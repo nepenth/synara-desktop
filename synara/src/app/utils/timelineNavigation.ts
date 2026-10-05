@@ -227,7 +227,7 @@ export class TimelineNavigationController<TTimeline> {
   ): TimelineNavigationBounds {
     const authoritativeLatestWindow = Boolean(
       this.authoritativeTailEventIdValue &&
-        currentWindowTailEventId === this.authoritativeTailEventIdValue
+      currentWindowTailEventId === this.authoritativeTailEventIdValue
     );
     const canPaginateForward = !authoritativeLatestWindow && hasForwardPaginationToken;
     return {

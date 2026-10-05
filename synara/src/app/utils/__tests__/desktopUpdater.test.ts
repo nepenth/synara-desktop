@@ -17,7 +17,7 @@ const jsonFetch =
       ok: status >= 200 && status < 300,
       status,
       json: async () => body,
-    } as Response);
+    }) as Response;
 
 test('desktop updater compares semantic version strings', () => {
   assert.equal(compareVersions('1.2.22', '1.2.21'), 1);

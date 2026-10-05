@@ -2,12 +2,7 @@ import { invokeDesktopWithAvailability } from '../../utils/desktop';
 
 export type NativeBackupAvailability = 'missing' | 'available';
 export type NativeBackupDeviceState =
-  | 'unavailable'
-  | 'disconnected'
-  | 'connecting'
-  | 'downloading'
-  | 'uploading'
-  | 'ready';
+  'unavailable' | 'disconnected' | 'connecting' | 'downloading' | 'uploading' | 'ready';
 export type NativeBackupRecoveryState = 'unknown' | 'not_set_up' | 'incomplete' | 'ready';
 export type NativeBackupAction = 'setup_required' | 'restore_required' | 'repair_required' | 'none';
 

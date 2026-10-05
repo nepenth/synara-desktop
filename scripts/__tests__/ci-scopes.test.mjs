@@ -15,7 +15,7 @@ import test from "node:test";
 const root = path.resolve(import.meta.dirname, "../..");
 const workflow = readFileSync(
   path.join(root, ".github/workflows/ci.yml"),
-  "utf8"
+  "utf8",
 );
 const start = workflow.indexOf("          set -euo pipefail");
 const end = workflow.indexOf("\n  validate-rust:", start);
@@ -37,7 +37,7 @@ function scopes(files, extraEnv = {}) {
     for (const script of ["ci-icon-only.mjs", "ci-metadata-only.mjs"]) {
       copyFileSync(
         path.join(root, "scripts", script),
-        path.join(cwd, "scripts", script)
+        path.join(cwd, "scripts", script),
       );
     }
     // Version consistency is orthogonal to the scope decision under test.
@@ -60,7 +60,7 @@ function scopes(files, extraEnv = {}) {
       "--quiet",
       "--allow-empty",
       "-m",
-      "change"
+      "change",
     );
     const output = path.join(cwd, "outputs");
     execFileSync("bash", ["-c", scopeScript], {
@@ -84,7 +84,7 @@ function scopes(files, extraEnv = {}) {
       readFileSync(output, "utf8")
         .trim()
         .split("\n")
-        .map((line) => line.split("="))
+        .map((line) => line.split("=")),
     );
   } finally {
     rmSync(cwd, { recursive: true, force: true });
@@ -110,6 +110,7 @@ for (const file of [
   "devAssets/index.html",
   "packaging/arch/PKGBUILD",
   ".github/workflows/release.yml",
+  ".github/actions/setup-node/action.yml",
 ]) {
   test(`${file} alone runs frontend validation`, () => {
     assert.equal(scopes([file]).validate_frontend, "true");
@@ -133,7 +134,7 @@ test("release pushes run iOS gates even for notes-only diffs", () => {
 test("explicit iOS opt-in cannot be skipped as release metadata", () => {
   assert.equal(
     scopes(["synara-ios/project.yml"], { PR_LABELS: "needs-ios" }).ios,
-    "true"
+    "true",
   );
   const result = scopes(["docs/releases/v2.1.2.md"], {
     PR_LABELS: "needs-ios-ui",
@@ -150,12 +151,12 @@ test("ordinary prose-only changes retain the cheap path", () => {
 test("adding an icon cannot hide a workflow or dependency edit", () => {
   assert.equal(
     scopes(["src-tauri/icons/icon.png", "package-lock.json"]).validate_frontend,
-    "true"
+    "true",
   );
   assert.equal(
     scopes(["src-tauri/icons/icon.png", ".github/workflows/ci.yml"])
       .validate_rust,
-    "true"
+    "true",
   );
 });
 
@@ -176,11 +177,30 @@ test("iOS path changes on an unlabeled feature PR run the compile gate only", ()
     "rust-toolchain.toml",
     ".cargo/config.toml",
     "scripts/generate-synara-core-swift.sh",
+    "scripts/generate-xcode-project.mjs",
+    ".github/actions/setup-xcode-cache/action.yml",
+    ".github/actions/save-xcode-cache/action.yml",
   ]) {
     const result = scopes([file]);
     assert.equal(result.ios, "false", `${file}: simulator lane stays skipped`);
     assert.equal(result.ios_ui, "false");
     assert.equal(result.ios_compile, "true", `${file}: compile gate runs`);
+  }
+});
+test("Swift cache and project generation changes run the Apple unit gate on main", () => {
+  for (const file of [
+    "scripts/generate-xcode-project.mjs",
+    ".github/actions/setup-xcode-cache/action.yml",
+    ".github/actions/save-xcode-cache/action.yml",
+    "synara-ios/scripts/lib/xcode-cache.sh",
+  ]) {
+    const result = scopes([file], {
+      EVENT_NAME: "push",
+      GITHUB_REF_NAME: "main",
+    });
+    assert.equal(result.ios, "true", file);
+    assert.equal(result.ios_ui, "false", file);
+    assert.equal(result.ios_compile, "false", file);
   }
 });
 test("the compile gate never runs alongside or instead of a scheduled simulator lane", () => {
@@ -216,7 +236,7 @@ test("the compile gate never runs alongside or instead of a scheduled simulator 
   assert.equal(
     scopes(["synara-ios/project.yml"], { EVENT_NAME: "workflow_dispatch" })
       .ios_compile,
-    "false"
+    "false",
   );
 });
 test("NSE production feature guard changes run the unit gate on main", () => {
@@ -225,7 +245,7 @@ test("NSE production feature guard changes run the unit gate on main", () => {
     {
       EVENT_NAME: "push",
       GITHUB_REF_NAME: "main",
-    }
+    },
   );
   assert.equal(result.ios, "true");
   assert.equal(result.ios_ui, "false");

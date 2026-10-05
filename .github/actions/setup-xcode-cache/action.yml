@@ -1,0 +1,52 @@
+name: Restore native Xcode compilation cache
+description: Restore only compiler CAS objects with an exact selected toolchain identity.
+outputs:
+  cache-key:
+    description: Weekly immutable compiler cache snapshot key
+    value: ${{ steps.paths.outputs.cache-key }}
+  cache-prefix:
+    description: Exact toolchain restore prefix
+    value: ${{ steps.paths.outputs.cache-prefix }}
+  cache-path:
+    description: Compiler CAS directory, excluding DerivedData and signing material
+    value: ${{ steps.paths.outputs.cache-path }}
+  cache-hit:
+    description: Whether this week's snapshot already exists
+    value: ${{ steps.restore.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - name: Identify selected Xcode compiler cache
+      id: paths
+      shell: bash
+      run: |
+        expected_xcode=$'Xcode 26.6\nBuild version 17F113'
+        actual_xcode="$(xcodebuild -version)"
+        if [[ "$actual_xcode" != "$expected_xcode" ]]; then
+          echo "Expected pinned Xcode 26.6 (17F113); selected toolchain: $actual_xcode" >&2
+          exit 1
+        fi
+        export SYNARA_IOS_CACHE_ROOT="$GITHUB_WORKSPACE/.xcode-cache"
+        source synara-ios/scripts/lib/xcode-cache.sh
+        synara_configure_xcode_cache "$GITHUB_WORKSPACE/synara-ios"
+        prefix="xcode-compilation-v1-${RUNNER_OS}-${RUNNER_ARCH}-${SYNARA_XCODE_TOOLCHAIN_KEY}-"
+        week="$(date -u +%G-W%V)"
+        echo "SYNARA_IOS_CACHE_ROOT=$SYNARA_IOS_CACHE_ROOT" >> "$GITHUB_ENV"
+        echo "SYNARA_IOS_COMPILATION_CACHE_LIMIT=256M" >> "$GITHUB_ENV"
+        echo "SYNARA_IOS_CACHE_REMARKS=YES" >> "$GITHUB_ENV"
+        echo "cache-path=$SYNARA_XCODE_COMPILATION_CACHE_PATH" >> "$GITHUB_OUTPUT"
+        echo "cache-prefix=$prefix" >> "$GITHUB_OUTPUT"
+        echo "cache-key=$prefix$week" >> "$GITHUB_OUTPUT"
+        {
+          echo "### Native Xcode compiler cache"
+          echo "Selected toolchain: \`$SYNARA_XCODE_TOOLCHAIN_KEY\`"
+          echo "Weekly snapshot: \`$prefix$week\`"
+          echo "Only compiler CAS objects are restored; native diagnostic remarks expose hits and misses."
+        } >> "$GITHUB_STEP_SUMMARY"
+    - name: Restore exact-toolchain compiler objects
+      id: restore
+      uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+      with:
+        path: ${{ steps.paths.outputs.cache-path }}
+        key: ${{ steps.paths.outputs.cache-key }}
+        restore-keys: ${{ steps.paths.outputs.cache-prefix }}

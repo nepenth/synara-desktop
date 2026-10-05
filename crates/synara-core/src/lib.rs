@@ -25,6 +25,7 @@ pub fn binding_scaffold_version() -> String {
 /// Converts supported Markdown to Matrix-compatible HTML using Ruma's parser.
 /// Plain text deliberately returns `None` so clients omit a redundant
 /// `formatted_body` field.
+#[cfg(feature = "full-app")]
 pub fn markdown_to_html(body: String) -> Option<String> {
     use matrix_sdk::ruma::{
         events::room::message::FormattedBody,
@@ -36,7 +37,7 @@ pub fn markdown_to_html(body: String) -> Option<String> {
     Some(formatted.body)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "full-app"))]
 mod markdown_tests {
     use super::markdown_to_html;
 
@@ -155,16 +156,21 @@ pub use shared_core_ffi::{
     VerificationSasError,
 };
 
+#[cfg(feature = "full-app")]
 mod core;
+#[cfg(feature = "full-app")]
 pub use core::Core;
 
 pub mod app;
+#[cfg(feature = "full-app")]
 pub use app::room_list::{
     room_activity_recovery_required, room_unread_presentation, RoomActivityPreviousState,
     RoomEncryptionStatus, RoomUnreadMembership, RoomUnreadPresentationDto,
 };
 
+#[cfg(feature = "full-app")]
 pub mod dto;
+#[cfg(feature = "full-app")]
 pub mod platform;
 
 pub mod transport;

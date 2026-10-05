@@ -5,7 +5,13 @@ on:
     branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
-    branches: [main, "feature/matrix-rust-sdk-full-replacement", "feature/shared-native-core", "release/**"]
+    branches:
+      [
+        main,
+        "feature/matrix-rust-sdk-full-replacement",
+        "feature/shared-native-core",
+        "release/**",
+      ]
   schedule:
     # Nightly full client suite, including the XCUITest lane.
     - cron: "17 11 * * *"
@@ -158,6 +164,7 @@ jobs:
           # Desktop / runtime validation (Node + Rust Tauri shell + synara frontend).
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
             .github/workflows \
+            .github/actions \
             .cargo \
             devAssets \
             packaging \
@@ -184,6 +191,13 @@ jobs:
           if [[ "$VALIDATE" == "true" ]]; then
             if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
               .github/workflows/ci.yml \
+              .github/actions/setup-rust-cache \
+              .kache.toml \
+              scripts/ci-rust-cache-identity.sh \
+              scripts/start-ci-rust-cache.mjs \
+              scripts/setup-rust-cache.sh \
+              scripts/with-rust-cache.sh \
+              scripts/lib/rust-cache.sh \
               Cargo.toml \
               Cargo.lock \
               .cargo \
@@ -198,6 +212,7 @@ jobs:
             fi
             if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
               .github/workflows \
+              .github/actions \
               devAssets \
               packaging \
               .node-version \
@@ -279,8 +294,21 @@ jobs:
             scripts/generate-synara-core-swift.sh \
             scripts/generate-synara-nse-core-swift.sh \
             synara-ios/scripts/check-notification-service-archive.sh \
+            scripts/generate-xcode-project.mjs \
+            .github/actions/setup-rust-cache \
+            .kache.toml \
+            scripts/ci-rust-cache-identity.sh \
+            scripts/start-ci-rust-cache.mjs \
+            scripts/setup-rust-cache.sh \
+            scripts/with-rust-cache.sh \
+            scripts/lib/rust-cache.sh \
+            .github/actions/setup-xcode-cache \
+            .github/actions/save-xcode-cache \
             scripts/check-synara-nse-core-isolation.mjs \
             scripts/check-synara-nse-core-production-features.mjs \
+            scripts/check-synara-core-production-features.mjs \
+            scripts/lib/publish-generated-apple-pair.sh \
+            scripts/lib/compare-generated-apple-pair.mjs \
             scripts/check-synara-nse-core-archive-exports.sh \
             scripts/lib/rust-llvm-symbols.sh \
             scripts/check-synara-core-swift-scaffold.mjs \
@@ -473,12 +501,16 @@ jobs:
           toolchain: 1.96
           components: rustfmt, clippy
 
-      - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Test Rust build input invalidation
+        run: |
+          rustc --edition=2021 --test src-tauri/build_support/build_inputs.rs -o "$RUNNER_TEMP/synara-build-input-tests"
+          "$RUNNER_TEMP/synara-build-input-tests"
+
+      - name: Cache Rust compilation
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: |
-            . -> target
-          shared-key: validate-rust-desktop
+          family: validate-rust-desktop
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -486,6 +518,11 @@ jobs:
       - name: Check Rust formatting
         run: cargo fmt --check
         working-directory: src-tauri
+
+      - name: Prove shipping Core feature boundaries
+        run: |
+          node scripts/check-synara-core-production-features.mjs
+          node scripts/check-synara-nse-core-production-features.mjs
 
       - name: Check shared Rust workspace formatting
         run: cargo fmt --all -- --check
@@ -511,6 +548,8 @@ jobs:
 
       - name: Test shared Rust workspace
         if: needs.changes.outputs.validate_rust_tests == 'true'
+        env:
+          RUST_TEST_THREADS: 4
         run: cargo test --locked -p synara-core -p synara-nse-core -p synara-core-bindgen
 
       - name: Check Matrix integration boundaries
@@ -534,7 +573,11 @@ jobs:
           toolchain: 1.96
 
       - name: Install cargo-audit
-        run: cargo install cargo-audit --version 0.22.2 --locked
+        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2, pinned installer/checksums
+        with:
+          tool: cargo-audit@0.22.2
+          checksum: true
+          fallback: none
 
       # Desktop, full Core, bindgen, and NSE resolve from one root lockfile.
       - name: Audit Rust workspace dependencies (RustSec advisory DB)
@@ -551,14 +594,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            synara/package-lock.json
+      - name: Setup Node.js and npm download cache
+        uses: ./.github/actions/setup-node
 
       - name: Install desktop dependencies
         run: npm ci
@@ -662,6 +699,8 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.ios == 'true'
     runs-on: macos-26
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     # Default: arm64 simulator + unit tests. Manual all-slice/device opt-ins
     # compile the full Apple graph and unsigned device Release NSE here.
     timeout-minutes: 120
@@ -676,16 +715,20 @@ jobs:
           components: llvm-tools-preview
           targets: ${{ github.event_name == 'workflow_dispatch' && (inputs.apple_slices == 'all' || inputs.check_ios_device_release) && 'aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin' || 'aarch64-apple-ios-sim' }}
 
-      - name: Cache Apple SynaraCore build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Cache Apple SynaraCore Rust compilation
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: ". -> target/synara-core-apple"
-          shared-key: ci-synara-core-apple
+          family: ci-synara-core-apple-simulator-arm64
+          save-cache: ${{ github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || (inputs.apple_slices != 'all' && !inputs.check_ios_device_release)) }}
 
       - name: Install XcodeGen
         run: |
           brew install xcodegen
           test "$(xcodegen --version)" = "Version: 2.46.0"
+
+      - name: Restore native Xcode compilation cache
+        id: xcode_cache
+        uses: ./.github/actions/setup-xcode-cache
 
       - name: Check SynaraCore Swift scaffold
         run: node scripts/check-synara-core-swift-scaffold.mjs
@@ -702,6 +745,14 @@ jobs:
           SYNARA_CORE_APPLE_SLICES: ${{ github.event_name == 'workflow_dispatch' && (inputs.apple_slices == 'all' || inputs.check_ios_device_release) && 'all' || 'simulator-arm64' }}
           CHECK_IOS_DEVICE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.check_ios_device_release && '1' || '0' }}
 
+      - name: Publish bounded Xcode compiler cache from main
+        if: github.ref == 'refs/heads/main'
+        uses: ./.github/actions/save-xcode-cache
+        with:
+          cache-key: ${{ steps.xcode_cache.outputs.cache-key }}
+          cache-path: ${{ steps.xcode_cache.outputs.cache-path }}
+          cache-hit: ${{ steps.xcode_cache.outputs.cache-hit }}
+
       - name: Upload iOS result bundles
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -716,6 +767,8 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.ios_ui == 'true'
     runs-on: macos-26
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     timeout-minutes: 75
     steps:
       - name: Checkout repository
@@ -728,16 +781,20 @@ jobs:
           components: llvm-tools-preview
           targets: aarch64-apple-ios-sim
 
-      - name: Cache Apple SynaraCore build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Cache Apple SynaraCore Rust compilation
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: ". -> target/synara-core-apple"
-          shared-key: ci-synara-core-apple-simulator-arm64
+          family: ci-synara-core-apple-simulator-arm64
+          save-cache: "false"
 
       - name: Install XcodeGen
         run: |
           brew install xcodegen
           test "$(xcodegen --version)" = "Version: 2.46.0"
+
+      - name: Restore native Xcode compilation cache
+        id: xcode_cache
+        uses: ./.github/actions/setup-xcode-cache
 
       - name: Check SynaraCore Swift scaffold
         run: node scripts/check-synara-core-swift-scaffold.mjs
@@ -767,6 +824,8 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.ios_compile == 'true'
     runs-on: macos-26
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     # Runs only when Swift/FFI/iOS paths changed and the simulator lane was
     # skipped by policy. Same generators and scaffold checks as ios-tests,
     # then `build-for-testing` for the arm64 simulator slice: compile and
@@ -785,16 +844,20 @@ jobs:
           components: llvm-tools-preview
           targets: aarch64-apple-ios-sim
 
-      - name: Cache Apple SynaraCore build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Cache Apple SynaraCore Rust compilation
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: ". -> target/synara-core-apple"
-          shared-key: ci-synara-core-apple-simulator-arm64
+          family: ci-synara-core-apple-simulator-arm64
+          save-cache: "false"
 
       - name: Install XcodeGen
         run: |
           brew install xcodegen
           test "$(xcodegen --version)" = "Version: 2.46.0"
+
+      - name: Restore native Xcode compilation cache
+        id: xcode_cache
+        uses: ./.github/actions/setup-xcode-cache
 
       - name: Check SynaraCore Swift scaffold
         run: node scripts/check-synara-core-swift-scaffold.mjs
@@ -833,6 +896,12 @@ jobs:
         with:
           toolchain: 1.96
 
+      - name: Restore desktop Rust compilation cache
+        uses: ./.github/actions/setup-rust-cache
+        with:
+          family: validate-rust-desktop
+          save-cache: "false"
+
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
 
@@ -866,6 +935,12 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
           toolchain: 1.96
+
+      - name: Restore desktop Rust compilation cache
+        uses: ./.github/actions/setup-rust-cache
+        with:
+          family: validate-rust-desktop
+          save-cache: "false"
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -901,6 +976,12 @@ jobs:
         with:
           toolchain: 1.96
 
+      - name: Restore desktop Rust compilation cache
+        uses: ./.github/actions/setup-rust-cache
+        with:
+          family: validate-rust-desktop
+          save-cache: "false"
+
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
 
@@ -934,6 +1015,12 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
           toolchain: 1.96
+
+      - name: Restore desktop Rust compilation cache
+        uses: ./.github/actions/setup-rust-cache
+        with:
+          family: validate-rust-desktop
+          save-cache: "false"
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -969,6 +1056,12 @@ jobs:
         with:
           toolchain: 1.96
 
+      - name: Restore desktop Rust compilation cache
+        uses: ./.github/actions/setup-rust-cache
+        with:
+          family: validate-rust-desktop
+          save-cache: "false"
+
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
 
@@ -1003,6 +1096,12 @@ jobs:
         with:
           toolchain: 1.96
 
+      - name: Restore desktop Rust compilation cache
+        uses: ./.github/actions/setup-rust-cache
+        with:
+          family: validate-rust-desktop
+          save-cache: "false"
+
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
 
@@ -1027,7 +1126,22 @@ jobs:
     # still runs after job failures; skip when this workflow was cancelled so a
     # superseded push run cannot fail the required check on the surviving SHA.
     if: always() && !cancelled()
-    needs: [changes, validate-rust, validate-frontend, ios-tests, ios-ui-tests, ios-compile, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
+    needs:
+      [
+        changes,
+        validate-rust,
+        validate-frontend,
+        rust-dependency-audit,
+        ios-tests,
+        ios-ui-tests,
+        ios-compile,
+        synapse-native-reactions,
+        synapse-native-attachments,
+        synapse-native-polls,
+        synapse-native-rich-messages,
+        synapse-native-threads,
+        synapse-native-receipts,
+      ]
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
@@ -1035,6 +1149,7 @@ jobs:
         env:
           DESKTOP_RUST_RESULT: ${{ needs.validate-rust.result }}
           DESKTOP_FRONTEND_RESULT: ${{ needs.validate-frontend.result }}
+          RUST_AUDIT_RESULT: ${{ needs.rust-dependency-audit.result }}
           IOS_RESULT: ${{ needs.ios-tests.result }}
           IOS_UI_RESULT: ${{ needs.ios-ui-tests.result }}
           IOS_COMPILE_RESULT: ${{ needs.ios-compile.result }}
@@ -1067,6 +1182,7 @@ jobs:
           fail=0
           ok "Desktop/runtime Rust validation" "$DESKTOP_RUST_RESULT" || fail=1
           ok "Desktop/runtime Node validation" "$DESKTOP_FRONTEND_RESULT" || fail=1
+          ok "Rust dependency audit" "$RUST_AUDIT_RESULT" || fail=1
           ok "iOS simulator tests" "$IOS_RESULT" || fail=1
           ok "iOS simulator UI tests" "$IOS_UI_RESULT" || fail=1
           ok "iOS compile gate" "$IOS_COMPILE_RESULT" || fail=1

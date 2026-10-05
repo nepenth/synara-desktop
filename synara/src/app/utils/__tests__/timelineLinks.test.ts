@@ -26,7 +26,7 @@ type TimelineStub = EventTimelineReading & {
   forward?: TimelineStub;
 };
 
-const event = (id: string): StubEvent => ({ getId: () => id } as StubEvent);
+const event = (id: string): StubEvent => ({ getId: () => id }) as StubEvent;
 
 const timeline = (id: string, eventIds: string[]): TimelineStub => {
   const stub = {
@@ -38,7 +38,7 @@ const timeline = (id: string, eventIds: string[]): TimelineStub => {
       return stub.stubEvents;
     },
     getNeighbouringTimeline(direction: string): TimelineStub | null {
-      return direction === 'b' ? stub.backward ?? null : stub.forward ?? null;
+      return direction === 'b' ? (stub.backward ?? null) : (stub.forward ?? null);
     },
   };
   return stub as unknown as TimelineStub;

@@ -4,7 +4,7 @@
 /// `b18166c68bb958a21f0bca8b2d8320cb53583362` / tag `matrix-sdk-0.19.1`).
 pub const MATRIX_SDK_PIN_VERSION: &str = "0.19.1";
 
-/// Features intentionally enabled on direct `matrix-sdk` dependency after P2.3.
+/// Approved explicitly requested Matrix SDK capabilities (dependency or Core feature).
 ///
 /// - `sqlite` — state + event-cache stores via `ClientBuilder::sqlite_store*`
 /// - `bundled-sqlite` — portable desktop binary without system libsqlite
@@ -12,7 +12,7 @@ pub const MATRIX_SDK_PIN_VERSION: &str = "0.19.1";
 ///   `default-features = false` on matrix-sdk 0.19.0.
 /// - `unstable-msc4426` — MSC4426 `m.status` / `m.call` profile fields.
 /// - `automatic-room-key-forwarding` — compile-in Megolm gossip among this
-///   user's verified devices. Gated by Core `room-key-forwarding` (full-uniffi /
+///   user's verified devices. Gated by Core `room-key-forwarding` (full-app /
 ///   desktop only; never NSE). 0.19 has no public `Encryption` setter, so the
 ///   OlmMachine defaults stay on once compiled.
 /// - `experimental-widgets` — compile pin for the experimental widget host.
@@ -25,8 +25,8 @@ pub const MATRIX_SDK_PIN_VERSION: &str = "0.19.1";
 ///   `x509-identity` from **desktop `src-tauri` only**. Runtime-inert until a
 ///   verifier is injected (Devices setting on **and** a CA PEM imported).
 ///
-/// `e2e-encryption` continues to arrive via `matrix-sdk-ui` feature unification
-/// (documented in P1.2) and enables the crypto store when combined with `sqlite`.
+/// `e2e-encryption` is explicit on the common dependency so NSE and full-app
+/// stores keep the same encryption contract without relying on UI unification.
 ///
 /// `experimental-send-custom-to-device` arrives **transitively** via
 /// `experimental-widgets`. It must not be requested as a direct `Cargo.toml`
@@ -62,9 +62,9 @@ pub const FORBIDDEN_MATRIX_SDK_FEATURES: &[&str] = &[
 /// [`FORBIDDEN_MATRIX_SDK_FEATURES`].
 const GATED_MATRIX_SDK_PACKAGES: &[&str] = &["matrix-sdk", "matrix-sdk-ui", "matrix-sdk-sqlite"];
 
-/// Collect quoted feature names from every `features = [ ... ]` array on a
-/// direct `{crate} = { ... }` dependency line. Nested braces (e.g. other
-/// tables) are tracked so the scan stops at the matching close.
+/// Collect explicit capability requests from dependency feature arrays and
+/// `crate/feature` (including weak `crate?/feature`) forwarding declarations.
+/// Nested table braces are tracked so dependency scans stop at the matching close.
 pub fn requested_cargo_features(cargo_toml: &str, crate_name: &str) -> Vec<String> {
     let needle = format!("{crate_name} = {{");
     let mut features = Vec::new();
@@ -76,6 +76,18 @@ pub fn requested_cargo_features(cargo_toml: &str, crate_name: &str) -> Vec<Strin
         };
         features.extend(quoted_feature_names(block));
         search_from = start + block.len();
+    }
+    let direct_prefix = format!("{crate_name}/");
+    let weak_prefix = format!("{crate_name}?/");
+    for quoted in cargo_toml.split('"').skip(1).step_by(2) {
+        if let Some(feature) = quoted
+            .strip_prefix(&direct_prefix)
+            .or_else(|| quoted.strip_prefix(&weak_prefix))
+        {
+            if !features.iter().any(|existing| existing == feature) {
+                features.push(feature.to_owned());
+            }
+        }
     }
     features
 }
@@ -168,7 +180,7 @@ mod tests {
     fn core_manifest_requests_forwarding_only_via_product_feature() {
         let manifest = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
         assert!(manifest.contains("nse-preview = []"));
-        assert!(manifest.contains(r#"full-uniffi = ["room-key-forwarding"]"#));
+        assert!(manifest.contains(r#"full-uniffi = ["full-app", "dep:uniffi"]"#));
         assert!(manifest.contains("matrix-sdk/automatic-room-key-forwarding"));
         assert!(manifest.contains("matrix-sdk-crypto/automatic-room-key-forwarding"));
         assert!(
@@ -197,6 +209,7 @@ mod tests {
         assert!(!APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-send-custom-to-device"));
     }
 
+    #[cfg(feature = "full-app")]
     #[test]
     fn widget_driver_type_resolves_with_experimental_widgets() {
         let name = std::any::type_name::<matrix_sdk::widget::WidgetDriver>();
@@ -207,20 +220,19 @@ mod tests {
     }
 
     #[test]
-    fn core_cargo_toml_requests_widgets_directly_not_custom_to_device() {
+    fn core_cargo_toml_requests_widgets_only_for_full_app_not_custom_to_device() {
         // The package owns production feature requests; workspace inheritance
         // owns the version/default policy. Exclude dev-only feature unification.
         let production = CORE_CARGO
-            .split("[dependencies]")
-            .nth(1)
-            .and_then(|rest| rest.split("[dev-dependencies]").next())
-            .expect("Core production dependency section");
+            .split("[dev-dependencies]")
+            .next()
+            .expect("Core production features/dependency sections");
         let features = requested_cargo_features(production, "matrix-sdk");
         assert!(
             features
                 .iter()
                 .any(|feature| feature == "experimental-widgets"),
-            "Core production must request the widget capability directly"
+            "Core full-app feature must request the widget capability explicitly"
         );
         assert!(
             !features
@@ -228,6 +240,10 @@ mod tests {
                 .any(|feature| feature == "experimental-send-custom-to-device"),
             "custom to-device must remain transitive through the widget feature"
         );
+        let common = production.split("[dependencies]").nth(1).unwrap();
+        assert!(!requested_cargo_features(common, "matrix-sdk")
+            .iter()
+            .any(|feature| feature == "experimental-widgets"));
         assert!(forbidden_requested_features(production).is_empty());
 
         let workspace = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../Cargo.toml"));
@@ -268,6 +284,23 @@ mod tests {
     }
 
     #[test]
+    fn common_clients_retain_encrypted_state_store_compatibility() {
+        let common = CORE_CARGO
+            .split("[dependencies]")
+            .nth(1)
+            .and_then(|rest| rest.split("[dev-dependencies]").next())
+            .expect("shared production dependencies");
+        for package in ["matrix-sdk", "matrix-sdk-ui"] {
+            assert!(
+                requested_cargo_features(common, package)
+                    .iter()
+                    .any(|feature| feature == "experimental-encrypted-state-events"),
+                "{package} must retain encrypted-state support in NSE/shared client stores"
+            );
+        }
+    }
+
+    #[test]
     fn x509_identity_is_approved_not_forbidden() {
         assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
         assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
@@ -295,6 +328,23 @@ mod tests {
                 "{label} Cargo.toml requests still-forbidden features: {forbidden:?}"
             );
         }
+    }
+
+    #[test]
+    fn parser_checks_direct_and_weak_feature_forwarding() {
+        let cargo = r#"
+[features]
+full-app = ["matrix-sdk/experimental-widgets"]
+leak = ["matrix-sdk-ui?/experimental-push-secrets", "other/experimental-element-recent-emojis"]
+"#;
+        assert_eq!(
+            requested_cargo_features(cargo, "matrix-sdk"),
+            vec!["experimental-widgets"]
+        );
+        assert_eq!(
+            forbidden_requested_features(cargo),
+            vec!["experimental-push-secrets"]
+        );
     }
 
     #[test]

@@ -1,0 +1,79 @@
+name: Setup Kache and Cargo downloads
+description: Cache compiler outputs with Kache; trusted main writers publish snapshots.
+inputs:
+  family:
+    description: Compatible compilation graph family
+    required: true
+  save-cache:
+    description: Whether this lane is an authorized main-branch writer
+    default: "false"
+  max-size:
+    description: Production compiler store LRU eviction target
+    default: 5GiB
+runs:
+  using: composite
+  steps:
+    - name: Identify compiler and download caches
+      id: identity
+      shell: bash
+      env:
+        SYNARA_CACHE_FAMILY: ${{ inputs.family }}
+        SYNARA_CACHE_WRITER: ${{ inputs.save-cache }}
+      run: bash scripts/ci-rust-cache-identity.sh
+    - name: Restore compiler snapshots for readers
+      if: inputs.save-cache != 'true'
+      uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+      with:
+        path: ${{ github.workspace }}/.kache-cache
+        key: ${{ steps.identity.outputs.compiler-prefix }}-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
+        restore-keys: ${{ steps.identity.outputs.compiler-prefix }}-
+    - name: Restore and publish compiler snapshots for main writers
+      if: inputs.save-cache == 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+      with:
+        path: ${{ github.workspace }}/.kache-cache
+        key: ${{ steps.identity.outputs.compiler-prefix }}-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
+        restore-keys: ${{ steps.identity.outputs.compiler-prefix }}-
+    - name: Restore Cargo downloads for readers
+      if: inputs.save-cache != 'true'
+      uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
+        key: synara-cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock') }}
+        restore-keys: synara-cargo-v1-${{ runner.os }}-${{ runner.arch }}-
+    - name: Restore and publish Cargo downloads for main writers
+      if: inputs.save-cache == 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
+        key: synara-cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock') }}
+        restore-keys: synara-cargo-v1-${{ runner.os }}-${{ runner.arch }}-
+    - name: Fetch complete locked Cargo download graph
+      if: inputs.save-cache == 'true' && github.ref == 'refs/heads/main'
+      shell: bash
+      run: cargo fetch --locked --manifest-path Cargo.toml
+    - name: Install pinned Kache compiler wrapper
+      uses: kunobi-ninja/kache-action@1a33fb2ff51be23eb9e87abeae6edb65be78f71c # pinned 2026-10-03
+      with:
+        version: v1.0.0
+        # Own persistence so unchanged lockfiles can still publish new source artifacts.
+        github-cache: "false"
+        save-cache: "false"
+        cache-dir: ${{ github.workspace }}/.kache-cache
+        max-size: ${{ inputs.max-size }}
+        cache-executables: "true"
+        cache-c-cpp: "true"
+        pr-comment: "false"
+        job-summary: "true"
+        strict: "true"
+    - name: Start and verify job compiler cache daemon
+      shell: bash
+      env:
+        SYNARA_CACHE_MAX_SIZE: ${{ inputs.max-size }}
+      run: node scripts/start-ci-rust-cache.mjs

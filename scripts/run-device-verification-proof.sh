@@ -20,6 +20,10 @@ if [[ ! "$SYNARA_LIVE_VERIFICATION_STORE_PASSPHRASE" =~ [^[:space:]] ]]; then
   exit 1
 fi
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$repo_root/scripts/lib/rust-cache.sh"
+synara_configure_rust_cache "$repo_root"
+
 export SYNARA_VERIFICATION_DIAGNOSTICS=1
 export CARGO_INCREMENTAL=0
 

@@ -90,8 +90,8 @@ export const useActiveTheme = (): Theme => {
 
   const selectedTheme =
     systemThemeKind === ThemeKind.Dark
-      ? themes.find((theme) => theme.id === darkThemeId) ?? DarkTheme
-      : themes.find((theme) => theme.id === lightThemeId) ?? LightTheme;
+      ? (themes.find((theme) => theme.id === darkThemeId) ?? DarkTheme)
+      : (themes.find((theme) => theme.id === lightThemeId) ?? LightTheme);
 
   return selectedTheme;
 };

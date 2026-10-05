@@ -2,12 +2,7 @@ import { invokeDesktopWithAvailability } from '../../utils/desktop';
 
 export type NativeRoomKeyTransferKind = 'export' | 'import';
 export type NativeRoomKeyTransferPhase =
-  | 'idle'
-  | 'preparing'
-  | 'in_flight'
-  | 'succeeded'
-  | 'failed'
-  | 'cancelled';
+  'idle' | 'preparing' | 'in_flight' | 'succeeded' | 'failed' | 'cancelled';
 
 export type NativeRoomKeyTransferStatus = {
   sessionGeneration: number;

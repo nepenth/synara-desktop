@@ -1,4 +1,5 @@
 import js from '@eslint/js';
+import { fixupPluginRules } from '@eslint/compat';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 import globals from 'globals';
@@ -7,6 +8,12 @@ import jsxA11yPlugin from 'eslint-plugin-jsx-a11y';
 import reactPlugin from 'eslint-plugin-react';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
 import prettierConfig from 'eslint-config-prettier';
+
+// These plugins still call rule APIs removed in ESLint 10. ESLint's official
+// bridge retains their rules until upstream releases support the new APIs.
+const compatibleReactPlugin = fixupPluginRules(reactPlugin);
+const compatibleImportPlugin = fixupPluginRules(importPlugin);
+const compatibleJsxA11yPlugin = fixupPluginRules(jsxA11yPlugin);
 
 export default [
   {
@@ -40,9 +47,9 @@ export default [
     },
     plugins: {
       '@typescript-eslint': tsPlugin,
-      import: importPlugin,
-      'jsx-a11y': jsxA11yPlugin,
-      react: reactPlugin,
+      import: compatibleImportPlugin,
+      'jsx-a11y': compatibleJsxA11yPlugin,
+      react: compatibleReactPlugin,
       'react-hooks': reactHooksPlugin,
     },
     settings: {
@@ -133,7 +140,7 @@ export default [
     },
     plugins: {
       '@typescript-eslint': tsPlugin,
-      import: importPlugin,
+      import: compatibleImportPlugin,
     },
     rules: {
       ...tsPlugin.configs['eslint-recommended'].overrides[0].rules,

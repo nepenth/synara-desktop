@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync, readFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  chmodSync,
+  readFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -8,7 +15,7 @@ import { fileURLToPath } from "node:url";
 
 const checker = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  "../check-synara-nse-core-production-features.mjs"
+  "../check-synara-nse-core-production-features.mjs",
 );
 
 function fixture(t, leak) {
@@ -16,13 +23,13 @@ function fixture(t, leak) {
     leak === "ios-only" || leak === "ios-build"
       ? "'cfg(target_os = \"ios\")'"
       : leak?.startsWith("target:")
-      ? JSON.stringify(leak.slice(7))
-      : undefined;
+        ? JSON.stringify(leak.slice(7))
+        : undefined;
   const root = mkdtempSync(join(tmpdir(), "synara-nse-feature-check-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   writeFileSync(
     join(root, "Cargo.toml"),
-    '[workspace]\nmembers = ["core", "nse"]\nresolver = "2"\n'
+    '[workspace]\nmembers = ["core", "nse"]\nresolver = "2"\n',
   );
   for (const name of ["core", "nse"]) {
     mkdirSync(join(root, name, "src"), { recursive: true });
@@ -37,8 +44,9 @@ edition = "2021"
 [features]
 default = ["full-uniffi"]
 full-uniffi = []
+full-app = []
 nse-preview = []
-`
+`,
   );
   writeFileSync(
     join(root, "nse/Cargo.toml"),
@@ -48,7 +56,11 @@ version = "0.1.0"
 edition = "2021"
 [dependencies]
 synara-core = { path = "../core", default-features = false, features = ["nse-preview"${
-      leak === "normal" ? ', "full-uniffi"' : ""
+      leak === "normal"
+        ? ', "full-uniffi"'
+        : leak === "full-app"
+          ? ', "full-app"'
+          : ""
     }] }
 [dev-dependencies]
 synara-core = { path = "../core", features = ["full-uniffi"] }
@@ -63,7 +75,7 @@ ${
         leak === "ios-build" ? "build-dependencies" : "dependencies"
       }]\nsynara-core = { path = "../core", features = ["full-uniffi"] }\n`
     : ""
-}`
+}`,
   );
   const lock = spawnSync(
     "cargo",
@@ -73,7 +85,7 @@ ${
       "--manifest-path",
       join(root, "Cargo.toml"),
     ],
-    { encoding: "utf8" }
+    { encoding: "utf8" },
   );
   assert.equal(lock.status, 0, lock.stderr);
   return join(root, "Cargo.toml");
@@ -100,7 +112,7 @@ test("dev-only full Core fixture does not contaminate the production graph", (t)
       "-e",
       "features",
     ],
-    { encoding: "utf8" }
+    { encoding: "utf8" },
   );
   assert.equal(original.status, 0, original.stderr);
   assert.match(original.stdout, /synara-core feature "full-uniffi"/);
@@ -116,6 +128,12 @@ for (const edge of ["normal", "build"]) {
     assert.match(result.stderr, /must not enable the full Core UniFFI feature/);
   });
 }
+
+test("full application owners without UniFFI still fail NSE isolation", (t) => {
+  const result = check(fixture(t, "full-app"));
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /must not enable full application owners/);
+});
 
 test("a failed Cargo query cannot pass isolation", (t) => {
   const manifest = fixture(t);
@@ -135,7 +153,7 @@ for (const target of [
   test(`${target} production leakage is rejected even when the macOS graph is narrow`, (t) => {
     const manifest = fixture(
       t,
-      target.startsWith("ios-") ? target : `target:${target}`
+      target.startsWith("ios-") ? target : `target:${target}`,
     );
     const macOS = spawnSync(
       "cargo",
@@ -153,7 +171,7 @@ for (const target of [
         "--target",
         "aarch64-apple-darwin",
       ],
-      { encoding: "utf8" }
+      { encoding: "utf8" },
     );
     assert.equal(macOS.status, 0, macOS.stderr);
     assert.doesNotMatch(macOS.stdout, /synara-core feature "full-uniffi"/);
@@ -173,22 +191,56 @@ for (const feature of [
     const root = dirname(manifest);
     mkdirSync(join(root, "crypto/src"), { recursive: true });
     writeFileSync(join(root, "crypto/src/lib.rs"), "");
-    writeFileSync(join(root, "crypto/Cargo.toml"), `[package]
+    writeFileSync(
+      join(root, "crypto/Cargo.toml"),
+      `[package]
 name = "matrix-sdk-crypto"
 version = "0.1.0"
 edition = "2021"
 [features]
 ${feature} = []
-`);
-    writeFileSync(manifest, readFileSync(manifest, "utf8").replace('"core", "nse"', '"core", "nse", "crypto"'));
+`,
+    );
+    writeFileSync(
+      manifest,
+      readFileSync(manifest, "utf8").replace(
+        '"core", "nse"',
+        '"core", "nse", "crypto"',
+      ),
+    );
     const core = join(root, "core/Cargo.toml");
-    writeFileSync(core, readFileSync(core, "utf8") + `
+    writeFileSync(
+      core,
+      readFileSync(core, "utf8") +
+        `
 [dependencies]
 matrix-sdk-crypto = { path = "../crypto", features = ["${feature}"] }
-`);
-    const lock = spawnSync("cargo", ["generate-lockfile", "--offline", "--manifest-path", manifest], { encoding: "utf8" });
+`,
+    );
+    const lock = spawnSync(
+      "cargo",
+      ["generate-lockfile", "--offline", "--manifest-path", manifest],
+      { encoding: "utf8" },
+    );
     assert.equal(lock.status, 0, lock.stderr);
-    const inverse = spawnSync("cargo", ["tree", "--locked", "--manifest-path", manifest, "-p", "synara-nse-core", "-e", "normal,build,features", "-i", "synara-core", "--target", "aarch64-apple-ios"], { encoding: "utf8", env: { ...process.env, CARGO_TERM_COLOR: "never" } });
+    const inverse = spawnSync(
+      "cargo",
+      [
+        "tree",
+        "--locked",
+        "--manifest-path",
+        manifest,
+        "-p",
+        "synara-nse-core",
+        "-e",
+        "normal,build,features",
+        "-i",
+        "synara-core",
+        "--target",
+        "aarch64-apple-ios",
+      ],
+      { encoding: "utf8", env: { ...process.env, CARGO_TERM_COLOR: "never" } },
+    );
     assert.equal(inverse.status, 0, inverse.stderr);
     assert.doesNotMatch(inverse.stdout, new RegExp(`feature "${feature}"`));
     const result = check(manifest);
@@ -202,7 +254,9 @@ test("every Cargo query overrides inherited color before matching feature nodes"
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const cargo = join(root, "cargo");
   const log = join(root, "calls");
-  writeFileSync(cargo, String.raw`#!/bin/sh
+  writeFileSync(
+    cargo,
+    String.raw`#!/bin/sh
 printf '%s\n' "$CARGO_TERM_COLOR" >> "$QUERY_LOG"
 if [ "$CARGO_TERM_COLOR" != never ]; then
   printf 'matrix-sdk-crypto feature "\033[31mexperimental-x509-identity-verification\033[0m"\n'
@@ -214,13 +268,75 @@ case "$*" in
     if [ "$QUERY_LEAK" = 1 ]; then printf 'matrix-sdk-crypto feature "experimental-x509-identity-verification"\n'; fi ;;
   *) printf 'synara-core v0.1.0 (/fixture/x509-identity)\n' ;;
 esac
-`);
+`,
+  );
   chmodSync(cargo, 0o755);
-  const env = { ...process.env, PATH: `${root}:${process.env.PATH}`, CARGO_TERM_COLOR: "always", QUERY_LOG: log };
-  const clean = spawnSync(process.execPath, [checker, "fixture.toml"], { encoding: "utf8", env });
+  const env = {
+    ...process.env,
+    PATH: `${root}:${process.env.PATH}`,
+    CARGO_TERM_COLOR: "always",
+    QUERY_LOG: log,
+  };
+  const clean = spawnSync(process.execPath, [checker, "fixture.toml"], {
+    encoding: "utf8",
+    env,
+  });
   assert.equal(clean.status, 0, clean.stderr);
-  assert.deepEqual(readFileSync(log, "utf8").trim().split("\n"), Array(12).fill("never"));
-  const leaking = spawnSync(process.execPath, [checker, "fixture.toml"], { encoding: "utf8", env: { ...env, QUERY_LEAK: "1" } });
+  assert.deepEqual(
+    readFileSync(log, "utf8").trim().split("\n"),
+    Array(12).fill("never"),
+  );
+  const leaking = spawnSync(process.execPath, [checker, "fixture.toml"], {
+    encoding: "utf8",
+    env: { ...env, QUERY_LEAK: "1" },
+  });
   assert.equal(leaking.status, 1, leaking.stderr);
   assert.match(leaking.stderr, /must not enable X\.509 identity verification/);
+});
+
+// Root-feature forwarding may not emit the upstream feature node in a forward
+// tree; the guard must inspect effective package feature sets as well.
+test("forwarded upstream-only room-key forwarding cannot bypass NSE isolation", (t) => {
+  const manifest = fixture(t);
+  const root = dirname(manifest);
+  mkdirSync(join(root, "crypto/src"), { recursive: true });
+  writeFileSync(join(root, "crypto/src/lib.rs"), "");
+  writeFileSync(
+    join(root, "crypto/Cargo.toml"),
+    `[package]
+name = "matrix-sdk-crypto"
+version = "0.1.0"
+edition = "2021"
+[features]
+automatic-room-key-forwarding = []
+`,
+  );
+  writeFileSync(
+    manifest,
+    readFileSync(manifest, "utf8").replace(
+      '"core", "nse"',
+      '"core", "nse", "crypto"',
+    ),
+  );
+  const core = join(root, "core/Cargo.toml");
+  writeFileSync(
+    core,
+    readFileSync(core, "utf8").replace(
+      "nse-preview = []",
+      'nse-preview = ["matrix-sdk-crypto/automatic-room-key-forwarding"]',
+    ) +
+      `
+[dependencies]
+matrix-sdk-crypto = { path = "../crypto" }
+`,
+  );
+  const lock = spawnSync(
+    "cargo",
+    ["generate-lockfile", "--offline", "--manifest-path", manifest],
+    { encoding: "utf8" },
+  );
+  assert.equal(lock.status, 0, lock.stderr);
+  const result = check(manifest);
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /must not compile automatic-room-key-forwarding/);
 });

@@ -11,7 +11,7 @@ type EmailNotificationResult = {
 
 export const useEmailNotifications = (): [
   EmailNotificationResult | undefined | null,
-  RefreshHandler
+  RefreshHandler,
 ] => {
   const mx = useMatrixClient();
 

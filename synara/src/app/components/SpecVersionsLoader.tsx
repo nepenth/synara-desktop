@@ -4,12 +4,14 @@ import { SpecVersions, specVersions } from '../cs-api';
 
 type SpecVersionsLoaderProps = {
   baseUrl: string;
+  blocking?: boolean;
   fallback?: () => ReactNode;
   error?: (err: unknown, retry: () => void, ignore: () => void) => ReactNode;
   children: (versions: SpecVersions) => ReactNode;
 };
 export function SpecVersionsLoader({
   baseUrl,
+  blocking = true,
   fallback,
   error,
   children,
@@ -20,17 +22,22 @@ export function SpecVersionsLoader({
   const [ignoreError, setIgnoreError] = useState(false);
 
   const ignoreCallback = useCallback(() => setIgnoreError(true), []);
-
-  useEffect(() => {
-    load();
+  const retry = useCallback(() => {
+    void load().catch(() => {
+      // The loader projects errors into UI or optional metadata below.
+    });
   }, [load]);
 
-  if (state.status === AsyncStatus.Idle || state.status === AsyncStatus.Loading) {
+  useEffect(() => {
+    retry();
+  }, [retry]);
+
+  if (blocking && (state.status === AsyncStatus.Idle || state.status === AsyncStatus.Loading)) {
     return fallback?.();
   }
 
-  if (!ignoreError && state.status === AsyncStatus.Error) {
-    return error?.(state.error, load, ignoreCallback);
+  if (blocking && !ignoreError && state.status === AsyncStatus.Error) {
+    return error?.(state.error, retry, ignoreCallback);
   }
 
   return children(

@@ -15,7 +15,7 @@ const session = {
   sessionGeneration: 'generation-1',
 };
 
-const createMockMatrixClient = (): any => ({ refresh: async () => undefined } as any);
+const createMockMatrixClient = (): any => ({ refresh: async () => undefined }) as any;
 
 test('initClient boots through the native client owner', async () => {
   const client = createMockMatrixClient();

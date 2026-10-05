@@ -31,9 +31,15 @@
     "check:versions": "node scripts/check-version-consistency.mjs",
     "pretauri": "node scripts/warn-macos-app-replace.mjs",
     "pretest:modernization": "node scripts/build-runtime.mjs",
-    "tauri": "cp config.json synara/ && tauri",
+    "tauri": "cp config.json synara/ && scripts/with-rust-cache.sh tauri",
+    "cache:setup": "scripts/setup-rust-cache.sh --install",
+    "cache:status": "scripts/setup-rust-cache.sh --status",
+    "cache:clean": "scripts/setup-rust-cache.sh --clean",
+    "cargo": "scripts/with-rust-cache.sh cargo",
     "test:modernization": "npm --prefix synara run test:modernization",
-    "typecheck:modernization": "npm --prefix synara run typecheck:modernization"
+    "typecheck:modernization": "npm --prefix synara run typecheck:modernization",
+    "audit:build-cache": "node scripts/audit-build-cache.mjs",
+    "check:core-features": "node scripts/check-synara-core-production-features.mjs && node scripts/check-synara-nse-core-production-features.mjs"
   },
   "keywords": [
     "matrix",
@@ -46,12 +52,12 @@
   "author": "Synara contributors",
   "license": "AGPL-3.0-only",
   "dependencies": {
-    "@tauri-apps/api": "2.11.1",
-    "@tauri-apps/plugin-process": "2.3.1",
-    "@tauri-apps/plugin-updater": "2.12.0"
+    "@tauri-apps/api": "2.12.1",
+    "@tauri-apps/plugin-process": "2.4.0",
+    "@tauri-apps/plugin-updater": "2.13.1"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.11.5"
+    "@tauri-apps/cli": "2.12.1"
   },
   "private": true
 }

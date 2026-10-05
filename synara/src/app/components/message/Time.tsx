@@ -25,7 +25,7 @@ export const Time = as<'span', TimeProps & ComponentProps<typeof Text>>(
   ({ compact, hour24Clock, dateFormatString, ts, ...props }, ref) => {
     const formattedTime = timeHourMinute(ts, hour24Clock);
 
-    let time = '';
+    let time: string;
     if (compact) {
       time = formattedTime;
     } else if (today(ts)) {

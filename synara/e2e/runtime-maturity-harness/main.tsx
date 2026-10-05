@@ -67,7 +67,7 @@ function PdfRenderLifecycle() {
             }),
           }),
         }),
-      } as unknown as PDFDocumentProxy),
+      }) as unknown as PDFDocumentProxy,
     []
   );
   const [state, load] = usePdfPageLoader(doc, 1, 1);
@@ -167,4 +167,8 @@ function MaturityHarness() {
     </>
   );
 }
-createRoot(document.getElementById('root')!).render(<MaturityHarness />);
+if (new URLSearchParams(location.search).has('sync-recovery')) {
+  void import('./sync-recovery').then(({ mountSyncRecovery }) => mountSyncRecovery());
+} else {
+  createRoot(document.getElementById('root')!).render(<MaturityHarness />);
+}

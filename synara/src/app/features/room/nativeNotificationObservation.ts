@@ -21,9 +21,7 @@ import { isSynaraDesktop } from '../../utils/desktop';
 export const NOTIFICATION_OBSERVED_EVENT = 'matrix-notification-observed';
 
 export type NativeNotificationObservationEventType =
-  | 'm.room.message'
-  | 'm.room.encrypted'
-  | 'm.sticker';
+  'm.room.message' | 'm.room.encrypted' | 'm.sticker';
 
 export type NativeNotificationObservation = {
   sessionGeneration: number;

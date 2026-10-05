@@ -2,10 +2,10 @@ import { useCallback, useMemo } from 'react';
 import type { RoomMemberListItem } from './useRoomMembers';
 
 const getMemberName = (member: RoomMemberListItem): string =>
-  !('getMxcAvatarUrl' in member) ? member.displayName ?? member.userId : member.name;
+  !('getMxcAvatarUrl' in member) ? (member.displayName ?? member.userId) : member.name;
 
 const getMemberEventTs = (member: RoomMemberListItem): number =>
-  !('getMxcAvatarUrl' in member) ? 0 : member.events.member?.getTs() ?? 0;
+  !('getMxcAvatarUrl' in member) ? 0 : (member.events.member?.getTs() ?? 0);
 
 export const MemberSort = {
   Ascending: (a: RoomMemberListItem, b: RoomMemberListItem) =>

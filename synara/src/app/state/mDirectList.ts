@@ -66,9 +66,8 @@ export const useBindMDirectAtom = (mDirect: typeof mDirectAtom = mDirectAtom) =>
           clear();
           return;
         }
-        const result = await invokeDesktopWithAvailability<NativeMDirectSnapshot>(
-          'matrix_mdirect_snapshot'
-        );
+        const result =
+          await invokeDesktopWithAvailability<NativeMDirectSnapshot>('matrix_mdirect_snapshot');
         if (!disposed && result.available && result.value) {
           setMDirect({
             type: 'PUT',

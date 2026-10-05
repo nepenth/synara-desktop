@@ -1,7 +1,6 @@
 //! Empty-term in-room Media/Files listing against the event cache.
 //!
 //! Does not enable `search-index` and never issues Client-Server `/search`.
-#![recursion_limit = "256"]
 
 use matrix_sdk::ruma::{
     events::room::message::{FileMessageEventContent, MessageType, RoomMessageEventContent},

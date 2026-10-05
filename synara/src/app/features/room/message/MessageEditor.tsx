@@ -88,7 +88,7 @@ export const MessageEditor = as<'div', MessageEditorProps>(
     const getPrevBodyAndFormattedBody = useCallback((): [
       string | undefined,
       string | undefined,
-      IMentions | undefined
+      IMentions | undefined,
     ] => {
       const evtId = mEvent.getId()!;
       const evtTimeline = room.getTimelineForEvent(evtId);

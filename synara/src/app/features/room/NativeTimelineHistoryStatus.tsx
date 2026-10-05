@@ -68,12 +68,12 @@ function NativeTimelineHistoryStatusView({
     kind === 'error'
       ? 'error'
       : kind === 'loading' && edge === 'backward'
-      ? 'loading'
-      : loadingVisible
-      ? 'loading'
-      : kind === 'loading'
-      ? 'hidden'
-      : kind;
+        ? 'loading'
+        : loadingVisible
+          ? 'loading'
+          : kind === 'loading'
+            ? 'hidden'
+            : kind;
   const copy = copyForEdge(edge);
   const showDate = Boolean(visibleDateLabel) && kind === 'hidden' && !reserveRail;
   if (paintedKind === 'hidden' && !showDate) return null;

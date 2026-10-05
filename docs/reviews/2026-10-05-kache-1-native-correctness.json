@@ -1,0 +1,18 @@
+{
+  "kacheVersion": "1.0.0",
+  "fixture": "native restore mutation and identical C sources with different local headers",
+  "startedAt": "2026-10-05T17:33:08Z",
+  "linkedValuesAfterMutation": "101 202",
+  "restoredObjectSha256": "142d9de2a6988c5e2cba858ad914b0a2ed178dbf168ed521f977afb3480923d3",
+  "sameContentDifferentHeaders": true,
+  "restoredObjectMutationIsolated": true,
+  "result": "pass",
+  "counterTotals": {
+    "local_hits": 3,
+    "remote_hits": 0,
+    "misses": 2,
+    "dups": 0
+  },
+  "scope": "Isolated local macOS C compiler fixture; not full application or hosted performance evidence.",
+  "cleanup": "Owned daemon stopped and isolated scratch removed."
+}

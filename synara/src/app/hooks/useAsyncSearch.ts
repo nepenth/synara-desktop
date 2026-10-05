@@ -41,9 +41,9 @@ export const shouldKeepPreviousSearchItems = (
 ): boolean =>
   Boolean(
     current &&
-      current.query === query &&
-      current.items.length > 0 &&
-      items.length < current.items.length
+    current.query === query &&
+    current.items.length > 0 &&
+    items.length < current.items.length
   );
 
 /** Reuse the previous array when item identities are unchanged. */

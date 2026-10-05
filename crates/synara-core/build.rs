@@ -1,19 +1,27 @@
 // P4-1: generate Rust FFI scaffolding from the project-owned UDL at build time.
 // Swift generation is intentionally an explicit Apple-target command; see
 // scripts/generate-synara-core-swift.sh.
+#[cfg(feature = "full-uniffi")]
 use std::env;
+#[cfg(feature = "full-uniffi")]
 use std::fs;
+#[cfg(feature = "full-uniffi")]
 use std::path::PathBuf;
 
+#[cfg(feature = "full-uniffi")]
 #[path = "build_support/uniffi_async.rs"]
 mod uniffi_async;
 
+#[cfg(not(feature = "full-uniffi"))]
+fn main() {
+    // No generated inputs or binding dependencies in desktop/NSE Core builds.
+    println!("cargo:rerun-if-changed=build.rs");
+}
+
+#[cfg(feature = "full-uniffi")]
 fn main() {
     println!("cargo:rerun-if-changed=build_support/uniffi_async.rs");
     println!("cargo:rerun-if-changed=src/synara_core.udl");
-    if env::var_os("CARGO_FEATURE_FULL_UNIFFI").is_none() {
-        return;
-    }
     uniffi::generate_scaffolding("src/synara_core.udl").expect("valid synara-core UniFFI UDL");
 
     let generated =

@@ -76,8 +76,8 @@ export const createRoom = async (data: CreateRoomData): Promise<string> => {
       data.type === RoomType.Space
         ? { eventsDefault: 50 }
         : data.type === RoomType.Call
-        ? { events: { 'org.matrix.msc3401.call.member': 0 } }
-        : undefined,
+          ? { events: { 'org.matrix.msc3401.call.member': 0 } }
+          : undefined,
   };
 
   await pushEncryptedStateEventsSetting(getSharedSettings().encryptedStateEvents);

@@ -2,12 +2,7 @@ import type { DesktopEvent, DesktopInvokeResult, DesktopUnlisten } from '../../.
 import { hasForbiddenWireFields, isObject } from '../../matrix-dto/parseUtil';
 
 export type NativeRoomJoinRule =
-  | 'public'
-  | 'knock'
-  | 'invite'
-  | 'restricted'
-  | 'knock_restricted'
-  | 'private';
+  'public' | 'knock' | 'invite' | 'restricted' | 'knock_restricted' | 'private';
 
 export type NativeRoomJoinRuleSnapshot = {
   status: 'ok';

@@ -4,8 +4,6 @@
 //! `media_upload` stays on SharedCore. Failed errors stay static and must
 //! not echo bytes, filename, mime, room id, or tokens.
 
-#![recursion_limit = "256"]
-
 use std::collections::HashMap;
 use std::fs;
 use std::sync::{Arc, Mutex};

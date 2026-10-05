@@ -29,9 +29,7 @@ type TypingMemberResetAction = {
   rooms: IRoomIdToTypingMembers;
 };
 export type IRoomIdToTypingMembersAction =
-  | TypingMemberPutAction
-  | TypingMemberDeleteAction
-  | TypingMemberResetAction;
+  TypingMemberPutAction | TypingMemberDeleteAction | TypingMemberResetAction;
 
 type NativeTypingRoom = {
   roomId: string;
@@ -154,9 +152,8 @@ export const useBindRoomIdToTypingMembersAtom = (
           clear();
           return;
         }
-        const result = await invokeDesktopWithAvailability<NativeTypingSnapshot>(
-          'matrix_typing_snapshot'
-        );
+        const result =
+          await invokeDesktopWithAvailability<NativeTypingSnapshot>('matrix_typing_snapshot');
         if (!disposed && result.available && result.value) {
           setTypingMembers({
             type: 'RESET',

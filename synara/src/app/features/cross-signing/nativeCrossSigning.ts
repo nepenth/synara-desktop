@@ -4,11 +4,7 @@ export type NativeCrossSigningKeyPublication = 'missing' | 'published';
 export type NativeCrossSigningPrivateIdentity = 'missing' | 'partial' | 'complete';
 export type NativeOwnIdentityVerification = 'missing' | 'unverified' | 'verified';
 export type NativeCrossSigningReadiness =
-  | 'unavailable'
-  | 'setup_required'
-  | 'recovery_required'
-  | 'verification_required'
-  | 'ready';
+  'unavailable' | 'setup_required' | 'recovery_required' | 'verification_required' | 'ready';
 
 export type NativeCrossSigningStatus = {
   sessionGeneration: number;

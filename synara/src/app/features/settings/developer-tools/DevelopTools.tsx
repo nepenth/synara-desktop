@@ -44,10 +44,10 @@ function NativeSessionStoreStatus() {
     persistence === 'persistent'
       ? 'Success'
       : persistence === 'session-scoped'
-      ? 'Warning'
-      : status
-      ? 'Critical'
-      : 'Secondary';
+        ? 'Warning'
+        : status
+          ? 'Critical'
+          : 'Secondary';
   const backendLabel = status ? getPlatformSecretStoreBackendLabel(status.backend) : 'Checking';
   const statusLabel = status ? getPlatformSecretStoreStatusLabel(status) : 'Checking';
   const details = status ? getPlatformSecretStoreStatusDescription(status) : backendLabel;

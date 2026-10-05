@@ -109,10 +109,13 @@ test('web and native logged-out sessions retain the legacy owner', async () => {
 
 test('native command failure never falls through to legacy send', async () => {
   await assert.rejects(
-    sendTextWithNativeOwner({ roomId: '!room:example.org', body: 'hello' }, true, async (command) =>
-      command === 'matrix_session_snapshot'
-        ? { available: true, value: { status: 'logged_in' } }
-        : { available: false }
+    sendTextWithNativeOwner(
+      { roomId: '!room:example.org', body: 'hello' },
+      true,
+      async (command) =>
+        command === 'matrix_session_snapshot'
+          ? { available: true, value: { status: 'logged_in' } }
+          : { available: false }
     ),
     /Native Matrix text send is unavailable/
   );

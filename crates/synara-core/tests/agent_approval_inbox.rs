@@ -1,6 +1,5 @@
 //! The real SDK supplies unopened room state, reaction aggregation and redaction
 //! diffs. Only its homeserver HTTP transport is deterministic test data.
-#![recursion_limit = "256"]
 
 use matrix_sdk::test_utils::mocks::{MatrixMockServer, RoomMessagesResponseTemplate};
 use matrix_sdk_test::{event_factory::EventFactory, JoinedRoomBuilder, LeftRoomBuilder, BOB};

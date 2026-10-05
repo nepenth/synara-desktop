@@ -1,4 +1,5 @@
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -108,12 +109,13 @@ ${iosBuildStep}
   quality-gate:
     name: Quality gate
     if: always() && !cancelled()
-    needs: [changes, validate, ios-tests, ios-ui-tests, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
+    needs: [changes, validate, rust-dependency-audit, ios-tests, ios-ui-tests, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
     runs-on: ubuntu-latest
     steps:
       - name: Require every scheduled client validation job
         env:
           DESKTOP_RESULT: \${{ needs.validate.result }}
+          RUST_AUDIT_RESULT: \${{ needs.rust-dependency-audit.result }}
           IOS_RESULT: \${{ needs.ios-tests.result }}
           IOS_UI_RESULT: \${{ needs.ios-ui-tests.result }}
           SYNAPSE_NATIVE_REACTIONS_RESULT: \${{ needs.synapse-native-reactions.result }}
@@ -143,6 +145,7 @@ ${iosBuildStep}
           }
           fail=0
           ok "Desktop/runtime validation" "$DESKTOP_RESULT" || fail=1
+          ok "Rust dependency audit" "$RUST_AUDIT_RESULT" || fail=1
           ok "iOS simulator tests" "$IOS_RESULT" || fail=1
           ok "iOS simulator UI tests" "$IOS_UI_RESULT" || fail=1
           ok "Synapse native reaction proof" "$SYNAPSE_NATIVE_REACTIONS_RESULT" || fail=1
@@ -459,8 +462,8 @@ test("the split CI layout must aggregate the iOS compile gate", () => {
   });
 
   const withoutNeed = realCiWorkflow.replace(
-    "ios-tests, ios-ui-tests, ios-compile, synapse-native-reactions",
-    "ios-tests, ios-ui-tests, synapse-native-reactions"
+    /ios-ui-tests,\s*ios-compile,/,
+    "ios-ui-tests,"
   );
   assert.notEqual(withoutNeed, realCiWorkflow);
   const missingNeed = inspect({ ciWorkflow: withoutNeed });
@@ -481,8 +484,8 @@ test("rejects an aggregate that drops a native synapse proof", () => {
   // the native synapse proof family remains a required client-validation signal.
   const result = inspect({
     ciWorkflow: ciWorkflow.replace(
-      "validate, ios-tests, ios-ui-tests, synapse-native-reactions, synapse-native-attachments",
-      "validate, ios-tests, ios-ui-tests, synapse-native-attachments"
+      "validate, rust-dependency-audit, ios-tests, ios-ui-tests, synapse-native-reactions, synapse-native-attachments",
+      "validate, rust-dependency-audit, ios-tests, ios-ui-tests, synapse-native-attachments"
     ),
   });
   assert.equal(result.ok, false);
@@ -721,4 +724,45 @@ test("rejects release documentation that recommends unavailable CI checks", () =
   });
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /documentation.*forbid/i);
+});
+
+test("the required Quality gate rejects a failed or cancelled dependency audit", () => {
+  const workflow = readFileSync(
+    path.join(import.meta.dirname, "../../.github/workflows/ci.yml"),
+    "utf8"
+  );
+  const gate = workflow.slice(workflow.indexOf("  quality-gate:\n"));
+  const script = gate.split("        run: |\n")[1].replace(/^ {10}/gm, "");
+  const results = Object.fromEntries(
+    [...gate.matchAll(/^ {10}([A-Z_]+): \$\{\{ needs\./gm)].map((match) => [
+      match[1],
+      "skipped",
+    ])
+  );
+  results.CHANGES_RESULT = "success";
+  for (const status of ["success", "skipped", "failure", "cancelled"]) {
+    const run = spawnSync("bash", ["-c", script], {
+      env: { ...process.env, ...results, RUST_AUDIT_RESULT: status },
+      encoding: "utf8",
+    });
+    assert.equal(
+      run.status,
+      ["success", "skipped"].includes(status) ? 0 : 1,
+      run.stderr
+    );
+  }
+});
+
+test("audit aggregation cannot be dropped or changed into a non-failing check", () => {
+  for (const workflow of [
+    ciWorkflow.replace("validate, rust-dependency-audit,", "validate,"),
+    ciWorkflow.replace(
+      'ok "Rust dependency audit" "$RUST_AUDIT_RESULT" || fail=1',
+      'echo "$RUST_AUDIT_RESULT"'
+    ),
+  ]) {
+    const result = inspect({ ciWorkflow: workflow });
+    assert.equal(result.ok, false);
+    assert.match(result.errors.join("\n"), /CI aggregate/);
+  }
 });

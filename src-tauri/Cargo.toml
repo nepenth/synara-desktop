@@ -18,10 +18,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 serde_json = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-# Matrix DTOs and policy live in the shared native core. Default features
-# include full-uniffi → room-key-forwarding (desktop compile-in). Search index
-# and X.509 identity are desktop-only; NSE / iOS SharedCore must not enable them.
-synara-core = { path = "../crates/synara-core", version = "0.1.0", features = [
+# Desktop shares full-app policy/owners without the Apple UniFFI surface.
+# Search index and X.509 identity are desktop-only; Apple must not enable them.
+synara-core = { path = "../crates/synara-core", version = "0.1.0", default-features = false, features = [
+  "full-app",
   "search-index",
   "x509-identity",
 ] }
@@ -30,18 +30,11 @@ keyring = { version = "3.6.3", default-features = false, features = [
   "linux-native-sync-persistent",
   "crypto-rust",
 ] }
-tauri = { version = "~2.11.6", features = ["tray-icon", "image-png"] }
+tauri = { version = "~2.12.1", features = ["tray-icon", "image-png"] }
 getrandom = { workspace = true }
-sha2 = { workspace = true }
 zeroize = { workspace = true }
 regex = "1"
 rfd = "0.17.2"
-# R0.7: live CS-API discovery/login-types transports (read-only; no login).
-reqwest = { workspace = true, features = [
-  "rustls",
-  "http2",
-  "stream",
-] }
 tauri-plugin-window-state = "2"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-notification = "2"
@@ -75,15 +68,6 @@ matrix-sdk = { workspace = true, features = [
   "experimental-search",
   "experimental-encrypted-state-events",
 ] }
-matrix-sdk-ui = { workspace = true, features = [
-  "rustls-aws-lc-rs",
-  "experimental-encrypted-state-events",
-] }
-matrix-sdk-crypto = { workspace = true, features = [
-  "automatic-room-key-forwarding",
-] }
-eyeball-im = { workspace = true }
-futures-util = { workspace = true }
 # Runtime for Matrix client open/drop (also used by matrix-sdk). Kept direct so
 # SdkClientHandle can shut down SQLite pools outside an ambient async context.
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time"] }
@@ -99,7 +83,7 @@ devtools = [ "tauri/devtools" ]
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-global-shortcut = "2"
-tauri-plugin-updater = "~2.12.0"
+tauri-plugin-updater = "~2.13.1"
 tauri-plugin-process = "2"
 tauri-plugin-single-instance = "2.4.5"
 
@@ -124,6 +108,16 @@ name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dev-dependencies]
+# Direct HTTP calls and SyncService SDK types are used only by desktop tests.
+reqwest = { workspace = true, features = [
+  "rustls",
+  "http2",
+  "stream",
+] }
+matrix-sdk-ui = { workspace = true, features = [
+  "rustls-aws-lc-rs",
+  "experimental-encrypted-state-events",
+] }
 rusqlite = { workspace = true }
 hmac = "0.13"
 sha1 = "0.11"
@@ -138,4 +132,3 @@ matrix-sdk = { workspace = true, features = [
   "experimental-search",
   "experimental-encrypted-state-events",
 ] }
-matrix-sdk-test = { workspace = true }

@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-/private/tmp/synara-ios-derived}"
-PACKAGE_CACHE_PATH="${IOS_PACKAGE_CACHE_PATH:-/private/tmp/synara-ios-package-cache}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/xcode-cache.sh"
+synara_configure_xcode_cache "$SCRIPT_DIR/.."
+DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$SYNARA_XCODE_DERIVED_DATA_ROOT/simulator}"
 RESULT_BUNDLE_DIR="${IOS_RESULT_BUNDLE_DIR:-/private/tmp/synara-ios-results}"
 RESULT_STAMP="${IOS_RESULT_STAMP:-$(date +%Y%m%d-%H%M%S)-$$}"
 APPLE_SLICES="${SYNARA_CORE_APPLE_SLICES:-all}"
@@ -23,11 +25,8 @@ else
   TEST_DESTINATION="platform=iOS Simulator,name=iPhone 17"
 fi
 TEST_SUITE="${IOS_TEST_SUITE:-all}"
-DEVICE_DERIVED_DATA_PATH="${IOS_DEVICE_DERIVED_DATA_PATH:-/private/tmp/synara-ios-device-derived}"
-CLONED_SOURCE_PACKAGES_DIR_PATH="${IOS_CLONED_SOURCE_PACKAGES_DIR_PATH:-}"
-export CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-/private/tmp/synara-ios-module-cache}"
-export SWIFTPM_MODULECACHE_OVERRIDE="${SWIFTPM_MODULECACHE_OVERRIDE:-/private/tmp/synara-ios-swiftpm-module-cache}"
-export CFFIXED_USER_HOME="${CFFIXED_USER_HOME:-/private/tmp/synara-ios-home}"
+DEVICE_DERIVED_DATA_PATH="${IOS_DEVICE_DERIVED_DATA_PATH:-$SYNARA_XCODE_DERIVED_DATA_ROOT/device-release}"
+export CFFIXED_USER_HOME="${CFFIXED_USER_HOME:-$SYNARA_XCODE_CACHE_ROOT/Home}"
 PACKAGE_RESOLVED_PATH="Synara.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
 PACKAGE_RESOLVED_BACKUP=""
 UNSIGNED_BUILD_ARGS=(
@@ -43,18 +42,6 @@ if [[ "$APPLE_SLICES" == "simulator-arm64" ]]; then
     EXCLUDED_ARCHS=x86_64
   )
 fi
-PACKAGE_ARGS=(
-  -packageCachePath "$PACKAGE_CACHE_PATH"
-  -scmProvider system
-  -skipPackagePluginValidation
-  -skipMacroValidation
-  -skipPackageSignatureValidation
-)
-
-if [[ -n "$CLONED_SOURCE_PACKAGES_DIR_PATH" ]]; then
-  PACKAGE_ARGS+=(-clonedSourcePackagesDirPath "$CLONED_SOURCE_PACKAGES_DIR_PATH")
-fi
-
 case "$TEST_SUITE" in
   all)
     TEST_ONLY_ARGS=()
@@ -95,6 +82,9 @@ cleanup() {
 trap cleanup EXIT
 
 repo_root="$(cd .. && pwd)"
+source "$repo_root/scripts/lib/rust-cache.sh"
+synara_configure_rust_cache "$repo_root"
+
 checker="$repo_root/scripts/check-synara-core-swift-scaffold.mjs"
 if [[ ! -f "$checker" ]]; then
   echo "SynaraCore Swift scaffold checker is required at $checker" >&2
@@ -214,7 +204,8 @@ if [[ -f "$PACKAGE_RESOLVED_PATH" ]]; then
   PACKAGE_RESOLVED_BACKUP="$(mktemp "${TMPDIR:-/tmp}/synara-package-resolved.XXXXXX")"
   cp "$PACKAGE_RESOLVED_PATH" "$PACKAGE_RESOLVED_BACKUP"
 fi
-xcodegen generate --spec project.yml
+node "$repo_root/scripts/generate-xcode-project.mjs" \
+  --project-dir "$PWD" --cache-path "$XCODEGEN_CACHE_PATH"
 
 package_graph_checker="$repo_root/scripts/check-xcode-local-package-graph.mjs"
 if [[ ! -f "$package_graph_checker" ]]; then
@@ -243,11 +234,9 @@ if [[ "$has_remote_package_reference" == "1" ]]; then
     exit 1
   fi
   mkdir -p "$(dirname "$PACKAGE_RESOLVED_PATH")"
-  cp "$PACKAGE_RESOLVED_BACKUP" "$PACKAGE_RESOLVED_PATH"
-  PACKAGE_ARGS+=(
-    -onlyUsePackageVersionsFromResolvedFile
-    -skipPackageUpdates
-  )
+  if [[ ! -f "$PACKAGE_RESOLVED_PATH" ]] || ! cmp -s "$PACKAGE_RESOLVED_BACKUP" "$PACKAGE_RESOLVED_PATH"; then
+    cp "$PACKAGE_RESOLVED_BACKUP" "$PACKAGE_RESOLVED_PATH"
+  fi
 elif [[ -n "$PACKAGE_RESOLVED_BACKUP" ]]; then
   mkdir -p "$(dirname "$PACKAGE_RESOLVED_PATH")"
   cp "$PACKAGE_RESOLVED_BACKUP" "$PACKAGE_RESOLVED_PATH"
@@ -255,12 +244,23 @@ elif [[ -n "$PACKAGE_RESOLVED_BACKUP" ]]; then
   exit 1
 fi
 
+# Use the same reachable graph and lock policy as local UI and signed builds.
+synara_xcode_package_args "$PWD"
+PACKAGE_ARGS=(
+  "${SYNARA_XCODE_PACKAGE_ARGS[@]}"
+  ${SYNARA_XCODE_COMPILATION_ARGS[@]+"${SYNARA_XCODE_COMPILATION_ARGS[@]}"}
+  -skipPackagePluginValidation
+  -skipMacroValidation
+  -skipPackageSignatureValidation
+)
+
 xcodebuild \
   -project Synara.xcodeproj \
   -scheme Synara \
   -destination "$BUILD_DESTINATION" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
   -resultBundlePath "$RESULT_BUNDLE_DIR/build-for-testing-$RESULT_STAMP.xcresult" \
+  -showBuildTimingSummary \
   "${PACKAGE_ARGS[@]}" \
   build-for-testing \
   "${UNSIGNED_BUILD_ARGS[@]}"
@@ -302,6 +302,7 @@ if [[ "${CHECK_IOS_DEVICE_RELEASE:-0}" == "1" ]]; then
     -destination "generic/platform=iOS" \
     -derivedDataPath "$DEVICE_DERIVED_DATA_PATH" \
     -resultBundlePath "$RESULT_BUNDLE_DIR/device-release-$RESULT_STAMP.xcresult" \
+    -showBuildTimingSummary \
     "${PACKAGE_ARGS[@]}" \
     build \
     "${UNSIGNED_BUILD_ARGS[@]}"

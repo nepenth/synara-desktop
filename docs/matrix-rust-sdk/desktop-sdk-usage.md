@@ -210,6 +210,6 @@ Scope: **tooling only**. Import files: 2. Files with any finding: 5.
 - Repository-wide totals include production, test, and tooling roles.
 - Desktop runtime baseline counts only import files under synara/src/ and matches plan §4 (220 production / 12 test).
 - Aggregates under aggregates.{production,test,tooling} never mix roles.
-- Direct networking uses false-positive-resistant /\_matrix/{client,media,federation,key}/ path literals.
+- Direct networking uses false-positive-resistant /_matrix/{client,media,federation,key}/ path literals.
 - Generated inventory; no wall-clock timestamps or absolute paths.
 - JSON/Markdown artifacts are formatted with Prettier using config resolved from each artifact path (same as the root CLI).

@@ -61,6 +61,9 @@ for target in "${targets[@]}"; do
   }
 done
 
+source "$repo_root/scripts/lib/rust-cache.sh"
+synara_configure_rust_cache "$repo_root"
+
 work_dir="$(mktemp -d "${TMPDIR:-/tmp}/synara-nse-core-uniffi.XXXXXX")"
 cleanup_work_dir() {
   rm -rf -- "$work_dir"
@@ -78,7 +81,7 @@ fi
 remove_bounded_target_dir() {
   local target_dir="$1"
   case "$target_dir" in
-    "$work_dir"/cargo-target-*|"$work_dir"/cargo-bindgen)
+    "$work_dir"/cargo-target-*)
       rm -rf -- "$target_dir"
       ;;
     *)
@@ -108,7 +111,7 @@ for target in "${targets[@]}"; do
   fi
   IPHONEOS_DEPLOYMENT_TARGET=16.0 \
     CARGO_TARGET_DIR="$target_build_dir" \
-    cargo build --locked --profile "$rust_profile" --package synara-nse-core --target "$target" --manifest-path "$repo_root/Cargo.toml"
+    cargo rustc --locked --profile "$rust_profile" --package synara-nse-core --lib --crate-type staticlib --target "$target" --manifest-path "$repo_root/Cargo.toml"
   if [[ "$space_bounded" == "1" ]]; then
     built_archive="$target_build_dir/$target/$rust_profile/libsynara_nse_core.a"
     [[ -f "$built_archive" ]] || fail "Rust build did not produce $built_archive"
@@ -121,16 +124,12 @@ done
 
 swift_tmp="$work_dir/Swift"
 mkdir -p "$swift_tmp"
-bindgen_target_dir="$cargo_target_dir"
-if [[ "$space_bounded" == "1" ]]; then
-  bindgen_target_dir="$work_dir/cargo-bindgen"
-  mkdir -p "$bindgen_target_dir"
-fi
+# Host tooling has the same locked graph for Core and NSE. Keep it reusable
+# independently of the Apple profiles, including space-bounded builds.
+bindgen_target_dir="${SYNARA_APPLE_BINDGEN_TARGET_DIR:-$repo_root/target/synara-core-bindgen}"
+mkdir -p "$bindgen_target_dir"
 CARGO_TARGET_DIR="$bindgen_target_dir" cargo run --locked --package synara-core-bindgen --manifest-path "$repo_root/Cargo.toml" \
   -- generate "$core_udl" --language swift --out-dir "$swift_tmp" --no-format
-if [[ "$space_bounded" == "1" ]]; then
-  remove_bounded_target_dir "$bindgen_target_dir"
-fi
 
 headers_root="$work_dir/Headers"
 headers_tmp="$headers_root/synara_nse_coreFFI"

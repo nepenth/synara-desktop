@@ -35,7 +35,8 @@ changing platform or Matrix boundaries.
 ## Validation
 
 Source builds use Node.js 24.13.1 (`.node-version`) and Rust 1.96
-(`rust-toolchain.toml`).
+(`rust-toolchain.toml`). Install the pinned compiler cache once with
+`npm run cache:setup`; npm Cargo/Tauri and Apple build scripts then select Kache.
 
 Run the gates appropriate to the changed surface. The baseline is:
 
@@ -49,7 +50,7 @@ npm --prefix synara run typecheck
 npm --prefix synara run test:modernization
 npm --prefix synara run check:eslint
 npm --prefix synara run check:prettier
-cargo test --workspace --locked
+npm run cargo -- test --workspace --locked
 ```
 
 A green pull-request check is not the full iOS simulator or desktop package

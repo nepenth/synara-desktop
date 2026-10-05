@@ -14,9 +14,8 @@ test('home room path helper includes event and via servers for join route target
 });
 
 test('all room destinations encode Matrix room and event identifiers exactly once', async () => {
-  const { getHomeRoomPath, getDirectRoomPath, getSpaceRoomPath, getSpacePath } = await import(
-    '../pathUtils'
-  );
+  const { getHomeRoomPath, getDirectRoomPath, getSpaceRoomPath, getSpacePath } =
+    await import('../pathUtils');
   const { parseSynaraRouteDestination } = await import('../../routes/synaraRoutes');
   const room = '#agent room/%25:example.test';
   const event = '$event/+?%25:example.test';
@@ -38,9 +37,8 @@ test('all room destinations encode Matrix room and event identifiers exactly onc
 });
 
 test('thread destinations encode the room and root and survive parse', async () => {
-  const { getHomeRoomThreadPath, getDirectRoomThreadPath, getSpaceRoomThreadPath } = await import(
-    '../pathUtils'
-  );
+  const { getHomeRoomThreadPath, getDirectRoomThreadPath, getSpaceRoomThreadPath } =
+    await import('../pathUtils');
   const { parseSynaraRouteDestination } = await import('../../routes/synaraRoutes');
   const room = '#agent room/%25:example.test';
   const root = '$root/+?%25:example.test';
@@ -64,9 +62,8 @@ test('thread destinations encode the room and root and survive parse', async () 
 
 test('approval Back preserves its originating location and rejects invalid or self returns', async () => {
   const { getBackRoutePath } = await import('../../components/backRoutePath');
-  const { createApprovalsNavigationState, getApprovalsOriginSpace } = await import(
-    '../../routes/approvalsNavigation'
-  );
+  const { createApprovalsNavigationState, getApprovalsOriginSpace } =
+    await import('../../routes/approvalsNavigation');
   for (const pathname of ['/direct/', '/inbox/later/', '/%23space%3Aexample.test/', '/home/']) {
     const state = createApprovalsNavigationState({
       pathname,

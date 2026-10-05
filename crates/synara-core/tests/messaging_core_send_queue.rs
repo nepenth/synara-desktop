@@ -5,8 +5,6 @@
 //! unused. The live Synapse proof is the happy-path `RoomSendQueue` owner;
 //! this mock-server test covers wedge / abort / unwedge.
 
-#![recursion_limit = "256"]
-
 use std::sync::Arc;
 use std::time::Duration;
 

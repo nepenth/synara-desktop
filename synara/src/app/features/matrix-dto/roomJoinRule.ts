@@ -7,12 +7,7 @@
  */
 
 export type RoomJoinRulePresentation =
-  | 'public'
-  | 'invite'
-  | 'knock'
-  | 'private'
-  | 'restricted'
-  | 'knock_restricted';
+  'public' | 'invite' | 'knock' | 'private' | 'restricted' | 'knock_restricted';
 
 const ROOM_JOIN_RULE_PRESENTATIONS: readonly RoomJoinRulePresentation[] = [
   'public',

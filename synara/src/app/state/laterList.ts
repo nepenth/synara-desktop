@@ -50,9 +50,8 @@ export const useBindLaterContentAtom = (
           clear();
           return;
         }
-        const result = await invokeDesktopWithAvailability<NativeLaterSnapshot>(
-          'matrix_later_snapshot'
-        );
+        const result =
+          await invokeDesktopWithAvailability<NativeLaterSnapshot>('matrix_later_snapshot');
         if (!disposed && result.available && result.value) {
           setLaterContent({
             type: 'PUT',

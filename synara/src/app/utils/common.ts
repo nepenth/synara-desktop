@@ -183,7 +183,7 @@ export const randomStr = (len = 12): string => {
 
 export const suffixRename = (name: string, validator: (newName: string) => boolean): string => {
   let suffix = 1;
-  let newName = name;
+  let newName: string;
   do {
     newName = name + suffix;
     suffix += 1;

@@ -84,11 +84,7 @@ export type TimelineWindow = {
 };
 
 export type RoomReadFrontierSource =
-  | 'marked-unread-anchor'
-  | 'private-receipt'
-  | 'public-receipt'
-  | 'fully-read'
-  | 'absent';
+  'marked-unread-anchor' | 'private-receipt' | 'public-receipt' | 'fully-read' | 'absent';
 
 export type RoomReadFrontier = {
   eventId?: string;
@@ -368,7 +364,7 @@ export const resolveRoomReadFrontier = (
       .unread === true;
 
   let eventId: string | undefined;
-  let source: RoomReadFrontierSource = 'absent';
+  let source: RoomReadFrontierSource;
 
   if (isExplicitlyMarkedUnread && unreadAnchorEventId) {
     eventId = unreadAnchorEventId;
@@ -414,8 +410,8 @@ export const resolveRoomReadFrontier = (
       : undefined;
   const isAtLiveTail = Boolean(
     eventId &&
-      liveTailEventId &&
-      (eventId === liveTailEventId || (tailOrdering !== null && (tailOrdering ?? -1) >= 0))
+    liveTailEventId &&
+    (eventId === liveTailEventId || (tailOrdering !== null && (tailOrdering ?? -1) >= 0))
   );
 
   return { eventId, source, isExplicitlyMarkedUnread, isAtLiveTail };
@@ -554,10 +550,7 @@ export const shouldShowJumpToUnread = (
 };
 
 export type RoomTimelineOpenMode =
-  | 'focused-event'
-  | 'unread-window'
-  | 'saved-viewport'
-  | 'live-end';
+  'focused-event' | 'unread-window' | 'saved-viewport' | 'live-end';
 
 export type RoomTimelineOpenDiagnostics = {
   openMode: RoomTimelineOpenMode;

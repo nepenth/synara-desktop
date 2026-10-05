@@ -422,14 +422,14 @@ test("output is deterministic and uses repository-relative POSIX paths only", ()
   }
 });
 
-test("check mode detects stale artifacts and does not mutate them", () => {
+test("check mode detects stale artifacts and does not mutate them", async () => {
   const files = {
     "synara/src/app/features/x/x.ts": `import { Room } from 'matrix-js-sdk';\nexport type R = Room;\n`,
   };
   const { root, fileList } = makeFixtureRoot(files);
   try {
     const inventory = buildInventory({ root, fileList });
-    writeSnapshots(inventory, { root });
+    await writeSnapshots(inventory, { root });
 
     const jsonRel = "docs/matrix-rust-sdk/desktop-sdk-usage.json";
     const mdRel = "docs/matrix-rust-sdk/desktop-sdk-usage.md";
@@ -438,7 +438,7 @@ test("check mode detects stale artifacts and does not mutate them", () => {
     const beforeJson = readFileSync(jsonPath, "utf8");
     const beforeMd = readFileSync(mdPath, "utf8");
 
-    const ok = checkSnapshots(inventory, { root });
+    const ok = await checkSnapshots(inventory, { root });
     assert.equal(ok.ok, true);
     assert.deepEqual(ok.errors, []);
 
@@ -447,7 +447,7 @@ test("check mode detects stale artifacts and does not mutate them", () => {
       beforeJson.replace('"schemaVersion": 2', '"schemaVersion": 0'),
       "utf8",
     );
-    const stale = checkSnapshots(inventory, { root });
+    const stale = await checkSnapshots(inventory, { root });
     assert.equal(stale.ok, false);
     assert.ok(
       stale.errors.some(
@@ -462,7 +462,7 @@ test("check mode detects stale artifacts and does not mutate them", () => {
 
     writeFileSync(jsonPath, beforeJson, "utf8");
     writeFileSync(mdPath, `${beforeMd}\n<!-- stale -->\n`, "utf8");
-    const staleMd = checkSnapshots(inventory, { root });
+    const staleMd = await checkSnapshots(inventory, { root });
     assert.equal(staleMd.ok, false);
     assert.ok(staleMd.errors.some((e) => e.includes(mdRel)));
     assert.equal(readFileSync(jsonPath, "utf8"), beforeJson);
@@ -535,18 +535,18 @@ test("repository inventory records the deletion delta to zero production js-sdk 
   assert.ok(!/"form": "dynamic"/.test(json), "no dynamic js-sdk import recorded");
 });
 
-test("generator artifacts match external root Prettier CLI formatting", () => {
+test("generator artifacts match external root Prettier CLI formatting", async () => {
   const inventory = buildInventory({ root: REPO_ROOT });
   const jsonRel = "docs/matrix-rust-sdk/desktop-sdk-usage.json";
   const mdRel = "docs/matrix-rust-sdk/desktop-sdk-usage.md";
   const jsonPath = path.join(REPO_ROOT, jsonRel);
   const mdPath = path.join(REPO_ROOT, mdRel);
 
-  const generatorJson = formatJsonArtifact(inventory, {
+  const generatorJson = await formatJsonArtifact(inventory, {
     root: REPO_ROOT,
     jsonPath,
   });
-  const generatorMd = formatMarkdownArtifact(inventory, {
+  const generatorMd = await formatMarkdownArtifact(inventory, {
     root: REPO_ROOT,
     mdPath,
   });
@@ -579,8 +579,8 @@ test("generator artifacts match external root Prettier CLI formatting", () => {
   const prettier = requireFromTest(
     path.join(REPO_ROOT, "synara/node_modules/prettier"),
   );
-  const pathConfig = prettier.resolveConfig.sync(jsonPath);
-  const synaraForced = prettier.resolveConfig.sync(
+  const pathConfig = await prettier.resolveConfig(jsonPath);
+  const synaraForced = await prettier.resolveConfig(
     path.join(REPO_ROOT, "synara/package.json"),
   );
   assert.equal(

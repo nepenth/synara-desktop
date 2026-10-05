@@ -92,6 +92,9 @@ EOF
   exit 1
 fi
 
+source "$root/scripts/lib/rust-cache.sh"
+synara_configure_rust_cache "$root"
+
 target="${SYNARA_MACOS_TARGET:-universal-apple-darwin}"
 bundles="${SYNARA_MACOS_BUNDLES:-dmg}"
 signing_dir="$(mktemp -d "${TMPDIR:-/tmp}/synara-macos-signing.XXXXXX")"

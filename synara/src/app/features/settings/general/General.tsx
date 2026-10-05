@@ -723,10 +723,10 @@ function SecretStoreTile() {
     persistence === 'persistent'
       ? 'Success'
       : persistence === 'session-scoped'
-      ? 'Warning'
-      : status
-      ? 'Critical'
-      : 'Secondary';
+        ? 'Warning'
+        : status
+          ? 'Critical'
+          : 'Secondary';
   const statusLabel = status ? getPlatformSecretStoreStatusLabel(status) : 'Checking';
   const details = status ? getPlatformSecretStoreStatusDescription(status) : statusLabel;
   const showNativeStoreErrorWarning = shouldSurfaceNativeStoreErrorWarning(nativeStoreError, true);

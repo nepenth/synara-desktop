@@ -27,7 +27,10 @@ export type ApprovalInboxSnapshot = {
 export const approvalIdentity = (item: Pick<ApprovalInboxItem, 'roomId' | 'eventId'>): string =>
   `${item.roomId}\u0000${item.eventId}`;
 
-export const approvalStatus = (item: ApprovalInboxItem, now: number): ApprovalInboxItem['status'] =>
+export const approvalStatus = (
+  item: ApprovalInboxItem,
+  now: number
+): ApprovalInboxItem['status'] =>
   item.status === 'pending' && now >= item.expiresAt ? 'expired' : item.status;
 
 export function acceptsApprovalInbox(value: unknown): value is ApprovalInboxSnapshot {

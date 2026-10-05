@@ -5,8 +5,6 @@
 //! a fresh `NativeTimelineOwner` after the local homeserver has stopped. It
 //! must not add a shell-owned message cache or retain the pre-restart client.
 
-#![recursion_limit = "256"]
-
 use std::fs;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};

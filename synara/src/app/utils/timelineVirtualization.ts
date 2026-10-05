@@ -174,7 +174,7 @@ export type TimelineBuildFingerprint = {
 
 export type TimelineRowsBuildState<
   TRow extends TimelineBuildRow,
-  TEvt extends TimelineRowBuildEvent = TimelineRowBuildEvent
+  TEvt extends TimelineRowBuildEvent = TimelineRowBuildEvent,
 > = {
   fingerprint: TimelineBuildFingerprint;
   rows: TRow[];
@@ -235,7 +235,7 @@ const getEventRevisionToken = (event: TimelineRowBuildEvent): string =>
   `${event.getId() ?? ''}:${event.isRedacted() ? 1 : 0}:${event.getTs()}:${event.getType()}`;
 
 const getTimelineRevisionToken = <
-  TTimeline extends TimelineRowBuildTimeline<TimelineRowBuildEvent>
+  TTimeline extends TimelineRowBuildTimeline<TimelineRowBuildEvent>,
 >(
   linkedTimelines: TTimeline[],
   startAbsoluteIndex = 0,
@@ -334,7 +334,7 @@ const getNormalizedEventRange = (
 };
 
 export const createTimelineBuildFingerprint = <
-  TTimeline extends TimelineRowBuildTimeline<TimelineRowBuildEvent>
+  TTimeline extends TimelineRowBuildTimeline<TimelineRowBuildEvent>,
 >(
   linkedTimelines: TTimeline[],
   options: TimelineBuildOptions,
@@ -390,7 +390,7 @@ const getTrailingSyntheticRowCount = (rows: TimelineBuildRow[]): number => {
 
 const getEventAtAbsoluteIndex = <
   TEvt extends TimelineRowBuildEvent,
-  TTimeline extends TimelineRowBuildTimeline<TEvt>
+  TTimeline extends TimelineRowBuildTimeline<TEvt>,
 >(
   linkedTimelines: TTimeline[],
   absoluteIndex: number
@@ -409,7 +409,7 @@ const getEventAtAbsoluteIndex = <
 const processTimelineEvent = <
   TEvt extends TimelineRowBuildEvent,
   TTimeline extends TimelineRowBuildTimeline<TEvt>,
-  TRow extends TimelineBuildRow
+  TRow extends TimelineBuildRow,
 >(args: {
   mEvent: TEvt;
   eventIndex: number;
@@ -512,7 +512,7 @@ const processTimelineEvent = <
 const appendTimelineRowsFromIndex = <
   TEvt extends TimelineRowBuildEvent,
   TTimeline extends TimelineRowBuildTimeline<TEvt>,
-  TRow extends TimelineBuildRow
+  TRow extends TimelineBuildRow,
 >(args: {
   linkedTimelines: TTimeline[];
   options: TimelineBuildOptions;
@@ -556,7 +556,7 @@ const appendTimelineRowsFromIndex = <
 export const buildTimelineRows = <
   TEvt extends TimelineRowBuildEvent,
   TTimeline extends TimelineRowBuildTimeline<TEvt>,
-  TRow extends TimelineBuildRow
+  TRow extends TimelineBuildRow,
 >(
   linkedTimelines: TTimeline[],
   options: TimelineBuildOptions,
@@ -617,7 +617,7 @@ export const buildTimelineRows = <
 
 const canIncrementallyAppendRows = <
   TRow extends TimelineBuildRow,
-  TEvt extends TimelineRowBuildEvent
+  TEvt extends TimelineRowBuildEvent,
 >(
   previous: TimelineRowsBuildState<TRow, TEvt>,
   fingerprint: TimelineBuildFingerprint
@@ -631,7 +631,7 @@ const canIncrementallyAppendRows = <
 const verifyIncrementalAnchor = <
   TTimeline extends TimelineRowBuildTimeline<TimelineRowBuildEvent>,
   TRow extends TimelineBuildRow,
-  TEvt extends TimelineRowBuildEvent
+  TEvt extends TimelineRowBuildEvent,
 >(
   linkedTimelines: TTimeline[],
   previous: TimelineRowsBuildState<TRow, TEvt>
@@ -648,7 +648,7 @@ const verifyIncrementalAnchor = <
 
 export type TimelineRowsBuildResult<
   TRow extends TimelineBuildRow,
-  TEvt extends TimelineRowBuildEvent = TimelineRowBuildEvent
+  TEvt extends TimelineRowBuildEvent = TimelineRowBuildEvent,
 > = {
   rows: TRow[];
   state: TimelineRowsBuildState<TRow, TEvt>;
@@ -658,7 +658,7 @@ export type TimelineRowsBuildResult<
 export const buildTimelineRowsWithState = <
   TEvt extends TimelineRowBuildEvent,
   TTimeline extends TimelineRowBuildTimeline<TEvt>,
-  TRow extends TimelineBuildRow
+  TRow extends TimelineBuildRow,
 >(
   linkedTimelines: TTimeline[],
   options: TimelineBuildOptions,

@@ -63,8 +63,8 @@ function mergeInboxOverHistory(
   const decision = inboxNamedDecision
     ? inbox.decision
     : hideUnprovenHistoryDecision
-    ? undefined
-    : history.decision;
+      ? undefined
+      : history.decision;
   const status = decision !== undefined || hideUnprovenHistoryDecision ? 'decided' : inbox.status;
   const summary = historyPreview(history) ?? inbox.summary ?? inbox.body;
   return {

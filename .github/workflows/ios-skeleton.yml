@@ -14,6 +14,8 @@ jobs:
   test:
     name: Unsigned simulator build and tests
     runs-on: macos-26
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     # Bounded cap allows post-test output/upload.
     timeout-minutes: 90
     steps:
@@ -27,10 +29,20 @@ jobs:
           components: llvm-tools-preview
           targets: aarch64-apple-ios-sim
 
+      - name: Restore Apple simulator Rust compilation cache
+        uses: ./.github/actions/setup-rust-cache
+        with:
+          family: ci-synara-core-apple-simulator-arm64
+          save-cache: "false"
+
       - name: Install XcodeGen
         run: |
           brew install xcodegen
           test "$(xcodegen --version)" = "Version: 2.46.0"
+
+      - name: Restore native Xcode compilation cache
+        id: xcode_cache
+        uses: ./.github/actions/setup-xcode-cache
 
       - name: Build and run unsigned simulator tests
         run: scripts/ci-build.sh

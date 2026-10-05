@@ -1,0 +1,57 @@
+name: Save bounded native Xcode compilation cache
+description: Only main publishes a successful, nonempty compiler CAS snapshot of at most 512 MiB.
+inputs:
+  cache-key:
+    description: Weekly immutable compiler cache snapshot key
+    required: true
+  cache-path:
+    description: Compiler CAS directory from setup-xcode-cache
+    required: true
+  cache-hit:
+    description: Exact weekly cache hit from setup-xcode-cache
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Check compiler cache publication budget
+      id: budget
+      shell: bash
+      env:
+        CACHE_PATH: ${{ inputs.cache-path }}
+        CACHE_KEY: ${{ inputs.cache-key }}
+        CACHE_HIT: ${{ inputs.cache-hit }}
+      run: |
+        expected_path="$GITHUB_WORKSPACE/.xcode-cache/CompilationCache.noindex"
+        if [[ "$CACHE_PATH" != "$expected_path" || -L "$CACHE_PATH" ]]; then
+          echo "Refusing to publish anything outside the owned compiler CAS directory." >&2
+          exit 1
+        fi
+        size_kib=0
+        if [[ -d "$CACHE_PATH" && -n "$(find "$CACHE_PATH" -type f -print -quit)" ]]; then
+          size_kib="$(du -sk "$CACHE_PATH" | awk '{print $1}')"
+        fi
+        publish=false
+        if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+          reason="Branch and tag builds only read compiler snapshots."
+        elif [[ "$CACHE_HIT" == true ]]; then
+          reason="This week's immutable snapshot already exists."
+        elif (( size_kib == 0 )); then
+          reason="No compiler objects were produced."
+        elif (( size_kib > 524288 )); then
+          reason="Compiler cache exceeds the 512 MiB publication budget; skipping upload."
+        else
+          publish=true
+          reason="Publishing this week's bounded compiler snapshot from main."
+        fi
+        echo "publish=$publish" >> "$GITHUB_OUTPUT"
+        {
+          echo "### Xcode compiler cache publication"
+          echo "Snapshot: \`$CACHE_KEY\`; allocated size: $size_kib KiB; budget: 524288 KiB."
+          echo "$reason"
+        } >> "$GITHUB_STEP_SUMMARY"
+    - name: Save compiler objects from main
+      if: github.ref == 'refs/heads/main' && steps.budget.outputs.publish == 'true'
+      uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+      with:
+        path: ${{ inputs.cache-path }}
+        key: ${{ inputs.cache-key }}

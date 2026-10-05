@@ -40,11 +40,11 @@ for (const target of productionTargets) {
       encoding: "utf8",
       maxBuffer: 16 * 1024 * 1024,
       env: { ...process.env, CARGO_TERM_COLOR: "never" },
-    }
+    },
   );
   if (result.error || result.status !== 0) {
     console.error(
-      `SynaraNseCore production feature query failed for ${target}.`
+      `SynaraNseCore production feature query failed for ${target}.`,
     );
     if (result.stderr) console.error(result.stderr.trim());
     process.exit(1);
@@ -53,13 +53,25 @@ for (const target of productionTargets) {
   // failure (including SIGPIPE) must never be interpreted as a clean graph.
   if (result.stdout.includes('synara-core feature "full-uniffi"')) {
     console.error(
-      `SynaraNseCore must not enable the full Core UniFFI feature in its production graph (${target})`
+      `SynaraNseCore must not enable the full Core UniFFI feature in its production graph (${target})`,
+    );
+    process.exit(1);
+  }
+  if (result.stdout.includes('synara-core feature "room-key-forwarding"')) {
+    console.error(
+      `SynaraNseCore must not compile automatic-room-key-forwarding (${target})`,
+    );
+    process.exit(1);
+  }
+  if (result.stdout.includes('synara-core feature "full-app"')) {
+    console.error(
+      `SynaraNseCore must not enable full application owners (${target})`,
     );
     process.exit(1);
   }
   if (result.stdout.includes('synara-core feature "search-index"')) {
     console.error(
-      `SynaraNseCore must not enable the desktop search-index feature (${target})`
+      `SynaraNseCore must not enable the desktop search-index feature (${target})`,
     );
     process.exit(1);
   }
@@ -76,6 +88,8 @@ for (const target of productionTargets) {
       "synara-nse-core",
       "-e",
       "normal,build,features",
+      "--format",
+      "{p} [{f}]",
       "--target",
       target,
     ],
@@ -83,28 +97,44 @@ for (const target of productionTargets) {
       encoding: "utf8",
       maxBuffer: 16 * 1024 * 1024,
       env: { ...process.env, CARGO_TERM_COLOR: "never" },
-    }
+    },
   );
   if (forwarding.error || forwarding.status !== 0) {
     console.error(
-      `SynaraNseCore forwarding-feature query failed for ${target}.`
+      `SynaraNseCore forwarding-feature query failed for ${target}.`,
     );
     if (forwarding.stderr) console.error(forwarding.stderr.trim());
     process.exit(1);
   }
+  // Forward feature-node trees can omit requests forwarded by a selected
+  // root feature. The package's effective feature set catches those too.
+  const effectiveFeatures = new Set();
+  for (const line of forwarding.stdout.split("\n")) {
+    const match = /\bv\S+.* \[([^\]]*)\](?: \(\*\))?$/.exec(line);
+    if (match)
+      for (const feature of match[1].split(",")) effectiveFeatures.add(feature);
+  }
   if (
     /\bfeature "(?:x509-identity|experimental-x509-identity-verification|rust-x509-verifier-impl)"/.test(
-      forwarding.stdout
-    )
+      forwarding.stdout,
+    ) ||
+    [
+      "x509-identity",
+      "experimental-x509-identity-verification",
+      "rust-x509-verifier-impl",
+    ].some((feature) => effectiveFeatures.has(feature))
   ) {
     console.error(
-      `SynaraNseCore must not enable X.509 identity verification (${target})`
+      `SynaraNseCore must not enable X.509 identity verification (${target})`,
     );
     process.exit(1);
   }
-  if (/\bfeature "automatic-room-key-forwarding"/.test(forwarding.stdout)) {
+  if (
+    /\bfeature "automatic-room-key-forwarding"/.test(forwarding.stdout) ||
+    effectiveFeatures.has("automatic-room-key-forwarding")
+  ) {
     console.error(
-      `SynaraNseCore must not compile automatic-room-key-forwarding (${target})`
+      `SynaraNseCore must not compile automatic-room-key-forwarding (${target})`,
     );
     process.exit(1);
   }
@@ -126,16 +156,21 @@ for (const target of productionTargets) {
       encoding: "utf8",
       maxBuffer: 16 * 1024 * 1024,
       env: { ...process.env, CARGO_TERM_COLOR: "never" },
-    }
+    },
   );
   if (tree.error || tree.status !== 0) {
     console.error(
-      `SynaraNseCore production crate tree query failed for ${target}.`
+      `SynaraNseCore production crate tree query failed for ${target}.`,
     );
     if (tree.stderr) console.error(tree.stderr.trim());
     process.exit(1);
   }
-  for (const leaked of ["matrix-sdk-search", "tantivy"]) {
+  for (const leaked of [
+    "matrix-sdk-search",
+    "tantivy",
+    "matrix-sdk-qrcode",
+    "pulldown-cmark",
+  ]) {
     if (tree.stdout.includes(leaked)) {
       console.error(`SynaraNseCore must not pull ${leaked} on ${target}`);
       process.exit(1);
@@ -143,5 +178,5 @@ for (const target of productionTargets) {
   }
 }
 console.log(
-  "Synara NSE Core production feature isolation passed for Apple slices and target-gated build dependencies."
+  "Synara NSE Core production feature isolation passed for Apple slices and target-gated build dependencies.",
 );

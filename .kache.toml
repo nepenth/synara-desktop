@@ -1,0 +1,11 @@
+# Rust compiler cache shared by local Cargo, Tauri and Apple binding builds.
+# Paths stay in the user environment; no checkout- or machine-specific values.
+[cache]
+local_only = true
+cache_executables = true
+explain_miss = true
+# Let Kache choose its adaptive disk budget unless KACHE_MAX_SIZE is provided.
+# Target directories are reviewed and cleaned explicitly via npm run cache:clean.
+auto_clean_orphaned_targets = false
+auto_clean_idle_targets_days = 0
+auto_clean_unused_units_days = 0

@@ -119,8 +119,8 @@ export function NativeSecretStorageAction({
             {action === 'unlock_required'
               ? 'Unlock & Import'
               : action === 'reset'
-              ? 'Replace Recovery Key'
-              : 'Set Up Recovery'}
+                ? 'Replace Recovery Key'
+                : 'Set Up Recovery'}
           </Text>
         </Button>
         {action === 'reset' && (

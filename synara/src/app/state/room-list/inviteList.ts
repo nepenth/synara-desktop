@@ -55,24 +55,21 @@ export const useBindAllInvitesAtom = () => {
       if (inFlight) return;
       inFlight = true;
       try {
-        const session = await invokeDesktopWithAvailability<NativeSessionSnapshot>(
-          'matrix_session_snapshot'
-        );
+        const session =
+          await invokeDesktopWithAvailability<NativeSessionSnapshot>('matrix_session_snapshot');
         if (disposed || !session.available) return;
         if (session.value?.status !== 'logged_in') {
           setSnapshot(emptyInviteSnapshot);
           setSyncing(false);
           return;
         }
-        const syncStatus = await invokeDesktopWithAvailability<NativeSyncReadiness>(
-          'matrix_sync_status'
-        );
+        const syncStatus =
+          await invokeDesktopWithAvailability<NativeSyncReadiness>('matrix_sync_status');
         if (!disposed && syncStatus.available && syncStatus.value) {
           setSyncing(syncStatus.value.readiness === 'running');
         }
-        const result = await invokeDesktopWithAvailability<NativeInviteSnapshot>(
-          'matrix_invites_snapshot'
-        );
+        const result =
+          await invokeDesktopWithAvailability<NativeInviteSnapshot>('matrix_invites_snapshot');
         if (!disposed && result.available && result.value) setSnapshot(result.value);
       } catch {
         // The native command records a privacy-safe diagnostic. Preserve the last

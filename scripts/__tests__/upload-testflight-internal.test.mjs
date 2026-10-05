@@ -8,11 +8,11 @@ import { fileURLToPath } from "node:url";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../.."
+  "../..",
 );
 const uploadScript = path.join(
   repositoryRoot,
-  "synara-ios/scripts/upload-testflight-internal.sh"
+  "synara-ios/scripts/upload-testflight-internal.sh",
 );
 
 async function createHarness({
@@ -21,7 +21,7 @@ async function createHarness({
   retrySeconds = 0,
 } = {}) {
   const root = await mkdtemp(
-    path.join(os.tmpdir(), "synara-testflight-upload-")
+    path.join(os.tmpdir(), "synara-testflight-upload-"),
   );
   const binDirectory = path.join(root, "bin");
   const diagnosticsDirectory = path.join(root, "diagnostics");
@@ -30,6 +30,7 @@ async function createHarness({
   const archiveCountFile = path.join(root, "archive-count.txt");
   const exportCountFile = path.join(root, "export-count.txt");
   const outputFile = path.join(root, "github-output.txt");
+  const commandLog = path.join(root, "xcode-commands.jsonl");
   await Promise.all([
     mkdir(binDirectory, { recursive: true }),
     mkdir(distributionLogs, { recursive: true }),
@@ -40,7 +41,7 @@ async function createHarness({
   await writeFile(
     path.join(distributionLogs, "DistributionSummary.plist"),
     "fixture diagnostics",
-    "utf8"
+    "utf8",
   );
 
   const fakeXcodebuild = path.join(binDirectory, "xcodebuild");
@@ -48,6 +49,11 @@ async function createHarness({
     fakeXcodebuild,
     `#!/usr/bin/env bash
 set -euo pipefail
+if [[ "$1" == "-version" ]]; then
+  printf 'Xcode 26.0\\nBuild version fixture\\n'
+  exit 0
+fi
+node -e 'require("node:fs").appendFileSync(process.argv[1], JSON.stringify(process.argv.slice(2)) + "\\n")' -- "$FAKE_XCODE_COMMAND_LOG" "$@"
 if [[ " $* " == *" -showBuildSettings "* ]]; then
   printf '    MARKETING_VERSION = 1.2.56\\n'
   printf '    CURRENT_PROJECT_VERSION = 1.2.57\\n'
@@ -85,9 +91,25 @@ count="$(cat "$FAKE_ARCHIVE_COUNT_FILE")"
 printf '%s\\n' "$((count + 1))" > "$FAKE_ARCHIVE_COUNT_FILE"
 printf 'fixture archive\\n'
 `,
-    "utf8"
+    "utf8",
   );
   await chmod(fakeXcodebuild, 0o755);
+
+  // These fixtures run in Linux CI as well as on developer Macs. Never use
+  // installed Apple tooling or compile/resolve packages while testing upload.
+  for (const [name, body] of Object.entries({
+    "xcode-select": 'printf "/fixture/Xcode/Contents/Developer\\n"',
+    xcrun: `case "$*" in
+      "--find swift") printf '/fixture/Xcode/usr/bin/swift\\n' ;;
+      "swift --version") printf 'Apple Swift version 6.2\\n' ;;
+      *) printf '26.0\\n' ;;
+    esac`,
+    swift: `printf '{"dependencies":[]}'`,
+  })) {
+    const tool = path.join(binDirectory, name);
+    await writeFile(tool, `#!/bin/sh\n${body}\n`, "utf8");
+    await chmod(tool, 0o755);
+  }
 
   const fakeArchiveChecker = path.join(binDirectory, "check-archive");
   await writeFile(
@@ -98,7 +120,7 @@ set -euo pipefail
 [[ "$2" == "$SYNARA_IOS_DIAGNOSTICS_DIR" ]]
 printf 'checked\\n' > "$SYNARA_ARCHIVE_CHECK_MARKER"
 `,
-    "utf8"
+    "utf8",
   );
   await chmod(fakeArchiveChecker, 0o755);
 
@@ -108,6 +130,7 @@ printf 'checked\\n' > "$SYNARA_ARCHIVE_CHECK_MARKER"
     TMPDIR: root,
     GITHUB_OUTPUT: outputFile,
     FAKE_DISTRIBUTION_LOGS: distributionLogs,
+    FAKE_XCODE_COMMAND_LOG: commandLog,
     FAKE_EXPORT_BEHAVIORS: exportBehaviors.join(","),
     FAKE_ARCHIVE_COUNT_FILE: archiveCountFile,
     FAKE_EXPORT_COUNT_FILE: exportCountFile,
@@ -117,11 +140,12 @@ printf 'checked\\n' > "$SYNARA_ARCHIVE_CHECK_MARKER"
       "notification-profile",
     SYNARA_PUSH_GATEWAY_URL: "https://push.example.test/_matrix/push/v1/notify",
     SYNARA_IOS_ARCHIVE_ROOT: root,
+    SYNARA_IOS_CACHE_ROOT: path.join(root, "cache root"),
     SYNARA_IOS_DIAGNOSTICS_DIR: diagnosticsDirectory,
     SYNARA_IOS_NOTIFICATION_ARCHIVE_CHECKER: fakeArchiveChecker,
     SYNARA_EXPECTED_ARCHIVE_PATH: path.join(
       root,
-      "Synara-1.2.56-1.2.57.xcarchive"
+      "Synara-1.2.56-1.2.57.xcarchive",
     ),
     SYNARA_ARCHIVE_CHECK_MARKER: archiveCheckMarker,
     SYNARA_TESTFLIGHT_EXPORT_RETRY_SECONDS: String(retrySeconds),
@@ -142,6 +166,7 @@ printf 'checked\\n' > "$SYNARA_ARCHIVE_CHECK_MARKER"
     distributionLogs,
     exportCountFile,
     outputFile,
+    commandLog,
     result,
   };
 }
@@ -149,13 +174,30 @@ printf 'checked\\n' > "$SYNARA_ARCHIVE_CHECK_MARKER"
 test("preserves version outputs, command logs, and Xcode distribution diagnostics", async () => {
   const harness = await createHarness();
   assert.equal(harness.result.status, 0, harness.result.stderr);
+  const calls = (await readFile(harness.commandLog, "utf8"))
+    .trim()
+    .split("\n")
+    .map(JSON.parse);
+  const archive = calls.find((args) => args.includes("archive"));
+  assert.match(
+    archive[archive.indexOf("-derivedDataPath") + 1],
+    /cache root\/DerivedData\/signed-release$/,
+  );
+  assert.ok(archive.includes("-showBuildTimingSummary"));
+  assert.ok(archive.includes("COMPILATION_CACHE_ENABLE_CACHING=YES"));
+  assert.ok(archive.includes("DEVELOPMENT_TEAM=TEAM"));
+  assert.ok(archive.includes("SYNARA_IOS_PROVISIONING_PROFILE=app-profile"));
+  assert.ok(!archive.includes("-onlyUsePackageVersionsFromResolvedFile"));
+  const exported = calls.find((args) => args.includes("-exportArchive"));
+  assert.ok(!exported.includes("-derivedDataPath"));
+  assert.ok(!exported.includes("COMPILATION_CACHE_ENABLE_CACHING=YES"));
   assert.match(
     await readFile(harness.outputFile, "utf8"),
-    /marketing_version=1\.2\.56/
+    /marketing_version=1\.2\.56/,
   );
   assert.match(
     await readFile(harness.outputFile, "utf8"),
-    /build_number=1\.2\.57/
+    /build_number=1\.2\.57/,
   );
   assert.equal(await readFile(harness.archiveCheckMarker, "utf8"), "checked\n");
   assert.equal(await readFile(harness.archiveCountFile, "utf8"), "1\n");
@@ -163,27 +205,27 @@ test("preserves version outputs, command logs, and Xcode distribution diagnostic
   assert.match(
     await readFile(
       path.join(harness.diagnosticsDirectory, "xcodebuild-archive.log"),
-      "utf8"
+      "utf8",
     ),
-    /fixture archive/
+    /fixture archive/,
   );
   assert.match(
     await readFile(
       path.join(harness.diagnosticsDirectory, "xcodebuild-export.log"),
-      "utf8"
+      "utf8",
     ),
-    /fixture export/
+    /fixture export/,
   );
   assert.equal(
     await readFile(
       path.join(
         harness.diagnosticsDirectory,
         path.basename(harness.distributionLogs),
-        "DistributionSummary.plist"
+        "DistributionSummary.plist",
       ),
-      "utf8"
+      "utf8",
     ),
-    "fixture diagnostics"
+    "fixture diagnostics",
   );
 });
 
@@ -196,11 +238,11 @@ test("returns the original Xcode export status after capturing diagnostics", asy
       path.join(
         harness.diagnosticsDirectory,
         path.basename(harness.distributionLogs),
-        "DistributionSummary.plist"
+        "DistributionSummary.plist",
       ),
-      "utf8"
+      "utf8",
     ),
-    "fixture diagnostics"
+    "fixture diagnostics",
   );
 });
 
@@ -216,18 +258,18 @@ test("retries only export after a transient App Store Connect auth failure", asy
     await readFile(
       path.join(
         harness.diagnosticsDirectory,
-        "xcodebuild-export-attempt-2.log"
+        "xcodebuild-export-attempt-2.log",
       ),
-      "utf8"
+      "utf8",
     ),
-    /fixture export/
+    /fixture export/,
   );
   assert.match(
     await readFile(
       path.join(harness.diagnosticsDirectory, "xcodebuild-export.log"),
-      "utf8"
+      "utf8",
     ),
-    /fixture export/
+    /fixture export/,
   );
 });
 
@@ -238,7 +280,7 @@ test("does not retry signing or archive-unrelated export failures", async () => 
   assert.equal(await readFile(harness.exportCountFile, "utf8"), "1\n");
   assert.doesNotMatch(
     harness.result.stdout,
-    /Retrying App Store Connect export/
+    /Retrying App Store Connect export/,
   );
 });
 
@@ -250,7 +292,7 @@ test("treats a redundant App Store Connect build as export success", async () =>
   assert.equal(await readFile(harness.exportCountFile, "utf8"), "1\n");
   assert.match(
     harness.result.stdout,
-    /already has this build; treating export as success/
+    /already has this build; treating export as success/,
   );
 });
 
@@ -274,8 +316,8 @@ test("exhausts transient export retries and keeps the last Xcode status", async 
   assert.match(
     await readFile(
       path.join(harness.diagnosticsDirectory, "xcodebuild-export.log"),
-      "utf8"
+      "utf8",
     ),
-    /Account credentials have expired/
+    /Account credentials have expired/,
   );
 });

@@ -20,7 +20,7 @@ const room = (overrides: Partial<RoomSummary> & Pick<RoomSummary, 'roomId'>): Ro
     markedUnread: false,
     lastMessageIsAgentApproval: false,
     ...overrides,
-  } as RoomSummary);
+  }) as RoomSummary;
 
 test('sameStringList compares order and identity, not array reference', () => {
   const first = ['!a', '!b'];

@@ -17,13 +17,13 @@ const makeScrollElement = (
     offsetHeight,
     offsetTop,
     scrollHeight,
-  } as HTMLElement);
+  }) as HTMLElement;
 
 const makeItemElement = (offsetTop: number, clientHeight: number) =>
   ({
     offsetTop,
     clientHeight,
-  } as HTMLElement);
+  }) as HTMLElement;
 
 test('getRestoreScrollData preserves index zero anchors', () => {
   const anchor = makeItemElement(0, 120);

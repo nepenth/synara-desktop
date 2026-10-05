@@ -14,7 +14,7 @@ NOTIFICATION_SERVICE_PROVISIONING_PROFILE="${SYNARA_IOS_NOTIFICATION_SERVICE_PRO
 PUSH_GATEWAY_URL="${SYNARA_PUSH_GATEWAY_URL:-}"
 ARCHIVE_ROOT="${SYNARA_IOS_ARCHIVE_ROOT:-/tmp}"
 DIAGNOSTICS_DIR="${SYNARA_IOS_DIAGNOSTICS_DIR:-${RUNNER_TEMP:-$ARCHIVE_ROOT}/synara-ios-testflight-diagnostics}"
-PACKAGE_CACHE_PATH="${SYNARA_IOS_PACKAGE_CACHE_PATH:-}"
+source "$SCRIPT_DIR/lib/xcode-cache.sh"
 NOTIFICATION_SERVICE_ARCHIVE_CHECKER="${SYNARA_IOS_NOTIFICATION_ARCHIVE_CHECKER:-$SCRIPT_DIR/check-notification-service-archive.sh}"
 
 require_env() {
@@ -55,6 +55,11 @@ if ! is_nonneg_int "$EXPORT_RETRY_SECONDS"; then
   exit 1
 fi
 EXPORT_MAX_ATTEMPTS=$((EXPORT_RETRIES + 1))
+synara_configure_xcode_cache "$PROJECT_DIR"
+PACKAGE_CACHE_PATH="${SYNARA_IOS_PACKAGE_CACHE_PATH:-$PACKAGE_CACHE_PATH}"
+CLONED_SOURCE_PACKAGES_DIR_PATH="${SYNARA_IOS_CLONED_SOURCE_PACKAGES_DIR_PATH:-$CLONED_SOURCE_PACKAGES_DIR_PATH}"
+DERIVED_DATA_PATH="${SYNARA_IOS_DERIVED_DATA_PATH:-$SYNARA_XCODE_DERIVED_DATA_ROOT/signed-release}"
+synara_xcode_package_args "$PROJECT_DIR"
 xcode_auth_args=()
 has_xcode_auth_args=0
 if [[ -n "${SYNARA_ASC_KEY_PATH:-}" || -n "${SYNARA_ASC_KEY_ID:-}" || -n "${SYNARA_ASC_ISSUER_ID:-}" ]]; then
@@ -79,14 +84,8 @@ run_xcodebuild() {
 }
 
 run_project_xcodebuild() {
-  local package_args=(
-    -onlyUsePackageVersionsFromResolvedFile
-    -skipPackageUpdates
-  )
-  if [[ -n "$PACKAGE_CACHE_PATH" ]]; then
-    package_args+=( -packageCachePath "$PACKAGE_CACHE_PATH" )
-  fi
-  run_xcodebuild "$@" "${package_args[@]}"
+  run_xcodebuild "$@" -derivedDataPath "$DERIVED_DATA_PATH" \
+    "${SYNARA_XCODE_PACKAGE_ARGS[@]}" ${SYNARA_XCODE_COMPILATION_ARGS[@]+"${SYNARA_XCODE_COMPILATION_ARGS[@]}"}
 }
 
 read_build_setting() {
@@ -199,6 +198,7 @@ run_project_xcodebuild \
   -configuration "$CONFIGURATION" \
   -destination "generic/platform=iOS" \
   -archivePath "$archive_path" \
+  -showBuildTimingSummary \
   DEVELOPMENT_TEAM="$TEAM_ID" \
   SYNARA_IOS_PROVISIONING_PROFILE="$PROVISIONING_PROFILE" \
   SYNARA_IOS_NOTIFICATION_SERVICE_PROVISIONING_PROFILE="$NOTIFICATION_SERVICE_PROVISIONING_PROFILE" \

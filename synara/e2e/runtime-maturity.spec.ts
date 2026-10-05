@@ -1,5 +1,295 @@
 import { expect, test, type Worker } from '@playwright/test';
 
+for (const readiness of ['idle', 'offline', 'failed', 'terminated']) {
+  test(`the production Retry button recovers ${readiness} native sync and awaits one owner request`, async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.route('**/mock-homeserver/_matrix/client/versions', (route) =>
+      route.fulfill({ json: { versions: ['v1.11'], unstable_features: {} } })
+    );
+    await page.route('**/.well-known/matrix/client', (route) => route.fulfill({ json: {} }));
+    await page.clock.install();
+    await page.goto(`/e2e/runtime-maturity-harness/index.html?sync-recovery=${readiness}`);
+    await expect(page.getByText('Heating up', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText(
+        readiness === 'failed'
+          ? 'Sync is retrying'
+          : readiness === 'offline'
+            ? 'Reconnecting'
+            : 'Sync is stopped',
+        { exact: true }
+      )
+    ).toBeVisible();
+    await page.clock.fastForward(30_001);
+    await expect(page.getByText('Sync is taking longer than expected.')).toBeVisible();
+    const retry = page.getByRole('button', { name: 'Retry', exact: true });
+    await retry.click();
+    await expect(page.getByTestId('native-recovery-count')).toHaveText('1');
+    await expect(retry).toBeDisabled();
+    await retry.dispatchEvent('click');
+    await expect(page.getByTestId('native-recovery-count')).toHaveText('1');
+    await expect(page.getByTestId('native-readiness')).toHaveText(readiness);
+    await expect(page.getByText('Native client ready')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Complete native recovery' }).click();
+    await expect(page.getByTestId('native-readiness')).toHaveText('running');
+    await expect(page.getByText('Native client ready')).toBeVisible();
+    await expect(page.getByTestId('native-recovery-count')).toHaveText('1');
+    await expect(page.getByTestId('native-logout-count')).toHaveText('0');
+    expect(errors).toEqual([]);
+  });
+}
+
+test('a rejected native recovery stays visible and allows a later explicit Retry without signing out', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.route('**/mock-homeserver/_matrix/client/versions', (route) =>
+    route.fulfill({ json: { versions: ['v1.11'], unstable_features: {} } })
+  );
+  await page.route('**/.well-known/matrix/client', (route) => route.fulfill({ json: {} }));
+  await page.clock.install();
+  await page.goto('/e2e/runtime-maturity-harness/index.html?sync-recovery=failed');
+  await expect(page.getByText('Sync is retrying', { exact: true })).toBeVisible();
+  await page.clock.fastForward(30_001);
+  const retry = page.getByRole('button', { name: 'Retry', exact: true });
+  await retry.click();
+  await expect(page.getByTestId('native-recovery-count')).toHaveText('1');
+  await page.getByRole('button', { name: 'Fail native recovery' }).click();
+  await expect(page.getByRole('alert')).toHaveText(
+    'Could not restart sync. You can retry or reload the application.'
+  );
+  await expect(retry).toBeEnabled();
+  await expect(page.getByTestId('native-readiness')).toHaveText('failed');
+  await expect(page.getByTestId('native-logout-count')).toHaveText('0');
+  await retry.click();
+  await expect(page.getByTestId('native-recovery-count')).toHaveText('2');
+  await page.getByRole('button', { name: 'Complete native recovery' }).click();
+  await expect(page.getByText('Native client ready')).toBeVisible();
+  await expect(page.getByTestId('native-logout-count')).toHaveText('0');
+  expect(errors).toEqual([]);
+});
+
+test('an acknowledged restart keeps recovery controls until native sync is actually ready', async ({
+  page,
+}) => {
+  await page.route('**/mock-homeserver/_matrix/client/versions', (route) =>
+    route.fulfill({ json: { versions: ['v1.11'], unstable_features: {} } })
+  );
+  await page.route('**/.well-known/matrix/client', (route) => route.fulfill({ json: {} }));
+  await page.clock.install();
+  await page.goto('/e2e/runtime-maturity-harness/index.html?sync-recovery=offline');
+  await expect(page.getByText('Reconnecting', { exact: true })).toBeVisible();
+  await page.clock.fastForward(30_001);
+  const retry = page.getByRole('button', { name: 'Retry', exact: true });
+  await retry.click();
+  await page.getByRole('button', { name: 'Acknowledge recovery without readiness' }).click();
+  await expect(page.getByTestId('native-readiness')).toHaveText('offline');
+  await expect(page.getByText('Sync is taking longer than expected.')).toBeVisible();
+  await expect(retry).toBeEnabled();
+  await expect(page.getByText('Native client ready')).toHaveCount(0);
+  await expect(page.getByTestId('native-recovery-count')).toHaveText('1');
+  await expect(page.getByTestId('native-logout-count')).toHaveText('0');
+  await retry.click();
+  await page.getByRole('button', { name: 'Complete native recovery' }).click();
+  await expect(page.getByText('Native client ready')).toBeVisible();
+});
+
+test('a failed native restore stays retryable across repeated failures without signing out', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.route('**/mock-homeserver/_matrix/client/versions', (route) =>
+    route.fulfill({ json: { versions: ['v1.11'], unstable_features: {} } })
+  );
+  await page.route('**/.well-known/matrix/client', (route) => route.fulfill({ json: {} }));
+  await page.clock.install();
+  await page.goto('/e2e/runtime-maturity-harness/index.html?sync-recovery=offline&restore-error');
+  await expect(page.getByText('Failed to load. Controlled native restore failure')).toBeVisible();
+  await expect(page.getByTestId('native-restore-count')).toHaveText('1');
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(page.getByTestId('native-restore-count')).toHaveText('2');
+  await expect(page.getByText('Failed to load. Controlled native restore failure')).toBeVisible();
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(page.getByTestId('native-restore-count')).toHaveText('3');
+  await expect(page.getByText('Reconnecting', { exact: true })).toBeVisible();
+  await page.clock.fastForward(30_001);
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(page.getByTestId('native-recovery-count')).toHaveText('1');
+  await page.getByRole('button', { name: 'Complete native recovery' }).click();
+  await expect(page.getByText('Native client ready')).toBeVisible();
+  await expect(page.getByTestId('native-logout-count')).toHaveText('0');
+  expect(errors).toEqual([]);
+});
+
+test('Retry clears a renderer startup read failure through native recovery and fresh hydration', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.route('**/mock-homeserver/_matrix/client/versions', (route) =>
+    route.fulfill({ json: { versions: ['v1.11'], unstable_features: {} } })
+  );
+  await page.route('**/.well-known/matrix/client', (route) => route.fulfill({ json: {} }));
+  await page.goto('/e2e/runtime-maturity-harness/index.html?sync-recovery=offline&startup-error');
+  await expect(page.getByText('Failed to start. Controlled startup read failure')).toBeVisible();
+  const retry = page.getByRole('button', { name: 'Retry', exact: true });
+  await retry.click();
+  await expect(page.getByTestId('native-recovery-count')).toHaveText('1');
+  await expect(retry).toBeDisabled();
+  await page.getByRole('button', { name: 'Complete native recovery' }).click();
+  await expect(page.getByText('Native client ready')).toBeVisible();
+  await expect(page.getByTestId('native-logout-count')).toHaveText('0');
+  expect(errors).toEqual([]);
+});
+
+test('an established client requests native recovery on network return and contains a rejected wake', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.route('**/mock-homeserver/_matrix/client/versions', (route) =>
+    route.fulfill({ json: { versions: ['v1.11'], unstable_features: {} } })
+  );
+  await page.route('**/.well-known/matrix/client', (route) => route.fulfill({ json: {} }));
+  await page.clock.install();
+  await page.goto('/e2e/runtime-maturity-harness/index.html?sync-recovery=running');
+  await expect(page.getByText('Native client ready')).toBeVisible();
+  await page.getByRole('button', { name: 'Lose native connection' }).click();
+  await page.clock.runFor(6_000);
+  await expect(page.getByText('Connection Lost! Reconnecting...', { exact: true })).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.clock.runFor(1);
+  await expect(page.getByTestId('native-recovery-count')).toHaveText('1');
+  await page.getByRole('button', { name: 'Fail native recovery' }).click();
+  await expect(page.getByTestId('native-readiness')).toHaveText('offline');
+  await page.clock.fastForward(8_001);
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.clock.runFor(1);
+  await expect(page.getByTestId('native-recovery-count')).toHaveText('2');
+  await page.getByRole('button', { name: 'Complete native recovery' }).click();
+  await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+  await expect(page.getByText('Native client ready')).toBeVisible();
+  await expect(page.getByTestId('native-logout-count')).toHaveText('0');
+  expect(errors).toEqual([]);
+});
+
+for (const metadataFailure of ['failed', 'hanging']) {
+  test(`a ${metadataFailure} renderer versions request cannot block a restored native client`, async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    let releaseRequest: (() => void) | undefined;
+    const hold = new Promise<void>((resolve) => {
+      releaseRequest = resolve;
+    });
+    await page.route('**/mock-homeserver/_matrix/client/versions', async (route) => {
+      if (metadataFailure === 'hanging') await hold;
+      await route.abort('failed');
+    });
+    await page.route('**/.well-known/matrix/client', (route) => route.fulfill({ json: {} }));
+    try {
+      await page.goto('/e2e/runtime-maturity-harness/index.html?sync-recovery=running');
+      await expect(page.getByText('Native client ready')).toBeVisible();
+      await expect(page.getByTestId('native-readiness')).toHaveText('running');
+      await expect(
+        page.getByText('Unable to connect to the homeserver.', { exact: false })
+      ).toHaveCount(0);
+      await expect(page.getByTestId('native-recovery-count')).toHaveText('0');
+      await expect(page.getByTestId('native-logout-count')).toHaveText('0');
+      expect(errors).toEqual([]);
+    } finally {
+      releaseRequest?.();
+    }
+  });
+}
+
+test('failed renderer metadata leaves the real native sync recovery controls reachable', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.route('**/mock-homeserver/_matrix/client/versions', (route) => route.abort('failed'));
+  await page.route('**/.well-known/matrix/client', (route) => route.fulfill({ json: {} }));
+  await page.clock.install();
+  await page.goto('/e2e/runtime-maturity-harness/index.html?sync-recovery=offline');
+  await expect(page.getByText('Reconnecting', { exact: true })).toBeVisible();
+  await page.clock.fastForward(30_001);
+  await expect(page.getByText('Sync is taking longer than expected.')).toBeVisible();
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(page.getByTestId('native-recovery-count')).toHaveText('1');
+  await page.getByRole('button', { name: 'Complete native recovery' }).click();
+  await expect(page.getByText('Native client ready')).toBeVisible();
+  await expect(page.getByTestId('native-logout-count')).toHaveText('0');
+  expect(errors).toEqual([]);
+});
+
+test('optional versions metadata updates capabilities without blocking or remounting native readiness', async ({
+  page,
+}) => {
+  let releaseRequest: (() => void) | undefined;
+  const hold = new Promise<void>((resolve) => {
+    releaseRequest = resolve;
+  });
+  await page.route('**/mock-homeserver/_matrix/client/versions', async (route) => {
+    await hold;
+    await route.fulfill({ json: { versions: ['v1.11'], unstable_features: {} } });
+  });
+  await page.route('**/.well-known/matrix/client', (route) => route.fulfill({ json: {} }));
+  try {
+    await page.goto('/e2e/runtime-maturity-harness/index.html?sync-recovery=running');
+    await expect(page.getByText('Native client ready')).toBeVisible();
+    await expect(page.getByTestId('server-versions')).toHaveText('');
+    releaseRequest?.();
+    await expect(page.getByTestId('server-versions')).toHaveText('v1.11');
+    await expect(page.getByText('Native client ready')).toBeVisible();
+    await expect(page.getByTestId('native-restore-count')).toHaveText('1');
+    await expect(page.getByTestId('native-recovery-count')).toHaveText('0');
+  } finally {
+    releaseRequest?.();
+  }
+});
+
+test('the default pre-login metadata loader still blocks and retries failed server validation', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  let attempts = 0;
+  let releaseRequest: (() => void) | undefined;
+  const hold = new Promise<void>((resolve) => {
+    releaseRequest = resolve;
+  });
+  await page.route('**/mock-homeserver/_matrix/client/versions', async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      await hold;
+      await route.abort('failed');
+    } else {
+      await route.fulfill({ json: { versions: ['v1.11'], unstable_features: {} } });
+    }
+  });
+  try {
+    await page.goto(
+      '/e2e/runtime-maturity-harness/index.html?sync-recovery=idle&pre-login-versions'
+    );
+    await expect(page.getByText('Checking login server')).toBeVisible();
+    await expect(page.getByText('Login server validated:', { exact: false })).toHaveCount(0);
+    releaseRequest?.();
+    await page.getByRole('button', { name: 'Retry login server check' }).click();
+    await expect(page.getByText('Login server validated: v1.11')).toBeVisible();
+    expect(attempts).toBe(2);
+    expect(errors).toEqual([]);
+  } finally {
+    releaseRequest?.();
+  }
+});
+
 test('the typed update hook, dialog focus trap and PDF worker run without Node polyfills', async ({
   page,
   browserName,

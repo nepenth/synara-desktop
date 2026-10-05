@@ -153,8 +153,8 @@ export class UserStatusWriteError extends Error {
       kind === 'unsupported'
         ? 'This homeserver does not support user status.'
         : kind === 'invalid'
-        ? 'Status emoji or text is too long.'
-        : 'Native user status is unavailable.'
+          ? 'Status emoji or text is too long.'
+          : 'Native user status is unavailable.'
     );
     this.kind = kind;
   }

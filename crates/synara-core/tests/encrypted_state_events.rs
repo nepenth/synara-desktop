@@ -1,5 +1,4 @@
 //! MSC4362 encrypted-state product adapters against the pinned SDK mock server.
-#![recursion_limit = "256"]
 
 use std::sync::Arc;
 

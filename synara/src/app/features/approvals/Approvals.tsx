@@ -189,21 +189,21 @@ export function ApprovalsView({
             {search
               ? 'No matching requests'
               : loading || (filter === 'recent' && historyReady === false)
-              ? 'Checking your rooms'
-              : error || incomplete
-              ? 'No requests loaded yet'
-              : filter === 'pending'
-              ? coverage === 'latest_event'
-                ? 'No recent approvals found'
-                : 'No pending approvals'
-              : 'No recent requests'}
+                ? 'Checking your rooms'
+                : error || incomplete
+                  ? 'No requests loaded yet'
+                  : filter === 'pending'
+                    ? coverage === 'latest_event'
+                      ? 'No recent approvals found'
+                      : 'No pending approvals'
+                    : 'No recent requests'}
           </Text>
           <Text priority="300">
             {search
               ? 'Try a different agent, room, or command.'
               : filter === 'pending'
-              ? 'New Hermes approval requests will appear here as they arrive.'
-              : 'Decided approvals will appear here after you approve or deny a request.'}
+                ? 'New Hermes approval requests will appear here as they arrive.'
+                : 'Decided approvals will appear here after you approve or deny a request.'}
           </Text>
         </div>
       ) : (
@@ -316,8 +316,8 @@ export function ApprovalsView({
                         {item.status === 'expired'
                           ? 'This request can no longer be acted on. Open the conversation to ask Hermes for a fresh request.'
                           : canOpenRoom
-                          ? 'Your account has already sent a decision for this request.'
-                          : 'Your account has already sent a decision for this request. The room is no longer joined, so the original message cannot be opened.'}
+                            ? 'Your account has already sent a decision for this request.'
+                            : 'Your account has already sent a decision for this request. The room is no longer joined, so the original message cannot be opened.'}
                       </Text>
                     </Box>
                   )}
