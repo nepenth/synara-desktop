@@ -1,6 +1,6 @@
 {
   "name": "synara",
-  "version": "2.1.43",
+  "version": "2.1.44",
   "description": "Synara app runtime for the native desktop shell",
   "type": "module",
   "engines": {

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [2.1.44] - 2026-10-04
+
+- Notifications: add account-synced agent preferences for Tool activity, Commentary, and final/other responses while preserving verified approval prompts; expose controls on desktop and iOS.
+- Apple: strengthen authenticated preview resolution and safe fallback presentation, add privacy-safe diagnostics Copy/Share, and use Time Sensitive delivery for eligible approvals with refreshed signing profiles. Critical alerts and complete background filtering remain conditional on Apple's restricted entitlements.
+- Desktop: make Direct Messages unread badges consistent with native room classification, room lists, Mark as Read, and navigation; remeasure live edited Hermes Markdown to correct stale timeline row offsets.
+- Release: validate and embed the macOS Developer ID notification profile, verify packaged signatures and capabilities, and extend Chromium/WebKit, Swift, Core, and signing regressions.
+
 ## [2.1.43] - 2026-10-02
 
 - Matrix: consolidate shared session, encryption recovery, notifications, and timeline behavior in the Rust core used by desktop and iOS; strengthen cancellation and account-generation ownership.
