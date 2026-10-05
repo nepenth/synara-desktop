@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 import { benchmark } from "../benchmark-rust-cache.mjs";
 
 function fixture(t, extraEnv = {}) {
@@ -43,6 +44,10 @@ else if (command === "cargo" && args[0] === "build") {
   if (env.FAIL_PHASE === String(phase)) process.exit(7);
   if (env.HANG_PHASE === String(phase)) setInterval(() => {}, 1000);
   if (env.CHANGE_GRAPH_PHASE === String(phase)) fs.appendFileSync(path.join(process.cwd(), "Cargo.toml"), "changed");
+  if (env.CHANGE_CONFIG_PHASE === String(phase)) {
+    const config = path.join(process.cwd(), ".cargo");
+    fs.mkdirSync(config, { recursive: true }); fs.writeFileSync(path.join(config, "config.toml"), "[build]\\njobs = 1\\n");
+  }
   if (env.CHANGE_TEST_PHASE === String(phase)) {
     const tests = path.join(process.cwd(), "crates/synara-core/tests");
     fs.mkdirSync(tests, { recursive: true }); fs.writeFileSync(path.join(tests, "new_test.rs"), "test-only");
@@ -195,6 +200,16 @@ test("integration test edits do not invalidate a production --lib measurement", 
   assert.deepEqual(readdirSync(f.scratchParent), []);
 });
 
+test("Cargo configuration drift invalidates the production measurement", async (t) => {
+  const f = fixture(t, { CHANGE_CONFIG_PHASE: "2" });
+  await assert.rejects(benchmark(f), /source graph changed during measurement/);
+  const report = JSON.parse(readFileSync(f.output));
+  assert.equal(report.status, "failed");
+  assert.equal(report.activeRun, "baseline-repeat");
+  assert.equal(report.runs.length, 1);
+  assert.deepEqual(readdirSync(f.scratchParent), []);
+});
+
 test("scratch budget aborts excessive builds and removes only owned scratch", async (t) => {
   const f = fixture(t);
   await assert.rejects(
@@ -233,5 +248,23 @@ test("benchmark workflow stays manually invoked, version pinned and outside pers
   assert.match(workflow, /strict: "true"/);
   assert.match(workflow, /version: v0\.28\.1/);
   assert.match(workflow, /max-size: 512MiB/);
+  assert.match(workflow, /--max-scratch-mib 3072/);
   assert.doesNotMatch(workflow, /secrets\.|s3-bucket|pull-requests: write/);
+});
+
+test("CLI rejects unsafe scratch budgets before creating or launching a build", () => {
+  for (const value of ["0", "-1", "NaN", "Infinity", "not-a-number"]) {
+    const result = spawnSync(
+      process.execPath,
+      [
+        new URL("../benchmark-rust-cache.mjs", import.meta.url).pathname,
+        "--max-scratch-mib",
+        value,
+      ],
+      { encoding: "utf8" },
+    );
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /must be a positive finite number/);
+    assert.doesNotMatch(result.stderr, /Benchmark:/);
+  }
 });

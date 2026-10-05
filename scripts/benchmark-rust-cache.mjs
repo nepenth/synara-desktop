@@ -42,6 +42,7 @@ function sourceFingerprint(root) {
     }
   }
   collect("crates");
+  collect(".cargo");
   const hash = createHash("sha256");
   for (const path of files.sort()) {
     if (!existsSync(join(root, path))) continue;
@@ -236,7 +237,7 @@ export async function benchmark({
       remote: false,
       githubCache: false,
       limitation:
-        "The deliberately small 512MiB local store may evict entries; measure larger budgets separately before adopting a backend.",
+        "512MiB is an asynchronous eviction target, not a hard peak disk cap. Transient store writes can exceed it; the independent scratch guard bounds the experiment. The small store may evict useful entries.",
     },
     runs: [],
   };
@@ -387,28 +388,36 @@ if (
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
   const args = process.argv.slice(2);
-  if (args.length !== 0 && !(args.length === 2 && args[0] === "--output")) {
-    console.error(
-      "Usage: node scripts/benchmark-rust-cache.mjs [--output path]",
-    );
-    process.exitCode = 64;
-  } else {
-    try {
-      const report = await benchmark({ output: args[1] });
-      console.log(
-        JSON.stringify(
-          report.runs.map(({ name, seconds, statsDelta }) => ({
-            name,
-            seconds,
-            statsDelta,
-          })),
-          null,
-          2,
-        ),
-      );
-    } catch (error) {
-      console.error(error.message);
-      process.exitCode = 1;
+  try {
+    const options = {};
+    for (let index = 0; index < args.length; index += 2) {
+      const value = args[index + 1];
+      if (!value || !["--output", "--max-scratch-mib"].includes(args[index]))
+        throw new Error(
+          "Usage: node scripts/benchmark-rust-cache.mjs [--output path] [--max-scratch-mib positive-number]",
+        );
+      if (args[index] === "--output") options.output = value;
+      else {
+        const mib = Number(value);
+        if (!Number.isFinite(mib) || mib <= 0)
+          throw new Error("--max-scratch-mib must be a positive finite number");
+        options.maxBytes = mib * 1024 ** 2;
+      }
     }
+    const report = await benchmark(options);
+    console.log(
+      JSON.stringify(
+        report.runs.map(({ name, seconds, statsDelta }) => ({
+          name,
+          seconds,
+          statsDelta,
+        })),
+        null,
+        2,
+      ),
+    );
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
   }
 }

@@ -44,7 +44,9 @@ jobs:
           max-size: 512MiB
 
       - name: Compare fresh NSE builds with a local compiler cache
-        run: node scripts/benchmark-rust-cache.mjs --output "$RUNNER_TEMP/build-cache-benchmark.json"
+        # Store eviction is asynchronous. Allow transient writes on this
+        # disposable runner; local CLI keeps its conservative 1.8GiB default.
+        run: node scripts/benchmark-rust-cache.mjs --output "$RUNNER_TEMP/build-cache-benchmark.json" --max-scratch-mib 3072
 
       - name: Upload benchmark measurements
         if: always()

@@ -247,6 +247,25 @@ logical bytes, commit and toolchain. This experiment measures compiler reuse;
 it excludes Swatinem/GitHub restore/save, downloads, source edits, Apple/Xcode
 and full desktop builds, and a small store may evict useful entries.
 
+The source-stable local trial on 2026-10-05 (macOS arm64, Rust 1.96.1,
+commit `a5aec71c`) completed two wrapper-free,
+fresh-target NSE builds in **149.29 seconds** and **230.02 seconds**, each
+producing approximately **1.065 GiB** of logical target files. The cold Kache
+build exceeded the local **1.8 GiB** scratch guard and was stopped before
+completion; the warm Kache build was not measured. Cleanup stopped the private
+daemon and removed the owned scratch outputs. This trial establishes a local
+footprint limit; it provides no evidence of a caching speedup.
+
+Kache's 512 MiB setting is an eviction target rather than a hard peak disk
+limit: its [size-pressure garbage collection runs asynchronously](https://github.com/kunobi-ninja/kache/blob/v0.28.1/src/config.rs#L453),
+so transient writes can exceed the store limit. The manually dispatched hosted
+trial therefore uses an explicit **3 GiB scratch budget** through
+`--max-scratch-mib 3072`, while the local CLI retains its conservative 1.8 GiB
+default. Both retain a separate **3 GiB filesystem free-space reserve** and the
+512 MiB store target. The hosted experiment must complete before drawing any
+compiler-reuse conclusion, and whole-job restore/save measurements are still
+required before selecting a production backend.
+
 The pinned Swatinem backend remains production policy pending comparable
 whole-job measurements. Kache's GitHub-backed store also inherits branch
 isolation and immutable snapshots. Any S3-backed trial needs its own trusted
