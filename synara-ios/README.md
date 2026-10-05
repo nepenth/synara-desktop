@@ -13,7 +13,11 @@ by old phase labels in planning files.
 
 - SwiftUI owns presentation, navigation, accessibility, and Apple platform
   integrations.
-- `../crates/synara-core/` owns Matrix lifecycle and domain behavior.
+- `../crates/synara-core/` owns Matrix lifecycle and domain behavior. Full iOS
+  builds explicitly enable `full-uniffi` over shared `full-app` services.
+- `../crates/synara-nse-core/` exports the one-shot notification preview ABI.
+  Its Core dependency enables only `nse-preview`, keeping app command owners,
+  room-key forwarding and desktop capabilities out of the shipping extension.
 - `../crates/synara-core-bindgen/` generates the Swift interface and
   XCFramework.
 - `SynaraCore` build products are generated locally and remain ignored.

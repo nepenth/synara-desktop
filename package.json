@@ -34,7 +34,8 @@
     "tauri": "cp config.json synara/ && tauri",
     "test:modernization": "npm --prefix synara run test:modernization",
     "typecheck:modernization": "npm --prefix synara run typecheck:modernization",
-    "audit:build-cache": "node scripts/audit-build-cache.mjs"
+    "audit:build-cache": "node scripts/audit-build-cache.mjs",
+    "check:core-features": "node scripts/check-synara-core-production-features.mjs && node scripts/check-synara-nse-core-production-features.mjs"
   },
   "keywords": [
     "matrix",

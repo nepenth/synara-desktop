@@ -1,5 +1,4 @@
 //! Exercise the same authenticated SDK endpoint used by both desktop clients.
-#![recursion_limit = "256"]
 
 use matrix_sdk::test_utils::mocks::MatrixMockServer;
 use synara_core::app::notifications::{fetch_inbox_notifications, MatrixInboxNotificationsRequest};

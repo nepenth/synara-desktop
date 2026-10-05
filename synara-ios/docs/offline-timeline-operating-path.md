@@ -44,7 +44,7 @@ cold-restart proof.
 Run from the repository root:
 
 ```sh
-cargo test -p synara-core --test offline_timeline_cold_restart -- --nocapture
+cargo test -p synara-core --test sdk_behaviors offline_timeline_cold_restart:: -- --nocapture
 ```
 
 `offline_timeline_cold_restart` starts a disposable local Matrix `/sync`, opens

@@ -129,7 +129,7 @@ for target in "${targets[@]}"; do
   fi
   IPHONEOS_DEPLOYMENT_TARGET=16.0 \
     CARGO_TARGET_DIR="$target_build_dir" \
-    cargo build --locked --release --package synara-core --target "$target" --manifest-path "$repo_root/Cargo.toml"
+    cargo rustc --locked --release --package synara-core --lib --crate-type staticlib --no-default-features --features full-uniffi --target "$target" --manifest-path "$repo_root/Cargo.toml"
 
   if [[ "$space_bounded" == "1" ]]; then
     built_archive="$target_build_dir/$target/release/libsynara_core.a"

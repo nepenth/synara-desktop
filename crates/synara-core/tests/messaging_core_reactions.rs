@@ -5,8 +5,6 @@
 //! recovered id. Self-unreact stays `toggle_reaction` and does not wait on
 //! a missing id (the live Synapse proof uses that path).
 
-#![recursion_limit = "256"]
-
 use std::{sync::Arc, time::Duration};
 
 use matrix_sdk::room::IncludeRelations;

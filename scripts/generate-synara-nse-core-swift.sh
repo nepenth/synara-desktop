@@ -108,7 +108,7 @@ for target in "${targets[@]}"; do
   fi
   IPHONEOS_DEPLOYMENT_TARGET=16.0 \
     CARGO_TARGET_DIR="$target_build_dir" \
-    cargo build --locked --profile "$rust_profile" --package synara-nse-core --target "$target" --manifest-path "$repo_root/Cargo.toml"
+    cargo rustc --locked --profile "$rust_profile" --package synara-nse-core --lib --crate-type staticlib --target "$target" --manifest-path "$repo_root/Cargo.toml"
   if [[ "$space_bounded" == "1" ]]; then
     built_archive="$target_build_dir/$target/$rust_profile/libsynara_nse_core.a"
     [[ -f "$built_archive" ]] || fail "Rust build did not produce $built_archive"

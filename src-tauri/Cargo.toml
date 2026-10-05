@@ -18,10 +18,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 serde_json = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-# Matrix DTOs and policy live in the shared native core. Default features
-# include full-uniffi → room-key-forwarding (desktop compile-in). Search index
-# and X.509 identity are desktop-only; NSE / iOS SharedCore must not enable them.
-synara-core = { path = "../crates/synara-core", version = "0.1.0", features = [
+# Desktop shares full-app policy/owners without the Apple UniFFI surface.
+# Search index and X.509 identity are desktop-only; Apple must not enable them.
+synara-core = { path = "../crates/synara-core", version = "0.1.0", default-features = false, features = [
+  "full-app",
   "search-index",
   "x509-identity",
 ] }

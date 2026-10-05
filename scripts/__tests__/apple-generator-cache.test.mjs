@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import {
-  chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync,
-  rmSync, writeFileSync,
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,19 +25,31 @@ function fixture(t, { bounded, override }) {
   mkdirSync(bin);
   mkdirSync(join(root, "scripts/lib"), { recursive: true });
   for (const name of [
-    "generate-synara-core-swift.sh", "generate-synara-nse-core-swift.sh",
+    "generate-synara-core-swift.sh",
+    "generate-synara-nse-core-swift.sh",
     "lib/publish-generated-apple-pair.sh",
+    "lib/compare-generated-apple-pair.mjs",
   ]) {
     copyFileSync(join(repoRoot, "scripts", name), join(root, "scripts", name));
   }
   // Existing graph/LLVM tests prove the real guards. Record their ordering here
   // while exercising the actual generators and transactional publication.
-  writeFileSync(join(root, "scripts/check-synara-nse-core-production-features.mjs"),
-    'import fs from "node:fs"; fs.appendFileSync(process.env.CACHE_LOG, JSON.stringify({ command: "preflight" }) + "\\n");\n');
-  writeFileSync(join(root, "scripts/lib/rust-llvm-symbols.sh"),
-    'resolve_rust_llvm_nm() { return 0; }\n');
-  const checker = join(root, "scripts/check-synara-nse-core-archive-exports.sh");
-  writeFileSync(checker, '#!/bin/sh\nfor archive in "$@"; do test -s "$archive" || exit 1; done\n');
+  writeFileSync(
+    join(root, "scripts/check-synara-nse-core-production-features.mjs"),
+    'import fs from "node:fs"; fs.appendFileSync(process.env.CACHE_LOG, JSON.stringify({ command: "preflight" }) + "\\n");\n',
+  );
+  writeFileSync(
+    join(root, "scripts/lib/rust-llvm-symbols.sh"),
+    "resolve_rust_llvm_nm() { return 0; }\n",
+  );
+  const checker = join(
+    root,
+    "scripts/check-synara-nse-core-archive-exports.sh",
+  );
+  writeFileSync(
+    checker,
+    '#!/bin/sh\nfor archive in "$@"; do test -s "$archive" || exit 1; done\n',
+  );
   chmodSync(checker, 0o755);
 
   const mock = `#!/usr/bin/env node
@@ -46,7 +65,7 @@ if (command === "uname") console.log("Darwin");
 else if (command === "rustup") console.log([
   "aarch64-apple-ios", "aarch64-apple-ios-sim", "x86_64-apple-ios", "aarch64-apple-darwin",
 ].join("\\n"));
-else if (command === "cargo" && args[0] === "build") {
+else if (command === "cargo" && args[0] === "rustc") {
   const previous = fs.existsSync(process.env.LAST_APPLE_TARGET)
     ? fs.readFileSync(process.env.LAST_APPLE_TARGET, "utf8") : "";
   // Bounded builds must remove each target before starting the next one.
@@ -96,7 +115,9 @@ else throw new Error("unexpected mock invocation: " + command + " " + args.join(
     chmodSync(join(bin, command), 0o755);
   }
   const log = join(root, "calls.jsonl");
-  const bindgenDir = override ? join(root, "custom-host-cache") : join(root, "target/synara-core-bindgen");
+  const bindgenDir = override
+    ? join(root, "custom-host-cache")
+    : join(root, "target/synara-core-bindgen");
   const env = {
     ...process.env,
     PATH: `${bin}:${process.env.PATH}`,
@@ -106,15 +127,25 @@ else throw new Error("unexpected mock invocation: " + command + " " + args.join(
     SYNARA_CORE_APPLE_SLICES: "all",
     SYNARA_NSE_CORE_APPLE_SLICES: "all",
   };
-  for (const name of ["SYNARA_CORE_APPLE_TARGET_DIR", "SYNARA_NSE_CORE_APPLE_TARGET_DIR",
-    "SYNARA_CORE_APPLE_SPACE_BOUNDED", "SYNARA_NSE_CORE_APPLE_SPACE_BOUNDED",
-    "SYNARA_APPLE_BINDGEN_TARGET_DIR"]) delete env[name];
+  for (const name of [
+    "SYNARA_CORE_APPLE_TARGET_DIR",
+    "SYNARA_NSE_CORE_APPLE_TARGET_DIR",
+    "SYNARA_CORE_APPLE_SPACE_BOUNDED",
+    "SYNARA_NSE_CORE_APPLE_SPACE_BOUNDED",
+    "SYNARA_APPLE_BINDGEN_TARGET_DIR",
+  ])
+    delete env[name];
   if (override) env.SYNARA_APPLE_BINDGEN_TARGET_DIR = bindgenDir;
   return {
-    root, bindgenDir,
+    root,
+    bindgenDir,
     run(name) {
-      const result = spawnSync("bash", [join(root, "scripts", name)], { env, encoding: "utf8" });
+      const result = spawnSync("bash", [join(root, "scripts", name)], {
+        env,
+        encoding: "utf8",
+      });
       assert.equal(result.status, 0, result.stderr);
+      return result;
     },
     calls: () => readFileSync(log, "utf8").trim().split("\n").map(JSON.parse),
   };
@@ -124,27 +155,77 @@ for (const bounded of [false, true]) {
   for (const override of [false, true]) {
     test(`Apple generators reuse ${override ? "overridden" : "default"} host cache in ${bounded ? "bounded" : "ordinary"} mode`, (t) => {
       const f = fixture(t, { bounded, override });
-      for (const generator of ["generate-synara-core-swift.sh", "generate-synara-nse-core-swift.sh",
-        "generate-synara-core-swift.sh"]) f.run(generator);
+      f.run("generate-synara-core-swift.sh");
+      const coreOutputs = [
+        "Sources/SynaraCore/Generated/synara_core.swift",
+        "Artifacts/SynaraCore.xcframework",
+        "Artifacts/SynaraCore.xcframework/Info.plist",
+      ];
+      const outputMetadata = () =>
+        coreOutputs.map((output) => {
+          const info = lstatSync(
+            join(f.root, "synara-ios/SynaraCore", output),
+            { bigint: true },
+          );
+          return { inode: info.ino, mtime: info.mtimeNs };
+        });
+      const originalOutputs = outputMetadata();
+      f.run("generate-synara-nse-core-swift.sh");
+      assert.match(
+        f.run("generate-synara-core-swift.sh").stdout,
+        /generated pair unchanged/,
+      );
+      assert.deepEqual(outputMetadata(), originalOutputs);
       const calls = f.calls();
       assert.equal(calls[0].command, "preflight");
-      const hostRuns = calls.filter((call) => call.command === "cargo" && call.args[0] === "run");
-      assert.deepEqual(hostRuns.map((call) => call.reused), [false, true, true]);
+      const hostRuns = calls.filter(
+        (call) => call.command === "cargo" && call.args[0] === "run",
+      );
+      assert.deepEqual(
+        hostRuns.map((call) => call.reused),
+        [false, true, true],
+      );
       for (const call of hostRuns) {
         assert.equal(call.targetDir, f.bindgenDir);
         assert.ok(call.args.includes("--locked"));
-        assert.equal(call.args[call.args.indexOf("--package") + 1], "synara-core-bindgen");
-        assert.equal(call.args[call.args.indexOf("--manifest-path") + 1], join(f.root, "Cargo.toml"));
+        assert.equal(
+          call.args[call.args.indexOf("--package") + 1],
+          "synara-core-bindgen",
+        );
+        assert.equal(
+          call.args[call.args.indexOf("--manifest-path") + 1],
+          join(f.root, "Cargo.toml"),
+        );
       }
-      assert.equal(readFileSync(join(f.bindgenDir, "host-generator-reuse"), "utf8"), "preserved");
-      const builds = calls.filter((call) => call.command === "cargo" && call.args[0] === "build");
+      assert.equal(
+        readFileSync(join(f.bindgenDir, "host-generator-reuse"), "utf8"),
+        "preserved",
+      );
+      const builds = calls.filter(
+        (call) => call.command === "cargo" && call.args[0] === "rustc",
+      );
       assert.equal(builds.length, 11); // Core four slices, NSE three, Core rerun four.
       for (const call of builds) {
+        assert.ok(call.args.includes("--lib"));
+        assert.equal(
+          call.args[call.args.indexOf("--crate-type") + 1],
+          "staticlib",
+        );
         assert.notEqual(call.targetDir, f.bindgenDir);
         assert.equal(existsSync(call.targetDir), !bounded);
       }
       for (const name of ["SynaraCore", "SynaraNseCore"]) {
-        assert.ok(existsSync(join(f.root, "synara-ios", name, "Artifacts", `${name}.xcframework/Info.plist`)));
+        assert.ok(
+          existsSync(
+            join(
+              f.root,
+              "synara-ios",
+              name,
+              "Artifacts",
+              `${name}.xcframework/Info.plist`,
+            ),
+          ),
+        );
       }
     });
   }

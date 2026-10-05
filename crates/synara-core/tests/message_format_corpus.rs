@@ -1,5 +1,3 @@
-#![recursion_limit = "256"]
-
 use std::{collections::HashSet, fs, path::PathBuf};
 
 use matrix_sdk::ruma::events::room::message::{MessageType, TextMessageEventContent};

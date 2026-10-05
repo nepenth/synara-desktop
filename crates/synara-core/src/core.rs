@@ -872,6 +872,7 @@ impl Core {
     /// Capture the currently authenticated owner for an account-bound HTTP
     /// pusher handle. The returned `Arc` remains bound to that owner's Matrix
     /// client even if a later session attach replaces Core's current owner.
+    #[cfg(feature = "full-uniffi")]
     pub(crate) fn http_pusher_owner(&self) -> Result<Arc<NativeHttpPusherOwner>, MatrixIpcError> {
         self.state.http_pusher_owner()?.ok_or_else(|| {
             MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
@@ -981,11 +982,13 @@ impl Core {
     }
 
     /// Attached SyncService owner, if any. Does not start sync.
+    #[cfg(feature = "full-uniffi")]
     pub(crate) fn attached_sync_owner(&self) -> Option<Arc<SyncServiceOwner>> {
         self.state.sync_owner().ok().flatten()
     }
 
     /// Attached timeline owner, if any. Does not open a view.
+    #[cfg(feature = "full-uniffi")]
     pub(crate) fn attached_timeline_owner(&self) -> Option<Arc<NativeTimelineOwner>> {
         self.state.timeline_owner().ok().flatten()
     }

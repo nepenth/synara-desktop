@@ -4,6 +4,9 @@ repository.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 name = "synara-core"
+# Domain harnesses share links and test workers; explicit targets retain isolation
+# for the authorized live proof and feature-gated index tests.
+autotests = false
 version = "0.1.0"
 description = "Transport-agnostic shared native core for Synara (desktop + iOS)"
 license.workspace = true
@@ -12,13 +15,28 @@ edition.workspace = true
 # P4-1: Apple shells link the same project-owned library; no prebuilt Matrix
 # wrapper is used for this binding surface.
 [lib]
-crate-type = ["lib", "staticlib", "cdylib"]
+# Apple generators explicitly request staticlib; ordinary builds/tests emit rlib only.
+crate-type = ["lib"]
 
 [features]
 default = ["full-uniffi"]
-# Desktop and iOS full-app compile in automatic Megolm gossip. NSE must not:
-# NotificationClient restores the crypto store and must not answer key requests.
-full-uniffi = ["room-key-forwarding"]
+# Shared desktop/iOS owners and their SDK capabilities. NSE retains only the
+# notification, client/store/lifecycle, and privacy-policy boundary below.
+full-app = [
+  "room-key-forwarding",
+  "matrix-sdk/markdown",
+  "matrix-sdk/qrcode",
+  "matrix-sdk/unstable-msc4426",
+  "matrix-sdk/experimental-widgets",
+  "dep:reqwest",
+  "dep:ruma",
+  "dep:eyeball-im",
+  "dep:futures-util",
+  "dep:mime",
+]
+# Apple adds its binding surface explicitly; desktop opts out of the default
+# so it never compiles UniFFI runtime/scaffolding or exports Apple symbols.
+full-uniffi = ["full-app", "dep:uniffi"]
 nse-preview = []
 # matrix-sdk 0.19 GossipMachine defaults both serve and request switches on
 # once this cfg is compiled. Encryption has no public setter; product stays
@@ -29,9 +47,10 @@ room-key-forwarding = [
 ]
 # Desktop-only local message index (matrix-sdk-search / Tantivy). NSE and iOS
 # SharedCore must not enable this; they keep Client-Server `/search`.
-search-index = ["matrix-sdk/experimental-search"]
+search-index = ["full-app", "matrix-sdk/experimental-search"]
 # Desktop-only. Do not enable on nse-preview / iOS SharedCore graphs.
 x509-identity = [
+  "full-app",
   "matrix-sdk/experimental-x509-identity-verification",
   "matrix-sdk-crypto/experimental-x509-identity-verification",
   "matrix-sdk-crypto/rust-x509-verifier-impl",
@@ -47,7 +66,7 @@ serde_json = { workspace = true }
 # URL parser for fail-closed homeserver base validation.
 url = { workspace = true }
 # Credential-free login-flow discovery transport (moved from desktop auth).
-reqwest = { workspace = true, features = ["rustls", "http2", "stream"] }
+reqwest = { workspace = true, features = ["rustls", "http2", "stream"], optional = true }
 # SNC-P1-4: task registry (moved from src-tauri/matrix/tasks) supervises async
 # work — tokio spawn/JoinHandle at runtime and the test macro for its unit tests.
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "io-util"] }
@@ -55,21 +74,16 @@ tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time
 # Workspace pins disable SDK default features. sqlite + bundled-sqlite
 # are required here because build_unauthenticated_client opens the product store.
 # rustls-aws-lc-rs is required with default-features=false (0.19.0 rustls provider).
-# Markdown is shared for Matrix-compatible rich composer output. QR verification
-# (show-code) is a stable matrix-sdk feature, already enabled on desktop; Core
-# enables it so NativeVerificationOwner can generate a code in tests and iOS.
-# E2E encryption still arrives via matrix-sdk-ui. automatic-room-key-forwarding
-# is *not* listed here: NSE builds this dependency without the Core
-# `room-key-forwarding` feature. experimental-widgets is a compile pin for the
-# experimental host; do not add experimental-send-custom-to-device (transitive).
+# Full-app capabilities (Markdown, QR and widgets) belong to `full-app`.
+# Encrypted state stays common: NSE reads the same crypto/store format and
+# must resolve notifications for existing encrypted-state rooms.
+# E2E is explicit so the client's encryption contract does not depend on UI
+# feature unification. NSE never enables automatic room-key forwarding.
 matrix-sdk = { workspace = true, features = [
   "sqlite",
   "bundled-sqlite",
   "rustls-aws-lc-rs",
-  "markdown",
-  "qrcode",
-  "unstable-msc4426",
-  "experimental-widgets",
+  "e2e-encryption",
   "experimental-encrypted-state-events",
 ] }
 matrix-sdk-ui = { workspace = true, features = [
@@ -90,23 +104,23 @@ matrix-sdk-sqlite = { workspace = true, features = [
 rusqlite = { workspace = true }
 # Feature-unifies Ruma's Matrix-spec HTML sanitizer with the SDK re-export.
 # Outbound composer Markdown is parsed and sanitized in one shared boundary.
-ruma = { workspace = true, features = ["html", "markdown"] }
+ruma = { workspace = true, features = ["html", "markdown"], optional = true }
 # SNC-P1-5b: room_list (moved from src-tauri/matrix/room_list) — live.rs streams
 # room-list vector diffs (eyeball-im) asynchronously (futures-util).
-eyeball-im = { workspace = true }
-futures-util = { workspace = true }
+eyeball-im = { workspace = true, optional = true }
+futures-util = { workspace = true, optional = true }
 # SNC-P1-5b: invite_avatars.rs mints opaque random bearer handles for
 # invite-card avatar media sources (getrandom::fill).
 getrandom = { workspace = true }
 # P4-1 binding metadata/runtime. The version is pinned so the UDL scaffolding,
 # generated Swift, and Apple libraries are produced by one reproducible toolchain.
-uniffi = { workspace = true, features = ["tokio"] }
+uniffi = { workspace = true, features = ["tokio"], optional = true }
 # Store identity fingerprints directory names (moved from desktop store/identity.rs).
 sha2 = { workspace = true }
 # Host-only register token buffers (moved with live register orchestration).
 zeroize = { workspace = true }
 # Avatar MIME parsing for upload_avatar (bytes stay off Core JSON).
-mime = { workspace = true }
+mime = { workspace = true, optional = true }
 # Optional: desktop `x509-identity` installs aws-lc as the rustls process
 # default so HTTPS and `RustRawX509Verifier` share one provider. The verifier
 # crate also enables rustls `ring`; we never install ring as default.
@@ -117,7 +131,7 @@ rustls = { workspace = true, features = [
 ], optional = true }
 
 [build-dependencies]
-uniffi = { workspace = true, features = ["build"] }
+uniffi = { workspace = true, features = ["build"], optional = true }
 
 [dev-dependencies]
 # dto/tests.rs fixture + serde round-trip tests.
@@ -141,3 +155,35 @@ wiremock = "0.6"
 name = "indexed_message_search"
 path = "tests/indexed_message_search.rs"
 required-features = ["search-index"]
+
+# Root integration sources are included by the domain harnesses. The coverage
+# guard in uniffi_async_bridge rejects orphaned or multiply registered sources.
+
+[[test]]
+name = "ffi_lifecycle"
+path = "tests/suites/ffi_lifecycle.rs"
+required-features = ["full-uniffi"]
+
+[[test]]
+name = "ffi_accounts_rooms"
+path = "tests/suites/ffi_accounts_rooms.rs"
+required-features = ["full-uniffi"]
+
+[[test]]
+name = "ffi_messaging"
+path = "tests/suites/ffi_messaging.rs"
+required-features = ["full-uniffi"]
+
+[[test]]
+name = "sdk_behaviors"
+path = "tests/suites/sdk_behaviors.rs"
+required-features = ["full-uniffi"]
+
+[[test]]
+name = "live_device_eligibility"
+path = "tests/live_device_eligibility.rs"
+required-features = ["full-uniffi"]
+
+[[test]]
+name = "uniffi_async_bridge"
+path = "tests/uniffi_async_bridge.rs"

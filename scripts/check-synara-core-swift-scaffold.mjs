@@ -310,8 +310,8 @@ if (iosCiSyntax.status !== 0) {
 const ciWorkflow = readFileSync(resolve(root, ".github/workflows/ci.yml"), "utf8");
 
 const assertions = [
-  [cargo, 'crate-type = ["lib", "staticlib", "cdylib"]', "Apple library crate types"],
-  [cargo, 'uniffi = { workspace = true, features = ["tokio"] }', "workspace Tokio-aware UniFFI runtime"],
+  [cargo, 'crate-type = ["lib"]', "ordinary Rust library without unused Apple link outputs"],
+  [cargo, 'uniffi = { workspace = true, features = ["tokio"], optional = true }', "optional workspace Tokio-aware UniFFI runtime"],
   [readFileSync(resolve(root, "Cargo.toml"), "utf8"), 'uniffi = { version = "=0.32.2", default-features = false }', "pinned shared UniFFI runtime without Cargo metadata discovery"],
   [readFileSync(resolve(root, "crates/synara-core-bindgen/Cargo.toml"), "utf8"), 'uniffi = { workspace = true, features = ["cli", "cargo-metadata"] }', "pinned project-owned UniFFI generator with Cargo metadata discovery"],
   [cargo, 'features = ["build"]', "UniFFI build scaffolding"],
@@ -1025,7 +1025,7 @@ const assertions = [
   [generator, "simulator-arm64", "Apple Silicon-only simulator generation mode"],
   [generator, "xcrun lipo -create", "combined generic simulator library"],
   [generator, "aarch64-apple-darwin", "Apple macOS target"],
-  [generator, "cargo build --locked --release --package synara-core", "locked Rust build"],
+  [generator, "cargo rustc --locked --release --package synara-core --lib --crate-type staticlib", "locked explicit Apple staticlib build"],
   [generator, "SYNARA_CORE_APPLE_TARGET_DIR", "cacheable Apple Rust target directory"],
   [generator, "SYNARA_CORE_APPLE_SPACE_BOUNDED", "opt-in space-bounded Apple build"],
   [generator, 'target_build_dir="$work_dir/cargo-target-$target"', "isolated per-target bounded build directory"],

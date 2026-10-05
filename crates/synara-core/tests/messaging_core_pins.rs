@@ -6,8 +6,6 @@
 //! receipt that drives live unread. Idle rooms with no displayable tail
 //! back-paginate through `BackPaginationQueue` without opening a timeline.
 
-#![recursion_limit = "256"]
-
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use matrix_sdk::latest_events::LatestEventValue;

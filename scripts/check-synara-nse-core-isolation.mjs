@@ -69,9 +69,11 @@ requireText(
 requireText(coreManifest, "nse-preview = []", "NSE Core feature");
 requireText(
   coreManifest,
-  'search-index = ["matrix-sdk/experimental-search"]',
+  'search-index = ["full-app", "matrix-sdk/experimental-search"]',
   "desktop search-index feature"
 );
+requireText(nseManifest, 'crate-type = ["lib"]', "ordinary NSE Rust library");
+requireText(generator, '--package synara-nse-core --lib --crate-type staticlib', "explicit NSE static archive");
 requireText(nseManifest, "default-features = false", "full binding exclusion");
 requireText(nseManifest, 'features = ["nse-preview"]', "NSE-only feature");
 forbidText(nseManifest, "search-index", "NSE search-index feature");
@@ -241,7 +243,7 @@ requireText(
 );
 requireText(
   coreManifest,
-  'full-uniffi = ["room-key-forwarding"]',
+  'full-uniffi = ["full-app", "dep:uniffi"]',
   "full-app room-key forwarding"
 );
 requireText(

@@ -298,6 +298,25 @@ publish_generated_apple_pair() {
   mv "$source_framework" "$staged_framework"
   publication_test_failpoint after_stage_framework
   publication_test_pausepoint after_stage_framework
+  # Compare the entire ABI-coupled pair under the destination lock. A successful
+  # rebuild can reproduce the same files; keep their inodes and modification
+  # times so Xcode does not rebuild consumers merely because generation ran.
+  # Comparison failures abort before touching either destination.
+  comparison_status=0
+  node "$(dirname "${BASH_SOURCE[0]}")/compare-generated-apple-pair.mjs" \
+    "$staged_swift" "$destination_swift" "$staged_framework" "$destination_framework" \
+    || comparison_status=$?
+  case "$comparison_status" in
+    0)
+      rm -f -- "$staged_swift"
+      rm -rf -- "$staged_framework"
+      publication_state="inactive"
+      printf 'publish-generated-apple-pair: generated pair unchanged; preserving %s\n' "$destination_framework"
+      return 0
+      ;;
+    1) ;;
+    *) return "$comparison_status" ;;
+  esac
   write_publication_journal_state backing_up_swift
   if [[ -e "$destination_swift" ]]; then
     mv "$destination_swift" "$backup_swift"
