@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## [2.1.46] - 2026-10-06
+
+- Sessions: stop rejected refresh-token recovery loops, present expired-session guidance, and keep homeserver capability checks anonymous.
+- Persistence: track failed credential saves, retry local writes under the active session lease, and retain bounded diagnostics while preserving encrypted history when retiring rejected credentials.
+- iOS: distinguish device verification from decryption failures, connect Retry Decryption to the Core-owned live timeline, and avoid unmeasured session-wide decryption counts.
+- iOS: update the Support address to synara-support@whyland.com, reduce space above Favorites, and join the composer background to the keyboard.
+- Dependencies: integrate the reviewed renderer updates and patch Seroval and source-map-js advisories.
+
 ## [2.1.45] - 2026-10-05
 
 - Desktop: let restored sessions start syncing without a successful homeserver metadata probe; improve native sync startup and connection Retry progress and failure handling.
