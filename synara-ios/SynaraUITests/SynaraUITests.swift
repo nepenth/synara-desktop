@@ -1104,7 +1104,7 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.buttons["ConfirmLogoutButton"].waitForExistence(timeout: 5))
     }
 
-    func testAccessibilityPushedSettingsFinalActionCanScrollAboveAndReceiveTap() {
+    func testAccessibilityPushedSettingsFinalActionCanScrollAboveAndReceiveTap() throws {
         let app = launchSignedInSettingsApp(
             contentSizeCategory: "UICTContentSizeCategoryAccessibilityXL"
         )
@@ -1115,17 +1115,22 @@ final class SynaraUITests: XCTestCase {
         let finalAction = app.switches["AppearanceHideActivityToggle"]
         XCTAssertTrue(revealForDirectHit(finalAction, in: appearanceList, app: app))
         assertAboveFloatingTabBar(finalAction, app: app)
-        let originalValue = finalAction.value as? String
-        finalAction.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
-        let valueChanged = NSPredicate { evaluated, _ in
-            guard let control = evaluated as? XCUIElement else {
-                return false
-            }
-            return control.value as? String != originalValue
+        let originalValue = try XCTUnwrap(finalAction.value as? String)
+        XCTAssertTrue(["0", "1"].contains(originalValue))
+        // SwiftUI exposes both the combined label/control row and the native
+        // switch. Target the actual control rather than a relative point in
+        // the much larger row, whose geometry changes with Dynamic Type.
+        let rowFrame = finalAction.frame
+        let nativeSwitches = app.switches.allElementsBoundByIndex.filter {
+            $0.identifier.isEmpty && rowFrame.contains($0.frame) && $0.frame.width < rowFrame.width
         }
+        XCTAssertEqual(nativeSwitches.count, 1)
+        let nativeSwitch = try XCTUnwrap(nativeSwitches.first)
+        assertAboveFloatingTabBar(nativeSwitch, app: app)
+        nativeSwitch.tap()
+        let valueChanged = NSPredicate(format: "value == %@", originalValue == "0" ? "1" : "0")
         expectation(for: valueChanged, evaluatedWith: finalAction)
-        // Two simulator clones share one CI host; a toggle re-render can trail
-        // the tap by several seconds there without anything being wrong.
+        // Read the SwiftUI row's value after the single native-control tap.
         waitForExpectations(timeout: 10)
     }
 
