@@ -1,3 +1,4 @@
+import { clearSessionExpiryNotice } from '../app/utils/sessionExpiry';
 import {
   createNativeMatrixClient,
   type NativeMatrixClient,
@@ -94,6 +95,7 @@ export const initClient = async (
 ): Promise<MatrixClient> => {
   const initStartedAtMs = performance.now();
   const freshLogin = isFreshLoginIdentity(session);
+  if (freshLogin) clearSessionExpiryNotice();
   recordClientDiagnostic('session', 'matrix-client.bootstrap-decision', {
     freshLogin,
   });

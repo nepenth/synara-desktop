@@ -6,7 +6,11 @@
 //! **No** production Tauri commands. **No** room-list projection (P4.2).
 
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use std::time::Duration;
 
 use matrix_sdk::Client;
 use matrix_sdk_ui::sync_service::{State as SdkSyncState, SyncService};
@@ -21,7 +25,7 @@ use super::reconnect::{decide_reconnect, ReconnectAction, SyncIntent};
 /// Configuration for building the product SyncService.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SyncServiceConfig {
-    /// Enable SDK offline mode (periodic `/versions` probe when sync fails).
+    /// Enable native recovery for transient sync errors (bounded sync retries).
     pub offline_mode: bool,
 }
 
@@ -42,6 +46,10 @@ pub struct SyncServiceOwner {
     /// Best-effort preflight verdict for server sliding-sync support.
     sliding_sync_capable: Option<bool>,
     room_subscriptions: Mutex<RoomSubscriptions>,
+    recovery_task: Option<tokio::task::JoinHandle<()>>,
+    authentication_rejected: Arc<AtomicBool>,
+    sync_requested: Arc<AtomicBool>,
+    lifecycle_gate: Arc<Mutex<()>>,
 }
 
 #[derive(Default)]
@@ -68,18 +76,48 @@ impl SyncServiceOwner {
         // `state()` returns a Subscriber; read the current value without async.
         let subscriber = self.service.state();
         let current: SdkSyncState = subscriber.get();
-        snapshot_from_sdk_state(&current, self.session_generation, self.offline_mode_enabled)
-            .with_sliding_sync_capability(self.sliding_sync_capable)
+        if matches!(&current, SdkSyncState::Error(error) if is_terminal_auth_error(error.as_ref()))
+        {
+            self.authentication_rejected.store(true, Ordering::Release);
+        }
+        let mut snapshot =
+            snapshot_from_sdk_state(&current, self.session_generation, self.offline_mode_enabled)
+                .with_sliding_sync_capability(self.sliding_sync_capable);
+        if self.authentication_rejected.load(Ordering::Acquire) {
+            snapshot.readiness = SyncReadiness::Failed;
+            snapshot.failure_diagnostic_id =
+                Some(super::readiness::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID);
+        } else if self.offline_mode_enabled
+            && snapshot.failure_diagnostic_id
+                == Some(super::readiness::SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID)
+        {
+            snapshot.readiness = if self.sync_requested.load(Ordering::Acquire) {
+                SyncReadiness::Offline
+            } else {
+                SyncReadiness::Idle
+            };
+            snapshot.failure_diagnostic_id = None;
+        }
+        snapshot
     }
 
     /// Start (or restart) underlying sliding syncs.
     pub async fn start(&self) -> Result<SyncReadinessSnapshot, SyncError> {
+        let _gate = self.lifecycle_gate.lock().await;
+        let snapshot = self.observe();
+        if self.authentication_rejected.load(Ordering::Acquire) {
+            return Ok(snapshot);
+        }
+        self.sync_requested.store(true, Ordering::Release);
         self.service.start().await;
         Ok(self.observe())
     }
 
     /// Stop underlying sliding syncs (background / logout path).
     pub async fn stop(&self) -> Result<SyncReadinessSnapshot, SyncError> {
+        let _gate = self.lifecycle_gate.lock().await;
+        self.sync_requested.store(false, Ordering::Release);
+        let _ = self.observe();
         self.service.stop().await;
         Ok(self.observe())
     }
@@ -181,22 +219,40 @@ pub async fn build_sync_service(
         });
     }
 
-    let mut builder = SyncService::builder(client.clone());
-    if config.offline_mode {
-        builder = builder.with_offline_mode();
-    }
-
-    let service = builder.build().await.map_err(map_build_error)?;
+    // SDK 0.19 offline mode hides the typed error and probes authenticated
+    // /versions every 100 ms after a rejected refresh. Keep the typed error;
+    // the native owner recovers only non-terminal failures with bounded delay.
+    let service = Arc::new(
+        SyncService::builder(client.clone())
+            .build()
+            .await
+            .map_err(map_build_error)?,
+    );
+    let authentication_rejected = Arc::new(AtomicBool::new(false));
+    let sync_requested = Arc::new(AtomicBool::new(false));
+    let lifecycle_gate = Arc::new(Mutex::new(()));
+    let recovery_task = config.offline_mode.then(|| {
+        spawn_network_recovery(
+            service.clone(),
+            authentication_rejected.clone(),
+            sync_requested.clone(),
+            lifecycle_gate.clone(),
+        )
+    });
     // Best-effort server capability probe: purely informational, never gates
     // the sync path. On probe failure `None` is stored and sync proceeds.
     let sliding_sync_capable = probe_sliding_sync(client).await;
 
     Ok(SyncServiceOwner {
-        service: Arc::new(service),
+        service,
         session_generation,
         offline_mode_enabled: config.offline_mode,
         sliding_sync_capable,
         room_subscriptions: Mutex::new(RoomSubscriptions::default()),
+        recovery_task,
+        authentication_rejected,
+        sync_requested,
+        lifecycle_gate,
     })
 }
 
@@ -246,6 +302,117 @@ fn map_build_error(err: matrix_sdk_ui::sync_service::Error) -> SyncError {
 
 use crate::transport::MatrixIpcErrorCategory;
 
+impl Drop for SyncServiceOwner {
+    fn drop(&mut self) {
+        if let Some(task) = self.recovery_task.take() {
+            task.abort();
+        }
+    }
+}
+
+/// Inspect typed SDK errors, never their display text. An ordinary room
+/// permission denial is not a rejected session. In particular, a transient
+/// refresh/network failure must preserve the session rather than force login.
+pub(crate) fn is_terminal_auth_error(error: &(dyn std::error::Error + 'static)) -> bool {
+    use matrix_sdk::ruma::api::error::ErrorKind;
+    use matrix_sdk::{HttpError, RefreshTokenError};
+    if let Some(error) = error.downcast_ref::<matrix_sdk_ui::sync_service::Error>() {
+        return match error {
+            matrix_sdk_ui::sync_service::Error::RoomList(inner) => is_terminal_auth_error(inner),
+            matrix_sdk_ui::sync_service::Error::EncryptionSync(inner) => {
+                is_terminal_auth_error(inner)
+            }
+            _ => false,
+        };
+    }
+    if let Some(error) = error.downcast_ref::<matrix_sdk_ui::room_list_service::Error>() {
+        return match error {
+            matrix_sdk_ui::room_list_service::Error::SlidingSync(inner) => {
+                is_terminal_auth_error(inner)
+            }
+            _ => false,
+        };
+    }
+    if let Some(error) = error.downcast_ref::<matrix_sdk_ui::encryption_sync_service::Error>() {
+        return match error {
+            matrix_sdk_ui::encryption_sync_service::Error::SlidingSync(inner)
+            | matrix_sdk_ui::encryption_sync_service::Error::LockError(inner)
+            | matrix_sdk_ui::encryption_sync_service::Error::ClientError(inner) => {
+                is_terminal_auth_error(inner)
+            }
+        };
+    }
+    if let Some(error) = error.downcast_ref::<matrix_sdk::Error>() {
+        return match error {
+            matrix_sdk::Error::Http(inner) => is_terminal_auth_error(inner.as_ref()),
+            _ => false,
+        };
+    }
+    if let Some(http) = error.downcast_ref::<HttpError>() {
+        return match http {
+            HttpError::RefreshToken(RefreshTokenError::MatrixAuth(inner)) => {
+                matches!(
+                    inner.client_api_error_kind(),
+                    Some(
+                        ErrorKind::UnknownToken(_) | ErrorKind::Forbidden | ErrorKind::MissingToken
+                    )
+                )
+            }
+            HttpError::RefreshToken(RefreshTokenError::RefreshTokenRequired) => true,
+            HttpError::Cached(inner) => is_terminal_auth_error(inner.as_ref()),
+            _ => matches!(
+                http.client_api_error_kind(),
+                Some(ErrorKind::UnknownToken(_) | ErrorKind::MissingToken)
+            ),
+        };
+    }
+    error.source().is_some_and(is_terminal_auth_error)
+}
+
+fn spawn_network_recovery(
+    service: Arc<SyncService>,
+    authentication_rejected: Arc<AtomicBool>,
+    sync_requested: Arc<AtomicBool>,
+    lifecycle_gate: Arc<Mutex<()>>,
+) -> tokio::task::JoinHandle<()> {
+    // Subscribe before spawning so a fast first sync failure cannot be missed.
+    let mut states = service.state();
+    tokio::spawn(async move {
+        let mut pending = Some(states.get());
+        loop {
+            let state = match pending.take() {
+                Some(state) => state,
+                None => match states.next().await {
+                    Some(state) => state,
+                    None => break,
+                },
+            };
+            match state {
+                SdkSyncState::Error(error) if is_terminal_auth_error(error.as_ref()) => {
+                    authentication_rejected.store(true, Ordering::Release);
+                }
+                SdkSyncState::Error(error)
+                    if sync_requested.load(Ordering::Acquire)
+                        && !is_terminal_auth_error(error.as_ref()) =>
+                {
+                    tokio::select! {
+                        next = states.next() => { pending = next; if pending.is_none() { break; } }
+                        _ = tokio::time::sleep(Duration::from_secs(5)) => {
+                            let _gate = lifecycle_gate.lock().await;
+                            if sync_requested.load(Ordering::Acquire)
+                                && !authentication_rejected.load(Ordering::Acquire)
+                                && matches!(service.state().get(), SdkSyncState::Error(ref error) if !is_terminal_auth_error(error.as_ref())) {
+                                service.start().await;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    })
+}
+
 #[cfg(test)]
 mod subscription_tests {
     use super::*;
@@ -278,5 +445,321 @@ mod subscription_tests {
             &[first.clone(), second],
             &[first, third]
         ));
+    }
+}
+
+#[cfg(test)]
+mod auth_recovery_tests {
+    use super::*;
+    use matrix_sdk::ruma::{device_id, user_id};
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use matrix_sdk::{
+        authentication::matrix::MatrixSession, store::RoomLoadSettings, SessionMeta, SessionTokens,
+    };
+    use wiremock::{
+        matchers::{method, path},
+        Mock, ResponseTemplate,
+    };
+
+    async fn refreshing_client(server: &MatrixMockServer) -> Client {
+        let client = server
+            .client_builder()
+            .unlogged()
+            .on_builder(|builder| {
+                builder
+                    .handle_refresh_tokens()
+                    .request_config(matrix_sdk::config::RequestConfig::new().retry_limit(0))
+            })
+            .build()
+            .await;
+        client
+            .matrix_auth()
+            .restore_session(
+                MatrixSession {
+                    meta: SessionMeta {
+                        user_id: user_id!("@alice:example.org").to_owned(),
+                        device_id: device_id!("DEVICE").to_owned(),
+                    },
+                    tokens: SessionTokens {
+                        access_token: "test-access-old".into(),
+                        refresh_token: Some("test-refresh-old".into()),
+                    },
+                },
+                RoomLoadSettings::default(),
+            )
+            .await
+            .unwrap();
+        client
+    }
+
+    async fn rejected_refresh(status: u16) -> matrix_sdk::HttpError {
+        let server = MatrixMockServer::new().await;
+        let client = refreshing_client(&server).await;
+        Mock::given(method("GET"))
+            .and(path("/_matrix/client/versions"))
+            .respond_with(
+                ResponseTemplate::new(401).set_body_json(
+                    serde_json::json!({"errcode":"M_UNKNOWN_TOKEN","error":"expired"}),
+                ),
+            )
+            .expect(1)
+            .mount(server.server())
+            .await;
+        Mock::given(method("POST")).and(path("/_matrix/client/v3/refresh"))
+            .respond_with(ResponseTemplate::new(status).set_body_json(serde_json::json!({"errcode":if status == 401 {"M_UNKNOWN_TOKEN"} else {"M_FORBIDDEN"},"error":"rejected"})))
+            .expect(1).mount(server.server()).await;
+        client.fetch_server_versions(None).await.unwrap_err()
+    }
+
+    #[tokio::test]
+    async fn rejected_refresh_is_terminal_through_both_sdk_sync_error_wrappers() {
+        for status in [401, 403] {
+            let error = rejected_refresh(status).await;
+            let error = matrix_sdk_ui::sync_service::Error::RoomList(
+                matrix_sdk_ui::room_list_service::Error::SlidingSync(matrix_sdk::Error::Http(
+                    Box::new(error),
+                )),
+            );
+            assert!(is_terminal_auth_error(&error));
+            let snapshot = snapshot_from_sdk_state(&SdkSyncState::Error(Arc::new(error)), 7, true);
+            assert_eq!(
+                snapshot.failure_diagnostic_id,
+                Some(super::super::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID)
+            );
+        }
+        let error = rejected_refresh(401).await;
+        let error = matrix_sdk_ui::sync_service::Error::EncryptionSync(
+            matrix_sdk_ui::encryption_sync_service::Error::SlidingSync(matrix_sdk::Error::Http(
+                Box::new(error),
+            )),
+        );
+        assert!(is_terminal_auth_error(&error));
+    }
+
+    #[tokio::test]
+    async fn refresh_network_failure_is_not_terminal_and_probe_sends_no_authorization() {
+        let server = MatrixMockServer::new().await;
+        let client = refreshing_client(&server).await;
+        Mock::given(method("GET")).and(path("/_matrix/client/versions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"versions":["v1.12"],"unstable_features":{"org.matrix.simplified_msc3575":true}})))
+            .expect(1).mount(server.server()).await;
+        assert_eq!(probe_sliding_sync(&client).await, Some(true));
+        let requests = server.server().received_requests().await.unwrap();
+        assert!(requests
+            .iter()
+            .filter(|request| request.url.path() == "/_matrix/client/versions")
+            .all(|request| !request.headers.contains_key("authorization")));
+        server.server().reset().await;
+        Mock::given(method("POST"))
+            .and(path("/_matrix/client/v3/refresh"))
+            .respond_with(
+                ResponseTemplate::new(500)
+                    .set_body_json(serde_json::json!({"errcode":"M_UNKNOWN","error":"temporary"})),
+            )
+            .mount(server.server())
+            .await;
+        let error = client
+            .matrix_auth()
+            .refresh_access_token()
+            .await
+            .unwrap_err();
+        assert!(!is_terminal_auth_error(
+            &matrix_sdk::HttpError::RefreshToken(error)
+        ));
+    }
+
+    #[tokio::test]
+    async fn successful_refresh_persists_new_tokens_and_restore_uses_them() {
+        use crate::app::lifecycle::{
+            load_session_material, matrix_session_from_host_secrets, persist_session_after_login,
+            InMemorySessionMaterialVault,
+        };
+        use crate::app::store::AccountIdentity;
+        let server = MatrixMockServer::new().await;
+        let client = refreshing_client(&server).await;
+        let vault = Arc::new(InMemorySessionMaterialVault::new());
+        let identity = AccountIdentity::new("@alice:example.org", &server.uri()).unwrap();
+        persist_session_after_login(&client, &identity, vault.as_ref()).unwrap();
+        let writer = vault.clone();
+        let account = identity.clone();
+        client
+            .set_session_callbacks(
+                Box::new(|_| {
+                    Ok(SessionTokens {
+                        access_token: "test-access-old".into(),
+                        refresh_token: Some("test-refresh-old".into()),
+                    })
+                }),
+                Box::new(move |client| {
+                    persist_session_after_login(&client, &account, writer.as_ref())?;
+                    Ok(())
+                }),
+            )
+            .unwrap();
+        Mock::given(method("POST")).and(path("/_matrix/client/v3/refresh"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"access_token":"test-access-new","refresh_token":"test-refresh-new","expires_in_ms":300000})))
+            .expect(1).mount(server.server()).await;
+        client.matrix_auth().refresh_access_token().await.unwrap();
+        let saved = load_session_material(vault.as_ref(), &identity)
+            .unwrap()
+            .unwrap();
+        let restored =
+            matrix_session_from_host_secrets(&identity, &saved.decode_host_secrets().unwrap())
+                .unwrap();
+        assert_eq!(restored.tokens.access_token, "test-access-new");
+        assert_eq!(
+            restored.tokens.refresh_token.as_deref(),
+            Some("test-refresh-new")
+        );
+    }
+
+    #[tokio::test]
+    async fn rejected_sync_stays_terminal_after_delay_stop_and_wake() {
+        let server = MatrixMockServer::new().await;
+        let client = refreshing_client(&server).await;
+        Mock::given(method("GET")).and(path("/_matrix/client/versions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"versions":["v1.12"],"unstable_features":{"org.matrix.simplified_msc3575":true}})))
+            .expect(1).mount(server.server()).await;
+        server
+            .mock_sliding_sync()
+            .error_unknown_token(false)
+            .mount()
+            .await;
+        server
+            .mock_upload_keys()
+            .error_unknown_token(false)
+            .mount()
+            .await;
+        Mock::given(method("POST")).and(path("/_matrix/client/v3/refresh"))
+            .respond_with(ResponseTemplate::new(401).set_body_json(serde_json::json!({"errcode":"M_UNKNOWN_TOKEN","error":"refresh token does not exist"})))
+            .mount(server.server()).await;
+        let owner = build_sync_service(&client, 9, SyncServiceConfig::default())
+            .await
+            .unwrap();
+        owner.start().await.unwrap();
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while owner.observe().failure_diagnostic_id
+                != Some(super::super::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID)
+            {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("typed rejected refresh must reach the owner");
+        let count = server.server().received_requests().await.unwrap().len();
+        tokio::time::sleep(Duration::from_millis(5200)).await;
+        owner.apply_intent(SyncIntent::Resume).await.unwrap();
+        owner.stop().await.unwrap();
+        owner.start().await.unwrap();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert_eq!(
+            server.server().received_requests().await.unwrap().len(),
+            count,
+            "no offline probes or automatic/manual restart of rejected credentials"
+        );
+        assert_eq!(
+            owner.observe().failure_diagnostic_id,
+            Some(super::super::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID)
+        );
+        let requests = server.server().received_requests().await.unwrap();
+        assert!(
+            requests
+                .iter()
+                .filter(|r| r.url.path().ends_with("/refresh"))
+                .count()
+                <= 2
+        );
+    }
+
+    #[tokio::test]
+    async fn sdk_reports_success_even_when_rotation_save_fails() {
+        use crate::app::lifecycle::{
+            load_session_material, persist_session_after_login, InMemorySessionMaterialVault,
+        };
+        use crate::app::store::AccountIdentity;
+        let server = MatrixMockServer::new().await;
+        let client = refreshing_client(&server).await;
+        let vault = InMemorySessionMaterialVault::new();
+        let identity = AccountIdentity::new("@alice:example.org", &server.uri()).unwrap();
+        persist_session_after_login(&client, &identity, &vault).unwrap();
+        let called = Arc::new(AtomicBool::new(false));
+        let callback_called = called.clone();
+        client
+            .set_session_callbacks(
+                Box::new(|_| Err(std::io::Error::other("unused Matrix reload callback").into())),
+                Box::new(move |_| {
+                    callback_called.store(true, Ordering::Release);
+                    Err(std::io::Error::other("test vault unavailable").into())
+                }),
+            )
+            .unwrap();
+        Mock::given(method("POST")).and(path("/_matrix/client/v3/refresh"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"access_token":"test-access-new","refresh_token":"test-refresh-new","expires_in_ms":300000})))
+            .expect(1).mount(server.server()).await;
+        client.matrix_auth().refresh_access_token().await.unwrap();
+        assert!(called.load(Ordering::Acquire));
+        assert_eq!(
+            client
+                .matrix_auth()
+                .session()
+                .unwrap()
+                .tokens
+                .refresh_token
+                .as_deref(),
+            Some("test-refresh-new")
+        );
+        let saved = load_session_material(&vault, &identity)
+            .unwrap()
+            .unwrap()
+            .decode_host_secrets()
+            .unwrap();
+        assert_eq!(saved.refresh_token.as_deref(), Some("test-refresh-old"));
+    }
+
+    #[tokio::test]
+    async fn transient_sync_recovery_is_delayed_and_explicit_stop_cancels_it() {
+        let server = MatrixMockServer::new().await;
+        let client = refreshing_client(&server).await;
+        Mock::given(method("GET")).and(path("/_matrix/client/versions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"versions":["v1.12"],"unstable_features":{"org.matrix.simplified_msc3575":true}})))
+            .expect(1).mount(server.server()).await;
+        server.mock_sliding_sync().error500().mount().await;
+        server.mock_upload_keys().error500().mount().await;
+        let owner = build_sync_service(&client, 10, SyncServiceConfig::default())
+            .await
+            .unwrap();
+        owner.start().await.unwrap();
+        async fn wait_offline(owner: &SyncServiceOwner) {
+            tokio::time::timeout(Duration::from_secs(3), async {
+                while owner.observe().readiness != SyncReadiness::Offline {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .unwrap();
+        }
+        wait_offline(&owner).await;
+        let first = server.server().received_requests().await.unwrap().len();
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert_eq!(
+            server.server().received_requests().await.unwrap().len(),
+            first
+        );
+        tokio::time::timeout(Duration::from_secs(6), async {
+            while server.server().received_requests().await.unwrap().len() == first {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("a transient outage remains recoverable");
+        wait_offline(&owner).await;
+        owner.stop().await.unwrap();
+        let stopped = server.server().received_requests().await.unwrap().len();
+        tokio::time::sleep(Duration::from_millis(5200)).await;
+        assert_eq!(
+            server.server().received_requests().await.unwrap().len(),
+            stopped
+        );
+        assert_eq!(owner.observe().readiness, SyncReadiness::Idle);
     }
 }

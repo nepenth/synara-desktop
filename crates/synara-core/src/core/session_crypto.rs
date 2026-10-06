@@ -910,15 +910,18 @@ pub(super) fn matrix_session_snapshot(
 
 /// Reconstruct the public status DTO from the string-free Platform projection.
 ///
-/// This is the only Platform-to-public mapping: Core constructs the fixed
-/// `p4.1-sync-service-error` value from the closed failure enum, then validates
+/// This is the only Platform-to-public mapping: Core constructs one of two
+/// fixed diagnostics from the closed failure enum, then validates
 /// the full DTO contract before it can be serialized.
 pub(super) fn public_sync_status(
     status: PlatformSyncStatus,
 ) -> Result<SyncReadinessSnapshot, MatrixIpcError> {
-    let failure_diagnostic_id = status
-        .failure()
-        .map(|PlatformSyncFailure::SyncService| SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID);
+    let failure_diagnostic_id = status.failure().map(|failure| match failure {
+        PlatformSyncFailure::SyncService => SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
+        PlatformSyncFailure::AuthenticationRejected => {
+            crate::app::sync::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID
+        }
+    });
     let snapshot = SyncReadinessSnapshot {
         readiness: status.readiness(),
         session_generation: status.session_generation(),

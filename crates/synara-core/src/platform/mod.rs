@@ -10,7 +10,10 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::app::sync::{SyncReadiness, SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
+use crate::app::sync::{
+    SyncReadiness, SyncReadinessSnapshot, SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID,
+    SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
+};
 use crate::dto::NotificationCandidate;
 use crate::transport::{
     MatrixIpcEnvelope, MatrixIpcError, MatrixIpcErrorCategory, MAX_WIRE_COUNTER,
@@ -22,11 +25,13 @@ pub use ios_fail_closed::IosFailClosedPlatform;
 /// Closed failure classification that may cross from a shell into Core.
 ///
 /// This is deliberately not a diagnostic string. Core alone maps this enum to
-/// the one public `matrix_sync_status` diagnostic id.
+/// the two fixed public `matrix_sync_status` diagnostic ids.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PlatformSyncFailure {
     /// The shell-observed SyncService is in its terminal error state.
     SyncService,
+    /// The installed session cannot refresh its rejected credentials.
+    AuthenticationRejected,
 }
 
 /// Static, opaque errors from the shell-owned sync observation.
@@ -70,7 +75,9 @@ impl PlatformSyncStatus {
             (readiness, failure),
             (
                 SyncReadiness::Failed,
-                Some(PlatformSyncFailure::SyncService)
+                Some(
+                    PlatformSyncFailure::SyncService | PlatformSyncFailure::AuthenticationRejected
+                )
             ) | (SyncReadiness::Unconfigured, None)
                 | (SyncReadiness::Idle, None)
                 | (SyncReadiness::Running, None)
@@ -103,6 +110,9 @@ impl PlatformSyncStatus {
         let failure = match snapshot.failure_diagnostic_id {
             None => None,
             Some(SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID) => Some(PlatformSyncFailure::SyncService),
+            Some(SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID) => {
+                Some(PlatformSyncFailure::AuthenticationRejected)
+            }
             Some(_) => return Err(PlatformSyncStatusError::InvalidSnapshot),
         };
         Self::new(
@@ -728,6 +738,23 @@ mod tests {
             ),
             Err(PlatformSyncStatusError::InvalidSnapshot)
         );
+    }
+
+    #[test]
+    fn authentication_rejection_survives_the_closed_platform_projection() {
+        let status = PlatformSyncStatus::from_desktop_snapshot(SyncReadinessSnapshot {
+            readiness: SyncReadiness::Failed,
+            session_generation: 12,
+            offline_mode_enabled: true,
+            failure_diagnostic_id: Some(SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID),
+            sliding_sync_capable: Some(true),
+        })
+        .unwrap();
+        assert_eq!(
+            status.failure(),
+            Some(PlatformSyncFailure::AuthenticationRejected)
+        );
+        assert_eq!(status.session_generation(), 12);
     }
 
     #[test]

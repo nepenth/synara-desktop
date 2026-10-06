@@ -42,7 +42,7 @@ use synara_core::platform::{
     PlatformSecretStorageState, PlatformSecretStorageStatus, PlatformSecretStorageStatusError,
 };
 
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use tokio::sync::Mutex;
 
@@ -387,6 +387,42 @@ impl MatrixAuthState {
         .await
     }
 
+    async fn retry_failed_session_save(&self, app: &AppHandle) {
+        let session = self.session.lock().await;
+        let Some(active) = session.as_ref() else {
+            return;
+        };
+        if !active.session_persistence.callback_lease().save_failed() {
+            return;
+        }
+        let result = app_data_root(app).and_then(|root| {
+            let identity = account_identity(&active.identity)?;
+            let saved = active
+                .session_persistence
+                .callback_lease()
+                .save_credentials(
+                    || ensure_logout_retry_locator(&root, &active.identity),
+                    || {
+                        persist_session_after_login(
+                            &active.client,
+                            &identity,
+                            &KeyringSessionMaterialVault::new(),
+                        )
+                        .map(|_| ())
+                        .map_err(map_session_rotation_persist_error)
+                    },
+                );
+            record_session_rotation_outcome(&root, &saved);
+            saved
+        });
+        let _ = app.emit(
+            "matrix-session-persistence",
+            serde_json::json!({
+                "sessionGeneration": active.sync.session_generation(), "saved": result.is_ok()
+            }),
+        );
+    }
+
     /// Read the current SDK sync owner as the existing safe readiness DTO.
     ///
     /// This remains desktop-owned: no client, credential, store handle, or raw
@@ -714,12 +750,42 @@ pub fn spawn_suspend_resume_watch(app: AppHandle) {
             );
             previous_wall = now_wall;
             previous_mono = now_mono;
-            if !slept {
-                continue;
-            }
             let Some(state) = app.try_state::<MatrixAuthState>() else {
                 continue;
             };
+            // A server refresh can succeed while its synchronous save callback
+            // fails. Retry only the local write of the current in-memory tokens;
+            // never replay the old refresh token or erase encryption data.
+            state.retry_failed_session_save(&app).await;
+            let snapshot = state.sync_status_snapshot().await;
+            if snapshot.failure_diagnostic_id
+                == Some(synara_core::app::sync::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID)
+            {
+                // A terminal rejected refresh is not an offline server. Retire
+                // native work and invalid credentials through the existing
+                // fenced logout owner. This does not erase the crypto store.
+                crate::desktop_logging::desktop_append_log(
+                    app.clone(),
+                    "native".into(),
+                    "session-authentication-rejected".into(),
+                );
+                if let Some(core) = app.try_state::<Arc<synara_core::Core>>() {
+                    if let Err(error) =
+                        matrix_logout(app.clone(), state, core, Some(snapshot.session_generation))
+                            .await
+                    {
+                        crate::desktop_logging::desktop_append_log(
+                            app.clone(),
+                            "native".into(),
+                            error.diagnostic_id,
+                        );
+                    }
+                }
+                continue;
+            }
+            if !slept {
+                continue;
+            }
             if let Err(error) = state.recover_sync_after_detected_suspend().await {
                 eprintln!(
                     "[synara] sync resume after suspend failed: {}",

@@ -2919,6 +2919,11 @@ async fn media_config_desktop_owner_keeps_the_live_client_and_closed_no_session_
     let projection = desktop_owner
         .split("pub(crate) async fn media_config_projection")
         .nth(1)
+        .and_then(|source| {
+            source
+                .split("pub(super) async fn clear_store_recovery")
+                .next()
+        })
         .expect("desktop media config projection");
     let clone = projection
         .find("active.client.clone()")
@@ -4683,4 +4688,81 @@ async fn suspend_resume_inflight_and_error_preserve_recovery_gate_contract() {
         Some(1),
         "ordinary retry remains allowed after resume error"
     );
+}
+
+#[test]
+fn rotation_save_failure_is_tracked_until_durable_write_and_cannot_outlive_owner() {
+    use std::cell::Cell;
+    let owner = SessionPersistenceOwner::new();
+    let lease = owner.callback_lease();
+    let wrote = Cell::new(false);
+    assert!(!lease.save_failed());
+    let result: Result<(), _> = lease.save_credentials(
+        || {
+            Err(MatrixAuthCommandError::unavailable(
+                "d0.1-session-locator-sync-failed",
+            ))
+        },
+        || {
+            wrote.set(true);
+            Ok(())
+        },
+    );
+    assert!(result.is_err());
+    assert!(lease.save_failed());
+    assert!(!wrote.get());
+    assert!(lease
+        .save(|| Err::<(), _>(MatrixAuthCommandError::unavailable(
+            "d0.1-session-rotation-persist-failed"
+        )))
+        .is_err());
+    assert!(lease.save_failed());
+    lease
+        .save(|| {
+            wrote.set(true);
+            Ok(())
+        })
+        .unwrap();
+    assert!(!lease.save_failed());
+    assert!(wrote.get());
+    drop(owner);
+    wrote.set(false);
+    assert!(lease
+        .save(|| {
+            wrote.set(true);
+            Ok(())
+        })
+        .is_err());
+    assert!(!wrote.get());
+}
+
+#[test]
+fn rotation_log_is_bounded_and_never_contains_dynamic_error_text() {
+    let root = std::env::temp_dir().join(format!("synara-rotation-log-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    record_session_rotation_outcome(
+        &root,
+        &Err(MatrixAuthCommandError::new(
+            "Unknown",
+            "private test credential",
+            "d0.1-session-private-test-credential",
+        )),
+    );
+    record_session_rotation_outcome(
+        &root,
+        &Err(MatrixAuthCommandError::unavailable(
+            "d0.1-session-locator-sync-failed",
+        )),
+    );
+    record_session_rotation_outcome(&root, &Ok(()));
+    let path = root.join("logs/matrix-session-lifecycle.log");
+    let text = fs::read_to_string(&path).unwrap();
+    assert!(!text.contains("private"));
+    assert!(text.contains("session-rotation-persisted"));
+    assert!(text.contains("d0.1-session-locator-sync-failed"));
+    fs::write(&path, vec![b'x'; 65537]).unwrap();
+    record_session_rotation_outcome(&root, &Ok(()));
+    assert!(fs::metadata(&path).unwrap().len() < 1024);
+    assert!(root.join("logs/matrix-session-lifecycle.log.1").is_file());
+    fs::remove_dir_all(root).unwrap();
 }

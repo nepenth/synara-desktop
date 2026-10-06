@@ -6,7 +6,8 @@
 
 use serde::{de::DeserializeOwned, Deserialize};
 use synara_core::app::sync::{
-    SyncReadiness, SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
+    SyncReadiness, SyncReadinessSnapshot, SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID,
+    SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
 };
 use synara_core::dto::{SessionLifecycle, SessionSnapshot};
 use synara_core::transport::CommandEnvelope;
@@ -42,6 +43,9 @@ impl TryFrom<SyncStatusWireResponse> for SyncReadinessSnapshot {
         let failure_diagnostic_id = match response.failure_diagnostic_id.as_deref() {
             None => None,
             Some(SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID) => Some(SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID),
+            Some(SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID) => {
+                Some(SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID)
+            }
             Some(_) => return Err(()),
         };
         Ok(Self {
@@ -451,29 +455,34 @@ mod tests {
 
     #[tokio::test]
     async fn sync_status_bridge_forwards_exact_core_envelope_and_react_json() {
-        let forwarded = Arc::new(Mutex::new(Vec::new()));
-        let payload = serde_json::json!({
-            "readiness": "failed",
-            "sessionGeneration": 9,
-            "offlineModeEnabled": true,
-            "failureDiagnosticId": SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
-            "slidingSyncCapable": true,
-        });
-        let core = core_returning(SYNC_STATUS_COMMAND, payload.clone(), Arc::clone(&forwarded));
+        for diagnostic in [
+            SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
+            SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID,
+        ] {
+            let forwarded = Arc::new(Mutex::new(Vec::new()));
+            let payload = serde_json::json!({
+                "readiness": "failed",
+                "sessionGeneration": 9,
+                "offlineModeEnabled": true,
+                "failureDiagnosticId": diagnostic,
+                "slidingSyncCapable": true,
+            });
+            let core = core_returning(SYNC_STATUS_COMMAND, payload.clone(), Arc::clone(&forwarded));
 
-        let snapshot = sync_status(&core)
-            .await
-            .expect("known Core status response remains the desktop DTO");
-        assert_eq!(serde_json::to_value(snapshot).unwrap(), payload);
-        assert_eq!(
-            forwarded.lock().unwrap().as_slice(),
-            &[CommandEnvelope {
-                command: SYNC_STATUS_COMMAND.to_owned(),
-                session_generation: READ_ONLY_SESSION_GENERATION,
-                request_id: None,
-                payload: serde_json::Value::Null,
-            }]
-        );
+            let snapshot = sync_status(&core)
+                .await
+                .expect("known Core status response remains the desktop DTO");
+            assert_eq!(serde_json::to_value(snapshot).unwrap(), payload);
+            assert_eq!(
+                forwarded.lock().unwrap().as_slice(),
+                &[CommandEnvelope {
+                    command: SYNC_STATUS_COMMAND.to_owned(),
+                    session_generation: READ_ONLY_SESSION_GENERATION,
+                    request_id: None,
+                    payload: serde_json::Value::Null,
+                }]
+            );
+        }
     }
 
     #[tokio::test]

@@ -1108,35 +1108,38 @@ async fn crypto_status_projection_is_closed_and_core_errors_are_static() {
 }
 
 #[tokio::test]
-async fn core_sync_status_constructs_the_only_public_failure_diagnostic() {
-    let status = PlatformSyncStatus::new(
-        SyncReadiness::Failed,
-        9,
-        true,
-        Some(PlatformSyncFailure::SyncService),
-        Some(true),
-    )
-    .expect("closed sync failure is a valid Platform projection");
-    let response = Core::new(Arc::new(StatusPlatform { status: Ok(status) }))
-        .command(CommandEnvelope {
-            command: "matrix_sync_status".into(),
-            session_generation: 9,
-            request_id: None,
-            payload: serde_json::Value::Null,
-        })
-        .await
-        .expect("closed Platform failure serializes through Core");
+async fn core_sync_status_constructs_only_the_closed_public_failure_diagnostics() {
+    for (failure, diagnostic) in [
+        (PlatformSyncFailure::SyncService, "p4.1-sync-service-error"),
+        (
+            PlatformSyncFailure::AuthenticationRejected,
+            "p4.1-session-authentication-rejected",
+        ),
+    ] {
+        let status =
+            PlatformSyncStatus::new(SyncReadiness::Failed, 9, true, Some(failure), Some(true))
+                .expect("closed sync failure is a valid Platform projection");
+        let response = Core::new(Arc::new(StatusPlatform { status: Ok(status) }))
+            .command(CommandEnvelope {
+                command: "matrix_sync_status".into(),
+                session_generation: 9,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect("closed Platform failure serializes through Core");
 
-    assert_eq!(
-        response.payload,
-        serde_json::json!({
-            "readiness": "failed",
-            "sessionGeneration": 9,
-            "offlineModeEnabled": true,
-            "failureDiagnosticId": "p4.1-sync-service-error",
-            "slidingSyncCapable": true,
-        })
-    );
+        assert_eq!(
+            response.payload,
+            serde_json::json!({
+                "readiness": "failed",
+                "sessionGeneration": 9,
+                "offlineModeEnabled": true,
+                "failureDiagnosticId": diagnostic,
+                "slidingSyncCapable": true,
+            })
+        );
+    }
 }
 
 #[tokio::test]
