@@ -1097,6 +1097,19 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreDecryptionRetryWithoutSessionFailsClosed() async {
+        do {
+            _ = try await SharedCoreTimeline.timelineRetryDecryption(core: SharedCore(), streamId: "view-1")
+            XCTFail("Retry cannot succeed without an attached timeline owner")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-timeline-retry-decryption-no-session"))
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testSharedCoreTypingLiveMatchesRoomWithoutEcho() {
         let users = SharedCoreTypingLive.users(
             roomID: "!s21:example.org",
@@ -1413,7 +1426,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(ready.backup, .enabled)
         XCTAssertNil(ready.hasDevicesToVerifyAgainst)
         XCTAssertNil(ready.isLastDevice)
-        XCTAssertEqual(ready.unableToDecryptCount, 0)
+        XCTAssertNil(ready.unableToDecryptCount)
 
         let attention = SharedCoreSessionCrypto.status(
             crossSigningState: "not_set_up",

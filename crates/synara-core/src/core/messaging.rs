@@ -384,6 +384,25 @@ pub(super) fn matrix_timeline_snapshot(
     })
 }
 
+pub(super) fn matrix_timeline_retry_decryption(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelineSnapshotRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-timeline-retry-decryption-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-retry-decryption-no-session")
+        })?;
+        let requested = owner
+            .retry_decryption(&payload.stream_id)
+            .await
+            .map_err(timeline_open_owner_error)?;
+        Ok(serde_json::Value::Bool(requested))
+    })
+}
+
 pub(super) fn timeline_open_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "d0.3-timeline-invalid-room-id"

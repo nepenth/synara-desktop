@@ -111,7 +111,7 @@ struct AppEnvironment {
         let timeline = SharedCoreTimelineService(host: host)
         let roomList = SharedCoreRoomListService(host: host)
         let roomMembership = SharedCoreRoomMembershipService(host: host)
-        let crypto = SharedCoreCryptoStatusService(host: host)
+        let crypto = SharedCoreCryptoStatusService(host: host, timeline: timeline)
         let roomManagement = SharedCoreRoomManagementService(host: host)
         let sessionReadiness = SignedInSessionReadiness()
         let messageSender = SharedCoreMessageSendService(host: host)

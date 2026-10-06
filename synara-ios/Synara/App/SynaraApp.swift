@@ -711,7 +711,13 @@ private extension AppEnvironment {
             timeline = MockTimelineService()
         }
 
-        let roomList = processEnvironment["SYNARA_UI_TEST_LARGE_ROOMS"] == "1"
+        let roomList = processEnvironment["SYNARA_UI_TEST_FAVORITES"] == "1"
+            ? MockRoomListService(state: .loaded([
+                RoomSummary(id: "!project:matrix.org", name: "Product", lastMessagePreview: "Fixture message",
+                    unreadCount: 1, hasHighlight: false, kind: .room, membership: .joined,
+                    lastActivityAt: Date(), isFavorite: true)
+            ]))
+            : processEnvironment["SYNARA_UI_TEST_LARGE_ROOMS"] == "1"
             ? MockRoomListService(state: .loaded(RoomListFixtures.large()))
             : MockRoomListService()
         let later = processEnvironment["SYNARA_UI_TEST_LATER_ITEMS"] == "1"
@@ -735,6 +741,11 @@ private extension AppEnvironment {
         let readMarkers = MockRoomReadMarkerService(eventID: processEnvironment["SYNARA_UI_TEST_READ_MARKER_EVENT_ID"])
         let crypto: CryptoStatusServicing = processEnvironment["SYNARA_UI_TEST_VERIFICATION"] != nil
             ? VerificationUITestService(verified: processEnvironment["SYNARA_UI_TEST_VERIFICATION"] == "verified")
+            : processEnvironment["SYNARA_UI_TEST_CRYPTO_VERIFICATION_ONLY"] == "1"
+            ? MockCryptoStatusService(
+                roomCryptoStatus: RoomCryptoStatus(encryption: .encrypted, verification: .unverified,
+                    recovery: .enabled, backup: .enabled, unableToDecryptCount: 0)
+            )
             : processEnvironment["SYNARA_UI_TEST_ENCRYPTED_TIMELINE"] == "1"
             ? MockCryptoStatusService(
                 roomCryptoStatus: RoomCryptoStatus(

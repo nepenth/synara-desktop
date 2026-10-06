@@ -54,6 +54,7 @@ struct RoomListView: View {
                         }
                     }
                     .listStyle(.plain)
+                    .modifier(RoomListTopMargin())
                     .scrollContentBackground(.hidden)
                     .background(SynaraChrome.roomList)
                     .accessibilityIdentifier("RoomListLoading")
@@ -225,6 +226,7 @@ struct RoomListView: View {
                         }
                     }
                     .listStyle(.plain)
+                    .modifier(RoomListTopMargin())
                     .scrollContentBackground(.hidden)
                     .background(SynaraChrome.roomList)
                     .refreshable {
@@ -1551,5 +1553,17 @@ struct RoomListView_Previews: PreviewProvider {
             RoomListView()
         }
         .environment(\.appEnvironment, AppEnvironment.mock())
+    }
+}
+
+/// A custom account/filter header already provides the list's top spacing.
+private struct RoomListTopMargin: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content.contentMargins(.top, 0, for: .scrollContent)
+        } else {
+            content
+        }
     }
 }

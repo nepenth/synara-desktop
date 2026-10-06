@@ -1545,6 +1545,12 @@
           "markdownDescription": "Enables the matrix_timeline_set_read_state command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_timeline_retry_decryption command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-timeline-retry-decryption",
+          "markdownDescription": "Enables the matrix_timeline_retry_decryption command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_timeline_snapshot command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-timeline-snapshot",
@@ -2917,6 +2923,12 @@
           "type": "string",
           "const": "deny-matrix-timeline-set-read-state",
           "markdownDescription": "Denies the matrix_timeline_set_read_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_timeline_retry_decryption command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-timeline-retry-decryption",
+          "markdownDescription": "Denies the matrix_timeline_retry_decryption command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_timeline_snapshot command without any pre-configured scope.",

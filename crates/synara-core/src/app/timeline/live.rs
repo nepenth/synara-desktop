@@ -1098,6 +1098,36 @@ impl NativeTimelineOwner {
             .await
     }
 
+    /// Request SDK-owned decryption on this exact open view. Completion only
+    /// acknowledges the request; decrypted rows arrive through its live stream.
+    pub async fn retry_decryption(&self, stream_id: &str) -> Result<bool, &'static str> {
+        let timeline = {
+            let registry = self.registry.lock().await;
+            registry
+                .view_streams
+                .get(stream_id)
+                .ok_or("v-timeline-view-not-open")?
+                .timeline
+                .clone()
+        };
+        let session_ids: std::collections::BTreeSet<String> = timeline
+            .items()
+            .await
+            .iter()
+            .filter_map(|item| {
+                let event = item.as_event()?;
+                match event.content().as_unable_to_decrypt()? {
+                    EncryptedMessage::MegolmV1AesSha2 { session_id, .. } => {
+                        Some(session_id.clone())
+                    }
+                    _ => None,
+                }
+            })
+            .collect();
+        timeline.retry_decryption(session_ids).await;
+        Ok(true)
+    }
+
     #[allow(clippy::too_many_arguments)] // Host boundary mirrors the typed Matrix send contract.
     pub async fn send_text(
         &self,

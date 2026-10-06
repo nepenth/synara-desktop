@@ -59,4 +59,67 @@ A process crash while native credential storage remains unwritable can still los
 
 Regression coverage exercises the pinned SDK and real Core sync owner: rejected refreshes through room/encryption error wrappers; absence of anonymous-probe Authorization; no requests after the recovery interval or stop/start/wake of a rejected owner; delayed transient recovery and explicit-stop cancellation; successful rotation/restoration; and the SDK save-failure behavior. Native tests cover pending-save state, retirement fencing, bounded/private logs and existing logout/crypto continuity. Renderer coverage verifies expiry notice storage and unavailable-storage behavior.
 
-Local validation passed 1,081 Core library tests (three existing ignored tests), 476 desktop library tests serially, and 1,209 renderer tests; renderer typechecks, lint and production build also passed. A parallel desktop run exposed an existing shared-state dropped-file grant collision; serial execution passed. Final Clippy and CI status are recorded in the feature PR. Live validation of the new signed Mac/Linux product and an OS credential-store lock/unlock is still required before claiming the original production path repaired end to end. Production clients were not replaced by this branch work.
+Local validation after the iOS follow-up passed 1,127 Core library tests (four existing ignored tests), 476 desktop library tests serially, and 1,209 renderer tests; renderer typechecks, lint and production build also passed. A parallel desktop run exposed an existing shared-state dropped-file grant collision; serial execution passed. Final Clippy and CI status are recorded in the feature PR. Live validation of the new signed Mac/Linux product and an OS credential-store lock/unlock is still required before claiming the original production path repaired end to end. Production clients were not replaced by this branch work.
+
+
+## iOS encryption and presentation follow-up
+
+The supplied screenshots show readable messages, an unverified device, enabled
+recovery/backup, and a room warning titled “Encrypted history needs attention.”
+The banner treated unverified-device state as a decryption failure; Security’s
+zero UTD count was a constant, not a history measurement. This confirms a
+presentation defect, but does not establish that connection loss destroyed keys
+or explain any genuinely undecryptable event without its native readback.
+
+The intended retry route is an iOS user in an open room with SDK-projected
+undecryptable rows → Retry Decryption → the retained Swift timeline service →
+typed SharedCore operation → registered Core command → that exact native stream
+→ SDK event-cache decryption request → live timeline invalidation → authoritative
+snapshot. The only immediate completion is acknowledgement of the request.
+Decryption is complete only when Core projects readable rows. This route may
+re-read keys and update cached event projections; it never replaces an encryption
+identity, signs out, marks a device verified, or closes/reopens the stream.
+A missing/closed stream or session fails closed. Claiming recovered history from
+a request acknowledgement, or calling a second Matrix client, disqualifies the
+route. Verification trust remains owned by the SDK device projection.
+
+The old Swift retry returned unavailable without reaching Core. The new operation
+requests SDK decryption on the retained stream. Actual placeholder rows drive
+room recovery controls, even when encryption metadata is temporarily unknown.
+A device-verification advisory has its own title and no decryption button when
+messages are readable. Device-owner updates refresh the advisory and request
+SDK decryption once when trust changes to verified with placeholders present.
+The subscription is cancelled when the view disappears or changes sessions.
+Security now directs users to room history when no session-wide count exists.
+
+The Support link and mailto target use synara-support@whyland.com. Room lists
+remove the system top content margin beneath the custom filter header. Composer
+backgrounds extend through the keyboard/container safe areas, while controls
+retain keyboard avoidance; focused composing omits the home-indicator padding.
+
+CI also detected newly published Seroval and source-map-js advisories in the
+merged dependency update. The lock now uses Seroval 1.6.8 (an override is needed
+because Solid pins an older minor) and source-map-js 1.2.2. The production npm
+audit reports zero vulnerabilities.
+
+
+Follow-up validation used Xcode 27 and an iPhone 17 simulator on iOS 27. The
+configured simulator-arm64 build generated both production Rust/Swift pairs and
+built the app/test bundles successfully. The full Swift suite executed 843 tests
+with three existing skips and zero failures. Six focused UI tests passed:
+favorite-section geometry, composer/input-surface geometry, message send after
+keyboard focus, both crypto-banner states, and Settings navigation/support link.
+Dark-mode screenshots confirm the keyboard corners are filled and Favorites is
+closer to the filters. The lifetime test now drains UIKit autoreleases before
+checking weak ownership, without executing the queued focus callback first.
+
+The native SDK fixture starts with a genuinely encrypted event and no room key.
+Retry acknowledges the request while its projected row remains undecryptable.
+Importing its synthetic key and requesting decryption produces readable content
+and a live invalidation on the same stream. Unknown and closed stream requests
+fail closed; Swift's typed no-session operation also fails closed. This confirms
+the SDK fixture route and presenter behavior. Recovery of a specific production
+iPhone event remains unconfirmed because no undecryptable event readback was
+available; the supplied screenshots alone show the misleading trust advisory.
+Core and desktop Clippy across all targets, Rust formatting, repository boundary
+and workflow checks, production renderer build, and npm production audit passed.

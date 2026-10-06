@@ -1547,6 +1547,12 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_timeline_open", matrix_timeline_open)
         .expect("built-in matrix_timeline_open must remain in the command census");
     registry
+        .register(
+            "matrix_timeline_retry_decryption",
+            matrix_timeline_retry_decryption,
+        )
+        .expect("built-in matrix_timeline_retry_decryption must remain in the command census");
+    registry
         .register("matrix_timeline_snapshot", matrix_timeline_snapshot)
         .expect("built-in matrix_timeline_snapshot must remain in the command census");
     registry

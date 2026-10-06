@@ -1004,6 +1004,57 @@ final class SynaraUITests: XCTestCase {
         )
     }
 
+    func testFavoritesStartImmediatelyBelowRoomFilters() {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_FAVORITES"] = "1"
+        launch(app)
+        let favorites = app.staticTexts["Favorites"]
+        XCTAssertTrue(favorites.waitForExistence(timeout: 5))
+        let filters = identifiedElement(in: app, "RoomFilterStrip")
+        XCTAssertTrue(filters.exists)
+        XCTAssertGreaterThanOrEqual(favorites.frame.minY, filters.frame.maxY)
+        XCTAssertLessThanOrEqual(favorites.frame.minY - filters.frame.maxY, 32)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Favorites spacing"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    func testUnverifiedDeviceWithReadableMessagesDoesNotOfferDecryptionRetry() {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!project:matrix.org"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Project"
+        app.launchEnvironment["SYNARA_UI_TEST_CRYPTO_VERIFICATION_ONLY"] = "1"
+        launch(app)
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForTimelineElement(app.staticTexts["Verify this device"], app: app, timeout: 5, preferredSwipe: .down))
+        XCTAssertFalse(app.staticTexts["Encrypted history needs attention"].exists)
+        XCTAssertFalse(app.buttons["EncryptedRecoveryRetryButton"].exists)
+        XCTAssertTrue(app.buttons["EncryptedRecoverySettingsButton"].exists)
+    }
+
+    func testComposerJoinsTheSoftwareKeyboardWithoutHomeIndicatorPadding() {
+        let app = launchRoomApp()
+        let field = composerField(in: app)
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        // The keyboard's AX frame excludes QuickType / Write with Siri.
+        // Its inputView is the full system surface, including that assistant.
+        let inputView = app.otherElements["inputView"].firstMatch
+        XCTAssertTrue(inputView.exists)
+        let gap = inputView.frame.minY - field.frame.maxY
+        XCTAssertGreaterThanOrEqual(gap, 0)
+        XCTAssertLessThanOrEqual(gap, 16, "The composer must keep only its normal inner padding above the system input surface")
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Composer keyboard join"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     func testNotificationsInboxShowsUnreadRooms() {
         let app = launchSignedInNotificationsApp()
 
@@ -1162,12 +1213,13 @@ final class SynaraUITests: XCTestCase {
 
         tapSettingsElement(app.buttons["PrivacyPolicySettingsLink"], app: app, timeout: 10)
         XCTAssertTrue(app.collectionViews["PrivacyPolicySettingsScreen"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["PrivacyPolicyExternalLink"].exists)
+        XCTAssertTrue(identifiedElement(in: app, "PrivacyPolicyExternalLink").exists)
         app.navigationBars.buttons.element(boundBy: 0).tap()
 
         tapSettingsElement(app.buttons["SupportSettingsLink"], app: app, timeout: 10)
         XCTAssertTrue(app.collectionViews["SupportSettingsScreen"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["SupportExternalLink"].exists)
+        XCTAssertTrue(identifiedElement(in: app, "SupportExternalLink").exists)
+        XCTAssertEqual(identifiedElement(in: app, "SupportExternalLink").label, "synara-support@whyland.com")
         app.navigationBars.buttons.element(boundBy: 0).tap()
 
         XCTAssertTrue(app.collectionViews["SettingsScreen"].waitForExistence(timeout: 5))

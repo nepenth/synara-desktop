@@ -210,6 +210,7 @@
     "allow-matrix-notification-pending-snapshot",
     "allow-matrix-timeline-open",
     "allow-matrix-timeline-snapshot",
+    "allow-matrix-timeline-retry-decryption",
     "allow-matrix-timeline-close",
     "allow-matrix-timeline-paginate",
     "allow-matrix-timeline-reaction-toggle",

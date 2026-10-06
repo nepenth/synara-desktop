@@ -174,6 +174,7 @@ pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
     "matrix_timeline_reaction_toggle",
     "matrix_timeline_redact",
     "matrix_timeline_report",
+    "matrix_timeline_retry_decryption",
     "matrix_timeline_set_read_state",
     "matrix_timeline_snapshot",
     "matrix_timeline_timestamp_to_event",

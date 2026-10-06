@@ -1123,6 +1123,19 @@ final class SharedCoreTimelineService: TimelineServicing {
         }
     }
 
+    func retryDecryption(roomID: String) async -> CryptoActionResult {
+        guard let streamID = stream(for: roomID)?.streamID else {
+            return .unavailable("Open this room to retry decryption.")
+        }
+        do {
+            let requested = try await SharedCoreTimeline.timelineRetryDecryption(core: host.core, streamId: streamID)
+            return requested ? .completed("Decryption requested. Messages update when keys are available.")
+                : .failed("Decryption could not be retried.")
+        } catch {
+            return .failed("Decryption could not be retried. Reopen the room and try again.")
+        }
+    }
+
     func clearSessionCaches() {
         let streamIds = takeAllStreams()
         Task {
@@ -1852,10 +1865,12 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     }
 
     private let host: SharedCoreProductHost
+    private let timeline: SharedCoreTimelineService?
     private let flowLock = NSLock()
     private var flowId: String?
 
-    init(host: SharedCoreProductHost) {
+    init(host: SharedCoreProductHost, timeline: SharedCoreTimelineService? = nil) {
+        self.timeline = timeline
         self.host = host
     }
 
@@ -1940,8 +1955,8 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     }
 
     func retryDecryption(roomID: String) async -> CryptoActionResult {
-        _ = roomID
-        return .unavailable("Crypto recovery is unavailable.")
+        guard let timeline else { return .unavailable("Open this room to retry decryption.") }
+        return await timeline.retryDecryption(roomID: roomID)
     }
 
     func requestDeviceVerification(deviceId: String?) async -> CryptoActionResult {

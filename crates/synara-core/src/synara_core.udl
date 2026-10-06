@@ -1871,6 +1871,10 @@ interface SharedCore {
   [Async, Throws=TimelineError]
   TimelineSnapshotDto timeline_snapshot(string stream_id);
 
+  // Acknowledges an SDK retry request; live rows determine decryption success.
+  [Async, Throws=TimelineError]
+  boolean timeline_retry_decryption(string stream_id);
+
   [Async, Throws=TimelineError]
   TimelineSnapshotDto timeline_paginate(string stream_id, string direction);
 
