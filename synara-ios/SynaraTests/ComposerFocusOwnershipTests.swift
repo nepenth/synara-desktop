@@ -111,14 +111,21 @@ final class ComposerFocusOwnershipTests: XCTestCase {
         let state = ComposerFocusStateBox()
         state.focused = true
         let window = UIWindow()
-        var editor: ComposerFocusResponderSpy? = makeEditor()
-        editor?.attachedWindow = window
-        var owner: ComposerTextView.Coordinator? = ComposerTextView.Coordinator(parent: state.view())
-        let lifetime = ComposerFocusWeakWitness(owner: owner, editor: editor)
-        owner?.installFocusEditor(editor!)
-        owner?.requestFocusUpdate(for: editor!)
-        owner = nil
-        editor = nil
+        let lifetime = ComposerFocusWeakWitness(owner: nil, editor: nil)
+        // UIKit may autorelease a newly initialized text view. Drain those
+        // framework references before checking the queued callback's ownership,
+        // without allowing that callback to execute and hide a strong capture.
+        autoreleasepool {
+            var editor: ComposerFocusResponderSpy? = makeEditor()
+            editor?.attachedWindow = window
+            var owner: ComposerTextView.Coordinator? = ComposerTextView.Coordinator(parent: state.view())
+            lifetime.owner = owner
+            lifetime.editor = editor
+            owner?.installFocusEditor(editor!)
+            owner?.requestFocusUpdate(for: editor!)
+            owner = nil
+            editor = nil
+        }
         XCTAssertNil(lifetime.owner)
         XCTAssertNil(lifetime.editor)
         await drainMainQueue()

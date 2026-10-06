@@ -416,6 +416,7 @@ struct RoomTimelineView: View {
     @State private var markFullyReadTaskGeneration: UInt64 = 0
     @State private var readMarkerQueue = RoomTimelineReadMarkerQueue()
     @State private var timelineUpdatesTask: Task<Void, Never>?
+    @State private var cryptoUpdatesTask: Task<Void, Never>?
     @State private var timelineSession: RoomTimelineSession?
     @State private var activeTimelineMode: RoomTimelineMode = .live
     @State private var timelineProviderIsLive = false
@@ -460,8 +461,8 @@ struct RoomTimelineView: View {
             TimelineHeader(
                 title: displayRoomTitle,
                 subtitle: timelineSubtitle,
-                cryptoLabel: cryptoStatus.roomHeaderLabel,
-                cryptoSystemImage: cryptoStatus.roomHeaderSystemImage,
+                cryptoLabel: cryptoStatus.observing(loadedTimelineItems).roomHeaderLabel,
+                cryptoSystemImage: cryptoStatus.observing(loadedTimelineItems).roomHeaderSystemImage,
                 showsBackButton: canvasLayout.showsConversationBackButton,
                 onSearch: { isTimelineSearchPresented = true },
                 onDetails: { isRoomDetailsPresented = true },
@@ -503,14 +504,16 @@ struct RoomTimelineView: View {
                 onPasteImages: draftPastedImages,
                 isFocusedExternally: $isComposerFocused
             )
-            .padding(.bottom, canvasLayout == .stacked ? SynaraSpacing.large : 0)
-            .background(SynaraChrome.composer)
+            .padding(.bottom, canvasLayout == .stacked && !isComposerFocused ? SynaraSpacing.large : 0)
+            .background { SynaraChrome.composer.ignoresSafeArea(edges: .bottom) }
             .synaraDockedDepth(
                 .floating,
                 boundaryColor: isAgentRoom ? SynaraColor.agent : SynaraColor.separator
             )
         }
-        .background(isAgentRoom ? SynaraChrome.agentReview : SynaraChrome.chat)
+        .background {
+            (isAgentRoom ? SynaraChrome.agentReview : SynaraChrome.chat).ignoresSafeArea()
+        }
         .ignoresSafeArea(.container, edges: canvasLayout == .stacked ? .bottom : [])
         .navigationTitle(displayRoomTitle)
         .navigationBarBackButtonHidden(true)
@@ -687,6 +690,8 @@ struct RoomTimelineView: View {
             dismissKeyboard()
             stopTimelineUpdates(reason: "view-disappeared")
             stopTypingUpdates()
+            cryptoUpdatesTask?.cancel()
+            cryptoUpdatesTask = nil
             cancelTimelineScroll()
             // A disappearing view no longer proves that its previously painted
             // tail is visible. Cancel the tracked automatic acknowledgement;
@@ -775,7 +780,7 @@ struct RoomTimelineView: View {
 
                             if shouldShowCryptoBanner(items: items) {
                                 CryptoRecoveryBanner(
-                                    status: cryptoStatus,
+                                    status: cryptoStatus.observing(items),
                                     onRetry: retryDecryption,
                                     onReviewSecurity: { environment.router.route(to: .settings) },
                                     onDismiss: { isCryptoBannerDismissed = true }
@@ -1161,7 +1166,7 @@ struct RoomTimelineView: View {
             rows.append(.init(id: .pagination, content: .pagination))
         }
         if shouldShowCryptoBanner(items: items) {
-            rows.append(.init(id: .cryptoBanner, content: .cryptoBanner(cryptoStatus)))
+            rows.append(.init(id: .cryptoBanner, content: .cryptoBanner(cryptoStatus.observing(items))))
         }
 
         for (index, item) in items.enumerated() {
@@ -1510,6 +1515,8 @@ struct RoomTimelineView: View {
     }
 
     private func resetTimelineState() {
+        cryptoUpdatesTask?.cancel()
+        cryptoUpdatesTask = nil
         stopTimelineUpdates(reason: "room-reset")
         stopTypingUpdates()
         cancelTimelineScroll()
@@ -1904,8 +1911,10 @@ struct RoomTimelineView: View {
     private func loadCryptoStatus() async -> RoomCryptoStatus {
         let traceID = PerformanceTrace.begin("LoadCryptoStatus")
         defer { PerformanceTrace.end("LoadCryptoStatus", id: traceID) }
+        let expectedTimelineTaskID = timelineTaskID
         let status = await environment.crypto.roomStatus(roomID: roomID)
         await MainActor.run {
+            guard !Task.isCancelled, expectedTimelineTaskID == timelineTaskID else { return }
             cryptoStatus = status
         }
         return status
@@ -1943,14 +1952,20 @@ struct RoomTimelineView: View {
     }
 
     private func startVerificationAutoRetry() {
-        Task {
-            for await update in environment.crypto.verificationUpdates() {
-                if case .finished = update?.state, cryptoStatus.unableToDecryptCount > 0 {
-                    // Post-verification success: auto-retry decryption to clear "Retry Decryption" / UTD banners
-                    // in this room. This is the strict requirement for the flow after successful SAS.
+        cryptoUpdatesTask?.cancel()
+        let expectedTimelineTaskID = timelineTaskID
+        cryptoUpdatesTask = Task {
+            // Device-owner updates include verification and peer changes.
+            // Subscribe before reading so completion cannot be lost during a read.
+            let updates = environment.crypto.sessionDeviceUpdates()
+            for await _ in updates {
+                guard !Task.isCancelled, expectedTimelineTaskID == timelineTaskID else { return }
+                let previousStatus = cryptoStatus
+                let status = await loadCryptoStatus()
+                guard !Task.isCancelled, expectedTimelineTaskID == timelineTaskID else { return }
+                if status != previousStatus { isCryptoBannerDismissed = false }
+                if status.observing(loadedTimelineItems).shouldRetryAfterVerification(previous: previousStatus) {
                     _ = await environment.crypto.retryDecryption(roomID: roomID)
-                    _ = await loadCryptoStatus()
-                    logTimelineEvent("post-verification-retry", fields: ["utdBefore": "\(cryptoStatus.unableToDecryptCount)"])
                 }
             }
         }
@@ -1961,34 +1976,13 @@ struct RoomTimelineView: View {
             let result = await environment.crypto.retryDecryption(roomID: roomID)
             _ = await loadCryptoStatus()
             await MainActor.run {
-                stopTimelineUpdates(reason: "decryption-reload")
-            }
-            await loadTimeline()
-            await MainActor.run {
                 cryptoActionMessage = result.message
             }
         }
     }
 
     private func shouldShowCryptoBanner(items: [TimelineItem]) -> Bool {
-        guard isCryptoBannerDismissed == false else {
-            return false
-        }
-
-        if cryptoStatus.needsCryptoActionBanner {
-            return true
-        }
-
-        guard cryptoStatus.isEncrypted else {
-            return false
-        }
-
-        return items.contains { item in
-            if case .encryptedPlaceholder = item.kind {
-                return true
-            }
-            return false
-        }
+        !isCryptoBannerDismissed && cryptoStatus.observing(items).needsCryptoActionBanner
     }
 
     private func sendMessage(body rawBody: String) {
@@ -5754,6 +5748,11 @@ private struct SettingsInfo: View {
 }
 
 private struct CryptoRecoveryBanner: View {
+    private var tint: Color {
+        status.unableToDecryptCount > 0 || status.recovery == .incomplete
+            ? SynaraColor.warning : SynaraColor.accent
+    }
+
     let status: RoomCryptoStatus
     let onRetry: () -> Void
     let onReviewSecurity: () -> Void
@@ -5762,7 +5761,7 @@ private struct CryptoRecoveryBanner: View {
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.small) {
             HStack(alignment: .top, spacing: SynaraSpacing.small) {
-                Label(title, systemImage: "lock.trianglebadge.exclamationmark")
+                Label(status.cryptoBannerTitle, systemImage: status.unableToDecryptCount > 0 || status.recovery == .incomplete ? "lock.trianglebadge.exclamationmark" : "lock.shield")
                     .font(SynaraTypography.emphasis)
                     .foregroundStyle(SynaraColor.primaryText)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -5778,41 +5777,26 @@ private struct CryptoRecoveryBanner: View {
                 .accessibilityIdentifier("EncryptedRecoveryDismissButton")
             }
 
-            Text(detail)
+            Text(status.cryptoBannerDetail)
                 .font(SynaraTypography.supporting)
                 .foregroundStyle(SynaraColor.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: SynaraSpacing.small) {
-                Button("Retry Decryption", action: onRetry)
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("EncryptedRecoveryRetryButton")
+                if status.unableToDecryptCount > 0 {
+                    Button("Retry Decryption", action: onRetry)
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("EncryptedRecoveryRetryButton")
+                }
                 Button("Review Security", action: onReviewSecurity)
                     .buttonStyle(.bordered)
                     .accessibilityIdentifier("EncryptedRecoverySettingsButton")
             }
         }
         .padding(SynaraSpacing.medium)
-        .synaraCard(fill: SynaraColor.warning.opacity(0.10), stroke: SynaraColor.warning)
+        .synaraCard(fill: tint.opacity(0.10), stroke: tint)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("EncryptedRecoveryBanner")
-    }
-
-    private var title: String {
-        "Encrypted history needs attention"
-    }
-
-    private var detail: String {
-        if status.verification == .unverified {
-            return "This device is not verified. Verify another session from Settings before trusting encrypted history."
-        }
-        if status.recovery == .incomplete {
-            return "This room is encrypted, but recovery is incomplete. Verify another session or recover keys before acting on undecrypted messages."
-        }
-        if status.unableToDecryptCount > 0 {
-            return "Some encrypted events are missing keys. Retry decryption after sync, or review device verification and recovery in Settings."
-        }
-        return "Encrypted messages in this room need attention. Review device verification and recovery in Settings."
     }
 }
 

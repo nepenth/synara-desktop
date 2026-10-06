@@ -6,7 +6,8 @@ import Foundation
 /// Uses existing backup / secret-storage / crypto status and the Core room
 /// list's authoritative joined-room encryption tri-state. Invite encryption
 /// never substitutes for a missing joined-room state. Recovery keys,
-/// missing-secret lists, and UTD counts never appear on the product status.
+/// and missing-secret lists never appear on the product status. Session metadata
+/// cannot determine UTD counts; rooms use the SDK-projected timeline rows.
 /// This is not iOS-on-engine and not P4 acceptance.
 enum SharedCoreSessionCrypto {
     static func status(
@@ -27,7 +28,7 @@ enum SharedCoreSessionCrypto {
             ),
             hasDevicesToVerifyAgainst: nil,
             isLastDevice: nil,
-            unableToDecryptCount: 0
+            unableToDecryptCount: nil
         )
     }
 

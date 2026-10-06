@@ -89,6 +89,15 @@ pub async fn matrix_timeline_paginate(
 }
 
 #[tauri::command]
+pub async fn matrix_timeline_retry_decryption(
+    core: State<'_, Arc<synara_core::Core>>,
+    stream_id: String,
+) -> Result<bool, MatrixAuthCommandError> {
+    crate::bridge::timeline_snapshot::timeline_retry_decryption(core.inner().as_ref(), stream_id)
+        .await
+}
+
+#[tauri::command]
 pub async fn matrix_timeline_snapshot(
     core: State<'_, Arc<synara_core::Core>>,
     stream_id: String,

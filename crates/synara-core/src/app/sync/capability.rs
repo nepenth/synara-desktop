@@ -31,7 +31,11 @@ const SLIDING_SYNC_MARKERS: &[&str] = &[
 /// before a verdict) — the product should then proceed and report sync errors
 /// normally rather than block on an unknown environment.
 pub async fn probe_sliding_sync(client: &Client) -> Option<bool> {
-    let probe = timeout(Duration::from_secs(3), client.fetch_server_versions(None)).await;
+    let probe = timeout(
+        Duration::from_secs(3),
+        client.fetch_server_versions(Some(matrix_sdk::config::RequestConfig::new().skip_auth())),
+    )
+    .await;
     let response = probe.ok()?.ok()?;
     Some(server_supports_sliding_sync(
         &response.versions,

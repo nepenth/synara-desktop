@@ -465,6 +465,7 @@ async fn default_registry_dispatches_matrix_session_snapshot() {
             "matrix_timeline_reaction_toggle",
             "matrix_timeline_redact",
             "matrix_timeline_report",
+            "matrix_timeline_retry_decryption",
             "matrix_timeline_set_read_state",
             "matrix_timeline_snapshot",
             "matrix_timeline_timestamp_to_event",
@@ -1108,35 +1109,38 @@ async fn crypto_status_projection_is_closed_and_core_errors_are_static() {
 }
 
 #[tokio::test]
-async fn core_sync_status_constructs_the_only_public_failure_diagnostic() {
-    let status = PlatformSyncStatus::new(
-        SyncReadiness::Failed,
-        9,
-        true,
-        Some(PlatformSyncFailure::SyncService),
-        Some(true),
-    )
-    .expect("closed sync failure is a valid Platform projection");
-    let response = Core::new(Arc::new(StatusPlatform { status: Ok(status) }))
-        .command(CommandEnvelope {
-            command: "matrix_sync_status".into(),
-            session_generation: 9,
-            request_id: None,
-            payload: serde_json::Value::Null,
-        })
-        .await
-        .expect("closed Platform failure serializes through Core");
+async fn core_sync_status_constructs_only_the_closed_public_failure_diagnostics() {
+    for (failure, diagnostic) in [
+        (PlatformSyncFailure::SyncService, "p4.1-sync-service-error"),
+        (
+            PlatformSyncFailure::AuthenticationRejected,
+            "p4.1-session-authentication-rejected",
+        ),
+    ] {
+        let status =
+            PlatformSyncStatus::new(SyncReadiness::Failed, 9, true, Some(failure), Some(true))
+                .expect("closed sync failure is a valid Platform projection");
+        let response = Core::new(Arc::new(StatusPlatform { status: Ok(status) }))
+            .command(CommandEnvelope {
+                command: "matrix_sync_status".into(),
+                session_generation: 9,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect("closed Platform failure serializes through Core");
 
-    assert_eq!(
-        response.payload,
-        serde_json::json!({
-            "readiness": "failed",
-            "sessionGeneration": 9,
-            "offlineModeEnabled": true,
-            "failureDiagnosticId": "p4.1-sync-service-error",
-            "slidingSyncCapable": true,
-        })
-    );
+        assert_eq!(
+            response.payload,
+            serde_json::json!({
+                "readiness": "failed",
+                "sessionGeneration": 9,
+                "offlineModeEnabled": true,
+                "failureDiagnosticId": diagnostic,
+                "slidingSyncCapable": true,
+            })
+        );
+    }
 }
 
 #[tokio::test]
@@ -5185,5 +5189,34 @@ async fn known_but_unregistered_commands_fail_closed_with_static_diagnostic() {
             error.diagnostic_id.as_deref(),
             Some("p2-command-unregistered")
         );
+    }
+}
+
+#[tokio::test]
+async fn matrix_timeline_retry_decryption_fails_closed_without_owner_or_with_unknown_fields() {
+    for (payload, category, diagnostic) in [
+        (
+            serde_json::json!({"streamId":"view-1"}),
+            MatrixIpcErrorCategory::Forbidden,
+            "p2-timeline-retry-decryption-no-session",
+        ),
+        (
+            serde_json::json!({"streamId":"view-1","token":"no"}),
+            MatrixIpcErrorCategory::SdkInvariant,
+            "p2-timeline-retry-decryption-invalid-payload",
+        ),
+    ] {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_retry_decryption".into(),
+                session_generation: 0,
+                request_id: None,
+                payload,
+            })
+            .await
+            .expect_err("retry must not invent a timeline or accept credentials");
+        assert_eq!(error.category, category);
+        assert_eq!(error.diagnostic_id.as_deref(), Some(diagnostic));
     }
 }

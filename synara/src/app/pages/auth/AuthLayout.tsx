@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect } from 'react';
+import { hasSessionExpiryNotice } from '../../utils/sessionExpiry';
 import { Box, Header, Scroll, Spinner, Text, color } from 'folds';
 import {
   Outlet,
@@ -139,6 +140,9 @@ export function AuthLayout() {
         gap="400"
       >
         <Box direction="Column" className={css.AuthCard}>
+          {hasSessionExpiryNotice() && (
+            <Text role="alert">Your session expired. Sign in again to reconnect.</Text>
+          )}
           <Header className={css.AuthHeader} size="600" variant="Surface">
             <Box grow="Yes" direction="Row" gap="300" alignItems="Center">
               <img className={css.AuthLogo} src={SynaraPNG} alt="Synara Logo" />

@@ -25,6 +25,23 @@ pub(crate) async fn timeline_snapshot(
     serde_json::from_value(response.payload).map_err(|_| timeline_snapshot_response_error())
 }
 
+/// Acknowledges an SDK retry request; the live timeline reports its outcome.
+pub(crate) async fn timeline_retry_decryption(
+    core: &Core,
+    stream_id: String,
+) -> Result<bool, MatrixAuthCommandError> {
+    let response = core
+        .command(CommandEnvelope {
+            command: "matrix_timeline_retry_decryption".to_owned(),
+            session_generation: READ_ONLY_SESSION_GENERATION,
+            request_id: None,
+            payload: serde_json::json!({ "streamId": stream_id }),
+        })
+        .await
+        .map_err(map_timeline_snapshot_core_error)?;
+    serde_json::from_value(response.payload).map_err(|_| timeline_snapshot_response_error())
+}
+
 fn map_timeline_snapshot_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
     match error.category {
         MatrixIpcErrorCategory::Forbidden => MatrixAuthCommandError::new(

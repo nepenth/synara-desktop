@@ -5,7 +5,7 @@ import SynaraCore
 ///
 /// The caller owns the core so UniFFI does not free the retained Client.
 /// This wraps `matrix_timeline_open`, `matrix_timeline_close`, and
-/// `matrix_timeline_snapshot`, and `matrix_timeline_paginate` only. It is not a generic `Core.command` FFI,
+/// `matrix_timeline_snapshot`, `matrix_timeline_paginate`, and `matrix_timeline_retry_decryption`. It is not a generic `Core.command` FFI,
 /// not jump/read-state/send, and not a product timeline swap.
 enum SharedCoreTimeline {
     static func timelineOpen(
@@ -25,6 +25,10 @@ enum SharedCoreTimeline {
         streamId: String
     ) async throws -> TimelineSnapshotDto {
         try await core.timelineSnapshot(streamId: streamId)
+    }
+
+    static func timelineRetryDecryption(core: SharedCore, streamId: String) async throws -> Bool {
+        try await core.timelineRetryDecryption(streamId: streamId)
     }
 
     static func timelinePaginate(

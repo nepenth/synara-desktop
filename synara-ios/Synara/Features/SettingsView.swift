@@ -1383,7 +1383,7 @@ private struct SecuritySettingsView: View {
                     .accessibilityIdentifier("SecurityKeyRecoveryRow")
                 SettingsInfoRow(title: "Key Backup", value: sessionCrypto.status.backup.settingsDisplayName)
                     .accessibilityIdentifier("SecurityKeyBackupRow")
-                SettingsInfoRow(title: "Decryption Issues", value: sessionCrypto.status.unableToDecryptCount == 0 ? "None" : "\(sessionCrypto.status.unableToDecryptCount)")
+                SettingsInfoRow(title: "Decryption Issues", value: sessionCrypto.status.decryptionIssuesLabel)
                     .accessibilityIdentifier("SecurityDecryptionIssuesRow")
             }
 
@@ -1734,7 +1734,7 @@ private enum SettingsLink {
         case .privacy:
             return "https://synara.app/privacy"
         case .support:
-            return "support@synara.app"
+            return "synara-support@whyland.com"
         }
     }
 
@@ -1743,7 +1743,7 @@ private enum SettingsLink {
         case .privacy:
             return URL(string: "https://synara.app/privacy")!
         case .support:
-            return URL(string: "mailto:support@synara.app")!
+            return URL(string: "mailto:synara-support@whyland.com")!
         }
     }
 }

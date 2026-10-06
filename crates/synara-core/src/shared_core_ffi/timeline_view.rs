@@ -1146,6 +1146,41 @@ impl SharedCore {
         Ok(timeline_snapshot_dto(snapshot))
     }
 
+    pub async fn timeline_retry_decryption(
+        &self,
+        stream_id: String,
+    ) -> Result<bool, TimelineError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_retry_decryption".to_owned(),
+                session_generation: TIMELINE_READ_ONLY_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "streamId": stream_id }),
+            })
+            .await
+            .map_err(|error| match error.diagnostic_id.as_deref() {
+                Some("p2-timeline-retry-decryption-no-session") => timeline_failed(
+                    "p2-timeline-retry-decryption-no-session",
+                    TIMELINE_NO_SESSION_DESCRIPTION,
+                ),
+                Some("v-timeline-view-not-open") => timeline_failed(
+                    TIMELINE_VIEW_NOT_OPEN_CODE,
+                    TIMELINE_VIEW_NOT_OPEN_DESCRIPTION,
+                ),
+                _ => timeline_failed(
+                    "p4-retry-decryption-failed",
+                    "Decryption could not be retried.",
+                ),
+            })?;
+        serde_json::from_value(response.payload).map_err(|_| {
+            timeline_failed(
+                "p4-retry-decryption-failed",
+                "Decryption could not be retried.",
+            )
+        })
+    }
+
     pub async fn timeline_paginate(
         &self,
         stream_id: String,

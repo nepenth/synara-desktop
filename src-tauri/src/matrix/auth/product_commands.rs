@@ -912,10 +912,11 @@ pub async fn matrix_logout(
     app: AppHandle,
     state: State<'_, MatrixAuthState>,
     core: State<'_, Arc<synara_core::Core>>,
+    expected_session_generation: Option<u64>,
 ) -> Result<MatrixSessionSnapshot, MatrixAuthCommandError> {
     let mut session = state.session.lock().await;
-    state.clear_store_recovery().await;
     let Some(active) = session.as_ref() else {
+        state.clear_store_recovery().await;
         // Even a path-resolution failure must not skip retirement of stale Core.
         finish_orphan_logout(
             crate::bridge::session_lifecycle::close_after_desktop_session_removal(
@@ -931,6 +932,22 @@ pub async fn matrix_logout(
         drop(session);
         return Ok(MatrixSessionSnapshot::LoggedOut);
     };
+
+    if let Some(expected) = expected_session_generation {
+        if active.sync.session_generation() != expected
+            || active.sync.observe().failure_diagnostic_id
+                != Some(synara_core::app::sync::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID)
+        {
+            return Err(MatrixAuthCommandError::new(
+                "InvalidRequest",
+                "The rejected session has already changed.",
+                "d0.1-session-rejection-stale",
+            ));
+        }
+        let _ = app.emit("matrix-session-expired", expected);
+    }
+
+    state.clear_store_recovery().await;
 
     // Resolve the root while the live session still retains the retry identity.
     // The coordinator preflights the locator before constructing any SDK or
@@ -948,7 +965,9 @@ pub async fn matrix_logout(
         || async move {
             persistence_lease.revoke();
             // Remote revocation is best-effort; local cleanup remains mandatory.
-            let _remote_logout_succeeded = client.matrix_auth().logout().await.is_ok();
+            if expected_session_generation.is_none() {
+                let _remote_logout_succeeded = client.matrix_auth().logout().await.is_ok();
+            }
             join_rules.retire();
             observations.retire();
             widgets.retire_and_close().await;
@@ -1449,6 +1468,7 @@ async fn rollback_session_install(
 struct SessionPersistenceState {
     revoked: bool,
     credential_write_attempted: bool,
+    save_failed: bool,
 }
 
 #[derive(Default)]
@@ -1473,9 +1493,16 @@ impl SessionPersistenceLease {
                 "d0.1-session-persistence-retired",
             ));
         }
-        preflight()?;
-        state.credential_write_attempted = true;
-        persist()
+        let result = preflight().and_then(|()| {
+            state.credential_write_attempted = true;
+            persist()
+        });
+        state.save_failed = result.is_err();
+        result
+    }
+
+    pub(super) fn save_failed(&self) -> bool {
+        self.state.lock().map_or(true, |state| state.save_failed)
     }
 
     #[cfg(test)]
@@ -1867,26 +1894,22 @@ fn install_session_rotation_callbacks(
                 };
                 // SDK rotation can run before the explicit login save. Every
                 // callback establishes the same durable cleanup target first.
-                persistence_lease
-                    .save_credentials(
-                        || ensure_logout_retry_locator(&save_root, &locator),
-                        || {
-                            persist_session_after_login(
-                                &client,
-                                &save_identity,
-                                &KeyringSessionMaterialVault::new(),
-                            )
-                            .map(|_| ())
-                            .map_err(|_| {
-                                MatrixAuthCommandError::unavailable(
-                                    "d0.1-session-rotation-persist-failed",
-                                )
-                            })
-                        },
-                    )
-                    .map_err(|_| {
-                        SessionRotationCallbackError("d0.1-session-rotation-persist-failed")
-                    })?;
+                let persisted = persistence_lease.save_credentials(
+                    || ensure_logout_retry_locator(&save_root, &locator),
+                    || {
+                        persist_session_after_login(
+                            &client,
+                            &save_identity,
+                            &KeyringSessionMaterialVault::new(),
+                        )
+                        .map(|_| ())
+                        .map_err(map_session_rotation_persist_error)
+                    },
+                );
+                record_session_rotation_outcome(&save_root, &persisted);
+                persisted.map_err(|_| {
+                    SessionRotationCallbackError("d0.1-session-rotation-persist-failed")
+                })?;
                 Ok(())
             }),
         )
@@ -2213,6 +2236,80 @@ pub(super) fn map_auth_error(error: AuthError) -> MatrixAuthCommandError {
         _ => "Native Matrix login failed.",
     };
     MatrixAuthCommandError::new(code, message, error.diagnostic_id())
+}
+
+pub(super) fn map_session_rotation_persist_error(
+    error: crate::matrix::lifecycle::LifecycleError,
+) -> MatrixAuthCommandError {
+    let diagnostic_id = match error {
+        crate::matrix::lifecycle::LifecycleError::Vault { diagnostic_id, .. }
+            if matches!(
+                diagnostic_id,
+                "p3.5-keyring-no-entry"
+                    | "p3.5-keyring-encoding"
+                    | "p3.5-keyring-invalid"
+                    | "p3.5-keyring-ambiguous"
+                    | "p3.5-keyring-no-storage-access"
+                    | "p3.5-keyring-platform-failure"
+                    | "p3.5-keyring-unavailable"
+                    | "p3.5-keyring-unsupported-platform"
+            ) =>
+        {
+            diagnostic_id
+        }
+        _ => "d0.1-session-rotation-persist-failed",
+    };
+    MatrixAuthCommandError::unavailable(diagnostic_id)
+}
+
+/// Always available native evidence. Only time and a fixed outcome are stored;
+/// no account identifiers, tokens, SDK error text, or event data are accepted.
+pub(super) fn record_session_rotation_outcome(
+    root: &Path,
+    result: &Result<(), MatrixAuthCommandError>,
+) {
+    let saved = result.is_ok();
+    use std::io::Write;
+    let outcome = if saved {
+        "session-rotation-persisted"
+    } else {
+        "session-rotation-persist-failed"
+    };
+    let directory = root.join("logs");
+    if fs::create_dir_all(&directory).is_err() {
+        return;
+    }
+    let path = directory.join("matrix-session-lifecycle.log");
+    if fs::metadata(&path).is_ok_and(|meta| meta.len() > 64 * 1024) {
+        let _ = fs::rename(&path, directory.join("matrix-session-lifecycle.log.1"));
+    }
+    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(path) {
+        let timestamp = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map_or(0, |time| time.as_millis());
+        let _ = writeln!(file, "[{timestamp}] native {outcome}");
+        if let Err(error) = result {
+            // Save/preflight errors are closed native diagnostic ids.
+            if matches!(
+                error.diagnostic_id.as_str(),
+                "d0.1-session-rotation-persist-failed"
+                    | "d0.1-session-persistence-retired"
+                    | "d0.1-session-locator-mismatch"
+                    | "d0.1-session-locator-sync-failed"
+                    | "d0.1-session-locator-directory-sync-failed"
+                    | "p3.5-keyring-no-entry"
+                    | "p3.5-keyring-encoding"
+                    | "p3.5-keyring-invalid"
+                    | "p3.5-keyring-ambiguous"
+                    | "p3.5-keyring-no-storage-access"
+                    | "p3.5-keyring-platform-failure"
+                    | "p3.5-keyring-unavailable"
+                    | "p3.5-keyring-unsupported-platform"
+            ) {
+                let _ = writeln!(file, "[{timestamp}] native {}", error.diagnostic_id);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -2565,12 +2662,19 @@ mod tests {
         let revocation = logout
             .find("state.clear_store_recovery().await")
             .expect("logout must revoke recovery even when already logged out");
-        let logged_out = logout
-            .find("let Some(active) = session.as_ref() else")
-            .expect("logout's logged-out branch");
+        let logged_out_return = logout
+            .find("return Ok(MatrixSessionSnapshot::LoggedOut)")
+            .expect("logout's logged-out return");
         assert!(
-            revocation < logged_out,
+            revocation < logged_out_return,
             "recovery must be revoked before the already-logged-out return"
+        );
+        let active_logout = logout.split("if let Some(expected)").nth(1).unwrap();
+        assert!(
+            active_logout
+                .find("state.clear_store_recovery().await")
+                .unwrap()
+                < active_logout.find("// Resolve the root").unwrap()
         );
     }
 

@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-matrix-timeline-retry-decryption"
+description = "Enables the matrix_timeline_retry_decryption command without any pre-configured scope."
+commands.allow = ["matrix_timeline_retry_decryption"]
+
+[[permission]]
+identifier = "deny-matrix-timeline-retry-decryption"
+description = "Denies the matrix_timeline_retry_decryption command without any pre-configured scope."
+commands.deny = ["matrix_timeline_retry_decryption"]

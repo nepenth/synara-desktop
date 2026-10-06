@@ -88,6 +88,7 @@ auth_and_rooms=(
   testLoginValidationShowsNonSensitiveError
   testSuccessfulMockLoginShowsSignedInShell
   testRoomListShowsStableRoomRows
+  testFavoritesStartImmediatelyBelowRoomFilters
   testRoomHeaderAccountMenuShowsSettingsAndLogout
   testRoomManagementCreatesPrivateEncryptedRoom
   testRoomSearchFiltersByName
@@ -113,6 +114,8 @@ timeline_and_composer=(
   testFileUploadAddsAttachmentPlaceholder
   testThreadViewOpensAndRepliesFromTimeline
   testEncryptedTimelineShowsCryptoStatusRecoveryBannerAndSafePlaceholder
+  testUnverifiedDeviceWithReadableMessagesDoesNotOfferDecryptionRetry
+  testComposerJoinsTheSoftwareKeyboardWithoutHomeIndicatorPadding
 )
 
 settings_and_workflows=(

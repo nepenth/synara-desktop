@@ -410,9 +410,39 @@ struct RoomCryptoStatus: Equatable {
     }
 
     var needsCryptoActionBanner: Bool {
-        verification == .unverified
-            || unableToDecryptCount > 0
-            || recovery == .incomplete
+        unableToDecryptCount > 0
+            || (isEncrypted && (verification == .unverified || recovery == .incomplete))
+    }
+
+    func observing(_ items: [TimelineItem]) -> RoomCryptoStatus {
+        RoomCryptoStatus(
+            encryption: encryption, verification: verification,
+            recovery: recovery, backup: backup,
+            unableToDecryptCount: items.filter {
+                if case .encryptedPlaceholder = $0.kind { return true }
+                return false
+            }.count
+        )
+    }
+
+    func shouldRetryAfterVerification(previous: RoomCryptoStatus) -> Bool {
+        previous.verification == .unverified && verification == .verified && unableToDecryptCount > 0
+    }
+
+    var cryptoBannerTitle: String {
+        if unableToDecryptCount > 0 { return "Encrypted history needs attention" }
+        if recovery == .incomplete { return "Key recovery needs attention" }
+        return "Verify this device"
+    }
+
+    var cryptoBannerDetail: String {
+        if unableToDecryptCount > 0 {
+            return "Some messages could not be decrypted. Retry after keys arrive, or review verification and key recovery in Settings."
+        }
+        if recovery == .incomplete {
+            return "Key recovery is incomplete. Review Security to protect access to encrypted history."
+        }
+        return "This device is not verified. Compare emoji or number codes with another verified session in Settings. This does not mean messages failed to decrypt."
     }
 
     var roomHeaderLabel: String? {
@@ -444,7 +474,14 @@ struct SessionCryptoStatus: Equatable {
     let backup: SynaraCryptoBackupStatus
     let hasDevicesToVerifyAgainst: Bool?
     let isLastDevice: Bool?
-    let unableToDecryptCount: Int
+    let unableToDecryptCount: Int?
+
+    // Session crypto metadata does not scan message history. A missing count
+    // must never be presented as proof that every encrypted event decrypted.
+    var decryptionIssuesLabel: String {
+        guard let count = unableToDecryptCount else { return "Check room history" }
+        return count == 0 ? "None observed" : "\(count) observed"
+    }
 
     static let unknown = SessionCryptoStatus(
         verification: .unknown,
@@ -452,7 +489,7 @@ struct SessionCryptoStatus: Equatable {
         backup: .unknown,
         hasDevicesToVerifyAgainst: nil,
         isLastDevice: nil,
-        unableToDecryptCount: 0
+        unableToDecryptCount: nil
     )
 }
 

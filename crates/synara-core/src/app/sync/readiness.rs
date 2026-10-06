@@ -9,11 +9,12 @@ use serde::{Deserialize, Serialize};
 
 use super::sync_phase::SyncPhase;
 
-/// Only diagnostic id permitted on a failed [`SyncReadinessSnapshot`].
+/// Fixed sync-service diagnostic permitted on a failed snapshot.
 ///
 /// It is intentionally static: neither a raw SDK error nor a shell-provided
 /// diagnostic can cross the shared Core status transport.
 pub const SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID: &str = "p4.1-sync-service-error";
+pub const SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID: &str = "p4.1-session-authentication-rejected";
 
 /// High-level product readiness of the Matrix sync owner.
 ///
@@ -28,7 +29,7 @@ pub enum SyncReadiness {
     Idle,
     /// Sliding sync + encryption sync loops are running.
     Running,
-    /// Offline mode (server reachability probe). Optional SDK feature.
+    /// Transient sync outage awaiting bounded native recovery.
     Offline,
     /// Gracefully stopped / terminated; restartable.
     Terminated,
@@ -115,15 +116,17 @@ impl SyncReadinessSnapshot {
     /// Validate the fixed diagnostic contract of the public
     /// `matrix_sync_status` DTO.
     ///
-    /// This deliberately permits no diagnostic for healthy states and exactly
-    /// [`SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID`] for `failed`; callers must not
+    /// This permits no diagnostic for healthy states and only the two closed
+    /// sync-service/authentication diagnostics for `failed`; callers must not
     /// serialize a snapshot that has not passed this closed check.
     pub(crate) fn is_valid_public_sync_status(&self) -> bool {
         matches!(
             (self.readiness, self.failure_diagnostic_id),
             (
                 SyncReadiness::Failed,
-                Some(SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID)
+                Some(
+                    SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID | SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID
+                )
             ) | (SyncReadiness::Unconfigured, None)
                 | (SyncReadiness::Idle, None)
                 | (SyncReadiness::Running, None)
@@ -156,6 +159,9 @@ pub fn readiness_from_sdk_state(state: &SdkSyncState) -> SyncReadiness {
 /// Diagnostic id for a failed SDK state (no raw message).
 pub fn failure_diagnostic_from_sdk_state(state: &SdkSyncState) -> Option<&'static str> {
     match state {
+        SdkSyncState::Error(error) if super::service::is_terminal_auth_error(error.as_ref()) => {
+            Some(SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID)
+        }
         SdkSyncState::Error(_) => Some(SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID),
         _ => None,
     }

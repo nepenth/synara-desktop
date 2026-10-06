@@ -16,6 +16,8 @@ import {
 /** The live client's type, derived like useMatrixClient (js-sdk-free here). */
 type ClientMatrix = Awaited<ReturnType<typeof initClient>>;
 import FocusTrap from 'focus-trap-react';
+import { listen } from '@tauri-apps/api/event';
+import { recordSessionExpiry } from '../../utils/sessionExpiry';
 import React, {
   MouseEventHandler,
   ReactNode,
@@ -302,6 +304,7 @@ export function ClientRoot({ children }: ClientRootProps) {
   const mx = loadState.status === AsyncStatus.Success ? loadState.data : undefined;
   const [logoutError, setLogoutError] = useState<string>();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [sessionSaveFailed, setSessionSaveFailed] = useState(false);
   const logout = useCallback(async () => {
     if (loggingOut) return;
     setLoggingOut(true);
@@ -318,6 +321,52 @@ export function ClientRoot({ children }: ClientRootProps) {
   const [startState, startMatrix] = useAsyncCallback<void, Error, [ClientMatrix]>(
     useCallback((m) => startClient(m), [])
   );
+
+  useEffect(() => {
+    if (!isSynaraDesktop()) return undefined;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void listen<number>('matrix-session-expired', ({ payload }) => {
+      if (Number.isSafeInteger(payload) && payload === mx?.getSessionGeneration()) {
+        recordSessionExpiry();
+      }
+    })
+      .then((stop) => {
+        if (disposed) stop();
+        else unlisten = stop;
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [mx]);
+
+  useEffect(() => {
+    if (!isSynaraDesktop()) return undefined;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void listen<{ sessionGeneration: number; saved: boolean }>(
+      'matrix-session-persistence',
+      ({ payload }) => {
+        if (
+          payload?.sessionGeneration === mx?.getSessionGeneration() &&
+          typeof payload?.saved === 'boolean'
+        ) {
+          setSessionSaveFailed(!payload.saved);
+        }
+      }
+    )
+      .then((stop) => {
+        if (disposed) stop();
+        else unlisten = stop;
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [mx]);
 
   useLogoutListener(mx, logout);
   useSyncResumeRetry(mx);
@@ -441,6 +490,12 @@ export function ClientRoot({ children }: ClientRootProps) {
     <AutoDiscovery userId={userId!} baseUrl={baseUrl!}>
       <SpecVersions baseUrl={baseUrl!}>
         {mx && <SyncStatus mx={mx} />}
+        {sessionSaveFailed && (
+          <Text role="alert">
+            Your refreshed session could not be saved. Check free disk space and unlock your system
+            keychain. Keep Synara open until this warning clears.
+          </Text>
+        )}
         {loading && (
           <ClientRootOptions
             mx={mx}
@@ -476,7 +531,7 @@ export function ClientRoot({ children }: ClientRootProps) {
                       <Text size="T300" priority="400">
                         Before signing out, confirm that another verified client can decrypt your
                         history or that you have tested your recovery key/key backup. Signing out
-                        permanently removes this device&apos;s local encryption data.
+                        ends this session; local encryption data stays on this device.
                       </Text>
                       {canRetryCryptoStoreContinuityFailure(continuityError) && (
                         <Button variant="Primary" onClick={retryLoadMatrix}>

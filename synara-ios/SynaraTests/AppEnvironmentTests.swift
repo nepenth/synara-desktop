@@ -480,4 +480,42 @@ final class AppEnvironmentTests: XCTestCase {
 
         XCTAssertNil((environment.push as? SynaraPushService)?.pushGatewayURL)
     }
+    func testVerificationAdvisoryDoesNotClaimDecryptionFailure() {
+        let status = RoomCryptoStatus(encryption: .encrypted, verification: .unverified,
+            recovery: .enabled, backup: .enabled, unableToDecryptCount: 0)
+        XCTAssertTrue(status.needsCryptoActionBanner)
+        XCTAssertFalse(status.needsRecoveryAttention)
+        XCTAssertEqual(status.cryptoBannerTitle, "Verify this device")
+        XCTAssertEqual(status.roomHeaderLabel, "Unverified")
+        XCTAssertEqual(status.observing([]).unableToDecryptCount, 0)
+        XCTAssertEqual(SessionCryptoStatus.unknown.decryptionIssuesLabel, "Check room history")
+    }
+
+    func testDecryptionBannerUsesObservedRowsRatherThanSessionMetadata() {
+        let status = RoomCryptoStatus(encryption: .unknown, verification: .unknown,
+            recovery: .unknown, backup: .unknown, unableToDecryptCount: 0)
+        let missing = TimelineItem(id: "encrypted", eventID: "$fixture", senderID: "@fixture:example.org",
+            timestamp: Date(), kind: .encryptedPlaceholder, replyToEventID: nil,
+            isEdited: false, reactions: [:], isEncrypted: true)
+        let observed = status.observing([missing])
+        XCTAssertTrue(observed.needsCryptoActionBanner)
+        XCTAssertEqual(observed.unableToDecryptCount, 1)
+        XCTAssertEqual(observed.cryptoBannerTitle, "Encrypted history needs attention")
+        XCTAssertFalse(observed.observing([]).needsCryptoActionBanner)
+        let clear = RoomCryptoStatus(encryption: .notEncrypted, verification: .unverified,
+            recovery: .incomplete, backup: .unavailable, unableToDecryptCount: 0)
+        XCTAssertFalse(clear.needsCryptoActionBanner)
+    }
+
+    func testOnlyNewlyVerifiedDevicesWithMissingKeysAutomaticallyRequestDecryption() {
+        let unverified = RoomCryptoStatus(encryption: .encrypted, verification: .unverified,
+            recovery: .enabled, backup: .enabled, unableToDecryptCount: 0)
+        let verifiedWithMissingKeys = RoomCryptoStatus(encryption: .encrypted, verification: .verified,
+            recovery: .enabled, backup: .enabled, unableToDecryptCount: 1)
+        XCTAssertTrue(verifiedWithMissingKeys.shouldRetryAfterVerification(previous: unverified))
+        XCTAssertFalse(verifiedWithMissingKeys.shouldRetryAfterVerification(previous: .unknown))
+        XCTAssertFalse(verifiedWithMissingKeys.shouldRetryAfterVerification(previous: verifiedWithMissingKeys))
+        XCTAssertFalse(verifiedWithMissingKeys.observing([]).shouldRetryAfterVerification(previous: unverified))
+    }
+
 }
