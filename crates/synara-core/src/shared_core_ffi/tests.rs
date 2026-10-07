@@ -929,3 +929,16 @@ fn timeline_view_row_dto_preserves_base_metadata_for_non_message_events() {
     assert_base(&other, "$other:example.org");
     assert_eq!(other.message_type.as_deref(), Some("org.example.unknown"));
 }
+
+#[test]
+fn session_generation_is_monotonic_per_instance() {
+    // A re-login in the same process must install a new generation, so a
+    // shell fence keyed on a retired generation cannot match its successor.
+    let shared = SharedCore::new();
+    let first = shared.allocate_session_generation();
+    let second = shared.allocate_session_generation();
+    assert_eq!(first, 1);
+    assert!(second > first);
+    // A fresh instance starts again at 1 and never yields 0 (attach rejects 0).
+    assert_eq!(SharedCore::new().allocate_session_generation(), 1);
+}

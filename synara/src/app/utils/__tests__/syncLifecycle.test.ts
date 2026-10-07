@@ -111,6 +111,28 @@ test('wake recovery still retries backed-off states and ignores stopped clients'
   );
 });
 
+test('reopening a live session from the tray does not restart sync', () => {
+  assert.ok(SYNC_WAKE_HIDDEN_MS >= 5 * 60_000);
+  for (const reason of ['visibilitychange', 'focus'] as const) {
+    assert.equal(
+      shouldRecoverSyncOnWake({
+        reason,
+        syncState: 'PREPARED',
+        hiddenDurationMs: 60_000,
+      }),
+      false
+    );
+    assert.equal(
+      shouldRecoverSyncOnWake({
+        reason,
+        syncState: 'ERROR',
+        hiddenDurationMs: 60_000,
+      }),
+      true
+    );
+  }
+});
+
 test('hidden duration is zero until the window has been hidden', () => {
   assert.equal(hiddenDurationMs(null, 50_000), 0);
   assert.equal(hiddenDurationMs(10_000, 25_000), 15_000);

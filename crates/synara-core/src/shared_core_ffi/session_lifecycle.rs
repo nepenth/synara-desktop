@@ -871,6 +871,15 @@ pub(super) fn vault_unavailable() -> MatrixIpcError {
 }
 
 impl SharedCore {
+    /// Next session generation for this instance. Restore and login each
+    /// install a new generation, so a shell fence keyed on a retired
+    /// generation (for example rejected-auth retirement) cannot match the
+    /// session that replaced it.
+    pub(super) fn allocate_session_generation(&self) -> u64 {
+        self.next_session_generation
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+
     /// Construct a real Core with the fail-closed iOS Platform.
     pub fn new() -> Self {
         let platform = IosFailClosedPlatform::new();
@@ -888,6 +897,7 @@ impl SharedCore {
             room_list_live: Arc::new(Mutex::new(None)),
             own_profile_live: Arc::new(Mutex::new(None)),
             media_retention_live: Arc::new(Mutex::new(None)),
+            next_session_generation: std::sync::atomic::AtomicU64::new(1),
         }
     }
 
@@ -909,6 +919,7 @@ impl SharedCore {
             room_list_live: Arc::new(Mutex::new(None)),
             own_profile_live: Arc::new(Mutex::new(None)),
             media_retention_live: Arc::new(Mutex::new(None)),
+            next_session_generation: std::sync::atomic::AtomicU64::new(1),
         }
     }
 
@@ -1004,7 +1015,7 @@ impl SharedCore {
         })?;
 
         let snapshot = SessionSnapshot {
-            session_generation: 1,
+            session_generation: self.allocate_session_generation(),
             user_id: outcome.meta.user_id.clone(),
             device_id: outcome.meta.device_id.clone(),
             homeserver_url: outcome.meta.homeserver_url.clone(),
@@ -1204,7 +1215,7 @@ impl SharedCore {
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
 
         let snapshot = SessionSnapshot {
-            session_generation: 1,
+            session_generation: self.allocate_session_generation(),
             user_id: identity.user_id().to_owned(),
             device_id: device_id.clone(),
             homeserver_url: identity.homeserver_url().to_owned(),

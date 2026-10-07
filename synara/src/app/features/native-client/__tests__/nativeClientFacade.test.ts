@@ -58,6 +58,68 @@ test('readinessToSyncState maps Rust readiness to js-sdk literals', () => {
   assert.equal(readinessToSyncState('failed'), 'ERROR');
   assert.equal(readinessToSyncState('idle'), 'STOPPED');
   assert.equal(readinessToSyncState('unconfigured'), 'STOPPED');
+  assert.equal(readinessToSyncState('terminated'), 'ERROR');
+});
+
+/**
+ * Shared connection-status table. The identical rows live in
+ * synara-ios/SynaraTests/ConnectionStatusCopyTests.swift
+ * (`sharedConnectionStatusCases`); the last test below keeps them in step.
+ * Columns: readiness, command gate, connected earlier in this session, banner.
+ */
+const SHARED_CONNECTION_STATUS_CASES: ReadonlyArray<
+  readonly [string, string, boolean, 'connected' | 'reconnecting' | 'lost' | 'cold']
+> = [
+  ['running', 'open', false, 'connected'],
+  ['running', 'open', true, 'connected'],
+  ['running', 'closed', false, 'lost'],
+  ['running', 'closed', true, 'lost'],
+  ['running', 'unexpected', true, 'lost'],
+  ['offline', 'open', true, 'reconnecting'],
+  ['failed', 'open', false, 'lost'],
+  ['failed', 'open', true, 'lost'],
+  ['terminated', 'open', false, 'lost'],
+  ['terminated', 'open', true, 'lost'],
+  ['idle', 'open', false, 'cold'],
+  ['idle', 'open', true, 'lost'],
+  ['unconfigured', 'open', false, 'cold'],
+  ['unconfigured', 'open', true, 'lost'],
+];
+
+const desktopBannerClass = (
+  readiness: string,
+  gate: string,
+  connectedEarlier: boolean
+): 'connected' | 'reconnecting' | 'lost' | 'cold' => {
+  const state = readinessToSyncState(
+    readiness as Parameters<typeof readinessToSyncState>[0],
+    gate as Parameters<typeof readinessToSyncState>[1]
+  );
+  if (state === 'PREPARED') return 'connected';
+  if (state === 'RECONNECTING') return 'reconnecting';
+  if (state === 'ERROR') return 'lost';
+  return connectedEarlier ? 'lost' : 'cold';
+};
+
+test('desktop connection status follows the shared desktop/iOS table', () => {
+  for (const [readiness, gate, connectedEarlier, expected] of SHARED_CONNECTION_STATUS_CASES) {
+    assert.equal(
+      desktopBannerClass(readiness, gate, connectedEarlier),
+      expected,
+      `${readiness}/${gate}/${connectedEarlier}`
+    );
+  }
+});
+
+test('the iOS connection status tests carry the same shared table', () => {
+  const swift = readFileSync('../synara-ios/SynaraTests/ConnectionStatusCopyTests.swift', 'utf8');
+  const table =
+    swift.split('sharedConnectionStatusCases')[1]?.split('= [')[1]?.split('\n    ]')[0] ?? '';
+  const rows = [...table.matchAll(/\("(\w+)", "(\w+)", (true|false), \.(\w+)\)/g)].map(
+    ([, readiness, gate, connectedEarlier, expected]) =>
+      [readiness, gate, connectedEarlier === 'true', expected] as const
+  );
+  assert.deepEqual(rows, SHARED_CONNECTION_STATUS_CASES);
 });
 
 test('getSyncState proxies matrix_sync_status and caches PREPARED when running', async () => {
@@ -80,8 +142,17 @@ test('getSyncState proxies matrix_sync_status and caches PREPARED when running',
   });
 });
 
+const LOGGED_IN_SESSION = {
+  status: 'logged_in',
+  userId: '@alice:example.org',
+  deviceId: 'DEVICE',
+  homeserverUrl: 'https://example.org',
+  sessionGeneration: 7,
+};
+
 test('a closed command gate is ERROR even while readiness is running', async () => {
   const { invoke } = invokingWith({
+    matrix_session_snapshot: LOGGED_IN_SESSION,
     matrix_sync_status: {
       readiness: 'running',
       sessionGeneration: 7,
@@ -91,11 +162,13 @@ test('a closed command gate is ERROR even while readiness is running', async () 
   });
   const client = createNativeMatrixClient(invoke);
   await client.refresh();
+  assert.equal(client.hasSignedInSession(), true);
   assert.equal(client.getSyncState(), 'ERROR');
 });
 
 test('an unknown command gate fails closed and a missing gate stays open', async () => {
   const closed = invokingWith({
+    matrix_session_snapshot: LOGGED_IN_SESSION,
     matrix_sync_status: {
       readiness: 'running',
       sessionGeneration: 7,
@@ -108,6 +181,7 @@ test('an unknown command gate fails closed and a missing gate stays open', async
   assert.equal(closedClient.getSyncState(), 'ERROR');
 
   const open = invokingWith({
+    matrix_session_snapshot: LOGGED_IN_SESSION,
     matrix_sync_status: {
       readiness: 'running',
       sessionGeneration: 7,
@@ -117,6 +191,98 @@ test('an unknown command gate fails closed and a missing gate stays open', async
   const openClient = createNativeMatrixClient(open.invoke);
   await openClient.refresh();
   assert.equal(openClient.getSyncState(), 'PREPARED');
+});
+
+test('a closed gate without a signed-in session is not connection loss', async () => {
+  const { invoke } = invokingWith({
+    matrix_session_snapshot: { status: 'logged_out' },
+    matrix_sync_status: {
+      readiness: 'unconfigured',
+      sessionGeneration: 7,
+      offlineModeEnabled: false,
+      commandGate: 'closed',
+    },
+  });
+  const client = createNativeMatrixClient(invoke);
+  await client.refresh();
+  assert.equal(client.hasSignedInSession(), false);
+  assert.notEqual(client.getSyncState(), 'ERROR');
+});
+
+test('voluntary logout does not paint Connection Lost while native tears down', async () => {
+  let releaseLogout: (value: unknown) => void = () => undefined;
+  const syncStatus = {
+    readiness: 'running',
+    sessionGeneration: 7,
+    offlineModeEnabled: false,
+    commandGate: 'open',
+  };
+  const invoke: NativeInvoke = async (command) => {
+    if (command === 'matrix_session_snapshot') return ok(LOGGED_IN_SESSION);
+    if (command === 'matrix_sync_status') return ok(syncStatus);
+    if (command === 'matrix_logout') {
+      return ok(
+        await new Promise((resolve) => {
+          releaseLogout = resolve;
+        })
+      );
+    }
+    return unavailable;
+  };
+  const client = createNativeMatrixClient(invoke);
+  await client.refresh();
+  assert.equal(client.getSyncState(), 'PREPARED');
+  const emitted: unknown[] = [];
+  client.on('sync', (state: unknown) => emitted.push(state));
+
+  const logout = client.logout();
+  assert.equal(client.hasSignedInSession(), false, 'logging out is not a signed-in session');
+  // Native has taken the session out and closed Core: unconfigured + closed.
+  syncStatus.readiness = 'unconfigured';
+  syncStatus.commandGate = 'closed';
+  const stopWatching = client.watchSync(60_000);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await client.refresh();
+  assert.notEqual(client.getSyncState(), 'ERROR');
+  assert.ok(!emitted.includes('ERROR'));
+
+  releaseLogout({ status: 'logged_out' });
+  await logout;
+  stopWatching();
+  assert.ok(!emitted.includes('ERROR'));
+});
+
+test('a failed logout restores the signed-in banner mapping', async () => {
+  const { invoke } = invokingWith({
+    matrix_session_snapshot: LOGGED_IN_SESSION,
+    matrix_sync_status: {
+      readiness: 'running',
+      sessionGeneration: 7,
+      offlineModeEnabled: false,
+      commandGate: 'closed',
+    },
+    matrix_logout: { status: 'logged_in' },
+  });
+  const client = createNativeMatrixClient(invoke);
+  await client.refresh();
+  await assert.rejects(client.logout(), /did not complete/);
+  assert.equal(client.hasSignedInSession(), true);
+  await client.refresh();
+  assert.equal(client.getSyncState(), 'ERROR');
+});
+
+test('stopClient before reload is not a signed-in session', async () => {
+  const { invoke } = invokingWith({
+    matrix_session_snapshot: LOGGED_IN_SESSION,
+    matrix_sync_status: { readiness: 'running', sessionGeneration: 7, offlineModeEnabled: false },
+  });
+  const client = createNativeMatrixClient(invoke);
+  await client.startClient();
+  assert.equal(client.hasSignedInSession(), true);
+  await client.stopClient();
+  assert.equal(client.hasSignedInSession(), false);
+  await client.startClient();
+  assert.equal(client.hasSignedInSession(), true);
 });
 
 test('getSyncState fails closed when the native command is unavailable', async () => {

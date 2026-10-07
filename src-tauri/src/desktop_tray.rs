@@ -294,7 +294,7 @@ fn schedule_tray_state_flush<R: Runtime>(app: AppHandle<R>) {
 
     tauri::async_runtime::spawn(async move {
         if !delay.is_zero() {
-            let _ = tauri::async_runtime::spawn_blocking(move || std::thread::sleep(delay)).await;
+            tokio::time::sleep(delay).await;
         }
 
         let coalescer = app.state::<TrayStateCoalescer>();

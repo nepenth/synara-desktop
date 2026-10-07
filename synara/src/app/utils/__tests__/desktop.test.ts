@@ -494,7 +494,7 @@ test('desktop invoke never persists raw native rejection fields', async () => {
           if (command === 'desktop_append_log') return undefined;
           throw {
             message: 'server body password=hunter2 https://private.example/token=secret',
-            diagnosticId: 'p3.2-login-unlisted-native-value',
+            diagnosticId: 'p3.2-login token=secret',
           };
         },
       },
@@ -513,7 +513,7 @@ test('desktop invoke never persists raw native rejection fields', async () => {
   }
 });
 
-test('desktop invoke records only explicitly allowlisted native diagnostics', async () => {
+test('desktop invoke records only static closed-alphabet native diagnostics', async () => {
   assert.equal(
     formatDesktopInvokeError({
       message: 'private server response',
@@ -521,13 +521,30 @@ test('desktop invoke records only explicitly allowlisted native diagnostics', as
     }),
     'native command rejected (d0.4-send-sdk-no-olm-machine)'
   );
+  // Send-queue ids were hidden by the old fixed allowlist.
   assert.equal(
-    formatDesktopInvokeError({
-      message: 'private server response',
-      diagnosticId: 'd0.4-send-sdk-no-olm-machine-secret-suffix',
-    }),
-    'native command rejected'
+    formatDesktopInvokeError({ diagnosticId: 'd0.4-send-queue-wedged' }),
+    'native command rejected (d0.4-send-queue-wedged)'
   );
+  assert.equal(
+    formatDesktopInvokeError({ diagnosticId: 'v-send.r-media-preview-requires-session' }),
+    'native command rejected (v-send.r-media-preview-requires-session)'
+  );
+  for (const unsafe of [
+    'd0.4-send-sdk-failed-0123456789abcdef0123456789abcdef',
+    'd0.4-https://private.example/token',
+    'v-@alice:example.org',
+    'd0.4-send queue',
+    `d0.4-${'a-'.repeat(40)}`,
+    'syt_secret_token',
+    'M_UNKNOWN_TOKEN',
+  ]) {
+    assert.equal(
+      formatDesktopInvokeError({ diagnosticId: unsafe }),
+      'native command rejected',
+      unsafe
+    );
+  }
   assert.equal(
     formatDesktopInvokeError({ diagnosticId: 'd0.3-timeline-requires-session' }),
     'native command rejected (d0.3-timeline-requires-session)'

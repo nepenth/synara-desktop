@@ -176,7 +176,64 @@ enum RejectedAuthenticationRetirement {
     }
 }
 
+/// Local retirement for a rejected refresh (spec FR-3).
+///
+/// The only effects are the injected ones: forget the Core vault credentials,
+/// note the expiry, and sign the app shell out. There is no remote `/logout`,
+/// no refresh, and no store wipe. Signing the shell out deletes the app session
+/// record that drives launch restore, so the retired generation cannot come
+/// back on the next launch even if the vault forget keeps failing.
+struct RejectedAuthenticationRetirer {
+    enum Outcome: Equatable {
+        /// Vault credentials forgotten and the shell signed out.
+        case retired
+        /// Shell signed out; the vault forget failed every attempt. The next
+        /// login replaces those credentials.
+        case signedOutCredentialsKept
+        /// The shell could not be signed out. The caller retries on a later poll.
+        case signOutFailed
+    }
+
+    var forgetCredentials: () async throws -> Void
+    var noteSessionExpired: @MainActor () -> Void
+    var signOut: @MainActor () throws -> Void
+    var maxAttempts = 3
+    var retryDelayNanoseconds: UInt64 = 1_000_000_000
+
+    func run() async -> Outcome {
+        let forgot = await attempt { try await forgetCredentials() }
+        await noteSessionExpired()
+        let signedOut = await attempt { try await signOut() }
+        guard signedOut else {
+            return .signOutFailed
+        }
+        return forgot ? .retired : .signedOutCredentialsKept
+    }
+
+    private func attempt(_ body: () async throws -> Void) async -> Bool {
+        for index in 0..<max(maxAttempts, 1) {
+            do {
+                try await body()
+                return true
+            } catch {
+                if index + 1 < maxAttempts {
+                    try? await Task.sleep(nanoseconds: retryDelayNanoseconds)
+                }
+            }
+        }
+        return false
+    }
+}
+
 enum ExplicitRoomReadReceipt {
+    static let failureCopy = "Couldn't mark this channel as read."
+
+    /// Fixed copy for the channel menu when explicit mark-read did not publish
+    /// a fully-read marker. Nil means the mark-read landed.
+    static func failureMessage(acknowledgedEventID: String?) -> String? {
+        acknowledgedEventID == nil ? failureCopy : nil
+    }
+
     static func acknowledgedEventID(receiptSent: Bool?, acknowledgedEventID: String?) -> String? {
         guard receiptSent == true else {
             return nil
@@ -198,6 +255,9 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     private var pathMonitor: NWPathMonitor?
     private let pathQueue = DispatchQueue(label: "com.whylandcreative.synara.connection-path")
     private var statusWatchTask: Task<Void, Never>?
+    /// Set under `applyLock` while a retirement for that generation is running
+    /// or has finished. Cleared only after a failed sign-out so a later poll
+    /// may retry.
     private var retiringAuthenticationGeneration: UInt64?
     private(set) var syncStatus: MatrixSyncStatus = .stopped
     private static let syncNotAttachedCode = "p4-s12-sync-not-attached"
@@ -376,7 +436,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
             return
         }
         if RejectedAuthenticationRetirement.shouldRetire(failureDiagnosticID: dto.failureDiagnosticId) {
-            await retireRejectedAuthentication(generation: dto.sessionGeneration)
+            beginRejectedAuthenticationRetirement(generation: dto.sessionGeneration)
             return
         }
         switch syncStatus {
@@ -395,31 +455,56 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     }
 
     /// Local retirement for a rejected refresh. Does not POST /logout, refresh
-    /// the rejected token, or delete the crypto store.
-    private func retireRejectedAuthentication(generation: UInt64) async {
-        if retiringAuthenticationGeneration == generation {
+    /// the rejected token, or delete the crypto store. One retirement runs per
+    /// generation; a later poll may start another only after a failed sign-out.
+    private func beginRejectedAuthenticationRetirement(generation: UInt64) {
+        let claim: (start: Bool, session: AuthenticatedSession?) = applyLock.withLock {
+            if retiringAuthenticationGeneration == generation {
+                return (false, nil)
+            }
+            retiringAuthenticationGeneration = generation
+            return (true, lastSession)
+        }
+        guard claim.start else {
             return
         }
-        retiringAuthenticationGeneration = generation
-        defer { retiringAuthenticationGeneration = nil }
-        if let lastSession {
-            try? await forgetPersistedSession(lastSession)
-        } else {
-            _ = try? await host.core.logout()
-        }
-        let signedOut = await MainActor.run { () -> Bool in
-            host.sessionStore.noteSessionExpired()
-            do {
-                try host.sessionStore.signOut()
-                return true
-            } catch {
-                return false
+        let session = claim.session
+        let host = host
+        let retirer = RejectedAuthenticationRetirer(
+            forgetCredentials: { [weak self] in
+                if let session {
+                    // Stops sync (and this watch) first, then forgets the vault
+                    // credentials. Not a remote logout and not a store wipe.
+                    try await self?.forgetPersistedSession(session)
+                } else {
+                    await self?.stop()
+                    _ = try await host.core.logout()
+                }
+            },
+            noteSessionExpired: { host.sessionStore.noteSessionExpired() },
+            signOut: { try host.sessionStore.signOut() }
+        )
+        // Unstructured on purpose, not a child of `statusWatchTask`: retiring
+        // stops that watch, and a retirement it owned would cancel its own
+        // credential forget part way through.
+        Task { [weak self] in
+            let outcome = await retirer.run()
+            guard let self else {
+                return
             }
-        }
-        self.lastSession = nil
-        if signedOut {
-            stopStatusWatch()
-            stopPathMonitor()
+            self.lastSession = nil
+            switch outcome {
+            case .retired, .signedOutCredentialsKept:
+                self.stopStatusWatch()
+                self.stopPathMonitor()
+            case .signOutFailed:
+                // Forgetting stopped the watch. Restart it so a later poll that
+                // still reports the rejection retries this generation.
+                self.applyLock.withLock {
+                    self.retiringAuthenticationGeneration = nil
+                }
+                self.startStatusWatch()
+            }
         }
     }
 

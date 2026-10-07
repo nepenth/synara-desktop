@@ -6,6 +6,8 @@ import UserNotifications
 struct SettingsView: View {
     @Environment(\.appEnvironment) private var environment
     @State private var state: SettingsState = .idle
+    @State private var logoutAttempt = 0
+    @State private var inFlightLogout: Task<Void, Error>?
     @State private var isLogoutConfirmationPresented = false
 
     var body: some View {
@@ -132,38 +134,52 @@ struct SettingsView: View {
 
     private func logout() {
         state = .loading
+        logoutAttempt += 1
+        let attempt = logoutAttempt
+        // Reuse a logout that outlived an earlier timeout instead of starting a
+        // second one; Sign Out never adds a store wipe of its own here.
+        let work: Task<Void, Error>
+        if let inFlightLogout {
+            work = inFlightLogout
+        } else {
+            let wipe = environment.wipe
+            work = Task { try await wipe.logoutAndWipe() }
+            inFlightLogout = work
+            // Forget the task once it settles, even after a timeout, so a later
+            // tap starts a fresh attempt instead of rereading a stale failure.
+            Task {
+                _ = try? await work.value
+                await MainActor.run {
+                    if inFlightLogout == work {
+                        inFlightLogout = nil
+                    }
+                }
+            }
+        }
 
         Task {
+            let outcome: Result<Void, Error>
             do {
-                try await Self.boundedSignOut {
-                    try await environment.wipe.logoutAndWipe()
+                try await BoundedSignOut.wait(for: work)
+                outcome = .success(())
+            } catch {
+                outcome = .failure(error)
+            }
+            await MainActor.run {
+                // A later attempt owns the screen state. A timeout leaves the
+                // spinner with the retry copy while the logout keeps running.
+                guard attempt == logoutAttempt else {
+                    return
                 }
-                await MainActor.run {
+                switch outcome {
+                case .success:
                     state = .idle
                     environment.logger.info("Local logout completed", category: .auth)
-                }
-            } catch {
-                await MainActor.run {
+                case .failure(let error):
                     state = .failed(LocalWipeError.displayMessage(for: error))
                     environment.logger.error("Local logout failed", category: .auth)
                 }
             }
-        }
-    }
-
-    /// Explicit Sign Out must leave the spinner if remote logout does not return.
-    /// This does not add a crypto-store wipe.
-    private static func boundedSignOut(_ body: @escaping () async throws -> Void) async throws {
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            group.addTask {
-                try await body()
-            }
-            group.addTask {
-                try await Task.sleep(nanoseconds: 15_000_000_000)
-                throw LocalWipeError.sessionDeleteFailed
-            }
-            defer { group.cancelAll() }
-            try await group.next()
         }
     }
 }

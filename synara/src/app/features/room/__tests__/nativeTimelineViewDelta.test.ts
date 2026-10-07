@@ -8,6 +8,8 @@ import {
   filterNativeForwardTargets,
   isNativeTimelineEventPinned,
   isNativeTimelineReadbackStale,
+  isUnchangedNativeTimelineSnapshot,
+  NATIVE_TIMELINE_SAFETY_NET_POLL_MS,
   canAcceptNativeTimelineFollowReadback,
   nativeThreadFocusEventId,
   nativeTimelineCommandError,
@@ -539,4 +541,28 @@ test('setReadState keeps the current snapshot when a successful mark_read readba
     setReadState,
     /if \(!result\.available \|\| !result\.value \|\| !acceptSnapshot\(result\.value\.snapshot\)\)/
   );
+});
+
+test('identical snapshots are recognised so polling does not re-render rows', () => {
+  const current = baseSnapshot();
+  assert.equal(isUnchangedNativeTimelineSnapshot(current, baseSnapshot()), true);
+  // Same revision, but read state moved without an SDK diff: not unchanged.
+  assert.equal(
+    isUnchangedNativeTimelineSnapshot(current, {
+      ...baseSnapshot(),
+      readState: { isMarkedUnread: false },
+    }),
+    false
+  );
+  assert.equal(
+    isUnchangedNativeTimelineSnapshot(current, { ...baseSnapshot(), revision: 4 }),
+    false
+  );
+});
+
+test('the snapshot poll is a slow safety net while deltas are live', () => {
+  assert.ok(NATIVE_TIMELINE_SAFETY_NET_POLL_MS >= 10_000);
+  const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
+  assert.match(source, /unlisten\s*\?\s*NATIVE_TIMELINE_SAFETY_NET_POLL_MS/);
+  assert.match(source, /if \(isUnchangedNativeTimelineSnapshot\(current, next\)\)/);
 });

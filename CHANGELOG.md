@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- CI: fast pull-request gate plus a nightly heavy suite (XCUITests, live Synapse proofs, package builds, release-cache seeding); releases reuse the proven CI gate, keep warm compiler caches and retry notarization instead of rebuilding.
+- Linux: closing the window hides Synara to the tray instead of minimizing it, matching macOS. Reopen from the tray or the launcher; quit from the tray menu.
+- Linux: drag the borderless window from the title strip on Wayland, keep it undecorated across relaunch, and keep double-click maximize.
+- Sessions: retire a rejected session locally on desktop and iOS, bound logout when the homeserver does not answer, show a closed command gate as Connection Lost, and log static diagnostic ids for rejected commands.
+- Mark as Read: target the newest event including thread replies, always write the fully-read marker and private receipt, and report failures in the room menu.
+- Messages: show unsent messages as sending or failed with Discard and Retry, keep still-queued sends visibly queued, and resend recoverable failures once sync recovers.
+- Sync: re-apply open-room subscriptions after a sliding-sync expiry, download key backups on decryption failure, and avoid restarting a healthy sync when the window is shown again.
+- Performance: slow background polling while the window is hidden, skip unchanged timeline snapshots, back off undecryptable-message readback and keyring retries, and stop holding the session lock while loading media.
+
 ## [2.1.46] - 2026-10-06
 
 - Sessions: stop rejected refresh-token recovery loops, present expired-session guidance, and keep homeserver capability checks anonymous.

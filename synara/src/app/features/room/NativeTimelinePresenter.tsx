@@ -68,17 +68,19 @@ import {
   type NativeTimelineFilePreviewTarget,
 } from './nativeTimelineFilePreview';
 import {
-  discardNativeLocalEcho,
   editedFormattedBodyForSubmit,
   filterNativeForwardTargets,
   isNativeTimelineEventPinned,
   nativeTimelineEchoFields,
   nativeTimelineUnsentDelivery,
-  retryNativeLocalEcho,
+  NativeLocalEchoActionGuard,
+  runNativeLocalEchoDiscard,
+  runNativeLocalEchoRetry,
   nativeForwardEncryptionDecision,
   nativeThreadFocusEventId,
   nativeTimelineMediaSrc,
   parseNativeTimelineAgentCard,
+  type NativeLocalEchoActionResult,
   type NativeTimelineMediaHandle,
   type NativeTimelinePollAnswer,
   type NativeTimelineReaction,
@@ -336,14 +338,14 @@ const nativeTimelineRowSizeHint = (
     row.kind === 'sticker'
       ? row.media.width
       : row.kind === 'message'
-      ? row.media?.width
-      : undefined,
+        ? row.media?.width
+        : undefined,
   mediaHeight:
     row.kind === 'sticker'
       ? row.media.height
       : row.kind === 'message'
-      ? row.media?.height
-      : undefined,
+        ? row.media?.height
+        : undefined,
   reactionCount: rowReactionCount(row),
 });
 
@@ -396,6 +398,9 @@ type NativeTimelineRowProps = {
 // event/action lock outside transient presenter state so reopening the menu
 // cannot dispatch the same server mutation twice.
 const nativeTimelineActionsInFlight = new Set<string>();
+// Shared across row remounts so a virtualized row cannot re-run a discard
+// or retry that is still in flight.
+const nativeLocalEchoActions = new NativeLocalEchoActionGuard();
 const nativePollFlights = new NativePollFlightCoordinator();
 const nativeReactionFlights = new NativeReactionFlightCoordinator();
 let nativeTimelineActionSessionGeneration: number | undefined;
@@ -1047,16 +1052,22 @@ const NativeTimelineRowActions = ({
 
 const NativeTimelineUnsentChrome = ({
   unsent,
+  pending,
   onDiscard,
   onRetry,
 }: {
   unsent: NativeTimelineUnsentDelivery;
+  pending: boolean;
   onDiscard: (transactionId: string) => void;
   onRetry: (transactionId: string) => void;
 }) => {
   const transactionId = unsent.transactionId;
   return (
-    <div className={htmlCss.UnsentDelivery} data-native-timeline-unsent="true">
+    <div
+      className={htmlCss.UnsentDelivery}
+      data-native-timeline-unsent="true"
+      aria-busy={pending || undefined}
+    >
       <span
         aria-label={unsent.accessibleName}
         data-native-timeline-delivery={unsent.status}
@@ -1070,6 +1081,7 @@ const NativeTimelineUnsentChrome = ({
           className={htmlCss.UnsentAction}
           aria-label="Discard unsent message"
           data-native-timeline-discard-unsent="true"
+          disabled={pending}
           onClick={() => onDiscard(transactionId)}
         >
           Discard
@@ -1081,6 +1093,7 @@ const NativeTimelineUnsentChrome = ({
           className={htmlCss.UnsentAction}
           aria-label="Retry unsent message"
           data-native-timeline-retry-unsent="true"
+          disabled={pending}
           onClick={() => onRetry(transactionId)}
         >
           Retry
@@ -1095,6 +1108,7 @@ type NativeTimelineRowActionSurfaceProps = {
   actionProps: Omit<NativeTimelineRowActionsProps, 'onRequestClose'>;
   onReaction: (key: string) => void;
   unsent?: NativeTimelineUnsentDelivery;
+  unsentPending?: boolean;
   onDiscardUnsent?: (transactionId: string) => void;
   onRetryUnsent?: (transactionId: string) => void;
 };
@@ -1110,6 +1124,7 @@ const NativeTimelineRowActionSurface = ({
   actionProps,
   onReaction,
   unsent,
+  unsentPending = false,
   onDiscardUnsent,
   onRetryUnsent,
 }: NativeTimelineRowActionSurfaceProps) => {
@@ -1232,6 +1247,7 @@ const NativeTimelineRowActionSurface = ({
       {unsent && onDiscardUnsent && onRetryUnsent ? (
         <NativeTimelineUnsentChrome
           unsent={unsent}
+          pending={unsentPending}
           onDiscard={onDiscardUnsent}
           onRetry={onRetryUnsent}
         />
@@ -1698,7 +1714,11 @@ const NativeTimelineRow = ({
   const runReaction = (key: string) => {
     if (!eventId || !genericReactionCapabilities?.react) return;
     const reactions =
-      row.kind === 'sticker' ? row.reactions ?? [] : 'reactions' in row ? row.reactions ?? [] : [];
+      row.kind === 'sticker'
+        ? (row.reactions ?? [])
+        : 'reactions' in row
+          ? (row.reactions ?? [])
+          : [];
     const projected = reactions.find((reaction) => reaction.key === key);
     if (projected !== undefined && projected.own === undefined) {
       onActionError('Reaction ownership is unavailable.');
@@ -1804,7 +1824,11 @@ const NativeTimelineRow = ({
   useEffect(() => {
     if (!eventId) return;
     const reactions =
-      row.kind === 'sticker' ? row.reactions ?? [] : 'reactions' in row ? row.reactions ?? [] : [];
+      row.kind === 'sticker'
+        ? (row.reactions ?? [])
+        : 'reactions' in row
+          ? (row.reactions ?? [])
+          : [];
     const actionPrefix = nativeTimelineActionFlightKey(
       sessionGeneration,
       roomId,
@@ -1816,16 +1840,32 @@ const NativeTimelineRow = ({
     }
   }, [eventId, roomId, row, sessionGeneration]);
   const unsentDelivery = nativeTimelineUnsentDelivery(nativeTimelineEchoFields(row));
-  const discardUnsent = (transactionId: string) => {
-    void discardNativeLocalEcho(roomId, transactionId).catch(() => {
-      onActionError('The unsent message could not be discarded.');
+  const [unsentPending, setUnsentPending] = useState(() =>
+    unsentDelivery?.transactionId
+      ? nativeLocalEchoActions.isPending(roomId, unsentDelivery.transactionId)
+      : false
+  );
+  const runUnsentAction = (
+    transactionId: string,
+    run: () => Promise<NativeLocalEchoActionResult>
+  ) => {
+    if (nativeLocalEchoActions.isPending(roomId, transactionId)) return;
+    setUnsentPending(true);
+    void run().then((result) => {
+      // A press ignored by the guard leaves the first press to finish.
+      if (result.status === 'ignored') return;
+      if (result.status === 'error') onActionError(result.message);
+      if (rowMountedRef.current) setUnsentPending(false);
     });
   };
-  const retryUnsent = (transactionId: string) => {
-    void retryNativeLocalEcho(roomId, transactionId).catch(() => {
-      onActionError('The unsent message could not be retried.');
-    });
-  };
+  const discardUnsent = (transactionId: string) =>
+    runUnsentAction(transactionId, () =>
+      runNativeLocalEchoDiscard(nativeLocalEchoActions, roomId, transactionId)
+    );
+  const retryUnsent = (transactionId: string) =>
+    runUnsentAction(transactionId, () =>
+      runNativeLocalEchoRetry(nativeLocalEchoActions, roomId, transactionId)
+    );
   const rowViewReactions = nativeReactionsForViewer('reactions' in row ? row.reactions : undefined);
   const openReactionViewer = (initialKey?: string) => {
     if (!eventId) return;
@@ -1863,6 +1903,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
           unsent={unsentDelivery}
+          unsentPending={unsentPending}
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}
         >
@@ -2016,6 +2057,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
           unsent={unsentDelivery}
+          unsentPending={unsentPending}
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}
         >
@@ -2042,6 +2084,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
           unsent={unsentDelivery}
+          unsentPending={unsentPending}
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}
         >
@@ -2096,6 +2139,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
           unsent={unsentDelivery}
+          unsentPending={unsentPending}
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}
         >
@@ -2163,6 +2207,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
           unsent={unsentDelivery}
+          unsentPending={unsentPending}
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}
         >
@@ -2189,6 +2234,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
           unsent={unsentDelivery}
+          unsentPending={unsentPending}
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}
         >
@@ -2216,6 +2262,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
           unsent={unsentDelivery}
+          unsentPending={unsentPending}
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}
         >
@@ -2243,6 +2290,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
           unsent={unsentDelivery}
+          unsentPending={unsentPending}
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}
         >
@@ -2344,15 +2392,15 @@ export function NativeTimelinePresenter({
       position: threadRootId
         ? ({ kind: 'thread', rootEventId: threadRootId } as const)
         : preferLiveBottom
-        ? ({ kind: 'live_bottom' } as const)
-        : focusEventId
-        ? ({ kind: 'focused', eventId: focusEventId } as const)
-        : ({
-            kind: 'normal',
-            restoredAnchorEventId: openingViewport?.atBottom
-              ? undefined
-              : openingViewport?.anchor?.eventId,
-          } as const),
+          ? ({ kind: 'live_bottom' } as const)
+          : focusEventId
+            ? ({ kind: 'focused', eventId: focusEventId } as const)
+            : ({
+                kind: 'normal',
+                restoredAnchorEventId: openingViewport?.atBottom
+                  ? undefined
+                  : openingViewport?.anchor?.eventId,
+              } as const),
     }),
     [focusEventId, openingViewport, preferLiveBottom, roomId, threadRootId]
   );
@@ -2767,9 +2815,9 @@ export function NativeTimelinePresenter({
       : undefined;
   const liveTailAlreadyRead = Boolean(
     readyState &&
-      receiptTailEventId &&
-      readyState.snapshot.readState.ownReadEventId === receiptTailEventId &&
-      !readyState.snapshot.readState.isMarkedUnread
+    receiptTailEventId &&
+    readyState.snapshot.readState.ownReadEventId === receiptTailEventId &&
+    !readyState.snapshot.readState.isMarkedUnread
   );
   useEffect(() => {
     if (!liveTailMarkReadKey) {
@@ -2791,8 +2839,8 @@ export function NativeTimelinePresenter({
       if (!scrollEl) return;
       const paintedAtBottom = Boolean(
         scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight <= 8 &&
-          document.visibilityState === 'visible' &&
-          document.hasFocus()
+        document.visibilityState === 'visible' &&
+        document.hasFocus()
       );
       if (!paintedAtBottom) return;
       submitted = true;
@@ -2857,8 +2905,8 @@ export function NativeTimelinePresenter({
       if (!scrollEl) return;
       const paintedAtBottom = Boolean(
         scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight <= 8 &&
-          document.visibilityState === 'visible' &&
-          document.hasFocus()
+        document.visibilityState === 'visible' &&
+        document.hasFocus()
       );
       if (!paintedAtBottom) return;
       followLiveSubmittedKeyRef.current = followLiveKey;
@@ -2964,15 +3012,15 @@ export function NativeTimelinePresenter({
         snapshot.pagination.backward === 'available'
           ? 'backwards'
           : distanceFromBottom <= 96 &&
-            snapshot.capabilities.paginateForward &&
-            snapshot.pagination.forward === 'available' &&
-            canPaginateTimelineForward({
-              atLiveBottom: atLiveBottomRef.current,
-              positionKind: current.selectedPosition.kind,
-              followingLive: followingLiveRef.current,
-            })
-          ? 'forwards'
-          : undefined;
+              snapshot.capabilities.paginateForward &&
+              snapshot.pagination.forward === 'available' &&
+              canPaginateTimelineForward({
+                atLiveBottom: atLiveBottomRef.current,
+                positionKind: current.selectedPosition.kind,
+                followingLive: followingLiveRef.current,
+              })
+            ? 'forwards'
+            : undefined;
       if (!direction) return;
       requestPaginationRef.current(direction);
     };
@@ -3192,20 +3240,20 @@ export function NativeTimelinePresenter({
       selectedPosition.kind === 'focused'
         ? { eventId: selectedPosition.target_event_id, itemId: selectedPosition.target_event_id }
         : selectedPosition.kind === 'thread'
-        ? threadScrollEventId
-          ? { eventId: threadScrollEventId, itemId: threadScrollEventId }
-          : undefined
-        : selectedPosition.kind === 'unread'
-        ? {
-            eventId: selectedPosition.anchor_event_id,
-            itemId: selectedPosition.anchor_event_id,
-          }
-        : selectedPosition.kind === 'restored' && selectedPosition.anchor_event_id
-        ? {
-            eventId: selectedPosition.anchor_event_id,
-            itemId: selectedPosition.anchor_event_id,
-          }
-        : undefined;
+          ? threadScrollEventId
+            ? { eventId: threadScrollEventId, itemId: threadScrollEventId }
+            : undefined
+          : selectedPosition.kind === 'unread'
+            ? {
+                eventId: selectedPosition.anchor_event_id,
+                itemId: selectedPosition.anchor_event_id,
+              }
+            : selectedPosition.kind === 'restored' && selectedPosition.anchor_event_id
+              ? {
+                  eventId: selectedPosition.anchor_event_id,
+                  itemId: selectedPosition.anchor_event_id,
+                }
+              : undefined;
     const placementKey = `${roomId}:${snapshot.sessionGeneration}:${selectedPosition.kind}:${
       selectedAnchor?.eventId ??
       (selectedPosition.kind === 'thread' ? selectedPosition.root_event_id : '')
@@ -3215,8 +3263,8 @@ export function NativeTimelinePresenter({
       selectedPosition.kind === 'thread'
         ? undefined
         : initialPlacement
-        ? openingViewport ?? nativeTimelineViewports.get(roomId)
-        : nativeTimelineViewports.get(roomId);
+          ? (openingViewport ?? nativeTimelineViewports.get(roomId))
+          : nativeTimelineViewports.get(roomId);
     const parkedIndex = savedViewport?.anchor ? findAnchorIndex(rows, savedViewport.anchor) : -1;
     const explicitLatest = latestPlacementRequest !== appliedLatestPlacementRef.current;
     appliedLatestPlacementRef.current = latestPlacementRequest;
@@ -3237,7 +3285,7 @@ export function NativeTimelinePresenter({
         ? savedViewport?.atBottom
           ? undefined
           : savedViewport?.anchor
-        : selectedAnchor ?? savedViewport?.anchor;
+        : (selectedAnchor ?? savedViewport?.anchor);
       const anchorIndex = anchor ? findAnchorIndex(rows, anchor) : -1;
       if (missingLastRead) setPendingLastRead(selectedPosition.anchor_event_id);
       // Passive live promotion must preserve an unresolved last-read action.
@@ -3256,7 +3304,7 @@ export function NativeTimelinePresenter({
         programmaticScrollUntilRef.current = performance.now() + 250;
         virtualizer.scrollToIndex(anchorIndex, { align: 'start', behavior: 'auto' });
         const offsetPx =
-          selectedAnchor && !missingLastRead ? 0 : savedViewport?.anchor?.offsetPx ?? 0;
+          selectedAnchor && !missingLastRead ? 0 : (savedViewport?.anchor?.offsetPx ?? 0);
         if (selectedAnchor && !missingLastRead) {
           parkedVisualTopRef.current = undefined;
           setPendingLastRead((pending) =>

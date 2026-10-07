@@ -2,6 +2,50 @@ import XCTest
 @testable import Synara
 
 final class ConnectionStatusCopyTests: XCTestCase {
+    enum BannerClass { case connected, reconnecting, lost, cold }
+
+    /// Shared connection-status table. The identical rows live in
+    /// synara/src/app/features/native-client/__tests__/nativeClientFacade.test.ts
+    /// (`SHARED_CONNECTION_STATUS_CASES`), which also checks this copy.
+    /// Columns: readiness, command gate, connected earlier in this session, banner.
+    let sharedConnectionStatusCases: [(String, String, Bool, BannerClass)] = [
+        ("running", "open", false, .connected),
+        ("running", "open", true, .connected),
+        ("running", "closed", false, .lost),
+        ("running", "closed", true, .lost),
+        ("running", "unexpected", true, .lost),
+        ("offline", "open", true, .reconnecting),
+        ("failed", "open", false, .lost),
+        ("failed", "open", true, .lost),
+        ("terminated", "open", false, .lost),
+        ("terminated", "open", true, .lost),
+        ("idle", "open", false, .cold),
+        ("idle", "open", true, .lost),
+        ("unconfigured", "open", false, .cold),
+        ("unconfigured", "open", true, .lost),
+    ]
+
+    func testConnectionStatusFollowsTheSharedDesktopTable() {
+        for (readiness, gate, connectedEarlier, expected) in sharedConnectionStatusCases {
+            let status = ConnectionStatusCopy.fromReadiness(
+                readiness,
+                previous: connectedEarlier ? .connected : .starting,
+                commandGate: gate
+            )
+            let actual: BannerClass
+            switch status {
+            case .connected, .syncing:
+                actual = .connected
+            case .reconnecting:
+                actual = .reconnecting
+            case .disconnected, .failed, .restoreFailed:
+                actual = .lost
+            case .starting, .stopped:
+                actual = .cold
+            }
+            XCTAssertEqual(actual, expected, "\(readiness)/\(gate)/\(connectedEarlier)")
+        }
+    }
     func testCopyMatchesDesktopMeaningWithoutSecrets() {
         XCTAssertEqual(ConnectionStatusCopy.banner(.connected), "Connected")
         XCTAssertEqual(ConnectionStatusCopy.banner(.syncing), "Syncing history…")
@@ -32,7 +76,11 @@ final class ConnectionStatusCopyTests: XCTestCase {
         XCTAssertEqual(ConnectionStatusCopy.fromReadiness("offline"), .reconnecting)
         XCTAssertEqual(ConnectionStatusCopy.fromReadiness("failed"), .disconnected)
         XCTAssertEqual(ConnectionStatusCopy.fromReadiness("terminated"), .disconnected)
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("unconfigured"), .disconnected)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("unconfigured"), .starting)
+        XCTAssertEqual(
+            ConnectionStatusCopy.fromReadiness("unconfigured", previous: .connected),
+            .disconnected
+        )
         XCTAssertEqual(ConnectionStatusCopy.fromReadiness(nil), .starting)
         XCTAssertEqual(
             ConnectionStatusCopy.fromReadiness("running", commandGate: "closed"),

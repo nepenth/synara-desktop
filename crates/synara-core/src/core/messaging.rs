@@ -526,6 +526,7 @@ pub(super) fn timeline_view_owner_error(diagnostic_id: &'static str) -> MatrixIp
         | "v-timeline-read-mark-unread-requires-explicit-intent"
         | "v-timeline-send-thread-receipt-failed"
         | "v-timeline-send-read-markers-failed"
+        | "v-timeline-read-target-unresolved"
         | "v-timeline-follow-live-tail-required"
         | "v-timeline-follow-live-tail-invalid"
         | "v-timeline-follow-live-tail-not-loaded" => MatrixIpcErrorCategory::SdkInvariant,

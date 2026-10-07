@@ -122,14 +122,31 @@ export const nativeTimelineUnsentDelivery = (row: {
   return { status: 'unsent', accessibleName: 'Not sent', wedged: false, transactionId };
 };
 
-export async function discardNativeLocalEcho(roomId: string, transactionId: string): Promise<void> {
-  const result = await invokeDesktopWithAvailability('matrix_local_echo_discard', {
+/**
+ * `matrix_local_echo_discard` resolves `true` when the SDK dropped the unsent
+ * request and `false` when it no longer held it because it was already sent.
+ * Anything else is an invalid readback, not a discard.
+ */
+export type NativeLocalEchoDiscardOutcome = 'discarded' | 'already_sent';
+
+export const nativeLocalEchoDiscardOutcome = (value: unknown): NativeLocalEchoDiscardOutcome => {
+  if (value === true) return 'discarded';
+  if (value === false) return 'already_sent';
+  throw new Error('invalid discard readback');
+};
+
+export async function discardNativeLocalEcho(
+  roomId: string,
+  transactionId: string
+): Promise<NativeLocalEchoDiscardOutcome> {
+  const result = await invokeDesktopWithAvailability<boolean>('matrix_local_echo_discard', {
     roomId,
     transactionId,
   });
   if (!result.available) {
     throw new Error('unavailable');
   }
+  return nativeLocalEchoDiscardOutcome(result.value);
 }
 
 export async function retryNativeLocalEcho(roomId: string, transactionId: string): Promise<void> {
@@ -141,6 +158,77 @@ export async function retryNativeLocalEcho(roomId: string, transactionId: string
     throw new Error('unavailable');
   }
 }
+
+export const NATIVE_LOCAL_ECHO_DISCARD_FAILED = 'The unsent message could not be discarded.';
+export const NATIVE_LOCAL_ECHO_ALREADY_SENT =
+  'This message was already sent and could not be discarded.';
+export const NATIVE_LOCAL_ECHO_RETRY_FAILED = 'The unsent message could not be retried.';
+
+export type NativeLocalEchoActionResult =
+  { status: 'ignored' } | { status: 'done' } | { status: 'error'; message: string };
+
+const nativeLocalEchoActionKey = (roomId: string, transactionId: string): string =>
+  `${roomId}\u0000${transactionId}`;
+
+/**
+ * One discard or retry per unsent row at a time. A second press while the
+ * first is in flight is ignored, so a double click cannot report a false
+ * "could not be discarded" after the first press already removed the echo.
+ */
+export class NativeLocalEchoActionGuard {
+  private readonly pending = new Set<string>();
+
+  isPending(roomId: string, transactionId: string): boolean {
+    return this.pending.has(nativeLocalEchoActionKey(roomId, transactionId));
+  }
+
+  async run(
+    roomId: string,
+    transactionId: string,
+    action: () => Promise<NativeLocalEchoActionResult>
+  ): Promise<NativeLocalEchoActionResult> {
+    const key = nativeLocalEchoActionKey(roomId, transactionId);
+    if (this.pending.has(key)) return { status: 'ignored' };
+    this.pending.add(key);
+    try {
+      return await action();
+    } finally {
+      this.pending.delete(key);
+    }
+  }
+}
+
+export const runNativeLocalEchoDiscard = (
+  guard: NativeLocalEchoActionGuard,
+  roomId: string,
+  transactionId: string,
+  discard: typeof discardNativeLocalEcho = discardNativeLocalEcho
+): Promise<NativeLocalEchoActionResult> =>
+  guard.run(roomId, transactionId, async () => {
+    try {
+      const outcome = await discard(roomId, transactionId);
+      return outcome === 'discarded'
+        ? { status: 'done' }
+        : { status: 'error', message: NATIVE_LOCAL_ECHO_ALREADY_SENT };
+    } catch {
+      return { status: 'error', message: NATIVE_LOCAL_ECHO_DISCARD_FAILED };
+    }
+  });
+
+export const runNativeLocalEchoRetry = (
+  guard: NativeLocalEchoActionGuard,
+  roomId: string,
+  transactionId: string,
+  retry: typeof retryNativeLocalEcho = retryNativeLocalEcho
+): Promise<NativeLocalEchoActionResult> =>
+  guard.run(roomId, transactionId, async () => {
+    try {
+      await retry(roomId, transactionId);
+      return { status: 'done' };
+    } catch {
+      return { status: 'error', message: NATIVE_LOCAL_ECHO_RETRY_FAILED };
+    }
+  });
 
 export type NativeTimelineReplyPreview = {
   eventId: string;
@@ -408,16 +496,35 @@ const isValidIndex = (index: number, length: number, allowEnd = false): boolean 
  * Pagination and read-state readbacks can lag a live delta. Callers first
  * confirm stream ownership; equal-or-older snapshots then keep the newer view.
  */
+/**
+ * With the delta listener live, the snapshot poll is only a safety net for a
+ * dropped batch. Without deltas it is the update path.
+ */
+export const NATIVE_TIMELINE_SAFETY_NET_POLL_MS = 10_000;
+export const NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS = 750;
+
+/**
+ * True when `next` carries nothing new. The revision counts SDK timeline
+ * diffs only; position, pagination, and read state can change without one, so
+ * an equal revision alone is not proof. Compare the payload too, but only
+ * when the revisions already match.
+ */
+export const isUnchangedNativeTimelineSnapshot = (
+  current: NativeTimelineViewSnapshot,
+  next: NativeTimelineViewSnapshot
+): boolean =>
+  next.revision === current.revision && JSON.stringify(next) === JSON.stringify(current);
+
 export const isNativeTimelineReadbackStale = (
   current: NativeTimelineViewSnapshot | undefined,
   next: NativeTimelineViewSnapshot
 ): boolean =>
   Boolean(
     current &&
-      next.schemaVersion === TIMELINE_VIEW_SCHEMA_VERSION &&
-      next.sessionGeneration === current.sessionGeneration &&
-      next.roomId === current.roomId &&
-      next.revision <= current.revision
+    next.schemaVersion === TIMELINE_VIEW_SCHEMA_VERSION &&
+    next.sessionGeneration === current.sessionGeneration &&
+    next.roomId === current.roomId &&
+    next.revision <= current.revision
   );
 
 /** Follow changes placement even when the SDK has emitted no new row revision. */
@@ -427,11 +534,11 @@ export const canAcceptNativeTimelineFollowReadback = (
 ): boolean =>
   Boolean(
     current &&
-      next.schemaVersion === TIMELINE_VIEW_SCHEMA_VERSION &&
-      next.sessionGeneration === current.sessionGeneration &&
-      next.roomId === current.roomId &&
-      next.revision >= current.revision &&
-      next.position.kind === 'live_bottom'
+    next.schemaVersion === TIMELINE_VIEW_SCHEMA_VERSION &&
+    next.sessionGeneration === current.sessionGeneration &&
+    next.roomId === current.roomId &&
+    next.revision >= current.revision &&
+    next.position.kind === 'live_bottom'
   );
 
 /**
@@ -692,16 +799,16 @@ const toNativeTimelineOpenRequest = (input: NativeTimelineOpenInput) => {
       position.kind === 'focused'
         ? { kind: 'focused' as const, event_id: position.eventId }
         : position.kind === 'thread'
-        ? { kind: 'thread' as const, root_event_id: position.rootEventId }
-        : position.kind === 'normal'
-        ? {
-            kind: 'normal' as const,
-            restored_anchor_event_id: position.restoredAnchorEventId,
-            at_bottom: Boolean(position.atBottom),
-            live_tail_event_id: position.liveTailEventId,
-            updated_at_ms: position.updatedAtMs,
-          }
-        : position,
+          ? { kind: 'thread' as const, root_event_id: position.rootEventId }
+          : position.kind === 'normal'
+            ? {
+                kind: 'normal' as const,
+                restored_anchor_event_id: position.restoredAnchorEventId,
+                at_bottom: Boolean(position.atBottom),
+                live_tail_event_id: position.liveTailEventId,
+                updated_at_ms: position.updatedAtMs,
+              }
+            : position,
   };
 };
 
@@ -806,16 +913,16 @@ export const useNativeTimelineView = (
         positionKind === 'focused' && focusedEventId
           ? { kind: 'focused', eventId: focusedEventId }
           : positionKind === 'thread' && threadRootEventId
-          ? { kind: 'thread', rootEventId: threadRootEventId }
-          : positionKind === 'normal'
-          ? {
-              kind: 'normal',
-              restoredAnchorEventId: normalPosition?.restoredAnchorEventId,
-              atBottom: normalPosition?.atBottom,
-              liveTailEventId: normalPosition?.liveTailEventId,
-              updatedAtMs: normalPosition?.updatedAtMs,
-            }
-          : { kind: positionKind },
+            ? { kind: 'thread', rootEventId: threadRootEventId }
+            : positionKind === 'normal'
+              ? {
+                  kind: 'normal',
+                  restoredAnchorEventId: normalPosition?.restoredAnchorEventId,
+                  atBottom: normalPosition?.atBottom,
+                  liveTailEventId: normalPosition?.liveTailEventId,
+                  updatedAtMs: normalPosition?.updatedAtMs,
+                }
+              : { kind: positionKind },
     } as NativeTimelineOpenInput);
   }, [
     focusedEventId,
@@ -858,6 +965,11 @@ export const useNativeTimelineView = (
       next.revision < current.revision
     ) {
       return false;
+    }
+    if (isUnchangedNativeTimelineSnapshot(current, next)) {
+      // Accepted, but identical: keep row identities so memoized rows do not
+      // re-render on every safety-net poll.
+      return true;
     }
     snapshotRef.current = next;
     setState({
@@ -1321,7 +1433,7 @@ export const useNativeTimelineView = (
             () => {
               void pollSnapshot();
             },
-            unlisten ? 1500 : 750
+            unlisten ? NATIVE_TIMELINE_SAFETY_NET_POLL_MS : NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS
           );
         }
       } catch (error) {

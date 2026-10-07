@@ -356,6 +356,14 @@ where
 #[derive(Default)]
 pub struct MatrixAuthState {
     session: Mutex<Option<ManagedMatrixSession>>,
+    /// Session transition gate. Logout holds it through the whole teardown,
+    /// including the bounded remote `/logout` and Core close; login, register,
+    /// restore, and store recovery take it before `session`. Ordinary commands
+    /// never take it, so they fail closed on the empty slot instead of waiting.
+    transition: Mutex<()>,
+    /// Identity whose credential cleanup failed after its live session left the
+    /// slot. Restore refuses to reinstall it, and the watcher retries cleanup.
+    pending_logout_cleanup: std::sync::Mutex<Option<MatrixLoginIdentity>>,
     store_recovery: Mutex<StoreRecoveryState>,
     next_session_generation: AtomicU64,
     recover_gate: Mutex<RecoverGate>,
@@ -387,40 +395,56 @@ impl MatrixAuthState {
         .await
     }
 
-    async fn retry_failed_session_save(&self, app: &AppHandle) {
-        let session = self.session.lock().await;
-        let Some(active) = session.as_ref() else {
-            return;
+    /// Retry a failed save of the current in-memory tokens.
+    ///
+    /// Returns `None` when nothing needs saving, otherwise whether the write
+    /// succeeded. The keyring write is synchronous D-Bus/Keychain work, so it
+    /// runs on a blocking thread with a timeout and without the session mutex.
+    /// The persistence lease still fences it: logout revokes the lease first.
+    async fn retry_failed_session_save(&self, app: &AppHandle) -> Option<bool> {
+        let (lease, client, identity, generation) = {
+            let session = self.session.lock().await;
+            let active = session.as_ref()?;
+            let lease = active.session_persistence.callback_lease();
+            if !lease.save_failed() {
+                return None;
+            }
+            (
+                lease,
+                active.client.clone(),
+                active.identity.clone(),
+                active.sync.session_generation(),
+            )
         };
-        if !active.session_persistence.callback_lease().save_failed() {
-            return;
-        }
-        let result = app_data_root(app).and_then(|root| {
-            let identity = account_identity(&active.identity)?;
-            let saved = active
-                .session_persistence
-                .callback_lease()
-                .save_credentials(
-                    || ensure_logout_retry_locator(&root, &active.identity),
+        let root = app_data_root(app);
+        let write = tauri::async_runtime::spawn_blocking(move || {
+            root.and_then(|root| {
+                let account = account_identity(&identity)?;
+                let saved = lease.save_credentials(
+                    || ensure_logout_retry_locator(&root, &identity),
                     || {
                         persist_session_after_login(
-                            &active.client,
-                            &identity,
+                            &client,
+                            &account,
                             &KeyringSessionMaterialVault::new(),
                         )
                         .map(|_| ())
                         .map_err(map_session_rotation_persist_error)
                     },
                 );
-            record_session_rotation_outcome(&root, &saved);
-            saved
+                record_session_rotation_outcome(&root, &saved);
+                saved
+            })
         });
+        let saved = matches!(
+            tokio::time::timeout(KEYRING_RETRY_TIMEOUT, write).await,
+            Ok(Ok(Ok(())))
+        );
         let _ = app.emit(
             "matrix-session-persistence",
-            serde_json::json!({
-                "sessionGeneration": active.sync.session_generation(), "saved": result.is_ok()
-            }),
+            serde_json::json!({ "sessionGeneration": generation, "saved": saved }),
         );
+        Some(saved)
     }
 
     /// Read the current SDK sync owner as the existing safe readiness DTO.
@@ -623,6 +647,46 @@ impl MatrixAuthState {
         PlatformMediaConfig::new(upload_size)
     }
 
+    /// Serialize session installs and logout teardown. Always taken before
+    /// `session`, never while holding it.
+    pub(super) async fn lock_transition(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.transition.lock().await
+    }
+
+    pub(super) fn record_pending_logout_cleanup(&self, identity: MatrixLoginIdentity) {
+        if let Ok(mut pending) = self.pending_logout_cleanup.lock() {
+            *pending = Some(identity);
+        }
+    }
+
+    pub(super) fn has_pending_logout_cleanup(&self) -> bool {
+        self.pending_logout_cleanup
+            .lock()
+            .map(|pending| pending.is_some())
+            .unwrap_or(true)
+    }
+
+    /// Retry credential cleanup for a session that already left the slot.
+    /// Caller holds the transition gate so a new install cannot interleave.
+    pub(super) fn retry_pending_logout_cleanup(
+        &self,
+        cleanup: impl FnOnce(&MatrixLoginIdentity) -> Result<(), MatrixAuthCommandError>,
+    ) -> Result<(), MatrixAuthCommandError> {
+        retry_pending_logout_cleanup(&self.pending_logout_cleanup, cleanup)
+    }
+
+    /// A new install replaces whatever the failed cleanup was retrying. Try
+    /// once more, then forget it so a later retry cannot erase the new session.
+    pub(super) fn settle_pending_logout_cleanup_before_install(
+        &self,
+        cleanup: impl FnOnce(&MatrixLoginIdentity) -> Result<(), MatrixAuthCommandError>,
+    ) {
+        let _ = self.retry_pending_logout_cleanup(cleanup);
+        if let Ok(mut pending) = self.pending_logout_cleanup.lock() {
+            *pending = None;
+        }
+    }
+
     /// A normal login supersedes any abandoned recovery affordance. This only
     /// clears a process-local capability; it does not touch files or Keychain.
     pub(super) async fn clear_store_recovery(&self) {
@@ -716,10 +780,16 @@ impl MatrixAuthState {
         &self,
         handle: &str,
     ) -> Option<(Client, TimelineMediaSource)> {
-        let session = self.session.lock().await;
-        let active = session.as_ref()?;
-        let source = active.timelines.lock().await.resolve_media(handle).await?;
-        Some((active.client.clone(), source))
+        // Clone the owners and release the session mutex before awaiting the
+        // timeline registry. A registry operation can be on the network, and
+        // holding the session here would stall every status poll behind it.
+        let (client, timelines) = {
+            let session = self.session.lock().await;
+            let active = session.as_ref()?;
+            (active.client.clone(), Arc::clone(&active.timelines))
+        };
+        let source = timelines.lock().await.resolve_media(handle).await?;
+        Some((client, source))
     }
 
     /// Live session client for plain `mxc://` display through the media protocol.
@@ -729,17 +799,31 @@ impl MatrixAuthState {
     }
 }
 
-/// Restart SyncService when wall time jumps ahead of monotonic time (OS sleep).
-/// Linux sleep often leaves the webview visible, so renderer hooks never run.
+pub(super) fn retry_pending_logout_cleanup(
+    pending: &std::sync::Mutex<Option<MatrixLoginIdentity>>,
+    cleanup: impl FnOnce(&MatrixLoginIdentity) -> Result<(), MatrixAuthCommandError>,
+) -> Result<(), MatrixAuthCommandError> {
+    let mut pending = pending
+        .lock()
+        .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-clear-failed"))?;
+    let Some(identity) = pending.as_ref() else {
+        return Ok(());
+    };
+    cleanup(identity)?;
+    *pending = None;
+    Ok(())
+}
+
 pub(super) const SESSION_REJECTION_NO_CORE_DIAGNOSTIC_ID: &str = "d0.1-session-rejection-no-core";
 
-/// One authentication-rejection retirement per generation, with a later tick
-/// allowed to retry local cleanup after the in-flight attempt finishes.
+/// Per-generation log de-duplication for the rejection watcher. Concurrency
+/// with a user logout is the transition gate's job, not this struct's: every
+/// tick that still sees the rejected generation retries `matrix_logout`.
 #[derive(Debug, Default)]
 pub(super) struct AuthenticationRejectionWatch {
     logged_rejection: Option<u64>,
     logged_missing_core: Option<u64>,
-    retirement_in_flight: Option<u64>,
+    logged_failure: Option<(u64, String)>,
 }
 
 impl AuthenticationRejectionWatch {
@@ -759,18 +843,53 @@ impl AuthenticationRejectionWatch {
         true
     }
 
-    /// `false` while a retirement for this generation is already running.
-    pub(super) fn begin_retirement(&mut self, generation: u64) -> bool {
-        if self.retirement_in_flight == Some(generation) {
+    fn should_log_failure(&mut self, generation: u64, diagnostic_id: &str) -> bool {
+        if self
+            .logged_failure
+            .as_ref()
+            .is_some_and(|(logged, id)| *logged == generation && id == diagnostic_id)
+        {
             return false;
         }
-        self.retirement_in_flight = Some(generation);
+        self.logged_failure = Some((generation, diagnostic_id.to_owned()));
         true
     }
+}
 
-    pub(super) fn finish_retirement(&mut self, generation: u64) {
-        if self.retirement_in_flight == Some(generation) {
-            self.retirement_in_flight = None;
+/// One watcher tick for a sync snapshot that reports a rejected refresh.
+///
+/// `retire` is the local, generation-fenced `matrix_logout`; it is called only
+/// when Core is present. Every line passed to `log` is a fixed lifecycle word or
+/// a static `d0.1-*` / `p4.1-*` id. Returns whether retirement succeeded.
+pub(super) async fn handle_authentication_rejection_tick<Retire, RetireFuture>(
+    watch: &mut AuthenticationRejectionWatch,
+    generation: u64,
+    core_present: bool,
+    mut log: impl FnMut(&str),
+    retire: Retire,
+) -> bool
+where
+    Retire: FnOnce(u64) -> RetireFuture,
+    RetireFuture: std::future::Future<Output = Result<(), MatrixAuthCommandError>>,
+{
+    if watch.should_log_rejection(generation) {
+        log("session-authentication-rejected");
+    }
+    if !core_present {
+        if watch.should_log_missing_core(generation) {
+            log(SESSION_REJECTION_NO_CORE_DIAGNOSTIC_ID);
+        }
+        return false;
+    }
+    match retire(generation).await {
+        Ok(()) => true,
+        Err(error) => {
+            if let Some(diagnostic_id) = static_rejection_logout_diagnostic(&error.diagnostic_id) {
+                if watch.should_log_failure(generation, diagnostic_id) {
+                    log(diagnostic_id);
+                }
+            }
+            false
         }
     }
 }
@@ -786,6 +905,44 @@ pub(super) fn static_rejection_logout_diagnostic(diagnostic_id: &str) -> Option<
     (static_id && closed_alphabet).then_some(diagnostic_id)
 }
 
+/// Upper bound for one watchdog keyring write before the tick moves on.
+const KEYRING_RETRY_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Exponential backoff for watchdog retries of synchronous keyring work:
+/// 5s after the first failure, doubling to at most 60s, reset on success.
+#[derive(Debug)]
+pub(super) struct RetryBackoff {
+    delay: Duration,
+    next_attempt: Option<Instant>,
+}
+
+impl RetryBackoff {
+    const INITIAL: Duration = Duration::from_secs(5);
+    const MAX: Duration = Duration::from_secs(60);
+
+    pub(super) fn new() -> Self {
+        Self {
+            delay: Self::INITIAL,
+            next_attempt: None,
+        }
+    }
+
+    pub(super) fn ready(&self, now: Instant) -> bool {
+        self.next_attempt.is_none_or(|at| now >= at)
+    }
+
+    pub(super) fn record(&mut self, now: Instant, succeeded: bool) {
+        if succeeded {
+            *self = Self::new();
+        } else {
+            self.next_attempt = Some(now + self.delay);
+            self.delay = (self.delay * 2).min(Self::MAX);
+        }
+    }
+}
+
+/// Restart SyncService when wall time jumps ahead of monotonic time (OS sleep).
+/// Linux sleep often leaves the webview visible, so renderer hooks never run.
 pub fn spawn_suspend_resume_watch(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(5));
@@ -793,6 +950,8 @@ pub fn spawn_suspend_resume_watch(app: AppHandle) {
         let mut previous_wall = SystemTime::now();
         let mut previous_mono = Instant::now();
         let mut rejection_watch = AuthenticationRejectionWatch::default();
+        let mut save_backoff = RetryBackoff::new();
+        let mut cleanup_backoff = RetryBackoff::new();
         loop {
             interval.tick().await;
             let now_wall = SystemTime::now();
@@ -812,49 +971,61 @@ pub fn spawn_suspend_resume_watch(app: AppHandle) {
             // A server refresh can succeed while its synchronous save callback
             // fails. Retry only the local write of the current in-memory tokens;
             // never replay the old refresh token or erase encryption data.
-            state.retry_failed_session_save(&app).await;
+            // A broken keyring backs off instead of blocking a worker every tick.
+            if save_backoff.ready(now_mono) {
+                if let Some(saved) = state.retry_failed_session_save(&app).await {
+                    save_backoff.record(Instant::now(), saved);
+                }
+            }
+            // A retired session whose credential delete failed must not stay
+            // restorable. Retry under the transition gate so a new login
+            // cannot interleave with the delete.
+            if state.has_pending_logout_cleanup() && cleanup_backoff.ready(now_mono) {
+                let _transition = state.lock_transition().await;
+                let cleaned = tokio::task::block_in_place(|| {
+                    state.retry_pending_logout_cleanup(|identity| {
+                        app_data_root(&app).and_then(|root| {
+                            clear_native_logout_material(
+                                &KeyringSessionMaterialVault::new(),
+                                identity,
+                                &root,
+                            )
+                        })
+                    })
+                })
+                .is_ok();
+                cleanup_backoff.record(Instant::now(), cleaned);
+            }
             let snapshot = state.sync_status_snapshot().await;
             if snapshot.failure_diagnostic_id
                 == Some(synara_core::app::sync::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID)
             {
-                let generation = snapshot.session_generation;
                 // A terminal rejected refresh is not an offline server. Retire
                 // native work and invalid credentials through the existing
                 // fenced logout owner. This does not erase the crypto store,
                 // POST /logout, or send the rejected refresh token.
-                if rejection_watch.should_log_rejection(generation) {
-                    crate::desktop_logging::desktop_append_log(
-                        app.clone(),
-                        "native".into(),
-                        "session-authentication-rejected".into(),
-                    );
-                }
-                let Some(core) = app.try_state::<Arc<synara_core::Core>>() else {
-                    if rejection_watch.should_log_missing_core(generation) {
+                let core = app.try_state::<Arc<synara_core::Core>>();
+                let log_app = app.clone();
+                let retire_app = app.clone();
+                handle_authentication_rejection_tick(
+                    &mut rejection_watch,
+                    snapshot.session_generation,
+                    core.is_some(),
+                    |line| {
                         crate::desktop_logging::desktop_append_log(
-                            app.clone(),
+                            log_app.clone(),
                             "native".into(),
-                            SESSION_REJECTION_NO_CORE_DIAGNOSTIC_ID.into(),
-                        );
-                    }
-                    continue;
-                };
-                if !rejection_watch.begin_retirement(generation) {
-                    continue;
-                }
-                let logout_result = matrix_logout(app.clone(), state, core, Some(generation)).await;
-                rejection_watch.finish_retirement(generation);
-                if let Err(error) = logout_result {
-                    if let Some(diagnostic_id) =
-                        static_rejection_logout_diagnostic(&error.diagnostic_id)
-                    {
-                        crate::desktop_logging::desktop_append_log(
-                            app.clone(),
-                            "native".into(),
-                            diagnostic_id.to_owned(),
-                        );
-                    }
-                }
+                            line.to_owned(),
+                        )
+                    },
+                    |generation| async move {
+                        let core = core.expect("retire runs only when Core is present");
+                        matrix_logout(retire_app, state, core, Some(generation))
+                            .await
+                            .map(|_| ())
+                    },
+                )
+                .await;
                 continue;
             }
             if !slept {
@@ -1234,3 +1405,33 @@ use user_profile::{parse_avatar_mxc, parse_display_name};
 
 #[cfg(test)]
 use media::validate_media_download_size;
+
+#[cfg(test)]
+mod retry_backoff_tests {
+    use super::RetryBackoff;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn keyring_retries_back_off_to_a_minute_and_reset_on_success() {
+        let start = Instant::now();
+        let mut backoff = RetryBackoff::new();
+        assert!(backoff.ready(start), "the first attempt runs immediately");
+
+        let mut now = start;
+        for expected in [5, 10, 20, 40, 60, 60] {
+            backoff.record(now, false);
+            assert!(!backoff.ready(now + Duration::from_secs(expected) - Duration::from_millis(1)));
+            now += Duration::from_secs(expected);
+            assert!(backoff.ready(now), "retry after {expected}s");
+        }
+
+        backoff.record(now, true);
+        assert!(backoff.ready(now), "success clears the wait");
+        backoff.record(now, false);
+        assert!(!backoff.ready(now + Duration::from_secs(4)));
+        assert!(
+            backoff.ready(now + Duration::from_secs(5)),
+            "success resets to 5s"
+        );
+    }
+}

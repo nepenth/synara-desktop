@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../utils/desktop';
 import { useSetting } from './hooks/settings';
 import { settingsAtom } from './settings';
+import { startVisibilityAwarePoll } from '../utils/visibilityPoll';
 
 export const TYPING_TIMEOUT_MS = 5000; // 5 seconds
 
@@ -173,10 +174,10 @@ export const useBindRoomIdToTypingMembersAtom = (
     }
 
     void refresh();
-    const pollId = window.setInterval(() => void refresh(), 1_000);
+    const stopPolling = startVisibilityAwarePoll(() => void refresh());
     return () => {
       disposed = true;
-      window.clearInterval(pollId);
+      stopPolling();
     };
   }, [hideActivity, setTypingMembers]);
 };

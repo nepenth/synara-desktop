@@ -2687,11 +2687,12 @@ fn v_auth_logout_clears_orphaned_native_identity_when_restore_never_installed_a_
         .expect("matrix_logout body");
 
     let no_active_session = logout
-        .split("let Some(active) = session.as_ref() else {")
+        .split("let Some((active, plan)) = taken else {")
         .nth(1)
-        .and_then(|source| source.split("// Resolve the root").next())
+        .and_then(|source| source.split("matrix-session-expired").next())
         .expect("matrix_logout missing-session branch");
     assert!(no_active_session.contains("clear_persisted_logout_material"));
+    assert!(no_active_session.contains("record_pending_logout_cleanup"));
 }
 
 #[test]
@@ -2745,14 +2746,15 @@ fn product_client_persists_rotated_sdk_tokens_in_native_vault_and_logout_is_loca
         .and_then(|source| source.split("pub async fn matrix_restore_session").next())
         .expect("matrix_logout body");
     assert!(
-        logout.contains("bounded_voluntary_remote_logout(client.matrix_auth().logout())")
-            && logout.contains("voluntary_remote_logout")
-            && logout.contains("VOLUNTARY_REMOTE_LOGOUT_TIMEOUT"),
-        "voluntary remote logout stays one bounded best-effort attempt"
+        logout.contains("lock_transition().await")
+            && logout.contains("take_session_for_logout(&state.session")
+            && logout.contains("finish_taken_session_logout("),
+        "logout serializes on the transition gate and takes the session out of the slot"
     );
     assert!(
-        logout.contains("drop(session);"),
-        "logout must release the session mutex before remote logout and sync stop"
+        logout.contains("client.matrix_auth().logout()")
+            && logout.contains("plan.remote_logout_allowed"),
+        "remote logout runs only when the plan allows it"
     );
     assert!(
         logout.contains("clear_native_logout_material")
@@ -2770,17 +2772,58 @@ fn product_client_persists_rotated_sdk_tokens_in_native_vault_and_logout_is_loca
 }
 
 #[test]
-fn authentication_rejection_watch_logs_once_and_retries_local_cleanup_without_a_second_flight() {
-    let mut watch = AuthenticationRejectionWatch::default();
-    assert!(watch.should_log_rejection(4));
-    assert!(!watch.should_log_rejection(4));
-    assert!(watch.should_log_missing_core(4));
-    assert!(!watch.should_log_missing_core(4));
-    assert!(watch.begin_retirement(4));
-    assert!(!watch.begin_retirement(4));
-    watch.finish_retirement(4);
-    assert!(watch.begin_retirement(4));
+fn installs_and_restore_wait_on_the_session_transition_gate() {
+    for command in [
+        "pub async fn matrix_login_password(",
+        "pub async fn matrix_register(",
+        "pub async fn matrix_store_recovery_confirm(",
+        "pub async fn matrix_restore_session(",
+    ] {
+        let body = AUTH_PRODUCT_COMMANDS_SOURCE
+            .split(command)
+            .nth(1)
+            .and_then(|source| source.split("#[tauri::command]").next())
+            .expect("command body");
+        let gate = body
+            .find("state.lock_transition().await")
+            .unwrap_or_else(|| panic!("{command} must take the transition gate"));
+        let slot = body
+            .find("state.session.lock().await")
+            .unwrap_or_else(|| panic!("{command} must take the session slot"));
+        assert!(gate < slot, "{command} takes the transition gate first");
+    }
+    let restore = AUTH_PRODUCT_COMMANDS_SOURCE
+        .split("pub async fn matrix_restore_session")
+        .nth(1)
+        .and_then(|source| source.split("#[tauri::command]").next())
+        .expect("restore body");
+    let retry = restore
+        .find("retry_pending_logout_cleanup")
+        .expect("restore finishes a failed retirement cleanup first");
+    let read = restore
+        .find("read_active_identity(&app_data_root)")
+        .expect("restore reads the active identity");
+    assert!(retry < read);
+}
 
+#[test]
+fn remote_logout_is_skipped_for_any_rejected_generation() {
+    let rejected = Some(synara_core::app::sync::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID);
+    assert!(remote_logout_allowed(None, None));
+    assert!(remote_logout_allowed(
+        None,
+        Some(synara_core::app::sync::SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID)
+    ));
+    // The watcher's retirement never POSTs.
+    assert!(!remote_logout_allowed(Some(4), rejected));
+    assert!(!remote_logout_allowed(Some(4), None));
+    // A user Sign Out that beats the watcher to a rejected generation does not
+    // POST the rejected credentials either.
+    assert!(!remote_logout_allowed(None, rejected));
+}
+
+#[test]
+fn rejection_logout_diagnostics_are_static_ids_only() {
     assert_eq!(
         static_rejection_logout_diagnostic("d0.1-session-rejection-stale"),
         Some("d0.1-session-rejection-stale")
@@ -2794,48 +2837,298 @@ fn authentication_rejection_watch_logs_once_and_retries_local_cleanup_without_a_
         None
     );
     assert_eq!(static_rejection_logout_diagnostic("not-a-session-id"), None);
+}
 
+#[tokio::test]
+async fn rejection_tick_retires_once_logs_once_and_never_claims_success_without_core() {
+    use std::cell::RefCell;
+
+    let mut watch = AuthenticationRejectionWatch::default();
+    let lines = RefCell::new(Vec::<String>::new());
+    let retired = RefCell::new(Vec::<u64>::new());
+    let log = |line: &str| lines.borrow_mut().push(line.to_owned());
+
+    // No Core: log the rejection and the static no-core id once, never retire.
+    for _ in 0..2 {
+        let succeeded =
+            handle_authentication_rejection_tick(&mut watch, 4, false, log, |generation| {
+                retired.borrow_mut().push(generation);
+                async { Ok(()) }
+            })
+            .await;
+        assert!(!succeeded, "missing Core must not claim retirement");
+    }
+    assert!(retired.borrow().is_empty());
+    assert_eq!(
+        *lines.borrow(),
+        vec![
+            "session-authentication-rejected".to_owned(),
+            SESSION_REJECTION_NO_CORE_DIAGNOSTIC_ID.to_owned(),
+        ]
+    );
+
+    // Core present but local cleanup fails: retry on the next tick, log the
+    // static id once, and drop anything that is not a static id.
+    lines.borrow_mut().clear();
+    for _ in 0..2 {
+        let succeeded =
+            handle_authentication_rejection_tick(&mut watch, 4, true, log, |generation| {
+                retired.borrow_mut().push(generation);
+                async {
+                    Err(MatrixAuthCommandError::unavailable(
+                        "d0.1-session-clear-failed",
+                    ))
+                }
+            })
+            .await;
+        assert!(!succeeded);
+    }
+    assert_eq!(
+        *retired.borrow(),
+        vec![4, 4],
+        "a later tick retries local cleanup"
+    );
+    assert_eq!(
+        *lines.borrow(),
+        vec!["d0.1-session-clear-failed".to_owned()]
+    );
+
+    lines.borrow_mut().clear();
+    let succeeded = handle_authentication_rejection_tick(&mut watch, 4, true, log, |_| async {
+        Err(MatrixAuthCommandError::unavailable(
+            "https://private.example/token",
+        ))
+    })
+    .await;
+    assert!(!succeeded);
+    assert!(lines.borrow().is_empty(), "non-static ids are never logged");
+
+    // Success with the fenced generation.
+    retired.borrow_mut().clear();
+    let succeeded = handle_authentication_rejection_tick(&mut watch, 4, true, log, |generation| {
+        retired.borrow_mut().push(generation);
+        async { Ok(()) }
+    })
+    .await;
+    assert!(succeeded);
+    assert_eq!(*retired.borrow(), vec![4]);
+
+    // A new rejected generation is logged again.
+    lines.borrow_mut().clear();
+    let _ =
+        handle_authentication_rejection_tick(&mut watch, 5, true, log, |_| async { Ok(()) }).await;
+    assert_eq!(
+        *lines.borrow(),
+        vec!["session-authentication-rejected".to_owned()]
+    );
+}
+
+#[test]
+fn the_watcher_retires_through_the_tick_helper_with_its_generation() {
     let product = include_str!("product.rs");
     let watch_body = product
         .split("if snapshot.failure_diagnostic_id")
         .nth(1)
         .and_then(|source| source.split("if !slept").next())
         .expect("authentication rejection watcher");
-    assert!(watch_body.contains("session-authentication-rejected"));
-    assert!(watch_body.contains("d0.1-session-rejection-no-core"));
-    assert!(watch_body.contains("matrix_logout(app.clone(), state, core, Some(generation))"));
+    assert!(watch_body.contains("handle_authentication_rejection_tick("));
+    assert!(watch_body.contains("matrix_logout(retire_app, state, core, Some(generation))"));
     assert!(!watch_body.contains("client.matrix_auth().logout()"));
     assert!(!watch_body.contains("wipePersistedStores"));
+    let tick = product
+        .split("pub fn spawn_suspend_resume_watch")
+        .nth(1)
+        .and_then(|source| {
+            source
+                .split("let snapshot = state.sync_status_snapshot()")
+                .next()
+        })
+        .expect("watcher prelude");
+    assert!(
+        tick.contains("retry_pending_logout_cleanup"),
+        "the watcher retries a failed retirement cleanup"
+    );
 }
 
+#[test]
+fn pending_logout_cleanup_retries_until_it_succeeds() {
+    let pending = std::sync::Mutex::new(None::<MatrixLoginIdentity>);
+    let identity = MatrixLoginIdentity {
+        user_id: "@alice:example.org".to_owned(),
+        device_id: "DEVICE".to_owned(),
+        homeserver_url: "https://example.org".to_owned(),
+    };
+    // Nothing pending: cleanup is not called.
+    retry_pending_logout_cleanup(&pending, |_| panic!("no pending cleanup")).unwrap();
+
+    *pending.lock().unwrap() = Some(identity.clone());
+    let error = retry_pending_logout_cleanup(&pending, |_| {
+        Err(MatrixAuthCommandError::unavailable(
+            "d0.1-session-clear-failed",
+        ))
+    })
+    .expect_err("a failed retry stays pending");
+    assert_eq!(error.diagnostic_id, "d0.1-session-clear-failed");
+    assert_eq!(pending.lock().unwrap().as_ref(), Some(&identity));
+
+    retry_pending_logout_cleanup(&pending, |retried| {
+        assert_eq!(retried, &identity);
+        Ok(())
+    })
+    .unwrap();
+    assert!(pending.lock().unwrap().is_none());
+}
+
+/// Acceptance 7: drive the real take + teardown pair that `matrix_logout` runs.
+/// Production passes `VOLUNTARY_REMOTE_LOGOUT_TIMEOUT`; the test shortens it.
 #[tokio::test]
-async fn voluntary_remote_logout_is_bounded_and_does_not_hold_the_session_mutex() {
+async fn voluntary_logout_finishes_within_the_bound_without_holding_the_session_mutex() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
     assert_eq!(
         VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
         std::time::Duration::from_secs(15)
     );
-    assert!(
-        !bounded_voluntary_remote_logout(async { Err::<(), ()>(()) }).await,
-        "a 401-style remote logout must not block local cleanup"
-    );
+    let bound = std::time::Duration::from_millis(200);
+    let slot = Arc::new(Mutex::new(Some(7u64)));
+    let transition = Arc::new(Mutex::new(()));
+    let remote_started = Arc::new(AtomicBool::new(false));
+    let cleaned = Arc::new(AtomicBool::new(false));
+    let closed = Arc::new(AtomicBool::new(false));
 
-    let session = std::sync::Arc::new(tokio::sync::Mutex::new(Some(7u64)));
-    let remote_session = std::sync::Arc::clone(&session);
-    let remote = tokio::spawn(async move {
-        let _succeeded = bounded_voluntary_remote_logout(async {
-            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-            Ok::<(), ()>(())
+    let logout = {
+        let slot = Arc::clone(&slot);
+        let transition = Arc::clone(&transition);
+        let remote_started = Arc::clone(&remote_started);
+        let cleaned = Arc::clone(&cleaned);
+        let closed = Arc::clone(&closed);
+        tokio::spawn(async move {
+            let _transition = transition.lock().await;
+            let started = tokio::time::Instant::now();
+            let (session, ()) = take_session_for_logout(&slot, |_| Ok(()))
+                .await?
+                .expect("installed session");
+            finish_taken_session_logout(
+                session,
+                bound,
+                || {},
+                Some(move || {
+                    remote_started.store(true, Ordering::SeqCst);
+                    // A remote /logout that never returns.
+                    std::future::pending::<Result<(), ()>>()
+                }),
+                || async { Ok(()) },
+                || {
+                    cleaned.store(true, Ordering::SeqCst);
+                    Ok(())
+                },
+                || async {
+                    closed.store(true, Ordering::SeqCst);
+                    Ok(())
+                },
+            )
+            .await
+            .map(|()| started.elapsed())
         })
-        .await;
-        let mut guard = remote_session.lock().await;
-        *guard = None;
-    });
-    let acquired = tokio::time::timeout(std::time::Duration::from_secs(2), session.lock())
+    };
+
+    // While the remote call hangs, another task can take the real session
+    // mutex at once, and it already sees no installed session.
+    while !remote_started.load(Ordering::SeqCst) {
+        tokio::task::yield_now().await;
+    }
+    let observed = tokio::time::timeout(std::time::Duration::from_millis(50), slot.lock())
         .await
         .expect("session mutex must be free while remote logout waits");
-    assert_eq!(*acquired, Some(7));
-    drop(acquired);
-    remote.abort();
+    assert_eq!(
+        *observed, None,
+        "the retiring session is not visible as live"
+    );
+    drop(observed);
+    // An install waits on the transition gate until teardown is done.
+    assert!(transition.try_lock().is_err());
+
+    let elapsed = logout
+        .await
+        .expect("logout task")
+        .expect("a hung remote logout still logs out locally");
+    assert!(elapsed >= bound);
+    assert!(elapsed < bound + std::time::Duration::from_secs(5));
+    assert!(cleaned.load(Ordering::SeqCst) && closed.load(Ordering::SeqCst));
+    assert!(transition.try_lock().is_ok());
+}
+
+#[tokio::test]
+async fn a_401_remote_logout_and_a_rejected_generation_both_finish_locally() {
+    use std::cell::Cell;
+
+    // 401: returns at once and still runs cleanup and close.
+    let slot = Mutex::new(Some(1u64));
+    let (session, ()) = take_session_for_logout(&slot, |_| Ok(()))
+        .await
+        .unwrap()
+        .unwrap();
+    let cleaned = Cell::new(false);
+    let started = tokio::time::Instant::now();
+    finish_taken_session_logout(
+        session,
+        VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
+        || {},
+        Some(|| async { Err::<(), &str>("M_UNKNOWN_TOKEN") }),
+        || async { Ok(()) },
+        || {
+            cleaned.set(true);
+            Ok(())
+        },
+        || async { Ok(()) },
+    )
+    .await
+    .unwrap();
+    assert!(cleaned.get());
+    assert!(started.elapsed() < std::time::Duration::from_secs(1));
+    assert!(slot.lock().await.is_none());
+
+    // Rejected generation: no remote closure at all.
+    let slot = Mutex::new(Some(2u64));
+    let (session, ()) = take_session_for_logout(&slot, |_| Ok(()))
+        .await
+        .unwrap()
+        .unwrap();
+    let revoked = Cell::new(false);
+    finish_taken_session_logout(
+        session,
+        VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
+        || revoked.set(true),
+        None::<fn() -> std::future::Ready<Result<(), ()>>>,
+        || async { Ok(()) },
+        || Ok(()),
+        || async { Ok(()) },
+    )
+    .await
+    .unwrap();
+    assert!(revoked.get());
+
+    // A second logout after the first sees an empty slot (orphan path).
+    assert!(take_session_for_logout(&slot, |_: &u64| Ok(()))
+        .await
+        .unwrap()
+        .is_none());
+}
+
+#[tokio::test]
+async fn a_failed_logout_preflight_leaves_the_session_installed() {
+    let slot = Mutex::new(Some(3u64));
+    let error = take_session_for_logout(&slot, |_| -> Result<(), _> {
+        Err(MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "The rejected session has already changed.",
+            "d0.1-session-rejection-stale",
+        ))
+    })
+    .await
+    .expect_err("stale generation");
+    assert_eq!(error.diagnostic_id, "d0.1-session-rejection-stale");
+    assert_eq!(*slot.lock().await, Some(3));
 }
 
 #[test]

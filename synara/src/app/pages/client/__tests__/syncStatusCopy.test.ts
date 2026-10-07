@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 // SyncState literals are the probed js-sdk enum values.
 import {
@@ -7,6 +8,7 @@ import {
   getSlidingSyncCapabilityBannerCopy,
   getSyncStatusBannerCopy,
   getTransientSyncStatusBannerCopy,
+  isSignedInSessionForBanner,
   shouldShowConnectedTransition,
 } from '../syncStatusCopy';
 
@@ -44,4 +46,42 @@ test('connected flash only follows a Lost banner the user actually saw', () => {
   assert.equal(shouldShowConnectedTransition('PREPARED', true), true);
   assert.equal(shouldShowConnectedTransition('RECONNECTING', true), false);
   assert.equal(shouldShowConnectedTransition('ERROR', true), false);
+});
+
+test('STOPPED is Connection Lost only for a signed-in session that was connected', () => {
+  const signedIn = { hasSignedInSession: () => true };
+  const signedOut = { hasSignedInSession: () => false };
+  assert.equal(isSignedInSessionForBanner(signedIn, true), true);
+  // Cold start before the first PREPARED stays blank.
+  assert.equal(isSignedInSessionForBanner(signedIn, false), false);
+  // Logout, stopClient, or a logged-out snapshot.
+  assert.equal(isSignedInSessionForBanner(signedOut, true), false);
+  // A client without the probe (non-native) never claims a signed-in session.
+  assert.equal(isSignedInSessionForBanner({}, true), false);
+  assert.equal(isSignedInSessionForBanner(null, true), false);
+
+  assert.equal(
+    getTransientSyncStatusBannerCopy(
+      'STOPPED',
+      false,
+      false,
+      isSignedInSessionForBanner(signedIn, true)
+    ),
+    'Connection Lost!'
+  );
+  assert.equal(
+    getTransientSyncStatusBannerCopy(
+      'STOPPED',
+      false,
+      false,
+      isSignedInSessionForBanner(signedOut, true)
+    ),
+    null
+  );
+});
+
+test('SyncStatus derives the signed-in flag from the client, not a constant', () => {
+  const source = readFileSync('src/app/pages/client/SyncStatus.tsx', 'utf8');
+  assert.match(source, /isSignedInSessionForBanner\(mx, connectedDuringMount\)/);
+  assert.doesNotMatch(source, /signedInSession = true/);
 });

@@ -37,10 +37,7 @@ import { _SearchPathSearchParams } from '../../pages/paths';
 import * as css from './RoomViewHeader.css';
 import { useRoomUnread } from '../../state/hooks/unread';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
-import {
-  markAsReadFromExplicitUserAction,
-  markAsUnread,
-} from '../../utils/notifications';
+import { markAsReadFromExplicitUserAction, markAsUnread } from '../../utils/notifications';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { copyToClipboard } from '../../utils/dom';
 import { LeaveRoomPrompt } from '../../components/leave-room-prompt';

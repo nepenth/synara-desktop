@@ -11,7 +11,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::app::sync::{
-    CommandGate, SyncReadiness, SyncReadinessSnapshot, SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID,
+    SyncReadiness, SyncReadinessSnapshot, SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID,
     SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
 };
 use crate::dto::NotificationCandidate;
@@ -701,6 +701,7 @@ impl SecretVault for UnavailableSecretVault {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::sync::CommandGate;
 
     #[test]
     fn desktop_snapshot_normalization_rejects_private_diagnostic_before_seam() {

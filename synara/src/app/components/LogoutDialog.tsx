@@ -1,7 +1,11 @@
 import React, { forwardRef, useCallback } from 'react';
 import { Dialog, Header, config, Box, Text, Button, Spinner, color } from 'folds';
 import { AsyncStatus, useAsyncCallback } from '../hooks/useAsyncCallback';
-import { performLogout } from '../../client/initMatrix';
+import {
+  attemptLogout,
+  LOGOUT_RETRY_COPY,
+  type LogoutAttemptOutcome,
+} from '../../client/initMatrix';
 import { useMatrixClient } from '../hooks/useMatrixClient';
 import { useCrossSigningActive } from '../hooks/useCrossSigning';
 import { InfoCard } from './info-card';
@@ -17,13 +21,16 @@ export const LogoutDialog = forwardRef<HTMLDivElement, LogoutDialogProps>(
     const crossSigningActive = useCrossSigningActive();
     const [deviceSnapshot] = useDeviceList();
 
-    const [logoutState, logout] = useAsyncCallback<void, Error, []>(
-      useCallback(async () => {
-        await performLogout(mx);
-      }, [mx])
+    const [logoutState, logout] = useAsyncCallback<LogoutAttemptOutcome, Error, []>(
+      useCallback(() => attemptLogout(mx), [mx])
     );
 
     const ongoingLogout = logoutState.status === AsyncStatus.Loading;
+    // attemptLogout resolves `retry` for a rejected or incomplete native
+    // logout; an unexpected throw is treated the same way.
+    const logoutNeedsRetry =
+      (logoutState.status === AsyncStatus.Success && logoutState.data === 'retry') ||
+      logoutState.status === AsyncStatus.Error;
 
     return (
       <Dialog variant="Surface" ref={ref}>
@@ -57,22 +64,17 @@ export const LogoutDialog = forwardRef<HTMLDivElement, LogoutDialogProps>(
               />
             ))}
           <Text priority="400">You’re about to log out. Are you sure?</Text>
-          {logoutState.status === AsyncStatus.Error && (
+          {logoutNeedsRetry && (
             <Text style={{ color: color.Critical.Main }} size="T300">
-              Local sign out did not complete. Retry to finish local cleanup.
+              {LOGOUT_RETRY_COPY}
             </Text>
           )}
           <Box direction="Column" gap="200">
             <Button
               variant="Critical"
               onClick={() => {
-                void logout().then(
-                  () => undefined,
-                  () => {
-                    // useAsyncCallback stores AsyncStatus.Error. The retry copy
-                    // below is the completion path for a rejected matrix_logout.
-                  }
-                );
+                // The outcome lands in logoutState; `retry` renders LOGOUT_RETRY_COPY.
+                void logout();
               }}
               disabled={ongoingLogout}
               before={ongoingLogout && <Spinner variant="Critical" fill="Solid" size="200" />}

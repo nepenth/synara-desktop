@@ -121,16 +121,22 @@ export const readinessToSyncState = (
   readiness: NativeReadiness,
   commandGate: NativeCommandGate = 'open'
 ): NativeSyncState => {
-  if (commandGate === 'closed') return 'ERROR';
+  // Mirrors iOS `ConnectionStatusCopy.fromReadiness`; the shared case table
+  // lives in syncStatusCopy.test.ts and ConnectionStatusCopyTests.swift.
+  if (commandGate !== 'open') return 'ERROR';
   switch (readiness) {
     case 'running':
       return 'PREPARED';
     case 'offline':
       return 'RECONNECTING';
     case 'failed':
+    case 'terminated':
+      // A terminated SyncService is not syncing; it restarts only through
+      // recovery. Show the loss rather than a blank banner.
       return 'ERROR';
     case 'unconfigured':
     case 'idle':
+      // Lost only once this mount had connected (see isSignedInSessionForBanner).
       return 'STOPPED';
     default:
       return 'STOPPED';
@@ -591,6 +597,23 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     { summaryRef: FacadeRoomSummaryRef; room: FacadeEventedRoomReading }
   >();
   let cachedSessionGeneration: number | undefined;
+  // A voluntary logout closes the command gate on purpose. While it runs, the
+  // sync poll is not a connection signal and must not paint Connection Lost.
+  let logoutInFlight = false;
+  // stopClient tears down renderer reads before a reload; that STOPPED is not
+  // a lost connection either.
+  let clientStopped = false;
+
+  /** A definitive logged-in snapshot is cached and the client is not winding down. */
+  const hasSignedInSession = (): boolean =>
+    !logoutInFlight && !clientStopped && Boolean(cachedIdentity.userId);
+
+  /**
+   * A closed gate means connection loss only for a signed-in session. Signed
+   * out (or mid-logout) Core has no owners by design, so the gate reads open.
+   */
+  const syncStateForStatus = (status: NativeSyncStatus): NativeSyncState =>
+    readinessToSyncState(status.readiness, hasSignedInSession() ? status.commandGate : 'open');
 
   // F6b: the facade object fills this holder after construction so rooms can
   // reference it as their `client` (EventedRoomReading contract).
@@ -668,7 +691,7 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
   };
 
   const applySyncStatus = (status: NativeSyncStatus): void => {
-    cachedSyncState = readinessToSyncState(status.readiness, status.commandGate);
+    cachedSyncState = syncStateForStatus(status);
     cachedSyncData = {
       readiness: status.readiness,
       sessionGeneration: status.sessionGeneration,
@@ -809,6 +832,10 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     clientRunning(): boolean {
       return cachedSyncData?.readiness === 'running';
     },
+    /** Signed in per the last definitive native snapshot, and not logging out. */
+    hasSignedInSession(): boolean {
+      return hasSignedInSession();
+    },
 
     /** Readiness refresh on demand (still async); keeps sync cache fresh. */
     async retryImmediately(): Promise<void> {
@@ -819,17 +846,24 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       }
     },
     async startClient(): Promise<void> {
+      clientStopped = false;
       await refresh();
     },
     async stopClient(): Promise<void> {
       // Keep identity until the caller has finished user-keyed local cleanup.
+      clientStopped = true;
       clearSession();
     },
     async logout(): Promise<void> {
-      const result = await invoke('matrix_logout');
-      if (!result.available) throw new Error(UNAVAILABLE_MESSAGE);
-      if (!result.value || (result.value as NativeSessionSnapshot).status !== 'logged_out') {
-        throw new Error('Native logout did not complete. Retry before signing out.');
+      logoutInFlight = true;
+      try {
+        const result = await invoke('matrix_logout');
+        if (!result.available) throw new Error(UNAVAILABLE_MESSAGE);
+        if (!result.value || (result.value as NativeSessionSnapshot).status !== 'logged_out') {
+          throw new Error('Native logout did not complete. Retry before signing out.');
+        }
+      } finally {
+        logoutInFlight = false;
       }
       try {
         clearSession({ clearIdentity: true });
@@ -880,8 +914,8 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
         inFlight = true;
         try {
           const status = await readSyncStatus();
-          if (stopped || !status) return;
-          const next = readinessToSyncState(status.readiness, status.commandGate);
+          if (stopped || !status || logoutInFlight) return;
+          const next = syncStateForStatus(status);
           if (next === last && cachedSyncState === next) return;
           last = next;
           applySyncStatus(status);

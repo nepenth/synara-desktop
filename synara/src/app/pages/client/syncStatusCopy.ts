@@ -47,6 +47,20 @@ export const getTransientSyncStatusBannerCopy = (
   return getSyncStatusBannerCopy(state);
 };
 
+/**
+ * `STOPPED` is a lost connection only for a session that is still signed in
+ * and was connected during this mount. Cold start before the first PREPARED,
+ * logout, and a renderer stop before reload all stay banner-free.
+ */
+export const isSignedInSessionForBanner = (
+  client: unknown,
+  connectedDuringMount: boolean
+): boolean => {
+  if (!connectedDuringMount || typeof client !== 'object' || client === null) return false;
+  const probe = (client as { hasSignedInSession?: unknown }).hasSignedInSession;
+  return typeof probe === 'function' && probe.call(client) === true;
+};
+
 export const CONNECTED_STATUS_BANNER_DURATION_MS = 4_000;
 
 /** Ignore SDK Offline blips shorter than this before showing Connection Lost. */

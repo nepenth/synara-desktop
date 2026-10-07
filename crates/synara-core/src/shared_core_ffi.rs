@@ -831,6 +831,9 @@ pub struct SharedCore {
     room_list_live: Arc<Mutex<Option<NativeRoomListOwner>>>,
     own_profile_live: Arc<Mutex<Option<NativeOwnProfileOwner>>>,
     media_retention_live: Arc<Mutex<Option<NativeMediaRetentionOwner>>>,
+    /// Monotonic per-instance session generation. A re-login in the same
+    /// process must not reuse the generation a retired session carried.
+    next_session_generation: std::sync::atomic::AtomicU64,
 }
 
 impl Default for SharedCore {

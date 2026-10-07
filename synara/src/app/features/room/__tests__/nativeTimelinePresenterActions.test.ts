@@ -2,7 +2,17 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { nativeTimelineUnsentDelivery } from '../nativeTimelineView';
+import {
+  NATIVE_LOCAL_ECHO_ALREADY_SENT,
+  NATIVE_LOCAL_ECHO_DISCARD_FAILED,
+  NATIVE_LOCAL_ECHO_RETRY_FAILED,
+  NativeLocalEchoActionGuard,
+  nativeLocalEchoDiscardOutcome,
+  nativeTimelineUnsentDelivery,
+  runNativeLocalEchoDiscard,
+  runNativeLocalEchoRetry,
+  type NativeLocalEchoDiscardOutcome,
+} from '../nativeTimelineView';
 
 const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');
 const htmlCss = readFileSync('src/app/features/room/nativeTimelineHtml.css.ts', 'utf8');
@@ -589,8 +599,15 @@ test('unsent rows are visibly not sent and discard does not require an event id'
   assert.doesNotMatch(chrome, /eventId/);
   assert.doesNotMatch(chrome, /matrix_send_text/);
   assert.doesNotMatch(chrome, /matrix_timeline_redact/);
-  assert.match(presenter, /discardNativeLocalEcho\(roomId, transactionId\)/);
-  assert.match(presenter, /retryNativeLocalEcho\(roomId, transactionId\)/);
+  assert.match(chrome, /disabled=\{pending\}/);
+  assert.match(
+    presenter,
+    /runNativeLocalEchoDiscard\(nativeLocalEchoActions, roomId, transactionId\)/
+  );
+  assert.match(
+    presenter,
+    /runNativeLocalEchoRetry\(nativeLocalEchoActions, roomId, transactionId\)/
+  );
   assert.doesNotMatch(presenter, /matrix_send_text/);
   assert.match(presenter, /hasActionMenu = Boolean\(eventId && capabilities\)/);
   assert.match(presenter, /aria-label="More message actions"/);
@@ -611,4 +628,75 @@ test('unsent rows are visibly not sent and discard does not require an event id'
   assert.match(retry, /matrix_local_echo_retry/);
   assert.match(retry, /transactionId/);
   assert.doesNotMatch(retry, /matrix_send_text/);
+});
+
+test('discard readback distinguishes a dropped echo from one that was already sent', () => {
+  assert.equal(nativeLocalEchoDiscardOutcome(true), 'discarded');
+  assert.equal(nativeLocalEchoDiscardOutcome(false), 'already_sent');
+  assert.throws(() => nativeLocalEchoDiscardOutcome(undefined));
+  assert.throws(() => nativeLocalEchoDiscardOutcome('true'));
+});
+
+test('discard reports an already-sent message instead of claiming it was discarded', async () => {
+  const guard = new NativeLocalEchoActionGuard();
+  const calls: string[] = [];
+  const discard = async (
+    roomId: string,
+    transactionId: string
+  ): Promise<NativeLocalEchoDiscardOutcome> => {
+    calls.push(`${roomId}/${transactionId}`);
+    return transactionId === 'txn-sent' ? 'already_sent' : 'discarded';
+  };
+  assert.deepEqual(await runNativeLocalEchoDiscard(guard, '!room:x', 'txn-unsent', discard), {
+    status: 'done',
+  });
+  assert.deepEqual(await runNativeLocalEchoDiscard(guard, '!room:x', 'txn-sent', discard), {
+    status: 'error',
+    message: NATIVE_LOCAL_ECHO_ALREADY_SENT,
+  });
+  assert.deepEqual(
+    await runNativeLocalEchoDiscard(guard, '!room:x', 'txn-throws', async () => {
+      throw new Error('native command rejected');
+    }),
+    { status: 'error', message: NATIVE_LOCAL_ECHO_DISCARD_FAILED }
+  );
+  assert.deepEqual(calls, ['!room:x/txn-unsent', '!room:x/txn-sent']);
+});
+
+test('a second discard or retry press while the first is in flight is ignored', async () => {
+  const guard = new NativeLocalEchoActionGuard();
+  let release: (outcome: NativeLocalEchoDiscardOutcome) => void = () => undefined;
+  let discardCalls = 0;
+  const slowDiscard = () => {
+    discardCalls += 1;
+    return new Promise<NativeLocalEchoDiscardOutcome>((resolve) => {
+      release = resolve;
+    });
+  };
+  const first = runNativeLocalEchoDiscard(guard, '!room:x', 'txn-a', slowDiscard);
+  assert.equal(guard.isPending('!room:x', 'txn-a'), true);
+  assert.deepEqual(await runNativeLocalEchoDiscard(guard, '!room:x', 'txn-a', slowDiscard), {
+    status: 'ignored',
+  });
+  let retried = false;
+  assert.deepEqual(
+    await runNativeLocalEchoRetry(guard, '!room:x', 'txn-a', async () => {
+      retried = true;
+    }),
+    { status: 'ignored' }
+  );
+  assert.equal(retried, false);
+  // Another transaction in the same room is independent.
+  assert.equal(guard.isPending('!room:x', 'txn-b'), false);
+  release('discarded');
+  assert.deepEqual(await first, { status: 'done' });
+  assert.equal(discardCalls, 1);
+  assert.equal(guard.isPending('!room:x', 'txn-a'), false);
+  assert.deepEqual(
+    await runNativeLocalEchoRetry(guard, '!room:x', 'txn-a', async () => {
+      throw new Error('native command rejected');
+    }),
+    { status: 'error', message: NATIVE_LOCAL_ECHO_RETRY_FAILED }
+  );
+  assert.equal(guard.isPending('!room:x', 'txn-a'), false);
 });

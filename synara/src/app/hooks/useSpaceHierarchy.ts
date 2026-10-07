@@ -20,6 +20,7 @@ import {
   normalizeRoomJoinRulePresentation,
   type RoomJoinRulePresentation,
 } from '../features/matrix-dto/roomJoinRule';
+import { startVisibilityAwarePoll } from '../utils/visibilityPoll';
 
 export type HierarchyItemSpace = {
   roomId: string;
@@ -200,10 +201,10 @@ const useNativeSpaceChildEdgeMap = (): SpaceChildEdgeMap => {
     };
 
     void refresh();
-    const pollId = window.setInterval(() => void refresh(), 1_000);
+    const stopPolling = startVisibilityAwarePoll(() => void refresh());
     return () => {
       disposed = true;
-      window.clearInterval(pollId);
+      stopPolling();
     };
   }, []);
 

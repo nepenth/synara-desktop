@@ -12,7 +12,11 @@ test('room read state invokes the native owner for a logged-in desktop session',
     }
     return {
       available: true,
-      value: { receiptSent: true, acknowledgedEventId: '$event:example.org', unreadFlagCleared: false },
+      value: {
+        receiptSent: true,
+        acknowledgedEventId: '$event:example.org',
+        unreadFlagCleared: false,
+      },
     };
   };
 

@@ -197,6 +197,28 @@ export const performLogout = async (
   deps.reload();
 };
 
+/** Fixed dialog copy when native logout rejects or does not report `logged_out`. */
+export const LOGOUT_RETRY_COPY = 'Local sign out did not complete. Retry to finish local cleanup.';
+
+export type LogoutAttemptOutcome = 'logged_out' | 'retry';
+
+/**
+ * One user-initiated Sign Out. A rejected or incomplete native logout keeps
+ * the signed-in screen and resolves `retry`; it is never swallowed silently.
+ * Native error text is not surfaced, only the fixed retry outcome.
+ */
+export const attemptLogout = async (
+  mx?: MatrixClient,
+  options?: Parameters<typeof performLogout>[1]
+): Promise<LogoutAttemptOutcome> => {
+  try {
+    await performLogout(mx, options);
+    return 'logged_out';
+  } catch {
+    return 'retry';
+  }
+};
+
 export const logoutClient = async (mx: MatrixClient) => performLogout(mx);
 
 export const clearLoginData = async (

@@ -30,6 +30,8 @@ pub async fn matrix_login_password(
     indexed_message_search: Option<bool>,
 ) -> Result<MatrixLoginIdentity, MatrixAuthCommandError> {
     let password = zeroize::Zeroizing::new(password);
+    let _transition = state.lock_transition().await;
+    settle_pending_logout_cleanup_for_install(&app, &state);
     let mut session = state.session.lock().await;
     if session.is_some() {
         return Err(MatrixAuthCommandError::new(
@@ -107,7 +109,11 @@ pub async fn matrix_login_password(
     let live_identity = accept_authenticated_identity(
         authenticated_login_identity(&result.user_id, &result.homeserver_url, &requested_identity),
         || async {
-            let _ = client.matrix_auth().logout().await;
+            let _ = bounded_remote_logout(
+                VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
+                client.matrix_auth().logout(),
+            )
+            .await;
         },
     )
     .await?;
@@ -346,6 +352,7 @@ pub async fn matrix_store_recovery_confirm(
 ) -> Result<MatrixStoreRecoveryResult, MatrixAuthCommandError> {
     // Keep the session gate while consuming the confirmation and touching the
     // local layout so a concurrent normal login cannot open the same store.
+    let _transition = state.lock_transition().await;
     let session = state.session.lock().await;
     if session.is_some() {
         return Err(MatrixAuthCommandError::new(
@@ -490,6 +497,8 @@ pub async fn matrix_register(
     device_display_name: Option<String>,
     auth: RegisterAuthStage,
 ) -> Result<MatrixRegisterOutcome, MatrixAuthCommandError> {
+    let _transition = state.lock_transition().await;
+    settle_pending_logout_cleanup_for_install(&app, &state);
     let mut session = state.session.lock().await;
     if session.is_some() {
         return Err(MatrixAuthCommandError::new(
@@ -624,14 +633,18 @@ pub(super) async fn revoke_uninstalled_registration(
         .map_err(|_| {
             MatrixAuthCommandError::unavailable("v-auth.4b-register-compensation-restore-failed")
         })?;
-    client
-        .matrix_auth()
-        .logout()
-        .await
-        .map(|_| ())
-        .map_err(|_| {
-            MatrixAuthCommandError::unavailable("v-auth.4b-register-compensation-logout-failed")
-        })
+    if bounded_remote_logout(
+        VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
+        client.matrix_auth().logout(),
+    )
+    .await
+    {
+        Ok(())
+    } else {
+        Err(MatrixAuthCommandError::unavailable(
+            "v-auth.4b-register-compensation-logout-failed",
+        ))
+    }
 }
 
 pub(super) async fn install_session_from_register_secrets(
@@ -865,6 +878,10 @@ pub async fn matrix_session_identity(
         return Ok(Some(active.identity.clone()));
     }
     drop(session);
+    // A retired identity whose credential delete failed is not a sign-in.
+    if state.has_pending_logout_cleanup() {
+        return Ok(None);
+    }
 
     let root = app_data_root(&app)?;
     if !active_identity_path(&root).is_file() {
@@ -914,8 +931,39 @@ pub async fn matrix_logout(
     core: State<'_, Arc<synara_core::Core>>,
     expected_session_generation: Option<u64>,
 ) -> Result<MatrixSessionSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let Some(active) = session.as_ref() else {
+    // The transition gate serializes this teardown with every other logout
+    // (including the rejection watcher), restore, login, and register. The
+    // session mutex itself is held only to validate and take the session.
+    let _transition = state.lock_transition().await;
+    let root = app_data_root(&app);
+    let taken = take_session_for_logout(&state.session, |active| {
+        if let Some(expected) = expected_session_generation {
+            if active.sync.session_generation() != expected
+                || active.sync.observe().failure_diagnostic_id
+                    != Some(synara_core::app::sync::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID)
+            {
+                return Err(MatrixAuthCommandError::new(
+                    "InvalidRequest",
+                    "The rejected session has already changed.",
+                    "d0.1-session-rejection-stale",
+                ));
+            }
+        }
+        // Resolve the root while the live session still retains the retry
+        // identity. Preflight failure leaves this session installed.
+        let root = root.clone()?;
+        ensure_logout_retry_locator(&root, &active.identity)?;
+        Ok(LogoutPlan {
+            root,
+            remote_logout_allowed: remote_logout_allowed(
+                expected_session_generation,
+                active.sync.observe().failure_diagnostic_id,
+            ),
+        })
+    })
+    .await?;
+
+    let Some((active, plan)) = taken else {
         state.clear_store_recovery().await;
         // Even a path-resolution failure must not skip retirement of stale Core.
         finish_orphan_logout(
@@ -923,37 +971,25 @@ pub async fn matrix_logout(
                 core.inner().as_ref(),
             ),
             || {
-                app_data_root(&app).and_then(|root| {
+                root.and_then(|root| {
                     clear_persisted_logout_material(&KeyringSessionMaterialVault::new(), &root)
+                        .inspect_err(|_| {
+                            if let Ok(identity) = read_active_identity(&root) {
+                                state.record_pending_logout_cleanup(identity);
+                            }
+                        })
                 })
             },
         )
         .await?;
-        drop(session);
         return Ok(MatrixSessionSnapshot::LoggedOut);
     };
 
     if let Some(expected) = expected_session_generation {
-        if active.sync.session_generation() != expected
-            || active.sync.observe().failure_diagnostic_id
-                != Some(synara_core::app::sync::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID)
-        {
-            return Err(MatrixAuthCommandError::new(
-                "InvalidRequest",
-                "The rejected session has already changed.",
-                "d0.1-session-rejection-stale",
-            ));
-        }
         let _ = app.emit("matrix-session-expired", expected);
     }
-
     state.clear_store_recovery().await;
 
-    // Resolve the root while the live session still retains the retry identity.
-    // The coordinator preflights the locator before constructing any SDK or
-    // widget teardown future; preflight failure leaves this session installed.
-    let root = app_data_root(&app)?;
-    let generation = active.sync.session_generation();
     let persistence_lease = active.session_persistence.lease.clone();
     let client = active.client.clone();
     let sync = Arc::clone(&active.sync);
@@ -961,41 +997,28 @@ pub async fn matrix_logout(
     let join_rules = Arc::clone(&active.join_rules);
     let observations = Arc::clone(&active.notification_observations);
     let widgets = Arc::clone(&active.widgets);
-    let voluntary_remote_logout = expected_session_generation.is_none();
-    drop(session);
-
-    let session_slot = &state.session;
-    finish_active_logout(
-        || ensure_logout_retry_locator(&root, &identity),
-        || async move {
+    let root = plan.root;
+    finish_taken_session_logout(
+        active,
+        VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
+        move || {
             persistence_lease.revoke();
-            // Remote revocation is best-effort and only for voluntary logout.
-            // A rejected generation must not POST /logout or send its refresh token.
-            // The wait is bounded and must not hold the session mutex.
-            if voluntary_remote_logout {
-                let _remote_logout_succeeded =
-                    bounded_voluntary_remote_logout(client.matrix_auth().logout()).await;
-            }
+        },
+        plan.remote_logout_allowed
+            .then_some(move || async move { client.matrix_auth().logout().await }),
+        || async move {
             join_rules.retire();
             observations.retire();
             widgets.retire_and_close().await;
-            let stop_result = sync
-                .stop()
+            sync.stop()
                 .await
                 .map(|_| ())
-                .map_err(|error| map_sync_error(error.diagnostic_id()));
-            let mut session = session_slot.lock().await;
-            if session
-                .as_ref()
-                .is_some_and(|active| active.sync.session_generation() == generation)
-            {
-                *session = None;
-            }
-            drop(session);
-            stop_result
+                .map_err(|error| map_sync_error(error.diagnostic_id()))
         },
-        || clear_native_logout_material(&KeyringSessionMaterialVault::new(), &identity, &root),
-        || {},
+        || {
+            clear_native_logout_material(&KeyringSessionMaterialVault::new(), &identity, &root)
+                .inspect_err(|_| state.record_pending_logout_cleanup(identity.clone()))
+        },
         || {
             crate::bridge::session_lifecycle::close_after_desktop_session_removal(
                 core.inner().as_ref(),
@@ -1006,18 +1029,111 @@ pub async fn matrix_logout(
     Ok(MatrixSessionSnapshot::LoggedOut)
 }
 
-/// One voluntary `/logout` attempt. 401, timeout, and transport errors are
-/// `false` so local cleanup still runs. Auth-rejection logout does not call this.
+pub(super) struct LogoutPlan {
+    root: PathBuf,
+    remote_logout_allowed: bool,
+}
+
+/// Voluntary logout may attempt one remote `/logout`. A generation whose
+/// refresh was rejected never does, whether the watcher or the user asked.
+pub(super) fn remote_logout_allowed(
+    expected_session_generation: Option<u64>,
+    failure_diagnostic_id: Option<&str>,
+) -> bool {
+    expected_session_generation.is_none()
+        && failure_diagnostic_id
+            != Some(synara_core::app::sync::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID)
+}
+
+/// Validate the installed session under the session mutex, then move it out of
+/// the slot before any teardown await. From here on, ordinary commands see no
+/// session and fail closed, sync recovery has nothing to restart, and the
+/// mutex is free while the remote logout and SDK stop run. `Ok(None)` means
+/// the slot was already empty.
+pub(super) async fn take_session_for_logout<Session, Plan>(
+    slot: &Mutex<Option<Session>>,
+    prepare: impl FnOnce(&Session) -> Result<Plan, MatrixAuthCommandError>,
+) -> Result<Option<(Session, Plan)>, MatrixAuthCommandError> {
+    let mut slot = slot.lock().await;
+    let Some(active) = slot.as_ref() else {
+        return Ok(None);
+    };
+    let plan = prepare(active)?;
+    Ok(slot.take().map(|active| (active, plan)))
+}
+
+/// Tear down a session that `take_session_for_logout` already removed.
+/// `remote_logout` is `None` for a rejected generation; otherwise it is one
+/// attempt bounded by `remote_timeout` ([`VOLUNTARY_REMOTE_LOGOUT_TIMEOUT`] in
+/// production). A 401, timeout, or
+/// transport error still runs local cleanup and Core close.
+pub(super) async fn finish_taken_session_logout<
+    Session,
+    Remote,
+    RemoteFuture,
+    RemoteOk,
+    RemoteErr,
+    Stop,
+    StopFuture,
+    Close,
+    CloseFuture,
+>(
+    session: Session,
+    remote_timeout: std::time::Duration,
+    revoke: impl FnOnce(),
+    remote_logout: Option<Remote>,
+    stop_local: Stop,
+    cleanup: impl FnOnce() -> Result<(), MatrixAuthCommandError>,
+    close: Close,
+) -> Result<(), MatrixAuthCommandError>
+where
+    Remote: FnOnce() -> RemoteFuture,
+    RemoteFuture: std::future::Future<Output = Result<RemoteOk, RemoteErr>>,
+    Stop: FnOnce() -> StopFuture,
+    StopFuture: std::future::Future<Output = Result<(), MatrixAuthCommandError>>,
+    Close: FnOnce() -> CloseFuture,
+    CloseFuture: std::future::Future<Output = Result<(), MatrixAuthCommandError>>,
+{
+    finish_active_logout(
+        || Ok(()),
+        || async move {
+            revoke();
+            // Stop sync first: a running sync loop would race the server-side
+            // token revocation into a refresh 401 on every logout.
+            let stop_result = stop_local().await;
+            if let Some(remote_logout) = remote_logout {
+                let _remote_logout_succeeded =
+                    bounded_remote_logout(remote_timeout, remote_logout()).await;
+            }
+            stop_result
+        },
+        cleanup,
+        move || drop(session),
+        close,
+    )
+    .await
+}
+
+fn settle_pending_logout_cleanup_for_install(app: &AppHandle, state: &MatrixAuthState) {
+    state.settle_pending_logout_cleanup_before_install(|identity| {
+        app_data_root(app).and_then(|root| {
+            clear_native_logout_material(&KeyringSessionMaterialVault::new(), identity, &root)
+        })
+    });
+}
+
+/// One bounded `/logout` attempt (voluntary logout, install rollback, identity
+/// mismatch, and registration compensation). 401, timeout, and transport
+/// errors are `false` so local cleanup still runs. Auth-rejection logout does
+/// not call this.
 pub(super) const VOLUNTARY_REMOTE_LOGOUT_TIMEOUT: std::time::Duration =
     std::time::Duration::from_secs(15);
 
-pub(super) async fn bounded_voluntary_remote_logout<T, E>(
+pub(super) async fn bounded_remote_logout<T, E>(
+    timeout: std::time::Duration,
     logout: impl std::future::Future<Output = Result<T, E>>,
 ) -> bool {
-    matches!(
-        tokio::time::timeout(VOLUNTARY_REMOTE_LOGOUT_TIMEOUT, logout).await,
-        Ok(Ok(_))
-    )
+    matches!(tokio::time::timeout(timeout, logout).await, Ok(Ok(_)))
 }
 
 #[tauri::command]
@@ -1027,12 +1143,23 @@ pub async fn matrix_restore_session(
     core: State<'_, Arc<synara_core::Core>>,
     indexed_message_search: Option<bool>,
 ) -> Result<MatrixLoginIdentity, MatrixAuthCommandError> {
+    // Waits for an in-flight logout, which then leaves no identity to restore.
+    let _transition = state.lock_transition().await;
     let mut session = state.session.lock().await;
     if let Some(active) = session.as_ref() {
         return Ok(active.identity.clone());
     }
 
     let app_data_root = app_data_root(&app)?;
+    // A retired session whose credential delete failed must not come back.
+    // Finish that delete first; the identity read below then fails closed.
+    state.retry_pending_logout_cleanup(|identity| {
+        clear_native_logout_material(
+            &KeyringSessionMaterialVault::new(),
+            identity,
+            &app_data_root,
+        )
+    })?;
     let identity = read_active_identity(&app_data_root)?;
     ensure_logout_retry_locator(&app_data_root, &identity)?;
     let account = account_identity(&identity)?;
@@ -1298,7 +1425,11 @@ impl SessionPreparationRollback {
             &self.persistence_lease,
             || async {
                 if self.client.session().is_some() {
-                    let _ = self.client.matrix_auth().logout().await;
+                    let _ = bounded_remote_logout(
+                        VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
+                        self.client.matrix_auth().logout(),
+                    )
+                    .await;
                 }
             },
             || async {
@@ -1353,7 +1484,11 @@ pub(super) async fn finish_password_login_attempt<T>(
                     // access_token() returns an owned secret; zeroize this
                     // presence-check copy immediately and never expose it.
                     if client.access_token().map(zeroize::Zeroizing::new).is_some() {
-                        let _ = client.matrix_auth().logout().await;
+                        let _ = bounded_remote_logout(
+                            VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
+                            client.matrix_auth().logout(),
+                        )
+                        .await;
                     }
                 },
                 || async { Ok(()) },
@@ -1471,7 +1606,11 @@ async fn rollback_session_install(
         origin,
         &persistence_lease,
         || async {
-            let _ = client.matrix_auth().logout().await;
+            let _ = bounded_remote_logout(
+                VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
+                client.matrix_auth().logout(),
+            )
+            .await;
         },
         || async move {
             join_rules.retire();
@@ -2653,6 +2792,34 @@ mod tests {
     }
 
     #[test]
+    fn every_remote_logout_is_bounded() {
+        // Rollback, identity-mismatch, and registration-compensation logouts run
+        // under the transition/session locks; an unbounded SDK logout (30 s ×
+        // retries plus a refresh) would stall restore, login, and logout.
+        let (production, _) = include_str!("product_commands.rs")
+            .split_once("\n#[cfg(test)]\nmod tests {")
+            .expect("auth command test module boundary");
+        let calls = production.matches("matrix_auth().logout()").count();
+        let bounded = production.matches("bounded_remote_logout(\n").count();
+        // The voluntary path hands its closure to `finish_taken_session_logout`,
+        // which applies `bounded_remote_logout` itself.
+        assert_eq!(calls, bounded + 1, "every remote logout must be bounded");
+        assert!(production
+            .contains(".then_some(move || async move { client.matrix_auth().logout().await })"));
+        let teardown = production
+            .split("pub(super) async fn finish_taken_session_logout")
+            .nth(1)
+            .unwrap();
+        assert!(
+            teardown.find("stop_local().await").unwrap()
+                < teardown
+                    .find("bounded_remote_logout(remote_timeout")
+                    .unwrap(),
+            "sync stops before the remote /logout"
+        );
+    }
+
+    #[test]
     fn session_install_and_every_logout_path_revoke_store_recovery() {
         let (production, _) = include_str!("product_commands.rs")
             .split_once("\n#[cfg(test)]\nmod tests {")
@@ -2698,12 +2865,21 @@ mod tests {
             revocation < logged_out_return,
             "recovery must be revoked before the already-logged-out return"
         );
-        let active_logout = logout.split("if let Some(expected)").nth(1).unwrap();
+        // The active path revokes recovery after taking the session and
+        // before any teardown future runs.
+        let active_logout = logout
+            .split("let Some((active, plan)) = taken else")
+            .nth(1)
+            .unwrap();
+        let active_logout = active_logout
+            .split("return Ok(MatrixSessionSnapshot::LoggedOut);")
+            .nth(1)
+            .unwrap();
         assert!(
             active_logout
                 .find("state.clear_store_recovery().await")
                 .unwrap()
-                < active_logout.find("// Resolve the root").unwrap()
+                < active_logout.find("finish_taken_session_logout(").unwrap()
         );
     }
 

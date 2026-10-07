@@ -151,9 +151,11 @@ pub(crate) async fn open_after_desktop_session_install(
         .map_err(|_| core_lifecycle_error())
 }
 
-/// Clear Core after desktop retirement while the caller retains its session
-/// transition gate. Core closing does not call back into desktop auth; keeping
-/// the gate prevents another installation from racing the close.
+/// Clear Core after desktop retirement. Logout calls this while it holds
+/// `MatrixAuthState`'s transition gate but not the session mutex, so ordinary
+/// commands keep failing closed on the empty slot while install, restore, and
+/// another logout wait for the close. Install rollback still holds both. Core
+/// closing does not call back into desktop auth.
 pub(crate) async fn close_after_desktop_session_removal(
     core: &Core,
 ) -> Result<(), MatrixAuthCommandError> {

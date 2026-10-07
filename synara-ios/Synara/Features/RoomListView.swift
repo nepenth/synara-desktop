@@ -633,9 +633,15 @@ struct RoomListView: View {
     }
 
     private func markRoomAsRead(_ room: RoomSummary) {
+        membershipError = nil
         Task {
             let acknowledged = await environment.readMarkers.markRoomAsRead(roomID: room.id)
-            guard acknowledged != nil else {
+            // A nil readback means no fully-read marker reached the server. Keep
+            // the row unread and say so instead of treating the tap as finished.
+            if let failure = ExplicitRoomReadReceipt.failureMessage(acknowledgedEventID: acknowledged) {
+                await MainActor.run {
+                    membershipError = failure
+                }
                 return
             }
             await MainActor.run {

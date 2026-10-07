@@ -38,6 +38,10 @@ pub struct QueuedSendError {
     pub transaction_id: Option<String>,
     pub wedged: bool,
     pub cancelled: bool,
+    /// The request is still in the SDK's persisted queue and will be retried
+    /// (recoverable error, or the wait deadline passed). The caller must not
+    /// present this as a failure that invites a second send.
+    pub still_queued: bool,
 }
 
 impl QueuedSendError {
@@ -47,6 +51,17 @@ impl QueuedSendError {
             transaction_id,
             wedged: false,
             cancelled: false,
+            still_queued: false,
+        }
+    }
+
+    fn still_queued(diagnostic_id: &'static str, transaction_id: String) -> Self {
+        Self {
+            diagnostic_id,
+            transaction_id: Some(transaction_id),
+            wedged: false,
+            cancelled: false,
+            still_queued: true,
         }
     }
 
@@ -56,6 +71,7 @@ impl QueuedSendError {
             transaction_id,
             wedged: true,
             cancelled: false,
+            still_queued: false,
         }
     }
 
@@ -65,6 +81,7 @@ impl QueuedSendError {
             transaction_id,
             wedged: false,
             cancelled: true,
+            still_queued: false,
         }
     }
 }
@@ -242,9 +259,9 @@ pub async fn wait_for_queued_send(
                         // request stays queued (not removed), so re-enabling
                         // here also lets the SDK retry it in order.
                         session.room.send_queue().set_enabled(true);
-                        return Err(QueuedSendError::failed(
+                        return Err(QueuedSendError::still_queued(
                             send_message_error_diagnostic(error.as_ref()),
-                            Some(txn.to_owned()),
+                            txn.to_owned(),
                         ));
                     }
                     return Err(QueuedSendError::wedged(Some(txn.to_owned())));
@@ -267,9 +284,10 @@ pub async fn wait_for_queued_send(
     .await;
     match deadline {
         Ok(result) => result,
-        Err(_) => Err(QueuedSendError::failed(
+        // The request is still persisted and the SDK keeps sending it.
+        Err(_) => Err(QueuedSendError::still_queued(
             "d0.4-send-queue-timeout",
-            Some(txn.to_owned()),
+            txn.to_owned(),
         )),
     }
 }
@@ -337,30 +355,37 @@ pub async fn unwedge_queued_send(room: &Room, transaction_id: &str) -> Result<()
 ///
 /// This is the `RoomSendQueue::set_enabled(true)` path that
 /// [`wait_for_queued_send`] uses after a recoverable send failure. It does
-/// not allocate a transaction id. Wedged requests stay on
-/// [`unwedge_queued_send`].
+/// not allocate a transaction id. The caller has already routed wedged
+/// requests to [`unwedge_queued_send`]; this only confirms the echo is still
+/// queued so a retry of a vanished request fails closed.
 pub async fn reenable_queued_send(
     room: &Room,
     transaction_id: &str,
 ) -> Result<(), QueuedSendError> {
     let _handle = handle_for_transaction(room, transaction_id).await?;
-    if queued_send_is_wedged(room, transaction_id).await? {
-        return Err(QueuedSendError::wedged(Some(transaction_id.to_owned())));
-    }
     room.send_queue().set_enabled(true);
     Ok(())
 }
 
-/// Abort one wedged (or still-local) request so later items can send.
+/// Abort one unsent request, then let later items in the room send.
+///
+/// The abort runs before the room queue is re-enabled. After a send error
+/// the SDK leaves the room queue disabled; re-enabling first would wake the
+/// sending task, which could pick this very request up and send the message
+/// the user just discarded. `Ok(false)` means the SDK no longer held the
+/// request (it was already sent); the queue is left as it was.
 pub async fn abort_queued_send(room: &Room, transaction_id: &str) -> Result<bool, QueuedSendError> {
     let handle = handle_for_transaction(room, transaction_id).await?;
-    room.send_queue().set_enabled(true);
-    handle.abort().await.map_err(|_| {
+    let aborted = handle.abort().await.map_err(|_| {
         QueuedSendError::failed(
             "d0.4-send-queue-abort-failed",
             Some(transaction_id.to_owned()),
         )
-    })
+    })?;
+    if aborted {
+        room.send_queue().set_enabled(true);
+    }
+    Ok(aborted)
 }
 
 /// True when this echo carries an SDK `QueueWedgeError`.
@@ -409,5 +434,31 @@ mod tests {
         assert!(source.contains("room.send_queue()"));
         assert!(!source.contains(&format!("{}{}", "room.", "send(")));
         assert!(!source.contains(&format!("{}{}", "room.", "send_attachment(")));
+    }
+
+    #[test]
+    fn discard_aborts_before_waking_the_room_queue() {
+        // Re-enabling first wakes the SDK sending task, which can pick up the
+        // parked request and send the message the user discarded. The mock
+        // suite cannot force that race on a single-threaded runtime, so pin
+        // the order here.
+        let source = include_str!("room_queue.rs");
+        let start = source
+            .find("pub async fn abort_queued_send")
+            .expect("abort_queued_send");
+        let end = start
+            + source[start..]
+                .find("\n}\n")
+                .expect("abort_queued_send body end");
+        let body = &source[start..end];
+        let abort = body.find("handle.abort()").expect("abort call");
+        let enable = body
+            .find(concat!("set_enabled", "(true)"))
+            .expect("re-enable after abort");
+        assert!(
+            abort < enable,
+            "abort must run before the queue is re-enabled"
+        );
+        assert!(body.contains("if aborted {"));
     }
 }

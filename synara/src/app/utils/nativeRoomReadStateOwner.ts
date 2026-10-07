@@ -48,9 +48,7 @@ export async function setRoomReadStateWithNativeOwner(
   }
   if (action !== 'mark_read') return;
   const readback = result.value as
-    | { receiptSent?: unknown; unreadFlagCleared?: unknown }
-    | null
-    | undefined;
+    { receiptSent?: unknown; unreadFlagCleared?: unknown } | null | undefined;
   const receiptSent = readback?.receiptSent === true;
   const unreadFlagCleared = readback?.unreadFlagCleared === true;
   if (!receiptSent && !unreadFlagCleared) {

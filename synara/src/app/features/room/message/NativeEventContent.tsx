@@ -1,6 +1,7 @@
 import React, { ReactNode, useEffect, useState } from 'react';
 import { MessageEvent, NativeEventContentEvent } from '../../../../types/matrix/room';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../../utils/desktop';
+import { nextEventReadbackDelayMs, type EventReadbackState } from './nativeEventReadbackPoll';
 
 type NativeTimelineItem = {
   itemId: string;
@@ -69,30 +70,41 @@ export function NativeEventContent({ roomId, mEvent, children }: NativeEventCont
     if (!eventId) return;
 
     let disposed = false;
-    let unavailableShown = false;
+    let timer: number | undefined;
+    let delayMs: number | undefined;
+    const schedule = (state: EventReadbackState) => {
+      delayMs = nextEventReadbackDelayMs(state, delayMs);
+      if (!disposed && delayMs !== undefined) {
+        timer = window.setTimeout(() => void readback(), delayMs);
+      }
+    };
     const readback = async () => {
       const result = await invokeDesktopWithAvailability<NativeTimelineEventReadback>(
         'matrix_timeline_event_readback',
         { roomId, eventId }
       ).catch(() => undefined);
-      if (disposed || !result?.available || !result.value) return;
+      if (disposed) return;
+      if (!result?.available || !result.value) {
+        schedule('pending');
+        return;
+      }
       const { item } = result.value;
-      if (item.decryptionState === 'pending') return;
+      if (item.decryptionState === 'pending') {
+        schedule('pending');
+        return;
+      }
       if (item.decryptionState === 'unavailable') {
-        if (!unavailableShown) {
-          unavailableShown = true;
-          setResolvedEvent(toSafeNativeEvent(item, true));
-        }
+        setResolvedEvent(toSafeNativeEvent(item, true));
+        schedule('unavailable');
         return;
       }
       setResolvedEvent(toSafeNativeEvent(item, false));
-      window.clearInterval(pollId);
+      schedule('decrypted');
     };
-    const pollId = window.setInterval(() => void readback(), 1000);
     void readback();
     return () => {
       disposed = true;
-      window.clearInterval(pollId);
+      if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [mEvent, roomId]);
 

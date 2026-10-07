@@ -56,9 +56,12 @@ async fn build_client(
         .retry_limit(config.timeouts.retry_limit);
 
     // Recovery secrets remain explicitly user/verification driven. Once the
-    // SDK receives one, restore all available room keys into the native store.
+    // SDK has backup access it fetches the room key for each event that fails
+    // to decrypt. `OneShot` downloads the whole backup once, logs a warning on
+    // failure and never retries, which the SDK documents as unworkable for any
+    // sizeable account.
     let encryption_settings = EncryptionSettings {
-        backup_download_strategy: BackupDownloadStrategy::OneShot,
+        backup_download_strategy: BackupDownloadStrategy::AfterDecryptionFailure,
         ..EncryptionSettings::default()
     };
 
@@ -603,13 +606,17 @@ mod privacy_tests {
     #[test]
     fn product_encryption_settings_only_override_backup_download() {
         let settings = EncryptionSettings {
-            backup_download_strategy: BackupDownloadStrategy::OneShot,
+            backup_download_strategy: BackupDownloadStrategy::AfterDecryptionFailure,
             ..EncryptionSettings::default()
         };
         assert_eq!(
             settings.backup_download_strategy,
-            BackupDownloadStrategy::OneShot
+            BackupDownloadStrategy::AfterDecryptionFailure
         );
+        let source = include_str!("open.rs");
+        let production = source.split("#[cfg(test)]").next().unwrap_or("");
+        assert!(production
+            .contains("backup_download_strategy: BackupDownloadStrategy::AfterDecryptionFailure"));
         assert!(!settings.auto_enable_cross_signing);
         assert!(!settings.auto_enable_backups);
     }

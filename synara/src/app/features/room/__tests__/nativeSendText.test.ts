@@ -120,3 +120,36 @@ test('native command failure never falls through to legacy send', async () => {
     /Native Matrix text send is unavailable/
   );
 });
+
+test('a send the native queue still holds counts as accepted, not failed', async () => {
+  // Reporting it as failed kept the composer text, and a second press
+  // duplicated the message once the queued retry landed.
+  const owner = await sendTextWithNativeOwner(
+    { roomId: '!room:example.org', body: 'hello' },
+    true,
+    async (command) =>
+      command === 'matrix_session_snapshot'
+        ? { available: true, value: { status: 'logged_in' } }
+        : {
+            available: true,
+            value: {
+              roomId: '!room:example.org',
+              eventId: '',
+              localTxnId: 'txn-1',
+              status: 'queued',
+            },
+          }
+  );
+  assert.equal(owner, 'native');
+  await assert.rejects(
+    sendTextWithNativeOwner(
+      { roomId: '!room:example.org', body: 'hello' },
+      true,
+      async (command) =>
+        command === 'matrix_session_snapshot'
+          ? { available: true, value: { status: 'logged_in' } }
+          : { available: true, value: { status: 'failed' } }
+    ),
+    /Native Matrix text send is unavailable/
+  );
+});

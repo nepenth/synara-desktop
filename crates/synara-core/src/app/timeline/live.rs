@@ -103,6 +103,8 @@ mod approval_history;
 #[cfg(test)]
 mod approval_history_tests;
 #[cfg(test)]
+mod room_read_state_tests;
+#[cfg(test)]
 mod thread_list_tests;
 #[cfg(test)]
 mod thread_open_tests;
@@ -289,6 +291,72 @@ fn plan_live_read_target(
     }
 }
 
+/// Pages explicit mark-read may fetch to find a receipt-capable remote event,
+/// and the total time it may spend doing so. Callers run this after releasing
+/// the timeline registry lock, so other timeline commands are not stalled.
+const EXPLICIT_READ_TARGET_PAGES: usize = 3;
+const EXPLICIT_READ_TARGET_BUDGET: Duration = Duration::from_secs(8);
+
+/// Latest remote event in the room, including in-thread replies.
+///
+/// The live timeline hides threaded events (`HIDE_THREADED_EVENTS`), so
+/// `Timeline::latest_event_id` skips thread replies. Room unread counts and
+/// the homeserver both count them, so a room whose newest activity is in a
+/// thread would never clear. The room event cache keeps every event in one
+/// linked chunk (threading support is not enabled), so read it first and fall
+/// back to the timeline's own resolver.
+async fn latest_room_event_id(timeline: &Timeline) -> Option<OwnedEventId> {
+    if !timeline.is_threaded() {
+        if let Ok((cache, _drop_handles)) = timeline.room().event_cache().await {
+            if let Ok(Some(event_id)) = cache
+                .rfind_map_event_in_memory_by(|event| event.event_id().map(ToOwned::to_owned))
+                .await
+            {
+                return Some(event_id);
+            }
+        }
+    }
+    timeline.latest_event_id().await
+}
+
+/// Resolve the event an explicit mark-read must acknowledge.
+///
+/// A freshly opened timeline can be empty while the room has remote events:
+/// the event cache was cold and the open-time page failed, timed out, or held
+/// only hidden events. Treating that as "no events" would clear only the
+/// local unread flag and never move `m.fully_read`, so other clients of the
+/// same user keep the room unread. Page backwards until a remote event
+/// appears. `Ok(None)` means the start of the room was reached with no
+/// receipt-capable event. A page failure, the time budget, or running out of
+/// pages is an error rather than a silent flag clear.
+async fn resolve_explicit_read_target(
+    timeline: &Timeline,
+) -> Result<Option<OwnedEventId>, &'static str> {
+    if let Some(event_id) = latest_room_event_id(timeline).await {
+        return Ok(Some(event_id));
+    }
+    if timeline.is_threaded() {
+        return Ok(None);
+    }
+    timeout(EXPLICIT_READ_TARGET_BUDGET, async {
+        for _ in 0..EXPLICIT_READ_TARGET_PAGES {
+            let hit_start = timeline
+                .paginate_backwards(PAGINATION_BATCH_SIZE)
+                .await
+                .map_err(|_| "v-timeline-read-target-unresolved")?;
+            if let Some(event_id) = latest_room_event_id(timeline).await {
+                return Ok(Some(event_id));
+            }
+            if hit_start {
+                return Ok(None);
+            }
+        }
+        Err("v-timeline-read-target-unresolved")
+    })
+    .await
+    .map_err(|_| "v-timeline-read-target-unresolved")?
+}
+
 /// Advance the private receipt and fully-read marker through the SDK owner.
 ///
 /// Automatic visibility requests are compare-and-target operations: the exact
@@ -303,11 +371,11 @@ async fn mark_live_timeline_read(
 ) -> Result<LiveTimelineReadMark, &'static str> {
     // Use the same SDK-owned latest-event resolver as Timeline::mark_as_read;
     // hand-walking visible items diverges for local echoes, focus, and threads.
-    match plan_live_read_target(
-        timeline.latest_event_id().await,
-        intent,
-        observed_live_tail_event_id,
-    )? {
+    let latest_event_id = match intent {
+        NativeTimelineReadIntent::AutomaticVisibility => timeline.latest_event_id().await,
+        NativeTimelineReadIntent::ExplicitUser => resolve_explicit_read_target(timeline).await?,
+    };
+    match plan_live_read_target(latest_event_id, intent, observed_live_tail_event_id)? {
         LiveReadTargetPlan::NoOp => Ok(LiveTimelineReadMark {
             acknowledged_event_id: None,
             unread_flag_cleared: false,
@@ -341,6 +409,18 @@ async fn mark_live_timeline_read(
                     .send_single_receipt(ReceiptType::ReadPrivate, event_id.clone())
                     .await
                     .map_err(|_| "v-timeline-send-thread-receipt-failed")?;
+            } else if intent == NativeTimelineReadIntent::ExplicitUser {
+                // An explicit Mark as Read always writes. `Timeline`'s receipt
+                // deduplication compares against main-timeline positions and can
+                // drop the write when the target is an in-thread reply or the
+                // local receipt view is stale, which would report success while
+                // other clients keep the room unread. `Room::send_multiple_receipts`
+                // posts the markers and then clears the unread flag.
+                timeline
+                    .room()
+                    .send_multiple_receipts(exact_read_receipts(event_id.clone()))
+                    .await
+                    .map_err(|_| "v-timeline-send-read-markers-failed")?;
             } else {
                 timeline
                     // Pinned matrix-sdk-ui 0.19 invariant: `Timeline::send_multiple_receipts`
@@ -355,6 +435,40 @@ async fn mark_live_timeline_read(
                 acknowledged_event_id: Some(event_id),
                 unread_flag_cleared: false,
             })
+        }
+    }
+}
+
+/// Apply a stream's read or unread action to its timeline.
+async fn apply_stream_read_action(
+    timeline: &Timeline,
+    request: &NativeTimelineReadStateRequest,
+) -> Result<(Option<bool>, Option<OwnedEventId>), &'static str> {
+    match request.action {
+        NativeTimelineReadAction::MarkRead => {
+            let mark = mark_live_timeline_read(
+                timeline,
+                request.intent,
+                request.observed_live_tail_event_id.as_deref(),
+            )
+            .await?;
+            Ok((
+                Some(mark.acknowledged_event_id.is_some()),
+                mark.acknowledged_event_id,
+            ))
+        }
+        NativeTimelineReadAction::MarkUnread => {
+            if request.intent != NativeTimelineReadIntent::ExplicitUser
+                || request.observed_live_tail_event_id.is_some()
+            {
+                return Err("v-timeline-read-mark-unread-requires-explicit-intent");
+            }
+            timeline
+                .room()
+                .set_unread_flag(true)
+                .await
+                .map_err(|_| "v-timeline-view-mark-unread-failed")?;
+            Ok((None, None))
         }
     }
 }
@@ -787,15 +901,30 @@ impl NativeTimelineOwner {
             .await
     }
 
+    /// Mark a view stream read or unread.
+    ///
+    /// The registry lock is held only to validate the stream and to build the
+    /// snapshot. Receipt writes and any explicit-read pagination run without
+    /// it, so a slow homeserver does not stall every other timeline command.
     pub async fn set_read_state(
         &self,
         request: NativeTimelineReadStateRequest,
     ) -> Result<NativeTimelineReadStateReadback, &'static str> {
-        self.registry
+        let timeline = self.registry.lock().await.read_state_timeline(&request)?;
+        let (receipt_sent, acknowledged_event_id) =
+            apply_stream_read_action(&timeline, &request).await?;
+        let snapshot = self
+            .registry
             .lock()
             .await
-            .set_read_state(&self.client, request)
-            .await
+            .view_snapshot_for_stream(&self.client, &request.stream_id)
+            .await?;
+        Ok(NativeTimelineReadStateReadback {
+            action: request.action,
+            receipt_sent,
+            acknowledged_event_id: acknowledged_event_id.map(|event_id| event_id.to_string()),
+            snapshot,
+        })
     }
 
     /// Promote unread placement on an existing live provider without reopening.
@@ -813,16 +942,48 @@ impl NativeTimelineOwner {
 
     /// Mark a room read or unread without requiring an already-open view stream.
     /// Context-menu Mark as Read uses this while the room is not mounted.
+    ///
+    /// The registry lock covers opening the live timeline only. Target
+    /// resolution (which may paginate) and the receipt write run after the
+    /// lock is released.
     pub async fn set_room_read_state(
         &self,
         room_id: &str,
         action: NativeTimelineReadAction,
     ) -> Result<NativeRoomReadStateReadback, &'static str> {
-        self.registry
-            .lock()
-            .await
-            .set_room_read_state(&self.client, room_id, action)
-            .await
+        let room_id = parse_room_id(room_id)?;
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-rooms-room-read-state-room-not-found")?;
+        match action {
+            NativeTimelineReadAction::MarkRead => {
+                let timeline = self
+                    .registry
+                    .lock()
+                    .await
+                    .open_room_read_timeline(&self.client, room_id.as_str())
+                    .await?;
+                let mark = mark_live_timeline_read(
+                    &timeline,
+                    NativeTimelineReadIntent::ExplicitUser,
+                    None,
+                )
+                .await
+                .map_err(|_| "v-rooms-room-read-state-mark-read-failed")?;
+                room_readback_from_mark(&mark)
+            }
+            NativeTimelineReadAction::MarkUnread => {
+                room.set_unread_flag(true)
+                    .await
+                    .map_err(|_| "v-rooms-room-read-state-mark-unread-failed")?;
+                Ok(NativeRoomReadStateReadback {
+                    receipt_sent: false,
+                    acknowledged_event_id: None,
+                    unread_flag_cleared: false,
+                })
+            }
+        }
     }
 
     pub async fn toggle_reaction(
@@ -1233,10 +1394,23 @@ impl NativeTimelineOwner {
                 Err(error) if error.cancelled => {
                     let _ = sends.cancel(&local_txn_id);
                 }
+                // Still persisted in the SDK queue: it stays `Sending` and the
+                // timeline row shows the SDK send state (with Discard).
+                Err(error) if error.still_queued => {}
                 Err(error) => {
                     let _ = sends.mark_failed(&local_txn_id, error.diagnostic_id);
                 }
             }
+        }
+        if matches!(&send_result, Err(error) if error.still_queued) {
+            // Reporting this as a failure made the composer keep the text, and
+            // a second press duplicated the message once the SDK retry landed.
+            return Ok(MatrixSendTextResult {
+                room_id,
+                event_id: String::new(),
+                local_txn_id,
+                status: "queued",
+            });
         }
         let ack = send_result.map_err(|error| error.diagnostic_id)?;
         Ok(MatrixSendTextResult {
@@ -1278,8 +1452,12 @@ impl NativeTimelineOwner {
         let aborted = abort_queued_send(&room, local_txn_id)
             .await
             .map_err(|error| error.diagnostic_id)?;
-        let mut sends = self.sends.lock().await;
-        let _ = sends.cancel(local_txn_id);
+        // `false` means the SDK had already sent the request. The product
+        // queue must not record a cancel for a message that went out.
+        if aborted {
+            let mut sends = self.sends.lock().await;
+            let _ = sends.cancel(local_txn_id);
+        }
         Ok(aborted)
     }
 
@@ -2441,11 +2619,11 @@ impl NativeTimelineRegistry {
         .await)
     }
 
-    pub async fn set_read_state(
-        &mut self,
-        client: &Client,
-        request: NativeTimelineReadStateRequest,
-    ) -> Result<NativeTimelineReadStateReadback, &'static str> {
+    /// Validate a stream read-state request and return the stream's timeline.
+    pub fn read_state_timeline(
+        &self,
+        request: &NativeTimelineReadStateRequest,
+    ) -> Result<Arc<Timeline>, &'static str> {
         let stream = self
             .view_streams
             .get(&request.stream_id)
@@ -2455,43 +2633,7 @@ impl NativeTimelineRegistry {
         {
             return Err("v-timeline-read-requires-live-view");
         }
-        let timeline = stream.timeline.clone();
-        let (receipt_sent, acknowledged_event_id) = match request.action {
-            NativeTimelineReadAction::MarkRead => {
-                let mark = mark_live_timeline_read(
-                    &timeline,
-                    request.intent,
-                    request.observed_live_tail_event_id.as_deref(),
-                )
-                .await?;
-                (
-                    Some(mark.acknowledged_event_id.is_some()),
-                    mark.acknowledged_event_id,
-                )
-            }
-            NativeTimelineReadAction::MarkUnread => {
-                if request.intent != NativeTimelineReadIntent::ExplicitUser
-                    || request.observed_live_tail_event_id.is_some()
-                {
-                    return Err("v-timeline-read-mark-unread-requires-explicit-intent");
-                }
-                timeline
-                    .room()
-                    .set_unread_flag(true)
-                    .await
-                    .map_err(|_| "v-timeline-view-mark-unread-failed")?;
-                (None, None)
-            }
-        };
-        let snapshot = self
-            .view_snapshot_for_stream(client, &request.stream_id)
-            .await?;
-        Ok(NativeTimelineReadStateReadback {
-            action: request.action,
-            receipt_sent,
-            acknowledged_event_id: acknowledged_event_id.map(|event_id| event_id.to_string()),
-            snapshot,
-        })
+        Ok(stream.timeline.clone())
     }
 
     /// Promote unread placement on an existing live provider without reopening.
@@ -2550,49 +2692,22 @@ impl NativeTimelineRegistry {
             .await
     }
 
-    /// Send receipts and/or the unread flag for a room that may not have a view.
-    pub async fn set_room_read_state(
+    /// Open (or reuse) the live timeline a room-level Mark as Read acts on.
+    pub async fn open_room_read_timeline(
         &mut self,
         client: &Client,
-        room_id: &str,
-        action: NativeTimelineReadAction,
-    ) -> Result<NativeRoomReadStateReadback, &'static str> {
-        let room_id = parse_room_id(room_id)?;
-        let room_id_string = room_id.to_string();
-        let room = client
-            .get_room(&room_id)
-            .ok_or("v-rooms-room-read-state-room-not-found")?;
-        match action {
-            NativeTimelineReadAction::MarkRead => {
-                self.open(client, &room_id_string)
-                    .await
-                    .map_err(|_| "v-rooms-room-read-state-mark-read-failed")?;
-                let timeline = self
-                    .entries
-                    .get(&room_id_string)
-                    .ok_or("v-rooms-room-read-state-mark-read-failed")?
-                    .timeline
-                    .clone();
-                let mark = mark_live_timeline_read(
-                    &timeline,
-                    NativeTimelineReadIntent::ExplicitUser,
-                    None,
-                )
-                .await
-                .map_err(|_| "v-rooms-room-read-state-mark-read-failed")?;
-                room_readback_from_mark(&mark)
-            }
-            NativeTimelineReadAction::MarkUnread => {
-                room.set_unread_flag(true)
-                    .await
-                    .map_err(|_| "v-rooms-room-read-state-mark-unread-failed")?;
-                Ok(NativeRoomReadStateReadback {
-                    receipt_sent: false,
-                    acknowledged_event_id: None,
-                    unread_flag_cleared: false,
-                })
-            }
-        }
+        room_id_string: &str,
+    ) -> Result<Arc<Timeline>, &'static str> {
+        let room_id_string = room_id_string.to_owned();
+        self.open(client, &room_id_string)
+            .await
+            .map_err(|_| "v-rooms-room-read-state-mark-read-failed")?;
+        Ok(self
+            .entries
+            .get(&room_id_string)
+            .ok_or("v-rooms-room-read-state-mark-read-failed")?
+            .timeline
+            .clone())
     }
 
     pub async fn view_snapshot_for_stream(

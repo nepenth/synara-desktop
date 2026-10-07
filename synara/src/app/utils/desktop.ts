@@ -504,44 +504,23 @@ export type DesktopInvokeOptions = {
   suppressErrorDiagnostic?: boolean;
 };
 
-const SAFE_NATIVE_DIAGNOSTIC_IDS = new Set([
-  'd0.4-send-sdk-http-failed',
-  'd0.4-send-sdk-http-network-failed',
-  'd0.4-send-sdk-http-request-failed',
-  'd0.4-send-sdk-http-refresh-failed',
-  'd0.4-send-sdk-http-forbidden',
-  'd0.4-send-sdk-http-auth-failed',
-  'd0.4-send-sdk-http-rate-limited',
-  'd0.4-send-sdk-http-invalid-request',
-  'd0.4-send-sdk-http-not-found',
-  'd0.4-send-sdk-http-api-failed',
-  'd0.4-send-sdk-auth-required',
-  'd0.4-send-sdk-insufficient-data',
-  'd0.4-send-sdk-crypto-store-state',
-  'd0.4-send-sdk-no-olm-machine',
-  'd0.4-send-sdk-crypto-store-failed',
-  'd0.4-send-sdk-olm-failed',
-  'd0.4-send-sdk-megolm-failed',
-  'd0.4-send-sdk-state-store-failed',
-  'd0.4-send-sdk-wrong-room-state',
-  'd0.4-send-sdk-concurrent-request-failed',
-  'd0.4-send-sdk-failed',
-  'd0.3-timeline-requires-session',
-  'v-timeline-view-not-open',
-  'v-timeline-view-snapshot-failed',
-  'v-timeline-view-read-state-failed',
-  'v-rooms-room-read-state-mark-read-failed',
-  'v-rooms-room-read-state-room-not-found',
-  'v-send.r-media-preview-requires-session',
-  'v-rooms.4-typing-owner-user-missing',
-  'v-rooms.4-typing-notice-failed',
-  'd0.4-send-requires-session',
-  'v-crypto.7-device-requires-session',
-  'v-crypto.1-start-requires-session',
-  'p4.1-session-authentication-rejected',
-  'd0.1-session-rejection-no-core',
-  'd0.1-session-rejection-stale',
-]);
+/**
+ * Native diagnostic ids are static, closed-alphabet strings, mirroring the
+ * Rust rule in `static_rejection_logout_diagnostic`: a plan-phase prefix
+ * (`d0.4-`, `p4.1-`, `p4-`, `v-`), then ASCII letters, digits, `.` and `-`
+ * only, at most 80 characters. Underscores, `:`, `/`, `@`, whitespace, and
+ * any segment longer than 24 characters are rejected, so tokens (`syt_…`),
+ * URLs, user ids, and hex blobs never reach the log. This replaces a fixed
+ * list that hid every id it did not name, such as the send-queue ids.
+ */
+const SAFE_NATIVE_DIAGNOSTIC_ID = /^(?:[dp]\d+(?:\.\d+)?-|v-)[A-Za-z0-9.-]+$/;
+const MAX_NATIVE_DIAGNOSTIC_ID_LENGTH = 80;
+const MAX_NATIVE_DIAGNOSTIC_SEGMENT_LENGTH = 24;
+
+export const isSafeNativeDiagnosticId = (value: string): boolean =>
+  value.length <= MAX_NATIVE_DIAGNOSTIC_ID_LENGTH &&
+  SAFE_NATIVE_DIAGNOSTIC_ID.test(value) &&
+  value.split(/[.-]/).every((segment) => segment.length <= MAX_NATIVE_DIAGNOSTIC_SEGMENT_LENGTH);
 
 /**
  * Tauri/native rejection values are untrusted: a server body, URL, credential,
@@ -550,7 +529,7 @@ const SAFE_NATIVE_DIAGNOSTIC_IDS = new Set([
 export const formatDesktopInvokeError = (error: unknown): string => {
   if (error && typeof error === 'object' && !Array.isArray(error)) {
     const diagnosticId = (error as Record<string, unknown>).diagnosticId;
-    if (typeof diagnosticId === 'string' && SAFE_NATIVE_DIAGNOSTIC_IDS.has(diagnosticId)) {
+    if (typeof diagnosticId === 'string' && isSafeNativeDiagnosticId(diagnosticId)) {
       return `native command rejected (${diagnosticId})`;
     }
   }

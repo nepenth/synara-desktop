@@ -88,14 +88,18 @@ fn parse_send_text_result(
         status: String,
     }
     let wire: Wire = serde_json::from_value(payload).map_err(|_| send_text_response_error())?;
-    if wire.status != "sent" {
-        return Err(send_text_response_error());
-    }
+    // `queued`: the SDK still holds the request and keeps retrying it; the
+    // timeline row shows its send state. It has no server event id yet.
+    let status = match wire.status.as_str() {
+        "sent" if !wire.event_id.is_empty() => "sent",
+        "queued" if wire.event_id.is_empty() && !wire.local_txn_id.is_empty() => "queued",
+        _ => return Err(send_text_response_error()),
+    };
     Ok(MatrixSendTextResult {
         room_id: wire.room_id,
         event_id: wire.event_id,
         local_txn_id: wire.local_txn_id,
-        status: "sent",
+        status,
     })
 }
 
@@ -260,4 +264,34 @@ fn send_text_response_error() -> MatrixAuthCommandError {
         "The native Matrix message could not be sent.",
         "d0.4-send-sdk-failed",
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_send_text_result;
+
+    #[test]
+    fn send_result_accepts_sent_and_still_queued_only() {
+        let sent = parse_send_text_result(serde_json::json!({
+            "roomId": "!r:example.org", "eventId": "$e", "localTxnId": "t1", "status": "sent"
+        }))
+        .unwrap();
+        assert_eq!(sent.status, "sent");
+        let queued = parse_send_text_result(serde_json::json!({
+            "roomId": "!r:example.org", "eventId": "", "localTxnId": "t2", "status": "queued"
+        }))
+        .unwrap();
+        assert_eq!(queued.status, "queued");
+        for (event_id, txn, status) in [
+            ("", "t", "sent"),
+            ("$e", "t", "queued"),
+            ("", "", "queued"),
+            ("$e", "t", "failed"),
+        ] {
+            assert!(parse_send_text_result(serde_json::json!({
+                "roomId": "!r:example.org", "eventId": event_id, "localTxnId": txn, "status": status
+            }))
+            .is_err());
+        }
+    }
 }

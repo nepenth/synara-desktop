@@ -9,6 +9,7 @@ import {
   getSlidingSyncCapabilityBannerCopy,
   getSyncStatusBannerVariant,
   getTransientSyncStatusBannerCopy,
+  isSignedInSessionForBanner,
   shouldShowConnectedTransition,
   type SyncState,
 } from './syncStatusCopy';
@@ -57,6 +58,10 @@ export function SyncStatus({ mx }: SyncStatusProps) {
   );
 
   const currentSyncState = stateData.current;
+  const [connectedDuringMount, setConnectedDuringMount] = useState(false);
+  useEffect(() => {
+    if (currentSyncState === 'PREPARED') setConnectedDuringMount(true);
+  }, [currentSyncState]);
 
   // Native SyncService flickers Offline during short sliding-sync gaps. Hold
   // Connection Lost until Offline lasts, so a 1.5s poll blip never alarms.
@@ -94,7 +99,7 @@ export function SyncStatus({ mx }: SyncStatusProps) {
     return () => clearTimeout(timer);
   }, [mx, currentSyncState, recoveredFromVisibleDisconnect]);
 
-  const signedInSession = true;
+  const signedInSession = isSignedInSessionForBanner(mx, connectedDuringMount);
   const bannerCopy = getTransientSyncStatusBannerCopy(
     currentSyncState,
     connectedTransitionVisible,

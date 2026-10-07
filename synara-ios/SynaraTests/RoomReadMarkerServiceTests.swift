@@ -32,8 +32,15 @@ final class RoomReadMarkerServiceTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func testRejectedAuthenticationRetiresWithoutWipeOrRemoteLogout() throws {
+    func testExplicitMarkReadFailureCopyIsFixedAndOnlyForMissingReadback() {
+        XCTAssertEqual(
+            ExplicitRoomReadReceipt.failureMessage(acknowledgedEventID: nil),
+            "Couldn't mark this channel as read."
+        )
+        XCTAssertNil(ExplicitRoomReadReceipt.failureMessage(acknowledgedEventID: "$event:example.org"))
+    }
+
+    func testRejectedAuthenticationDiagnosticIsTheOnlyRetirementTrigger() {
         XCTAssertTrue(
             RejectedAuthenticationRetirement.shouldRetire(
                 failureDiagnosticID: "p4.1-session-authentication-rejected"
@@ -41,36 +48,114 @@ final class RoomReadMarkerServiceTests: XCTestCase {
         )
         XCTAssertFalse(RejectedAuthenticationRetirement.shouldRetire(failureDiagnosticID: "p4.1-sync-service-error"))
         XCTAssertFalse(RejectedAuthenticationRetirement.shouldRetire(failureDiagnosticID: nil))
+    }
 
-        let service = try String(
-            contentsOfFile: Self.repositoryRoot() + "/synara-ios/Synara/Services/SharedCoreProductServices.swift",
-            encoding: .utf8
+    /// Acceptance 13: a rejected refresh ends signed out with the expiry notice.
+    /// The retirer's only effects are the injected ones, so there is no store
+    /// wipe and no remote logout to call.
+    @MainActor
+    func testRejectedAuthenticationRetirementSignsOutAndForgetsCredentials() async throws {
+        let store = AppSessionStore(
+            secureStore: InMemorySecureSessionStore(session: try Self.makeSession()),
+            restorePersistedSession: true
         )
-        let retirement = service.components(separatedBy: "private func retireRejectedAuthentication").dropFirst().first
-            ?? ""
-        let retirementBody = retirement.components(separatedBy: "private func publish").first ?? retirement
-        XCTAssertFalse(retirementBody.contains("wipePersistedStores"))
-        XCTAssertFalse(retirementBody.contains("revokeServerSession"))
-        XCTAssertFalse(retirementBody.contains("logoutAndWipe"))
-        XCTAssertTrue(retirementBody.contains("forgetPersistedSession"))
-        XCTAssertTrue(retirementBody.contains("noteSessionExpired"))
-        XCTAssertTrue(retirementBody.contains("signOut()"))
+        XCTAssertNotEqual(store.currentState, .signedOut)
+        let forgets = RetirementCallCounter()
 
-        let store = AppSessionStore()
-        store.noteSessionExpired()
-        try store.signOut()
+        let outcome = await RejectedAuthenticationRetirer(
+            forgetCredentials: { forgets.increment() },
+            noteSessionExpired: { store.noteSessionExpired() },
+            signOut: { try store.signOut() },
+            retryDelayNanoseconds: 0
+        ).run()
+
+        XCTAssertEqual(outcome, .retired)
+        XCTAssertEqual(forgets.count, 1)
         XCTAssertEqual(store.currentState, .signedOut)
         XCTAssertTrue(store.sessionExpiredNotice)
+        // The app session record that drives launch restore is gone.
+        XCTAssertNil(try store.secureStore.load())
     }
 
-    private static func repositoryRoot() -> String {
-        var url = URL(fileURLWithPath: #filePath)
-        while url.pathComponents.count > 1 {
-            url.deleteLastPathComponent()
-            if FileManager.default.fileExists(atPath: url.appendingPathComponent("synara-ios").path) {
-                return url.path
-            }
-        }
-        return url.path
+    @MainActor
+    func testRejectedAuthenticationRetirementRetriesForgetAndStillSignsOut() async throws {
+        let store = AppSessionStore(
+            secureStore: InMemorySecureSessionStore(session: try Self.makeSession()),
+            restorePersistedSession: true
+        )
+        let forgets = RetirementCallCounter()
+
+        let outcome = await RejectedAuthenticationRetirer(
+            forgetCredentials: {
+                forgets.increment()
+                throw RetirementTestFailure()
+            },
+            noteSessionExpired: { store.noteSessionExpired() },
+            signOut: { try store.signOut() },
+            maxAttempts: 3,
+            retryDelayNanoseconds: 0
+        ).run()
+
+        // A failed forget is reported, not treated as success, and the shell
+        // still signs out so the retired generation does not restore.
+        XCTAssertEqual(outcome, .signedOutCredentialsKept)
+        XCTAssertEqual(forgets.count, 3)
+        XCTAssertEqual(store.currentState, .signedOut)
+        XCTAssertNil(try store.secureStore.load())
     }
+
+    @MainActor
+    func testRejectedAuthenticationRetirementReportsSignOutFailure() async throws {
+        let session = try Self.makeSession()
+        let store = AppSessionStore(
+            currentState: .signedIn(session),
+            secureStore: RetirementDeleteFailingSecureSessionStore(session: session)
+        )
+
+        let outcome = await RejectedAuthenticationRetirer(
+            forgetCredentials: {},
+            noteSessionExpired: { store.noteSessionExpired() },
+            signOut: { try store.signOut() },
+            retryDelayNanoseconds: 0
+        ).run()
+
+        XCTAssertEqual(outcome, .signOutFailed)
+    }
+
+    private static func makeSession() throws -> AuthenticatedSession {
+        AuthenticatedSession(
+            userID: "@alice:example.org",
+            deviceID: "DEVICE",
+            homeserverURL: try XCTUnwrap(URL(string: "https://example.org")),
+            accessToken: ""
+        )
+    }
+}
+
+private final class RetirementCallCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+
+    var count: Int {
+        lock.withLock { value }
+    }
+
+    func increment() {
+        lock.withLock { value += 1 }
+    }
+}
+
+private struct RetirementTestFailure: Error {}
+
+private final class RetirementDeleteFailingSecureSessionStore: SecureSessionStoring {
+    private let session: AuthenticatedSession
+
+    init(session: AuthenticatedSession) {
+        self.session = session
+    }
+
+    func save(_: AuthenticatedSession) throws {}
+    func load() throws -> AuthenticatedSession? { session }
+    func delete() throws { throw SecureSessionStoreError.keychainFailure(status: -1) }
+    func migrateIfNeeded() throws -> SessionMigrationResult { .notNeeded }
 }

@@ -12,6 +12,7 @@ use std::sync::{
 };
 use std::time::Duration;
 
+use futures_util::StreamExt;
 use matrix_sdk::Client;
 use matrix_sdk_ui::sync_service::{State as SdkSyncState, SyncService};
 use ruma::{OwnedRoomId, RoomId};
@@ -45,8 +46,11 @@ pub struct SyncServiceOwner {
     offline_mode_enabled: bool,
     /// Best-effort preflight verdict for server sliding-sync support.
     sliding_sync_capable: Option<bool>,
-    room_subscriptions: Mutex<RoomSubscriptions>,
+    room_subscriptions: Arc<Mutex<RoomSubscriptions>>,
     recovery_task: Option<tokio::task::JoinHandle<()>>,
+    /// Re-enables send queues after recoverable send errors; aborted with
+    /// this owner so it never outlives the session generation.
+    send_queue_recovery: tokio::task::JoinHandle<()>,
     authentication_rejected: Arc<AtomicBool>,
     sync_requested: Arc<AtomicBool>,
     lifecycle_gate: Arc<Mutex<()>>,
@@ -110,6 +114,10 @@ impl SyncServiceOwner {
         }
         self.sync_requested.store(true, Ordering::Release);
         self.service.start().await;
+        // An expired sliding-sync session (`M_UNKNOWN_POS`) clears every SDK
+        // room subscription. Re-apply ours after each start so the open room
+        // and visible rows do not fall back to the timeline-limit-1 feed.
+        reapply_room_subscriptions(&self.service, &self.room_subscriptions).await;
         Ok(self.observe())
     }
 
@@ -179,6 +187,24 @@ impl SyncServiceOwner {
     }
 }
 
+/// Re-send the cached subscription set to the SDK. Our cache skips unchanged
+/// viewports, so without this a restarted session would never resubscribe.
+async fn reapply_room_subscriptions(
+    service: &SyncService,
+    subscriptions: &Mutex<RoomSubscriptions>,
+) {
+    let subscriptions = subscriptions.lock().await;
+    let room_ids = coordinated_room_subscriptions(&subscriptions);
+    if room_ids.is_empty() {
+        return;
+    }
+    let room_id_refs = room_ids.iter().map(OwnedRoomId::as_ref).collect::<Vec<_>>();
+    service
+        .room_list_service()
+        .set_room_subscriptions(&room_id_refs)
+        .await;
+}
+
 fn viewport_ids_equivalent(current: &[OwnedRoomId], next: &[OwnedRoomId]) -> bool {
     if current.len() != next.len() {
         return false;
@@ -231,14 +257,24 @@ pub async fn build_sync_service(
     let authentication_rejected = Arc::new(AtomicBool::new(false));
     let sync_requested = Arc::new(AtomicBool::new(false));
     let lifecycle_gate = Arc::new(Mutex::new(()));
+    let room_subscriptions = Arc::new(Mutex::new(RoomSubscriptions::default()));
     let recovery_task = config.offline_mode.then(|| {
         spawn_network_recovery(
             service.clone(),
             authentication_rejected.clone(),
             sync_requested.clone(),
             lifecycle_gate.clone(),
+            room_subscriptions.clone(),
         )
     });
+    let send_queue_recovery = crate::app::send::spawn_send_queue_recovery(
+        client.clone(),
+        Box::pin(
+            service
+                .state()
+                .map(|state| matches!(state, SdkSyncState::Running)),
+        ),
+    );
     // Best-effort server capability probe: purely informational, never gates
     // the sync path. On probe failure `None` is stored and sync proceeds.
     let sliding_sync_capable = probe_sliding_sync(client).await;
@@ -248,8 +284,9 @@ pub async fn build_sync_service(
         session_generation,
         offline_mode_enabled: config.offline_mode,
         sliding_sync_capable,
-        room_subscriptions: Mutex::new(RoomSubscriptions::default()),
+        room_subscriptions,
         recovery_task,
+        send_queue_recovery,
         authentication_rejected,
         sync_requested,
         lifecycle_gate,
@@ -307,6 +344,7 @@ impl Drop for SyncServiceOwner {
         if let Some(task) = self.recovery_task.take() {
             task.abort();
         }
+        self.send_queue_recovery.abort();
     }
 }
 
@@ -374,6 +412,7 @@ fn spawn_network_recovery(
     authentication_rejected: Arc<AtomicBool>,
     sync_requested: Arc<AtomicBool>,
     lifecycle_gate: Arc<Mutex<()>>,
+    room_subscriptions: Arc<Mutex<RoomSubscriptions>>,
 ) -> tokio::task::JoinHandle<()> {
     // Subscribe before spawning so a fast first sync failure cannot be missed.
     let mut states = service.state();
@@ -403,6 +442,7 @@ fn spawn_network_recovery(
                                 && !authentication_rejected.load(Ordering::Acquire)
                                 && matches!(service.state().get(), SdkSyncState::Error(ref error) if !is_terminal_auth_error(error.as_ref())) {
                                 service.start().await;
+                                reapply_room_subscriptions(&service, &room_subscriptions).await;
                             }
                         }
                     }
@@ -761,5 +801,88 @@ mod auth_recovery_tests {
             stopped
         );
         assert_eq!(owner.observe().readiness, SyncReadiness::Idle);
+    }
+
+    #[tokio::test]
+    async fn expired_sliding_sync_session_resubscribes_the_open_room() {
+        use wiremock::matchers::body_partial_json;
+        let server = MatrixMockServer::new().await;
+        let client = refreshing_client(&server).await;
+        Mock::given(method("GET")).and(path("/_matrix/client/versions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"versions":["v1.12"],"unstable_features":{"org.matrix.simplified_msc3575":true}})))
+            .mount(server.server()).await;
+        server.mock_upload_keys().ok().mount().await;
+        let sliding_sync = "/_matrix/client/unstable/org.matrix.simplified_msc3575/sync";
+        // The first room-list request expires the session (M_UNKNOWN_POS), which
+        // makes the SDK clear every room subscription before the loop errors.
+        Mock::given(method("POST"))
+            .and(path(sliding_sync))
+            .and(body_partial_json(
+                serde_json::json!({"conn_id": "room-list"}),
+            ))
+            .respond_with(
+                ResponseTemplate::new(400).set_body_json(
+                    serde_json::json!({"errcode":"M_UNKNOWN_POS","error":"expired"}),
+                ),
+            )
+            .up_to_n_times(1)
+            .with_priority(1)
+            .mount(server.server())
+            .await;
+        Mock::given(method("POST"))
+            .and(path(sliding_sync))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(
+                        serde_json::json!({"pos":"1","lists":{},"rooms":{},"extensions":{}}),
+                    )
+                    .set_delay(Duration::from_millis(50)),
+            )
+            .mount(server.server())
+            .await;
+        let owner = build_sync_service(&client, 3, SyncServiceConfig::default())
+            .await
+            .unwrap();
+        let room: OwnedRoomId = "!open:example.org".try_into().unwrap();
+        owner.subscribe_to_room(&room).await;
+        owner.start().await.unwrap();
+
+        let resubscribed = |requests: &[wiremock::Request]| {
+            let expired_at = requests.iter().position(|request| {
+                request.url.path() == sliding_sync
+                    && request
+                        .body_json::<serde_json::Value>()
+                        .ok()
+                        .and_then(|body| {
+                            body.get("conn_id")
+                                .and_then(|id| id.as_str())
+                                .map(|id| id == "room-list")
+                        })
+                        == Some(true)
+            });
+            expired_at.is_some_and(|index| {
+                requests[index + 1..].iter().any(|request| {
+                    request.url.path() == sliding_sync
+                        && request
+                            .body_json::<serde_json::Value>()
+                            .ok()
+                            .and_then(|body| body.get("room_subscriptions").cloned())
+                            .is_some_and(|subscriptions| subscriptions.get(room.as_str()).is_some())
+                })
+            })
+        };
+        // The owner's recovery task restarts a non-terminal error after 5 s.
+        tokio::time::timeout(Duration::from_secs(12), async {
+            loop {
+                let requests = server.server().received_requests().await.unwrap();
+                if resubscribed(&requests) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await
+        .expect("the restarted session must carry the open room subscription again");
+        owner.stop().await.unwrap();
     }
 }

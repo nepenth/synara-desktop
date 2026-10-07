@@ -95,10 +95,14 @@ enum ConnectionStatusCopy {
         if let commandGate, commandGate != "open" {
             return .disconnected
         }
+        // Mirrors desktop `readinessToSyncState`; the shared case table lives in
+        // ConnectionStatusCopyTests and synara syncStatusCopy.test.ts.
         switch readiness {
         case "running":
             return .connected
-        case "idle":
+        case "idle", "unconfigured":
+            // A stopped or not-yet-configured owner is a loss only after this
+            // session had connected; before that it is still starting.
             switch previous {
             case .connected, .syncing, .reconnecting, .disconnected:
                 return .disconnected
@@ -107,7 +111,7 @@ enum ConnectionStatusCopy {
             }
         case "offline":
             return .reconnecting
-        case "failed", "terminated", "unconfigured":
+        case "failed", "terminated":
             return .disconnected
         default:
             return .starting
