@@ -2377,6 +2377,11 @@ interface SharedCore {
   [Async, Throws=LeftoverCommandError]
   LeftoverAckDto forget_session(string user_id, string homeserver_url);
 
+  // Local retirement of a generation whose refresh token was rejected.
+  // Generation-fenced, idempotent, and never contacts the homeserver.
+  [Async, Throws=LeftoverCommandError]
+  LeftoverAckDto retire_rejected_session(u64 session_generation);
+
   [Async, Throws=LeftoverCommandError]
   LeftoverAckDto recover(string recovery_key);
 

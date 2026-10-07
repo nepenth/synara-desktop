@@ -1605,6 +1605,15 @@ impl SharedCore {
                 LEFTOVER_FAILED_DESCRIPTION,
             ));
         }
+        // A generation whose refresh was rejected never POSTs `/logout` with
+        // its credentials (same policy as desktop `remote_logout_allowed`).
+        let failure = self
+            .core
+            .attached_sync_owner()
+            .and_then(|owner| owner.observe().failure_diagnostic_id);
+        if !session_policy::remote_logout_allowed(None, failure) {
+            return Ok(false);
+        }
         Ok(matches!(
             tokio::time::timeout(
                 std::time::Duration::from_secs(5),
@@ -1695,6 +1704,45 @@ impl SharedCore {
                 persistence.lease().revoke();
             }
         }
+    }
+
+    /// Retire a generation whose refresh token the homeserver rejected.
+    ///
+    /// Generation-fenced: it acts only while that generation is installed and
+    /// its sync owner still reports the authentication rejection. It stops
+    /// sync, revokes the persistence lease, closes Core and forgets the vault
+    /// session material, keeping the store key and encrypted history. It never
+    /// contacts the homeserver. Calling it again after retirement is a no-op.
+    pub async fn retire_rejected_session(
+        &self,
+        session_generation: u64,
+    ) -> Result<LeftoverAckDto, LeftoverCommandError> {
+        let failed = || leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION);
+        if self.is_nse_read_only() {
+            return Err(failed());
+        }
+        let Some(snapshot) = self.core.session_snapshot().map_err(|_| failed())? else {
+            return Ok(LeftoverAckDto {
+                status: "retired".to_owned(),
+            });
+        };
+        let rejected = self
+            .core
+            .attached_sync_owner()
+            .and_then(|owner| owner.observe().failure_diagnostic_id)
+            == Some(SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID);
+        if snapshot.session_generation != session_generation || !rejected {
+            return Err(failed());
+        }
+        let identity = AccountIdentity::new(&snapshot.user_id, &snapshot.homeserver_url)
+            .map_err(|_| failed())?;
+        self.logout().await?;
+        self.secret_store
+            .delete(SessionMaterialId::from_identity(&identity).account())
+            .map_err(|_| failed())?;
+        Ok(LeftoverAckDto {
+            status: "retired".to_owned(),
+        })
     }
 
     pub async fn logout(&self) -> Result<LeftoverAckDto, LeftoverCommandError> {

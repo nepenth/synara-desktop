@@ -1101,3 +1101,67 @@ fn failed_rotation_save_is_retried_with_backoff_and_stops_after_logout() {
     drop(rt);
     let _ = fs::remove_dir_all(&root);
 }
+
+#[test]
+fn rejected_session_retirement_is_generation_fenced_and_idempotent() {
+    let identity = alice();
+    let map = std::sync::Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(
+        std::sync::Arc::clone(&map),
+    )));
+    let root = temp_root("retire-rejected");
+    let rt = test_runtime();
+    let _enter = rt.enter();
+    rt.block_on(shared.persist_planted_session_for_test(
+        identity.user_id().to_owned(),
+        identity.homeserver_url().to_owned(),
+        root.to_string_lossy().into_owned(),
+        "DEVICEABC".to_owned(),
+        "syt_retire_rejected_access".to_owned(),
+        Some("syr_retire_rejected_refresh".to_owned()),
+    ))
+    .expect("planted session");
+    let generation = shared
+        .core
+        .session_snapshot()
+        .expect("projection")
+        .expect("session")
+        .session_generation;
+    let session_keys = |map: &Mutex<HashMap<String, Vec<u8>>>| {
+        map.lock()
+            .expect("vault")
+            .keys()
+            .filter(|key| key.starts_with("matrix-session:"))
+            .count()
+    };
+    assert_eq!(session_keys(&map), 1);
+
+    // A different generation, or one whose sync never reported the rejection,
+    // is refused and leaves the session and vault alone.
+    assert!(rt
+        .block_on(shared.retire_rejected_session(generation + 1))
+        .is_err());
+    assert!(rt
+        .block_on(shared.retire_rejected_session(generation))
+        .is_err());
+    assert_eq!(session_keys(&map), 1);
+    assert!(shared.core.session_snapshot().unwrap().is_some());
+
+    // Once the session is gone, retirement is a no-op success.
+    rt.block_on(shared.logout()).expect("logout");
+    let ack = rt
+        .block_on(shared.retire_rejected_session(generation))
+        .expect("idempotent after retirement");
+    assert_eq!(ack.status, "retired");
+    assert!(
+        map.lock()
+            .expect("vault")
+            .keys()
+            .any(|key| key.starts_with("store-key:")),
+        "the store key and encrypted history stay"
+    );
+    drop(shared);
+    drop(_enter);
+    drop(rt);
+    let _ = fs::remove_dir_all(&root);
+}
