@@ -70,7 +70,10 @@ fn invites_surface_exposes_only_the_registered_snapshot_command() {
         .expect("SharedCore");
     assert!(shared_core.contains("invites_snapshot"));
     assert!(shared_core.contains("room_list_snapshot"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
 }
 
 #[test]

@@ -70,11 +70,11 @@ fn error_text(error: &SendPollError) -> String {
 #[test]
 fn send_poll_surface_exposes_only_the_registered_family() {
     let udl = include_str!("../src/synara_core.udl");
-    assert!(udl.contains("send_poll("));
+    assert!(crate::ffi_surface::declares_fn(udl, "send_poll"));
     assert!(udl.contains("dictionary SendPollDto"));
     assert!(udl.contains("interface SendPollError"));
-    assert!(!udl.contains("send_sticker("));
-    assert!(udl.contains("send_text("));
+    assert!(!crate::ffi_surface::declares_fn(udl, "send_sticker"));
+    assert!(crate::ffi_surface::declares_fn(udl, "send_text"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
     assert!(!udl.contains("matrix_edit_message"));
@@ -84,11 +84,26 @@ fn send_poll_surface_exposes_only_the_registered_family() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("send_poll("));
-    assert!(!shared_core.contains("send_sticker("));
-    assert!(shared_core.contains("send_text("));
-    assert!(shared_core.contains("composer_set_reply_draft("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "send_poll"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "send_sticker"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "send_text"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "composer_set_reply_draft"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

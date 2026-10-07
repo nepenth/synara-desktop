@@ -66,7 +66,10 @@ fn timeline_view_update_surface_is_poll_only_and_not_a_leftover() {
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
     assert!(shared_core.contains("poll_timeline_view_updates()"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_login_password"));
     assert!(!shared_core.contains("Platform::emit"));
 }

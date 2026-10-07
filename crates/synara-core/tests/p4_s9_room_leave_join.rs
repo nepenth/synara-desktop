@@ -59,7 +59,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 fn room_leave_join_surface_exposes_only_the_registered_family() {
     let udl = include_str!("../src/synara_core.udl");
     assert!(udl.contains("room_leave"));
-    assert!(udl.contains("room_join("));
+    assert!(crate::ffi_surface::declares_fn(udl, "room_join"));
     assert!(udl.contains("room_set_favorite"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
@@ -74,11 +74,17 @@ fn room_leave_join_surface_exposes_only_the_registered_family() {
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
     assert!(shared_core.contains("room_leave"));
-    assert!(shared_core.contains("room_join("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "room_join"
+    ));
     assert!(shared_core.contains("room_set_favorite"));
     assert!(shared_core.contains("room_directory_search"));
     assert!(shared_core.contains("set_room_name"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

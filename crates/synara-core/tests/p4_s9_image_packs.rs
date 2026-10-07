@@ -76,7 +76,10 @@ fn image_pack_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("set_global_image_packs"));
     assert!(shared_core.contains("set_room_image_pack"));
     assert!(shared_core.contains("room_join_rule_snapshot"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

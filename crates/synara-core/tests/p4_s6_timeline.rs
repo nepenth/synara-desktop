@@ -84,7 +84,10 @@ fn timeline_surface_exposes_open_close_snapshot_paginate() {
     assert!(shared_core.contains("timeline_snapshot"));
     assert!(shared_core.contains("timeline_paginate"));
     assert!(shared_core.contains("invites_snapshot"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
 }
 
 #[test]

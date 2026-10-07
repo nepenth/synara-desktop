@@ -72,12 +72,12 @@ fn error_text(error: &EditMessageError) -> String {
 #[test]
 fn edit_message_surface_exposes_only_the_registered_family() {
     let udl = include_str!("../src/synara_core.udl");
-    assert!(udl.contains("edit_message("));
+    assert!(crate::ffi_surface::declares_fn(udl, "edit_message"));
     assert!(udl.contains("dictionary EditMessageDto"));
     assert!(udl.contains("interface EditMessageError"));
-    assert!(udl.contains("send_poll("));
-    assert!(!udl.contains("send_sticker("));
-    assert!(udl.contains("send_text("));
+    assert!(crate::ffi_surface::declares_fn(udl, "send_poll"));
+    assert!(!crate::ffi_surface::declares_fn(udl, "send_sticker"));
+    assert!(crate::ffi_surface::declares_fn(udl, "send_text"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
     assert!(!udl.contains("matrix_poll_respond"));
@@ -86,12 +86,30 @@ fn edit_message_surface_exposes_only_the_registered_family() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("edit_message("));
-    assert!(shared_core.contains("send_poll("));
-    assert!(!shared_core.contains("send_sticker("));
-    assert!(shared_core.contains("send_text("));
-    assert!(shared_core.contains("composer_set_reply_draft("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "edit_message"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "send_poll"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "send_sticker"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "send_text"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "composer_set_reply_draft"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

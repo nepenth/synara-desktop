@@ -66,8 +66,8 @@ fn send_error_text(error: &SendRoomAttachmentError) -> String {
 #[test]
 fn media_send_surface_exposes_live_owners_and_keeps_leftover_upload() {
     let udl = include_str!("../src/synara_core.udl");
-    assert!(udl.contains("upload_content("));
-    assert!(udl.contains("send_room_attachment("));
+    assert!(crate::ffi_surface::declares_fn(udl, "upload_content"));
+    assert!(crate::ffi_surface::declares_fn(udl, "send_room_attachment"));
     assert!(udl.contains("string? transaction_id"));
     assert!(udl.contains("sequence<string>? mention_user_ids"));
     assert!(udl.contains("boolean? mention_room"));
@@ -83,13 +83,31 @@ fn media_send_surface_exposes_live_owners_and_keeps_leftover_upload() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("upload_content("));
-    assert!(shared_core.contains("send_room_attachment("));
-    assert!(shared_core.contains("media_upload("));
-    assert!(shared_core.contains("upload_avatar("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "upload_content"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "send_room_attachment"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "media_upload"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "upload_avatar"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
-    assert!(!shared_core.contains("send_sticker("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "send_sticker"
+    ));
 }
 
 #[test]

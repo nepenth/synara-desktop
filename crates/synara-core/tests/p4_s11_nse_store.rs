@@ -109,13 +109,34 @@ fn nse_store_surface_is_read_only_and_cannot_start_sync() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("nse_open_read_only_store("));
-    assert!(shared_core.contains("nse_store_status("));
-    assert!(shared_core.contains("nse_close_read_only_store("));
-    assert!(shared_core.contains("nse_resolve_event_preview("));
-    assert!(shared_core.contains("nse_event_preview("));
-    assert!(shared_core.contains("secret_storage_status("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "nse_open_read_only_store"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "nse_store_status"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "nse_close_read_only_store"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "nse_resolve_event_preview"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "nse_event_preview"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "secret_storage_status"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(shared_core.contains("start_sync()"));
     assert!(shared_core.contains("poll_timeline_view_updates()"));
     assert!(shared_core.contains("poll_owner_updates()"));

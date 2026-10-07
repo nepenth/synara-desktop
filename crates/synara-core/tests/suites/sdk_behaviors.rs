@@ -7,6 +7,8 @@
 mod agent_approval_inbox;
 #[path = "../encrypted_state_events.rs"]
 mod encrypted_state_events;
+#[path = "../support/ffi_surface.rs"]
+mod ffi_surface;
 #[path = "../inbox_notifications.rs"]
 mod inbox_notifications;
 #[path = "../message_format_corpus.rs"]

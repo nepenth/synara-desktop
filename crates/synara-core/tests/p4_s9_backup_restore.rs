@@ -64,9 +64,18 @@ fn backup_restore_surface_exposes_product_and_keeps_leftover_recover() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("restore_backup("));
-    assert!(shared_core.contains("recover("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "restore_backup"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "recover"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_login_password"));
     assert!(!shared_core.contains("matrix_backup_status"));
 }

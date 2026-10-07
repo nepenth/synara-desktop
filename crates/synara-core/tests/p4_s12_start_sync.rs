@@ -69,7 +69,10 @@ fn sync_lifecycle_surface_is_attached_only_and_not_a_leftover() {
         .expect("SharedCore");
     assert!(shared_core.contains("start_sync()"));
     assert!(shared_core.contains("stop_sync()"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_login_password"));
 }
 

@@ -57,13 +57,22 @@ fn test_runtime() -> tokio::runtime::Runtime {
 #[test]
 fn composer_reply_draft_surface_exposes_only_the_registered_family() {
     let udl = include_str!("../src/synara_core.udl");
-    assert!(udl.contains("composer_set_reply_draft("));
-    assert!(udl.contains("composer_get_reply_draft("));
-    assert!(udl.contains("composer_clear_reply_draft("));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "composer_set_reply_draft"
+    ));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "composer_get_reply_draft"
+    ));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "composer_clear_reply_draft"
+    ));
     assert!(udl.contains("dictionary ComposerReplyDraftDto"));
     assert!(udl.contains("dictionary ComposerReplyDraftPreviewDto"));
     assert!(udl.contains("interface ComposerReplyDraftError"));
-    assert!(udl.contains("reaction_ensure("));
+    assert!(crate::ffi_surface::declares_fn(udl, "reaction_ensure"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
     assert!(!udl.contains("matrix_send_sticker"));
@@ -75,12 +84,30 @@ fn composer_reply_draft_surface_exposes_only_the_registered_family() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("composer_set_reply_draft("));
-    assert!(shared_core.contains("composer_get_reply_draft("));
-    assert!(shared_core.contains("composer_clear_reply_draft("));
-    assert!(shared_core.contains("reaction_ensure("));
-    assert!(shared_core.contains("timeline_event_readback("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "composer_set_reply_draft"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "composer_get_reply_draft"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "composer_clear_reply_draft"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "reaction_ensure"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_event_readback"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

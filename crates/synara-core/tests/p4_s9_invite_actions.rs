@@ -57,10 +57,10 @@ fn test_runtime() -> tokio::runtime::Runtime {
 #[test]
 fn invite_actions_surface_exposes_only_the_registered_family() {
     let udl = include_str!("../src/synara_core.udl");
-    assert!(udl.contains("invites_accept("));
-    assert!(udl.contains("invites_decline("));
-    assert!(udl.contains("invites_report_spam("));
-    assert!(udl.contains("invites_block_sender("));
+    assert!(crate::ffi_surface::declares_fn(udl, "invites_accept"));
+    assert!(crate::ffi_surface::declares_fn(udl, "invites_decline"));
+    assert!(crate::ffi_surface::declares_fn(udl, "invites_report_spam"));
+    assert!(crate::ffi_surface::declares_fn(udl, "invites_block_sender"));
     assert!(udl.contains("dictionary InviteSnapshotDto"));
     assert!(udl.contains("interface InviteActionError"));
     assert!(udl.contains("invites_snapshot()"));
@@ -75,13 +75,31 @@ fn invite_actions_surface_exposes_only_the_registered_family() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("invites_accept("));
-    assert!(shared_core.contains("invites_decline("));
-    assert!(shared_core.contains("invites_report_spam("));
-    assert!(shared_core.contains("invites_block_sender("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "invites_accept"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "invites_decline"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "invites_report_spam"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "invites_block_sender"
+    ));
     assert!(shared_core.contains("invites_snapshot()"));
-    assert!(shared_core.contains("space_parents_snapshot("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "space_parents_snapshot"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

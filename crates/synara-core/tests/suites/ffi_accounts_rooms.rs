@@ -3,6 +3,8 @@
 
 #![recursion_limit = "256"]
 
+#[path = "../support/ffi_surface.rs"]
+mod ffi_surface;
 #[path = "../p4_s9_account_settings.rs"]
 mod p4_s9_account_settings;
 #[path = "../p4_s9_backup_restore.rs"]

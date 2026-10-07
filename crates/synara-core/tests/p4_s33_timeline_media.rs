@@ -26,7 +26,10 @@ fn timeline_media_surface_is_handle_channel_not_leftover_envelope() {
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
     assert!(shared_core.contains("timeline_media_bytes"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
 }
 
 #[test]

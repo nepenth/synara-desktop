@@ -57,10 +57,22 @@ fn test_runtime() -> tokio::runtime::Runtime {
 #[test]
 fn room_members_snapshots_surface_exposes_only_the_registered_family() {
     let udl = include_str!("../src/synara_core.udl");
-    assert!(udl.contains("room_members_snapshot("));
-    assert!(udl.contains("room_power_levels_snapshot("));
-    assert!(udl.contains("room_creators_snapshot("));
-    assert!(udl.contains("room_power_level_tags_snapshot("));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "room_members_snapshot"
+    ));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "room_power_levels_snapshot"
+    ));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "room_creators_snapshot"
+    ));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "room_power_level_tags_snapshot"
+    ));
     assert!(udl.contains("dictionary RoomMembersSnapshotDto"));
     assert!(udl.contains("dictionary RoomPowerLevelsSnapshotDto"));
     assert!(udl.contains("dictionary RoomCreatorsSnapshotDto"));
@@ -76,13 +88,34 @@ fn room_members_snapshots_surface_exposes_only_the_registered_family() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("room_members_snapshot("));
-    assert!(shared_core.contains("room_power_levels_snapshot("));
-    assert!(shared_core.contains("room_creators_snapshot("));
-    assert!(shared_core.contains("room_power_level_tags_snapshot("));
-    assert!(shared_core.contains("room_create("));
-    assert!(shared_core.contains("room_set_power_level("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "room_members_snapshot"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "room_power_levels_snapshot"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "room_creators_snapshot"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "room_power_level_tags_snapshot"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "room_create"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "room_set_power_level"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

@@ -3,6 +3,8 @@
 
 #![recursion_limit = "256"]
 
+#[path = "../support/ffi_surface.rs"]
+mod ffi_surface;
 #[path = "../p4_s9_composer_draft.rs"]
 mod p4_s9_composer_draft;
 #[path = "../p4_s9_edit_message.rs"]

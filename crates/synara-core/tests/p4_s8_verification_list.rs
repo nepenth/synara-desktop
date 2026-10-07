@@ -69,7 +69,10 @@ fn verification_list_surface_exposes_only_the_registered_list_command() {
         .expect("SharedCore");
     assert!(shared_core.contains("verification_list"));
     assert!(shared_core.contains("typing_snapshot"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_crypto_status"));
 }
 

@@ -68,7 +68,10 @@ fn message_search_surface_exposes_only_the_registered_family() {
         .expect("SharedCore");
     assert!(shared_core.contains("message_search"));
     assert!(shared_core.contains("user_directory_search"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

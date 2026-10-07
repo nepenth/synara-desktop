@@ -57,12 +57,24 @@ fn test_runtime() -> tokio::runtime::Runtime {
 #[test]
 fn spaces_surface_exposes_only_the_registered_family() {
     let udl = include_str!("../src/synara_core.udl");
-    assert!(udl.contains("space_parents_snapshot("));
-    assert!(udl.contains("space_hierarchy_snapshot("));
-    assert!(udl.contains("space_children_snapshot("));
-    assert!(udl.contains("space_child_set("));
-    assert!(udl.contains("space_child_remove("));
-    assert!(udl.contains("restricted_join_reparent("));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "space_parents_snapshot"
+    ));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "space_hierarchy_snapshot"
+    ));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "space_children_snapshot"
+    ));
+    assert!(crate::ffi_surface::declares_fn(udl, "space_child_set"));
+    assert!(crate::ffi_surface::declares_fn(udl, "space_child_remove"));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "restricted_join_reparent"
+    ));
     assert!(udl.contains("dictionary SpaceParentsSnapshotDto"));
     assert!(udl.contains("dictionary SpaceHierarchySnapshotDto"));
     assert!(udl.contains("dictionary SpaceChildrenSnapshotDto"));
@@ -79,15 +91,42 @@ fn spaces_surface_exposes_only_the_registered_family() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("space_parents_snapshot("));
-    assert!(shared_core.contains("space_hierarchy_snapshot("));
-    assert!(shared_core.contains("space_children_snapshot("));
-    assert!(shared_core.contains("space_child_set("));
-    assert!(shared_core.contains("space_child_remove("));
-    assert!(shared_core.contains("restricted_join_reparent("));
-    assert!(shared_core.contains("room_members_snapshot("));
-    assert!(shared_core.contains("room_create("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "space_parents_snapshot"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "space_hierarchy_snapshot"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "space_children_snapshot"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "space_child_set"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "space_child_remove"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "restricted_join_reparent"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "room_members_snapshot"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "room_create"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

@@ -58,14 +58,20 @@ fn test_runtime() -> tokio::runtime::Runtime {
 #[test]
 fn timeline_read_state_surface_exposes_only_the_registered_family() {
     let udl = include_str!("../src/synara_core.udl");
-    assert!(udl.contains("timeline_event_readback("));
-    assert!(udl.contains("timeline_set_read_state("));
-    assert!(udl.contains("timeline_jump_latest("));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "timeline_event_readback"
+    ));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "timeline_set_read_state"
+    ));
+    assert!(crate::ffi_surface::declares_fn(udl, "timeline_jump_latest"));
     assert!(udl.contains("dictionary TimelineEventReadbackDto"));
     assert!(udl.contains("dictionary TimelineReadStateDto"));
     assert!(udl.contains("dictionary TimelineOpenDto"));
     assert!(udl.contains("interface TimelineReadStateError"));
-    assert!(udl.contains("timeline_open("));
+    assert!(crate::ffi_surface::declares_fn(udl, "timeline_open"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
     assert!(!udl.contains("matrix_send_sticker"));
@@ -77,12 +83,30 @@ fn timeline_read_state_surface_exposes_only_the_registered_family() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("timeline_event_readback("));
-    assert!(shared_core.contains("timeline_set_read_state("));
-    assert!(shared_core.contains("timeline_jump_latest("));
-    assert!(shared_core.contains("invites_accept("));
-    assert!(shared_core.contains("timeline_open("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_event_readback"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_set_read_state"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_jump_latest"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "invites_accept"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_open"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

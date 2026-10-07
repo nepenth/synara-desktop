@@ -70,7 +70,10 @@ fn mdirect_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("mdirect_add"));
     assert!(shared_core.contains("mdirect_remove"));
     assert!(shared_core.contains("later_snapshot"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

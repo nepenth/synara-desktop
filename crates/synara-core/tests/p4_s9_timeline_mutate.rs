@@ -93,14 +93,14 @@ fn error_text(error: &TimelineMutateError) -> String {
 #[test]
 fn timeline_mutate_surface_exposes_only_the_registered_family() {
     let udl = include_str!("../src/synara_core.udl");
-    assert!(udl.contains("timeline_edit_text("));
-    assert!(udl.contains("timeline_redact("));
-    assert!(udl.contains("timeline_report("));
+    assert!(crate::ffi_surface::declares_fn(udl, "timeline_edit_text"));
+    assert!(crate::ffi_surface::declares_fn(udl, "timeline_redact"));
+    assert!(crate::ffi_surface::declares_fn(udl, "timeline_report"));
     assert!(udl.contains("dictionary TimelineMutateDto"));
     assert!(udl.contains("interface TimelineMutateError"));
-    assert!(udl.contains("poll_respond("));
-    assert!(udl.contains("edit_message("));
-    assert!(udl.contains("send_poll("));
+    assert!(crate::ffi_surface::declares_fn(udl, "poll_respond"));
+    assert!(crate::ffi_surface::declares_fn(udl, "edit_message"));
+    assert!(crate::ffi_surface::declares_fn(udl, "send_poll"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
     assert!(!udl.contains("matrix_backup_status"));
@@ -113,12 +113,30 @@ fn timeline_mutate_surface_exposes_only_the_registered_family() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("timeline_edit_text("));
-    assert!(shared_core.contains("timeline_redact("));
-    assert!(shared_core.contains("timeline_report("));
-    assert!(shared_core.contains("poll_respond("));
-    assert!(shared_core.contains("edit_message("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_edit_text"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_redact"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_report"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "poll_respond"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "edit_message"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
     assert!(!shared_core.contains("matrix_crypto_status"));
 }

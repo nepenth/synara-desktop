@@ -93,8 +93,14 @@ fn session_status_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("dictionary MediaConfigDto"));
     assert!(udl.contains("dictionary SecretStorageStatusDto"));
     assert!(udl.contains("interface SessionStatusError"));
-    assert!(udl.contains("timeline_forward_text("));
-    assert!(udl.contains("timeline_forward_media("));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "timeline_forward_text"
+    ));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "timeline_forward_media"
+    ));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
     assert!(!udl.contains("matrix_backup_status"));
@@ -107,12 +113,30 @@ fn session_status_surface_exposes_only_the_registered_family() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("session_snapshot("));
-    assert!(shared_core.contains("sync_status("));
-    assert!(shared_core.contains("media_config("));
-    assert!(shared_core.contains("secret_storage_status("));
-    assert!(shared_core.contains("timeline_forward_text("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "session_snapshot"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "sync_status"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "media_config"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "secret_storage_status"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_forward_text"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
     assert!(!shared_core.contains("matrix_crypto_status"));
 }
