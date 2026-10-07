@@ -11,6 +11,7 @@ mod fault;
 mod generation;
 mod locator;
 mod logout;
+mod persistence;
 mod rejection;
 
 pub use backoff::RetryBackoff;
@@ -20,6 +21,9 @@ pub use locator::SessionLocator;
 pub use logout::{
     bounded_remote_logout, finish_active_logout, finish_orphan_logout, finish_taken_session_logout,
     take_session_for_logout, PendingLogoutCleanup, VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
+};
+pub use persistence::{
+    persist_with_client_lease, SessionPersistenceLease, SessionPersistenceOwner,
 };
 pub use rejection::{
     handle_authentication_rejection_tick, remote_logout_allowed,

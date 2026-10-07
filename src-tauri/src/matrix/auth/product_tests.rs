@@ -3975,7 +3975,7 @@ fn persistence_lease_waits_for_inflight_callback_before_teardown_cleanup() {
         lease
             .save(|| {
                 ran.set(true);
-                Ok(())
+                Ok::<(), MatrixAuthCommandError>(())
             })
             .unwrap_err()
             .diagnostic_id,
@@ -4062,7 +4062,10 @@ fn failed_preinstall_persistence_revokes_callbacks_before_failed_cleanup() {
         || {
             cleaned.set(true);
             assert_eq!(
-                callback.save(|| Ok(())).unwrap_err().diagnostic_id,
+                callback
+                    .save(|| Ok::<(), MatrixAuthCommandError>(()))
+                    .unwrap_err()
+                    .diagnostic_id,
                 "d0.1-session-persistence-retired"
             );
             Err(MatrixAuthCommandError::unavailable("test-cleanup-failed"))
@@ -4071,7 +4074,10 @@ fn failed_preinstall_persistence_revokes_callbacks_before_failed_cleanup() {
     assert!(saved.get() && cleaned.get());
     assert_eq!(result.unwrap_err().diagnostic_id, "test-cleanup-failed");
     assert_eq!(
-        callback.save(|| Ok(())).unwrap_err().diagnostic_id,
+        callback
+            .save(|| Ok::<(), MatrixAuthCommandError>(()))
+            .unwrap_err()
+            .diagnostic_id,
         "d0.1-session-persistence-retired"
     );
 }
@@ -4146,7 +4152,10 @@ async fn install_rollback_preserves_restored_refresh_but_cleans_new_authenticati
                         || async {
                             stopped.set(true);
                             assert_eq!(
-                                lease.save(|| Ok(())).unwrap_err().diagnostic_id,
+                                lease
+                                    .save(|| Ok::<(), MatrixAuthCommandError>(()))
+                                    .unwrap_err()
+                                    .diagnostic_id,
                                 "d0.1-session-persistence-retired"
                             );
                             if stop_fails {
@@ -4188,7 +4197,10 @@ async fn install_rollback_preserves_restored_refresh_but_cleans_new_authenticati
             assert_eq!(remote_revoked.get(), !restored);
             assert_eq!(cleaned.get(), !restored);
             assert_eq!(
-                lease.save(|| Ok(())).unwrap_err().diagnostic_id,
+                lease
+                    .save(|| Ok::<(), MatrixAuthCommandError>(()))
+                    .unwrap_err()
+                    .diagnostic_id,
                 "d0.1-session-persistence-retired"
             );
             if restored {
@@ -4291,7 +4303,10 @@ async fn preparation_failure_after_callback_save_uses_origin_rollback_and_stops_
         assert!(!started_sync.get() && !widgets_open.get() && !observed.get() && core_closed.get());
         assert_eq!(remote_revoked.get(), !restored);
         assert_eq!(
-            lease.save(|| Ok(())).unwrap_err().diagnostic_id,
+            lease
+                .save(|| Ok::<(), MatrixAuthCommandError>(()))
+                .unwrap_err()
+                .diagnostic_id,
             "d0.1-session-persistence-retired"
         );
         if restored {
@@ -4403,7 +4418,10 @@ async fn new_auth_preparation_without_credential_write_preserves_previous_login(
                 == previous.as_bytes()
         );
         assert_eq!(
-            lease.save(|| Ok(())).unwrap_err().diagnostic_id,
+            lease
+                .save(|| Ok::<(), MatrixAuthCommandError>(()))
+                .unwrap_err()
+                .diagnostic_id,
             "d0.1-session-persistence-retired"
         );
         fs::remove_dir_all(root).unwrap();
@@ -4710,7 +4728,10 @@ async fn password_login_activation_failure_revokes_token_before_metadata_without
             "no writer attempt may clear a previous login"
         );
         assert_eq!(
-            lease.save(|| Ok(())).unwrap_err().diagnostic_id,
+            lease
+                .save(|| Ok::<(), MatrixAuthCommandError>(()))
+                .unwrap_err()
+                .diagnostic_id,
             "d0.1-session-persistence-retired"
         );
         assert_eq!(read_active_identity(&root).unwrap(), identity);
@@ -4951,7 +4972,7 @@ fn rotation_save_failure_is_tracked_until_durable_write_and_cannot_outlive_owner
     lease
         .save(|| {
             wrote.set(true);
-            Ok(())
+            Ok::<(), MatrixAuthCommandError>(())
         })
         .unwrap();
     assert!(!lease.save_failed());
@@ -4961,7 +4982,7 @@ fn rotation_save_failure_is_tracked_until_durable_write_and_cannot_outlive_owner
     assert!(lease
         .save(|| {
             wrote.set(true);
-            Ok(())
+            Ok::<(), MatrixAuthCommandError>(())
         })
         .is_err());
     assert!(!wrote.get());

@@ -220,7 +220,7 @@ pub async fn matrix_login_password(
             })?,
         );
         persist_with_client_lease(
-            &session_persistence.lease,
+            session_persistence.lease(),
             || ensure_logout_retry_locator(&app_data_root, &identity),
             || {
                 persist_session_after_login(
@@ -800,7 +800,7 @@ pub(super) async fn install_session_from_register_secrets(
             })?,
         );
         persist_with_client_lease(
-            &session_persistence.lease,
+            session_persistence.lease(),
             || ensure_logout_retry_locator(&app_data_root, &identity),
             || {
                 persist_session_after_login(
@@ -994,7 +994,7 @@ pub async fn matrix_logout(
     }
     state.clear_store_recovery().await;
 
-    let persistence_lease = active.session_persistence.lease.clone();
+    let persistence_lease = active.session_persistence.callback_lease();
     let client = active.client.clone();
     let sync = Arc::clone(&active.sync);
     let identity = active.identity.clone();
@@ -1514,7 +1514,7 @@ async fn rollback_session_install(
     let active = session
         .as_ref()
         .expect("failed tentative install is present");
-    let persistence_lease = active.session_persistence.lease.clone();
+    let persistence_lease = active.session_persistence.callback_lease();
     let client = active.client.clone();
     let sync = active.sync.clone();
     let identity = active.identity.clone();
@@ -1549,111 +1549,9 @@ async fn rollback_session_install(
     .await
 }
 
-/// Synchronous SDK save callbacks and teardown share this per-client fence.
-/// Revocation waits for a current save, then permanently rejects late saves.
-#[derive(Default)]
-struct SessionPersistenceState {
-    revoked: bool,
-    credential_write_attempted: bool,
-    save_failed: bool,
-}
-
-#[derive(Default)]
-pub(super) struct SessionPersistenceLease {
-    state: std::sync::Mutex<SessionPersistenceState>,
-}
-
-impl SessionPersistenceLease {
-    /// Locator preflight and credential persistence share the retirement fence.
-    /// Record provenance immediately before the writer, including partial errors.
-    pub(super) fn save_credentials<T>(
-        &self,
-        preflight: impl FnOnce() -> Result<(), MatrixAuthCommandError>,
-        persist: impl FnOnce() -> Result<T, MatrixAuthCommandError>,
-    ) -> Result<T, MatrixAuthCommandError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-persistence-retired"))?;
-        if state.revoked {
-            return Err(MatrixAuthCommandError::unavailable(
-                "d0.1-session-persistence-retired",
-            ));
-        }
-        let result = preflight().and_then(|()| {
-            state.credential_write_attempted = true;
-            persist()
-        });
-        state.save_failed = result.is_err();
-        result
-    }
-
-    pub(super) fn save_failed(&self) -> bool {
-        self.state.lock().map_or(true, |state| state.save_failed)
-    }
-
-    #[cfg(test)]
-    pub(super) fn save<T>(
-        &self,
-        operation: impl FnOnce() -> Result<T, MatrixAuthCommandError>,
-    ) -> Result<T, MatrixAuthCommandError> {
-        self.save_credentials(|| Ok(()), operation)
-    }
-
-    /// Wait for in-flight writes, permanently reject callbacks, and return this
-    /// client's write provenance so new-auth rollback cannot clear an older login.
-    pub(super) fn revoke(&self) -> bool {
-        // Poison is also revoked: a writer panic cannot enable a subsequent save.
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        state.revoked = true;
-        state.credential_write_attempted
-    }
-}
-
-/// Moves from factory/pre-install custody into the installed desktop owner.
-/// Dropping any unsuccessful preparation retires its SDK save callbacks too.
-#[derive(Default)]
-pub(super) struct SessionPersistenceOwner {
-    lease: Arc<SessionPersistenceLease>,
-}
-
-impl SessionPersistenceOwner {
-    pub(super) fn new() -> Self {
-        Self {
-            lease: Arc::new(SessionPersistenceLease::default()),
-        }
-    }
-
-    pub(super) fn callback_lease(&self) -> Arc<SessionPersistenceLease> {
-        self.lease.clone()
-    }
-}
-
-impl Drop for SessionPersistenceOwner {
-    fn drop(&mut self) {
-        self.lease.revoke();
-    }
-}
-
-pub(super) fn persist_with_client_lease(
-    lease: &SessionPersistenceLease,
-    preflight: impl FnOnce() -> Result<(), MatrixAuthCommandError>,
-    persist: impl FnOnce() -> Result<(), MatrixAuthCommandError>,
-    cleanup: impl FnOnce() -> Result<(), MatrixAuthCommandError>,
-) -> Result<(), MatrixAuthCommandError> {
-    let saved = lease.save_credentials(preflight, persist);
-    if let Err(error) = saved {
-        // No callback can race cleanup or resurrect this failed preparation.
-        if lease.revoke() {
-            cleanup()?;
-        }
-        return Err(error);
-    }
-    Ok(())
-}
+pub(super) use synara_core::app::lifecycle::session::{
+    persist_with_client_lease, SessionPersistenceLease, SessionPersistenceOwner,
+};
 
 pub(super) fn authenticated_login_identity(
     user_id: &str,
