@@ -1,6 +1,11 @@
 //! Typed SharedCore operations and projections for session lifecycle.
 
 use super::*;
+use crate::app::lifecycle::session as session_policy;
+use crate::app::lifecycle::session::{
+    RotationDiagnostics, RotationHooks, SessionFault, SessionPersistenceLease,
+    SessionPersistenceOwner,
+};
 use crate::app::sync::{CommandGate, SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID};
 
 /// Static fail-closed vault error. Fields are source constants only.
@@ -265,8 +270,10 @@ pub struct UserInCallDto {
 pub(super) enum RestoredClientSlot {
     Empty,
     InFlight,
-    /// Retained for S3d attach after restore or login.
-    Ready(Client),
+    /// Retained for S3d attach after restore or login, with the persistence
+    /// owner that fences this client's token-rotation saves. Dropping or
+    /// revoking it stops late SDK refreshes from writing the vault.
+    Ready(Client, SessionPersistenceOwner),
 }
 
 pub(super) enum OwnerAttachSlot {
@@ -602,7 +609,7 @@ impl<'a> RestoreClaim<'a> {
                     committed: false,
                 })
             }
-            RestoredClientSlot::Ready(_) => Err(restore_failed(
+            RestoredClientSlot::Ready(..) => Err(restore_failed(
                 ALREADY_RESTORED_CODE,
                 ALREADY_RESTORED_DESCRIPTION,
             )),
@@ -613,7 +620,11 @@ impl<'a> RestoreClaim<'a> {
         }
     }
 
-    fn commit(mut self, client: Client) -> Result<(), SessionRestoreError> {
+    fn commit(
+        mut self,
+        client: Client,
+        persistence: SessionPersistenceOwner,
+    ) -> Result<(), SessionRestoreError> {
         let mut guard = self
             .slot
             .lock()
@@ -624,7 +635,7 @@ impl<'a> RestoreClaim<'a> {
                 RESTORE_FAILED_DESCRIPTION,
             ));
         }
-        *guard = RestoredClientSlot::Ready(client);
+        *guard = RestoredClientSlot::Ready(client, persistence);
         self.committed = true;
         Ok(())
     }
@@ -771,58 +782,24 @@ pub(super) struct SecretStoreSessionVault {
     pub(super) store: Arc<dyn SecretVault + Send + Sync>,
 }
 
-#[derive(Debug)]
-pub(super) struct SessionRotationCallbackError(&'static str);
-
-impl std::fmt::Display for SessionRotationCallbackError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(self.0)
-    }
-}
-
-impl std::error::Error for SessionRotationCallbackError {}
-
-/// Keep the host vault in lockstep with SDK access/refresh-token rotation.
-///
-/// `handle_refresh_tokens` updates the live SDK session, but persistence is an
-/// application responsibility. Without these callbacks, a later relaunch can
-/// restore a consumed refresh token even though the preceding run worked.
+/// Keep the host vault in lockstep with SDK access/refresh-token rotation,
+/// fenced by this client's persistence lease (shared Core implementation).
 pub(super) fn install_session_rotation_callbacks(
     client: &matrix_sdk::Client,
     identity: AccountIdentity,
     store: Arc<dyn SecretVault + Send + Sync>,
-) -> Result<(), SessionRotationCallbackError> {
-    let reload_identity = identity.clone();
-    let reload_store = Arc::clone(&store);
-    let save_identity = identity;
-    client
-        .set_session_callbacks(
-            Box::new(move |_| {
-                let vault = SecretStoreSessionVault {
-                    store: Arc::clone(&reload_store),
-                };
-                let material = load_session_material(&vault, &reload_identity)
-                    .map_err(|_| SessionRotationCallbackError("session-reload-read-failed"))?
-                    .ok_or(SessionRotationCallbackError(
-                        "session-reload-material-missing",
-                    ))?;
-                let secrets = material
-                    .decode_host_secrets()
-                    .map_err(|_| SessionRotationCallbackError("session-reload-decode-failed"))?;
-                let session = matrix_session_from_host_secrets(&reload_identity, &secrets)
-                    .map_err(|_| SessionRotationCallbackError("session-reload-invalid"))?;
-                Ok(session.tokens)
-            }),
-            Box::new(move |client| {
-                let vault = SecretStoreSessionVault {
-                    store: Arc::clone(&store),
-                };
-                persist_session_after_login(&client, &save_identity, &vault)
-                    .map_err(|_| SessionRotationCallbackError("session-rotation-persist-failed"))?;
-                Ok(())
-            }),
-        )
-        .map_err(|_| SessionRotationCallbackError("session-callback-install-failed"))
+    lease: Arc<SessionPersistenceLease>,
+) -> Result<(), SessionFault> {
+    session_policy::install_session_rotation_callbacks(
+        client,
+        identity,
+        Arc::new(SecretStoreSessionVault { store }),
+        lease,
+        RotationDiagnostics::IOS,
+        RotationHooks::<SessionFault>::plain(|_| {
+            SessionFault::unavailable(RotationDiagnostics::IOS.persist_failed)
+        }),
+    )
 }
 
 impl SessionMaterialVault for SecretStoreSessionVault {
@@ -986,11 +963,13 @@ impl SharedCore {
         let client = build_unauthenticated_client(&config)
             .await
             .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
+        let persistence = SessionPersistenceOwner::new();
         if !nse_read_only {
             install_session_rotation_callbacks(
                 &client,
                 identity.clone(),
                 Arc::clone(&self.secret_store),
+                persistence.callback_lease(),
             )
             .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
         }
@@ -1028,7 +1007,7 @@ impl SharedCore {
             .await
             .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
 
-        if claim.commit(client).is_err() {
+        if claim.commit(client, persistence).is_err() {
             let _ = self.core.close().await;
             return Err(restore_failed(
                 RESTORE_FAILED_CODE,
@@ -1108,10 +1087,12 @@ impl SharedCore {
         let client = build_unauthenticated_client(&config)
             .await
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        let persistence = SessionPersistenceOwner::new();
         install_session_rotation_callbacks(
             &client,
             identity.clone(),
             Arc::clone(&self.secret_store),
+            persistence.callback_lease(),
         )
         .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let outcome = core_login_with_password(
@@ -1131,8 +1112,15 @@ impl SharedCore {
         if live_identity != identity {
             return Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION));
         }
-        self.persist_open_and_retain(client, &live_identity, &vault, claim, outcome.device_id)
-            .await
+        self.persist_open_and_retain(
+            client,
+            persistence,
+            &live_identity,
+            &vault,
+            claim,
+            outcome.device_id,
+        )
+        .await
     }
 
     /// Test-only persist+open+retain through the production login path.
@@ -1182,10 +1170,12 @@ impl SharedCore {
         let client = build_unauthenticated_client(&config)
             .await
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        let persistence = SessionPersistenceOwner::new();
         install_session_rotation_callbacks(
             &client,
             identity.clone(),
             Arc::clone(&self.secret_store),
+            persistence.callback_lease(),
         )
         .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let material = SessionMaterial::from_matrix_tokens(
@@ -1198,19 +1188,27 @@ impl SharedCore {
         restore_session_onto_client(&client, &identity, &material)
             .await
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
-        self.persist_open_and_retain(client, &identity, &vault, claim, device_id)
+        self.persist_open_and_retain(client, persistence, &identity, &vault, claim, device_id)
             .await
     }
 
     pub(super) async fn persist_open_and_retain(
         &self,
         client: Client,
+        persistence: SessionPersistenceOwner,
         identity: &AccountIdentity,
         vault: &SecretStoreSessionVault,
         claim: RestoreClaim<'_>,
         device_id: String,
     ) -> Result<SessionLoginDto, SessionLoginError> {
-        persist_session_after_login(&client, identity, vault)
+        // The login save shares the rotation callbacks' fence.
+        persistence
+            .lease()
+            .save(|| {
+                persist_session_after_login(&client, identity, vault)
+                    .map(|_| ())
+                    .map_err(|_| SessionFault::unavailable(RotationDiagnostics::IOS.persist_failed))
+            })
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
 
         let snapshot = SessionSnapshot {
@@ -1228,7 +1226,7 @@ impl SharedCore {
             .await
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
 
-        if claim.commit(client).is_err() {
+        if claim.commit(client, persistence).is_err() {
             let _ = self.core.close().await;
             return Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION));
         }
@@ -1261,7 +1259,7 @@ impl SharedCore {
                 .lock()
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
             match &*guard {
-                RestoredClientSlot::Ready(client) => client.clone(),
+                RestoredClientSlot::Ready(client, _) => client.clone(),
                 RestoredClientSlot::Empty | RestoredClientSlot::InFlight => {
                     return Err(attach_failed(
                         ATTACH_SESSION_MISSING_CODE,
@@ -1653,10 +1651,22 @@ impl SharedCore {
         })
     }
 
+    /// Permanently reject further credential writes from the retained client.
+    pub(super) fn revoke_retained_persistence(&self) {
+        if let Ok(guard) = self.restored_client.lock() {
+            if let RestoredClientSlot::Ready(_, persistence) = &*guard {
+                persistence.lease().revoke();
+            }
+        }
+    }
+
     pub async fn logout(&self) -> Result<LeftoverAckDto, LeftoverCommandError> {
         // Serialize teardown with foreground resume and release every store
         // before dropping ownership. This operation performs no remote logout.
         let _lifecycle = self.sync_lifecycle.lock().await;
+        // Fence token-rotation saves before teardown: a refresh that lands
+        // while sync stops must not write credentials back into the vault.
+        self.revoke_retained_persistence();
         if self.owners_attached() {
             self.core
                 .stop_attached_sync()
@@ -1748,7 +1758,7 @@ impl SharedCore {
     pub(super) fn has_retained_client(&self) -> bool {
         self.restored_client
             .lock()
-            .map(|guard| matches!(*guard, RestoredClientSlot::Ready(_)))
+            .map(|guard| matches!(*guard, RestoredClientSlot::Ready(..)))
             .unwrap_or(false)
     }
 
@@ -1765,7 +1775,7 @@ impl SharedCore {
             .lock()
             .map_err(|_| nse_failed(NSE_FAILED_CODE, NSE_FAILED_DESCRIPTION))?;
         match &*guard {
-            RestoredClientSlot::Ready(client) => Ok(client.clone()),
+            RestoredClientSlot::Ready(client, _) => Ok(client.clone()),
             RestoredClientSlot::Empty | RestoredClientSlot::InFlight => Err(nse_failed(
                 NSE_STORE_NOT_OPEN_CODE,
                 NSE_STORE_NOT_OPEN_DESCRIPTION,

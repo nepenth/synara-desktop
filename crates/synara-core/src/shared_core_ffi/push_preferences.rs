@@ -453,7 +453,7 @@ impl SharedCore {
                 )
             })?;
             match &*guard {
-                RestoredClientSlot::Ready(client) => client.clone(),
+                RestoredClientSlot::Ready(client, _) => client.clone(),
                 RestoredClientSlot::Empty | RestoredClientSlot::InFlight => {
                     return Err(http_pusher_failed(
                         BIND_HTTP_PUSHER_NO_SESSION_CODE,

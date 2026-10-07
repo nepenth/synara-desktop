@@ -13,6 +13,7 @@ mod locator;
 mod logout;
 mod persistence;
 mod rejection;
+mod rotation;
 
 pub use backoff::RetryBackoff;
 pub use fault::{HasDiagnosticId, SessionFault, SessionFaultKind};
@@ -29,4 +30,8 @@ pub use rejection::{
     handle_authentication_rejection_tick, remote_logout_allowed,
     static_rejection_logout_diagnostic, AuthenticationRejectionWatch,
     SESSION_AUTHENTICATION_REJECTED_LOG_LINE, SESSION_REJECTION_NO_CORE_DIAGNOSTIC_ID,
+};
+pub use rotation::{
+    install_session_rotation_callbacks, RotationDiagnostics, RotationHooks,
+    SessionRotationCallbackError,
 };

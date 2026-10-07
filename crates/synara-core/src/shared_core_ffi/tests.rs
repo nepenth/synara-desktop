@@ -433,7 +433,7 @@ fn restore_from_vault_installs_session_without_password_or_token_leak() {
     assert!(snapshot.is_some());
     assert!(matches!(
         *shared.restored_client.lock().expect("client"),
-        RestoredClientSlot::Ready(_)
+        RestoredClientSlot::Ready(..)
     ));
     let keys: Vec<String> = map.lock().expect("vault").keys().cloned().collect();
     assert!(keys.iter().any(|key| key.starts_with("store-key:")));
@@ -450,7 +450,7 @@ fn restore_from_vault_installs_session_without_password_or_token_leak() {
     assert!(!format!("{second:?}").contains(RESTORE_FAILED_CODE));
     assert!(matches!(
         *shared.restored_client.lock().expect("client"),
-        RestoredClientSlot::Ready(_)
+        RestoredClientSlot::Ready(..)
     ));
     drop(shared);
     drop(_enter);
@@ -941,4 +941,55 @@ fn session_generation_is_monotonic_per_instance() {
     assert!(second > first);
     // A fresh instance starts again at 1 and never yields 0 (attach rejects 0).
     assert_eq!(SharedCore::new().allocate_session_generation(), 1);
+}
+
+#[test]
+fn logout_fences_late_token_rotation_saves_out_of_the_vault() {
+    let identity = alice();
+    let map = std::sync::Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(
+        std::sync::Arc::clone(&map),
+    )));
+    let root = temp_root("rotation-fence");
+    let rt = test_runtime();
+    let _enter = rt.enter();
+    rt.block_on(shared.persist_planted_session_for_test(
+        identity.user_id().to_owned(),
+        identity.homeserver_url().to_owned(),
+        root.to_string_lossy().into_owned(),
+        "DEVICEABC".to_owned(),
+        "syt_rotation_fence_access".to_owned(),
+        Some("syr_rotation_fence_refresh".to_owned()),
+    ))
+    .expect("planted session");
+
+    // The SDK save callback holds this lease; capture it like the callback does.
+    let lease = match &*shared.restored_client.lock().expect("client") {
+        RestoredClientSlot::Ready(_, persistence) => persistence.callback_lease(),
+        _ => panic!("planted session is retained"),
+    };
+    assert!(!lease.is_revoked());
+
+    rt.block_on(shared.logout()).expect("logout");
+    assert!(lease.is_revoked(), "logout revokes the rotation fence");
+
+    map.lock().expect("vault").clear();
+    let late = lease.save(|| {
+        map.lock()
+            .expect("vault")
+            .insert("matrix-session:late".to_owned(), b"tokens".to_vec());
+        Ok::<(), crate::app::lifecycle::session::SessionFault>(())
+    });
+    assert_eq!(
+        late.unwrap_err().diagnostic_id,
+        "d0.1-session-persistence-retired"
+    );
+    assert!(
+        map.lock().expect("vault").is_empty(),
+        "a refresh after logout never writes credentials"
+    );
+    drop(shared);
+    drop(_enter);
+    drop(rt);
+    let _ = fs::remove_dir_all(&root);
 }

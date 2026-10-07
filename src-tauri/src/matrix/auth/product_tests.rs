@@ -2724,17 +2724,30 @@ fn product_client_persists_rotated_sdk_tokens_in_native_vault_and_logout_is_loca
         })
         .expect("session rotation callback body");
     for required in [
+        "synara_core::app::lifecycle::session::install_session_rotation_callbacks(",
+        "RotationDiagnostics::DESKTOP",
+        "ensure_logout_retry_locator",
+        "authenticated_login_identity",
+        "record_session_rotation_outcome",
+        "KeyringSessionMaterialVault::new()",
+    ] {
+        assert!(
+            callbacks.contains(required),
+            "desktop rotation hooks must retain {required}"
+        );
+    }
+    let core_rotation =
+        include_str!("../../../../crates/synara-core/src/app/lifecycle/session/rotation.rs");
+    for required in [
         "set_session_callbacks",
         "load_session_material",
         "matrix_session_from_host_secrets",
         "persist_session_after_login",
-        "save_credentials",
-        "ensure_logout_retry_locator",
-        "authenticated_login_identity",
+        "lease.save_credentials(",
     ] {
         assert!(
-            callbacks.contains(required),
-            "session rotation callback must retain {required}"
+            core_rotation.contains(required),
+            "Core session rotation callback must retain {required}"
         );
     }
     assert!(

@@ -75,10 +75,11 @@ use crate::matrix::dehydrated_devices::NativeDehydratedDevicesOwner;
 
 use crate::matrix::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot};
 
+#[cfg(test)]
+use crate::matrix::lifecycle::load_session_material;
 use crate::matrix::lifecycle::{
-    clear_session_material, load_session_material, matrix_session_from_host_secrets,
-    persist_session_after_login, restore_session_from_vault, restore_session_onto_client,
-    KeyringSessionMaterialVault, SessionMaterial,
+    clear_session_material, persist_session_after_login, restore_session_from_vault,
+    restore_session_onto_client, KeyringSessionMaterialVault, SessionMaterial,
 };
 
 use crate::matrix::notifications::NativeNotificationObservationOwner;

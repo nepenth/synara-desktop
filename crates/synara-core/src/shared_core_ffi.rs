@@ -51,9 +51,9 @@ use crate::app::devices::{
     NativeDeviceSnapshot, NativeDeviceTrust, NativeDeviceUpdateSignal,
 };
 use crate::app::lifecycle::{
-    load_session_material, matrix_session_from_host_secrets, persist_session_after_login,
-    restore_session_from_vault, restore_session_from_vault_with_room_load_settings,
-    restore_session_onto_client, SessionMaterial, SessionMaterialId, SessionMaterialVault,
+    persist_session_after_login, restore_session_from_vault,
+    restore_session_from_vault_with_room_load_settings, restore_session_onto_client,
+    SessionMaterial, SessionMaterialId, SessionMaterialVault,
 };
 use crate::app::media_cache::NativeMediaRetentionOwner;
 use crate::app::notifications::NativeHttpPusherOwner;

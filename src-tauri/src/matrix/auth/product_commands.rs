@@ -1817,86 +1817,51 @@ pub(super) async fn build_client(
     Ok((client, session_persistence))
 }
 
-#[derive(Debug)]
-struct SessionRotationCallbackError(&'static str);
-
-impl std::fmt::Display for SessionRotationCallbackError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(self.0)
-    }
-}
-
-impl std::error::Error for SessionRotationCallbackError {}
-
 fn install_session_rotation_callbacks(
     client: &Client,
     identity: AccountIdentity,
     root: &Path,
     persistence_lease: Arc<SessionPersistenceLease>,
 ) -> Result<(), MatrixAuthCommandError> {
-    let reload_identity = identity.clone();
-    let save_identity = identity;
-    let save_root = root.to_path_buf();
-    client
-        .set_session_callbacks(
-            Box::new(move |_| {
-                let material =
-                    load_session_material(&KeyringSessionMaterialVault::new(), &reload_identity)
-                        .map_err(|_| {
-                            SessionRotationCallbackError("d0.1-session-reload-read-failed")
-                        })?
-                        .ok_or(SessionRotationCallbackError(
-                            "d0.1-session-reload-material-missing",
-                        ))?;
-                let secrets = material.decode_host_secrets().map_err(|_| {
-                    SessionRotationCallbackError("d0.1-session-reload-decode-failed")
-                })?;
-                let session = matrix_session_from_host_secrets(&reload_identity, &secrets)
-                    .map_err(|_| SessionRotationCallbackError("d0.1-session-reload-invalid"))?;
-                Ok(session.tokens)
-            }),
-            Box::new(move |client| {
-                let user_id = client.user_id().ok_or(SessionRotationCallbackError(
-                    "d0.1-session-rotation-identity-missing",
-                ))?;
-                let device_id = client.device_id().ok_or(SessionRotationCallbackError(
-                    "d0.1-session-rotation-identity-missing",
-                ))?;
-                let account = authenticated_login_identity(
-                    user_id.as_str(),
-                    client.homeserver().as_str(),
-                    &save_identity,
-                )
-                .map_err(|_| {
-                    SessionRotationCallbackError("d0.1-session-rotation-identity-mismatch")
-                })?;
-                let locator = MatrixLoginIdentity {
-                    user_id: account.user_id().to_owned(),
-                    device_id: device_id.to_string(),
-                    homeserver_url: account.homeserver_url().to_owned(),
-                };
-                // SDK rotation can run before the explicit login save. Every
-                // callback establishes the same durable cleanup target first.
-                let persisted = persistence_lease.save_credentials(
-                    || ensure_logout_retry_locator(&save_root, &locator),
-                    || {
-                        persist_session_after_login(
-                            &client,
-                            &save_identity,
-                            &KeyringSessionMaterialVault::new(),
-                        )
-                        .map(|_| ())
-                        .map_err(map_session_rotation_persist_error)
-                    },
-                );
-                record_session_rotation_outcome(&save_root, &persisted);
-                persisted.map_err(|_| {
-                    SessionRotationCallbackError("d0.1-session-rotation-persist-failed")
-                })?;
-                Ok(())
-            }),
-        )
-        .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-callback-install-failed"))
+    use synara_core::app::lifecycle::session::{RotationDiagnostics, RotationHooks};
+    let check_identity = identity.clone();
+    let preflight_root = root.to_path_buf();
+    let journal_root = root.to_path_buf();
+    let hooks = RotationHooks {
+        check_identity: Box::new(move |client| {
+            let user_id = client
+                .user_id()
+                .ok_or("d0.1-session-rotation-identity-missing")?;
+            let device_id = client
+                .device_id()
+                .ok_or("d0.1-session-rotation-identity-missing")?;
+            let account = authenticated_login_identity(
+                user_id.as_str(),
+                client.homeserver().as_str(),
+                &check_identity,
+            )
+            .map_err(|_| "d0.1-session-rotation-identity-mismatch")?;
+            Ok(Some(MatrixLoginIdentity {
+                user_id: account.user_id().to_owned(),
+                device_id: device_id.to_string(),
+                homeserver_url: account.homeserver_url().to_owned(),
+            }))
+        }),
+        preflight: Box::new(move |locator| ensure_logout_retry_locator(&preflight_root, locator)),
+        map_persist_error: map_session_rotation_persist_error,
+        record_outcome: Box::new(move |result| {
+            record_session_rotation_outcome(&journal_root, result)
+        }),
+    };
+    synara_core::app::lifecycle::session::install_session_rotation_callbacks(
+        client,
+        identity,
+        Arc::new(KeyringSessionMaterialVault::new()),
+        persistence_lease,
+        RotationDiagnostics::DESKTOP,
+        hooks,
+    )
+    .map_err(MatrixAuthCommandError::from)
 }
 
 /// Ephemeral unauthenticated client for password-reset (no product session, no keyring key).
