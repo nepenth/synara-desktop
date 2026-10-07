@@ -7,9 +7,30 @@ import {
   NativeBackupAction,
   repairNativeBackup,
   restoreNativeBackup,
-  setupNativeBackup,
 } from '../features/backup/nativeBackup';
+import { bootstrapNativeSecretStorage } from '../features/secret-storage/nativeSecretStorage';
 import { PasswordInput } from './password-input';
+
+/**
+ * Backup setup enrols through secret-storage bootstrap, the one Core path that
+ * returns the generated recovery key, so the user can always save it.
+ * Restore and repair keep their backup commands.
+ */
+export const runNativeBackupAction = async (
+  action: NativeBackupAction,
+  secret: string
+): Promise<string | undefined> => {
+  if (action === 'setup_required') {
+    const result = await bootstrapNativeSecretStorage(secret);
+    return result.recoveryKey;
+  }
+  if (action === 'restore_required') {
+    await restoreNativeBackup(secret);
+  } else {
+    await repairNativeBackup(secret);
+  }
+  return undefined;
+};
 
 type BackupStatusProps = {
   enabled: boolean;
@@ -38,17 +59,12 @@ const nativeBackupActionLabel = (action: NativeBackupAction): string => {
 export function BackupRestoreTile() {
   const { status, loading, error, refresh } = useNativeKeyBackup();
   const action = status?.action ?? 'restore_required';
-  const [operationState, runOperation] = useAsyncCallback<void, Error, [string]>(
+  const [operationState, runOperation] = useAsyncCallback<string | undefined, Error, [string]>(
     useCallback(
       async (secret) => {
-        if (action === 'setup_required') {
-          await setupNativeBackup(secret);
-        } else if (action === 'restore_required') {
-          await restoreNativeBackup(secret);
-        } else {
-          await repairNativeBackup(secret);
-        }
+        const recoveryKey = await runNativeBackupAction(action, secret);
         refresh();
+        return recoveryKey;
       },
       [action, refresh]
     )
@@ -140,6 +156,16 @@ export function BackupRestoreTile() {
           </Button>
         </Box>
       </Box>
+      {operationState.status === AsyncStatus.Success && operationState.data && (
+        <Box direction="Column" gap="100">
+          <Text size="T200" style={{ color: color.Success.Main }}>
+            <b>Backup is ready. Copy this recovery key now and keep it somewhere safe.</b>
+          </Text>
+          <Text size="T200" style={{ wordBreak: 'break-all' }}>
+            {operationState.data}
+          </Text>
+        </Box>
+      )}
       {(error || operationState.status === AsyncStatus.Error) && (
         <Text size="T200" style={{ color: color.Critical.Main }}>
           <b>

@@ -3,6 +3,7 @@
 //! Core owns SDK recovery I/O; platforms retain confirmation and one-time secret display.
 
 mod live;
+pub(crate) use live::enable_recovery;
 pub use live::{bootstrap, reset, status, unlock, SecretStorageSetup};
 
 use serde::Serialize;

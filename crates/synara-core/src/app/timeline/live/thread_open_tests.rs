@@ -404,3 +404,179 @@ async fn decryption_retry_acknowledges_request_and_live_rows_only_recover_after_
         .iter()
         .any(|row| matches!(row, TimelineViewRow::EncryptedUnavailable(_))));
 }
+
+/// Mount a room whose newest activity is a thread reply, plus the mocks the
+/// live and thread opens need.
+async fn mount_thread_room(
+    server: &MatrixMockServer,
+    client: &matrix_sdk::Client,
+    room_id: &matrix_sdk::ruma::RoomId,
+    root_id: &matrix_sdk::ruma::EventId,
+    reply_id: &matrix_sdk::ruma::EventId,
+) {
+    let f = EventFactory::new().room(room_id);
+    let thread_reply = || {
+        let mut reply = RoomMessageEventContent::text_plain("thread reply");
+        reply.relates_to = Some(Relation::Thread(Thread::reply(
+            root_id.to_owned(),
+            root_id.to_owned(),
+        )));
+        reply
+    };
+    server
+        .sync_room(
+            client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f.create(client.user_id().unwrap(), RoomVersionId::V11))
+                .add_timeline_event(f.text_msg("thread root").sender(*BOB).event_id(root_id))
+                .add_timeline_event(f.event(thread_reply()).sender(*BOB).event_id(reply_id)),
+        )
+        .await;
+    server.mock_room_state_encryption().plain().mount().await;
+    server
+        .mock_room_messages()
+        .ok(RoomMessagesResponseTemplate::default())
+        .mount()
+        .await;
+    server
+        .mock_room_event_context()
+        .room(room_id)
+        .ok(RoomContextResponseTemplate::new(
+            f.text_msg("thread root")
+                .sender(*BOB)
+                .event_id(root_id)
+                .into_event(),
+        )
+        .events_before(vec![])
+        .events_after(vec![f
+            .event(thread_reply())
+            .sender(*BOB)
+            .event_id(reply_id)
+            .into_event()])
+        .start("thread-react-prev")
+        .end("thread-react-next"))
+        .mount()
+        .await;
+}
+
+#[tokio::test]
+async fn reacting_to_a_thread_reply_uses_the_thread_timeline() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    client.event_cache().subscribe().unwrap();
+    let room_id = room_id!("!thread-react:example.org");
+    let root_id = event_id!("$thread-react-root");
+    let reply_id = event_id!("$thread-react-reply");
+    mount_thread_room(&server, &client, room_id, root_id, reply_id).await;
+    server
+        .mock_room_send()
+        .ok(event_id!("$thread-react-annotation"))
+        .mock_once()
+        .mount()
+        .await;
+
+    let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 43);
+    let thread = timeout(
+        Duration::from_secs(8),
+        owner.open_at(NativeTimelineOpenRequest {
+            room_id: room_id.to_string(),
+            position: NativeTimelineOpenPosition::Thread {
+                root_event_id: root_id.to_string(),
+            },
+        }),
+    )
+    .await
+    .expect("thread open should finish")
+    .expect("thread open must succeed");
+    assert!(thread
+        .snapshot
+        .rows
+        .iter()
+        .filter_map(row_event_id)
+        .any(|id| id == reply_id.as_str()));
+
+    let added = timeout(
+        Duration::from_secs(8),
+        owner.toggle_reaction(room_id.as_str(), reply_id.as_str(), "👍"),
+    )
+    .await
+    .expect("toggle should finish")
+    .expect("a thread reply must be reactable from the thread view");
+    assert_eq!(added.mutation, NativeReactionMutation::Added);
+}
+
+#[tokio::test]
+async fn redaction_goes_through_the_room_send_queue() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    client.event_cache().subscribe().unwrap();
+    let room_id = room_id!("!queued-redact:example.org");
+    let own_id = event_id!("$queued-redact-own");
+    let f = EventFactory::new().room(room_id);
+    let own_user_id = client.user_id().unwrap().to_owned();
+    let mut member = std::collections::BTreeMap::from([(own_user_id.clone(), 0.into())]);
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f.create(&own_user_id, RoomVersionId::V11))
+                .add_state_event(
+                    f.power_levels(&mut member)
+                        .sender(&own_user_id)
+                        .state_key(""),
+                )
+                .add_timeline_event(f.text_msg("mine").sender(&own_user_id).event_id(own_id)),
+        )
+        .await;
+    server.mock_room_state_encryption().plain().mount().await;
+    server
+        .mock_room_messages()
+        .ok(RoomMessagesResponseTemplate::default())
+        .mount()
+        .await;
+    server
+        .mock_room_redact()
+        .ok(event_id!("$queued-redaction"))
+        .mock_once()
+        .mount()
+        .await;
+
+    let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 44);
+    timeout(
+        Duration::from_secs(8),
+        owner.open_at(NativeTimelineOpenRequest {
+            room_id: room_id.to_string(),
+            position: NativeTimelineOpenPosition::LiveBottom,
+        }),
+    )
+    .await
+    .expect("live open should finish")
+    .expect("live open must succeed");
+
+    let mut queue_updates = client.send_queue().subscribe();
+    let readback = timeout(
+        Duration::from_secs(8),
+        owner.redact_event(room_id.as_str(), own_id.as_str(), Some("typo")),
+    )
+    .await
+    .expect("redaction should finish")
+    .expect("own message redaction succeeds");
+    assert_eq!(readback.status, "redacted");
+
+    let mut saw_queued_redaction = false;
+    while let Ok(update) = queue_updates.try_recv() {
+        if let matrix_sdk::send_queue::RoomSendQueueUpdate::NewLocalEvent(echo) = update.update {
+            if matches!(
+                echo.content,
+                matrix_sdk::send_queue::LocalEchoContent::Redaction { ref redacts, .. }
+                    if redacts.as_str() == own_id.as_str()
+            ) {
+                saw_queued_redaction = true;
+            }
+        }
+    }
+    assert!(
+        saw_queued_redaction,
+        "the redaction must be a send-queue request ordered with queued edits"
+    );
+}

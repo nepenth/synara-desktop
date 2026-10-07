@@ -46,7 +46,7 @@ version = "0.1.0"
 edition = "2021"
 [features]
 default = ["full-uniffi"]
-full-app = ["matrix-sdk/automatic-room-key-forwarding"]
+full-app = [${leak === "forwarding" ? '"matrix-sdk/automatic-room-key-forwarding"' : ""}]
 full-uniffi = ["full-app", "dep:uniffi"${leak === "apple-search" ? ', "matrix-sdk/experimental-search"' : ""}]
 [dependencies]
 matrix-sdk = { path = "../sdk" }
@@ -100,10 +100,15 @@ for (const edge of ["normal", "build", "windows"]) {
     assert.match(result.stderr, /Desktop must not compile Apple UniFFI/);
   });
 }
-test("desktop must retain owners and compile-in forwarding policy", (t) => {
+test("desktop must retain full application owners", (t) => {
   const result = check(fixture(t, "missing-owners"));
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Desktop must retain full application owners/);
+});
+test("shipping graphs reject automatic room-key forwarding", (t) => {
+  const result = check(fixture(t, "forwarding"));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /must not compile automatic room-key forwarding/);
 });
 test("Apple full Core rejects forwarded desktop-only SDK features", (t) => {
   const result = check(fixture(t, "apple-search"));

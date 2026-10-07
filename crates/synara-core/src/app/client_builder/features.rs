@@ -11,10 +11,6 @@ pub const MATRIX_SDK_PIN_VERSION: &str = "0.19.1";
 /// - `rustls-aws-lc-rs` — rustls crypto provider. Required when
 ///   `default-features = false` on matrix-sdk 0.19.0.
 /// - `unstable-msc4426` — MSC4426 `m.status` / `m.call` profile fields.
-/// - `automatic-room-key-forwarding` — compile-in Megolm gossip among this
-///   user's verified devices. Gated by Core `room-key-forwarding` (full-app /
-///   desktop only; never NSE). 0.19 has no public `Encryption` setter, so the
-///   OlmMachine defaults stay on once compiled.
 /// - `experimental-widgets` — compile pin for the experimental widget host.
 ///   Runtime enablement is a separate in-client setting (default off).
 /// - `experimental-search` — desktop-only local Tantivy index via the
@@ -36,7 +32,6 @@ pub const APPROVED_MATRIX_SDK_FEATURES: &[&str] = &[
     "bundled-sqlite",
     "rustls-aws-lc-rs",
     "unstable-msc4426",
-    "automatic-room-key-forwarding",
     "experimental-widgets",
     "experimental-search",
     "experimental-encrypted-state-events",
@@ -49,7 +44,12 @@ pub const APPROVED_MATRIX_SDK_FEATURES: &[&str] = &[
 /// `experimental-send-custom-to-device` is a **direct-request** ban only; widgets
 /// may pull it transitively. Do not treat a `cargo tree` hit as a quality-gate
 /// failure when it is not listed on the `matrix-sdk` features array.
+///
+/// `automatic-room-key-forwarding` is banned on every graph: forwarded Megolm
+/// keys carry no proof of the original sender, so history comes from the
+/// encrypted key backup (`BackupDownloadStrategy::AfterDecryptionFailure`).
 pub const FORBIDDEN_MATRIX_SDK_FEATURES: &[&str] = &[
+    "automatic-room-key-forwarding",
     "experimental-element-recent-emojis",
     "experimental-push-secrets",
     "experimental-send-custom-to-device",
@@ -168,37 +168,22 @@ mod tests {
     }
 
     #[test]
-    fn automatic_room_key_forwarding_is_approved_not_forbidden() {
-        assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
-        assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
+    fn automatic_room_key_forwarding_is_forbidden_not_approved() {
+        assert!(!APPROVED_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
+        assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
         assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
         assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"testing"));
         assert!(!APPROVED_MATRIX_SDK_FEATURES.contains(&"testing"));
     }
 
     #[test]
-    fn core_manifest_requests_forwarding_only_via_product_feature() {
+    fn core_manifest_never_requests_room_key_forwarding() {
         let manifest = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
         assert!(manifest.contains("nse-preview = []"));
         assert!(manifest.contains(r#"full-uniffi = ["full-app", "dep:uniffi"]"#));
-        assert!(manifest.contains("matrix-sdk/automatic-room-key-forwarding"));
-        assert!(manifest.contains("matrix-sdk-crypto/automatic-room-key-forwarding"));
-        assert!(
-            !manifest.contains(r#"nse-preview = ["room-key-forwarding"]"#),
-            "NSE must not compile automatic room-key forwarding"
-        );
-    }
-
-    #[cfg(feature = "room-key-forwarding")]
-    #[test]
-    fn olm_machine_forwarding_setters_exist_when_compiled() {
-        // 0.19 exposes these only with the crypto cfg. Product cannot reach the
-        // live OlmMachine (`Encryption` has no setter; `Client::olm_machine` is
-        // pub(crate); `olm_machine_for_testing` needs matrix-sdk/testing).
-        let _set_forwarding: fn(&matrix_sdk_crypto::OlmMachine, bool) =
-            matrix_sdk_crypto::OlmMachine::set_room_key_forwarding_enabled;
-        let _set_requests: fn(&matrix_sdk_crypto::OlmMachine, bool) =
-            matrix_sdk_crypto::OlmMachine::set_room_key_requests_enabled;
+        assert!(!manifest.contains("matrix-sdk/automatic-room-key-forwarding"));
+        assert!(!manifest.contains("matrix-sdk-crypto/automatic-room-key-forwarding"));
+        assert!(!manifest.contains("room-key-forwarding = ["));
     }
 
     #[test]
@@ -280,7 +265,7 @@ mod tests {
         assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
         assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
         assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
-        assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
+        assert!(!APPROVED_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
     }
 
     #[test]

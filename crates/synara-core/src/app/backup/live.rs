@@ -115,23 +115,16 @@ pub async fn setup(
 
     finish_backup_operation(
         async {
-            let generated_recovery_key = zeroize::Zeroizing::new(
-                client
-                    .encryption()
-                    .recovery()
-                    .enable()
-                    .with_passphrase(passphrase)
-                    .wait_for_backups_to_upload()
-                    .await
-                    .map_err(|error| match error {
-                        RecoveryError::BackupExistsOnServer => "v-crypto.3-setup-existing-backup",
-                        _ => "v-crypto.3-setup-failed",
-                    })?,
-            );
-            let _ =
-                crate::app::dehydrated_devices::start_with_secret(client, &generated_recovery_key)
-                    .await;
-
+            // Same enrolment as secret-storage bootstrap. This command has no
+            // display channel, so the generated key is wiped here. The desktop
+            // backup tile enrols through `secret_storage::bootstrap` instead,
+            // which returns the key for one-time display.
+            let _wiped = crate::app::secret_storage::enable_recovery(client, passphrase)
+                .await
+                .map_err(|error| match error {
+                    RecoveryError::BackupExistsOnServer => "v-crypto.3-setup-existing-backup",
+                    _ => "v-crypto.3-setup-failed",
+                })?;
             Ok(())
         },
         status(client, session_generation),

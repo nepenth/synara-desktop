@@ -109,23 +109,36 @@ pub async fn bootstrap(
 
     finish_secret_setup(
         async {
-            let recovery_key = Zeroizing::new(
-                client
-                    .encryption()
-                    .recovery()
-                    .enable()
-                    .with_passphrase(passphrase)
-                    .wait_for_backups_to_upload()
-                    .await
-                    .map_err(map_bootstrap_error)?,
-            );
-            let _ = crate::app::dehydrated_devices::start_with_secret(client, &recovery_key).await;
-
-            Ok(recovery_key)
+            enable_recovery(client, passphrase)
+                .await
+                .map_err(map_bootstrap_error)
         },
         status(client, session_generation),
     )
     .await
+}
+
+/// The one enrolment path for secret storage and key backup.
+///
+/// `Recovery::enable` creates the default secret-storage key, stores the
+/// cross-signing and backup secrets in it, and enables key backup. Both
+/// `bootstrap` and `backup::setup` call this, so there is a single place that
+/// generates a recovery key; callers that can display it must do so.
+pub(crate) async fn enable_recovery(
+    client: &Client,
+    passphrase: &str,
+) -> Result<Zeroizing<String>, RecoveryError> {
+    let recovery_key = Zeroizing::new(
+        client
+            .encryption()
+            .recovery()
+            .enable()
+            .with_passphrase(passphrase)
+            .wait_for_backups_to_upload()
+            .await?,
+    );
+    let _ = crate::app::dehydrated_devices::start_with_secret(client, &recovery_key).await;
+    Ok(recovery_key)
 }
 
 pub async fn unlock(
@@ -320,6 +333,23 @@ fn require_complete(status: &NativeSecretStorageStatus) -> Result<(), &'static s
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn backup_setup_and_bootstrap_share_one_recovery_enrolment() {
+        let secret_storage = include_str!("live.rs");
+        let backup = include_str!("../backup/live.rs");
+        let enable_call = concat!(".recovery()\n", "            .enable()");
+        assert_eq!(secret_storage.matches(enable_call).count(), 1);
+        assert!(!backup.contains(concat!(".enable", "()")));
+        assert!(backup.contains("crate::app::secret_storage::enable_recovery(client, passphrase)"));
+        let bootstrap = secret_storage
+            .split("pub async fn bootstrap(")
+            .nth(1)
+            .and_then(|rest| rest.split("pub(crate) async fn enable_recovery").next())
+            .expect("bootstrap body");
+        assert!(bootstrap.contains("enable_recovery(client, passphrase)"));
+    }
+
     #[tokio::test]
     async fn setup_requires_passphrase_readback_while_key_only_unlock_remains_valid() {
         let key_only = project_secret_storage_status(

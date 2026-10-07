@@ -3,6 +3,11 @@
 //! The Matrix default suppress-edits rule follows mention overrides. Synara's
 //! product policy is stricter: edits must not alert even when they mention the
 //! user. Own one custom override and preserve every unrelated rule.
+//!
+//! This has to be a server push rule. Without Apple's restricted NSE Filtering
+//! entitlement, iOS displays every alert the push gateway delivers, so a
+//! client-side filter cannot stop an edit from alerting. Matrix push rules are
+//! account-wide, so other clients of the same account also skip edit alerts.
 
 use matrix_sdk::ruma::{
     api::client::push::{delete_pushrule, get_pushrules_all, set_pushrule, set_pushrule_enabled},

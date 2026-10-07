@@ -46,8 +46,8 @@ mime = { workspace = true }
 # rustls-aws-lc-rs is required with default-features=false so rustls has a crypto
 # provider (0.19.0 breaking change; previously arrived via reqwest's rustls default).
 # matrix-sdk-ui transitively enables matrix-sdk/e2e-encryption via feature unification.
-# automatic-room-key-forwarding is a desktop/full-app compile-in (also via Core
-# `room-key-forwarding`); NSE must not enable it.
+# automatic-room-key-forwarding stays off: forwarded keys are unauthenticated,
+# and history comes from the encrypted key backup instead.
 matrix-sdk = { workspace = true, features = [
   "sqlite",
   "bundled-sqlite",
@@ -59,7 +59,6 @@ matrix-sdk = { workspace = true, features = [
   "markdown",
   "qrcode",
   "unstable-msc4426",
-  "automatic-room-key-forwarding",
   # Experimental widget host compile pin. Runtime enablement is a separate
   # in-client setting (default off). Do not add experimental-send-custom-to-device
   # here; it arrives transitively via experimental-widgets.

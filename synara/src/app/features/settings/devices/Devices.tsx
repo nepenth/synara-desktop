@@ -117,12 +117,12 @@ export function Devices({ requestClose }: DevicesProps) {
                   />
                   {nativeSession && (
                     <SettingTile
-                      title="Share room keys with my verified devices"
-                      description="This session automatically shares historical room keys with your verified sessions, including ones verified with emoji or QR. Unverified logins stay undecryptable until you verify them or restore a backup."
+                      title="Message history for new sessions"
+                      description="New sessions read older encrypted messages from your key backup. Sessions don't hand room keys to each other, because a forwarded key can't prove who sent the message. Keep key backup on and verify new logins."
                       after={
-                        <Badge variant="Success" fill="Soft" radii="Pill" outlined>
+                        <Badge variant="Secondary" fill="Soft" radii="Pill" outlined>
                           <Text as="span" size="L400">
-                            On
+                            Key backup
                           </Text>
                         </Badge>
                       }

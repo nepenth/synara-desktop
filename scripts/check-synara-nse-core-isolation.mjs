@@ -242,18 +242,16 @@ requireText(
 requireText(
   coreManifest,
   'full-uniffi = ["full-app", "dep:uniffi"]',
-  "full-app room-key forwarding"
+  "full-uniffi Core feature"
 );
-requireText(
-  coreManifest,
+for (const forwarding of [
   "matrix-sdk/automatic-room-key-forwarding",
-  "SDK forwarding feature via Core"
-);
-requireText(
-  coreManifest,
   "matrix-sdk-crypto/automatic-room-key-forwarding",
-  "crypto forwarding feature via Core"
-);
+]) {
+  if (coreManifest.includes(forwarding)) {
+    throw new Error(`Core must not request ${forwarding} on any graph`);
+  }
+}
 requireText(
   productionFeatures,
   "matrix-sdk-search",

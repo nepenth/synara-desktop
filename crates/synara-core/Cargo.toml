@@ -23,7 +23,6 @@ default = ["full-uniffi"]
 # Shared desktop/iOS owners and their SDK capabilities. NSE retains only the
 # notification, client/store/lifecycle, and privacy-policy boundary below.
 full-app = [
-  "room-key-forwarding",
   "matrix-sdk/markdown",
   "matrix-sdk/qrcode",
   "matrix-sdk/unstable-msc4426",
@@ -41,13 +40,9 @@ full-uniffi = ["full-app", "dep:uniffi"]
 nse-preview = []
 # Emit TypeScript wire types for the desktop renderer (scripts/generate-ts-dto.sh).
 ts-export = ["dep:ts-rs"]
-# matrix-sdk 0.19 GossipMachine defaults both serve and request switches on
-# once this cfg is compiled. Encryption has no public setter; product stays
-# always-on. Do not put this feature on nse-preview.
-room-key-forwarding = [
-  "matrix-sdk/automatic-room-key-forwarding",
-  "matrix-sdk-crypto/automatic-room-key-forwarding",
-]
+# matrix-sdk `automatic-room-key-forwarding` is deliberately not compiled on any
+# graph. Forwarded Megolm keys are unauthenticated (no sender proof), so every
+# client recovers history from the encrypted key backup instead, as Element X does.
 # Desktop-only local message index (matrix-sdk-search / Tantivy). NSE and iOS
 # SharedCore must not enable this; they keep Client-Server `/search`.
 search-index = ["full-app", "matrix-sdk/experimental-search"]
@@ -95,9 +90,8 @@ matrix-sdk-ui = { workspace = true, features = [
   "experimental-encrypted-state-events",
 ] }
 # Live NativeTimelineRegistry maps UTD causes from the crypto crate.
-# The workspace disables SDK crypto default features. The
-# automatic-room-key-forwarding cfg is enabled only via the Core
-# `room-key-forwarding` feature (not here), so NSE stays off.
+# The workspace disables SDK crypto default features, including
+# automatic-room-key-forwarding, which no Synara graph compiles.
 matrix-sdk-crypto = { workspace = true }
 # Password re-login peeks the leftover SQLite crypto account so the next login
 # reuses that device id. Pin and default-features match the SDK workspace.
