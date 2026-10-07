@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Internals: pin the generated Swift API surface in CI, generate Swift bindings in UniFFI library mode, read session/sync/crypto status through typed Core methods on desktop and iOS, generate the renderer's status types from Rust, and start moving SharedCore methods to UniFFI proc-macro exports.
 - Sessions (iOS): token-rotation saves are fenced by the same persistence lease as desktop so a refresh after logout cannot write credentials back, failed saves are retried with backoff, and Core can retire a rejected session locally without contacting the homeserver.
 - CI: fast pull-request gate plus a nightly heavy suite (XCUITests, live Synapse proofs, package builds, release-cache seeding); releases reuse the proven CI gate, keep warm compiler caches and retry notarization instead of rebuilding.
 - Verification: when another device scans the QR code Synara shows, ask the user to confirm that device reported success instead of confirming automatically.
