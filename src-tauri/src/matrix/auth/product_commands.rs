@@ -866,7 +866,7 @@ pub(super) async fn install_session_from_register_secrets(
 pub async fn matrix_session_snapshot(
     core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<MatrixSessionSnapshot, MatrixAuthCommandError> {
-    crate::bridge::session_lifecycle::session_snapshot(core.inner().as_ref()).await
+    crate::bridge::session_lifecycle::session_snapshot(core.inner().as_ref())
 }
 
 /// Return only the persisted account identity used to decide whether the

@@ -31,7 +31,7 @@ use super::LoginFlow;
 
 use mime::Mime;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use synara_core::platform::{
     PlatformCrossSigningOwnIdentity, PlatformCrossSigningPrivateState, PlatformCrossSigningStatus,
@@ -156,35 +156,9 @@ const MATRIX_DATA_DIR: &str = "matrix";
 /// Non-secret account locator; the wire shape is owned by Core.
 pub use synara_core::app::lifecycle::session::SessionLocator as MatrixLoginIdentity;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "status", rename_all = "snake_case")]
-pub enum MatrixSessionSnapshot {
-    LoggedOut,
-    LoggedIn {
-        user_id: String,
-        device_id: String,
-        homeserver_url: String,
-        #[serde(rename = "sessionGeneration")]
-        session_generation: u64,
-    },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MatrixCrossSigningState {
-    Unavailable,
-    NotSetUp,
-    Partial,
-    Ready,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixCryptoStatus {
-    pub session_generation: u64,
-    pub encryption_enabled: bool,
-    pub cross_signing_state: MatrixCrossSigningState,
-}
+// Core owns the public session, crypto and cross-signing status types; the
+// desktop returns them from Tauri commands unchanged.
+pub use synara_core::{MatrixCryptoStatus, MatrixSessionSnapshot};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
