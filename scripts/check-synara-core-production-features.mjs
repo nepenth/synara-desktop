@@ -62,12 +62,15 @@ for (const target of [
       `Desktop must not compile Apple UniFFI runtime or scaffolding (${target})`,
     );
   }
+  if (!desktop.get("synara-core")?.has("full-app")) {
+    throw new Error(`Desktop must retain full application owners (${target})`);
+  }
   if (
-    !desktop.get("synara-core")?.has("full-app") ||
-    !desktop.get("matrix-sdk")?.has("automatic-room-key-forwarding")
+    desktop.get("matrix-sdk")?.has("automatic-room-key-forwarding") ||
+    desktop.get("matrix-sdk-crypto")?.has("automatic-room-key-forwarding")
   ) {
     throw new Error(
-      `Desktop must retain full application owners and room-key forwarding (${target})`,
+      `Desktop must not compile automatic room-key forwarding (${target})`,
     );
   }
 }
@@ -104,12 +107,15 @@ for (const target of [
       `Apple full Core must not compile desktop search or X.509 dependencies (${target})`,
     );
   }
+  if (!apple.has("uniffi")) {
+    throw new Error(`Apple full Core must retain UniFFI (${target})`);
+  }
   if (
-    !apple.has("uniffi") ||
-    !apple.get("matrix-sdk")?.has("automatic-room-key-forwarding")
+    apple.get("matrix-sdk")?.has("automatic-room-key-forwarding") ||
+    apple.get("matrix-sdk-crypto")?.has("automatic-room-key-forwarding")
   ) {
     throw new Error(
-      `Apple full Core must retain UniFFI and room-key forwarding (${target})`,
+      `Apple full Core must not compile automatic room-key forwarding (${target})`,
     );
   }
 }

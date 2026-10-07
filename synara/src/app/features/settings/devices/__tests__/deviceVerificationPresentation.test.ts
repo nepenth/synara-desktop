@@ -53,12 +53,13 @@ test('Devices does not leave Device Verification spinning after identity is know
   assert.doesNotMatch(devices, /resolveDeviceVerificationStatus\(\s*currentDevice\?\.trust/);
 });
 
-test('Devices Security shows always-on room-key forwarding status, not a Switch or Developer Tools control', () => {
-  assert.match(devices, /title="Share room keys with my verified devices"/);
+test('Devices Security explains backup-only key recovery, not a forwarding Switch or Developer Tools control', () => {
+  assert.match(devices, /title="Message history for new sessions"/);
   assert.match(devices, /nativeSession && \(/);
-  assert.match(devices, /your verified sessions/);
-  assert.match(devices, /Unverified logins stay undecryptable/);
-  assert.match(devices, />\s*On\s*</);
+  assert.match(devices, /from your key backup/);
+  assert.match(devices, /Sessions don't hand room keys to each other/);
+  assert.match(devices, />\s*Key backup\s*</);
+  assert.doesNotMatch(devices, /Share room keys with my verified devices/);
   assert.doesNotMatch(devices, /set_room_key_forwarding_enabled/);
   assert.doesNotMatch(devices, /settingsAtom/);
   // No Switch in this file: verification and forwarding are status, not toggles.
