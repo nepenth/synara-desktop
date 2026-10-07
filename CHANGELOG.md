@@ -11,6 +11,7 @@
 - Messages: show unsent messages as sending or failed with Discard and Retry, keep still-queued sends visibly queued, and resend recoverable failures once sync recovers.
 - Sync: re-apply open-room subscriptions after a sliding-sync expiry, download key backups on decryption failure, and avoid restarting a healthy sync when the window is shown again.
 - Performance: slow background polling while the window is hidden, skip unchanged timeline snapshots, back off undecryptable-message readback and keyring retries, and stop holding the session lock while loading media.
+- Room list: Core pushes a `matrix-room-list-updated` event when rooms, invites, push rules or account data change, so the desktop lists refresh on change instead of polling every second, iOS stops its 2-second refresh pulse, and room-list snapshots stop re-reading push rules and re-probing unknown encryption state for every room.
 
 ## [2.1.46] - 2026-10-06
 

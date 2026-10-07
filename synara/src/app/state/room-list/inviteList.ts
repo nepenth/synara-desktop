@@ -1,7 +1,7 @@
 import { atom, useAtomValue, useSetAtom } from 'jotai';
 import { useCallback, useEffect } from 'react';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
-import { startVisibilityAwarePoll } from '../../utils/visibilityPoll';
+import { startRoomListUpdateDrivenPoll } from '../../utils/nativeRoomListUpdates';
 
 export type NativeInviteTriage = 'known' | 'public' | 'spam';
 
@@ -87,7 +87,7 @@ export const useBindAllInvitesAtom = () => {
     }
 
     void refresh();
-    const stopPolling = startVisibilityAwarePoll(() => void refresh());
+    const stopPolling = startRoomListUpdateDrivenPoll(() => void refresh());
     return () => {
       disposed = true;
       stopPolling();

@@ -240,6 +240,7 @@ pub async fn matrix_login_password(
             crate::matrix::timeline::timeline_view_emit(app.clone()),
             session_generation,
         ));
+        let room_list_live = crate::matrix::room_list::start_room_list_live(&sync, app.clone());
         // A successfully installed session supersedes every pending/awaiting
         // recovery capability, including one prepared by an earlier failed login.
         state.clear_store_recovery().await;
@@ -263,6 +264,7 @@ pub async fn matrix_login_password(
             join_rules: join_rules.clone(),
             _own_profile: own_profile,
             _media_retention: media_retention,
+            _room_list_live: room_list_live,
             notification_observations,
 
             room_key_transfer: devices.room_key_transfer(),
@@ -820,6 +822,7 @@ pub(super) async fn install_session_from_register_secrets(
             crate::matrix::timeline::timeline_view_emit(app.clone()),
             session_generation,
         ));
+        let room_list_live = crate::matrix::room_list::start_room_list_live(&sync, app.clone());
         // Registration completed and is about to install a session, so no old
         // failed-login recovery capability may remain consumable.
         state.clear_store_recovery().await;
@@ -843,6 +846,7 @@ pub(super) async fn install_session_from_register_secrets(
             join_rules: join_rules.clone(),
             _own_profile: own_profile,
             _media_retention: media_retention,
+            _room_list_live: room_list_live,
             notification_observations,
 
             room_key_transfer: devices.room_key_transfer(),
@@ -1276,6 +1280,7 @@ pub async fn matrix_restore_session(
             crate::matrix::timeline::timeline_view_emit(app.clone()),
             session_generation,
         ));
+        let room_list_live = crate::matrix::room_list::start_room_list_live(&sync, app.clone());
         // A9 decision stream: account-bound Core policy owner (see login path).
         let notification_decisions = Arc::new(
             synara_core::app::notifications::NativeNotificationDecisionOwner::new(
@@ -1309,6 +1314,7 @@ pub async fn matrix_restore_session(
             join_rules: join_rules.clone(),
             _own_profile: own_profile,
             _media_retention: media_retention,
+            _room_list_live: room_list_live,
             notification_observations,
 
             room_key_transfer: devices.room_key_transfer(),

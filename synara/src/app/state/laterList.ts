@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../utils/desktop';
 import type { SynaraLaterContent } from '../../types/matrix/accountData';
 import { emptyLaterContent, normalizeLaterContent } from '../utils/later';
-import { startVisibilityAwarePoll } from '../utils/visibilityPoll';
+import { startRoomListUpdateDrivenPoll } from '../utils/nativeRoomListUpdates';
 
 export type LaterContentAction = {
   type: 'INITIALIZE' | 'PUT';
@@ -72,7 +72,7 @@ export const useBindLaterContentAtom = (
     }
 
     void refresh();
-    const stopPolling = startVisibilityAwarePoll(() => void refresh());
+    const stopPolling = startRoomListUpdateDrivenPoll(() => void refresh());
     return () => {
       disposed = true;
       stopPolling();

@@ -283,6 +283,8 @@ struct ManagedMatrixSession {
     join_rules: Arc<NativeRoomJoinRuleOwner>,
     _own_profile: NativeOwnProfileOwner,
     _media_retention: NativeMediaRetentionOwner,
+    /// Emits `matrix-room-list-updated`; dropping the session aborts it.
+    _room_list_live: synara_core::app::room_list::NativeRoomListOwner,
     /// Core→renderer observation stream; retired on logout, dropped with
     /// the session.
     notification_observations: Arc<NativeNotificationObservationOwner>,
