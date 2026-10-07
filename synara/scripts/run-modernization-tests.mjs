@@ -62,6 +62,7 @@ const tests = [
   'src/app/utils/__tests__/sessionExpiry.test.ts',
   'src/app/utils/__tests__/syncLifecycle.test.ts',
   'src/app/utils/__tests__/visibilityPoll.test.ts',
+  'src/app/utils/__tests__/nativeRoomListUpdates.test.ts',
   'src/app/utils/__tests__/syncSplashRecovery.test.ts',
   'src/app/utils/__tests__/timelinePagination.test.ts',
   'src/app/utils/__tests__/timelineDateMarks.test.ts',

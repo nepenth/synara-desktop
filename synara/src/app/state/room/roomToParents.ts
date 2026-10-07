@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { RoomToParents } from '../../../types/matrix/room';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { mapParentWithChildren } from '../../utils/room';
-import { startVisibilityAwarePoll } from '../../utils/visibilityPoll';
+import { startRoomListUpdateDrivenPoll } from '../../utils/nativeRoomListUpdates';
 
 export type RoomToParentsAction =
   | {
@@ -128,7 +128,7 @@ export const useBindRoomToParentsAtom = (
     }
 
     void refresh();
-    const stopPolling = startVisibilityAwarePoll(() => void refresh());
+    const stopPolling = startRoomListUpdateDrivenPoll(() => void refresh());
     return () => {
       disposed = true;
       stopPolling();

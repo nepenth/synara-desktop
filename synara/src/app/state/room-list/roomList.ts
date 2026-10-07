@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { parseRoomSummary, type RoomSummary } from '../../features/matrix-dto/room';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { RoomsAction } from './utils';
-import { startVisibilityAwarePoll } from '../../utils/visibilityPoll';
+import { startRoomListUpdateDrivenPoll } from '../../utils/nativeRoomListUpdates';
 
 export type NativeRoomListSnapshot = {
   sessionGeneration: number;
@@ -207,7 +207,7 @@ export const useBindAllRoomsAtom = (
     }
 
     void refresh();
-    const stopPolling = startVisibilityAwarePoll(() => void refresh());
+    const stopPolling = startRoomListUpdateDrivenPoll(() => void refresh());
     return () => {
       disposed = true;
       stopPolling();
