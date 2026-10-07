@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Sync: show Reconnecting while no sync response has arrived (the SDK reports running before any request succeeds), replace a dead long-poll, restart at once after an expired sliding-sync session, restart a sync service that stopped on its own, and recognize a rejected session from a failed command even while sync is stopped.
+- Notifications (desktop): an encrypted message whose room key arrives after the first few seconds still produces its notification once it decrypts.
+- Logout: give pending room keys a bounded chance to reach the server backup before signing out, and warn on desktop and iOS when this is the account's last signed-in device.
 - Sessions (iOS): token-rotation saves are fenced by the same persistence lease as desktop so a refresh after logout cannot write credentials back, failed saves are retried with backoff, and Core can retire a rejected session locally without contacting the homeserver.
 - CI: fast pull-request gate plus a nightly heavy suite (XCUITests, live Synapse proofs, package builds, release-cache seeding); releases reuse the proven CI gate, keep warm compiler caches and retry notarization instead of rebuilding.
 - Verification: when another device scans the QR code Synara shows, ask the user to confirm that device reported success instead of confirming automatically.

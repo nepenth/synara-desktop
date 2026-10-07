@@ -1008,8 +1008,16 @@ pub async fn matrix_logout(
         move || {
             persistence_lease.revoke();
         },
-        plan.remote_logout_allowed
-            .then_some(move || async move { client.matrix_auth().logout().await }),
+        // Voluntary only: give pending room keys a bounded chance to reach the
+        // server backup, then one `/logout`, all inside the remote bound.
+        plan.remote_logout_allowed.then_some(move || async move {
+            let _ = synara_core::app::lifecycle::session::wait_for_backup_steady_state(
+                &client,
+                synara_core::app::lifecycle::session::LOGOUT_BACKUP_STEADY_STATE_TIMEOUT,
+            )
+            .await;
+            client.matrix_auth().logout().await
+        }),
         || async move {
             join_rules.retire();
             observations.retire();
@@ -2547,8 +2555,20 @@ mod tests {
         // The voluntary path hands its closure to `finish_taken_session_logout`,
         // which applies `bounded_remote_logout` itself.
         assert_eq!(calls, bounded + 1, "every remote logout must be bounded");
-        assert!(production
-            .contains(".then_some(move || async move { client.matrix_auth().logout().await })"));
+        let voluntary = production
+            .split("plan.remote_logout_allowed.then_some(move || async move {")
+            .nth(1)
+            .and_then(|rest| rest.split("}),").next())
+            .expect("voluntary remote logout closure");
+        // The backup wait runs first and is itself bounded, inside the remote bound.
+        let backup = voluntary
+            .find("wait_for_backup_steady_state(")
+            .expect("voluntary logout waits for the key backup");
+        let logout = voluntary
+            .find("client.matrix_auth().logout().await")
+            .expect("voluntary logout POSTs /logout");
+        assert!(backup < logout);
+        assert!(voluntary.contains("LOGOUT_BACKUP_STEADY_STATE_TIMEOUT"));
         // Core's `finish_taken_session_logout` stops sync before the remote
         // `/logout`; its own test pins that order.
     }

@@ -13,6 +13,42 @@ use super::{SessionFault, SessionLocator};
 /// Upper bound for one voluntary remote `/logout` attempt.
 pub const VOLUNTARY_REMOTE_LOGOUT_TIMEOUT: Duration = Duration::from_secs(15);
 
+/// Longest a voluntary logout waits for pending room keys to reach the server
+/// backup. It runs inside the voluntary remote-logout bound, so the `/logout`
+/// itself keeps most of its budget.
+pub const LOGOUT_BACKUP_STEADY_STATE_TIMEOUT: Duration = Duration::from_secs(8);
+
+/// What the pre-logout backup wait observed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackupSteadyState {
+    /// Server-side key backup is not enabled on this device.
+    NotEnabled,
+    /// Every pending room key was uploaded.
+    Settled,
+    /// The upload did not finish within the bound; logout continues.
+    TimedOut,
+    /// The upload failed; logout continues.
+    Failed,
+}
+
+/// Give a pending key-backup upload a bounded chance to finish before a
+/// voluntary logout, so keys received just before signing out are not lost.
+/// Never blocks longer than `timeout`, and never fails the logout.
+pub async fn wait_for_backup_steady_state(
+    client: &matrix_sdk::Client,
+    timeout: Duration,
+) -> BackupSteadyState {
+    let backups = client.encryption().backups();
+    if !backups.are_enabled().await {
+        return BackupSteadyState::NotEnabled;
+    }
+    match tokio::time::timeout(timeout, backups.wait_for_steady_state()).await {
+        Ok(Ok(())) => BackupSteadyState::Settled,
+        Ok(Err(_)) => BackupSteadyState::Failed,
+        Err(_) => BackupSteadyState::TimedOut,
+    }
+}
+
 /// One bounded `/logout` attempt. A 401, timeout or transport error is `false`
 /// so local cleanup still runs. Rejected-session retirement never calls this.
 pub async fn bounded_remote_logout<T, E>(
@@ -195,6 +231,26 @@ mod tests {
             device_id: "DEVICE".to_owned(),
             homeserver_url: "https://matrix.example.org".to_owned(),
         }
+    }
+
+    #[tokio::test]
+    async fn backup_wait_returns_at_once_without_a_server_backup() {
+        let server = matrix_sdk::test_utils::mocks::MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        let started = std::time::Instant::now();
+        assert_eq!(
+            wait_for_backup_steady_state(&client, Duration::from_secs(5)).await,
+            BackupSteadyState::NotEnabled
+        );
+        assert!(started.elapsed() < Duration::from_secs(1));
+    }
+
+    #[test]
+    fn backup_wait_leaves_most_of_the_remote_logout_budget() {
+        assert!(
+            LOGOUT_BACKUP_STEADY_STATE_TIMEOUT * 2
+                <= VOLUNTARY_REMOTE_LOGOUT_TIMEOUT + Duration::from_secs(1)
+        );
     }
 
     #[tokio::test]

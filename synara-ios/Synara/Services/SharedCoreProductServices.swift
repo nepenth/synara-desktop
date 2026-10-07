@@ -2048,7 +2048,11 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
             recoveryState: backup?.recoveryState,
             secretStorageState: secretStorage?.state
         )
-        let hasOtherDevices = devices.contains { $0.isCurrent == false }
+        // A dehydrated device cannot sign back in, so it is not another
+        // signed-in device (same rule as the SDK's `is_last_device`).
+        let hasOtherDevices = devices.contains {
+            SignOutCopy.isOtherSignedInDevice(isCurrent: $0.isCurrent, trust: $0.trust)
+        }
         let verification: SynaraCryptoVerificationStatus
         switch deviceSnapshot?.ownVerification {
         case "verified":
