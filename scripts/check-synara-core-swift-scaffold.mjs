@@ -15,6 +15,7 @@ import { inspectTypedRecoveryBoundaries } from "./lib/typed-recovery-boundaries.
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const required = [
   "crates/synara-core/src/synara_core.udl",
+  "synara-ios/SynaraCore/api/synara_core.swift-api.txt",
   "crates/synara-core/src/ffi.rs",
   "crates/synara-core/src/session_projection_ffi.rs",
   "crates/synara-core/src/shared_core_ffi.rs",
@@ -83,6 +84,12 @@ for (const path of required) {
 
 const cargo = readFileSync(resolve(root, "crates/synara-core/Cargo.toml"), "utf8");
 const udl = readFileSync(resolve(root, "crates/synara-core/src/synara_core.udl"), "utf8");
+// Generated Swift API surface, pinned by scripts/check-swift-api-snapshot.sh.
+// Items exported with UniFFI proc-macros are asserted here instead of in the UDL.
+const swiftApi = readFileSync(
+  resolve(root, "synara-ios/SynaraCore/api/synara_core.swift-api.txt"),
+  "utf8"
+);
 const lib = readFileSync(resolve(root, "crates/synara-core/src/lib.rs"), "utf8");
 const ffi = readFileSync(resolve(root, "crates/synara-core/src/ffi.rs"), "utf8");
 const sessionProjectionFfi = readFileSync(
@@ -943,12 +950,12 @@ const assertions = [
   [sharedCoreTimelineForward, "core.timelineForwardText", "P4-S9-30 helper writes forward on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreTimelineForward.swift in Sources", "P4-S9-30 helper in Xcode target"],
   [sharedCoreFfi, "session_snapshot", "P4-S9-31 typed session-snapshot FFI"],
-  [sharedCoreFfi, "matrix_session_snapshot", "P4-S9-31 calls the registered session-snapshot command"],
-  [sharedCoreFfi, "matrix_sync_status", "P4-S9-31 calls the registered sync-status command"],
+  [sharedCoreFfi, "session_status_snapshot()", "P4-S9-31 reads Core's typed session snapshot"],
+  [sharedCoreFfi, ".sync_status()", "P4-S9-31 reads Core's typed sync status"],
   [sharedCoreFfi, "matrix_media_config", "P4-S9-31 calls the registered media-config command"],
   [sharedCoreFfi, "matrix_secret_storage_status", "P4-S9-31 calls the registered secret-storage-status command"],
-  [udl, "SessionSnapshotDto session_snapshot()", "P4-S9-31 SharedCore session snapshot"],
-  [udl, "SyncStatusDto sync_status()", "P4-S9-31 SharedCore sync status"],
+  [swiftApi, "open func sessionSnapshot() async throws -> SessionSnapshotDto", "P4-S9-31 SharedCore session snapshot"],
+  [swiftApi, "open func syncStatus() async throws -> SyncStatusDto", "P4-S9-31 SharedCore sync status"],
   [udl, "MediaConfigDto media_config()", "P4-S9-31 SharedCore media config"],
   [udl, "SecretStorageStatusDto secret_storage_status()", "P4-S9-31 SharedCore secret-storage status"],
   [udl, "interface SessionStatusError", "P4-S9-31 static session-status error"],
@@ -2001,8 +2008,13 @@ for (const required of ["timeline_forward_text(", "timeline_forward_media("]) {
     throw new Error(`P4-S9-30 SharedCore must expose ${required}`);
   }
 }
-for (const required of ["session_snapshot(", "sync_status(", "media_config(", "secret_storage_status("]) {
+for (const required of ["media_config(", "secret_storage_status("]) {
   if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-31 SharedCore must expose ${required}`);
+  }
+}
+for (const required of ["func sessionSnapshot()", "func syncStatus()"]) {
+  if (!swiftApi.includes(required)) {
     throw new Error(`P4-S9-31 SharedCore must expose ${required}`);
   }
 }
@@ -2013,6 +2025,18 @@ if (!recoveryBoundary.ok) throw new Error(recoveryBoundary.errors.join("\n"));
 for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "matrix_timeline_edit_text", "matrix_timeline_redact", "matrix_timeline_report", "matrix_timeline_pin", "matrix_timeline_unpin", "matrix_timeline_poll_vote", "matrix_timeline_call_decline", "matrix_timeline_forward_text", "matrix_timeline_forward_media", "matrix_session_snapshot", "matrix_sync_status", "matrix_media_config", "matrix_secret_storage_status", "matrix_backup_status", "matrix_room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "matrix_crypto_status", "matrix_cross_signing_status"]) {
   if (sharedCoreBody.includes(forbidden)) {
     throw new Error(`SharedCore must not expose generic or unapproved ${forbidden}`);
+  }
+}
+// Proc-macro exports replace the build-time UDL patcher only if every async
+// export block asks UniFFI for the Tokio bridge (Matrix SDK futures need it).
+{
+  const exportBlocks = sharedCoreFfi.split("#[uniffi::export").slice(1);
+  for (const block of exportBlocks) {
+    const attribute = block.slice(0, block.indexOf("]") + 1);
+    const body = block.slice(0, block.search(/\n}\n/) + 1);
+    if (/\basync fn\b/.test(body) && !attribute.includes('async_runtime = "tokio"')) {
+      throw new Error(`UniFFI async export must use async_runtime = "tokio": #[uniffi::export${attribute}`);
+    }
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {

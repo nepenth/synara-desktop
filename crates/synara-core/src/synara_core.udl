@@ -2301,11 +2301,8 @@ interface SharedCore {
   [Async, Throws=TimelineForwardError]
   TimelineForwardDto timeline_forward_media(string source_room_id, string event_id, string target_room_id, boolean confirmed_encryption_downgrade);
 
-  [Async, Throws=SessionStatusError]
-  SessionSnapshotDto session_snapshot();
-
-  [Async, Throws=SessionStatusError]
-  SyncStatusDto sync_status();
+  // session_snapshot and sync_status are proc-macro exports
+  // (shared_core_ffi/session_lifecycle.rs).
 
   [Async, Throws=SessionStatusError]
   MediaConfigDto media_config();

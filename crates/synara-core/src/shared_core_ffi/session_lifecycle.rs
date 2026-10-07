@@ -1432,31 +1432,6 @@ impl SharedCore {
         Ok(sync_stop_dto_from_snapshot(snapshot))
     }
 
-    pub async fn session_snapshot(&self) -> Result<SessionSnapshotDto, SessionStatusError> {
-        let snapshot = self
-            .core
-            .session_status_snapshot()
-            .map_err(map_session_status_core_error)?;
-        session_snapshot_dto_from_public(snapshot)
-    }
-
-    pub async fn sync_status(&self) -> Result<SyncStatusDto, SessionStatusError> {
-        // Swift polls this while the session is live; it is the iOS watchdog.
-        self.retry_failed_session_save(std::time::Instant::now());
-        if let Some(owner) = self.core.attached_sync_owner() {
-            return sync_status_from_owner_snapshot(
-                owner.observe(),
-                self.core.attached_timeline_owner().is_some(),
-            );
-        }
-        let snapshot = self
-            .core
-            .sync_status()
-            .await
-            .map_err(map_session_status_core_error)?;
-        sync_status_dto_from_public(snapshot)
-    }
-
     pub async fn wipe_persisted_stores(
         &self,
         store_root: String,
@@ -1781,5 +1756,35 @@ impl SharedCore {
             .await
             .map_err(map_session_status_core_error)?;
         Ok(response.payload)
+    }
+}
+
+// Proc-macro exports (UniFFI library mode). Their Swift signatures are pinned
+// by synara-ios/SynaraCore/api/synara_core.swift-api.txt.
+#[uniffi::export(async_runtime = "tokio")]
+impl SharedCore {
+    pub async fn session_snapshot(&self) -> Result<SessionSnapshotDto, SessionStatusError> {
+        let snapshot = self
+            .core
+            .session_status_snapshot()
+            .map_err(map_session_status_core_error)?;
+        session_snapshot_dto_from_public(snapshot)
+    }
+
+    pub async fn sync_status(&self) -> Result<SyncStatusDto, SessionStatusError> {
+        // Swift polls this while the session is live; it is the iOS watchdog.
+        self.retry_failed_session_save(std::time::Instant::now());
+        if let Some(owner) = self.core.attached_sync_owner() {
+            return sync_status_from_owner_snapshot(
+                owner.observe(),
+                self.core.attached_timeline_owner().is_some(),
+            );
+        }
+        let snapshot = self
+            .core
+            .sync_status()
+            .await
+            .map_err(map_session_status_core_error)?;
+        sync_status_dto_from_public(snapshot)
     }
 }
