@@ -1,0 +1,26 @@
+extension NseCoreError: Sendable
+extension NsePreviewDto: Sendable
+extension NseSecretVaultError: Sendable
+open class NsePreviewRequest: NsePreviewRequestProtocol, @unchecked Sendable
+  open func cancel()
+  open func resolve() async throws -> NsePreviewDto
+  public convenience init(store: NseSecretVault, userId: String, homeserverUrl: String, storeRoot: String, roomId: String, eventId: String)
+public enum NseCoreError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
+  case Failed(code: String, description: String)
+  public var errorDescription: String?
+public enum NseSecretVaultError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
+  case Unavailable(code: String, description: String)
+  public var errorDescription: String?
+public protocol NsePreviewRequestProtocol: AnyObject, Sendable
+  func cancel()
+  func resolve() async throws -> NsePreviewDto
+public protocol NseSecretVault: AnyObject, Sendable
+  func get(key: String) throws -> Data?
+public struct NsePreviewDto: Equatable, Hashable
+  public var eventType: String
+  public var senderId: String?
+  public var body: String?
+  public var messageType: String?
+  public var isAgentApproval: Bool
+  public var originServerTs: UInt64
+  public init(eventType: String, senderId: String?, body: String?, messageType: String?, isAgentApproval: Bool, originServerTs: UInt64)
