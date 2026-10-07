@@ -42,9 +42,9 @@ pub use queue::{LocalTxnId, OutboundTextMessage, SendQueue};
 pub use recovery::{send_queue_retry_delay, spawn_send_queue_recovery};
 pub use room_queue::{
     abort_queued_send, enqueue_attachment_via_room_queue, enqueue_event_via_room_queue,
-    queued_send_is_wedged, reenable_queued_send, send_attachment_via_room_queue,
-    send_event_via_room_queue, unwedge_queued_send, wait_for_queued_send, QueuedSendAck,
-    QueuedSendError, QueuedSendSession,
+    queued_send_is_wedged, redact_via_room_queue, reenable_queued_send,
+    send_attachment_via_room_queue, send_event_via_room_queue, unwedge_queued_send,
+    wait_for_queued_send, QueuedSendAck, QueuedSendError, QueuedSendSession,
 };
 pub use text::{
     edit_message_content, message_content, parse_edit_event_id, parse_reply_event_id,

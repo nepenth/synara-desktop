@@ -58,9 +58,9 @@ use crate::app::send::{
     abort_queued_send, apply_poll_start_relations, edit_message_content,
     enqueue_event_via_room_queue, message_content, normalize_poll, parse_edit_event_id,
     parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id, parse_transaction_id,
-    poll_response_content, poll_start_content, queued_send_is_wedged, reenable_queued_send,
-    send_event_via_room_queue, unwedge_queued_send, wait_for_queued_send, MatrixPollRespondResult,
-    MatrixSendPollResult, MatrixSendTextResult, SendQueue,
+    poll_response_content, poll_start_content, queued_send_is_wedged, redact_via_room_queue,
+    reenable_queued_send, send_event_via_room_queue, unwedge_queued_send, wait_for_queued_send,
+    MatrixPollRespondResult, MatrixSendPollResult, MatrixSendTextResult, SendQueue,
 };
 use crate::app::threads::{
     rebuild_thread_index, NativeThreadListSnapshot, ThreadIndex, ThreadListItemProjection,
@@ -521,6 +521,20 @@ impl ApprovalDecisionRegistry {
 
     fn remember(&mut self, key: (String, String)) {
         remember_agent_approval_decision(&mut self.completed, key);
+    }
+}
+
+/// A redaction that is still in the persisted send queue (recoverable error or
+/// slow server) will be sent in order, so it is accepted rather than reported
+/// as a failure the user would retry. Wedged, cancelled or rejected requests fail.
+fn queued_redaction_outcome(
+    result: Result<crate::app::send::QueuedSendAck, crate::app::send::QueuedSendError>,
+    failed: &'static str,
+) -> Result<(), &'static str> {
+    match result {
+        Ok(_) => Ok(()),
+        Err(error) if error.still_queued => Ok(()),
+        Err(_) => Err(failed),
     }
 }
 
@@ -1694,9 +1708,10 @@ impl NativeTimelineOwner {
         if !authorized {
             return Err("v-timeline-redact-permission-denied");
         }
-        room.redact(&event_id, reason.as_deref(), None)
-            .await
-            .map_err(|_| "v-timeline-redact-failed")?;
+        queued_redaction_outcome(
+            redact_via_room_queue(&room, &event_id, reason.as_deref()).await,
+            "v-timeline-redact-failed",
+        )?;
         Ok(NativeTimelineActionReadback {
             schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
             action: NativeTimelineActionKind::Redact,
@@ -3025,12 +3040,7 @@ impl NativeTimelineRegistry {
         let target_event_id = parse_event_id(target_event_id)?;
         validate_reaction_key(key)?;
         self.open(client, &room_id).await?;
-        let timeline = self
-            .entries
-            .get(&room_id)
-            .ok_or("v-send.2-reaction-timeline-not-open")?
-            .timeline
-            .clone();
+        let timeline = self.reaction_timeline(&room_id, &target_event_id).await?;
         let added = timeline
             .toggle_reaction(&TimelineEventItemId::EventId(target_event_id.clone()), key)
             .await
@@ -3049,6 +3059,45 @@ impl NativeTimelineRegistry {
             },
             readback,
         })
+    }
+
+    /// The open timeline that renders `target_event_id`.
+    ///
+    /// The live timeline hides thread replies and only covers the recent tail,
+    /// so a reaction on a thread reply or a permalinked event must go through
+    /// the thread, view or focused timeline that holds that row. Falls back to
+    /// the live timeline, whose error then reports the missing row.
+    async fn reaction_timeline(
+        &self,
+        room_id: &str,
+        target_event_id: &matrix_sdk::ruma::EventId,
+    ) -> Result<Arc<Timeline>, &'static str> {
+        let live = self
+            .entries
+            .get(room_id)
+            .ok_or("v-send.2-reaction-timeline-not-open")?
+            .timeline
+            .clone();
+        let candidates = std::iter::once(live.clone())
+            .chain(
+                self.view_streams
+                    .values()
+                    .filter(|entry| entry.room_id == room_id)
+                    .map(|entry| entry.timeline.clone()),
+            )
+            .chain(
+                self.thread_entries
+                    .iter()
+                    .chain(self.focused_entries.iter())
+                    .filter(|((entry_room_id, _), _)| entry_room_id == room_id)
+                    .map(|(_, timeline)| timeline.clone()),
+            );
+        for timeline in candidates {
+            if timeline.item_by_event_id(target_event_id).await.is_some() {
+                return Ok(timeline);
+            }
+        }
+        Ok(live)
     }
 
     /// Idempotently ensure an approval annotation exists. This intentionally
@@ -3100,8 +3149,8 @@ impl NativeTimelineRegistry {
     }
 
     /// Redact any reaction annotation selected in the viewer. Aggregated
-    /// annotations are not timeline rows, so this correctly uses the native
-    /// room owner rather than `Timeline::redact`.
+    /// annotations are not timeline rows, so this queues the redaction on the
+    /// room send queue rather than calling `Timeline::redact`.
     pub async fn redact_reaction(
         &mut self,
         client: &Client,
@@ -3124,9 +3173,10 @@ impl NativeTimelineRegistry {
         let room = client
             .get_room(parse_room_id(&room_id)?.as_ref())
             .ok_or("v-send.2-reaction-room-not-found")?;
-        room.redact(&reaction_event_id, Some("Removed reaction"), None)
-            .await
-            .map_err(|_| "v-send.2-reaction-redact-failed")?;
+        queued_redaction_outcome(
+            redact_via_room_queue(&room, &reaction_event_id, Some("Removed reaction")).await,
+            "v-send.2-reaction-redact-failed",
+        )?;
         let readback = self
             .reaction_readback(client, &room_id, &target_event_id, key, true)
             .await?;

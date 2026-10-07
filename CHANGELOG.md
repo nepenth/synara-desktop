@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Encryption: stop compiling automatic room-key forwarding, whose keys carry no sender proof; new sessions read history from the encrypted key backup. Key-backup setup now goes through secret storage so the recovery key is always shown.
+- Messages: reactions on thread replies and permalinked messages go through the timeline that shows them, and redactions are sent through the room send queue so they stay ordered with queued edits and survive offline periods.
 - Sessions (iOS): token-rotation saves are fenced by the same persistence lease as desktop so a refresh after logout cannot write credentials back, failed saves are retried with backoff, and Core can retire a rejected session locally without contacting the homeserver.
 - CI: fast pull-request gate plus a nightly heavy suite (XCUITests, live Synapse proofs, package builds, release-cache seeding); releases reuse the proven CI gate, keep warm compiler caches and retry notarization instead of rebuilding.
 - Verification: when another device scans the QR code Synara shows, ask the user to confirm that device reported success instead of confirming automatically.

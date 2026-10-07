@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use matrix_sdk::attachment::AttachmentConfig;
 use matrix_sdk::ruma::events::AnyMessageLikeEventContent;
-use matrix_sdk::ruma::OwnedTransactionId;
+use matrix_sdk::ruma::{EventId, OwnedTransactionId};
 use matrix_sdk::send_queue::{
     LocalEchoContent, RoomSendQueueError, RoomSendQueueUpdate, SendHandle,
 };
@@ -415,6 +415,54 @@ pub async fn queued_send_is_wedged(
         ));
     }
     Ok(false)
+}
+
+/// Queue a redaction on `RoomSendQueue` and wait for it like any other send.
+///
+/// The queue orders the redaction after earlier queued edits or reactions on
+/// the same event and keeps it across offline periods and restarts, which a
+/// direct `Room::redact` request does not.
+pub async fn redact_via_room_queue(
+    room: &Room,
+    redacts: &EventId,
+    reason: Option<&str>,
+) -> Result<QueuedSendAck, QueuedSendError> {
+    let queue = room.send_queue();
+    let (_echoes, mut updates) = queue
+        .subscribe()
+        .await
+        .map_err(|_| QueuedSendError::failed("d0.4-send-queue-subscribe-failed", None))?;
+    queue
+        .redact(redacts.to_owned(), reason)
+        .await
+        .map_err(map_queue_error)?;
+    // `RoomSendQueue::redact` announces its local echo before returning, so the
+    // transaction id is already buffered on this subscription.
+    let transaction_id = loop {
+        match updates.try_recv() {
+            Ok(RoomSendQueueUpdate::NewLocalEvent(echo))
+                if matches!(
+                    &echo.content,
+                    LocalEchoContent::Redaction { redacts: queued, .. } if **queued == *redacts
+                ) =>
+            {
+                break echo.transaction_id;
+            }
+            Ok(_) | Err(broadcast::error::TryRecvError::Lagged(_)) => continue,
+            Err(_) => {
+                return Err(QueuedSendError::failed(
+                    "d0.4-send-queue-redaction-unidentified",
+                    None,
+                ))
+            }
+        }
+    };
+    let mut session = QueuedSendSession {
+        updates,
+        room: room.clone(),
+        transaction_id: transaction_id.to_string(),
+    };
+    wait_for_queued_send(&mut session).await
 }
 
 #[cfg(test)]
