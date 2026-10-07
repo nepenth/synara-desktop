@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Cleanup: remove the renderer's js-sdk read-marker engine, room-activity store and rollout flags, and iOS client policies that only tests used; Mark as Read on desktop goes only through the native Core owner.
 - Internals: pin the generated Swift API surface in CI, generate Swift bindings in UniFFI library mode, read session/sync/crypto status through typed Core methods on desktop and iOS, generate the renderer's status types from Rust, and start moving SharedCore methods to UniFFI proc-macro exports.
 - Performance: keep at most 16 idle live room timelines and 32 focused or thread timelines (least recently used goes first), close view streams a reloaded window left open, and scope each view's power-level watcher to its room.
 - Startup: probe sliding-sync support and the system keyring in the background so restore and the first window paint no longer wait on them.

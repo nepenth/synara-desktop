@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import {
@@ -121,12 +121,6 @@ test('home rooms sort by native lastActivityTs and leave missing timestamps last
 test('desktop and iOS room lists no longer implement a Recent 24h partition', () => {
   const cwd = process.cwd();
   const home = readFileSync(join(cwd, 'src/app/pages/client/home/Home.tsx'), 'utf8');
-  const hook = readFileSync(join(cwd, 'src/app/hooks/useRoomActivity.ts'), 'utf8');
-  const activity = readFileSync(join(cwd, 'src/app/state/room-list/roomActivity.ts'), 'utf8');
-  const activityTests = readFileSync(
-    join(cwd, 'src/app/state/room-list/__tests__/roomActivity.test.ts'),
-    'utf8'
-  );
   const iosView = readFileSync(
     join(cwd, '../synara-ios/Synara/Features/RoomListView.swift'),
     'utf8'
@@ -146,10 +140,14 @@ test('desktop and iOS room lists no longer implement a Recent 24h partition', ()
 
   assert.equal(home.includes('Recent (24h)'), false);
   assert.equal(home.includes('useRecentRoomPartition'), false);
-  assert.equal(hook.includes('useRecentRoomPartition'), false);
-  assert.equal(activity.includes('RECENT_ROOM_WINDOW_MS'), false);
-  assert.equal(activity.includes('partitionRoomIdsByActivity'), false);
-  assert.equal(activityTests.includes('partitionRoomIdsByActivity'), false);
+  // The legacy js-sdk room-activity store and its retired hook are deleted.
+  for (const retired of [
+    'src/app/hooks/useRoomActivity.ts',
+    'src/app/state/room-list/roomActivity.ts',
+    'src/app/state/room-list/__tests__/roomActivity.test.ts',
+  ]) {
+    assert.equal(existsSync(join(cwd, retired)), false, retired);
+  }
   assert.equal(iosView.includes('Recent activity (24h)'), false);
   assert.equal(iosService.includes('enum RoomListRecentActivity'), false);
   assert.equal(iosService.includes('TimeInterval = 86400'), false);

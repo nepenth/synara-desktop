@@ -698,29 +698,6 @@ final class TimelineServiceTests: XCTestCase {
         )
     }
 
-    func testMatrixTimelineReadReceiptPolicyMatchesOnlySignedInUser() {
-        let users = ["@alice:matrix.example", "@operator:matrix.example"]
-
-        XCTAssertTrue(
-            MatrixTimelineReadReceiptPolicy.hasCurrentUserReceipt(
-                readReceiptUserIDs: users,
-                currentUserID: "@operator:matrix.example"
-            )
-        )
-        XCTAssertFalse(
-            MatrixTimelineReadReceiptPolicy.hasCurrentUserReceipt(
-                readReceiptUserIDs: users,
-                currentUserID: "@other:matrix.example"
-            )
-        )
-        XCTAssertFalse(
-            MatrixTimelineReadReceiptPolicy.hasCurrentUserReceipt(
-                readReceiptUserIDs: users,
-                currentUserID: nil
-            )
-        )
-    }
-
     func testUnreadPresentationKeepsLiveProviderGenerationAndSnapshot() async throws {
         let service = MockTimelineService(items: focusPolicyItems(receiptIndex: 1))
         let session = RoomTimelineSession(roomID: "!room:matrix.example", service: service)
@@ -2230,46 +2207,6 @@ final class TimelineServiceTests: XCTestCase {
         )
 
         XCTAssertEqual(merged.filter { !$0.isLocalPending }.map(\.eventID), ["$one", "$two", "$three"])
-    }
-
-    func testTimelineCollectorAndInteractiveFreshnessPoliciesAreBounded() {
-        XCTAssertEqual(MatrixTimelineCollectorPolicy.retainedSuffixCount(itemCount: 5000, limit: 1200), 1200)
-        XCTAssertEqual(MatrixTimelineCollectorPolicy.droppedPrefixCount(itemCount: 5000, limit: 1200), 3800)
-        XCTAssertEqual(
-            MatrixTimelineCollectorPolicy.droppedPrefixCountAfterPopBack(
-                retainedCount: 0,
-                droppedPrefixCount: 25
-            ),
-            24
-        )
-
-        let now = Date()
-        XCTAssertFalse(MatrixInteractiveFreshnessPolicy.shouldPerformSync(
-            hasActiveSyncService: true,
-            lastSuccessfulSyncAt: nil,
-            now: now,
-            maximumAge: 2
-        ))
-        XCTAssertFalse(MatrixInteractiveFreshnessPolicy.shouldPerformSync(
-            hasActiveSyncService: false,
-            lastSuccessfulSyncAt: now.addingTimeInterval(-1),
-            now: now,
-            maximumAge: 2
-        ))
-        XCTAssertTrue(MatrixInteractiveFreshnessPolicy.shouldPerformSync(
-            hasActiveSyncService: false,
-            lastSuccessfulSyncAt: now.addingTimeInterval(-3),
-            now: now,
-            maximumAge: 2
-        ))
-        XCTAssertTrue(MatrixInteractiveFreshnessPolicy.ownsInstalledOperation(
-            installedGeneration: 4,
-            currentGeneration: 4
-        ))
-        XCTAssertFalse(MatrixInteractiveFreshnessPolicy.ownsInstalledOperation(
-            installedGeneration: 4,
-            currentGeneration: 5
-        ))
     }
 
     func testPendingReconcilerDropsMatchedLocalEchoes() {
