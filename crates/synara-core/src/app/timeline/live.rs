@@ -27,8 +27,8 @@ use matrix_sdk::{
                 RoomMessageEventContentWithoutRelation,
             },
             sticker::StickerEventContent,
-            AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncStateEvent,
-            AnySyncTimelineEvent, Mentions, StateEventType,
+            AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncTimelineEvent, Mentions,
+            StateEventType,
         },
         MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UInt, UserId,
     },
@@ -103,6 +103,8 @@ mod approval_history;
 #[cfg(test)]
 mod approval_history_tests;
 #[cfg(test)]
+mod eviction_tests;
+#[cfg(test)]
 mod room_read_state_tests;
 #[cfg(test)]
 mod thread_list_tests;
@@ -112,17 +114,29 @@ mod thread_open_tests;
 mod thread_receipt_tests;
 use approval_history::{ApprovalHistory, HistoryProtection};
 mod approval_inbox;
+mod recency;
 use approval_inbox::ApprovalInboxOwner;
 pub use approval_inbox::{
     NativeAgentApprovalInboxCoverage, NativeAgentApprovalInboxItem,
     NativeAgentApprovalInboxSnapshot, NativeAgentApprovalInboxStatus,
 };
+use recency::{RecencyMap, UseStamp};
 
 const PAGINATION_BATCH_SIZE: u16 = 30;
 const REDACTED_PLACEHOLDER: &str = "Message removed";
 const UTD_PLACEHOLDER: &str = "Unable to decrypt this message";
 const UNSUPPORTED_PLACEHOLDER: &str = "Unsupported event";
 const MAX_FOCUSED_EVENT_READBACKS: usize = 256;
+/// Event-focused and thread timelines kept for reuse. Each one holds an SDK
+/// timeline with its own items, so the cache is far smaller than the
+/// decision-dedup window above.
+const MAX_FOCUSED_TIMELINES: usize = 32;
+/// Live room timelines kept after their last use. Rooms with an open view
+/// stream are never evicted, so this bounds only idle rooms.
+const MAX_LIVE_TIMELINES: usize = 16;
+/// Open view streams. A renderer reload can orphan streams it never closes;
+/// past this cap the least recently used stream is closed.
+const MAX_VIEW_STREAMS: usize = 32;
 const FOCUSED_CONTEXT_EVENT_COUNT: u16 = 25;
 /// Live and permalink Event timelines hide in-thread replies now that
 /// `NativeTimelineOpenPosition::Thread` owns the threaded stream.
@@ -558,6 +572,7 @@ struct LiveTimelineEntry {
     timeline: Arc<Timeline>,
     is_encrypted: bool,
     hit_start: bool,
+    last_used: UseStamp,
 }
 
 struct ViewStreamEntry {
@@ -567,17 +582,18 @@ struct ViewStreamEntry {
     position: TimelineViewPosition,
     hit_start: Arc<AtomicBool>,
     media: Arc<AsyncMutex<TimelineMediaRegistry>>,
+    last_access: UseStamp,
 }
 
 pub struct NativeTimelineRegistry {
     approval_history: Arc<ApprovalHistory>,
     session_generation: u64,
     entries: HashMap<String, LiveTimelineEntry>,
-    focused_entries: HashMap<(String, String), Arc<Timeline>>,
+    focused_entries: RecencyMap<(String, String), Arc<Timeline>>,
     /// Thread timelines keyed by `(room_id, root_event_id)`. Must not share
     /// `focused_entries`: a permalink of the root and a thread view of the
     /// root are different SDK streams.
-    thread_entries: HashMap<(String, String), Arc<Timeline>>,
+    thread_entries: RecencyMap<(String, String), Arc<Timeline>>,
     view_streams: HashMap<String, ViewStreamEntry>,
     view_update_tasks: HashMap<String, JoinHandle<()>>,
     view_revisions: HashMap<String, Arc<AtomicU64>>,
@@ -1268,6 +1284,7 @@ impl NativeTimelineOwner {
             .await
             .view_streams
             .get(stream_id)
+            .inspect(|stream| stream.last_access.touch())
             .map(|stream| stream.timeline.is_threaded())
     }
 
@@ -1278,6 +1295,7 @@ impl NativeTimelineOwner {
             .await
             .entries
             .get(room_id)
+            .inspect(|entry| entry.last_used.touch())
             .map(|entry| entry.timeline.is_threaded())
     }
 
@@ -1308,6 +1326,7 @@ impl NativeTimelineOwner {
             registry
                 .view_streams
                 .get(stream_id)
+                .inspect(|stream| stream.last_access.touch())
                 .ok_or("v-timeline-view-not-open")?
                 .timeline
                 .clone()
@@ -1658,7 +1677,11 @@ impl NativeTimelineOwner {
         let timelines = {
             let registry = self.registry.lock().await;
             let mut timelines = Vec::new();
-            if let Some(entry) = registry.entries.get(room_id.as_str()) {
+            if let Some(entry) = registry
+                .entries
+                .get(room_id.as_str())
+                .inspect(|entry| entry.last_used.touch())
+            {
                 timelines.push(entry.timeline.clone());
             }
             timelines.extend(
@@ -1838,7 +1861,11 @@ impl NativeTimelineOwner {
         let timelines = {
             let registry = self.registry.lock().await;
             let mut timelines = Vec::new();
-            if let Some(entry) = registry.entries.get(room_id.as_str()) {
+            if let Some(entry) = registry
+                .entries
+                .get(room_id.as_str())
+                .inspect(|entry| entry.last_used.touch())
+            {
                 timelines.push(entry.timeline.clone());
             }
             timelines.extend(
@@ -2150,14 +2177,55 @@ impl NativeTimelineRegistry {
             approval_history: Arc::new(ApprovalHistory::default()),
             session_generation,
             entries: HashMap::new(),
-            focused_entries: HashMap::new(),
-            thread_entries: HashMap::new(),
+            focused_entries: RecencyMap::new(MAX_FOCUSED_TIMELINES),
+            thread_entries: RecencyMap::new(MAX_FOCUSED_TIMELINES),
             view_streams: HashMap::new(),
             view_update_tasks: HashMap::new(),
             view_revisions: HashMap::new(),
             next_view_stream_id: 0,
             utd_index: UtdIndex::new(session_generation),
             utd_recovery: UtdRecoveryCoordinator::new(session_generation),
+        }
+    }
+
+    /// Drop the least recently used idle live timelines above
+    /// [`MAX_LIVE_TIMELINES`]. A room with an open view stream, and the room
+    /// that was just opened, are never evicted.
+    fn evict_idle_live_entries(&mut self, keep_room_id: &str) {
+        while self.entries.len() > MAX_LIVE_TIMELINES {
+            let candidate = self
+                .entries
+                .iter()
+                .filter(|(room_id, _)| {
+                    room_id.as_str() != keep_room_id
+                        && !self
+                            .view_streams
+                            .values()
+                            .any(|stream| &stream.room_id == *room_id)
+                })
+                .min_by_key(|(_, entry)| entry.last_used.get())
+                .map(|(room_id, _)| room_id.clone());
+            let Some(room_id) = candidate else {
+                break;
+            };
+            self.entries.remove(&room_id);
+        }
+    }
+
+    /// Close the least recently used view streams so a new one fits under
+    /// [`MAX_VIEW_STREAMS`]. Streams a reloaded renderer never closed are
+    /// the ones that stop being touched.
+    fn evict_least_recent_view_streams(&mut self) {
+        while self.view_streams.len() >= MAX_VIEW_STREAMS {
+            let Some(stream_id) = self
+                .view_streams
+                .iter()
+                .min_by_key(|(_, stream)| stream.last_access.get())
+                .map(|(stream_id, _)| stream_id.clone())
+            else {
+                break;
+            };
+            self.close_view(NativeTimelineCloseRequest { stream_id });
         }
     }
 
@@ -2216,8 +2284,10 @@ impl NativeTimelineRegistry {
                     timeline: Arc::new(timeline),
                     is_encrypted,
                     hit_start,
+                    last_used: UseStamp::now(),
                 },
             );
+            self.evict_idle_live_entries(&room_id_string);
         }
         self.snapshot(client, &room_id_string).await
     }
@@ -2276,6 +2346,7 @@ impl NativeTimelineRegistry {
                         let entry = self
                             .entries
                             .get(&room_id_string)
+                            .inspect(|entry| entry.last_used.touch())
                             .expect("live timeline inserted by open");
                         (
                             entry.timeline.clone(),
@@ -2298,6 +2369,7 @@ impl NativeTimelineRegistry {
                         let entry = self
                             .entries
                             .get(&room_id_string)
+                            .inspect(|entry| entry.last_used.touch())
                             .expect("live timeline inserted by open");
                         (
                             entry.timeline.clone(),
@@ -2329,6 +2401,7 @@ impl NativeTimelineRegistry {
                 let entry = self
                     .entries
                     .get(&room_id_string)
+                    .inspect(|entry| entry.last_used.touch())
                     .expect("live timeline inserted by open");
                 (
                     entry.timeline.clone(),
@@ -2350,11 +2423,6 @@ impl NativeTimelineRegistry {
                     .get_room(&room_id)
                     .ok_or("v-timeline-focused-room-not-found")?;
                 if !self.focused_entries.contains_key(&key) {
-                    if self.focused_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
-                        if let Some(oldest_key) = self.focused_entries.keys().next().cloned() {
-                            self.focused_entries.remove(&oldest_key);
-                        }
-                    }
                     let timeline = TimelineBuilder::new(&room)
                         .with_focus(TimelineFocus::Event {
                             target: event_id.clone(),
@@ -2406,6 +2474,7 @@ impl NativeTimelineRegistry {
                         let entry = self
                             .entries
                             .get(&room_id_string)
+                            .inspect(|entry| entry.last_used.touch())
                             .expect("live timeline inserted by open");
                         (
                             entry.timeline.clone(),
@@ -2429,6 +2498,7 @@ impl NativeTimelineRegistry {
                         let entry = self
                             .entries
                             .get(&room_id_string)
+                            .inspect(|entry| entry.last_used.touch())
                             .expect("live timeline inserted by open");
                         (
                             entry.timeline.clone(),
@@ -2498,6 +2568,7 @@ impl NativeTimelineRegistry {
         .await;
         // Publish ownership only after all awaited initialization succeeds.
         // Cancellation before this point drops the local history protection.
+        self.evict_least_recent_view_streams();
         self.view_revisions
             .insert(subscription_key.clone(), revision.clone());
         self.view_streams.insert(
@@ -2509,6 +2580,7 @@ impl NativeTimelineRegistry {
                 position: view_position.clone(),
                 hit_start: hit_start.clone(),
                 media: media.clone(),
+                last_access: UseStamp::now(),
             },
         );
         self.view_update_tasks.insert(
@@ -2545,7 +2617,11 @@ impl NativeTimelineRegistry {
         room_id: &str,
     ) -> Result<NativeTimelineSnapshot, &'static str> {
         let room_id = parse_room_id(room_id)?.to_string();
-        let entry = self.entries.get(&room_id).ok_or("d0.3-timeline-not-open")?;
+        let entry = self
+            .entries
+            .get(&room_id)
+            .inspect(|entry| entry.last_used.touch())
+            .ok_or("d0.3-timeline-not-open")?;
         let mut snapshot = snapshot_from_timeline(
             self.session_generation,
             room_id.clone(),
@@ -2568,6 +2644,7 @@ impl NativeTimelineRegistry {
             let stream = self
                 .view_streams
                 .get_mut(&request.stream_id)
+                .inspect(|stream| stream.last_access.touch())
                 .ok_or("v-timeline-view-not-open")?;
             let reached_end = match request.direction {
                 NativeTimelineDirection::Backwards => stream
@@ -2627,6 +2704,7 @@ impl NativeTimelineRegistry {
         let stream = self
             .view_streams
             .get(&request.stream_id)
+            .inspect(|stream| stream.last_access.touch())
             .ok_or("v-timeline-view-not-open")?;
         if request.action == NativeTimelineReadAction::MarkRead
             && !position_allows_mark_read(&stream.position)
@@ -2661,10 +2739,12 @@ impl NativeTimelineRegistry {
         let stream = self
             .view_streams
             .get(&request.stream_id)
+            .inspect(|stream| stream.last_access.touch())
             .ok_or("v-timeline-view-not-open")?;
         let uses_live_provider = self
             .entries
             .get(&stream.room_id)
+            .inspect(|entry| entry.last_used.touch())
             .is_some_and(|live| Arc::ptr_eq(&live.timeline, &stream.timeline));
         if !uses_live_provider {
             return Err("v-timeline-follow-live-tail-not-loaded");
@@ -2674,6 +2754,7 @@ impl NativeTimelineRegistry {
             let sdk_tail = self
                 .view_streams
                 .get(&request.stream_id)
+                .inspect(|stream| stream.last_access.touch())
                 .ok_or("v-timeline-view-not-open")?
                 .timeline
                 .latest_event_id()
@@ -2682,6 +2763,7 @@ impl NativeTimelineRegistry {
                 Some(tail) if tail == observed => {
                     self.view_streams
                         .get_mut(&request.stream_id)
+                        .inspect(|stream| stream.last_access.touch())
                         .ok_or("v-timeline-view-not-open")?
                         .position = TimelineViewPosition::LiveBottom;
                 }
@@ -2699,15 +2781,20 @@ impl NativeTimelineRegistry {
         room_id_string: &str,
     ) -> Result<Arc<Timeline>, &'static str> {
         let room_id_string = room_id_string.to_owned();
+        let was_open = self.entries.contains_key(&room_id_string);
         self.open(client, &room_id_string)
             .await
             .map_err(|_| "v-rooms-room-read-state-mark-read-failed")?;
-        Ok(self
+        let entry = self
             .entries
             .get(&room_id_string)
-            .ok_or("v-rooms-room-read-state-mark-read-failed")?
-            .timeline
-            .clone())
+            .ok_or("v-rooms-room-read-state-mark-read-failed")?;
+        if !was_open {
+            // Room-list Mark as Read does not mount the room. Keep its
+            // timeline only as the first candidate for eviction.
+            entry.last_used.demote();
+        }
+        Ok(entry.timeline.clone())
     }
 
     pub async fn view_snapshot_for_stream(
@@ -2718,6 +2805,7 @@ impl NativeTimelineRegistry {
         let stream = self
             .view_streams
             .get(stream_id)
+            .inspect(|stream| stream.last_access.touch())
             .ok_or("v-timeline-view-not-open")?;
         let revision = self
             .view_revisions
@@ -2767,6 +2855,7 @@ impl NativeTimelineRegistry {
         let room_id = self
             .view_streams
             .get(&request.stream_id)
+            .inspect(|stream| stream.last_access.touch())
             .ok_or("v-timeline-view-not-open")?
             .room_id
             .clone();
@@ -2785,7 +2874,10 @@ impl NativeTimelineRegistry {
     }
 
     async fn live_tail_event_id(&self, room_id: &str) -> Option<String> {
-        let entry = self.entries.get(room_id)?;
+        let entry = self
+            .entries
+            .get(room_id)
+            .inspect(|entry| entry.last_used.touch())?;
         let items = entry.timeline.items().await;
         items.iter().rev().find_map(|item| {
             item.as_event()
@@ -2794,7 +2886,11 @@ impl NativeTimelineRegistry {
     }
 
     async fn live_event_ids(&self, room_id: &str) -> Vec<String> {
-        let Some(entry) = self.entries.get(room_id) else {
+        let Some(entry) = self
+            .entries
+            .get(room_id)
+            .inspect(|entry| entry.last_used.touch())
+        else {
             return Vec::new();
         };
         let items = entry.timeline.items().await;
@@ -2814,7 +2910,11 @@ impl NativeTimelineRegistry {
         room_id: &str,
     ) -> LastReadOpenPlan {
         let live_ids = self.live_event_ids(room_id).await;
-        let Some(entry) = self.entries.get(room_id) else {
+        let Some(entry) = self
+            .entries
+            .get(room_id)
+            .inspect(|entry| entry.last_used.touch())
+        else {
             return LastReadOpenPlan::LiveBottom;
         };
         let (raw, anchor) = navigation_read_state(&entry.timeline, client.user_id()).await;
@@ -2833,11 +2933,6 @@ impl NativeTimelineRegistry {
         let event_id = parse_event_id(anchor_event_id).map_err(|_| invalid_id)?;
         let key = (room_id.to_owned(), event_id.to_string());
         if !self.focused_entries.contains_key(&key) {
-            if self.focused_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
-                if let Some(oldest_key) = self.focused_entries.keys().next().cloned() {
-                    self.focused_entries.remove(&oldest_key);
-                }
-            }
             let timeline = TimelineBuilder::new(room)
                 .with_focus(TimelineFocus::Event {
                     target: event_id.clone(),
@@ -2874,11 +2969,6 @@ impl NativeTimelineRegistry {
         let root_event_id = parse_thread_root_event_id_for_open(root_event_id)?;
         let key = (room_id.to_owned(), root_event_id.to_string());
         if !self.thread_entries.contains_key(&key) {
-            if self.thread_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
-                if let Some(oldest_key) = self.thread_entries.keys().next().cloned() {
-                    self.thread_entries.remove(&oldest_key);
-                }
-            }
             let timeline = TimelineBuilder::new(room)
                 .with_focus(TimelineFocus::Thread {
                     root_event_id: root_event_id.clone(),
@@ -2933,6 +3023,7 @@ impl NativeTimelineRegistry {
         let entry = self
             .entries
             .get_mut(&room_id)
+            .inspect(|entry| entry.last_used.touch())
             .ok_or("d0.3-timeline-not-open")?;
         let reached_end = match direction {
             NativeTimelineDirection::Backwards => entry
@@ -2972,11 +3063,6 @@ impl NativeTimelineRegistry {
         let event_id = parse_event_id(event_id)?;
         let key = (room_id.clone(), event_id.to_string());
         if !self.focused_entries.contains_key(&key) {
-            if self.focused_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
-                if let Some(oldest_key) = self.focused_entries.keys().next().cloned() {
-                    self.focused_entries.remove(&oldest_key);
-                }
-            }
             let room = client
                 .get_room(parse_room_id(&room_id)?.as_ref())
                 .ok_or("v-crypto.6-event-room-not-found")?;
@@ -3028,6 +3114,7 @@ impl NativeTimelineRegistry {
         let timeline = self
             .entries
             .get(&room_id)
+            .inspect(|entry| entry.last_used.touch())
             .ok_or("v-send.2-reaction-timeline-not-open")?
             .timeline
             .clone();
@@ -3151,6 +3238,7 @@ impl NativeTimelineRegistry {
         let entry = self
             .entries
             .get(room_id)
+            .inspect(|entry| entry.last_used.touch())
             .ok_or("v-send.2-reaction-timeline-not-open")?;
         let (items, _updates) = entry.timeline.subscribe().await;
         if let Some(item) = items
@@ -3188,11 +3276,6 @@ impl NativeTimelineRegistry {
         // used for event readback; no JS relation inspection is involved.
         let focus_key = (room_id.to_owned(), target_event_id.to_string());
         if !self.focused_entries.contains_key(&focus_key) {
-            if self.focused_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
-                if let Some(oldest_key) = self.focused_entries.keys().next().cloned() {
-                    self.focused_entries.remove(&oldest_key);
-                }
-            }
             let room = client
                 .get_room(parse_room_id(room_id)?.as_ref())
                 .ok_or("v-send.2-reaction-room-not-found")?;
@@ -3736,15 +3819,18 @@ fn spawn_view_update_owner(
         hydrate_sender_profiles,
     } = input;
     let client = timeline.room().client();
-    let (power_authority_tx, mut power_authority_rx) = tokio::sync::mpsc::unbounded_channel();
-    let power_handler = client.add_event_handler(move |event: AnySyncStateEvent| {
-        let power_authority_tx = power_authority_tx.clone();
-        async move {
-            if event.event_type() == StateEventType::RoomPowerLevels {
-                let _ = power_authority_tx.send(());
+    // Room-scoped and typed: only this room's power-level changes reach the
+    // handler. A one-slot channel coalesces bursts into one recompute.
+    let (power_authority_tx, mut power_authority_rx) = tokio::sync::mpsc::channel(1);
+    let power_handler = client.add_room_event_handler(
+        timeline.room().room_id(),
+        move |_event: matrix_sdk::ruma::events::room::power_levels::SyncRoomPowerLevelsEvent| {
+            let power_authority_tx = power_authority_tx.clone();
+            async move {
+                let _ = power_authority_tx.try_send(());
             }
-        }
-    });
+        },
+    );
     let power_handler = client.event_handler_drop_guard(power_handler);
     tokio::spawn(async move {
         let _power_handler = power_handler;
