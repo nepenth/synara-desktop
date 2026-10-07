@@ -35,9 +35,12 @@ fn every_integration_source_has_exactly_one_test_target() {
             "register the {name} harness exactly once in Cargo.toml"
         );
         for line in harness.lines() {
+            // Shared helpers under tests/support/ are included by several
+            // harnesses; only root sources must be registered exactly once.
             if let Some(source) = line
                 .strip_prefix("#[path = \"../")
                 .and_then(|line| line.strip_suffix("\"]"))
+                .filter(|source| !source.contains('/'))
             {
                 assert!(registered.insert(source.to_owned()), "duplicate: {source}");
             }
