@@ -69,12 +69,6 @@ fn main_window<R: Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<R>> {
 
 pub fn show_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     if let Some(window) = main_window(app) {
-        // Hidden-to-tray on Linux iconifies rather than unmapping. Keep the
-        // window in the dash/taskbar so a launcher click activates this copy.
-        #[cfg(target_os = "linux")]
-        {
-            let _ = window.set_skip_taskbar(false);
-        }
         window.show()?;
         window.unminimize()?;
         window.set_focus()?;
@@ -84,14 +78,10 @@ pub fn show_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 
 pub fn hide_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     if let Some(window) = main_window(app) {
-        #[cfg(target_os = "linux")]
-        {
-            // GTK hide() unmaps the toplevel. GNOME then treats Synara as not
-            // running (no dash dot) and a launcher click starts a second copy.
-            let _ = window.set_skip_taskbar(false);
-            window.minimize()?;
-        }
-        #[cfg(not(target_os = "linux"))]
+        // Close hides to the tray on every platform, like macOS. On Linux the
+        // dash may drop its running dot while hidden; a launcher click still
+        // reaches this copy through the single-instance plugin, which calls
+        // `show_main_window`. Quit stays on the tray menu.
         window.hide()?;
     }
     Ok(())
@@ -278,7 +268,7 @@ mod tests {
     }
 
     #[test]
-    fn linux_close_to_tray_iconifies_instead_of_unmapping() {
+    fn close_hides_to_tray_instead_of_minimizing() {
         let source = include_str!("desktop.rs");
         let hide_fn = source
             .split("pub fn hide_main_window")
@@ -287,9 +277,12 @@ mod tests {
             .split("pub fn navigate_main_window")
             .next()
             .unwrap_or("");
-        assert!(hide_fn.contains("target_os = \"linux\""));
-        assert!(hide_fn.contains("window.minimize()?"));
-        assert!(hide_fn.contains("set_skip_taskbar(false)"));
         assert!(hide_fn.contains("window.hide()?"));
+        assert!(!hide_fn.contains(concat!("window.", "minimize()")));
+        assert!(!hide_fn.contains(concat!("target_os = ", "\"linux\"")));
+        // A second launch must reach the hidden copy instead of starting another.
+        let lib = include_str!("lib.rs");
+        assert!(lib.contains("tauri_plugin_single_instance::init"));
+        assert!(lib.contains("desktop::show_main_window(app)"));
     }
 }
