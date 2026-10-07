@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Sessions (iOS): token-rotation saves are fenced by the same persistence lease as desktop so a refresh after logout cannot write credentials back, failed saves are retried with backoff, and Core can retire a rejected session locally without contacting the homeserver.
 - CI: fast pull-request gate plus a nightly heavy suite (XCUITests, live Synapse proofs, package builds, release-cache seeding); releases reuse the proven CI gate, keep warm compiler caches and retry notarization instead of rebuilding.
 - Verification: when another device scans the QR code Synara shows, ask the user to confirm that device reported success instead of confirming automatically.
 - Linux: closing the window hides Synara to the tray instead of minimizing it, matching macOS. Reopen from the tray or the launcher; quit from the tray menu.
