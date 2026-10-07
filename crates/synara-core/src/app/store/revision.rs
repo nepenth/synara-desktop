@@ -16,7 +16,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use synara_core::app::store::{StorePathError, StorePaths};
+use super::{StorePathError, StorePaths};
 
 /// Current on-disk layout revision. Bump this whenever a change touches state,
 /// crypto, cache, media, or store-key schema; add the matching migration step.
@@ -420,7 +420,7 @@ fn now_unix_ms() -> u128 {
 #[cfg(test)]
 mod revision_tests {
     use super::*;
-    use crate::matrix::store::AccountIdentity;
+    use crate::app::store::AccountIdentity;
 
     fn root(label: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(

@@ -13,6 +13,8 @@
 mod identity;
 mod key_material;
 mod paths;
+#[cfg(feature = "full-app")]
+mod revision;
 mod vault;
 
 pub use identity::{AccountIdentity, AccountIdentityError};
@@ -22,6 +24,12 @@ pub use key_material::{
 };
 pub use paths::{
     StoreKeyCreationPolicy, StoreLayout, StorePathError, StorePaths, MATRIX_STORE_ROOT_SEGMENT,
+};
+#[cfg(feature = "full-app")]
+pub use revision::{
+    migrate_store_to_current, reset_store_for_recovery, StoreMigrationError, StoreMigrationStep,
+    StoreResetOutcome, StoreRevisionDecision, StoreRevisionManifest, MIN_MIGRATABLE_LAYOUT_VERSION,
+    STORE_LAYOUT_VERSION, STORE_RECOVERY_ARCHIVE_SEGMENT, STORE_REVISION_MANIFEST_FILE,
 };
 pub use vault::{
     get_or_create_store_key, get_or_migrate_store_key, InMemoryStoreKeyVault, StoreKeyVault,
