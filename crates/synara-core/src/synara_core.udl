@@ -799,6 +799,7 @@ dictionary SyncStatusDto {
   boolean offline_mode_enabled;
   string? failure_diagnostic_id;
   boolean? sliding_sync_capable;
+  string command_gate;
 };
 
 // Privacy-safe media upload-size config from the registered Core command.

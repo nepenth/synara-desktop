@@ -38,8 +38,10 @@ export const getSyncStatusBannerCopy = (state: SyncState | null): string | null 
 export const getTransientSyncStatusBannerCopy = (
   state: SyncState | null,
   connectedTransitionVisible: boolean,
-  reconnectingBannerVisible = true
+  reconnectingBannerVisible = true,
+  signedInSession = false
 ): string | null => {
+  if (state === SyncState.Stopped && signedInSession) return 'Connection Lost!';
   if (state === SyncState.Prepared && !connectedTransitionVisible) return null;
   if (state === SyncState.Reconnecting && !reconnectingBannerVisible) return null;
   return getSyncStatusBannerCopy(state);
@@ -59,8 +61,10 @@ export const getSlidingSyncCapabilityBannerCopy = (): string =>
   'This homeserver does not advertise sliding-sync (MSC4186) support, so sync may not start. Contact your server administrator.';
 
 export const getSyncStatusBannerVariant = (
-  state: SyncState | null
+  state: SyncState | null,
+  signedInSession = false
 ): 'Success' | 'Warning' | 'Critical' | null => {
+  if (state === SyncState.Stopped && signedInSession) return 'Critical';
   if (state === SyncState.Catchup || state === SyncState.Prepared) {
     return 'Success';
   }

@@ -914,7 +914,7 @@ pub async fn matrix_logout(
     core: State<'_, Arc<synara_core::Core>>,
     expected_session_generation: Option<u64>,
 ) -> Result<MatrixSessionSnapshot, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
+    let session = state.session.lock().await;
     let Some(active) = session.as_ref() else {
         state.clear_store_recovery().await;
         // Even a path-resolution failure must not skip retirement of stale Core.
@@ -953,6 +953,7 @@ pub async fn matrix_logout(
     // The coordinator preflights the locator before constructing any SDK or
     // widget teardown future; preflight failure leaves this session installed.
     let root = app_data_root(&app)?;
+    let generation = active.sync.session_generation();
     let persistence_lease = active.session_persistence.lease.clone();
     let client = active.client.clone();
     let sync = Arc::clone(&active.sync);
@@ -960,26 +961,41 @@ pub async fn matrix_logout(
     let join_rules = Arc::clone(&active.join_rules);
     let observations = Arc::clone(&active.notification_observations);
     let widgets = Arc::clone(&active.widgets);
+    let voluntary_remote_logout = expected_session_generation.is_none();
+    drop(session);
+
+    let session_slot = &state.session;
     finish_active_logout(
         || ensure_logout_retry_locator(&root, &identity),
         || async move {
             persistence_lease.revoke();
-            // Remote revocation is best-effort; local cleanup remains mandatory.
-            if expected_session_generation.is_none() {
-                let _remote_logout_succeeded = client.matrix_auth().logout().await.is_ok();
+            // Remote revocation is best-effort and only for voluntary logout.
+            // A rejected generation must not POST /logout or send its refresh token.
+            // The wait is bounded and must not hold the session mutex.
+            if voluntary_remote_logout {
+                let _remote_logout_succeeded =
+                    bounded_voluntary_remote_logout(client.matrix_auth().logout()).await;
             }
             join_rules.retire();
             observations.retire();
             widgets.retire_and_close().await;
-            sync.stop()
+            let stop_result = sync
+                .stop()
                 .await
                 .map(|_| ())
-                .map_err(|error| map_sync_error(error.diagnostic_id()))
+                .map_err(|error| map_sync_error(error.diagnostic_id()));
+            let mut session = session_slot.lock().await;
+            if session
+                .as_ref()
+                .is_some_and(|active| active.sync.session_generation() == generation)
+            {
+                *session = None;
+            }
+            drop(session);
+            stop_result
         },
         || clear_native_logout_material(&KeyringSessionMaterialVault::new(), &identity, &root),
-        || {
-            *session = None;
-        },
+        || {},
         || {
             crate::bridge::session_lifecycle::close_after_desktop_session_removal(
                 core.inner().as_ref(),
@@ -987,8 +1003,21 @@ pub async fn matrix_logout(
         },
     )
     .await?;
-    drop(session);
     Ok(MatrixSessionSnapshot::LoggedOut)
+}
+
+/// One voluntary `/logout` attempt. 401, timeout, and transport errors are
+/// `false` so local cleanup still runs. Auth-rejection logout does not call this.
+pub(super) const VOLUNTARY_REMOTE_LOGOUT_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(15);
+
+pub(super) async fn bounded_voluntary_remote_logout<T, E>(
+    logout: impl std::future::Future<Output = Result<T, E>>,
+) -> bool {
+    matches!(
+        tokio::time::timeout(VOLUNTARY_REMOTE_LOGOUT_TIMEOUT, logout).await,
+        Ok(Ok(_))
+    )
 }
 
 #[tauri::command]

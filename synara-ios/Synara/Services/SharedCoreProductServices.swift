@@ -168,6 +168,23 @@ struct SharedCoreAuthService: AuthServicing {
     }
 }
 
+enum RejectedAuthenticationRetirement {
+    static let diagnosticID = "p4.1-session-authentication-rejected"
+
+    static func shouldRetire(failureDiagnosticID: String?) -> Bool {
+        failureDiagnosticID == diagnosticID
+    }
+}
+
+enum ExplicitRoomReadReceipt {
+    static func acknowledgedEventID(receiptSent: Bool?, acknowledgedEventID: String?) -> String? {
+        guard receiptSent == true else {
+            return nil
+        }
+        return acknowledgedEventID
+    }
+}
+
 final class SharedCoreMatrixClientService: MatrixClientServicing {
     private let host: SharedCoreProductHost
     private let connectionStatus: ConnectionStatusStore
@@ -181,6 +198,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     private var pathMonitor: NWPathMonitor?
     private let pathQueue = DispatchQueue(label: "com.whylandcreative.synara.connection-path")
     private var statusWatchTask: Task<Void, Never>?
+    private var retiringAuthenticationGeneration: UInt64?
     private(set) var syncStatus: MatrixSyncStatus = .stopped
     private static let syncNotAttachedCode = "p4-s12-sync-not-attached"
 
@@ -354,16 +372,55 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     }
 
     private func refreshLiveSyncStatus() async {
+        guard let dto = try? await SharedCoreSessionStatus.syncStatus(core: host.core) else {
+            return
+        }
+        if RejectedAuthenticationRetirement.shouldRetire(failureDiagnosticID: dto.failureDiagnosticId) {
+            await retireRejectedAuthentication(generation: dto.sessionGeneration)
+            return
+        }
         switch syncStatus {
         case .restoreFailed, .stopped:
             return
         default:
             break
         }
-        guard let dto = try? await SharedCoreSessionStatus.syncStatus(core: host.core) else {
+        await publish(
+            ConnectionStatusCopy.fromReadiness(
+                dto.readiness,
+                previous: syncStatus,
+                commandGate: dto.commandGate
+            )
+        )
+    }
+
+    /// Local retirement for a rejected refresh. Does not POST /logout, refresh
+    /// the rejected token, or delete the crypto store.
+    private func retireRejectedAuthentication(generation: UInt64) async {
+        if retiringAuthenticationGeneration == generation {
             return
         }
-        await publish(ConnectionStatusCopy.fromReadiness(dto.readiness, previous: syncStatus))
+        retiringAuthenticationGeneration = generation
+        defer { retiringAuthenticationGeneration = nil }
+        if let lastSession {
+            try? await forgetPersistedSession(lastSession)
+        } else {
+            _ = try? await host.core.logout()
+        }
+        let signedOut = await MainActor.run { () -> Bool in
+            host.sessionStore.noteSessionExpired()
+            do {
+                try host.sessionStore.signOut()
+                return true
+            } catch {
+                return false
+            }
+        }
+        self.lastSession = nil
+        if signedOut {
+            stopStatusWatch()
+            stopPathMonitor()
+        }
     }
 
     private func publish(_ status: MatrixSyncStatus) async {
@@ -2870,13 +2927,20 @@ final class SharedCoreRoomReadMarkerService: RoomReadMarkerServicing {
 
     func markRoomAsRead(roomID: String) async -> String? {
         return await withOpenLive(roomID: roomID) { opened in
-            let readback = try? await SharedCoreTimelineReadState.timelineSetReadState(
-                core: host.core,
-                streamId: opened.streamId,
-                action: "mark_read",
-                intent: "explicit_user"
-            )
-            return readback?.acknowledgedEventId
+            do {
+                let readback = try await SharedCoreTimelineReadState.timelineSetReadState(
+                    core: host.core,
+                    streamId: opened.streamId,
+                    action: "mark_read",
+                    intent: "explicit_user"
+                )
+                return ExplicitRoomReadReceipt.acknowledgedEventID(
+                    receiptSent: readback.receiptSent,
+                    acknowledgedEventID: readback.acknowledgedEventId
+                )
+            } catch {
+                return nil
+            }
         }
     }
 

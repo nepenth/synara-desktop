@@ -32,6 +32,27 @@ pub async fn matrix_send_text(
     .await
 }
 
+/// Discard one unsent local echo by room id and SDK transaction id.
+#[tauri::command]
+pub async fn matrix_local_echo_discard(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    transaction_id: String,
+) -> Result<bool, MatrixAuthCommandError> {
+    crate::bridge::send_text::discard_local_echo(core.inner().as_ref(), room_id, transaction_id)
+        .await
+}
+
+/// Retry one failed or wedged local echo by room id and SDK transaction id.
+#[tauri::command]
+pub async fn matrix_local_echo_retry(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    transaction_id: String,
+) -> Result<(), MatrixAuthCommandError> {
+    crate::bridge::send_text::retry_local_echo(core.inner().as_ref(), room_id, transaction_id).await
+}
+
 /// V-SEND.R-EDIT sole native message-edit owner.
 ///
 /// Sends a replacement (`m.replace`) room message via the live matrix-sdk session.

@@ -32,7 +32,9 @@ test('connected is transient while steady prepared sync is bannerless', () => {
     'Connection Lost! Reconnecting...'
   );
   assert.equal(getTransientSyncStatusBannerCopy('RECONNECTING', false, false), null);
-  assert.equal(getTransientSyncStatusBannerCopy('ERROR', false), 'Connection Lost!');
+  assert.equal(getTransientSyncStatusBannerCopy('ERROR', false, false), 'Connection Lost!');
+  assert.equal(getTransientSyncStatusBannerCopy('STOPPED', false, false, true), 'Connection Lost!');
+  assert.equal(getTransientSyncStatusBannerCopy('STOPPED', false, false, false), null);
   assert.ok(CONNECTED_STATUS_BANNER_DURATION_MS > 0);
   assert.ok(RECONNECTING_BANNER_HOLD_MS >= 4_000);
 });

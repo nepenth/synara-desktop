@@ -26,6 +26,7 @@ mod desktop_tray;
 mod desktop_unread_badge;
 mod desktop_url;
 mod desktop_webview_performance;
+mod desktop_window_drag;
 // P1.2: compile-only Matrix Rust SDK linkage; no production client session.
 // P1.3: Matrix IPC schema foundation (types/helpers only; no production commands).
 mod matrix;
@@ -374,7 +375,16 @@ pub fn run() {
     }
     builder = builder
         .manage(matrix::auth::MatrixAuthState::new())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin({
+            // macOS and Windows keep every default flag, including decorations.
+            // Linux must not restore DECORATIONS: the saved file still says
+            // decorated, and applying it puts the native chrome back.
+            let window_state = tauri_plugin_window_state::Builder::default();
+            #[cfg(target_os = "linux")]
+            let window_state =
+                window_state.with_state_flags(desktop_window_drag::linux_window_state_flags());
+            window_state.build()
+        })
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
@@ -562,6 +572,8 @@ pub fn run() {
             matrix::auth::product::matrix_timeline_poll_vote,
             matrix::auth::product::matrix_timeline_call_decline,
             matrix::auth::product::matrix_send_text,
+            matrix::auth::product::matrix_local_echo_discard,
+            matrix::auth::product::matrix_local_echo_retry,
             matrix::auth::product::matrix_edit_message,
             matrix::auth::product::matrix_send_attachment,
             matrix::auth::product::matrix_send_poll,
@@ -764,6 +776,9 @@ pub fn run() {
                 .build()?;
 
             if let Err(error) = desktop_spellcheck::configure_webview_spellcheck(&window) {
+                eprintln!("[synara] {error}");
+            }
+            if let Err(error) = desktop_window_drag::install(&window) {
                 eprintln!("[synara] {error}");
             }
             if let Err(error) = desktop_webview_performance::inspect(&window) {

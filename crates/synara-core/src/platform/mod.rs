@@ -11,7 +11,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::app::sync::{
-    SyncReadiness, SyncReadinessSnapshot, SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID,
+    CommandGate, SyncReadiness, SyncReadinessSnapshot, SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID,
     SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
 };
 use crate::dto::NotificationCandidate;
@@ -715,6 +715,7 @@ mod tests {
             offline_mode_enabled: true,
             failure_diagnostic_id: Some(private_text),
             sliding_sync_capable: Some(false),
+            command_gate: CommandGate::Open,
         };
 
         let result = PlatformSyncStatus::from_desktop_snapshot(snapshot);
@@ -748,6 +749,7 @@ mod tests {
             offline_mode_enabled: true,
             failure_diagnostic_id: Some(SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID),
             sliding_sync_capable: Some(true),
+            command_gate: CommandGate::Open,
         })
         .unwrap();
         assert_eq!(

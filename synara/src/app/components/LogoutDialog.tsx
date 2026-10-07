@@ -65,7 +65,15 @@ export const LogoutDialog = forwardRef<HTMLDivElement, LogoutDialogProps>(
           <Box direction="Column" gap="200">
             <Button
               variant="Critical"
-              onClick={() => void logout().catch(() => undefined)}
+              onClick={() => {
+                void logout().then(
+                  () => undefined,
+                  () => {
+                    // useAsyncCallback stores AsyncStatus.Error. The retry copy
+                    // below is the completion path for a rejected matrix_logout.
+                  }
+                );
+              }}
               disabled={ongoingLogout}
               before={ongoingLogout && <Spinner variant="Critical" fill="Solid" size="200" />}
             >

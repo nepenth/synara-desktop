@@ -50,6 +50,9 @@ export type NativeInvoke = (
 export type NativeReadiness =
   'unconfigured' | 'idle' | 'running' | 'offline' | 'failed' | 'terminated';
 
+/** Closed command-session gate. Absent on older payloads means open. */
+export type NativeCommandGate = 'open' | 'closed';
+
 /** Structural mirror of the Rust `SyncReadinessSnapshot` DTO. */
 export type NativeSyncStatus = {
   readiness: NativeReadiness;
@@ -58,6 +61,7 @@ export type NativeSyncStatus = {
   failureDiagnosticId?: string | null;
   /** Tri-state server capability probe: true=support, false=absent, null=unprobed. */
   slidingSyncCapable?: boolean | null;
+  commandGate: NativeCommandGate;
 };
 
 /** js-sdk-compatible sync-state strings the app UI already consumes. */
@@ -107,8 +111,17 @@ export type NativeClientEventName = keyof NativeClientEvents | string;
 const UNAVAILABLE_MESSAGE = 'Native Matrix client is unavailable.';
 const FORBIDDEN_READINESS = new Set(['offline', 'failed']);
 
+const parseCommandGate = (value: unknown): NativeCommandGate => {
+  if (value === undefined || value === null || value === 'open') return 'open';
+  return 'closed';
+};
+
 /** Map Rust sync readiness onto the js-sdk SyncState literals the UI reads. */
-export const readinessToSyncState = (readiness: NativeReadiness): NativeSyncState => {
+export const readinessToSyncState = (
+  readiness: NativeReadiness,
+  commandGate: NativeCommandGate = 'open'
+): NativeSyncState => {
+  if (commandGate === 'closed') return 'ERROR';
   switch (readiness) {
     case 'running':
       return 'PREPARED';
@@ -155,6 +168,9 @@ const parseSyncStatus = (value: unknown): NativeSyncStatus | null => {
     offlineModeEnabled,
     failureDiagnosticId: optString(value, 'failureDiagnosticId') ?? null,
     slidingSyncCapable: optBoolean(value, 'slidingSyncCapable') ?? null,
+    commandGate: parseCommandGate(
+      Object.prototype.hasOwnProperty.call(value, 'commandGate') ? value.commandGate : undefined
+    ),
   };
 };
 
@@ -652,7 +668,7 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
   };
 
   const applySyncStatus = (status: NativeSyncStatus): void => {
-    cachedSyncState = readinessToSyncState(status.readiness);
+    cachedSyncState = readinessToSyncState(status.readiness, status.commandGate);
     cachedSyncData = {
       readiness: status.readiness,
       sessionGeneration: status.sessionGeneration,
@@ -865,7 +881,7 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
         try {
           const status = await readSyncStatus();
           if (stopped || !status) return;
-          const next = readinessToSyncState(status.readiness);
+          const next = readinessToSyncState(status.readiness, status.commandGate);
           if (next === last && cachedSyncState === next) return;
           last = next;
           applySyncStatus(status);

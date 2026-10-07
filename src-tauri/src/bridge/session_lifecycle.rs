@@ -6,7 +6,7 @@
 
 use serde::{de::DeserializeOwned, Deserialize};
 use synara_core::app::sync::{
-    SyncReadiness, SyncReadinessSnapshot, SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID,
+    CommandGate, SyncReadiness, SyncReadinessSnapshot, SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID,
     SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
 };
 use synara_core::dto::{SessionLifecycle, SessionSnapshot};
@@ -34,6 +34,9 @@ struct SyncStatusWireResponse {
     failure_diagnostic_id: Option<String>,
     #[serde(default)]
     sliding_sync_capable: Option<bool>,
+    /// Absent on older payloads means open. Unknown strings are not forwarded.
+    #[serde(default)]
+    command_gate: Option<String>,
 }
 
 impl TryFrom<SyncStatusWireResponse> for SyncReadinessSnapshot {
@@ -48,12 +51,18 @@ impl TryFrom<SyncStatusWireResponse> for SyncReadinessSnapshot {
             }
             Some(_) => return Err(()),
         };
+        let command_gate = match response.command_gate.as_deref() {
+            None | Some("open") => CommandGate::Open,
+            // Unknown text is not forwarded. It fails closed as `closed`.
+            Some("closed") | Some(_) => CommandGate::Closed,
+        };
         Ok(Self {
             readiness: response.readiness,
             session_generation: response.session_generation,
             offline_mode_enabled: response.offline_mode_enabled,
             failure_diagnostic_id,
             sliding_sync_capable: response.sliding_sync_capable,
+            command_gate,
         })
     }
 }
@@ -466,6 +475,7 @@ mod tests {
                 "offlineModeEnabled": true,
                 "failureDiagnosticId": diagnostic,
                 "slidingSyncCapable": true,
+                "commandGate": "open",
             });
             let core = core_returning(SYNC_STATUS_COMMAND, payload.clone(), Arc::clone(&forwarded));
 

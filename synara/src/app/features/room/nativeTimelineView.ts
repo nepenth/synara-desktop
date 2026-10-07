@@ -33,6 +33,8 @@ export type NativeTimelineRowCapabilities = {
   declineCall: boolean;
 };
 
+export type NativeTimelineLocalEchoState = 'sending' | 'sent' | 'failed' | 'cancelled' | 'wedged';
+
 type NativeTimelineEventRowBase = {
   itemId: string;
   eventId?: string;
@@ -40,8 +42,105 @@ type NativeTimelineEventRowBase = {
   senderName: string;
   senderAvatarUrl?: string;
   originServerTs: number;
+  /** Absent on remote rows and on older snapshots. A server event id stays sent. */
+  localEchoState?: NativeTimelineLocalEchoState;
+  /** SDK transaction id for discard and retry. Not a server event id. */
+  transactionId?: string;
   capabilities: NativeTimelineRowCapabilities;
 };
+
+export type NativeTimelineUnsentDelivery = {
+  status: 'sending' | 'failed' | 'unsent';
+  /** Visible, hover-independent name. Sending and failed stay distinct. */
+  accessibleName: 'Sending' | 'Failed to send' | 'Not sent';
+  wedged: boolean;
+  transactionId?: string;
+};
+
+const isNativeTimelineLocalEchoState = (value: unknown): value is NativeTimelineLocalEchoState =>
+  value === 'sending' ||
+  value === 'sent' ||
+  value === 'failed' ||
+  value === 'cancelled' ||
+  value === 'wedged';
+
+/** Fields the unsent presentation reads. Sticker and other rows nest them on `event`. */
+export const nativeTimelineEchoFields = (
+  row: NativeTimelineViewRow
+): {
+  eventId?: string;
+  localEchoState?: NativeTimelineLocalEchoState;
+  transactionId?: string;
+  /** Virtual rows (dates, markers) are not local echoes just because they lack an event id. */
+  candidate: boolean;
+} => {
+  if (row.kind === 'sticker') return { ...row.event, candidate: true };
+  if (row.kind === 'other') {
+    return row.event
+      ? { ...row.event, candidate: true }
+      : { eventId: row.eventId, candidate: false };
+  }
+  if (
+    row.kind === 'message' ||
+    row.kind === 'poll' ||
+    row.kind === 'membership' ||
+    row.kind === 'state' ||
+    row.kind === 'call'
+  ) {
+    return { ...row, candidate: true };
+  }
+  return {
+    eventId: 'eventId' in row ? row.eventId : undefined,
+    candidate: false,
+  };
+};
+
+/**
+ * Classify a timeline row for the unsent presentation.
+ * A missing status with a server event id stays sent. A missing status without
+ * one is unsent when the row can be a local echo. Explicit sending / failed /
+ * wedged wins over a stale id.
+ */
+export const nativeTimelineUnsentDelivery = (row: {
+  eventId?: string;
+  localEchoState?: string;
+  transactionId?: string;
+  candidate?: boolean;
+}): NativeTimelineUnsentDelivery | undefined => {
+  const state = isNativeTimelineLocalEchoState(row.localEchoState) ? row.localEchoState : undefined;
+  const transactionId = row.transactionId;
+  if (state === 'sending') {
+    return { status: 'sending', accessibleName: 'Sending', wedged: false, transactionId };
+  }
+  if (state === 'failed') {
+    return { status: 'failed', accessibleName: 'Failed to send', wedged: false, transactionId };
+  }
+  if (state === 'wedged') {
+    return { status: 'failed', accessibleName: 'Failed to send', wedged: true, transactionId };
+  }
+  if (state === 'sent' || row.eventId || !row.candidate) return undefined;
+  return { status: 'unsent', accessibleName: 'Not sent', wedged: false, transactionId };
+};
+
+export async function discardNativeLocalEcho(roomId: string, transactionId: string): Promise<void> {
+  const result = await invokeDesktopWithAvailability('matrix_local_echo_discard', {
+    roomId,
+    transactionId,
+  });
+  if (!result.available) {
+    throw new Error('unavailable');
+  }
+}
+
+export async function retryNativeLocalEcho(roomId: string, transactionId: string): Promise<void> {
+  const result = await invokeDesktopWithAvailability('matrix_local_echo_retry', {
+    roomId,
+    transactionId,
+  });
+  if (!result.available) {
+    throw new Error('unavailable');
+  }
+}
 
 export type NativeTimelineReplyPreview = {
   eventId: string;
@@ -315,10 +414,10 @@ export const isNativeTimelineReadbackStale = (
 ): boolean =>
   Boolean(
     current &&
-    next.schemaVersion === TIMELINE_VIEW_SCHEMA_VERSION &&
-    next.sessionGeneration === current.sessionGeneration &&
-    next.roomId === current.roomId &&
-    next.revision <= current.revision
+      next.schemaVersion === TIMELINE_VIEW_SCHEMA_VERSION &&
+      next.sessionGeneration === current.sessionGeneration &&
+      next.roomId === current.roomId &&
+      next.revision <= current.revision
   );
 
 /** Follow changes placement even when the SDK has emitted no new row revision. */
@@ -328,11 +427,11 @@ export const canAcceptNativeTimelineFollowReadback = (
 ): boolean =>
   Boolean(
     current &&
-    next.schemaVersion === TIMELINE_VIEW_SCHEMA_VERSION &&
-    next.sessionGeneration === current.sessionGeneration &&
-    next.roomId === current.roomId &&
-    next.revision >= current.revision &&
-    next.position.kind === 'live_bottom'
+      next.schemaVersion === TIMELINE_VIEW_SCHEMA_VERSION &&
+      next.sessionGeneration === current.sessionGeneration &&
+      next.roomId === current.roomId &&
+      next.revision >= current.revision &&
+      next.position.kind === 'live_bottom'
   );
 
 /**
@@ -593,16 +692,16 @@ const toNativeTimelineOpenRequest = (input: NativeTimelineOpenInput) => {
       position.kind === 'focused'
         ? { kind: 'focused' as const, event_id: position.eventId }
         : position.kind === 'thread'
-          ? { kind: 'thread' as const, root_event_id: position.rootEventId }
-          : position.kind === 'normal'
-            ? {
-                kind: 'normal' as const,
-                restored_anchor_event_id: position.restoredAnchorEventId,
-                at_bottom: Boolean(position.atBottom),
-                live_tail_event_id: position.liveTailEventId,
-                updated_at_ms: position.updatedAtMs,
-              }
-            : position,
+        ? { kind: 'thread' as const, root_event_id: position.rootEventId }
+        : position.kind === 'normal'
+        ? {
+            kind: 'normal' as const,
+            restored_anchor_event_id: position.restoredAnchorEventId,
+            at_bottom: Boolean(position.atBottom),
+            live_tail_event_id: position.liveTailEventId,
+            updated_at_ms: position.updatedAtMs,
+          }
+        : position,
   };
 };
 
@@ -707,16 +806,16 @@ export const useNativeTimelineView = (
         positionKind === 'focused' && focusedEventId
           ? { kind: 'focused', eventId: focusedEventId }
           : positionKind === 'thread' && threadRootEventId
-            ? { kind: 'thread', rootEventId: threadRootEventId }
-            : positionKind === 'normal'
-              ? {
-                  kind: 'normal',
-                  restoredAnchorEventId: normalPosition?.restoredAnchorEventId,
-                  atBottom: normalPosition?.atBottom,
-                  liveTailEventId: normalPosition?.liveTailEventId,
-                  updatedAtMs: normalPosition?.updatedAtMs,
-                }
-              : { kind: positionKind },
+          ? { kind: 'thread', rootEventId: threadRootEventId }
+          : positionKind === 'normal'
+          ? {
+              kind: 'normal',
+              restoredAnchorEventId: normalPosition?.restoredAnchorEventId,
+              atBottom: normalPosition?.atBottom,
+              liveTailEventId: normalPosition?.liveTailEventId,
+              updatedAtMs: normalPosition?.updatedAtMs,
+            }
+          : { kind: positionKind },
     } as NativeTimelineOpenInput);
   }, [
     focusedEventId,

@@ -85,7 +85,7 @@ pub async fn matrix_room_set_read_state(
     core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     action: NativeTimelineReadAction,
-) -> Result<(), MatrixAuthCommandError> {
+) -> Result<synara_core::app::timeline::NativeRoomReadStateReadback, MatrixAuthCommandError> {
     crate::bridge::room_read_state::room_set_read_state(core.inner().as_ref(), room_id, action)
         .await
 }

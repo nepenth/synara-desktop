@@ -807,6 +807,18 @@
           "markdownDescription": "Enables the matrix_later_upsert command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_local_echo_discard command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-local-echo-discard",
+          "markdownDescription": "Enables the matrix_local_echo_discard command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_local_echo_retry command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-local-echo-retry",
+          "markdownDescription": "Enables the matrix_local_echo_retry command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_login_flows command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-login-flows",
@@ -2185,6 +2197,18 @@
           "type": "string",
           "const": "deny-matrix-later-upsert",
           "markdownDescription": "Denies the matrix_later_upsert command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_local_echo_discard command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-local-echo-discard",
+          "markdownDescription": "Denies the matrix_local_echo_discard command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_local_echo_retry command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-local-echo-retry",
+          "markdownDescription": "Denies the matrix_local_echo_retry command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_login_flows command without any pre-configured scope.",

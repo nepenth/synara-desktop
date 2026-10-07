@@ -51,6 +51,9 @@ const invokingWith = (routes: Record<string, unknown>) => {
 
 test('readinessToSyncState maps Rust readiness to js-sdk literals', () => {
   assert.equal(readinessToSyncState('running'), 'PREPARED');
+  assert.equal(readinessToSyncState('running', 'open'), 'PREPARED');
+  assert.equal(readinessToSyncState('running', 'closed'), 'ERROR');
+  assert.equal(readinessToSyncState('offline', 'closed'), 'ERROR');
   assert.equal(readinessToSyncState('offline'), 'RECONNECTING');
   assert.equal(readinessToSyncState('failed'), 'ERROR');
   assert.equal(readinessToSyncState('idle'), 'STOPPED');
@@ -75,6 +78,45 @@ test('getSyncState proxies matrix_sync_status and caches PREPARED when running',
     failureDiagnosticId: null,
     slidingSyncCapable: null,
   });
+});
+
+test('a closed command gate is ERROR even while readiness is running', async () => {
+  const { invoke } = invokingWith({
+    matrix_sync_status: {
+      readiness: 'running',
+      sessionGeneration: 7,
+      offlineModeEnabled: false,
+      commandGate: 'closed',
+    },
+  });
+  const client = createNativeMatrixClient(invoke);
+  await client.refresh();
+  assert.equal(client.getSyncState(), 'ERROR');
+});
+
+test('an unknown command gate fails closed and a missing gate stays open', async () => {
+  const closed = invokingWith({
+    matrix_sync_status: {
+      readiness: 'running',
+      sessionGeneration: 7,
+      offlineModeEnabled: false,
+      commandGate: 'https://private.example/token',
+    },
+  });
+  const closedClient = createNativeMatrixClient(closed.invoke);
+  await closedClient.refresh();
+  assert.equal(closedClient.getSyncState(), 'ERROR');
+
+  const open = invokingWith({
+    matrix_sync_status: {
+      readiness: 'running',
+      sessionGeneration: 7,
+      offlineModeEnabled: false,
+    },
+  });
+  const openClient = createNativeMatrixClient(open.invoke);
+  await openClient.refresh();
+  assert.equal(openClient.getSyncState(), 'PREPARED');
 });
 
 test('getSyncState fails closed when the native command is unavailable', async () => {

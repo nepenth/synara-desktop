@@ -875,6 +875,7 @@ protocol SettingsStoring {
 final class AppSessionStore: ObservableObject {
     @Published private(set) var currentState: SessionState
     @Published private(set) var sessionEpoch: Int = 0
+    @Published private(set) var sessionExpiredNotice = false
     let secureStore: SecureSessionStoring
     private(set) var restoreFailureLogDescription: String?
 
@@ -927,8 +928,14 @@ final class AppSessionStore: ObservableObject {
     @MainActor
     func completeLogin(_ session: AuthenticatedSession) throws {
         try secureStore.save(session)
+        sessionExpiredNotice = false
         sessionEpoch += 1
         currentState = .signedIn(session)
+    }
+
+    @MainActor
+    func noteSessionExpired() {
+        sessionExpiredNotice = true
     }
 
     @MainActor

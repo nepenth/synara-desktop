@@ -1,6 +1,7 @@
 //! Typed SharedCore operations and projections for session lifecycle.
 
 use super::*;
+use crate::app::sync::{CommandGate, SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID};
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -200,6 +201,8 @@ pub struct SyncStatusDto {
     pub offline_mode_enabled: bool,
     pub failure_diagnostic_id: Option<String>,
     pub sliding_sync_capable: Option<bool>,
+    /// `open` or `closed`. Never a free-form string.
+    pub command_gate: String,
 }
 
 /// Static fail-closed session/status error. Fields are source constants only.
@@ -359,6 +362,8 @@ pub(super) struct SyncStatusResultWire {
     pub(super) offline_mode_enabled: bool,
     pub(super) failure_diagnostic_id: Option<String>,
     pub(super) sliding_sync_capable: Option<bool>,
+    #[serde(default)]
+    pub(super) command_gate: Option<String>,
 }
 
 pub(super) fn closed_session_snapshot_status(value: &str) -> Option<&'static str> {
@@ -385,7 +390,17 @@ pub(super) fn closed_sync_failure_diagnostic(value: Option<&str>) -> Option<Opti
     match value {
         None => Some(None),
         Some(SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID) => Some(Some(SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID)),
+        Some(SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID) => {
+            Some(Some(SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID))
+        }
         Some(_) => None,
+    }
+}
+
+pub(super) fn closed_command_gate(value: Option<&str>) -> &'static str {
+    match value {
+        None | Some("open") => "open",
+        Some("closed") | Some(_) => "closed",
     }
 }
 
@@ -510,6 +525,7 @@ pub(super) async fn wait_for_started_readiness(
 
 pub(super) fn sync_status_from_owner_snapshot(
     snapshot: SyncReadinessSnapshot,
+    timeline_owner_attached: bool,
 ) -> Result<SyncStatusDto, SessionStatusError> {
     if !snapshot.is_valid_public_sync_status() {
         return Err(session_status_failed(
@@ -517,12 +533,15 @@ pub(super) fn sync_status_from_owner_snapshot(
             SESSION_STATUS_FAILED_DESCRIPTION,
         ));
     }
+    let command_gate =
+        CommandGate::for_installed_session(timeline_owner_attached, snapshot.failure_diagnostic_id);
     Ok(SyncStatusDto {
         readiness: snapshot.readiness.as_str().to_owned(),
         session_generation: snapshot.session_generation,
         offline_mode_enabled: snapshot.offline_mode_enabled,
         failure_diagnostic_id: snapshot.failure_diagnostic_id.map(str::to_owned),
         sliding_sync_capable: snapshot.sliding_sync_capable,
+        command_gate: command_gate.as_str().to_owned(),
     })
 }
 
@@ -550,12 +569,14 @@ pub(super) fn sync_status_dto(
                 )
             })?
             .map(str::to_owned);
+    let command_gate = closed_command_gate(result.command_gate.as_deref());
     Ok(SyncStatusDto {
         readiness: readiness.to_owned(),
         session_generation: result.session_generation,
         offline_mode_enabled: result.offline_mode_enabled,
         failure_diagnostic_id,
         sliding_sync_capable: result.sliding_sync_capable,
+        command_gate: command_gate.to_owned(),
     })
 }
 
@@ -1518,7 +1539,10 @@ impl SharedCore {
 
     pub async fn sync_status(&self) -> Result<SyncStatusDto, SessionStatusError> {
         if let Some(owner) = self.core.attached_sync_owner() {
-            return sync_status_from_owner_snapshot(owner.observe());
+            return sync_status_from_owner_snapshot(
+                owner.observe(),
+                self.core.attached_timeline_owner().is_some(),
+            );
         }
         let payload = self.session_status_command(SYNC_STATUS_COMMAND).await?;
         sync_status_dto(payload)

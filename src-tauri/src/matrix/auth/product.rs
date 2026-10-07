@@ -731,12 +731,68 @@ impl MatrixAuthState {
 
 /// Restart SyncService when wall time jumps ahead of monotonic time (OS sleep).
 /// Linux sleep often leaves the webview visible, so renderer hooks never run.
+pub(super) const SESSION_REJECTION_NO_CORE_DIAGNOSTIC_ID: &str = "d0.1-session-rejection-no-core";
+
+/// One authentication-rejection retirement per generation, with a later tick
+/// allowed to retry local cleanup after the in-flight attempt finishes.
+#[derive(Debug, Default)]
+pub(super) struct AuthenticationRejectionWatch {
+    logged_rejection: Option<u64>,
+    logged_missing_core: Option<u64>,
+    retirement_in_flight: Option<u64>,
+}
+
+impl AuthenticationRejectionWatch {
+    pub(super) fn should_log_rejection(&mut self, generation: u64) -> bool {
+        if self.logged_rejection == Some(generation) {
+            return false;
+        }
+        self.logged_rejection = Some(generation);
+        true
+    }
+
+    pub(super) fn should_log_missing_core(&mut self, generation: u64) -> bool {
+        if self.logged_missing_core == Some(generation) {
+            return false;
+        }
+        self.logged_missing_core = Some(generation);
+        true
+    }
+
+    /// `false` while a retirement for this generation is already running.
+    pub(super) fn begin_retirement(&mut self, generation: u64) -> bool {
+        if self.retirement_in_flight == Some(generation) {
+            return false;
+        }
+        self.retirement_in_flight = Some(generation);
+        true
+    }
+
+    pub(super) fn finish_retirement(&mut self, generation: u64) {
+        if self.retirement_in_flight == Some(generation) {
+            self.retirement_in_flight = None;
+        }
+    }
+}
+
+/// Log a logout failure id only when it is already a static session diagnostic.
+/// Anything else, including tokens and URLs, is dropped.
+pub(super) fn static_rejection_logout_diagnostic(diagnostic_id: &str) -> Option<&str> {
+    let static_id = diagnostic_id.starts_with("d0.1-") || diagnostic_id.starts_with("p4.1-");
+    let closed_alphabet = diagnostic_id
+        .chars()
+        .all(|character| character.is_ascii_alphanumeric() || character == '-' || character == '.')
+        && diagnostic_id.len() <= 80;
+    (static_id && closed_alphabet).then_some(diagnostic_id)
+}
+
 pub fn spawn_suspend_resume_watch(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(5));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let mut previous_wall = SystemTime::now();
         let mut previous_mono = Instant::now();
+        let mut rejection_watch = AuthenticationRejectionWatch::default();
         loop {
             interval.tick().await;
             let now_wall = SystemTime::now();
@@ -761,23 +817,41 @@ pub fn spawn_suspend_resume_watch(app: AppHandle) {
             if snapshot.failure_diagnostic_id
                 == Some(synara_core::app::sync::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID)
             {
+                let generation = snapshot.session_generation;
                 // A terminal rejected refresh is not an offline server. Retire
                 // native work and invalid credentials through the existing
-                // fenced logout owner. This does not erase the crypto store.
-                crate::desktop_logging::desktop_append_log(
-                    app.clone(),
-                    "native".into(),
-                    "session-authentication-rejected".into(),
-                );
-                if let Some(core) = app.try_state::<Arc<synara_core::Core>>() {
-                    if let Err(error) =
-                        matrix_logout(app.clone(), state, core, Some(snapshot.session_generation))
-                            .await
+                // fenced logout owner. This does not erase the crypto store,
+                // POST /logout, or send the rejected refresh token.
+                if rejection_watch.should_log_rejection(generation) {
+                    crate::desktop_logging::desktop_append_log(
+                        app.clone(),
+                        "native".into(),
+                        "session-authentication-rejected".into(),
+                    );
+                }
+                let Some(core) = app.try_state::<Arc<synara_core::Core>>() else {
+                    if rejection_watch.should_log_missing_core(generation) {
+                        crate::desktop_logging::desktop_append_log(
+                            app.clone(),
+                            "native".into(),
+                            SESSION_REJECTION_NO_CORE_DIAGNOSTIC_ID.into(),
+                        );
+                    }
+                    continue;
+                };
+                if !rejection_watch.begin_retirement(generation) {
+                    continue;
+                }
+                let logout_result = matrix_logout(app.clone(), state, core, Some(generation)).await;
+                rejection_watch.finish_retirement(generation);
+                if let Err(error) = logout_result {
+                    if let Some(diagnostic_id) =
+                        static_rejection_logout_diagnostic(&error.diagnostic_id)
                     {
                         crate::desktop_logging::desktop_append_log(
                             app.clone(),
                             "native".into(),
-                            error.diagnostic_id,
+                            diagnostic_id.to_owned(),
                         );
                     }
                 }

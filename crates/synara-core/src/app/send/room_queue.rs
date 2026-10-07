@@ -332,6 +332,25 @@ pub async fn unwedge_queued_send(room: &Room, transaction_id: &str) -> Result<()
     })
 }
 
+/// Re-enable one room queue so a recoverable failure that is still queued
+/// retries under the same transaction id.
+///
+/// This is the `RoomSendQueue::set_enabled(true)` path that
+/// [`wait_for_queued_send`] uses after a recoverable send failure. It does
+/// not allocate a transaction id. Wedged requests stay on
+/// [`unwedge_queued_send`].
+pub async fn reenable_queued_send(
+    room: &Room,
+    transaction_id: &str,
+) -> Result<(), QueuedSendError> {
+    let _handle = handle_for_transaction(room, transaction_id).await?;
+    if queued_send_is_wedged(room, transaction_id).await? {
+        return Err(QueuedSendError::wedged(Some(transaction_id.to_owned())));
+    }
+    room.send_queue().set_enabled(true);
+    Ok(())
+}
+
 /// Abort one wedged (or still-local) request so later items can send.
 pub async fn abort_queued_send(room: &Room, transaction_id: &str) -> Result<bool, QueuedSendError> {
     let handle = handle_for_transaction(room, transaction_id).await?;
@@ -344,7 +363,11 @@ pub async fn abort_queued_send(room: &Room, transaction_id: &str) -> Result<bool
     })
 }
 
-/// Test/debug: inspect whether a local echo currently carries a wedge error.
+/// True when this echo carries an SDK `QueueWedgeError`.
+///
+/// The send queue sets `send_error` only for an unrecoverable failure
+/// (`mark_as_wedged`). A recoverable failure stays queued with `send_error:
+/// None`, so retry must call [`reenable_queued_send`] instead of unwedge.
 pub async fn queued_send_is_wedged(
     room: &Room,
     transaction_id: &str,
@@ -379,6 +402,8 @@ mod tests {
         assert!(source.contains("wait_for_queued_send"));
         assert!(source.contains("unwedge"));
         assert!(source.contains("abort"));
+        assert!(source.contains("reenable_queued_send"));
+        assert!(source.contains("set_enabled(true)"));
         assert!(source.contains("d0.4-send-extra-content-forbidden"));
         assert!(source.contains("config.extra_content.is_some()"));
         assert!(source.contains("room.send_queue()"));

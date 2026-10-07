@@ -494,11 +494,12 @@ pub(super) fn matrix_room_set_read_state(
             MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
                 .with_diagnostic("p2-room-set-read-state-no-session")
         })?;
-        owner
+        let readback = owner
             .set_room_read_state(&payload.room_id, payload.action)
             .await
             .map_err(room_read_state_owner_error)?;
-        Ok(serde_json::Value::Null)
+        serde_json::to_value(readback)
+            .map_err(|_| core_state_error("p2-room-set-read-state-serialization-failed"))
     })
 }
 

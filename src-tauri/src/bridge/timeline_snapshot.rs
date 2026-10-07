@@ -65,3 +65,29 @@ fn timeline_snapshot_response_error() -> MatrixAuthCommandError {
         "v-timeline-view-snapshot-failed",
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_session_owner_maps_to_timeline_requires_session() {
+        let error = map_timeline_snapshot_core_error(
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-snapshot-no-session"),
+        );
+        assert_eq!(
+            error.diagnostic_id.as_str(),
+            "d0.3-timeline-requires-session"
+        );
+    }
+
+    #[test]
+    fn missing_room_view_stays_a_view_error() {
+        let error = map_timeline_snapshot_core_error(
+            MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
+                .with_diagnostic("v-timeline-view-not-open"),
+        );
+        assert_eq!(error.diagnostic_id.as_str(), "v-timeline-view-not-open");
+    }
+}

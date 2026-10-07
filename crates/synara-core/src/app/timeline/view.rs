@@ -18,15 +18,15 @@ use matrix_sdk::ruma::{
     UserId as RumaUserId,
 };
 use matrix_sdk_ui::timeline::{
-    AnyOtherStateEventContentChange, EventTimelineItem, MemberProfileChange, MembershipChange,
-    MsgLikeKind, OtherState, RoomMembershipChange, TimelineDetails, TimelineEventItemId,
-    TimelineItem as SdkTimelineItem, TimelineItemContent, VirtualTimelineItem,
+    AnyOtherStateEventContentChange, EventSendState, EventTimelineItem, MemberProfileChange,
+    MembershipChange, MsgLikeKind, OtherState, RoomMembershipChange, TimelineDetails,
+    TimelineEventItemId, TimelineItem as SdkTimelineItem, TimelineItemContent, VirtualTimelineItem,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 use crate::app::agent_approvals::is_eligible_agent_approval_prompt;
-use crate::dto::{EventId, RoomId, TimelineItemId, UserId};
+use crate::dto::{EventId, LocalEchoState, RoomId, TimelineItemId, UserId};
 
 use super::reactions::project_view_reaction_senders;
 use super::TimelineMediaRegistry;
@@ -207,7 +207,54 @@ pub struct TimelineEventRowBase {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sender_avatar_url: Option<String>,
     pub origin_server_ts: u64,
+    /// SDK send state for a local echo. Absent on remote rows and on older
+    /// snapshots. `SendingFailed.error` is never copied here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_echo_state: Option<LocalEchoState>,
+    /// SDK transaction id while this row is still a local echo. Discard and
+    /// retry address this id; it is not a server event id.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transaction_id: Option<String>,
     pub capabilities: TimelineRowCapabilities,
+}
+
+/// Delivery classification copied from `EventTimelineItem::send_state()`.
+///
+/// `known_event_id` is `EventTimelineItem::event_id()`. `NotSentYet` and
+/// `SendingFailed` omit it. An empty in-memory product `SendQueue` is not an
+/// input: relaunch builds that queue empty and must still project the SDK state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectedLocalEcho {
+    pub state: Option<LocalEchoState>,
+    pub event_id: Option<String>,
+}
+
+pub fn project_local_echo_status(
+    send_state: Option<&EventSendState>,
+    known_event_id: Option<&str>,
+) -> ProjectedLocalEcho {
+    match send_state {
+        Some(EventSendState::NotSentYet { .. }) => ProjectedLocalEcho {
+            state: Some(LocalEchoState::Sending),
+            event_id: None,
+        },
+        Some(EventSendState::SendingFailed { is_recoverable, .. }) => ProjectedLocalEcho {
+            state: Some(if *is_recoverable {
+                LocalEchoState::Failed
+            } else {
+                LocalEchoState::Wedged
+            }),
+            event_id: None,
+        },
+        Some(EventSendState::Sent { event_id }) => ProjectedLocalEcho {
+            state: Some(LocalEchoState::Sent),
+            event_id: Some(event_id.to_string()),
+        },
+        None => ProjectedLocalEcho {
+            state: None,
+            event_id: known_event_id.map(str::to_owned),
+        },
+    }
 }
 
 /// Project the SDK-owned metadata common to every event row.
@@ -228,13 +275,17 @@ fn project_event_row_base_for_user(
 ) -> TimelineEventRowBase {
     let sender_id = event.sender().to_string();
     let (sender_name, sender_avatar_url) = project_sender_presentation(event);
+    let delivery =
+        project_local_echo_status(event.send_state(), event.event_id().map(|id| id.as_str()));
     TimelineEventRowBase {
         item_id: item_id.to_owned(),
-        event_id: event.event_id().map(ToString::to_string),
+        event_id: delivery.event_id,
         sender_name,
         sender_id,
         sender_avatar_url,
         origin_server_ts: event.timestamp().get().into(),
+        local_echo_state: delivery.state,
+        transaction_id: event.transaction_id().map(ToString::to_string),
         capabilities: project_row_action_capabilities(event, own_user_id, authority),
     }
 }
@@ -1640,6 +1691,8 @@ mod tests {
                 sender_name: "@alice:example.org".into(),
                 sender_avatar_url: None,
                 origin_server_ts: 1,
+                local_echo_state: None,
+                transaction_id: None,
                 capabilities: TimelineRowCapabilities {
                     react: true,
                     reply: false,
@@ -1769,6 +1822,8 @@ mod tests {
                 sender_name: "@bob:example.org".into(),
                 sender_avatar_url: None,
                 origin_server_ts: 1,
+                local_echo_state: None,
+                transaction_id: None,
                 capabilities: TimelineRowCapabilities {
                     react: true,
                     reply: true,
@@ -1863,5 +1918,153 @@ mod tests {
         let batch_json = serde_json::to_string(&batch).unwrap();
         assert!(batch_json.contains("\"pinnedEventIds\""));
         assert!(batch_json.contains("$pin:example.org"));
+    }
+
+    fn untrusted_send_failure() -> std::sync::Arc<matrix_sdk::Error> {
+        std::sync::Arc::new(matrix_sdk::Error::Io(std::io::Error::other(
+            "untrusted-send-failure-detail",
+        )))
+    }
+
+    #[test]
+    fn sdk_send_state_projects_sending_failed_and_sent_without_the_failure_detail() {
+        let sending = project_local_echo_status(
+            Some(&EventSendState::NotSentYet { progress: None }),
+            Some("$must-not-stick:example.org"),
+        );
+        assert_eq!(sending.state, Some(LocalEchoState::Sending));
+        assert_eq!(sending.event_id, None);
+
+        let failed = project_local_echo_status(
+            Some(&EventSendState::SendingFailed {
+                error: untrusted_send_failure(),
+                is_recoverable: true,
+            }),
+            Some("$must-not-stick:example.org"),
+        );
+        assert_eq!(failed.state, Some(LocalEchoState::Failed));
+        assert_eq!(failed.event_id, None);
+
+        let wedged = project_local_echo_status(
+            Some(&EventSendState::SendingFailed {
+                error: untrusted_send_failure(),
+                is_recoverable: false,
+            }),
+            None,
+        );
+        assert_eq!(wedged.state, Some(LocalEchoState::Wedged));
+        assert_eq!(wedged.event_id, None);
+        assert_ne!(wedged.state, failed.state);
+
+        let sent_id = "$sent:example.org";
+        let sent = project_local_echo_status(
+            Some(&EventSendState::Sent {
+                event_id: sent_id.parse().expect("event id"),
+            }),
+            None,
+        );
+        assert_eq!(sent.state, Some(LocalEchoState::Sent));
+        assert_eq!(sent.event_id.as_deref(), Some(sent_id));
+
+        let remote = project_local_echo_status(None, Some("$remote:example.org"));
+        assert_eq!(remote.state, None);
+        assert_eq!(remote.event_id.as_deref(), Some("$remote:example.org"));
+
+        let row = TimelineEventRowBase {
+            item_id: "echo".into(),
+            event_id: failed.event_id.clone(),
+            sender_id: "@alice:example.org".into(),
+            sender_name: "Alice".into(),
+            sender_avatar_url: None,
+            origin_server_ts: 1,
+            local_echo_state: failed.state,
+            transaction_id: Some("txn-failed".into()),
+            capabilities: TimelineRowCapabilities {
+                react: false,
+                reply: false,
+                edit: false,
+                redact: false,
+                report: false,
+                pin: false,
+                forward: false,
+                vote: false,
+                decline_call: false,
+            },
+        };
+        let json = serde_json::to_string(&row).expect("row json");
+        assert!(json.contains("\"localEchoState\":\"failed\""));
+        assert!(json.contains("\"transactionId\":\"txn-failed\""));
+        assert!(!json.contains("eventId"));
+        assert!(!json.contains("untrusted-send-failure-detail"));
+        assert!(!json.contains("access_token"));
+        let rendered = format!("{failed:?}{wedged:?}{json}");
+        assert!(!rendered.contains("untrusted-send-failure-detail"));
+
+        let mut legacy = serde_json::to_value(&row).expect("row value");
+        let object = legacy.as_object_mut().expect("object");
+        object.remove("localEchoState");
+        object.remove("transactionId");
+        let decoded: TimelineEventRowBase =
+            serde_json::from_value(legacy).expect("older snapshots omit delivery");
+        assert_eq!(decoded.local_echo_state, None);
+        assert_eq!(decoded.transaction_id, None);
+        assert_eq!(decoded.event_id, None);
+    }
+
+    #[test]
+    fn empty_product_send_queue_does_not_present_a_restored_sdk_echo_as_sent() {
+        let queue = crate::app::send::SendQueue::new(9);
+        assert!(
+            queue.is_empty(),
+            "NativeTimelineOwner::new starts from an empty in-memory SendQueue"
+        );
+        for (state, expected) in [
+            (
+                EventSendState::NotSentYet { progress: None },
+                LocalEchoState::Sending,
+            ),
+            (
+                EventSendState::SendingFailed {
+                    error: untrusted_send_failure(),
+                    is_recoverable: true,
+                },
+                LocalEchoState::Failed,
+            ),
+            (
+                EventSendState::SendingFailed {
+                    error: untrusted_send_failure(),
+                    is_recoverable: false,
+                },
+                LocalEchoState::Wedged,
+            ),
+        ] {
+            let projected = project_local_echo_status(Some(&state), None);
+            assert_eq!(projected.state, Some(expected));
+            assert_eq!(projected.event_id, None);
+            assert_ne!(projected.state, Some(LocalEchoState::Sent));
+            let _ = &queue;
+        }
+
+        let source = include_str!("view.rs");
+        let start = source
+            .find("pub fn project_local_echo_status")
+            .expect("mapper");
+        let end = source[start..]
+            .find("\npub fn ")
+            .map(|offset| start + offset)
+            .expect("mapper ends before the next public function");
+        let body = &source[start..end];
+        assert!(body.contains("is_recoverable"));
+        assert!(body.contains("LocalEchoState::Wedged"));
+        assert!(!body.contains("untrusted-send-failure-detail"));
+        assert!(!body.contains(".error"));
+        assert!(!body.contains("format!"));
+        let call = source
+            .find("project_local_echo_status(event.send_state()")
+            .expect("row projection copies SDK send state");
+        let call_end = (call + 1200).min(source.len());
+        let call_body = &source[call..call_end];
+        assert!(call_body.contains("event.send_state()"));
+        assert!(call_body.contains("event.transaction_id()"));
     }
 }

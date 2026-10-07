@@ -24,7 +24,7 @@ import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { copyToClipboard } from '../../utils/dom';
 import { unreadFromNativeRoom } from '../../state/room/roomToUnread';
 import { setRoomReadStateWithNativeOwner } from '../../utils/nativeRoomReadStateOwner';
-import { markAsReadFromExplicitUserActionInBackground } from '../../utils/notifications';
+import { markAsReadFromExplicitUserAction } from '../../utils/notifications';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
 import { useRoomTypingMember } from '../../hooks/useRoomTypingMembers';
@@ -67,6 +67,8 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
     const isFavorite = nativeRoom?.isFavorite === true;
     const [favoriteError, setFavoriteError] = useState<string>();
     const [favoriteBusy, setFavoriteBusy] = useState(false);
+    const [readError, setReadError] = useState<string>();
+    const [readBusy, setReadBusy] = useState(false);
     const powerLevels = usePowerLevels(room);
     const creators = useRoomCreators(room);
 
@@ -77,9 +79,18 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
 
     const [invitePrompt, setInvitePrompt] = useState(false);
 
-    const handleMarkAsRead = () => {
-      markAsReadFromExplicitUserActionInBackground(mx, room.roomId);
-      requestClose();
+    const handleMarkAsRead = async () => {
+      if (readBusy) return;
+      setReadError(undefined);
+      setReadBusy(true);
+      try {
+        await markAsReadFromExplicitUserAction(mx, room.roomId);
+        requestClose();
+      } catch {
+        setReadError("Couldn't mark this channel as read.");
+      } finally {
+        setReadBusy(false);
+      }
     };
 
     const handleMarkAsUnread = () => {
@@ -140,7 +151,11 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
         )}
         <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
           <MenuItem
-            onClick={unread ? handleMarkAsRead : handleMarkAsUnread}
+            onClick={() => {
+              if (unread) void handleMarkAsRead();
+              else handleMarkAsUnread();
+            }}
+            disabled={unread && readBusy}
             size="300"
             after={<Icon size="100" src={unread ? Icons.CheckTwice : Icons.MessageUnread} />}
             radii="300"
@@ -149,6 +164,11 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
               {unread ? 'Mark as Read' : 'Mark as Unread'}
             </Text>
           </MenuItem>
+          {readError && (
+            <Text as="p" size="T200" style={{ paddingInline: config.space.S200 }}>
+              {readError}
+            </Text>
+          )}
           <MenuItem
             onClick={() => {
               void handleToggleFavorite();

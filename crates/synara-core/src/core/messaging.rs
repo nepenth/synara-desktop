@@ -107,6 +107,14 @@ pub(super) struct MatrixReactionRedactRequest {
     pub(super) key: String,
 }
 
+/// Room id plus SDK transaction id for discard or retry of one local echo.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixLocalEchoRequest {
+    pub(super) room_id: String,
+    pub(super) transaction_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_send_text`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -731,6 +739,73 @@ pub(super) fn matrix_send_text(state: Arc<CoreState>, request: CommandEnvelope) 
         serde_json::to_value(result)
             .map_err(|_| core_state_error("p2-send-text-serialization-failed"))
     })
+}
+
+pub(super) fn matrix_local_echo_discard(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixLocalEchoRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-local-echo-discard-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-local-echo-discard-no-session")
+        })?;
+        let transaction_id = require_local_echo_transaction_id(&payload.transaction_id)?;
+        let aborted = owner
+            .abort_send(&payload.room_id, &transaction_id)
+            .await
+            .map_err(local_echo_owner_error)?;
+        serde_json::to_value(serde_json::json!({
+            "roomId": payload.room_id,
+            "transactionId": transaction_id,
+            "aborted": aborted,
+        }))
+        .map_err(|_| core_state_error("p2-local-echo-discard-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_local_echo_retry(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixLocalEchoRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-local-echo-retry-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-local-echo-retry-no-session")
+        })?;
+        let transaction_id = require_local_echo_transaction_id(&payload.transaction_id)?;
+        owner
+            .retry_send(&payload.room_id, &transaction_id)
+            .await
+            .map_err(local_echo_owner_error)?;
+        serde_json::to_value(serde_json::json!({
+            "roomId": payload.room_id,
+            "transactionId": transaction_id,
+            "status": "retrying",
+        }))
+        .map_err(|_| core_state_error("p2-local-echo-retry-serialization-failed"))
+    })
+}
+
+fn require_local_echo_transaction_id(transaction_id: &str) -> Result<String, MatrixIpcError> {
+    crate::app::send::parse_transaction_id(Some(transaction_id.to_owned()))
+        .map_err(local_echo_owner_error)?
+        .map(|txn_id| txn_id.to_string())
+        .ok_or_else(|| local_echo_owner_error("d0.4-send-invalid-transaction-id"))
+}
+
+fn local_echo_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "d0.4-send-invalid-room-id"
+        | "d0.4-send-invalid-transaction-id"
+        | "d0.4-send-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 pub(super) fn send_text_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {

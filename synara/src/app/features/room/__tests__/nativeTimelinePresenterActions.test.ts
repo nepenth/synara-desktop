@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
+import { nativeTimelineUnsentDelivery } from '../nativeTimelineView';
+
 const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');
 const htmlCss = readFileSync('src/app/features/room/nativeTimelineHtml.css.ts', 'utf8');
 
@@ -531,4 +533,82 @@ test('native timeline row action menu items use quiet dimensionality', () => {
   );
   assert.match(actions, /variant="Surface"/);
   assert.match(actions, /variant="Critical"/);
+});
+
+test('unsent rows are visibly not sent and discard does not require an event id', () => {
+  const sending = nativeTimelineUnsentDelivery({
+    localEchoState: 'sending',
+    transactionId: 'txn-sending',
+    candidate: true,
+  });
+  const failed = nativeTimelineUnsentDelivery({
+    localEchoState: 'failed',
+    transactionId: 'txn-failed',
+    candidate: true,
+  });
+  const wedged = nativeTimelineUnsentDelivery({
+    localEchoState: 'wedged',
+    transactionId: 'txn-wedged',
+    candidate: true,
+  });
+  const missing = nativeTimelineUnsentDelivery({ candidate: true, transactionId: 'txn-missing' });
+  const sent = nativeTimelineUnsentDelivery({
+    eventId: '$sent:example.org',
+    localEchoState: 'sent',
+    candidate: true,
+  });
+  const remote = nativeTimelineUnsentDelivery({
+    eventId: '$remote:example.org',
+    candidate: true,
+  });
+
+  assert.equal(sending?.status, 'sending');
+  assert.equal(sending?.accessibleName, 'Sending');
+  assert.equal(failed?.status, 'failed');
+  assert.equal(failed?.accessibleName, 'Failed to send');
+  assert.equal(failed?.wedged, false);
+  assert.equal(wedged?.status, 'failed');
+  assert.equal(wedged?.wedged, true);
+  assert.equal(wedged?.accessibleName, 'Failed to send');
+  assert.equal(missing?.status, 'unsent');
+  assert.equal(missing?.accessibleName, 'Not sent');
+  assert.equal(sent, undefined);
+  assert.equal(remote, undefined);
+  assert.equal(nativeTimelineUnsentDelivery({}), undefined);
+
+  const chromeStart = presenter.indexOf('const NativeTimelineUnsentChrome');
+  const chromeEnd = presenter.indexOf('type NativeTimelineRowActionSurfaceProps');
+  assert.ok(chromeStart >= 0 && chromeEnd > chromeStart);
+  const chrome = presenter.slice(chromeStart, chromeEnd);
+  assert.match(chrome, /aria-label=\{unsent\.accessibleName\}/);
+  assert.match(chrome, /\{unsent\.accessibleName\}/);
+  assert.match(chrome, /aria-label="Discard unsent message"/);
+  assert.match(chrome, /aria-label="Retry unsent message"/);
+  assert.match(chrome, /unsent\.status === 'failed'/);
+  assert.match(chrome, /data-native-timeline-unsent="true"/);
+  assert.doesNotMatch(chrome, /eventId/);
+  assert.doesNotMatch(chrome, /matrix_send_text/);
+  assert.doesNotMatch(chrome, /matrix_timeline_redact/);
+  assert.match(presenter, /discardNativeLocalEcho\(roomId, transactionId\)/);
+  assert.match(presenter, /retryNativeLocalEcho\(roomId, transactionId\)/);
+  assert.doesNotMatch(presenter, /matrix_send_text/);
+  assert.match(presenter, /hasActionMenu = Boolean\(eventId && capabilities\)/);
+  assert.match(presenter, /aria-label="More message actions"/);
+  assert.match(presenter, /showActionRail = hasActionMenu && actionsActive/);
+
+  const view = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
+  const discard = view.slice(
+    view.indexOf('export async function discardNativeLocalEcho'),
+    view.indexOf('export async function retryNativeLocalEcho')
+  );
+  const retry = view.slice(
+    view.indexOf('export async function retryNativeLocalEcho'),
+    view.indexOf('export type NativeTimelineReplyPreview')
+  );
+  assert.match(discard, /matrix_local_echo_discard/);
+  assert.match(discard, /transactionId/);
+  assert.doesNotMatch(discard, /matrix_send_text/);
+  assert.match(retry, /matrix_local_echo_retry/);
+  assert.match(retry, /transactionId/);
+  assert.doesNotMatch(retry, /matrix_send_text/);
 });

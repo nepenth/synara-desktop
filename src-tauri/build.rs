@@ -186,6 +186,8 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_room_notes_complete_todo",
     "matrix_room_notes_move_todo",
     "matrix_send_text",
+    "matrix_local_echo_discard",
+    "matrix_local_echo_retry",
     "matrix_send_attachment",
     "matrix_send_poll",
     "matrix_edit_message",

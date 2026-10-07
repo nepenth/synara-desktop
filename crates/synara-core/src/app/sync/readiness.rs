@@ -82,6 +82,43 @@ impl SyncReadiness {
     }
 }
 
+/// Whether the installed command session can serve user commands.
+///
+/// `closed` means Core's session-level timeline owner is not attached, or sync
+/// has latched [`SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID`]. A missing room
+/// view is not this signal. Absent on older payloads means [`CommandGate::Open`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum CommandGate {
+    #[default]
+    Open,
+    Closed,
+}
+
+impl CommandGate {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Open => "open",
+            Self::Closed => "closed",
+        }
+    }
+
+    /// `timeline_owner_attached` is Core's session-level `timeline_owner()` slot
+    /// (wired with the session), not an open room view.
+    pub fn for_installed_session(
+        timeline_owner_attached: bool,
+        failure_diagnostic_id: Option<&str>,
+    ) -> Self {
+        if !timeline_owner_attached
+            || failure_diagnostic_id == Some(SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID)
+        {
+            Self::Closed
+        } else {
+            Self::Open
+        }
+    }
+}
+
 /// Privacy-safe snapshot of sync readiness (no SDK error payloads).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -96,6 +133,9 @@ pub struct SyncReadinessSnapshot {
     /// purely informational — never gates sync.
     #[serde(default)]
     pub sliding_sync_capable: Option<bool>,
+    /// Closed command-session gate. Older payloads omit it and mean open.
+    #[serde(default)]
+    pub command_gate: CommandGate,
 }
 
 impl SyncReadinessSnapshot {
@@ -106,6 +146,7 @@ impl SyncReadinessSnapshot {
             offline_mode_enabled: false,
             failure_diagnostic_id: None,
             sliding_sync_capable: None,
+            command_gate: CommandGate::Open,
         }
     }
 
@@ -120,19 +161,23 @@ impl SyncReadinessSnapshot {
     /// sync-service/authentication diagnostics for `failed`; callers must not
     /// serialize a snapshot that has not passed this closed check.
     pub(crate) fn is_valid_public_sync_status(&self) -> bool {
-        matches!(
-            (self.readiness, self.failure_diagnostic_id),
-            (
-                SyncReadiness::Failed,
-                Some(
-                    SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID | SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID
-                )
-            ) | (SyncReadiness::Unconfigured, None)
-                | (SyncReadiness::Idle, None)
-                | (SyncReadiness::Running, None)
-                | (SyncReadiness::Offline, None)
-                | (SyncReadiness::Terminated, None)
-        )
+        let gate_is_closed_vocabulary =
+            matches!(self.command_gate, CommandGate::Open | CommandGate::Closed);
+        gate_is_closed_vocabulary
+            && matches!(
+                (self.readiness, self.failure_diagnostic_id),
+                (
+                    SyncReadiness::Failed,
+                    Some(
+                        SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID
+                            | SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID
+                    )
+                ) | (SyncReadiness::Unconfigured, None)
+                    | (SyncReadiness::Idle, None)
+                    | (SyncReadiness::Running, None)
+                    | (SyncReadiness::Offline, None)
+                    | (SyncReadiness::Terminated, None)
+            )
     }
 
     /// Attach a best-effort sliding-sync capability verdict (informational).
@@ -179,5 +224,6 @@ pub fn snapshot_from_sdk_state(
         offline_mode_enabled,
         failure_diagnostic_id: failure_diagnostic_from_sdk_state(state),
         sliding_sync_capable: None,
+        command_gate: CommandGate::Open,
     }
 }

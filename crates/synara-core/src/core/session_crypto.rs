@@ -928,6 +928,7 @@ pub(super) fn public_sync_status(
         offline_mode_enabled: status.offline_mode_enabled(),
         failure_diagnostic_id,
         sliding_sync_capable: status.sliding_sync_capable(),
+        command_gate: crate::app::sync::CommandGate::Open,
     };
     snapshot
         .is_valid_public_sync_status()
@@ -950,7 +951,14 @@ pub(super) fn matrix_sync_status(state: Arc<CoreState>, request: CommandEnvelope
             // Platform status errors are closed enums, and Core still exposes
             // only its static command error through this public observation.
             .map_err(|_| core_state_error("p2-sync-status-platform-unavailable"))?;
-        let snapshot = public_sync_status(status)?;
+        let mut snapshot = public_sync_status(status)?;
+        // Session-level Core owner, not "a room timeline view is open".
+        // Commands such as matrix_timeline_snapshot consult this same slot.
+        let timeline_owner_attached = matches!(state.timeline_owner(), Ok(Some(_)));
+        snapshot.command_gate = crate::app::sync::CommandGate::for_installed_session(
+            timeline_owner_attached,
+            snapshot.failure_diagnostic_id,
+        );
         serde_json::to_value(snapshot)
             .map_err(|_| core_state_error("p2-sync-status-serialization-failed"))
     })

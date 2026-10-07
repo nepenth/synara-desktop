@@ -528,6 +528,34 @@ test('desktop invoke records only explicitly allowlisted native diagnostics', as
     }),
     'native command rejected'
   );
+  assert.equal(
+    formatDesktopInvokeError({ diagnosticId: 'd0.3-timeline-requires-session' }),
+    'native command rejected (d0.3-timeline-requires-session)'
+  );
+  assert.equal(
+    formatDesktopInvokeError({ diagnosticId: 'v-timeline-view-not-open' }),
+    'native command rejected (v-timeline-view-not-open)'
+  );
+  assert.equal(
+    formatDesktopInvokeError({ diagnosticId: 'd0.1-session-rejection-no-core' }),
+    'native command rejected (d0.1-session-rejection-no-core)'
+  );
+  assert.equal(
+    formatDesktopInvokeError({ diagnosticId: 'p4.1-session-authentication-rejected' }),
+    'native command rejected (p4.1-session-authentication-rejected)'
+  );
+  assert.equal(
+    formatDesktopInvokeError({ diagnosticId: 'not-a-real-id' }),
+    'native command rejected'
+  );
+  assert.equal(
+    formatDesktopInvokeError({
+      diagnosticId: 'syt_secret_token',
+      message: 'https://private.example/token',
+      code: 'M_UNKNOWN_TOKEN',
+    }),
+    'native command rejected'
+  );
 });
 
 test('desktop shortcut failures are recorded in diagnostics', async () => {

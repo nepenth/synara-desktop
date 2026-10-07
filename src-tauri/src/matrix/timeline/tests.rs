@@ -1109,6 +1109,8 @@ mod view_pure {
                 sender_name: "@alice:example.org".into(),
                 sender_avatar_url: None,
                 origin_server_ts: 1,
+                local_echo_state: None,
+                transaction_id: None,
                 capabilities: TimelineRowCapabilities {
                     react: true,
                     reply: false,
@@ -1160,6 +1162,8 @@ mod view_pure {
                 sender_name: "@bob:example.org".into(),
                 sender_avatar_url: None,
                 origin_server_ts: 1,
+                local_echo_state: None,
+                transaction_id: None,
                 capabilities: TimelineRowCapabilities {
                     react: true,
                     reply: true,

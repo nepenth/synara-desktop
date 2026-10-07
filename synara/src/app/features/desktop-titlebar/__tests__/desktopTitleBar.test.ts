@@ -136,6 +136,7 @@ test('custom titlebar renders only on Linux desktop', () => {
 
 test('linux titlebar owns drag and the three window controls', () => {
   const titlebar = source('src/app/features/desktop-titlebar/DesktopTitleBar.tsx');
+  const css = source('src/app/features/desktop-titlebar/DesktopTitleBar.css.ts');
 
   assert.match(titlebar, /desktop_window_minimize/);
   assert.match(titlebar, /desktop_window_toggle_maximize/);
@@ -143,6 +144,12 @@ test('linux titlebar owns drag and the three window controls', () => {
   assert.match(titlebar, /aria-label="Minimize"/);
   assert.match(titlebar, /aria-label="Close"/);
   assert.match(titlebar, /className=\{depthCss\.quietInteractiveSurface\}/);
+  assert.match(titlebar, /data-tauri-drag-region/);
+  assert.match(titlebar, /data-synara-window-drag/);
+  assert.match(titlebar, /data-synara-window-controls/);
+  assert.doesNotMatch(titlebar, /onDoubleClick/);
+  assert.doesNotMatch(titlebar, /startDragging/);
+  assert.match(css, /height: toRem\(40\)/);
 });
 
 test('native window chrome matches the in-app titlebar contract', () => {
@@ -156,6 +163,11 @@ test('native window chrome matches the in-app titlebar contract', () => {
   assert.doesNotMatch(lib, /\.hidden_title\(true\)/);
   assert.match(lib, /#\[cfg\(target_os = "linux"\)\]/);
   assert.match(lib, /\.decorations\(false\)/);
+  assert.match(lib, /desktop_window_drag::install/);
+  assert.match(
+    lib,
+    /with_state_flags\(desktop_window_drag::linux_window_state_flags\(\)\)/
+  );
   // Window-control commands are registered and ACL-granted.
   assert.match(lib, /desktop::desktop_window_minimize/);
   assert.match(lib, /desktop::desktop_window_toggle_maximize/);

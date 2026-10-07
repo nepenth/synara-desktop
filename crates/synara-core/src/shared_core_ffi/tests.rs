@@ -594,6 +594,8 @@ fn timeline_view_row_dto_maps_message_without_token_echo() {
             sender_name: "Alice Example".to_owned(),
             sender_avatar_url: Some("mxc://example.org/alice".to_owned()),
             origin_server_ts: 1_700_000_000_000,
+            local_echo_state: None,
+            transaction_id: None,
             capabilities: TimelineRowCapabilities {
                 react: true,
                 reply: true,
@@ -710,6 +712,8 @@ fn timeline_view_row_dto_preserves_open_and_closed_poll_semantics() {
                 sender_name: "Alice".to_owned(),
                 sender_avatar_url: None,
                 origin_server_ts: 1_700_000_000_002,
+                local_echo_state: None,
+                transaction_id: None,
                 capabilities: TimelineRowCapabilities {
                     react: true,
                     reply: false,
@@ -796,6 +800,8 @@ fn timeline_view_row_dto_preserves_incoming_sticker_media() {
             sender_name: "Alice".to_owned(),
             sender_avatar_url: Some("mxc://example.org/alice".to_owned()),
             origin_server_ts: 1_700_000_000_001,
+            local_echo_state: None,
+            transaction_id: None,
             capabilities: TimelineRowCapabilities {
                 react: true,
                 reply: true,
@@ -866,6 +872,8 @@ fn timeline_view_row_dto_preserves_base_metadata_for_non_message_events() {
         sender_name: "Alice".to_owned(),
         sender_avatar_url: Some("mxc://example.org/alice".to_owned()),
         origin_server_ts: 1_700_000_000_003,
+        local_echo_state: None,
+        transaction_id: None,
         capabilities: TimelineRowCapabilities {
             react: false,
             reply: false,

@@ -634,7 +634,10 @@ struct RoomListView: View {
 
     private func markRoomAsRead(_ room: RoomSummary) {
         Task {
-            _ = await environment.readMarkers.markRoomAsRead(roomID: room.id)
+            let acknowledged = await environment.readMarkers.markRoomAsRead(roomID: room.id)
+            guard acknowledged != nil else {
+                return
+            }
             await MainActor.run {
                 loadRooms(showLoading: false)
             }

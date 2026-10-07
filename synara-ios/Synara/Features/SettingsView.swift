@@ -135,7 +135,9 @@ struct SettingsView: View {
 
         Task {
             do {
-                try await environment.wipe.logoutAndWipe()
+                try await Self.boundedSignOut {
+                    try await environment.wipe.logoutAndWipe()
+                }
                 await MainActor.run {
                     state = .idle
                     environment.logger.info("Local logout completed", category: .auth)
@@ -146,6 +148,22 @@ struct SettingsView: View {
                     environment.logger.error("Local logout failed", category: .auth)
                 }
             }
+        }
+    }
+
+    /// Explicit Sign Out must leave the spinner if remote logout does not return.
+    /// This does not add a crypto-store wipe.
+    private static func boundedSignOut(_ body: @escaping () async throws -> Void) async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                try await body()
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: 15_000_000_000)
+                throw LocalWipeError.sessionDeleteFailed
+            }
+            defer { group.cancelAll() }
+            try await group.next()
         }
     }
 }

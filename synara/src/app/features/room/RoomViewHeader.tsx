@@ -38,7 +38,7 @@ import * as css from './RoomViewHeader.css';
 import { useRoomUnread } from '../../state/hooks/unread';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
 import {
-  markAsReadFromExplicitUserActionInBackground,
+  markAsReadFromExplicitUserAction,
   markAsUnread,
 } from '../../utils/notifications';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
@@ -103,10 +103,21 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
   const { navigateRoom } = useRoomNavigate();
 
   const [invitePrompt, setInvitePrompt] = useState(false);
+  const [readError, setReadError] = useState<string>();
+  const [readBusy, setReadBusy] = useState(false);
 
-  const handleMarkAsRead = () => {
-    markAsReadFromExplicitUserActionInBackground(mx, room.roomId);
-    requestClose();
+  const handleMarkAsRead = async () => {
+    if (readBusy) return;
+    setReadError(undefined);
+    setReadBusy(true);
+    try {
+      await markAsReadFromExplicitUserAction(mx, room.roomId);
+      requestClose();
+    } catch {
+      setReadError("Couldn't mark this channel as read.");
+    } finally {
+      setReadBusy(false);
+    }
   };
 
   const handleMarkAsUnread = () => {
@@ -149,7 +160,11 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
       )}
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
         <MenuItem
-          onClick={unread ? handleMarkAsRead : handleMarkAsUnread}
+          onClick={() => {
+            if (unread) void handleMarkAsRead();
+            else handleMarkAsUnread();
+          }}
+          disabled={unread && readBusy}
           size="300"
           after={<Icon size="100" src={unread ? Icons.CheckTwice : Icons.MessageUnread} />}
           radii="300"
@@ -159,6 +174,11 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
             {unread ? 'Mark as Read' : 'Mark as Unread'}
           </Text>
         </MenuItem>
+        {readError && (
+          <Text as="p" size="T200" style={{ paddingInline: config.space.S200 }}>
+            {readError}
+          </Text>
+        )}
         <RoomNotificationModeSwitcher roomId={room.roomId} value={notificationMode}>
           {(handleOpen, opened, changing) => (
             <MenuItem

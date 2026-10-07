@@ -94,12 +94,14 @@ export function SyncStatus({ mx }: SyncStatusProps) {
     return () => clearTimeout(timer);
   }, [mx, currentSyncState, recoveredFromVisibleDisconnect]);
 
+  const signedInSession = true;
   const bannerCopy = getTransientSyncStatusBannerCopy(
     currentSyncState,
     connectedTransitionVisible,
-    reconnectingBannerVisible
+    reconnectingBannerVisible,
+    signedInSession
   );
-  const bannerVariant = getSyncStatusBannerVariant(currentSyncState);
+  const bannerVariant = getSyncStatusBannerVariant(currentSyncState, signedInSession);
 
   const banners: React.ReactElement[] = [];
   if (slidingSyncCapable === false) {

@@ -239,6 +239,8 @@
     "allow-matrix-composer-get-reply-draft",
     "allow-matrix-thread-list",
     "allow-matrix-send-text",
+    "allow-matrix-local-echo-discard",
+    "allow-matrix-local-echo-retry",
     "allow-matrix-send-attachment",
     "allow-matrix-send-poll",
     "allow-matrix-edit-message",

@@ -46,4 +46,14 @@ export async function setRoomReadStateWithNativeOwner(
   if (!result.available) {
     throw new Error('Native Matrix room read state is unavailable.');
   }
+  if (action !== 'mark_read') return;
+  const readback = result.value as
+    | { receiptSent?: unknown; unreadFlagCleared?: unknown }
+    | null
+    | undefined;
+  const receiptSent = readback?.receiptSent === true;
+  const unreadFlagCleared = readback?.unreadFlagCleared === true;
+  if (!receiptSent && !unreadFlagCleared) {
+    throw new Error("Couldn't mark this channel as read.");
+  }
 }

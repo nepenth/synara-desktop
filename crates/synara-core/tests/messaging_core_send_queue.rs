@@ -123,6 +123,17 @@ async fn unrecoverable_send_wedges_and_abort_unblocks_later_send() {
         .abort_send(room_id.as_str(), &wedged_txn)
         .await
         .expect("abort wedged send");
+    let (echoes, _) = room
+        .send_queue()
+        .subscribe()
+        .await
+        .expect("local echoes after abort");
+    assert!(
+        echoes
+            .iter()
+            .all(|echo| echo.transaction_id.as_str() != wedged_txn),
+        "abort must remove the transaction from the SDK local-echo list"
+    );
     let second = tokio::time::timeout(Duration::from_secs(8), second)
         .await
         .expect("second send must not hang after abort")

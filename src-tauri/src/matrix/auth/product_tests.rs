@@ -2745,8 +2745,14 @@ fn product_client_persists_rotated_sdk_tokens_in_native_vault_and_logout_is_loca
         .and_then(|source| source.split("pub async fn matrix_restore_session").next())
         .expect("matrix_logout body");
     assert!(
-        logout.contains("matrix_auth().logout().await.is_ok()"),
-        "remote logout must remain best-effort"
+        logout.contains("bounded_voluntary_remote_logout(client.matrix_auth().logout())")
+            && logout.contains("voluntary_remote_logout")
+            && logout.contains("VOLUNTARY_REMOTE_LOGOUT_TIMEOUT"),
+        "voluntary remote logout stays one bounded best-effort attempt"
+    );
+    assert!(
+        logout.contains("drop(session);"),
+        "logout must release the session mutex before remote logout and sync stop"
     );
     assert!(
         logout.contains("clear_native_logout_material")
@@ -2757,6 +2763,79 @@ fn product_client_persists_rotated_sdk_tokens_in_native_vault_and_logout_is_loca
         !logout.contains("clear_frontend_session_envelope"),
         "logout must not depend on a renderer-facing credential store"
     );
+    assert!(
+        !logout.contains("wipePersistedStores"),
+        "logout must not delete crypto stores"
+    );
+}
+
+#[test]
+fn authentication_rejection_watch_logs_once_and_retries_local_cleanup_without_a_second_flight() {
+    let mut watch = AuthenticationRejectionWatch::default();
+    assert!(watch.should_log_rejection(4));
+    assert!(!watch.should_log_rejection(4));
+    assert!(watch.should_log_missing_core(4));
+    assert!(!watch.should_log_missing_core(4));
+    assert!(watch.begin_retirement(4));
+    assert!(!watch.begin_retirement(4));
+    watch.finish_retirement(4);
+    assert!(watch.begin_retirement(4));
+
+    assert_eq!(
+        static_rejection_logout_diagnostic("d0.1-session-rejection-stale"),
+        Some("d0.1-session-rejection-stale")
+    );
+    assert_eq!(
+        static_rejection_logout_diagnostic("p4.1-session-authentication-rejected"),
+        Some("p4.1-session-authentication-rejected")
+    );
+    assert_eq!(
+        static_rejection_logout_diagnostic("https://private.example/token"),
+        None
+    );
+    assert_eq!(static_rejection_logout_diagnostic("not-a-session-id"), None);
+
+    let product = include_str!("product.rs");
+    let watch_body = product
+        .split("if snapshot.failure_diagnostic_id")
+        .nth(1)
+        .and_then(|source| source.split("if !slept").next())
+        .expect("authentication rejection watcher");
+    assert!(watch_body.contains("session-authentication-rejected"));
+    assert!(watch_body.contains("d0.1-session-rejection-no-core"));
+    assert!(watch_body.contains("matrix_logout(app.clone(), state, core, Some(generation))"));
+    assert!(!watch_body.contains("client.matrix_auth().logout()"));
+    assert!(!watch_body.contains("wipePersistedStores"));
+}
+
+#[tokio::test]
+async fn voluntary_remote_logout_is_bounded_and_does_not_hold_the_session_mutex() {
+    assert_eq!(
+        VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
+        std::time::Duration::from_secs(15)
+    );
+    assert!(
+        !bounded_voluntary_remote_logout(async { Err::<(), ()>(()) }).await,
+        "a 401-style remote logout must not block local cleanup"
+    );
+
+    let session = std::sync::Arc::new(tokio::sync::Mutex::new(Some(7u64)));
+    let remote_session = std::sync::Arc::clone(&session);
+    let remote = tokio::spawn(async move {
+        let _succeeded = bounded_voluntary_remote_logout(async {
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            Ok::<(), ()>(())
+        })
+        .await;
+        let mut guard = remote_session.lock().await;
+        *guard = None;
+    });
+    let acquired = tokio::time::timeout(std::time::Duration::from_secs(2), session.lock())
+        .await
+        .expect("session mutex must be free while remote logout waits");
+    assert_eq!(*acquired, Some(7));
+    drop(acquired);
+    remote.abort();
 }
 
 #[test]

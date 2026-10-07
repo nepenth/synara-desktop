@@ -807,6 +807,18 @@
           "markdownDescription": "Enables the matrix_later_upsert command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_local_echo_discard command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-local-echo-discard",
+          "markdownDescription": "Enables the matrix_local_echo_discard command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_local_echo_retry command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-local-echo-retry",
+          "markdownDescription": "Enables the matrix_local_echo_retry command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_login_flows command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-login-flows",
@@ -1539,16 +1551,16 @@
           "markdownDescription": "Enables the matrix_timeline_report command without any pre-configured scope."
         },
         {
-          "description": "Enables the matrix_timeline_set_read_state command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-timeline-set-read-state",
-          "markdownDescription": "Enables the matrix_timeline_set_read_state command without any pre-configured scope."
-        },
-        {
           "description": "Enables the matrix_timeline_retry_decryption command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-timeline-retry-decryption",
           "markdownDescription": "Enables the matrix_timeline_retry_decryption command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_timeline_set_read_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-timeline-set-read-state",
+          "markdownDescription": "Enables the matrix_timeline_set_read_state command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_timeline_snapshot command without any pre-configured scope.",
@@ -2185,6 +2197,18 @@
           "type": "string",
           "const": "deny-matrix-later-upsert",
           "markdownDescription": "Denies the matrix_later_upsert command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_local_echo_discard command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-local-echo-discard",
+          "markdownDescription": "Denies the matrix_local_echo_discard command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_local_echo_retry command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-local-echo-retry",
+          "markdownDescription": "Denies the matrix_local_echo_retry command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_login_flows command without any pre-configured scope.",
@@ -2919,16 +2943,16 @@
           "markdownDescription": "Denies the matrix_timeline_report command without any pre-configured scope."
         },
         {
-          "description": "Denies the matrix_timeline_set_read_state command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-timeline-set-read-state",
-          "markdownDescription": "Denies the matrix_timeline_set_read_state command without any pre-configured scope."
-        },
-        {
           "description": "Denies the matrix_timeline_retry_decryption command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-timeline-retry-decryption",
           "markdownDescription": "Denies the matrix_timeline_retry_decryption command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_timeline_set_read_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-timeline-set-read-state",
+          "markdownDescription": "Denies the matrix_timeline_set_read_state command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_timeline_snapshot command without any pre-configured scope.",
@@ -3219,6 +3243,12 @@
           "markdownDescription": "Enables the default_window_icon command without any pre-configured scope."
         },
         {
+          "description": "Enables the exit command without any pre-configured scope.",
+          "type": "string",
+          "const": "core:app:allow-exit",
+          "markdownDescription": "Enables the exit command without any pre-configured scope."
+        },
+        {
           "description": "Enables the fetch_data_store_identifiers command without any pre-configured scope.",
           "type": "string",
           "const": "core:app:allow-fetch-data-store-identifiers",
@@ -3307,6 +3337,12 @@
           "type": "string",
           "const": "core:app:deny-default-window-icon",
           "markdownDescription": "Denies the default_window_icon command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the exit command without any pre-configured scope.",
+          "type": "string",
+          "const": "core:app:deny-exit",
+          "markdownDescription": "Denies the exit command without any pre-configured scope."
         },
         {
           "description": "Denies the fetch_data_store_identifiers command without any pre-configured scope.",
@@ -4569,6 +4605,12 @@
           "markdownDescription": "Enables the set_fullscreen command without any pre-configured scope."
         },
         {
+          "description": "Enables the set_fullscreen_on_monitor command without any pre-configured scope.",
+          "type": "string",
+          "const": "core:window:allow-set-fullscreen-on-monitor",
+          "markdownDescription": "Enables the set_fullscreen_on_monitor command without any pre-configured scope."
+        },
+        {
           "description": "Enables the set_icon command without any pre-configured scope.",
           "type": "string",
           "const": "core:window:allow-set-icon",
@@ -5037,6 +5079,12 @@
           "markdownDescription": "Denies the set_fullscreen command without any pre-configured scope."
         },
         {
+          "description": "Denies the set_fullscreen_on_monitor command without any pre-configured scope.",
+          "type": "string",
+          "const": "core:window:deny-set-fullscreen-on-monitor",
+          "markdownDescription": "Denies the set_fullscreen_on_monitor command without any pre-configured scope."
+        },
+        {
           "description": "Denies the set_icon command without any pre-configured scope.",
           "type": "string",
           "const": "core:window:deny-set-icon",
@@ -5265,10 +5313,10 @@
           "markdownDescription": "Denies the unregister_all command without any pre-configured scope."
         },
         {
-          "description": "This permission set configures which\nnotification features are by default exposed.\n\n#### Granted Permissions\n\nIt allows all notification related features.\n\n\n#### This default permission set includes:\n\n- `allow-is-permission-granted`\n- `allow-request-permission`\n- `allow-notify`\n- `allow-register-action-types`\n- `allow-register-listener`\n- `allow-cancel`\n- `allow-get-pending`\n- `allow-remove-active`\n- `allow-get-active`\n- `allow-check-permissions`\n- `allow-show`\n- `allow-batch`\n- `allow-list-channels`\n- `allow-delete-channel`\n- `allow-create-channel`\n- `allow-permission-state`",
+          "description": "This permission set configures which\nnotification features are by default exposed.\n\n#### Granted Permissions\n\nIt allows all notification related features.\n\n\n#### This default permission set includes:\n\n- `allow-is-permission-granted`\n- `allow-request-permission`\n- `allow-notify`\n- `allow-register-action-types`\n- `allow-register-listener`\n- `allow-remove-listener`\n- `allow-cancel`\n- `allow-get-pending`\n- `allow-remove-active`\n- `allow-get-active`\n- `allow-check-permissions`\n- `allow-show`\n- `allow-batch`\n- `allow-list-channels`\n- `allow-delete-channel`\n- `allow-create-channel`\n- `allow-permission-state`",
           "type": "string",
           "const": "notification:default",
-          "markdownDescription": "This permission set configures which\nnotification features are by default exposed.\n\n#### Granted Permissions\n\nIt allows all notification related features.\n\n\n#### This default permission set includes:\n\n- `allow-is-permission-granted`\n- `allow-request-permission`\n- `allow-notify`\n- `allow-register-action-types`\n- `allow-register-listener`\n- `allow-cancel`\n- `allow-get-pending`\n- `allow-remove-active`\n- `allow-get-active`\n- `allow-check-permissions`\n- `allow-show`\n- `allow-batch`\n- `allow-list-channels`\n- `allow-delete-channel`\n- `allow-create-channel`\n- `allow-permission-state`"
+          "markdownDescription": "This permission set configures which\nnotification features are by default exposed.\n\n#### Granted Permissions\n\nIt allows all notification related features.\n\n\n#### This default permission set includes:\n\n- `allow-is-permission-granted`\n- `allow-request-permission`\n- `allow-notify`\n- `allow-register-action-types`\n- `allow-register-listener`\n- `allow-remove-listener`\n- `allow-cancel`\n- `allow-get-pending`\n- `allow-remove-active`\n- `allow-get-active`\n- `allow-check-permissions`\n- `allow-show`\n- `allow-batch`\n- `allow-list-channels`\n- `allow-delete-channel`\n- `allow-create-channel`\n- `allow-permission-state`"
         },
         {
           "description": "Enables the batch command without any pre-configured scope.",
@@ -5353,6 +5401,12 @@
           "type": "string",
           "const": "notification:allow-remove-active",
           "markdownDescription": "Enables the remove_active command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the remove_listener command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:allow-remove-listener",
+          "markdownDescription": "Enables the remove_listener command without any pre-configured scope."
         },
         {
           "description": "Enables the request_permission command without any pre-configured scope.",
@@ -5449,6 +5503,12 @@
           "type": "string",
           "const": "notification:deny-remove-active",
           "markdownDescription": "Denies the remove_active command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the remove_listener command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:deny-remove-listener",
+          "markdownDescription": "Denies the remove_listener command without any pre-configured scope."
         },
         {
           "description": "Denies the request_permission command without any pre-configured scope.",

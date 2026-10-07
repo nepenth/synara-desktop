@@ -526,6 +526,21 @@ const SAFE_NATIVE_DIAGNOSTIC_IDS = new Set([
   'd0.4-send-sdk-wrong-room-state',
   'd0.4-send-sdk-concurrent-request-failed',
   'd0.4-send-sdk-failed',
+  'd0.3-timeline-requires-session',
+  'v-timeline-view-not-open',
+  'v-timeline-view-snapshot-failed',
+  'v-timeline-view-read-state-failed',
+  'v-rooms-room-read-state-mark-read-failed',
+  'v-rooms-room-read-state-room-not-found',
+  'v-send.r-media-preview-requires-session',
+  'v-rooms.4-typing-owner-user-missing',
+  'v-rooms.4-typing-notice-failed',
+  'd0.4-send-requires-session',
+  'v-crypto.7-device-requires-session',
+  'v-crypto.1-start-requires-session',
+  'p4.1-session-authentication-rejected',
+  'd0.1-session-rejection-no-core',
+  'd0.1-session-rejection-stale',
 ]);
 
 /**

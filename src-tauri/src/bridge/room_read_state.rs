@@ -1,6 +1,6 @@
 //! Desktop bridge for `matrix_room_set_read_state` through `Core::command`.
 
-use synara_core::app::timeline::NativeTimelineReadAction;
+use synara_core::app::timeline::{NativeRoomReadStateReadback, NativeTimelineReadAction};
 use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
@@ -13,19 +13,26 @@ pub(crate) async fn room_set_read_state(
     core: &Core,
     room_id: String,
     action: NativeTimelineReadAction,
-) -> Result<(), MatrixAuthCommandError> {
-    core.command(CommandEnvelope {
-        command: ROOM_SET_READ_STATE_COMMAND.to_owned(),
-        session_generation: READ_ONLY_SESSION_GENERATION,
-        request_id: None,
-        payload: serde_json::json!({
-            "roomId": room_id,
-            "action": action,
-        }),
+) -> Result<NativeRoomReadStateReadback, MatrixAuthCommandError> {
+    let response = core
+        .command(CommandEnvelope {
+            command: ROOM_SET_READ_STATE_COMMAND.to_owned(),
+            session_generation: READ_ONLY_SESSION_GENERATION,
+            request_id: None,
+            payload: serde_json::json!({
+                "roomId": room_id,
+                "action": action,
+            }),
+        })
+        .await
+        .map_err(map_room_set_read_state_core_error)?;
+    serde_json::from_value(response.payload).map_err(|_| {
+        MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix room read state is unavailable.",
+            "v-rooms-room-read-state-mark-read-failed",
+        )
     })
-    .await
-    .map_err(map_room_set_read_state_core_error)?;
-    Ok(())
 }
 
 fn map_room_set_read_state_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {

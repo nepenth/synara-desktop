@@ -34,6 +34,18 @@ final class ConnectionStatusCopyTests: XCTestCase {
         XCTAssertEqual(ConnectionStatusCopy.fromReadiness("terminated"), .disconnected)
         XCTAssertEqual(ConnectionStatusCopy.fromReadiness("unconfigured"), .disconnected)
         XCTAssertEqual(ConnectionStatusCopy.fromReadiness(nil), .starting)
+        XCTAssertEqual(
+            ConnectionStatusCopy.fromReadiness("running", commandGate: "closed"),
+            .disconnected
+        )
+        XCTAssertEqual(
+            ConnectionStatusCopy.fromReadiness("running", commandGate: "open"),
+            .connected
+        )
+        XCTAssertEqual(
+            ConnectionStatusCopy.fromReadiness("running", commandGate: "https://secret.example/token"),
+            .disconnected
+        )
     }
 
     func testRestoreFailedOffersSignOutWithoutRetry() {
@@ -70,8 +82,8 @@ final class ConnectionStatusCopyTests: XCTestCase {
 
     func testHoldsLostEquivalentBeforeBanner() {
         XCTAssertTrue(ConnectionStatusCopy.holdsBeforeBanner(.reconnecting))
-        XCTAssertTrue(ConnectionStatusCopy.holdsBeforeBanner(.disconnected))
-        XCTAssertTrue(ConnectionStatusCopy.holdsBeforeBanner(.failed("raw sdk blip")))
+        XCTAssertFalse(ConnectionStatusCopy.holdsBeforeBanner(.disconnected))
+        XCTAssertFalse(ConnectionStatusCopy.holdsBeforeBanner(.failed("raw sdk blip")))
         XCTAssertFalse(ConnectionStatusCopy.holdsBeforeBanner(.restoreFailed))
         XCTAssertFalse(ConnectionStatusCopy.holdsBeforeBanner(.connected))
         XCTAssertFalse(ConnectionStatusCopy.holdsBeforeBanner(.starting))
@@ -104,29 +116,24 @@ final class ConnectionStatusCopyTests: XCTestCase {
         XCTAssertFalse(store.isBannerVisible)
     }
 
-    func testDisconnectedHoldDoesNotShowImmediateLost() {
+    func testDisconnectedPresentsImmediately() {
         let store = ConnectionStatusStore(reconnectingHold: 4)
         store.update(.connected)
         store.update(.disconnected)
-        XCTAssertEqual(store.status, .connected)
-        XCTAssertFalse(store.isBannerVisible)
-        store.update(.reconnecting)
-        XCTAssertEqual(store.status, .connected)
-        XCTAssertFalse(store.isBannerVisible)
-        store.update(.connected)
-        XCTAssertEqual(store.status, .connected)
-        XCTAssertFalse(store.isBannerVisible)
+        XCTAssertEqual(store.status, .disconnected)
+        XCTAssertTrue(store.isBannerVisible)
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.disconnected)
     }
 
-    func testFailedHoldDoesNotShowImmediateLost() {
+    func testFailedPresentsImmediatelyWithoutSdkText() {
         let store = ConnectionStatusStore(reconnectingHold: 4)
         store.update(.connected)
         store.update(.failed("raw sdk https://user:secret@hs/?password=hunter2"))
-        XCTAssertEqual(store.status, .connected)
-        XCTAssertFalse(store.isBannerVisible)
-        store.update(.connected)
-        XCTAssertEqual(store.status, .connected)
-        XCTAssertFalse(store.isBannerVisible)
+        XCTAssertEqual(store.status, .failed("raw sdk https://user:secret@hs/?password=hunter2"))
+        XCTAssertTrue(store.isBannerVisible)
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.disconnected)
+        XCTAssertFalse(store.emptyStateMessage.contains("https://"))
+        XCTAssertFalse(store.emptyStateMessage.contains("hunter2"))
     }
 
     func testStartingHoldFromConnectedDoesNotShowImmediateConnecting() {
@@ -143,8 +150,6 @@ final class ConnectionStatusCopyTests: XCTestCase {
     func testRestoreFailedShowsImmediatelyDuringHold() {
         let store = ConnectionStatusStore(reconnectingHold: 4)
         store.update(.connected)
-        store.update(.disconnected)
-        XCTAssertEqual(store.status, .connected)
         store.update(.restoreFailed)
         XCTAssertEqual(store.status, .restoreFailed)
         XCTAssertTrue(store.isBannerVisible)
@@ -158,16 +163,16 @@ final class ConnectionStatusCopyTests: XCTestCase {
         XCTAssertTrue(store.isBannerVisible)
     }
 
-    func testLostHoldExpiresToDisconnected() {
+    func testLostHoldExpiresToReconnecting() {
         let store = ConnectionStatusStore(reconnectingHold: 0.05)
         store.update(.connected)
-        store.update(.disconnected)
+        store.update(.reconnecting)
         XCTAssertEqual(store.status, .connected)
         XCTAssertFalse(store.isBannerVisible)
 
-        let shown = expectation(description: "lost after hold")
+        let shown = expectation(description: "reconnecting after hold")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            XCTAssertEqual(store.status, .disconnected)
+            XCTAssertEqual(store.status, .reconnecting)
             XCTAssertTrue(store.isBannerVisible)
             shown.fulfill()
         }
@@ -224,11 +229,11 @@ final class ConnectionStatusCopyTests: XCTestCase {
         XCTAssertNotEqual(store.emptyStateMessage, MatrixSyncStatus.reconnecting.description)
 
         store.update(.disconnected)
-        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.connected)
-        XCTAssertNotEqual(store.emptyStateMessage, ConnectionStatusCopy.disconnected)
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.disconnected)
+        XCTAssertFalse(store.emptyStateMessage.contains("https://"))
 
         store.update(.failed("raw sdk https://user:secret@hs/?password=hunter2"))
-        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.connected)
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.disconnected)
         XCTAssertFalse(store.emptyStateMessage.contains("https://"))
 
         store.update(.restoreFailed)

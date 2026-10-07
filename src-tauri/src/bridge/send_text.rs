@@ -161,6 +161,99 @@ fn map_edit_message_core_error(error: MatrixIpcError) -> MatrixAuthCommandError 
     }
 }
 
+pub(crate) async fn discard_local_echo(
+    core: &Core,
+    room_id: String,
+    transaction_id: String,
+) -> Result<bool, MatrixAuthCommandError> {
+    let response = core
+        .command(CommandEnvelope {
+            command: "matrix_local_echo_discard".to_owned(),
+            session_generation: READ_ONLY_SESSION_GENERATION,
+            request_id: None,
+            payload: serde_json::json!({
+                "roomId": room_id,
+                "transactionId": transaction_id,
+            }),
+        })
+        .await
+        .map_err(|error| map_local_echo_error(error, "discard"))?;
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Wire {
+        aborted: bool,
+    }
+    let wire: Wire = serde_json::from_value(response.payload)
+        .map_err(|_| local_echo_response_error("discard"))?;
+    Ok(wire.aborted)
+}
+
+pub(crate) async fn retry_local_echo(
+    core: &Core,
+    room_id: String,
+    transaction_id: String,
+) -> Result<(), MatrixAuthCommandError> {
+    let response = core
+        .command(CommandEnvelope {
+            command: "matrix_local_echo_retry".to_owned(),
+            session_generation: READ_ONLY_SESSION_GENERATION,
+            request_id: None,
+            payload: serde_json::json!({
+                "roomId": room_id,
+                "transactionId": transaction_id,
+            }),
+        })
+        .await
+        .map_err(|error| map_local_echo_error(error, "retry"))?;
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Wire {
+        status: String,
+    }
+    let wire: Wire =
+        serde_json::from_value(response.payload).map_err(|_| local_echo_response_error("retry"))?;
+    if wire.status != "retrying" {
+        return Err(local_echo_response_error("retry"));
+    }
+    Ok(())
+}
+
+fn map_local_echo_error(error: MatrixIpcError, action: &'static str) -> MatrixAuthCommandError {
+    let diagnostic = error
+        .diagnostic_id
+        .as_deref()
+        .unwrap_or("d0.4-send-sdk-failed");
+    match error.category {
+        MatrixIpcErrorCategory::Forbidden => MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            diagnostic,
+        ),
+        MatrixIpcErrorCategory::SdkInvariant => MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "The native Matrix send request is invalid.",
+            diagnostic,
+        ),
+        _ => MatrixAuthCommandError::new("Unknown", local_echo_failure_message(action), diagnostic),
+    }
+}
+
+fn local_echo_failure_message(action: &'static str) -> &'static str {
+    if action == "discard" {
+        "The unsent message could not be discarded."
+    } else {
+        "The unsent message could not be retried."
+    }
+}
+
+fn local_echo_response_error(action: &'static str) -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "Unknown",
+        local_echo_failure_message(action),
+        "d0.4-send-sdk-failed",
+    )
+}
+
 fn send_text_response_error() -> MatrixAuthCommandError {
     MatrixAuthCommandError::new(
         "Unknown",

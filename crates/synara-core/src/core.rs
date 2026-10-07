@@ -1087,6 +1087,12 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_send_text", matrix_send_text)
         .expect("built-in matrix_send_text must remain in the command census");
     registry
+        .register("matrix_local_echo_discard", matrix_local_echo_discard)
+        .expect("built-in matrix_local_echo_discard must remain in the command census");
+    registry
+        .register("matrix_local_echo_retry", matrix_local_echo_retry)
+        .expect("built-in matrix_local_echo_retry must remain in the command census");
+    registry
         .register("matrix_send_poll", matrix_send_poll)
         .expect("built-in matrix_send_poll must remain in the command census");
     registry

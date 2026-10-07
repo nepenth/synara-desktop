@@ -58,9 +58,9 @@ use crate::app::send::{
     abort_queued_send, apply_poll_start_relations, edit_message_content,
     enqueue_event_via_room_queue, message_content, normalize_poll, parse_edit_event_id,
     parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id, parse_transaction_id,
-    poll_response_content, poll_start_content, send_event_via_room_queue, unwedge_queued_send,
-    wait_for_queued_send, MatrixPollRespondResult, MatrixSendPollResult, MatrixSendTextResult,
-    SendQueue,
+    poll_response_content, poll_start_content, queued_send_is_wedged, reenable_queued_send,
+    send_event_via_room_queue, unwedge_queued_send, wait_for_queued_send, MatrixPollRespondResult,
+    MatrixSendPollResult, MatrixSendTextResult, SendQueue,
 };
 use crate::app::threads::{
     rebuild_thread_index, NativeThreadListSnapshot, ThreadIndex, ThreadListItemProjection,
@@ -222,6 +222,35 @@ fn exact_read_receipts(event_id: OwnedEventId) -> Receipts {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+struct LiveTimelineReadMark {
+    acknowledged_event_id: Option<OwnedEventId>,
+    unread_flag_cleared: bool,
+}
+
+/// Closed readback for an explicit room mark-read that does not require an open view.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeRoomReadStateReadback {
+    pub receipt_sent: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acknowledged_event_id: Option<String>,
+    pub unread_flag_cleared: bool,
+}
+
+fn room_readback_from_mark(
+    mark: &LiveTimelineReadMark,
+) -> Result<NativeRoomReadStateReadback, &'static str> {
+    if mark.acknowledged_event_id.is_none() && !mark.unread_flag_cleared {
+        return Err("v-rooms-room-read-state-mark-read-failed");
+    }
+    Ok(NativeRoomReadStateReadback {
+        receipt_sent: mark.acknowledged_event_id.is_some(),
+        acknowledged_event_id: mark.acknowledged_event_id.as_ref().map(ToString::to_string),
+        unread_flag_cleared: mark.unread_flag_cleared,
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum LiveReadTargetPlan {
     Send(OwnedEventId),
     ClearUnreadFlag,
@@ -271,7 +300,7 @@ async fn mark_live_timeline_read(
     timeline: &Timeline,
     intent: NativeTimelineReadIntent,
     observed_live_tail_event_id: Option<&str>,
-) -> Result<Option<OwnedEventId>, &'static str> {
+) -> Result<LiveTimelineReadMark, &'static str> {
     // Use the same SDK-owned latest-event resolver as Timeline::mark_as_read;
     // hand-walking visible items diverges for local echoes, focus, and threads.
     match plan_live_read_target(
@@ -279,20 +308,29 @@ async fn mark_live_timeline_read(
         intent,
         observed_live_tail_event_id,
     )? {
-        LiveReadTargetPlan::NoOp => Ok(None),
+        LiveReadTargetPlan::NoOp => Ok(LiveTimelineReadMark {
+            acknowledged_event_id: None,
+            unread_flag_cleared: false,
+        }),
         LiveReadTargetPlan::ClearUnreadFlag => {
             // Explicit Mark Read must still clear a manually marked-unread room
             // when the room has no receipt-capable remote event. A thread stream
             // must not clear the room unread flag.
             if timeline.is_threaded() {
-                return Ok(None);
+                return Ok(LiveTimelineReadMark {
+                    acknowledged_event_id: None,
+                    unread_flag_cleared: false,
+                });
             }
             timeline
                 .room()
                 .set_unread_flag(false)
                 .await
                 .map_err(|_| "v-timeline-clear-empty-unread-failed")?;
-            Ok(None)
+            Ok(LiveTimelineReadMark {
+                acknowledged_event_id: None,
+                unread_flag_cleared: true,
+            })
         }
         LiveReadTargetPlan::Send(event_id) => {
             if timeline.is_threaded() {
@@ -313,7 +351,10 @@ async fn mark_live_timeline_read(
                     .await
                     .map_err(|_| "v-timeline-send-read-markers-failed")?;
             }
-            Ok(Some(event_id))
+            Ok(LiveTimelineReadMark {
+                acknowledged_event_id: Some(event_id),
+                unread_flag_cleared: false,
+            })
         }
     }
 }
@@ -776,7 +817,7 @@ impl NativeTimelineOwner {
         &self,
         room_id: &str,
         action: NativeTimelineReadAction,
-    ) -> Result<(), &'static str> {
+    ) -> Result<NativeRoomReadStateReadback, &'static str> {
         self.registry
             .lock()
             .await
@@ -1240,6 +1281,37 @@ impl NativeTimelineOwner {
         let mut sends = self.sends.lock().await;
         let _ = sends.cancel(local_txn_id);
         Ok(aborted)
+    }
+
+    /// Retry one local echo without allocating a new transaction id.
+    ///
+    /// Wedged requests (`SendingFailed` with `is_recoverable: false`) go through
+    /// [`unwedge_queued_send`]. A recoverable failure that is still queued uses
+    /// the same room-queue re-enable path as [`wait_for_queued_send`].
+    pub async fn retry_send(&self, room_id: &str, local_txn_id: &str) -> Result<(), &'static str> {
+        if parse_transaction_id(Some(local_txn_id.to_owned()))?.is_none() {
+            return Err("d0.4-send-invalid-transaction-id");
+        }
+        let parsed_room = parse_send_room_id(room_id)?;
+        let room = self
+            .client
+            .get_room(&parsed_room)
+            .ok_or("d0.4-send-room-not-found")?;
+        if queued_send_is_wedged(&room, local_txn_id)
+            .await
+            .map_err(|error| error.diagnostic_id)?
+        {
+            unwedge_queued_send(&room, local_txn_id)
+                .await
+                .map_err(|error| error.diagnostic_id)?;
+        } else {
+            reenable_queued_send(&room, local_txn_id)
+                .await
+                .map_err(|error| error.diagnostic_id)?;
+        }
+        let mut sends = self.sends.lock().await;
+        let _ = sends.retry(local_txn_id);
+        Ok(())
     }
 
     pub async fn outbound_text_for_room(
@@ -2386,13 +2458,16 @@ impl NativeTimelineRegistry {
         let timeline = stream.timeline.clone();
         let (receipt_sent, acknowledged_event_id) = match request.action {
             NativeTimelineReadAction::MarkRead => {
-                let acknowledged_event_id = mark_live_timeline_read(
+                let mark = mark_live_timeline_read(
                     &timeline,
                     request.intent,
                     request.observed_live_tail_event_id.as_deref(),
                 )
                 .await?;
-                (Some(acknowledged_event_id.is_some()), acknowledged_event_id)
+                (
+                    Some(mark.acknowledged_event_id.is_some()),
+                    mark.acknowledged_event_id,
+                )
             }
             NativeTimelineReadAction::MarkUnread => {
                 if request.intent != NativeTimelineReadIntent::ExplicitUser
@@ -2481,7 +2556,7 @@ impl NativeTimelineRegistry {
         client: &Client,
         room_id: &str,
         action: NativeTimelineReadAction,
-    ) -> Result<(), &'static str> {
+    ) -> Result<NativeRoomReadStateReadback, &'static str> {
         let room_id = parse_room_id(room_id)?;
         let room_id_string = room_id.to_string();
         let room = client
@@ -2489,24 +2564,35 @@ impl NativeTimelineRegistry {
             .ok_or("v-rooms-room-read-state-room-not-found")?;
         match action {
             NativeTimelineReadAction::MarkRead => {
-                self.open(client, &room_id_string).await?;
+                self.open(client, &room_id_string)
+                    .await
+                    .map_err(|_| "v-rooms-room-read-state-mark-read-failed")?;
                 let timeline = self
                     .entries
                     .get(&room_id_string)
-                    .ok_or("d0.3-timeline-open-failed")?
+                    .ok_or("v-rooms-room-read-state-mark-read-failed")?
                     .timeline
                     .clone();
-                mark_live_timeline_read(&timeline, NativeTimelineReadIntent::ExplicitUser, None)
-                    .await
-                    .map_err(|_| "v-rooms-room-read-state-mark-read-failed")?;
+                let mark = mark_live_timeline_read(
+                    &timeline,
+                    NativeTimelineReadIntent::ExplicitUser,
+                    None,
+                )
+                .await
+                .map_err(|_| "v-rooms-room-read-state-mark-read-failed")?;
+                room_readback_from_mark(&mark)
             }
             NativeTimelineReadAction::MarkUnread => {
                 room.set_unread_flag(true)
                     .await
                     .map_err(|_| "v-rooms-room-read-state-mark-unread-failed")?;
+                Ok(NativeRoomReadStateReadback {
+                    receipt_sent: false,
+                    acknowledged_event_id: None,
+                    unread_flag_cleared: false,
+                })
             }
         }
-        Ok(())
     }
 
     pub async fn view_snapshot_for_stream(
@@ -5221,7 +5307,8 @@ mod tests {
     fn room_read_state_sends_receipts_and_clears_marked_unread_without_a_view_stream() {
         let source = include_str!("live.rs");
         assert!(source.contains("pub async fn set_room_read_state"));
-        assert!(source.contains("self.open(client, &room_id_string).await?"));
+        assert!(source.contains("self.open(client, &room_id_string).await"));
+        assert!(source.contains("v-rooms-room-read-state-mark-read-failed"));
         assert!(source.contains(
             "mark_live_timeline_read(&timeline, NativeTimelineReadIntent::ExplicitUser, None)"
         ));
@@ -5239,6 +5326,33 @@ mod tests {
         assert_eq!(receipts.fully_read.as_ref(), Some(&event_id));
         assert_eq!(receipts.private_read_receipt.as_ref(), Some(&event_id));
         assert!(receipts.public_read_receipt.is_none());
+
+        let sent = room_readback_from_mark(&LiveTimelineReadMark {
+            acknowledged_event_id: Some(event_id.clone()),
+            unread_flag_cleared: false,
+        })
+        .expect("a sent fully-read marker is success");
+        assert!(sent.receipt_sent);
+        assert_eq!(
+            sent.acknowledged_event_id.as_deref(),
+            Some(event_id.as_str())
+        );
+        assert!(!sent.unread_flag_cleared);
+        let cleared = room_readback_from_mark(&LiveTimelineReadMark {
+            acknowledged_event_id: None,
+            unread_flag_cleared: true,
+        })
+        .expect("clearing the unread flag without a receipt target is success");
+        assert!(!cleared.receipt_sent);
+        assert!(cleared.acknowledged_event_id.is_none());
+        assert!(cleared.unread_flag_cleared);
+        assert_eq!(
+            room_readback_from_mark(&LiveTimelineReadMark {
+                acknowledged_event_id: None,
+                unread_flag_cleared: false,
+            }),
+            Err("v-rooms-room-read-state-mark-read-failed")
+        );
 
         let cargo_lock = include_str!("../../../../../Cargo.lock");
         assert!(cargo_lock.contains("name = \"matrix-sdk-ui\"\nversion = \"0.19.1\""));

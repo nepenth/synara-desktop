@@ -176,6 +176,24 @@ export const MessageRow = recipe({
   },
 });
 
+export const UnsentDelivery = style({
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: config.space.S200,
+  marginTop: config.space.S100,
+  color: 'var(--synara-message-foreground)',
+});
+
+export const UnsentAction = style({
+  border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
+  borderRadius: config.radii.R300,
+  background: color.Surface.Container,
+  color: 'var(--synara-message-foreground)',
+  padding: `${config.space.S100} ${config.space.S200}`,
+  cursor: 'pointer',
+});
+
 export const MessageBody = style({
   background: 'transparent',
   padding: 0,

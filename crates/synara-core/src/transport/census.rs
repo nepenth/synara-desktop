@@ -52,6 +52,8 @@ pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
     "matrix_later_snapshot",
     "matrix_later_snooze",
     "matrix_later_upsert",
+    "matrix_local_echo_discard",
+    "matrix_local_echo_retry",
     "matrix_login_flows",
     "matrix_login_password",
     "matrix_logout",
