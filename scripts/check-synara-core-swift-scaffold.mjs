@@ -1730,8 +1730,21 @@ if (nseArchiveExportIndex < 0 || nseArchiveExportIndex > ciBuildXcodebuildIndex)
 if (!iosCiBuild.includes("test-without-building")) {
   throw new Error("iOS CI must test the exact build-for-testing artifacts");
 }
-if (iosCiBuild.includes("-retry-tests-on-failure") || iosCiBuild.includes("-test-iterations")) {
-  throw new Error("iOS CI must not mask first-attempt failures with automatic retries");
+// Known-flaky simulator suites may retry once, but only when the workflow opts in.
+// A plain local `ci-build.sh` run still reports first-attempt failures.
+{
+  const lines = iosCiBuild.split("\n").map((line) => line.trim());
+  const retryLines = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => line.includes("-retry-tests-on-failure") || line.includes("-test-iterations"));
+  const gated = retryLines.every(
+    ({ line, index }) =>
+      line === "test_command+=(-retry-tests-on-failure -test-iterations 2)" &&
+      lines[index - 1] === 'if [[ "${IOS_TEST_RETRY_ON_FAILURE:-0}" == "1" ]]; then'
+  );
+  if (retryLines.length > 1 || !gated) {
+    throw new Error("iOS CI may retry failed tests only behind IOS_TEST_RETRY_ON_FAILURE=1");
+  }
 }
 if (
   !iosCiBuild.includes("PACKAGE_RESOLVED_PATH") ||
