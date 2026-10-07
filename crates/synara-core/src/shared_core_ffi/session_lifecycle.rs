@@ -874,6 +874,7 @@ impl SharedCore {
             own_profile_live: Arc::new(Mutex::new(None)),
             media_retention_live: Arc::new(Mutex::new(None)),
             generations: crate::app::lifecycle::session::SessionGenerations::new(),
+            save_retry_backoff: Mutex::new(crate::app::lifecycle::session::RetryBackoff::new()),
         }
     }
 
@@ -896,6 +897,7 @@ impl SharedCore {
             own_profile_live: Arc::new(Mutex::new(None)),
             media_retention_live: Arc::new(Mutex::new(None)),
             generations: crate::app::lifecycle::session::SessionGenerations::new(),
+            save_retry_backoff: Mutex::new(crate::app::lifecycle::session::RetryBackoff::new()),
         }
     }
 
@@ -1546,6 +1548,8 @@ impl SharedCore {
     }
 
     pub async fn sync_status(&self) -> Result<SyncStatusDto, SessionStatusError> {
+        // Swift polls this while the session is live; it is the iOS watchdog.
+        self.retry_failed_session_save(std::time::Instant::now());
         if let Some(owner) = self.core.attached_sync_owner() {
             return sync_status_from_owner_snapshot(
                 owner.observe(),
@@ -1649,6 +1653,39 @@ impl SharedCore {
         Ok(LeftoverAckDto {
             status: "forgotten".to_owned(),
         })
+    }
+
+    /// Re-save the retained client's current in-memory tokens after a failed
+    /// rotation save, at most once per backoff window. It never replays an old
+    /// refresh token, and a revoked lease (logout, forget) makes it a no-op.
+    /// Returns whether a retry ran and succeeded.
+    pub(super) fn retry_failed_session_save(&self, now: std::time::Instant) -> Option<bool> {
+        let (client, lease) = match &*self.restored_client.lock().ok()? {
+            RestoredClientSlot::Ready(client, persistence)
+                if persistence.lease().save_failed() && !persistence.lease().is_revoked() =>
+            {
+                (client.clone(), persistence.callback_lease())
+            }
+            _ => return None,
+        };
+        let mut backoff = self.save_retry_backoff.lock().ok()?;
+        if !backoff.ready(now) {
+            return None;
+        }
+        let snapshot = self.core.session_snapshot().ok().flatten()?;
+        let identity = AccountIdentity::new(&snapshot.user_id, &snapshot.homeserver_url).ok()?;
+        let vault = SecretStoreSessionVault {
+            store: Arc::clone(&self.secret_store),
+        };
+        let saved = lease
+            .save(|| {
+                persist_session_after_login(&client, &identity, &vault)
+                    .map(|_| ())
+                    .map_err(|_| SessionFault::unavailable(RotationDiagnostics::IOS.persist_failed))
+            })
+            .is_ok();
+        backoff.record(now, saved);
+        Some(saved)
     }
 
     /// Permanently reject further credential writes from the retained client.

@@ -993,3 +993,111 @@ fn logout_fences_late_token_rotation_saves_out_of_the_vault() {
     drop(rt);
     let _ = fs::remove_dir_all(&root);
 }
+
+struct FlakyCallbackVault {
+    map: std::sync::Arc<Mutex<HashMap<String, Vec<u8>>>>,
+    fail_puts: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl IosSecretVault for FlakyCallbackVault {
+    fn get(&self, key: String) -> Result<Option<Vec<u8>>, IosSecretVaultError> {
+        Ok(self.map.lock().expect("vault").get(&key).cloned())
+    }
+
+    fn put(&self, key: String, value: Vec<u8>) -> Result<(), IosSecretVaultError> {
+        if self.fail_puts.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err(IosSecretVaultError::Unavailable {
+                code: "test".to_owned(),
+                description: "test".to_owned(),
+            });
+        }
+        self.map.lock().expect("vault").insert(key, value);
+        Ok(())
+    }
+
+    fn delete(&self, key: String) -> Result<(), IosSecretVaultError> {
+        self.map.lock().expect("vault").remove(&key);
+        Ok(())
+    }
+}
+
+#[test]
+fn failed_rotation_save_is_retried_with_backoff_and_stops_after_logout() {
+    use std::sync::atomic::Ordering;
+    use std::time::{Duration, Instant};
+
+    let identity = alice();
+    let map = std::sync::Arc::new(Mutex::new(HashMap::new()));
+    let fail_puts = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let shared = SharedCore::new_with_secret_store(Box::new(FlakyCallbackVault {
+        map: std::sync::Arc::clone(&map),
+        fail_puts: std::sync::Arc::clone(&fail_puts),
+    }));
+    let root = temp_root("rotation-retry");
+    let rt = test_runtime();
+    let _enter = rt.enter();
+    rt.block_on(shared.persist_planted_session_for_test(
+        identity.user_id().to_owned(),
+        identity.homeserver_url().to_owned(),
+        root.to_string_lossy().into_owned(),
+        "DEVICEABC".to_owned(),
+        "syt_rotation_retry_access".to_owned(),
+        Some("syr_rotation_retry_refresh".to_owned()),
+    ))
+    .expect("planted session");
+    let start = Instant::now();
+    assert_eq!(
+        shared.retry_failed_session_save(start),
+        None,
+        "nothing to retry after a good save"
+    );
+
+    let lease = match &*shared.restored_client.lock().expect("client") {
+        RestoredClientSlot::Ready(_, persistence) => persistence.callback_lease(),
+        _ => panic!("planted session is retained"),
+    };
+    // A rotation save fails (vault unavailable).
+    let _ = lease.save(|| {
+        Err::<(), _>(crate::app::lifecycle::session::SessionFault::unavailable(
+            "session-rotation-persist-failed",
+        ))
+    });
+    assert!(lease.save_failed());
+
+    fail_puts.store(true, Ordering::Relaxed);
+    assert_eq!(shared.retry_failed_session_save(start), Some(false));
+    assert_eq!(
+        shared.retry_failed_session_save(start + Duration::from_secs(4)),
+        None,
+        "backoff holds the next attempt"
+    );
+
+    fail_puts.store(false, Ordering::Relaxed);
+    map.lock().expect("vault").clear();
+    assert_eq!(
+        shared.retry_failed_session_save(start + Duration::from_secs(5)),
+        Some(true)
+    );
+    assert!(!lease.save_failed());
+    assert!(map
+        .lock()
+        .expect("vault")
+        .keys()
+        .any(|key| key.starts_with("matrix-session:")));
+
+    let _ = lease.save(|| {
+        Err::<(), _>(crate::app::lifecycle::session::SessionFault::unavailable(
+            "session-rotation-persist-failed",
+        ))
+    });
+    rt.block_on(shared.logout()).expect("logout");
+    assert_eq!(
+        shared.retry_failed_session_save(start + Duration::from_secs(120)),
+        None,
+        "logout ends retries"
+    );
+    drop(shared);
+    drop(_enter);
+    drop(rt);
+    let _ = fs::remove_dir_all(&root);
+}

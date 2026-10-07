@@ -834,6 +834,8 @@ pub struct SharedCore {
     /// Monotonic per-instance session generation. A re-login in the same
     /// process must not reuse the generation a retired session carried.
     generations: crate::app::lifecycle::session::SessionGenerations,
+    /// Backoff for re-saving tokens after a failed rotation save.
+    save_retry_backoff: Mutex<crate::app::lifecycle::session::RetryBackoff>,
 }
 
 impl Default for SharedCore {
