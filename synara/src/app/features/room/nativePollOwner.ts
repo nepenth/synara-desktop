@@ -24,8 +24,18 @@ export type NativePollRespondInput = {
 export type NativePollSendResult = {
   roomId: string;
   eventId: string;
-  status: 'sent';
+  /**
+   * `queued`: the native send queue still holds the poll and keeps retrying
+   * it, so the caller finishes exactly as for `sent`; a retry would duplicate.
+   */
+  status: 'sent' | 'queued';
 };
+
+/** True when the native owner accepted the poll write (sent or still queued). */
+export function isAcceptedNativePollResult(value: unknown): boolean {
+  const status = (value as NativePollSendResult | undefined)?.status;
+  return status === 'sent' || status === 'queued';
+}
 
 export type NativeInvoke = (
   command: string,
@@ -67,8 +77,7 @@ export async function sendPollWithNativeOwner(
   if (!send.available) {
     throw new Error('Native Matrix poll send is unavailable.');
   }
-  const result = send.value as NativePollSendResult | undefined;
-  if (result?.status !== 'sent') {
+  if (!isAcceptedNativePollResult(send.value)) {
     throw new Error('Native Matrix poll send is unavailable.');
   }
   return 'native';
@@ -113,8 +122,7 @@ export async function respondPollWithNativeOwner(
   if (!send.available) {
     throw new Error('Native Matrix poll response is unavailable.');
   }
-  const result = send.value as NativePollSendResult | undefined;
-  if (result?.status !== 'sent') {
+  if (!isAcceptedNativePollResult(send.value)) {
     throw new Error('Native Matrix poll response is unavailable.');
   }
   return 'native';

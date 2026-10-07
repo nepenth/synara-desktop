@@ -107,3 +107,23 @@ test('native edit non-sent status throws (fail-closed)', async () => {
     /Native Matrix message edit is unavailable/
   );
 });
+
+test('an edit the native send queue still holds is accepted, not resent', async () => {
+  const owner = await editMessageWithNativeOwner(
+    { roomId: '!room:example.org', eventId: '$original:example.org', body: 'fixed' },
+    true,
+    async (command) =>
+      command === 'matrix_session_snapshot'
+        ? { available: true, value: { status: 'logged_in' } }
+        : {
+            available: true,
+            value: {
+              roomId: '!room:example.org',
+              eventId: '',
+              localTxnId: 'txn-edit',
+              status: 'queued',
+            },
+          }
+  );
+  assert.equal(owner, 'native');
+});

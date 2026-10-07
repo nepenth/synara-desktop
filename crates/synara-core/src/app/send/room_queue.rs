@@ -292,6 +292,51 @@ pub async fn wait_for_queued_send(
     }
 }
 
+/// How a caller should present one queued request after waiting on it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QueuedSendOutcome {
+    /// The homeserver accepted it.
+    Sent(QueuedSendAck),
+    /// Still in the SDK's persisted queue (recoverable error or the wait
+    /// deadline): the SDK keeps retrying and the timeline row shows Sending
+    /// with Discard. Reporting this as a failure would invite a duplicate.
+    Queued { transaction_id: String },
+}
+
+impl QueuedSendOutcome {
+    /// The wire `status` for a write that is either sent or still queued.
+    pub fn status(&self, sent: &'static str) -> &'static str {
+        match self {
+            Self::Sent(_) => sent,
+            Self::Queued { .. } => "queued",
+        }
+    }
+
+    /// The server event id, or empty while the request is still queued.
+    pub fn event_id(&self) -> String {
+        match self {
+            Self::Sent(ack) => ack.event_id.clone(),
+            Self::Queued { .. } => String::new(),
+        }
+    }
+}
+
+/// Fold a still-queued wait result into [`QueuedSendOutcome::Queued`];
+/// every other failure stays an error.
+pub fn queued_send_outcome(
+    result: Result<QueuedSendAck, QueuedSendError>,
+) -> Result<QueuedSendOutcome, QueuedSendError> {
+    match result {
+        Ok(ack) => Ok(QueuedSendOutcome::Sent(ack)),
+        Err(QueuedSendError {
+            still_queued: true,
+            transaction_id: Some(transaction_id),
+            ..
+        }) => Ok(QueuedSendOutcome::Queued { transaction_id }),
+        Err(error) => Err(error),
+    }
+}
+
 /// Enqueue and wait. Used by poll / edit / ensure / forward where the product
 /// harness does not need a `SendQueue` projection.
 pub async fn send_event_via_room_queue(

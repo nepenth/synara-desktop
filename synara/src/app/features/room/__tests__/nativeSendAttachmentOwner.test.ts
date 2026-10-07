@@ -144,3 +144,27 @@ test('partial attachment plan reports only completed steps so retry cannot resen
 
   assert.deepEqual(sent, [0]);
 });
+
+test('an attachment the native send queue still holds is accepted, not re-attached', async () => {
+  const owner = await sendAttachmentWithNativeOwner(
+    {
+      roomId: '!room:example.org',
+      transactionId: 'synara-attachment-queued',
+      file: { filename: 'cat.png', mimeType: 'image/png', bytes: [1] },
+    },
+    true,
+    async (command) =>
+      command === 'matrix_session_snapshot'
+        ? { available: true, value: { status: 'logged_in' } }
+        : {
+            available: true,
+            value: {
+              roomId: '!room:example.org',
+              eventId: '',
+              localTxnId: 'txn-queued',
+              status: 'queued',
+            },
+          }
+  );
+  assert.equal(owner, 'native');
+});

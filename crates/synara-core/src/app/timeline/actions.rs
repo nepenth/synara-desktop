@@ -106,8 +106,9 @@ pub struct NativeTimelineActionReadback {
     pub schema_version: u32,
     pub action: NativeTimelineActionKind,
     pub room_id: String,
-    /// For forward: the newly sent event in the target room. For every other
-    /// action: the event the write targeted.
+    /// For forward: the newly sent event in the target room (empty while the
+    /// forward is still `queued`). For every other action: the event the
+    /// write targeted.
     pub event_id: String,
     #[serde(deserialize_with = "deserialize_action_status")]
     pub status: String,
@@ -120,7 +121,7 @@ where
     let value = String::deserialize(deserializer)?;
     match value.as_str() {
         "sent" | "redacted" | "reported" | "pinned" | "unpinned" | "already_pinned"
-        | "already_unpinned" | "voted" | "declined" => Ok(value),
+        | "already_unpinned" | "voted" | "declined" | "queued" => Ok(value),
         other => Err(serde::de::Error::unknown_variant(
             other,
             &[
@@ -133,6 +134,7 @@ where
                 "already_unpinned",
                 "voted",
                 "declined",
+                "queued",
             ],
         )),
     }

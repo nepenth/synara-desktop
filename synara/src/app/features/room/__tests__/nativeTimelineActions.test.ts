@@ -393,3 +393,54 @@ test('reaction flight clears on failure and session transition', () => {
   coordinator.bindSession(11);
   assert.equal(coordinator.has('old'), false);
 });
+
+test('queued edit, forward and vote readbacks are accepted; queued redact is not', async () => {
+  const readback = (action: string, eventId: string, status: string) => ({
+    schemaVersion: 1,
+    action,
+    roomId: '!room:example.org',
+    eventId,
+    status,
+  });
+  const forward = await forwardTextWithNativeTimelineOwner(
+    {
+      sourceRoomId: '!source:example.org',
+      eventId: '$source:example.org',
+      targetRoomId: '!room:example.org',
+      asQuote: false,
+      confirmedEncryptionDowngrade: false,
+    },
+    true,
+    okInvoke('matrix_timeline_forward_text', readback('forward_text', '', 'queued'))
+  );
+  assert.notEqual(forward, 'unavailable', 'a queued forward has no new event id yet');
+  const vote = await pollVoteWithNativeTimelineOwner(
+    { roomId: '!room:example.org', eventId: '$poll:example.org', answerIds: ['a'] },
+    true,
+    okInvoke('matrix_timeline_poll_vote', readback('poll_vote', '$poll:example.org', 'queued'))
+  );
+  assert.notEqual(vote, 'unavailable');
+  const edit = await editTextWithNativeTimelineOwner(
+    { roomId: '!room:example.org', eventId: '$original:example.org', body: 'fixed' },
+    true,
+    okInvoke('matrix_timeline_edit_text', readback('edit_text', '$original:example.org', 'queued'))
+  );
+  assert.notEqual(edit, 'unavailable');
+  // A queued vote must still name its poll.
+  assert.equal(
+    await pollVoteWithNativeTimelineOwner(
+      { roomId: '!room:example.org', eventId: '$poll:example.org', answerIds: ['a'] },
+      true,
+      okInvoke('matrix_timeline_poll_vote', readback('poll_vote', '', 'queued'))
+    ),
+    'unavailable'
+  );
+  assert.equal(
+    await redactWithNativeTimelineOwner(
+      { roomId: '!room:example.org', eventId: '$event:example.org' },
+      true,
+      okInvoke('matrix_timeline_redact', readback('redact', '$event:example.org', 'queued'))
+    ),
+    'unavailable'
+  );
+});

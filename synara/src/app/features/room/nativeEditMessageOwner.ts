@@ -20,7 +20,11 @@ export type NativeEditMessageResult = {
   roomId: string;
   eventId: string;
   localTxnId: string;
-  status: 'sent';
+  /**
+   * `queued`: the native send queue still holds the edit and applies it in
+   * order once it sends; treated as accepted so the edit is not resent.
+   */
+  status: 'sent' | 'queued';
 };
 
 export type NativeInvoke = (
@@ -62,7 +66,7 @@ export async function editMessageWithNativeOwner(
     throw new Error('Native Matrix message edit is unavailable.');
   }
   const result = edit.value as NativeEditMessageResult | undefined;
-  if (result?.status !== 'sent') {
+  if (result?.status !== 'sent' && result?.status !== 'queued') {
     throw new Error('Native Matrix message edit is unavailable.');
   }
   return 'native';
