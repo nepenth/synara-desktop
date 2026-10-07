@@ -848,6 +848,8 @@ pub(super) fn closed_timeline_mutate_action(value: &str) -> Option<&'static str>
 pub(super) fn closed_timeline_mutate_status(value: &str) -> Option<&'static str> {
     match value {
         "sent" => Some("sent"),
+        // An edit the SDK still holds; it keeps retrying in order.
+        "queued" => Some("queued"),
         "redacted" => Some("redacted"),
         "reported" => Some("reported"),
         _ => None,
@@ -1037,6 +1039,7 @@ pub(super) fn closed_timeline_vote_decline_action(value: &str) -> Option<&'stati
 pub(super) fn closed_timeline_vote_decline_status(value: &str) -> Option<&'static str> {
     match value {
         "voted" => Some("voted"),
+        "queued" => Some("queued"),
         "declined" => Some("declined"),
         _ => None,
     }
@@ -1135,6 +1138,7 @@ pub(super) fn closed_timeline_forward_action(value: &str) -> Option<&'static str
 pub(super) fn closed_timeline_forward_status(value: &str) -> Option<&'static str> {
     match value {
         "sent" => Some("sent"),
+        "queued" => Some("queued"),
         _ => None,
     }
 }

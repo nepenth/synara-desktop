@@ -227,6 +227,95 @@ async fn recoverable_failure_does_not_strand_the_next_send() {
 }
 
 #[tokio::test]
+async fn recoverable_poll_failure_is_reported_queued_not_failed() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    let room_id = room_id!("!send-queue-poll-recoverable:example.org");
+    let room = server.sync_joined_room(&client, room_id).await;
+    server.mock_room_state_encryption().plain().mount().await;
+    // Exhaust the SDK's short HTTP retry so the room queue sees one
+    // recoverable `SendError` for this poll.
+    server
+        .mock_room_send()
+        .respond_with(ResponseTemplate::new(500).set_body_json(json!({
+            "errcode": "M_UNKNOWN",
+            "error": "transient failure",
+        })))
+        .up_to_n_times(3)
+        .expect(3)
+        .mount()
+        .await;
+
+    let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 47);
+    let poll = owner
+        .send_poll(
+            room_id.to_string(),
+            "Lunch?".into(),
+            vec!["Yes".into(), "No".into()],
+            1,
+            None,
+            None,
+        )
+        .await
+        .expect("a recoverable poll failure is still queued, not a failed send");
+    assert_eq!(
+        poll.status, "queued",
+        "reporting a still-queued poll as failed invites a duplicate poll"
+    );
+    assert!(poll.event_id.is_empty());
+
+    // The SDK still holds exactly that request, recoverably.
+    let (echoes, _) = room.send_queue().subscribe().await.expect("echoes");
+    assert_eq!(echoes.len(), 1, "the poll stays in the persisted queue");
+    let txn = echoes[0].transaction_id.to_string();
+    assert!(!synara_core::app::send::queued_send_is_wedged(&room, &txn)
+        .await
+        .unwrap_or(true));
+}
+
+#[test]
+fn queued_send_outcome_folds_only_still_queued_failures() {
+    use synara_core::app::send::{
+        queued_send_outcome, QueuedSendAck, QueuedSendError, QueuedSendOutcome,
+    };
+    let sent = queued_send_outcome(Ok(QueuedSendAck {
+        event_id: "$sent".into(),
+        transaction_id: "t1".into(),
+    }))
+    .expect("sent");
+    assert_eq!(sent.status("voted"), "voted");
+    assert_eq!(sent.event_id(), "$sent");
+
+    let queued = queued_send_outcome(Err(QueuedSendError {
+        diagnostic_id: "d0.4-send-queue-timeout",
+        transaction_id: Some("t2".into()),
+        wedged: false,
+        cancelled: false,
+        still_queued: true,
+    }))
+    .expect("still queued folds into an outcome");
+    assert_eq!(
+        queued,
+        QueuedSendOutcome::Queued {
+            transaction_id: "t2".into()
+        }
+    );
+    assert_eq!(queued.status("sent"), "queued");
+    assert!(queued.event_id().is_empty());
+
+    for (wedged, cancelled) in [(true, false), (false, true), (false, false)] {
+        assert!(queued_send_outcome(Err(QueuedSendError {
+            diagnostic_id: "d0.4-send-queue-wedged",
+            transaction_id: Some("t3".into()),
+            wedged,
+            cancelled,
+            still_queued: false,
+        }))
+        .is_err());
+    }
+}
+
+#[tokio::test]
 async fn unwedge_retries_wedged_send() {
     let server = MatrixMockServer::new().await;
     let client = server.client_builder().build().await;

@@ -310,6 +310,63 @@ final class EventActionServiceTests: XCTestCase {
         )
     }
 
+    func testTimelineActionReadbackAcceptsQueuedWritesOnlyForQueueableActions() {
+        // A still-queued forward has no new event id yet.
+        XCTAssertTrue(
+            TimelineActionReadbackPolicy.accepts(
+                schemaVersion: 1,
+                action: "forward_text",
+                roomID: "!room:matrix.org",
+                eventID: "",
+                status: "queued",
+                expectedAction: "forward_text",
+                expectedRoomID: "!room:matrix.org",
+                expectedStatus: "sent"
+            )
+        )
+        XCTAssertTrue(
+            TimelineActionReadbackPolicy.accepts(
+                schemaVersion: 1,
+                action: "poll_vote",
+                roomID: "!room:matrix.org",
+                eventID: "$poll:matrix.org",
+                status: "queued",
+                expectedAction: "poll_vote",
+                expectedRoomID: "!room:matrix.org",
+                expectedStatus: "voted",
+                expectedEventID: "$poll:matrix.org"
+            )
+        )
+        // A queued vote still has to name the poll it targeted.
+        XCTAssertFalse(
+            TimelineActionReadbackPolicy.accepts(
+                schemaVersion: 1,
+                action: "poll_vote",
+                roomID: "!room:matrix.org",
+                eventID: "",
+                status: "queued",
+                expectedAction: "poll_vote",
+                expectedRoomID: "!room:matrix.org",
+                expectedStatus: "voted",
+                expectedEventID: "$poll:matrix.org"
+            )
+        )
+        // Redaction and report never go through the send queue.
+        XCTAssertFalse(
+            TimelineActionReadbackPolicy.accepts(
+                schemaVersion: 1,
+                action: "report",
+                roomID: "!room:matrix.org",
+                eventID: "$event:matrix.org",
+                status: "queued",
+                expectedAction: "report",
+                expectedRoomID: "!room:matrix.org",
+                expectedStatus: "reported",
+                expectedEventID: "$event:matrix.org"
+            )
+        )
+    }
+
     func testTimelineActionReadbackMustMatchExactOwnerContract() {
         XCTAssertTrue(
             TimelineActionReadbackPolicy.accepts(

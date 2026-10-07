@@ -833,6 +833,10 @@ pub struct SharedCore {
     generations: crate::app::lifecycle::session::SessionGenerations,
     /// Backoff for re-saving tokens after a failed rotation save.
     save_retry_backoff: Mutex<crate::app::lifecycle::session::RetryBackoff>,
+    /// The generation (and account) whose sync reported a rejected refresh.
+    /// Latched when observed so retirement does not depend on the live sync
+    /// owner still existing, or still reporting, after the shell stops it.
+    rejected_session: Mutex<Option<(u64, AccountIdentity)>>,
 }
 
 impl Default for SharedCore {

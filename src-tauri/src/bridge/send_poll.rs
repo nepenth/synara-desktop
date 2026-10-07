@@ -69,13 +69,12 @@ fn parse_send_poll_result(
         status: String,
     }
     let wire: Wire = serde_json::from_value(payload).map_err(|_| send_poll_response_error())?;
-    if wire.status != "sent" {
-        return Err(send_poll_response_error());
-    }
+    let status =
+        sent_or_queued_status(&wire.status, &wire.event_id).ok_or_else(send_poll_response_error)?;
     Ok(MatrixSendPollResult {
         room_id: wire.room_id,
         event_id: wire.event_id,
-        status: "sent",
+        status,
     })
 }
 
@@ -91,15 +90,24 @@ fn parse_poll_respond_result(
         status: String,
     }
     let wire: Wire = serde_json::from_value(payload).map_err(|_| poll_respond_response_error())?;
-    if wire.status != "sent" {
-        return Err(poll_respond_response_error());
-    }
+    let status = sent_or_queued_status(&wire.status, &wire.event_id)
+        .ok_or_else(poll_respond_response_error)?;
     Ok(MatrixPollRespondResult {
         room_id: wire.room_id,
         poll_event_id: wire.poll_event_id,
         event_id: wire.event_id,
-        status: "sent",
+        status,
     })
+}
+
+/// `sent` carries the server event id; `queued` (still in the SDK's persisted
+/// queue, retried in order) carries none. Anything else fails closed.
+fn sent_or_queued_status(status: &str, event_id: &str) -> Option<&'static str> {
+    match status {
+        "sent" if !event_id.is_empty() => Some("sent"),
+        "queued" if event_id.is_empty() => Some("queued"),
+        _ => None,
+    }
 }
 
 fn map_send_poll_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -160,4 +168,34 @@ fn poll_respond_response_error() -> MatrixAuthCommandError {
         "The native Matrix poll response could not be sent.",
         "v-send.3-poll-response-sdk-failed",
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_poll_respond_result, parse_send_poll_result};
+
+    #[test]
+    fn poll_results_accept_sent_with_an_id_and_queued_without_one() {
+        let sent = parse_send_poll_result(serde_json::json!({
+            "roomId": "!r:example.org", "eventId": "$poll", "status": "sent"
+        }))
+        .expect("sent poll");
+        assert_eq!(sent.status, "sent");
+        let queued = parse_send_poll_result(serde_json::json!({
+            "roomId": "!r:example.org", "eventId": "", "status": "queued"
+        }))
+        .expect("queued poll");
+        assert_eq!(queued.status, "queued");
+        let vote = parse_poll_respond_result(serde_json::json!({
+            "roomId": "!r:example.org", "pollEventId": "$poll", "eventId": "", "status": "queued"
+        }))
+        .expect("queued response");
+        assert_eq!(vote.status, "queued");
+        for (event_id, status) in [("", "sent"), ("$e", "queued"), ("$e", "failed")] {
+            assert!(parse_send_poll_result(serde_json::json!({
+                "roomId": "!r:example.org", "eventId": event_id, "status": status
+            }))
+            .is_err());
+        }
+    }
 }

@@ -58,9 +58,9 @@ use crate::app::send::{
     abort_queued_send, apply_poll_start_relations, edit_message_content,
     enqueue_event_via_room_queue, message_content, normalize_poll, parse_edit_event_id,
     parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id, parse_transaction_id,
-    poll_response_content, poll_start_content, queued_send_is_wedged, reenable_queued_send,
-    send_event_via_room_queue, unwedge_queued_send, wait_for_queued_send, MatrixPollRespondResult,
-    MatrixSendPollResult, MatrixSendTextResult, SendQueue,
+    poll_response_content, poll_start_content, queued_send_is_wedged, queued_send_outcome,
+    reenable_queued_send, send_event_via_room_queue, unwedge_queued_send, wait_for_queued_send,
+    MatrixPollRespondResult, MatrixSendPollResult, MatrixSendTextResult, SendQueue,
 };
 use crate::app::threads::{
     rebuild_thread_index, NativeThreadListSnapshot, ThreadIndex, ThreadListItemProjection,
@@ -1544,14 +1544,15 @@ impl NativeTimelineOwner {
             .client
             .get_room(&parsed_room)
             .ok_or("v-send.3-poll-room-not-found")?;
-        let ack =
+        let outcome = queued_send_outcome(
             send_event_via_room_queue(&room, UnstablePollStartEventContent::New(content).into())
-                .await
-                .map_err(|error| error.diagnostic_id)?;
+                .await,
+        )
+        .map_err(|error| error.diagnostic_id)?;
         Ok(MatrixSendPollResult {
             room_id: parsed_room.to_string(),
-            event_id: ack.event_id,
-            status: "sent",
+            event_id: outcome.event_id(),
+            status: outcome.status("sent"),
         })
     }
 
@@ -1568,14 +1569,13 @@ impl NativeTimelineOwner {
             .client
             .get_room(&parsed_room)
             .ok_or("v-send.3-poll-room-not-found")?;
-        let ack = send_event_via_room_queue(&room, content.into())
-            .await
+        let outcome = queued_send_outcome(send_event_via_room_queue(&room, content.into()).await)
             .map_err(|error| error.diagnostic_id)?;
         Ok(MatrixPollRespondResult {
             room_id: parsed_room.to_string(),
             poll_event_id,
-            event_id: ack.event_id,
-            status: "sent",
+            event_id: outcome.event_id(),
+            status: outcome.status("sent"),
         })
     }
 
@@ -1645,15 +1645,14 @@ impl NativeTimelineOwner {
             .make_edit_event(&event_id, EditedContent::RoomMessage(new_content))
             .await
             .map_err(|_| "v-timeline-edit-prepare-failed")?;
-        send_event_via_room_queue(&room, edit_content)
-            .await
+        let outcome = queued_send_outcome(send_event_via_room_queue(&room, edit_content).await)
             .map_err(|_| "v-timeline-edit-send-failed")?;
         Ok(NativeTimelineActionReadback {
             schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
             action: NativeTimelineActionKind::EditText,
             room_id: room_id.to_string(),
             event_id: event_id.to_string(),
-            status: "sent".into(),
+            status: outcome.status("sent").into(),
         })
     }
 
@@ -1925,15 +1924,14 @@ impl NativeTimelineOwner {
         )?;
         let content = poll_response_content(event_id.as_str(), &answer_ids)
             .map_err(|_| "v-timeline-poll-vote-invalid-answer")?;
-        send_event_via_room_queue(&room, content.into())
-            .await
+        let outcome = queued_send_outcome(send_event_via_room_queue(&room, content.into()).await)
             .map_err(|_| "v-timeline-poll-vote-send-failed")?;
         Ok(NativeTimelineActionReadback {
             schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
             action: NativeTimelineActionKind::PollVote,
             room_id: room_id.to_string(),
             event_id: event_id.to_string(),
-            status: "voted".into(),
+            status: outcome.status("voted").into(),
         })
     }
 
@@ -1993,16 +1991,15 @@ impl NativeTimelineOwner {
         let forwarded_body = format_forwarded_plain_body(&sender_label, &body, as_quote);
         let mut content = RoomMessageEventContent::text_plain(forwarded_body);
         content.mentions = Some(Mentions::new());
-        let sent_event_id = send_event_via_room_queue(&target_room, content.into())
-            .await
-            .map_err(|_| "v-timeline-forward-send-failed")?
-            .event_id;
+        let outcome =
+            queued_send_outcome(send_event_via_room_queue(&target_room, content.into()).await)
+                .map_err(|_| "v-timeline-forward-send-failed")?;
         Ok(NativeTimelineActionReadback {
             schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
             action: NativeTimelineActionKind::ForwardText,
             room_id: target_room_id.to_string(),
-            event_id: sent_event_id,
-            status: "sent".into(),
+            event_id: outcome.event_id(),
+            status: outcome.status("sent").into(),
         })
     }
 
@@ -2028,16 +2025,14 @@ impl NativeTimelineOwner {
         validate_forward_encryption(&source_room, &target_room, confirmed_encryption_downgrade)
             .await?;
         let content = load_forwardable_media(&source_room, &event_id).await?;
-        let sent_event_id = send_event_via_room_queue(&target_room, content)
-            .await
-            .map_err(|_| "v-timeline-forward-media-send-failed")?
-            .event_id;
+        let outcome = queued_send_outcome(send_event_via_room_queue(&target_room, content).await)
+            .map_err(|_| "v-timeline-forward-media-send-failed")?;
         Ok(NativeTimelineActionReadback {
             schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
             action: NativeTimelineActionKind::ForwardMedia,
             room_id: target_room_id.to_string(),
-            event_id: sent_event_id,
-            status: "sent".into(),
+            event_id: outcome.event_id(),
+            status: outcome.status("sent").into(),
         })
     }
 

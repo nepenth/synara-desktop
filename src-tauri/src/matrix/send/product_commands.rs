@@ -214,6 +214,9 @@ pub async fn matrix_send_attachment(
                 Err(error) if error.cancelled => {
                     let _ = active.attachments.cancel(&local_txn_id);
                 }
+                // Still in the SDK's persisted queue: it stays Sending and the
+                // timeline row shows the SDK send state (with Discard).
+                Err(error) if error.still_queued => {}
                 Err(error) => {
                     let _ = active
                         .attachments
@@ -222,15 +225,17 @@ pub async fn matrix_send_attachment(
             }
         }
     }
+    drop(session);
 
-    let event_id = send_result
-        .map(|ack| ack.event_id)
+    // A still-queued upload keeps going in the SDK. Reporting it as a
+    // failure made the user attach the file again and post a duplicate.
+    let outcome = synara_core::app::send::queued_send_outcome(send_result)
         .map_err(|error| map_attachment_error(error.diagnostic_id))?;
     Ok(MatrixSendAttachmentResult {
         room_id: room_id.to_string(),
-        event_id,
+        event_id: outcome.event_id(),
         local_txn_id,
-        status: "sent",
+        status: outcome.status("sent"),
     })
 }
 
