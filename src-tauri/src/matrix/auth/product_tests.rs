@@ -2835,35 +2835,6 @@ fn the_watcher_retires_through_the_tick_helper_with_its_generation() {
     );
 }
 
-#[test]
-fn pending_logout_cleanup_retries_until_it_succeeds() {
-    let pending = std::sync::Mutex::new(None::<MatrixLoginIdentity>);
-    let identity = MatrixLoginIdentity {
-        user_id: "@alice:example.org".to_owned(),
-        device_id: "DEVICE".to_owned(),
-        homeserver_url: "https://example.org".to_owned(),
-    };
-    // Nothing pending: cleanup is not called.
-    retry_pending_logout_cleanup(&pending, |_| panic!("no pending cleanup")).unwrap();
-
-    *pending.lock().unwrap() = Some(identity.clone());
-    let error = retry_pending_logout_cleanup(&pending, |_| {
-        Err(MatrixAuthCommandError::unavailable(
-            "d0.1-session-clear-failed",
-        ))
-    })
-    .expect_err("a failed retry stays pending");
-    assert_eq!(error.diagnostic_id, "d0.1-session-clear-failed");
-    assert_eq!(pending.lock().unwrap().as_ref(), Some(&identity));
-
-    retry_pending_logout_cleanup(&pending, |retried| {
-        assert_eq!(retried, &identity);
-        Ok(())
-    })
-    .unwrap();
-    assert!(pending.lock().unwrap().is_none());
-}
-
 /// Acceptance 7: drive the real take + teardown pair that `matrix_logout` runs.
 /// Production passes `VOLUNTARY_REMOTE_LOGOUT_TIMEOUT`; the test shortens it.
 #[tokio::test]
@@ -2890,9 +2861,10 @@ async fn voluntary_logout_finishes_within_the_bound_without_holding_the_session_
         tokio::spawn(async move {
             let _transition = transition.lock().await;
             let started = tokio::time::Instant::now();
-            let (session, ()) = take_session_for_logout(&slot, |_| Ok(()))
-                .await?
-                .expect("installed session");
+            let (session, ()) =
+                take_session_for_logout(&slot, |_| Ok::<(), MatrixAuthCommandError>(()))
+                    .await?
+                    .expect("installed session");
             finish_taken_session_logout(
                 session,
                 bound,
@@ -2902,7 +2874,7 @@ async fn voluntary_logout_finishes_within_the_bound_without_holding_the_session_
                     // A remote /logout that never returns.
                     std::future::pending::<Result<(), ()>>()
                 }),
-                || async { Ok(()) },
+                || async { Ok::<(), MatrixAuthCommandError>(()) },
                 || {
                     cleaned.store(true, Ordering::SeqCst);
                     Ok(())
@@ -2949,7 +2921,7 @@ async fn a_401_remote_logout_and_a_rejected_generation_both_finish_locally() {
 
     // 401: returns at once and still runs cleanup and close.
     let slot = Mutex::new(Some(1u64));
-    let (session, ()) = take_session_for_logout(&slot, |_| Ok(()))
+    let (session, ()) = take_session_for_logout(&slot, |_| Ok::<(), MatrixAuthCommandError>(()))
         .await
         .unwrap()
         .unwrap();
@@ -2960,7 +2932,7 @@ async fn a_401_remote_logout_and_a_rejected_generation_both_finish_locally() {
         VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
         || {},
         Some(|| async { Err::<(), &str>("M_UNKNOWN_TOKEN") }),
-        || async { Ok(()) },
+        || async { Ok::<(), MatrixAuthCommandError>(()) },
         || {
             cleaned.set(true);
             Ok(())
@@ -2975,7 +2947,7 @@ async fn a_401_remote_logout_and_a_rejected_generation_both_finish_locally() {
 
     // Rejected generation: no remote closure at all.
     let slot = Mutex::new(Some(2u64));
-    let (session, ()) = take_session_for_logout(&slot, |_| Ok(()))
+    let (session, ()) = take_session_for_logout(&slot, |_| Ok::<(), MatrixAuthCommandError>(()))
         .await
         .unwrap()
         .unwrap();
@@ -2985,7 +2957,7 @@ async fn a_401_remote_logout_and_a_rejected_generation_both_finish_locally() {
         VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
         || revoked.set(true),
         None::<fn() -> std::future::Ready<Result<(), ()>>>,
-        || async { Ok(()) },
+        || async { Ok::<(), MatrixAuthCommandError>(()) },
         || Ok(()),
         || async { Ok(()) },
     )
@@ -2994,10 +2966,12 @@ async fn a_401_remote_logout_and_a_rejected_generation_both_finish_locally() {
     assert!(revoked.get());
 
     // A second logout after the first sees an empty slot (orphan path).
-    assert!(take_session_for_logout(&slot, |_: &u64| Ok(()))
-        .await
-        .unwrap()
-        .is_none());
+    assert!(
+        take_session_for_logout(&slot, |_: &u64| Ok::<(), MatrixAuthCommandError>(()))
+            .await
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[tokio::test]
@@ -3786,7 +3760,7 @@ async fn session_transition_gate_blocks_new_install_during_wiring_active_and_orp
             let close = async {
                 entered_send.send(()).unwrap();
                 release_receive.await.unwrap();
-                Ok(())
+                Ok::<(), MatrixAuthCommandError>(())
             };
             if route == "wiring" {
                 close.await.unwrap();

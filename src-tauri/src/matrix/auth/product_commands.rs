@@ -1040,74 +1040,10 @@ pub(super) struct LogoutPlan {
 
 pub(super) use synara_core::app::lifecycle::session::remote_logout_allowed;
 
-/// Validate the installed session under the session mutex, then move it out of
-/// the slot before any teardown await. From here on, ordinary commands see no
-/// session and fail closed, sync recovery has nothing to restart, and the
-/// mutex is free while the remote logout and SDK stop run. `Ok(None)` means
-/// the slot was already empty.
-pub(super) async fn take_session_for_logout<Session, Plan>(
-    slot: &Mutex<Option<Session>>,
-    prepare: impl FnOnce(&Session) -> Result<Plan, MatrixAuthCommandError>,
-) -> Result<Option<(Session, Plan)>, MatrixAuthCommandError> {
-    let mut slot = slot.lock().await;
-    let Some(active) = slot.as_ref() else {
-        return Ok(None);
-    };
-    let plan = prepare(active)?;
-    Ok(slot.take().map(|active| (active, plan)))
-}
-
-/// Tear down a session that `take_session_for_logout` already removed.
-/// `remote_logout` is `None` for a rejected generation; otherwise it is one
-/// attempt bounded by `remote_timeout` ([`VOLUNTARY_REMOTE_LOGOUT_TIMEOUT`] in
-/// production). A 401, timeout, or
-/// transport error still runs local cleanup and Core close.
-pub(super) async fn finish_taken_session_logout<
-    Session,
-    Remote,
-    RemoteFuture,
-    RemoteOk,
-    RemoteErr,
-    Stop,
-    StopFuture,
-    Close,
-    CloseFuture,
->(
-    session: Session,
-    remote_timeout: std::time::Duration,
-    revoke: impl FnOnce(),
-    remote_logout: Option<Remote>,
-    stop_local: Stop,
-    cleanup: impl FnOnce() -> Result<(), MatrixAuthCommandError>,
-    close: Close,
-) -> Result<(), MatrixAuthCommandError>
-where
-    Remote: FnOnce() -> RemoteFuture,
-    RemoteFuture: std::future::Future<Output = Result<RemoteOk, RemoteErr>>,
-    Stop: FnOnce() -> StopFuture,
-    StopFuture: std::future::Future<Output = Result<(), MatrixAuthCommandError>>,
-    Close: FnOnce() -> CloseFuture,
-    CloseFuture: std::future::Future<Output = Result<(), MatrixAuthCommandError>>,
-{
-    finish_active_logout(
-        || Ok(()),
-        || async move {
-            revoke();
-            // Stop sync first: a running sync loop would race the server-side
-            // token revocation into a refresh 401 on every logout.
-            let stop_result = stop_local().await;
-            if let Some(remote_logout) = remote_logout {
-                let _remote_logout_succeeded =
-                    bounded_remote_logout(remote_timeout, remote_logout()).await;
-            }
-            stop_result
-        },
-        cleanup,
-        move || drop(session),
-        close,
-    )
-    .await
-}
+pub(super) use synara_core::app::lifecycle::session::{
+    bounded_remote_logout, finish_active_logout, finish_orphan_logout, finish_taken_session_logout,
+    take_session_for_logout, VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
+};
 
 fn settle_pending_logout_cleanup_for_install(app: &AppHandle, state: &MatrixAuthState) {
     state.settle_pending_logout_cleanup_before_install(|identity| {
@@ -1115,20 +1051,6 @@ fn settle_pending_logout_cleanup_for_install(app: &AppHandle, state: &MatrixAuth
             clear_native_logout_material(&KeyringSessionMaterialVault::new(), identity, &root)
         })
     });
-}
-
-/// One bounded `/logout` attempt (voluntary logout, install rollback, identity
-/// mismatch, and registration compensation). 401, timeout, and transport
-/// errors are `false` so local cleanup still runs. Auth-rejection logout does
-/// not call this.
-pub(super) const VOLUNTARY_REMOTE_LOGOUT_TIMEOUT: std::time::Duration =
-    std::time::Duration::from_secs(15);
-
-pub(super) async fn bounded_remote_logout<T, E>(
-    timeout: std::time::Duration,
-    logout: impl std::future::Future<Output = Result<T, E>>,
-) -> bool {
-    matches!(tokio::time::timeout(timeout, logout).await, Ok(Ok(_)))
 }
 
 #[tauri::command]
@@ -2251,43 +2173,6 @@ pub(super) fn read_active_identity(
         .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-active-session-invalid"))
 }
 
-/// Once teardown begins, stop errors cannot retain a revoked live client.
-/// Always attempt credential cleanup, retire live ownership, and close Core.
-/// The fixed result contract returns credential failure first, then Core close,
-/// then sync stop; all three outcomes are observed before returning any error.
-pub(super) async fn finish_active_logout<Begin, BeginFuture, Close, CloseFuture>(
-    preflight: impl FnOnce() -> Result<(), MatrixAuthCommandError>,
-    begin: Begin,
-    cleanup: impl FnOnce() -> Result<(), MatrixAuthCommandError>,
-    retire: impl FnOnce(),
-    close: Close,
-) -> Result<(), MatrixAuthCommandError>
-where
-    Begin: FnOnce() -> BeginFuture,
-    BeginFuture: std::future::Future<Output = Result<(), MatrixAuthCommandError>>,
-    Close: FnOnce() -> CloseFuture,
-    CloseFuture: std::future::Future<Output = Result<(), MatrixAuthCommandError>>,
-{
-    preflight()?;
-    let stop_result = begin().await;
-    let cleanup_result = cleanup();
-    retire();
-    let close_result = close().await;
-    cleanup_result?;
-    close_result?;
-    stop_result
-}
-
-pub(super) async fn finish_orphan_logout(
-    close: impl std::future::Future<Output = Result<(), MatrixAuthCommandError>>,
-    cleanup: impl FnOnce() -> Result<(), MatrixAuthCommandError>,
-) -> Result<(), MatrixAuthCommandError> {
-    let close_result = close.await;
-    let cleanup_result = cleanup();
-    cleanup_result?;
-    close_result
-}
-
 /// Establish the non-secret retry locator before any logout side effect.
 /// Readback and filesystem sync errors leave the live session installed.
 /// These are OS filesystem sync requests, not a guarantee against hardware or
@@ -2801,17 +2686,8 @@ mod tests {
         assert_eq!(calls, bounded + 1, "every remote logout must be bounded");
         assert!(production
             .contains(".then_some(move || async move { client.matrix_auth().logout().await })"));
-        let teardown = production
-            .split("pub(super) async fn finish_taken_session_logout")
-            .nth(1)
-            .unwrap();
-        assert!(
-            teardown.find("stop_local().await").unwrap()
-                < teardown
-                    .find("bounded_remote_logout(remote_timeout")
-                    .unwrap(),
-            "sync stops before the remote /logout"
-        );
+        // Core's `finish_taken_session_logout` stops sync before the remote
+        // `/logout`; its own test pins that order.
     }
 
     #[test]

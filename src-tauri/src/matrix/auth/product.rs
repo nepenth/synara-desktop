@@ -358,7 +358,7 @@ pub struct MatrixAuthState {
     transition: Mutex<()>,
     /// Identity whose credential cleanup failed after its live session left the
     /// slot. Restore refuses to reinstall it, and the watcher retries cleanup.
-    pending_logout_cleanup: std::sync::Mutex<Option<MatrixLoginIdentity>>,
+    pending_logout_cleanup: synara_core::app::lifecycle::session::PendingLogoutCleanup,
     store_recovery: Mutex<StoreRecoveryState>,
     generations: synara_core::app::lifecycle::session::SessionGenerations,
     recover_gate: Mutex<RecoverGate>,
@@ -649,16 +649,11 @@ impl MatrixAuthState {
     }
 
     pub(super) fn record_pending_logout_cleanup(&self, identity: MatrixLoginIdentity) {
-        if let Ok(mut pending) = self.pending_logout_cleanup.lock() {
-            *pending = Some(identity);
-        }
+        self.pending_logout_cleanup.record(identity);
     }
 
     pub(super) fn has_pending_logout_cleanup(&self) -> bool {
-        self.pending_logout_cleanup
-            .lock()
-            .map(|pending| pending.is_some())
-            .unwrap_or(true)
+        self.pending_logout_cleanup.is_pending()
     }
 
     /// Retry credential cleanup for a session that already left the slot.
@@ -667,7 +662,7 @@ impl MatrixAuthState {
         &self,
         cleanup: impl FnOnce(&MatrixLoginIdentity) -> Result<(), MatrixAuthCommandError>,
     ) -> Result<(), MatrixAuthCommandError> {
-        retry_pending_logout_cleanup(&self.pending_logout_cleanup, cleanup)
+        self.pending_logout_cleanup.retry(cleanup)
     }
 
     /// A new install replaces whatever the failed cleanup was retrying. Try
@@ -676,10 +671,7 @@ impl MatrixAuthState {
         &self,
         cleanup: impl FnOnce(&MatrixLoginIdentity) -> Result<(), MatrixAuthCommandError>,
     ) {
-        let _ = self.retry_pending_logout_cleanup(cleanup);
-        if let Ok(mut pending) = self.pending_logout_cleanup.lock() {
-            *pending = None;
-        }
+        self.pending_logout_cleanup.settle_before_install(cleanup);
     }
 
     /// A normal login supersedes any abandoned recovery affordance. This only
@@ -794,27 +786,24 @@ impl MatrixAuthState {
     }
 }
 
-pub(super) fn retry_pending_logout_cleanup(
-    pending: &std::sync::Mutex<Option<MatrixLoginIdentity>>,
-    cleanup: impl FnOnce(&MatrixLoginIdentity) -> Result<(), MatrixAuthCommandError>,
-) -> Result<(), MatrixAuthCommandError> {
-    let mut pending = pending
-        .lock()
-        .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-clear-failed"))?;
-    let Some(identity) = pending.as_ref() else {
-        return Ok(());
-    };
-    cleanup(identity)?;
-    *pending = None;
-    Ok(())
-}
-
 /// Upper bound for one watchdog keyring write before the tick moves on.
 const KEYRING_RETRY_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub(super) use synara_core::app::lifecycle::session::{
     handle_authentication_rejection_tick, AuthenticationRejectionWatch, RetryBackoff,
 };
+
+impl From<synara_core::app::lifecycle::session::SessionFault> for MatrixAuthCommandError {
+    fn from(fault: synara_core::app::lifecycle::session::SessionFault) -> Self {
+        use synara_core::app::lifecycle::session::SessionFaultKind;
+        let code = match fault.kind {
+            SessionFaultKind::InvalidRequest => "InvalidRequest",
+            SessionFaultKind::Forbidden => "Forbidden",
+            SessionFaultKind::Unavailable => "Unknown",
+        };
+        Self::new(code, fault.message, fault.diagnostic_id)
+    }
+}
 
 impl synara_core::app::lifecycle::session::HasDiagnosticId for MatrixAuthCommandError {
     fn diagnostic_id(&self) -> &str {
