@@ -45,7 +45,7 @@ npm run check:repo-layout
 npm run check:versions
 npm run check:docs
 npm run check:matrix-boundaries
-npm run check:quality-gates
+npm run check:workflows   # needs actionlint on PATH
 npm --prefix synara run typecheck
 npm --prefix synara run test:modernization
 npm --prefix synara run check:eslint
@@ -53,10 +53,12 @@ npm --prefix synara run check:prettier
 npm run cargo -- test --workspace --locked
 ```
 
-A green pull-request check is not the full iOS simulator or desktop package
-matrix. Those jobs run when the changed paths require them, or when a
-maintainer adds `needs-ios`, `needs-ios-ui`, or `needs-package`. Fork pull
-requests do not receive signing secrets.
+A green pull-request check is the fast gate, not the full matrix. iOS
+simulator unit tests run on release PRs and with the `needs-ios` label;
+XCUITests run with `needs-ios-ui`. Labels apply from the next push. The
+nightly CI run covers XCUITests, the live Synapse proofs and the Linux/Arch/macOS
+package builds; dispatch CI with `packages: true` to build packages on demand.
+Fork pull requests do not receive signing secrets.
 
 Follow [the build and release runbook](docs/build-and-release.md) for package,
 simulator, signing, and release validation.

@@ -279,6 +279,11 @@ if [[ "${RUN_IOS_TESTS:-0}" == "1" ]]; then
   if [[ "$TEST_SUITE" != "all" ]]; then
     test_command+=("${TEST_ONLY_ARGS[@]}")
   fi
+  # CI opt-in: rerun a failed test once. A pass on retry is still recorded in
+  # the result bundle, so flaky tests stay visible without failing the lane.
+  if [[ "${IOS_TEST_RETRY_ON_FAILURE:-0}" == "1" ]]; then
+    test_command+=(-retry-tests-on-failure -test-iterations 2)
+  fi
   test_command+=(
     "${PACKAGE_ARGS[@]}"
     test-without-building

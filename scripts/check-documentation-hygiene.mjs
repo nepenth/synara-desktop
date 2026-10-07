@@ -188,7 +188,11 @@ export function auditDocumentation(root = repositoryRoot) {
     }
   }
 
-  for (const file of files.filter((candidate) => candidate.endsWith(".md"))) {
+  // `git ls-files` keeps unstaged deletions; audit the working tree.
+  for (const file of files.filter(
+    (candidate) =>
+      candidate.endsWith(".md") && existsSync(path.join(root, candidate))
+  )) {
     diagnostics.push(
       ...findBrokenLocalLinks({
         root,

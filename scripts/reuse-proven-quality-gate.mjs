@@ -23,6 +23,15 @@ export const secondParentOf = (revListParentsLine, sha) => {
   return parts[2];
 };
 
+// A Quality gate that has not finished yet on one of the candidate commits.
+export const hasPendingQualityGate = (checkRuns) =>
+  (checkRuns || []).some(
+    (run) =>
+      run &&
+      run.name === QUALITY_GATE_CHECK_NAME &&
+      run.status !== "completed"
+  );
+
 export const decideProvenQualityGate = ({ sha, checkRuns }) => {
   if ((checkRuns || []).some(isSuccessfulQualityGate)) {
     return { reuse: true, provenSha: sha };
@@ -82,46 +91,66 @@ const writeOutput = (name, value) => {
   process.stdout.write(line);
 };
 
-const main = () => {
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Release publishes only commits CI already proved. With --require, a missing
+// gate fails the release instead of re-running the suite at the tag; a gate
+// still running on the tagged commit or the merged PR head is waited for.
+const main = async () => {
   const sha = process.env.GITHUB_SHA;
   const repo = process.env.GITHUB_REPOSITORY;
   if (!sha || !repo) {
     throw new Error("GITHUB_SHA and GITHUB_REPOSITORY are required");
   }
+  const strict = process.argv.includes("--require");
+  const waitMinutes = Number(process.env.SYNARA_QUALITY_GATE_WAIT_MINUTES || 45);
+  const deadline = Date.now() + waitMinutes * 60_000;
 
   const parentsLine = runGit(["rev-list", "--parents", "-n", "1", sha]);
   const secondParent = secondParentOf(parentsLine, sha);
-  const checkRunsBySha = {
-    [sha]: fetchCheckRuns(repo, sha),
-  };
-  if (secondParent) {
-    checkRunsBySha[secondParent] = fetchCheckRuns(repo, secondParent);
-  }
+  const candidates = [sha, ...(secondParent ? [secondParent] : [])];
 
-  const decision = decideProvenQualityGateWithParents({
-    sha,
-    secondParent,
-    checkRunsBySha,
-  });
-
-  writeOutput("reuse", decision.reuse ? "true" : "false");
-  writeOutput("proven_sha", decision.provenSha || "");
-  if (decision.reuse) {
-    console.log(
-      `Reusing proven ${QUALITY_GATE_CHECK_NAME} on ${decision.provenSha}.`
+  for (;;) {
+    const checkRunsBySha = Object.fromEntries(
+      candidates.map((candidate) => [candidate, fetchCheckRuns(repo, candidate)])
     );
-    return;
+    const decision = decideProvenQualityGateWithParents({
+      sha,
+      secondParent,
+      checkRunsBySha,
+    });
+    if (decision.reuse) {
+      writeOutput("reuse", "true");
+      writeOutput("proven_sha", decision.provenSha);
+      console.log(
+        `Reusing proven ${QUALITY_GATE_CHECK_NAME} on ${decision.provenSha}.`
+      );
+      return;
+    }
+    const pending = candidates.some((candidate) =>
+      hasPendingQualityGate(checkRunsBySha[candidate])
+    );
+    if (!strict || !pending || Date.now() > deadline) break;
+    console.log(`${QUALITY_GATE_CHECK_NAME} still running; checking again in 60s.`);
+    await sleep(60_000);
   }
-  console.log(
-    `No proven ${QUALITY_GATE_CHECK_NAME} on ${sha}${
-      secondParent ? ` or incoming parent ${secondParent}` : ""
-    }; running exact-tag validation.`
-  );
+
+  writeOutput("reuse", "false");
+  writeOutput("proven_sha", "");
+  const where = `${sha}${secondParent ? ` or incoming parent ${secondParent}` : ""}`;
+  if (strict) {
+    console.error(
+      `No successful CI ${QUALITY_GATE_CHECK_NAME} on ${where}. ` +
+        "Merge the release PR after its Quality gate passes, or re-run CI on main, then re-run this release."
+    );
+    process.exit(1);
+  }
+  console.log(`No proven ${QUALITY_GATE_CHECK_NAME} on ${where}.`);
 };
 
 if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
-  main();
+  await main();
 }

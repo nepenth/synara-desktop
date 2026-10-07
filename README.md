@@ -104,7 +104,7 @@ migration record, not a statement that the core is unfinished.
 |-- integration/synapse/      Disposable local Synapse integration harness
 |-- packaging/                Linux package metadata
 |-- docs/                     Architecture, operations, and historical records
-`-- .github/workflows/        CI, package smoke, signing, and release automation
+`-- .github/workflows/        CI (fast gate + nightly) and release automation
 ```
 
 `synara/` is a normal tracked directory, not a submodule. Fresh clones do not
@@ -209,7 +209,7 @@ npm run check:repo-layout
 npm run check:versions
 npm run check:docs
 npm run check:matrix-boundaries
-npm run check:quality-gates
+npm run check:workflows
 npm run check:synapse-harness
 npm run check:production-smoke
 ```

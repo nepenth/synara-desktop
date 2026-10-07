@@ -20,20 +20,31 @@ runs:
         SYNARA_CACHE_FAMILY: ${{ inputs.family }}
         SYNARA_CACHE_WRITER: ${{ inputs.save-cache }}
       run: bash scripts/ci-rust-cache-identity.sh
+    # One snapshot per family, lockfile and ISO week. A per-commit key kept a
+    # 4 GiB copy for every main push and pushed the release families past the
+    # repository cache limit. The nightly prune keeps only the newest entry.
+    - name: Select weekly compiler snapshot key
+      id: week
+      shell: bash
+      run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
     - name: Restore compiler snapshots for readers
       if: inputs.save-cache != 'true'
       uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
       with:
         path: ${{ github.workspace }}/.kache-cache
-        key: ${{ steps.identity.outputs.compiler-prefix }}-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
-        restore-keys: ${{ steps.identity.outputs.compiler-prefix }}-
+        key: ${{ steps.identity.outputs.compiler-prefix }}-${{ hashFiles('Cargo.lock') }}-${{ steps.week.outputs.week }}
+        restore-keys: |
+          ${{ steps.identity.outputs.compiler-prefix }}-${{ hashFiles('Cargo.lock') }}-
+          ${{ steps.identity.outputs.compiler-prefix }}-
     - name: Restore and publish compiler snapshots for main writers
       if: inputs.save-cache == 'true' && github.ref == 'refs/heads/main'
       uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
       with:
         path: ${{ github.workspace }}/.kache-cache
-        key: ${{ steps.identity.outputs.compiler-prefix }}-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
-        restore-keys: ${{ steps.identity.outputs.compiler-prefix }}-
+        key: ${{ steps.identity.outputs.compiler-prefix }}-${{ hashFiles('Cargo.lock') }}-${{ steps.week.outputs.week }}
+        restore-keys: |
+          ${{ steps.identity.outputs.compiler-prefix }}-${{ hashFiles('Cargo.lock') }}-
+          ${{ steps.identity.outputs.compiler-prefix }}-
     - name: Restore Cargo downloads for readers
       if: inputs.save-cache != 'true'
       uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5

@@ -3,11 +3,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  formatViolations,
-  runGuardrails,
-} from "./check-matrix-rust-sdk-guardrails.mjs";
-import { runGuardrails as runP16AllowlistGuardrails } from "./matrix-rust-p1.6-guardrails.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -125,6 +120,37 @@ for (const file of desktopFiles) {
   );
 }
 
+// The JS Matrix SDK and widget API were retired by the Rust migration. Keep
+// them out of every lockfile and every source import.
+const RETIRED_PACKAGES = ["matrix-js-sdk", "matrix-widget-api"];
+const lockfiles = repositoryFiles.filter((path) =>
+  /(^|\/)package-lock\.json$/.test(path)
+);
+for (const lockfile of lockfiles) {
+  const { packages = {} } = JSON.parse(
+    readFileSync(resolve(root, lockfile), "utf8")
+  );
+  for (const name of RETIRED_PACKAGES) {
+    if (Object.keys(packages).some((key) => key.endsWith(`node_modules/${name}`))) {
+      fail(`${lockfile} still resolves retired package ${name}`);
+    }
+  }
+}
+const importPattern = new RegExp(
+  `(?:from\\s+|import\\s*\\(\\s*|require\\s*\\(\\s*)['"](?:${RETIRED_PACKAGES.join("|")})(?:/[^'"]*)?['"]`
+);
+for (const file of repositoryFiles) {
+  if (!/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(file) || isDocumentation(file)) continue;
+  if (file.startsWith("scripts/")) continue;
+  const hits = lineHits(file, [importPattern]);
+  if (hits.length > 0) {
+    fail(
+      `${file} imports a retired Matrix JS package: ` +
+        hits.map((hit) => `${hit.line}`).join(", ")
+    );
+  }
+}
+
 if (process.exitCode) {
   console.error("\nApproved iOS exceptions:");
   for (const [path, reason] of IOS_ALLOWED_DIRECT_MATRIX_PATHS) {
@@ -141,34 +167,3 @@ console.log(
   `Matrix boundary check passed with ${activeIOSExceptions.size} active iOS exceptions and ` +
     `${activeDesktopExceptions.size} active desktop exceptions.`
 );
-
-// P1.6 — Matrix Rust SDK replacement architectural guardrails.
-// (1) JS SDK allowlist freeze + wire-module bans + raw HTTP + versioned IPC
-const p16 = runP16AllowlistGuardrails({ root, files: repositoryFiles });
-if (!p16.ok) {
-  console.error(
-    `[matrix-boundaries] P1.6 allowlist/wire guardrails failed with ${p16.findingCount} finding(s)`
-  );
-  for (const f of p16.findings) {
-    console.error(`  - [${f.rule}] ${f.path}: ${f.message}`);
-  }
-  console.error(
-    "\nSee docs/matrix-rust-sdk/p1.6-architectural-guardrails.md for rules."
-  );
-  process.exit(1);
-}
-console.log(
-  `[matrix-boundaries] P1.6 allowlist/wire guardrails passed (${p16.fileCount} files; allowlist ${p16.allowlistSize}).`
-);
-
-// (2) Dual-backend ban, no production Client under matrix/, no matrix_* Tauri cmds
-const rustGuardrails = runGuardrails({ root, files: repositoryFiles });
-if (!rustGuardrails.ok) {
-  console.error(`[matrix-boundaries] ${rustGuardrails.summary}`);
-  console.error(formatViolations(rustGuardrails.violations));
-  console.error(
-    "\nSee docs/matrix-rust-sdk/p1.6-architectural-guardrails.md for rules."
-  );
-  process.exit(1);
-}
-console.log(`[matrix-boundaries] ${rustGuardrails.summary}`);

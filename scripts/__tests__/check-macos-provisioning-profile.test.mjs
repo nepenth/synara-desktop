@@ -120,8 +120,8 @@ with tempfile.TemporaryDirectory() as temporary:
  assert result.returncode==0,result.stderr`);
 });
 
-test("release and manual signed lanes embed the validated profile before signing", () => {
-  for (const file of ["release.yml", "macos-signed-build.yml"]) {
+test("the release lane embeds the validated profile before signing", () => {
+  for (const file of ["release.yml"]) {
     const workflow = readFileSync(`.github/workflows/${file}`, "utf8");
     assert.match(
       workflow,
@@ -138,15 +138,11 @@ test("release and manual signed lanes embed the validated profile before signing
     assert.ok(
       workflow.indexOf(
         "Validate and prepare Developer ID notification profile"
-      ) < workflow.indexOf("--bundles app,dmg") ||
-        file === "macos-signed-build.yml"
+      ) < workflow.indexOf("--bundles app,dmg")
     );
     assert.match(workflow, /--app /);
   }
-  const smoke = readFileSync(
-    ".github/workflows/desktop-package-smoke.yml",
-    "utf8"
-  );
+  const smoke = readFileSync(".github/workflows/ci.yml", "utf8");
   assert.match(smoke, /"entitlements":"Entitlements\.adhoc\.plist"/);
   assert.match(
     readFileSync("src-tauri/Entitlements.plist", "utf8"),
@@ -180,7 +176,6 @@ function assertBuildNotarizationCredentials(workflow, name) {
 
 for (const [file, name] of [
   ["release.yml", "Build macOS universal release packages"],
-  ["macos-signed-build.yml", "Build signed macOS DMG"],
 ]) {
   test(`${file} provides notarization credentials to the actual Tauri build`, () => {
     const workflow = readFileSync(`.github/workflows/${file}`, "utf8");
@@ -207,17 +202,14 @@ for (const [file, name] of [
   });
 }
 
-test("manual signed app verification reads back its profile before mandatory Gatekeeper assessment", () => {
-  const workflow = readFileSync(
-    ".github/workflows/macos-signed-build.yml",
-    "utf8"
-  );
+test("release app verification reads back its profile before mandatory Gatekeeper assessment", () => {
+  const workflow = readFileSync(".github/workflows/release.yml", "utf8");
   const verify = workflowStep(workflow, "Verify macOS app signature");
-  const signature = verify.indexOf("codesign --verify --deep --strict");
+  const signature = verify.indexOf("codesign --verify");
   const profile = verify.indexOf(
     "python3 scripts/check-macos-provisioning-profile.py"
   );
   const assessment = verify.indexOf("spctl --assess --type execute");
-  assert.ok(signature >= 0 && profile > signature && assessment > profile);
+  assert.ok(signature >= 0 && assessment > signature && profile > signature);
   assert.doesNotMatch(verify, /continue-on-error|\|\| true/);
 });

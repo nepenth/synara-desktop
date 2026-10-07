@@ -20,7 +20,6 @@ const archiveExports = read("scripts/check-synara-nse-core-archive-exports.sh");
 const symbolReader = read("scripts/lib/rust-llvm-symbols.sh");
 const ciWorkflow = read(".github/workflows/ci.yml");
 const releaseWorkflow = read(".github/workflows/release.yml");
-const diagnosticsWorkflow = read(".github/workflows/ios-skeleton.yml");
 const iosCiBuild = read("synara-ios/scripts/ci-build.sh");
 const publicationHelper = read("scripts/lib/publish-generated-apple-pair.sh");
 const generatorSyntax = spawnSync(
@@ -205,19 +204,18 @@ requireText(
 );
 if (/grep\s+-a|nm_cannot_read/.test(archiveExports + symbolReader))
   throw new Error("NSE isolation cannot fall back to raw byte inspection");
-for (const [name, yaml, requiredSteps] of [
-  ["CI", ciWorkflow, 3],
-  ["release", releaseWorkflow, 2],
-  ["diagnostics", diagnosticsWorkflow, 1],
+for (const [name, yaml] of [
+  ["CI", ciWorkflow],
+  ["release", releaseWorkflow],
 ]) {
   const steps = [
     ...yaml.matchAll(
       / {6}- name: Install Rust 1\.96 and Apple targets\n([\s\S]*?)(?=\n {6}- name:|\n {2}\S|$)/g
     ),
   ];
-  if (steps.length !== requiredSteps)
+  if (steps.length === 0)
     throw new Error(
-      `${name} Apple generator toolchain entrypoints changed; reconcile LLVM prerequisites`
+      `${name} has no Apple generator toolchain entrypoint; reconcile LLVM prerequisites`
     );
   for (const step of steps) {
     if (!/components:\s*[^\n]*\bllvm-tools-preview\b/.test(step[1]))

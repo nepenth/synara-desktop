@@ -7,8 +7,6 @@ const rustFamilies = [
   "validate-rust-desktop",
   "ci-synara-core-apple-simulator-arm64",
   "release-linux-deb",
-  "release-linux-arch",
-  "release-macos-host",
   "release-macos",
   "release-synara-core-apple-device",
 ];
@@ -28,8 +26,8 @@ export function summarizeCaches({
     scopes.set(scope, summary);
   }
   const mainCaches = caches.filter((cache) => cache.ref === "refs/heads/main");
-  // Select the longest family prefix: release-macos-host must not satisfy
-  // the separate release-macos universal seed requirement.
+  // Select the longest family prefix so one family name that prefixes
+  // another cannot satisfy the other's seed requirement.
   const longestFirst = [...rustFamilies].sort((a, b) => b.length - a.length);
   const mainRustFamilies = new Set(
     mainCaches.map((cache) =>

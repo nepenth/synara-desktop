@@ -122,7 +122,6 @@ test("every Apple workflow entrypoint requires the matching LLVM component", (t)
   for (const file of [
     ".github/workflows/ci.yml",
     ".github/workflows/release.yml",
-    ".github/workflows/ios-skeleton.yml",
   ]) {
     const isolated = fixture(t);
     const original = readFileSync(join(isolated.root, file), "utf8");

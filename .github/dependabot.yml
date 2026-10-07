@@ -1,10 +1,17 @@
 version: 2
+# Monthly, grouped updates: one PR per ecosystem keeps review and CI load
+# proportionate for a single maintainer. Security updates still open as soon
+# as an advisory is published.
 updates:
   - package-ecosystem: npm
-    directory: /
+    directories: ["/", "/synara"]
+    # Keep Node types aligned with the pinned runtime; compiler/linter/formatter
+    # majors flow through the normal coordinated dependency review.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     schedule:
-      interval: weekly
-      day: tuesday
+      interval: monthly
       time: "06:00"
       timezone: America/New_York
     open-pull-requests-limit: 2
@@ -15,11 +22,10 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: tuesday
+      interval: monthly
       time: "06:15"
       timezone: America/New_York
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 1
     groups:
       github-actions-updates:
         patterns: ["*"]
@@ -27,28 +33,10 @@ updates:
   - package-ecosystem: cargo
     directory: /
     schedule:
-      interval: weekly
-      day: tuesday
+      interval: monthly
       time: "06:35"
       timezone: America/New_York
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 1
     groups:
       workspace-rust-updates:
-        patterns: ["*"]
-
-  - package-ecosystem: npm
-    directory: /synara
-    # Keep Node types aligned with the pinned runtime; compiler/linter/formatter
-    # majors flow through the normal coordinated dependency review.
-    ignore:
-      - dependency-name: "@types/node"
-        update-types: ["version-update:semver-major"]
-    schedule:
-      interval: weekly
-      day: tuesday
-      time: "06:05"
-      timezone: America/New_York
-    open-pull-requests-limit: 2
-    groups:
-      synara-npm-updates:
         patterns: ["*"]
