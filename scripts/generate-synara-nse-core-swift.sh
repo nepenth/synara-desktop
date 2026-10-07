@@ -129,7 +129,7 @@ mkdir -p "$swift_tmp"
 bindgen_target_dir="${SYNARA_APPLE_BINDGEN_TARGET_DIR:-$repo_root/target/synara-core-bindgen}"
 mkdir -p "$bindgen_target_dir"
 CARGO_TARGET_DIR="$bindgen_target_dir" cargo run --locked --package synara-core-bindgen --manifest-path "$repo_root/Cargo.toml" \
-  -- generate "$core_udl" --language swift --out-dir "$swift_tmp" --no-format
+  -- generate "$(archive_for_target "${targets[0]}")" --crate synara_nse_core --language swift --out-dir "$swift_tmp" --no-format
 
 headers_root="$work_dir/Headers"
 headers_tmp="$headers_root/synara_nse_coreFFI"

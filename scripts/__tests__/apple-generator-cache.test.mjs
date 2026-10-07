@@ -87,7 +87,11 @@ else if (command === "cargo" && args[0] === "rustc") {
   fs.mkdirSync(targetDir, { recursive: true });
   fs.writeFileSync(marker, "preserved");
   const output = value("--out-dir");
-  const name = path.basename(value("generate"), ".udl");
+  // Library mode names the binding after --crate; the input is the archive.
+  if (!args.includes("--crate") || !value("generate").endsWith(".a")) {
+    throw new Error("Apple generators must run UniFFI in library mode");
+  }
+  const name = value("--crate");
   fs.mkdirSync(output, { recursive: true });
   for (const [suffix, contents] of [[".swift", "generated"], ["FFI.h", "header"], ["FFI.modulemap", "module"]]) {
     fs.writeFileSync(path.join(output, name + suffix), contents);

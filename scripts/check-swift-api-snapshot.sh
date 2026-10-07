@@ -18,17 +18,28 @@ if [[ "${1:-}" == "--update" ]]; then
 fi
 
 bindgen_target_dir="${SYNARA_APPLE_BINDGEN_TARGET_DIR:-$repo_root/target/synara-core-bindgen}"
+# Library mode reads UDL and proc-macro metadata from a built library, as the
+# Apple generators do. A host cdylib carries the same metadata as the iOS
+# archives and shares dependency builds with ordinary `cargo test`.
+library_target_dir="${SYNARA_SWIFT_API_TARGET_DIR:-$repo_root/target}"
 
 generate() {
-  local name="$1" udl="$2" out="$work_dir/$1"
+  local name="$1" package="$2"
+  shift 2
+  local out="$work_dir/$name"
+  CARGO_TARGET_DIR="$library_target_dir" cargo rustc --quiet --locked \
+    --package "$package" --lib --crate-type cdylib "$@" \
+    --manifest-path "$repo_root/Cargo.toml"
+  local library="$library_target_dir/debug/lib$name.so"
+  [[ "$(uname -s)" == "Darwin" ]] && library="$library_target_dir/debug/lib$name.dylib"
   CARGO_TARGET_DIR="$bindgen_target_dir" cargo run --quiet --locked \
     --package synara-core-bindgen --manifest-path "$repo_root/Cargo.toml" \
-    -- generate "$udl" --language swift --out-dir "$out" --no-format
+    -- generate "$library" --crate "$name" --language swift --out-dir "$out" --no-format
   node "$repo_root/scripts/swift-api-surface.mjs" "$out/$name.swift" > "$work_dir/$name.swift-api.txt"
 }
 
-generate synara_core "$repo_root/crates/synara-core/src/synara_core.udl"
-generate synara_nse_core "$repo_root/crates/synara-nse-core/src/synara_nse_core.udl"
+generate synara_core synara-core --no-default-features --features full-uniffi
+generate synara_nse_core synara-nse-core
 
 status=0
 for name in synara_core synara_nse_core; do
