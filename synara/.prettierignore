@@ -6,3 +6,4 @@ package.json
 package-lock.json
 LICENSE
 README.md
+src/app/features/matrix-dto/generated

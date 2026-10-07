@@ -20,6 +20,8 @@ publish = false
 # Versions and default-feature policy live here; each package explicitly adds
 # only the capabilities required by its own production or test graph.
 [workspace.dependencies]
+# Generates the renderer's TypeScript wire types; only built with `ts-export`.
+ts-rs = { version = "=12.0.1", default-features = false, features = ["serde-compat"] }
 serde = "1.0.193"
 serde_json = "1.0.109"
 url = "2"

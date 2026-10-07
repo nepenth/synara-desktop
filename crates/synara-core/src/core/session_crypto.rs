@@ -6,6 +6,7 @@ use super::*;
 ///
 /// This deliberately selects only the fields returned by the desktop command,
 /// rather than serializing the broader safe session projection wholesale.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum MatrixSessionSnapshot {
@@ -37,6 +38,7 @@ impl From<Option<SessionSnapshot>> for MatrixSessionSnapshot {
 ///
 /// Core alone serializes this public vocabulary after a Platform has reduced
 /// its shell-owned SDK observation to a closed enum.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MatrixCrossSigningState {
@@ -50,6 +52,7 @@ pub enum MatrixCrossSigningState {
 ///
 /// Keep this separate from the Platform projection: this type owns the wire
 /// field names and is constructed only after Core validates the closed input.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatrixCryptoStatus {

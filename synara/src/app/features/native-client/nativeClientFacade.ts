@@ -7,6 +7,7 @@ import {
   reqNumber,
   reqString,
 } from '../matrix-dto/parseUtil';
+import type { CommandGate, SyncReadiness, SyncReadinessSnapshot } from '../matrix-dto/generated';
 import type { EventId, RoomId, UserId } from '../matrix-dto/ids';
 import { nativeThumbnailContentUri } from '../../matrix/nativeThumbnail';
 import { parseRoomSummary, type RoomSummary } from '../matrix-dto/room';
@@ -47,23 +48,27 @@ export type NativeInvoke = (
   args?: Record<string, unknown>
 ) => Promise<DesktopInvokeResult<unknown>>;
 
-/** Serialized `SyncReadiness` enum (src-tauri/src/matrix/sync/readiness.rs). */
-export type NativeReadiness =
-  'unconfigured' | 'idle' | 'running' | 'offline' | 'failed' | 'terminated';
+/** Serialized `SyncReadiness` enum, generated from Rust (`app/sync/readiness.rs`). */
+export type NativeReadiness = SyncReadiness;
 
 /** Closed command-session gate. Absent on older payloads means open. */
-export type NativeCommandGate = 'open' | 'closed';
+export type NativeCommandGate = CommandGate;
 
-/** Structural mirror of the Rust `SyncReadinessSnapshot` DTO. */
-export type NativeSyncStatus = {
-  readiness: NativeReadiness;
-  sessionGeneration: number;
-  offlineModeEnabled: boolean;
-  failureDiagnosticId?: string | null;
-  /** Tri-state server capability probe: true=support, false=absent, null=unprobed. */
-  slidingSyncCapable?: boolean | null;
-  commandGate: NativeCommandGate;
-};
+/** Rust `SyncReadinessSnapshot` DTO after the renderer's fail-closed parse. */
+export type NativeSyncStatus = SyncReadinessSnapshot;
+
+/** Every readiness the renderer accepts; the compiler checks it against Rust. */
+const READINESSES = [
+  'unconfigured',
+  'idle',
+  'running',
+  'offline',
+  'failed',
+  'terminated',
+] as const satisfies readonly SyncReadiness[];
+type MissingReadiness = Exclude<SyncReadiness, (typeof READINESSES)[number]>;
+const readinessListIsExhaustive: MissingReadiness extends never ? true : never = true;
+void readinessListIsExhaustive;
 
 /** js-sdk-compatible sync-state strings the app UI already consumes. */
 export type NativeSyncState =
@@ -152,17 +157,9 @@ const parseSyncStatus = (value: unknown): NativeSyncStatus | null => {
   const readiness = optString(value, 'readiness');
   const sessionGeneration = reqNumber(value, 'sessionGeneration');
   const offlineModeEnabled = optBoolean(value, 'offlineModeEnabled');
-  const readinesses: readonly string[] = [
-    'unconfigured',
-    'idle',
-    'running',
-    'offline',
-    'failed',
-    'terminated',
-  ];
   if (
     typeof readiness !== 'string' ||
-    !readinesses.includes(readiness) ||
+    !(READINESSES as readonly string[]).includes(readiness) ||
     sessionGeneration === null ||
     !isSafeGeneration(sessionGeneration) ||
     typeof offlineModeEnabled !== 'boolean'

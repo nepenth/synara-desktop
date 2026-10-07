@@ -180,6 +180,17 @@ jobs:
           SYNARA_APPLE_BINDGEN_TARGET_DIR: ${{ github.workspace }}/target
         run: scripts/check-swift-api-snapshot.sh
 
+      - name: Check generated TypeScript wire types
+        run: |
+          scripts/generate-ts-dto.sh
+          generated=synara/src/app/features/matrix-dto/generated
+          if [[ -n "$(git status --porcelain -- "$generated")" ]]; then
+            git status --porcelain -- "$generated"
+            git diff -- "$generated"
+            echo "Generated TypeScript wire types are stale; run scripts/generate-ts-dto.sh." >&2
+            exit 1
+          fi
+
   rust-dependency-audit:
     name: Rust dependency audit (cargo-audit)
     needs: [changes]

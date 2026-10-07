@@ -39,6 +39,8 @@ full-app = [
 # so it never compiles UniFFI runtime/scaffolding or exports Apple symbols.
 full-uniffi = ["full-app", "dep:uniffi"]
 nse-preview = []
+# Emit TypeScript wire types for the desktop renderer (scripts/generate-ts-dto.sh).
+ts-export = ["dep:ts-rs"]
 # matrix-sdk 0.19 GossipMachine defaults both serve and request switches on
 # once this cfg is compiled. Encryption has no public setter; product stays
 # always-on. Do not put this feature on nse-preview.
@@ -61,6 +63,7 @@ x509-identity = [
 [dependencies]
 # P1.4 domain DTOs (moved from src-tauri/matrix/dto, SNC-P1-2) derive serde.
 serde = { workspace = true, features = ["derive"] }
+ts-rs = { workspace = true, optional = true }
 # P1.3 transport protocol (moved from src-tauri/matrix/ipc, SNC-P1-3): stream_body
 # validates JSON bodies at the envelope boundary; tests share the fixtures too.
 serde_json = { workspace = true }

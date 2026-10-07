@@ -20,6 +20,7 @@ pub const SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID: &str = "p4.1-session-authen
 ///
 /// Distinct from supervisor lifecycle (`Syncing` / `Ready`): this tracks the
 /// **SyncService** loop itself after a session is installed.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SyncReadiness {
@@ -87,6 +88,7 @@ impl SyncReadiness {
 /// `closed` means Core's session-level timeline owner is not attached, or sync
 /// has latched [`SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID`]. A missing room
 /// view is not this signal. Absent on older payloads means [`CommandGate::Open`].
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum CommandGate {
@@ -120,6 +122,7 @@ impl CommandGate {
 }
 
 /// Privacy-safe snapshot of sync readiness (no SDK error payloads).
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncReadinessSnapshot {
