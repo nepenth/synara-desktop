@@ -804,15 +804,12 @@ const TIMELINE_FORWARD_FAILED_DESCRIPTION: &str =
     "The timeline forward request could not be completed.";
 const TIMELINE_FORWARD_OWNER_DESCRIPTION: &str = "The timeline forward request is not available.";
 const SESSION_STATUS_GENERATION: u64 = 0;
-const SESSION_SNAPSHOT_COMMAND: &str = "matrix_session_snapshot";
-const SYNC_STATUS_COMMAND: &str = "matrix_sync_status";
 const MEDIA_CONFIG_COMMAND: &str = "matrix_media_config";
 const SECRET_STORAGE_STATUS_COMMAND: &str = "matrix_secret_storage_status";
 const SESSION_STATUS_FAILED_CODE: &str = "p4-s9-31-session-status-failed";
 const SESSION_STATUS_FAILED_DESCRIPTION: &str =
     "The session or status request could not be completed.";
 const SESSION_STATUS_OWNER_DESCRIPTION: &str = "The session or status request is not available.";
-const SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID: &str = "p4.1-sync-service-error";
 
 /// Retained shared Core for the iOS UniFFI boundary.
 pub struct SharedCore {

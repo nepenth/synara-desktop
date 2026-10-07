@@ -7,6 +7,7 @@ use crate::app::lifecycle::session::{
     SessionPersistenceOwner,
 };
 use crate::app::sync::{CommandGate, SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID};
+use crate::MatrixSessionSnapshot;
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -351,66 +352,6 @@ pub(super) fn session_status_envelope_payload(
     Ok(payload)
 }
 
-#[derive(Debug, Deserialize)]
-pub(super) struct SessionSnapshotResultWire {
-    pub(super) status: String,
-    pub(super) user_id: Option<String>,
-    pub(super) device_id: Option<String>,
-    pub(super) homeserver_url: Option<String>,
-    #[serde(rename = "sessionGeneration")]
-    pub(super) session_generation: Option<u64>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct SyncStatusResultWire {
-    pub(super) readiness: String,
-    pub(super) session_generation: u64,
-    pub(super) offline_mode_enabled: bool,
-    pub(super) failure_diagnostic_id: Option<String>,
-    pub(super) sliding_sync_capable: Option<bool>,
-    #[serde(default)]
-    pub(super) command_gate: Option<String>,
-}
-
-pub(super) fn closed_session_snapshot_status(value: &str) -> Option<&'static str> {
-    match value {
-        "logged_out" => Some("logged_out"),
-        "logged_in" => Some("logged_in"),
-        _ => None,
-    }
-}
-
-pub(super) fn closed_sync_readiness(value: &str) -> Option<&'static str> {
-    match value {
-        "unconfigured" => Some("unconfigured"),
-        "idle" => Some("idle"),
-        "running" => Some("running"),
-        "offline" => Some("offline"),
-        "terminated" => Some("terminated"),
-        "failed" => Some("failed"),
-        _ => None,
-    }
-}
-
-pub(super) fn closed_sync_failure_diagnostic(value: Option<&str>) -> Option<Option<&'static str>> {
-    match value {
-        None => Some(None),
-        Some(SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID) => Some(Some(SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID)),
-        Some(SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID) => {
-            Some(Some(SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID))
-        }
-        Some(_) => None,
-    }
-}
-
-pub(super) fn closed_command_gate(value: Option<&str>) -> &'static str {
-    match value {
-        None | Some("open") => "open",
-        Some("closed") | Some(_) => "closed",
-    }
-}
-
 pub(super) fn closed_missing_secret(value: &str) -> Option<&'static str> {
     match value {
         "cross_signing_master" => Some("cross_signing_master"),
@@ -421,75 +362,43 @@ pub(super) fn closed_missing_secret(value: &str) -> Option<&'static str> {
     }
 }
 
-pub(super) fn session_snapshot_dto(
-    payload: serde_json::Value,
+fn session_status_failure() -> SessionStatusError {
+    session_status_failed(
+        SESSION_STATUS_FAILED_CODE,
+        SESSION_STATUS_FAILED_DESCRIPTION,
+    )
+}
+
+/// Project Core's typed public session snapshot onto the Swift record. A
+/// logged-in snapshot must carry every identity field.
+pub(super) fn session_snapshot_dto_from_public(
+    snapshot: MatrixSessionSnapshot,
 ) -> Result<SessionSnapshotDto, SessionStatusError> {
-    let result: SessionSnapshotResultWire = serde_json::from_value(payload).map_err(|_| {
-        session_status_failed(
-            SESSION_STATUS_FAILED_CODE,
-            SESSION_STATUS_FAILED_DESCRIPTION,
-        )
-    })?;
-    let status = closed_session_snapshot_status(&result.status).ok_or_else(|| {
-        session_status_failed(
-            SESSION_STATUS_FAILED_CODE,
-            SESSION_STATUS_FAILED_DESCRIPTION,
-        )
-    })?;
-    match status {
-        "logged_out" => Ok(SessionSnapshotDto {
-            status: status.to_owned(),
+    match snapshot {
+        MatrixSessionSnapshot::LoggedOut => Ok(SessionSnapshotDto {
+            status: "logged_out".to_owned(),
             user_id: None,
             device_id: None,
             homeserver_url: None,
             session_generation: None,
         }),
-        "logged_in" => {
-            let user_id = result
-                .user_id
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| {
-                    session_status_failed(
-                        SESSION_STATUS_FAILED_CODE,
-                        SESSION_STATUS_FAILED_DESCRIPTION,
-                    )
-                })?;
-            let device_id = result
-                .device_id
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| {
-                    session_status_failed(
-                        SESSION_STATUS_FAILED_CODE,
-                        SESSION_STATUS_FAILED_DESCRIPTION,
-                    )
-                })?;
-            let homeserver_url = result
-                .homeserver_url
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| {
-                    session_status_failed(
-                        SESSION_STATUS_FAILED_CODE,
-                        SESSION_STATUS_FAILED_DESCRIPTION,
-                    )
-                })?;
-            let session_generation = result.session_generation.ok_or_else(|| {
-                session_status_failed(
-                    SESSION_STATUS_FAILED_CODE,
-                    SESSION_STATUS_FAILED_DESCRIPTION,
-                )
-            })?;
+        MatrixSessionSnapshot::LoggedIn {
+            user_id,
+            device_id,
+            homeserver_url,
+            session_generation,
+        } => {
+            if user_id.is_empty() || device_id.is_empty() || homeserver_url.is_empty() {
+                return Err(session_status_failure());
+            }
             Ok(SessionSnapshotDto {
-                status: status.to_owned(),
+                status: "logged_in".to_owned(),
                 user_id: Some(user_id),
                 device_id: Some(device_id),
                 homeserver_url: Some(homeserver_url),
                 session_generation: Some(session_generation),
             })
         }
-        _ => Err(session_status_failed(
-            SESSION_STATUS_FAILED_CODE,
-            SESSION_STATUS_FAILED_DESCRIPTION,
-        )),
     }
 }
 
@@ -552,38 +461,21 @@ pub(super) fn sync_status_from_owner_snapshot(
     })
 }
 
-pub(super) fn sync_status_dto(
-    payload: serde_json::Value,
+/// Project Core's typed public sync status (gate already applied) onto the
+/// Swift record.
+pub(super) fn sync_status_dto_from_public(
+    snapshot: SyncReadinessSnapshot,
 ) -> Result<SyncStatusDto, SessionStatusError> {
-    let result: SyncStatusResultWire = serde_json::from_value(payload).map_err(|_| {
-        session_status_failed(
-            SESSION_STATUS_FAILED_CODE,
-            SESSION_STATUS_FAILED_DESCRIPTION,
-        )
-    })?;
-    let readiness = closed_sync_readiness(&result.readiness).ok_or_else(|| {
-        session_status_failed(
-            SESSION_STATUS_FAILED_CODE,
-            SESSION_STATUS_FAILED_DESCRIPTION,
-        )
-    })?;
-    let failure_diagnostic_id =
-        closed_sync_failure_diagnostic(result.failure_diagnostic_id.as_deref())
-            .ok_or_else(|| {
-                session_status_failed(
-                    SESSION_STATUS_FAILED_CODE,
-                    SESSION_STATUS_FAILED_DESCRIPTION,
-                )
-            })?
-            .map(str::to_owned);
-    let command_gate = closed_command_gate(result.command_gate.as_deref());
+    if !snapshot.is_valid_public_sync_status() {
+        return Err(session_status_failure());
+    }
     Ok(SyncStatusDto {
-        readiness: readiness.to_owned(),
-        session_generation: result.session_generation,
-        offline_mode_enabled: result.offline_mode_enabled,
-        failure_diagnostic_id,
-        sliding_sync_capable: result.sliding_sync_capable,
-        command_gate: command_gate.to_owned(),
+        readiness: snapshot.readiness.as_str().to_owned(),
+        session_generation: snapshot.session_generation,
+        offline_mode_enabled: snapshot.offline_mode_enabled,
+        failure_diagnostic_id: snapshot.failure_diagnostic_id.map(str::to_owned),
+        sliding_sync_capable: snapshot.sliding_sync_capable,
+        command_gate: snapshot.command_gate.as_str().to_owned(),
     })
 }
 
@@ -1541,10 +1433,11 @@ impl SharedCore {
     }
 
     pub async fn session_snapshot(&self) -> Result<SessionSnapshotDto, SessionStatusError> {
-        let payload = self
-            .session_status_command(SESSION_SNAPSHOT_COMMAND)
-            .await?;
-        session_snapshot_dto(payload)
+        let snapshot = self
+            .core
+            .session_status_snapshot()
+            .map_err(map_session_status_core_error)?;
+        session_snapshot_dto_from_public(snapshot)
     }
 
     pub async fn sync_status(&self) -> Result<SyncStatusDto, SessionStatusError> {
@@ -1556,8 +1449,12 @@ impl SharedCore {
                 self.core.attached_timeline_owner().is_some(),
             );
         }
-        let payload = self.session_status_command(SYNC_STATUS_COMMAND).await?;
-        sync_status_dto(payload)
+        let snapshot = self
+            .core
+            .sync_status()
+            .await
+            .map_err(map_session_status_core_error)?;
+        sync_status_dto_from_public(snapshot)
     }
 
     pub async fn wipe_persisted_stores(
