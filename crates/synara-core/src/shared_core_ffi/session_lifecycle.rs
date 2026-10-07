@@ -2,6 +2,11 @@
 
 use super::*;
 use crate::app::lifecycle::session as session_policy;
+
+/// iOS Sign Out revokes the server session with a 5 s bound inside a 15 s
+/// Swift bound, so its backup wait is shorter than desktop's.
+const IOS_LOGOUT_BACKUP_STEADY_STATE_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(3);
 use crate::app::lifecycle::session::{
     RotationDiagnostics, RotationHooks, SessionFault, SessionPersistenceLease,
     SessionPersistenceOwner,
@@ -1488,6 +1493,13 @@ impl SharedCore {
         if !session_policy::remote_logout_allowed(None, failure) {
             return Ok(false);
         }
+        // Voluntary Sign Out: a short bounded chance for pending room keys to
+        // reach the server backup before this device's session is revoked.
+        let _ = session_policy::wait_for_backup_steady_state(
+            &client,
+            IOS_LOGOUT_BACKUP_STEADY_STATE_TIMEOUT,
+        )
+        .await;
         Ok(matches!(
             tokio::time::timeout(
                 std::time::Duration::from_secs(5),

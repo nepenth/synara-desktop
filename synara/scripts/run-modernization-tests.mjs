@@ -118,6 +118,7 @@ const tests = [
   'src/app/features/room/__tests__/nativeLinkUnfurl.test.ts',
   'src/app/features/common-settings/general/__tests__/roomPublishSourceGuard.test.ts',
   'src/app/components/__tests__/nativeRoomLeaveOwner.test.ts',
+  'src/app/components/__tests__/logoutLastDevice.test.ts',
   'src/app/components/__tests__/nativeRoomFavoriteOwner.test.ts',
   'src/app/utils/__tests__/nativeRoomReadStateOwner.test.ts',
   'src/app/features/room-nav/__tests__/roomNavItemReadState.test.ts',

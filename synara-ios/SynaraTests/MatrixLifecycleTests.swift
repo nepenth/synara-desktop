@@ -661,3 +661,20 @@ private final class SequencingCryptoStatusService: CryptoStatusServicing {
         .unavailable("unused")
     }
 }
+
+final class SignOutCopyTests: XCTestCase {
+    func testOnlyAConfirmedLastDeviceShowsTheRecoveryKeyWarning() {
+        XCTAssertTrue(SignOutCopy.message(isLastDevice: true).hasPrefix(SignOutCopy.lastDeviceWarning))
+        XCTAssertTrue(SignOutCopy.message(isLastDevice: true).contains(SignOutCopy.standardMessage))
+        XCTAssertEqual(SignOutCopy.message(isLastDevice: false), SignOutCopy.standardMessage)
+        XCTAssertEqual(SignOutCopy.message(isLastDevice: nil), SignOutCopy.standardMessage)
+        XCTAssertTrue(SignOutCopy.lastDeviceWarning.contains("recovery key"))
+    }
+
+    func testDehydratedDevicesAreNotOtherSignedInDevices() {
+        XCTAssertTrue(SignOutCopy.isOtherSignedInDevice(isCurrent: false, trust: "unverified"))
+        XCTAssertTrue(SignOutCopy.isOtherSignedInDevice(isCurrent: false, trust: "verified"))
+        XCTAssertFalse(SignOutCopy.isOtherSignedInDevice(isCurrent: false, trust: "dehydrated"))
+        XCTAssertFalse(SignOutCopy.isOtherSignedInDevice(isCurrent: true, trust: "verified"))
+    }
+}

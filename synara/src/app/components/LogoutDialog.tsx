@@ -10,6 +10,11 @@ import { useMatrixClient } from '../hooks/useMatrixClient';
 import { useCrossSigningActive } from '../hooks/useCrossSigning';
 import { InfoCard } from './info-card';
 import { useDeviceList } from '../hooks/useDeviceList';
+import {
+  isLastSignedInDevice,
+  LAST_DEVICE_LOGOUT_TITLE,
+  LAST_DEVICE_LOGOUT_WARNING,
+} from './logoutLastDevice';
 
 type LogoutDialogProps = {
   handleClose: () => void;
@@ -20,6 +25,7 @@ export const LogoutDialog = forwardRef<HTMLDivElement, LogoutDialogProps>(
     const hasEncryptedRoom = !!mx.getRooms().find((room) => room.hasEncryptionStateEvent());
     const crossSigningActive = useCrossSigningActive();
     const [deviceSnapshot] = useDeviceList();
+    const lastSignedInDevice = isLastSignedInDevice(deviceSnapshot) === true;
 
     const [logoutState, logout] = useAsyncCallback<LogoutAttemptOutcome, Error, []>(
       useCallback(() => attemptLogout(mx), [mx])
@@ -63,6 +69,13 @@ export const LogoutDialog = forwardRef<HTMLDivElement, LogoutDialogProps>(
                 description="Enable device verification or export your encrypted data from settings to avoid losing access to your messages."
               />
             ))}
+          {lastSignedInDevice && (
+            <InfoCard
+              variant="Critical"
+              title={LAST_DEVICE_LOGOUT_TITLE}
+              description={LAST_DEVICE_LOGOUT_WARNING}
+            />
+          )}
           <Text priority="400">You’re about to log out. Are you sure?</Text>
           {logoutNeedsRetry && (
             <Text style={{ color: color.Critical.Main }} size="T300">

@@ -3,12 +3,31 @@ import SwiftUI
 import UIKit
 import UserNotifications
 
+/// Log Out confirmation copy, including the last-device warning.
+enum SignOutCopy {
+    static let standardMessage =
+        "This clears local sign-in data and cached rooms. Synara also attempts to revoke this session and remove its push registration; remote cleanup requires a connection."
+    static let lastDeviceWarning =
+        "This is your last signed-in device. Save your recovery key before logging out, or you will lose access to your encrypted messages."
+
+    /// `isLastDevice` is `nil` while the device list is unknown; only a
+    /// confirmed last device shows the warning.
+    static func message(isLastDevice: Bool?) -> String {
+        isLastDevice == true ? "\(lastDeviceWarning)\n\n\(standardMessage)" : standardMessage
+    }
+
+    static func isOtherSignedInDevice(isCurrent: Bool, trust: String) -> Bool {
+        isCurrent == false && trust != "dehydrated"
+    }
+}
+
 struct SettingsView: View {
     @Environment(\.appEnvironment) private var environment
     @State private var state: SettingsState = .idle
     @State private var logoutAttempt = 0
     @State private var inFlightLogout: Task<Void, Error>?
     @State private var isLogoutConfirmationPresented = false
+    @StateObject private var logoutCrypto = SessionCryptoStatusObserver()
 
     var body: some View {
         Form {
@@ -88,6 +107,8 @@ struct SettingsView: View {
             Section("Danger Zone") {
                 Button(role: .destructive) {
                     isLogoutConfirmationPresented = true
+                    // Read the device list for the last-device warning.
+                    Task { await logoutCrypto.refresh(crypto: environment.crypto) }
                 } label: {
                     if state.isLoading {
                         ProgressView()
@@ -109,7 +130,7 @@ struct SettingsView: View {
                     .accessibilityIdentifier("ConfirmLogoutButton")
                     Button("Cancel", role: .cancel) {}
                 } message: {
-                    Text("This clears local sign-in data and cached rooms. Synara also attempts to revoke this session and remove its push registration; remote cleanup requires a connection.")
+                    Text(SignOutCopy.message(isLastDevice: logoutCrypto.status.isLastDevice))
                 }
             }
 

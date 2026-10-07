@@ -21,7 +21,8 @@ pub use generation::SessionGenerations;
 pub use locator::SessionLocator;
 pub use logout::{
     bounded_remote_logout, finish_active_logout, finish_orphan_logout, finish_taken_session_logout,
-    take_session_for_logout, PendingLogoutCleanup, VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
+    take_session_for_logout, wait_for_backup_steady_state, BackupSteadyState, PendingLogoutCleanup,
+    LOGOUT_BACKUP_STEADY_STATE_TIMEOUT, VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
 };
 pub use persistence::{
     persist_with_client_lease, SessionPersistenceLease, SessionPersistenceOwner,
