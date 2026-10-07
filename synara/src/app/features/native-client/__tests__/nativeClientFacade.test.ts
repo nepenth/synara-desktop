@@ -122,6 +122,21 @@ test('the iOS connection status tests carry the same shared table', () => {
   assert.deepEqual(rows, SHARED_CONNECTION_STATUS_CASES);
 });
 
+test('mxcUrlToHttp turns a requested size into a native thumbnail', () => {
+  const { invoke } = invokingWith({});
+  const client = createNativeMatrixClient(invoke);
+  assert.equal(client.mxcUrlToHttp('mxc://example.org/a'), 'mxc://example.org/a');
+  assert.equal(
+    client.mxcUrlToHttp('mxc://example.org/a', 48, 48, 'crop'),
+    'thumbnail/48x48/crop/mxc://example.org/a'
+  );
+  assert.equal(
+    client.mxcUrlToHttp('mxc://example.org/a', 320, 240, 'scale'),
+    'thumbnail/320x240/scale/mxc://example.org/a'
+  );
+  assert.equal(client.mxcUrlToHttp('https://example.org/a', 48, 48, 'crop'), null);
+});
+
 test('getSyncState proxies matrix_sync_status and caches PREPARED when running', async () => {
   const { invoke } = invokingWith({
     matrix_sync_status: {

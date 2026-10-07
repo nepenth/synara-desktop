@@ -33,6 +33,7 @@ full-app = [
   "dep:eyeball-im",
   "dep:futures-util",
   "dep:mime",
+  "dep:hmac",
 ]
 # Apple adds its binding surface explicitly; desktop opts out of the default
 # so it never compiles UniFFI runtime/scaffolding or exports Apple symbols.
@@ -117,6 +118,9 @@ getrandom = { workspace = true }
 uniffi = { workspace = true, features = ["tokio"], optional = true }
 # Store identity fingerprints directory names (moved from desktop store/identity.rs).
 sha2 = { workspace = true }
+# Timeline media handles: HMAC of (session generation, media source) under a
+# per-process secret, so revisits reuse URLs and handles stay unguessable.
+hmac = { workspace = true, optional = true }
 # Host-only register token buffers (moved with live register orchestration).
 zeroize = { workspace = true }
 # Avatar MIME parsing for upload_avatar (bytes stay off Core JSON).

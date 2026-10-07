@@ -8,6 +8,7 @@ import {
   reqString,
 } from '../matrix-dto/parseUtil';
 import type { EventId, RoomId, UserId } from '../matrix-dto/ids';
+import { nativeThumbnailContentUri } from '../../matrix/nativeThumbnail';
 import { parseRoomSummary, type RoomSummary } from '../matrix-dto/room';
 import type { MatrixClientReading, MatrixEventReading, RoomReading } from '../../utils/room';
 import type { DesktopInvokeResult } from '../../utils/desktop';
@@ -1360,9 +1361,25 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       return noNativePushRule ? undefined : undefined;
     },
 
-    /** F6a — MXC -> native URI (media handle protocol); fail-closed null. */
-    mxcUrlToHttp(mxcUrl: string): string | null {
-      return mxcUrl.startsWith('mxc://') ? mxcUrl : null;
+    /**
+     * F6a — MXC -> native URI (media handle protocol); fail-closed null. A
+     * requested size becomes a native thumbnail so avatars do not download
+     * the original upload.
+     */
+    mxcUrlToHttp(
+      mxcUrl: string,
+      width?: number,
+      height?: number,
+      resizeMethod?: string
+    ): string | null {
+      if (!mxcUrl.startsWith('mxc://')) return null;
+      if (!width || !height) return mxcUrl;
+      return nativeThumbnailContentUri(
+        mxcUrl,
+        width,
+        height,
+        resizeMethod === 'scale' ? 'scale' : 'crop'
+      );
     },
 
     get http(): {

@@ -82,6 +82,7 @@ const tests = [
   'src/app/platform/__tests__/legacyServiceWorkers.test.ts',
   'src/app/platform/__tests__/agentActions.test.ts',
   'src/app/matrix/__tests__/media.test.ts',
+  'src/app/matrix/__tests__/nativeThumbnail.test.ts',
   'src/app/matrix/__tests__/mediaObjectUrlCache.test.ts',
   'src/app/features/matrix-ipc/__tests__/matrixIpc.test.ts',
   'src/app/features/matrix-ipc/__tests__/matrixIpcContract.test.ts',

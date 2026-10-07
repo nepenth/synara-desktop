@@ -336,6 +336,8 @@ impl Core {
     /// Close the in-memory core projection. P2 deliberately does not erase
     /// platform persistence; lifecycle/destructive policies remain explicit.
     pub async fn close(&self) -> Result<(), MatrixIpcError> {
+        // Decrypted display bytes must not outlive the session that read them.
+        crate::app::media::clear_hot_media_cache();
         let mut guard = self
             .state
             .session

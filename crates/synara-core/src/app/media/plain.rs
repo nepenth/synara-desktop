@@ -10,7 +10,7 @@ use matrix_sdk::{
     Client,
 };
 
-use super::{download_media_bounded, BoundedMediaError};
+use super::{fetch_media_cached, BoundedMediaError};
 
 /// Same URI bound as desktop `parse_media_download_uri`.
 pub const MAX_PLAIN_MEDIA_URI_BYTES: usize = 2048;
@@ -77,7 +77,7 @@ pub async fn download_plain_media(
         source: MediaSource::Plain(uri),
         format: MediaFormat::File,
     };
-    download_media_bounded(client, &request, MAX_PLAIN_MEDIA_DOWNLOAD_BYTES)
+    fetch_media_cached(client, &request, MAX_PLAIN_MEDIA_DOWNLOAD_BYTES)
         .await
         .map_err(map_bounded_error)
 }
@@ -95,7 +95,7 @@ pub async fn thumbnail_plain_media(
         source: MediaSource::Plain(uri),
         format: MediaFormat::Thumbnail(MediaThumbnailSettings::new(width, height)),
     };
-    download_media_bounded(client, &request, MAX_PLAIN_MEDIA_DOWNLOAD_BYTES)
+    fetch_media_cached(client, &request, MAX_PLAIN_MEDIA_DOWNLOAD_BYTES)
         .await
         .map_err(map_bounded_error)
 }

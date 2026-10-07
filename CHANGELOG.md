@@ -10,6 +10,7 @@
 - Messages: show unsent messages as sending or failed with Discard and Retry, keep still-queued sends visibly queued, and resend recoverable failures once sync recovers.
 - Sync: re-apply open-room subscriptions after a sliding-sync expiry, download key backups on decryption failure, and avoid restarting a healthy sync when the window is shown again.
 - Performance: slow background polling while the window is hidden, skip unchanged timeline snapshots, back off undecryptable-message readback and keyring retries, and stop holding the session lock while loading media.
+- Media: cache images in memory and in the encrypted media store, load avatars and large inline images as server thumbnails, keep timeline media URLs stable across room visits, and refresh an expired access token instead of failing the download.
 
 ## [2.1.46] - 2026-10-06
 
