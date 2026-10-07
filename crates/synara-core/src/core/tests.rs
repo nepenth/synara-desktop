@@ -294,11 +294,11 @@ fn session() -> SessionSnapshot {
 #[test]
 fn matrix_session_snapshot_response_uses_exact_desktop_wire_keys() {
     assert_eq!(
-        serde_json::to_value(MatrixSessionSnapshotResponse::from(None)).unwrap(),
+        serde_json::to_value(MatrixSessionSnapshot::from(None)).unwrap(),
         serde_json::json!({"status":"logged_out"})
     );
 
-    let response = MatrixSessionSnapshotResponse::from(Some(SessionSnapshot {
+    let response = MatrixSessionSnapshot::from(Some(SessionSnapshot {
         session_generation: 7,
         user_id: "@alice:example.org".into(),
         device_id: "DEVICE".into(),
@@ -1103,10 +1103,10 @@ async fn crypto_status_projection_is_closed_and_core_errors_are_static() {
     // Validate the Core-owned response contract independently of the
     // Platform constructor so an accidental future mapping cannot emit an
     // impossible encryption/state pairing.
-    let invalid_response = MatrixCryptoStatusResponse {
+    let invalid_response = MatrixCryptoStatus {
         session_generation: 7,
         encryption_enabled: false,
-        cross_signing_state: MatrixCryptoCrossSigningStateResponse::Ready,
+        cross_signing_state: MatrixCrossSigningState::Ready,
     };
     assert!(!invalid_response.is_valid());
 }

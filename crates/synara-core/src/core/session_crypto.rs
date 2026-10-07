@@ -6,9 +6,9 @@ use super::*;
 ///
 /// This deliberately selects only the fields returned by the desktop command,
 /// rather than serializing the broader safe session projection wholesale.
-#[derive(Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
-pub(super) enum MatrixSessionSnapshotResponse {
+pub enum MatrixSessionSnapshot {
     LoggedOut,
     LoggedIn {
         user_id: String,
@@ -19,7 +19,7 @@ pub(super) enum MatrixSessionSnapshotResponse {
     },
 }
 
-impl From<Option<SessionSnapshot>> for MatrixSessionSnapshotResponse {
+impl From<Option<SessionSnapshot>> for MatrixSessionSnapshot {
     fn from(snapshot: Option<SessionSnapshot>) -> Self {
         match snapshot {
             None => Self::LoggedOut,
@@ -37,9 +37,9 @@ impl From<Option<SessionSnapshot>> for MatrixSessionSnapshotResponse {
 ///
 /// Core alone serializes this public vocabulary after a Platform has reduced
 /// its shell-owned SDK observation to a closed enum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(super) enum MatrixCryptoCrossSigningStateResponse {
+pub enum MatrixCrossSigningState {
     Unavailable,
     NotSetUp,
     Partial,
@@ -50,27 +50,21 @@ pub(super) enum MatrixCryptoCrossSigningStateResponse {
 ///
 /// Keep this separate from the Platform projection: this type owns the wire
 /// field names and is constructed only after Core validates the closed input.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct MatrixCryptoStatusResponse {
-    pub(super) session_generation: u64,
-    pub(super) encryption_enabled: bool,
-    pub(super) cross_signing_state: MatrixCryptoCrossSigningStateResponse,
+pub struct MatrixCryptoStatus {
+    pub session_generation: u64,
+    pub encryption_enabled: bool,
+    pub cross_signing_state: MatrixCrossSigningState,
 }
 
-impl MatrixCryptoStatusResponse {
+impl MatrixCryptoStatus {
     pub(super) fn from_platform(status: PlatformCryptoStatus) -> Result<Self, MatrixIpcError> {
         let cross_signing_state = match status.cross_signing_state() {
-            PlatformCryptoCrossSigningState::Unavailable => {
-                MatrixCryptoCrossSigningStateResponse::Unavailable
-            }
-            PlatformCryptoCrossSigningState::NotSetUp => {
-                MatrixCryptoCrossSigningStateResponse::NotSetUp
-            }
-            PlatformCryptoCrossSigningState::Partial => {
-                MatrixCryptoCrossSigningStateResponse::Partial
-            }
-            PlatformCryptoCrossSigningState::Ready => MatrixCryptoCrossSigningStateResponse::Ready,
+            PlatformCryptoCrossSigningState::Unavailable => MatrixCrossSigningState::Unavailable,
+            PlatformCryptoCrossSigningState::NotSetUp => MatrixCrossSigningState::NotSetUp,
+            PlatformCryptoCrossSigningState::Partial => MatrixCrossSigningState::Partial,
+            PlatformCryptoCrossSigningState::Ready => MatrixCrossSigningState::Ready,
         };
         let response = Self {
             session_generation: status.session_generation(),
@@ -83,13 +77,13 @@ impl MatrixCryptoStatusResponse {
             .ok_or_else(|| core_state_error("p2-crypto-status-invalid-platform-projection"))
     }
 
-    pub(super) fn is_valid(&self) -> bool {
+    pub fn is_valid(&self) -> bool {
         matches!(
             (self.encryption_enabled, self.cross_signing_state),
-            (false, MatrixCryptoCrossSigningStateResponse::Unavailable)
-                | (true, MatrixCryptoCrossSigningStateResponse::NotSetUp)
-                | (true, MatrixCryptoCrossSigningStateResponse::Partial)
-                | (true, MatrixCryptoCrossSigningStateResponse::Ready)
+            (false, MatrixCrossSigningState::Unavailable)
+                | (true, MatrixCrossSigningState::NotSetUp)
+                | (true, MatrixCrossSigningState::Partial)
+                | (true, MatrixCrossSigningState::Ready)
         )
     }
 }
@@ -902,10 +896,50 @@ pub(super) fn matrix_session_snapshot(
     _request: CommandEnvelope,
 ) -> CommandFuture {
     Box::pin(async move {
-        let response = MatrixSessionSnapshotResponse::from(state.session_snapshot()?);
+        let response = state.public_session_snapshot()?;
         serde_json::to_value(response)
             .map_err(|_| core_state_error("p2-session-snapshot-serialization-failed"))
     })
+}
+
+impl CoreState {
+    /// Typed `matrix_session_snapshot`: the exact public session observation.
+    pub(super) fn public_session_snapshot(&self) -> Result<MatrixSessionSnapshot, MatrixIpcError> {
+        Ok(MatrixSessionSnapshot::from(self.session_snapshot()?))
+    }
+
+    /// Typed `matrix_sync_status`: Platform sync readiness plus Core's
+    /// session-level command gate.
+    pub(super) async fn public_sync_status(&self) -> Result<SyncReadinessSnapshot, MatrixIpcError> {
+        let status = self
+            .platform()
+            .sync_status()
+            .await
+            // Platform status errors are closed enums, and Core still exposes
+            // only its static command error through this public observation.
+            .map_err(|_| core_state_error("p2-sync-status-platform-unavailable"))?;
+        let mut snapshot = public_sync_status(status)?;
+        // Session-level Core owner, not "a room timeline view is open".
+        // Commands such as matrix_timeline_snapshot consult this same slot.
+        let timeline_owner_attached = matches!(self.timeline_owner(), Ok(Some(_)));
+        snapshot.command_gate = crate::app::sync::CommandGate::for_installed_session(
+            timeline_owner_attached,
+            snapshot.failure_diagnostic_id,
+        );
+        Ok(snapshot)
+    }
+
+    /// Typed `matrix_crypto_status`: the validated public crypto observation.
+    pub(super) async fn public_crypto_status(&self) -> Result<MatrixCryptoStatus, MatrixIpcError> {
+        let status = self
+            .platform()
+            .crypto_status()
+            .await
+            // A Platform crypto error is a closed enum. Never attach a shell
+            // error, SDK diagnostic, identity, or key to the public command.
+            .map_err(|_| core_state_error("p2-crypto-status-platform-unavailable"))?;
+        MatrixCryptoStatus::from_platform(status)
+    }
 }
 
 /// Reconstruct the public status DTO from the string-free Platform projection.
@@ -944,21 +978,7 @@ pub(super) fn matrix_sync_status(state: Arc<CoreState>, request: CommandEnvelope
         if !request.payload.is_null() {
             return Err(core_state_error("p2-sync-status-invalid-payload"));
         }
-        let platform = state.platform();
-        let status = platform
-            .sync_status()
-            .await
-            // Platform status errors are closed enums, and Core still exposes
-            // only its static command error through this public observation.
-            .map_err(|_| core_state_error("p2-sync-status-platform-unavailable"))?;
-        let mut snapshot = public_sync_status(status)?;
-        // Session-level Core owner, not "a room timeline view is open".
-        // Commands such as matrix_timeline_snapshot consult this same slot.
-        let timeline_owner_attached = matches!(state.timeline_owner(), Ok(Some(_)));
-        snapshot.command_gate = crate::app::sync::CommandGate::for_installed_session(
-            timeline_owner_attached,
-            snapshot.failure_diagnostic_id,
-        );
+        let snapshot = state.public_sync_status().await?;
         serde_json::to_value(snapshot)
             .map_err(|_| core_state_error("p2-sync-status-serialization-failed"))
     })
@@ -975,14 +995,7 @@ pub(super) fn matrix_crypto_status(
         if !request.payload.is_null() {
             return Err(core_state_error("p2-crypto-status-invalid-payload"));
         }
-        let platform = state.platform();
-        let status = platform
-            .crypto_status()
-            .await
-            // A Platform crypto error is a closed enum. Never attach a shell
-            // error, SDK diagnostic, identity, or key to the public command.
-            .map_err(|_| core_state_error("p2-crypto-status-platform-unavailable"))?;
-        let response = MatrixCryptoStatusResponse::from_platform(status)?;
+        let response = state.public_crypto_status().await?;
         serde_json::to_value(response)
             .map_err(|_| core_state_error("p2-crypto-status-serialization-failed"))
     })

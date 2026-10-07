@@ -123,6 +123,7 @@ mod room_administration;
 use room_administration::*;
 mod session_crypto;
 use session_crypto::*;
+pub use session_crypto::{MatrixCrossSigningState, MatrixCryptoStatus, MatrixSessionSnapshot};
 
 /// Internal state passed to command handlers. It never carries shell types.
 /// Opaque state context supplied to registered core command handlers.
@@ -964,6 +965,22 @@ impl Core {
 
     pub fn session_snapshot(&self) -> Result<Option<SessionSnapshot>, MatrixIpcError> {
         self.state.session_snapshot()
+    }
+
+    /// Typed `matrix_session_snapshot`. Shells call this instead of round-
+    /// tripping the command envelope through JSON in the same process.
+    pub fn session_status_snapshot(&self) -> Result<MatrixSessionSnapshot, MatrixIpcError> {
+        self.state.public_session_snapshot()
+    }
+
+    /// Typed `matrix_sync_status`.
+    pub async fn sync_status(&self) -> Result<SyncReadinessSnapshot, MatrixIpcError> {
+        self.state.public_sync_status().await
+    }
+
+    /// Typed `matrix_crypto_status`.
+    pub async fn crypto_status(&self) -> Result<MatrixCryptoStatus, MatrixIpcError> {
+        self.state.public_crypto_status().await
     }
 
     /// Whether a SyncService owner is attached. Does not start sync.
