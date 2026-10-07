@@ -8,6 +8,7 @@ export type NativeVerificationPhase =
   | 'started'
   | 'keys_exchanging'
   | 'sas_ready'
+  | 'qr_scanned'
   | 'confirmed'
   | 'done'
   | 'mismatched'
@@ -86,6 +87,17 @@ export const verificationRequestNeedsSasStart = (request: NativeVerificationRequ
   request.direction === 'outgoing' &&
   request.phase === 'ready' &&
   !verificationRequestHasQr(request);
+
+/**
+ * The other device scanned the code this device shows. Core waits for the user
+ * to say the other device reported success before it confirms the scan.
+ */
+export const verificationRequestAwaitsQrConfirmation = (
+  request: NativeVerificationRequest
+): boolean => request.phase === 'qr_scanned';
+
+export const QR_SCANNED_CONFIRMATION_PROMPT =
+  'The other device scanned your code. Did it show a confirmation?';
 
 export const verificationRequestCanFallbackToSas = (request: NativeVerificationRequest): boolean =>
   verificationRequestHasQr(request) &&

@@ -5,7 +5,7 @@ use super::{
     MAX_QR_IMAGE_DATA_URL_CHARS,
 };
 use matrix_sdk::{
-    encryption::verification::{SasState, Verification, VerificationRequest},
+    encryption::verification::{QrVerificationData, SasState, Verification, VerificationRequest},
     ruma::{
         api::client::to_device::send_event_to_device::v3::Messages,
         events::key::verification::VerificationMethod, owned_device_id, owned_user_id,
@@ -611,4 +611,135 @@ async fn advertised_sas_only_methods_are_used_when_show_qr_is_off() {
     assert!(source.contains("if !show_qr"));
     assert!(source.contains("vec![VerificationMethod::SasV1]"));
     let _ = sas_only_methods();
+}
+
+/// Peer scans the QR code the desktop owner shows. Returns the peer's QR handle.
+async fn peer_scans_shown_qr(
+    devices: &TwoDevices,
+    flow_id: &str,
+) -> matrix_sdk::encryption::verification::QrVerification {
+    let user = devices.alice.user_id().expect("alice user");
+    let shown = match devices
+        .alice
+        .encryption()
+        .get_verification(user, flow_id)
+        .await
+    {
+        Some(Verification::QrV1(qr)) => qr,
+        other => panic!("owner must hold a show-QR handle, got {}", other.is_some()),
+    };
+    let data = QrVerificationData::from_bytes(shown.to_bytes().expect("encode shown QR"))
+        .expect("decode shown QR");
+    let peer_request = wait_for_sdk_request(devices, &devices.alice2, user, flow_id).await;
+    peer_request
+        .scan_qr_code(data)
+        .await
+        .expect("peer scans QR")
+        .expect("peer QR handle")
+}
+
+async fn shown_qr_flow(devices: &TwoDevices, owner: &NativeVerificationOwner) -> String {
+    let peer_device = devices
+        .alice2
+        .device_id()
+        .expect("alice2 device")
+        .to_string();
+    let flow_id = owner
+        .start(Some(peer_device))
+        .await
+        .expect("desktop owner starts verification")
+        .flow_id;
+    let user = devices.alice.user_id().expect("alice user");
+    wait_for_sdk_request(devices, &devices.alice2, user, &flow_id)
+        .await
+        .accept_with_methods(scan_capable_methods())
+        .await
+        .expect("scan-capable peer accepts");
+    wait_for_shown_qr(devices, owner, &flow_id).await;
+    flow_id
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn scanned_qr_waits_for_the_user_before_confirming() {
+    let devices = two_own_devices().await;
+    let owner = show_qr_owner(&devices.alice);
+    let flow_id = shown_qr_flow(&devices, &owner).await;
+    let peer_qr = peer_scans_shown_qr(&devices, &flow_id).await;
+
+    wait_for_owner_phase(
+        &devices,
+        &owner,
+        &flow_id,
+        NativeVerificationPhase::QrScanned,
+    )
+    .await;
+    // Keep delivering traffic: a scan alone must never confirm or finish.
+    for _ in 0..5 {
+        pump(&devices).await;
+        let phase = owner
+            .list()
+            .await
+            .requests
+            .into_iter()
+            .find(|request| request.flow_id == flow_id)
+            .expect("flow listed")
+            .phase;
+        assert_eq!(phase, NativeVerificationPhase::QrScanned);
+    }
+    assert!(
+        !peer_qr.is_done(),
+        "peer must not finish before the user confirms"
+    );
+
+    let confirmed = owner.confirm(&flow_id).await.expect("user confirms scan");
+    assert!(
+        matches!(
+            confirmed.phase,
+            NativeVerificationPhase::Confirmed | NativeVerificationPhase::Done
+        ),
+        "explicit confirm must advance, got {:?}",
+        confirmed.phase
+    );
+    wait_for_owner_phase(&devices, &owner, &flow_id, NativeVerificationPhase::Done).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rejecting_a_scanned_qr_cancels_the_flow() {
+    let devices = two_own_devices().await;
+    let owner = show_qr_owner(&devices.alice);
+    let flow_id = shown_qr_flow(&devices, &owner).await;
+    let peer_qr = peer_scans_shown_qr(&devices, &flow_id).await;
+    wait_for_owner_phase(
+        &devices,
+        &owner,
+        &flow_id,
+        NativeVerificationPhase::QrScanned,
+    )
+    .await;
+
+    let rejected = owner.mismatch(&flow_id).await.expect("user rejects scan");
+    assert_eq!(rejected.phase, NativeVerificationPhase::Mismatched);
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while !peer_qr.is_cancelled() {
+        assert!(Instant::now() < deadline, "peer did not observe the cancel");
+        pump(&devices).await;
+    }
+    assert!(!peer_qr.is_done());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn confirm_before_a_scan_still_requires_sas() {
+    let devices = two_own_devices().await;
+    let owner = show_qr_owner(&devices.alice);
+    let flow_id = shown_qr_flow(&devices, &owner).await;
+    // No scan yet: confirm must not reach the QR handle.
+    assert!(owner.confirm(&flow_id).await.is_err());
+    let listed = owner
+        .list()
+        .await
+        .requests
+        .into_iter()
+        .find(|request| request.flow_id == flow_id)
+        .expect("flow listed");
+    assert_ne!(listed.phase, NativeVerificationPhase::Confirmed);
 }

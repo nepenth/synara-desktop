@@ -397,6 +397,10 @@ impl NativeVerificationOwner {
     }
 
     pub async fn confirm(&self, flow_id: &str) -> Result<NativeVerificationRequest, &'static str> {
+        if let Some(qr) = self.scanned_show_qr(flow_id).await? {
+            confirm_scanned_show_qr(flow_id, &qr).await?;
+            return self.record_user_decision(flow_id, true).await;
+        }
         let sas = self.sas(flow_id).await?;
         verification_trace(
             flow_id,
@@ -423,6 +427,15 @@ impl NativeVerificationOwner {
     }
 
     pub async fn mismatch(&self, flow_id: &str) -> Result<NativeVerificationRequest, &'static str> {
+        if let Some(qr) = self.scanned_show_qr(flow_id).await? {
+            // The SDK QR handle cancels with `m.user`; the projected phase
+            // records that the user rejected the scan.
+            qr.cancel()
+                .await
+                .map_err(|_| "v-crypto.1-mismatch-failed")?;
+            verification_trace(flow_id, "qr_user_mismatch", None, Some("scanned"));
+            return self.record_user_decision(flow_id, false).await;
+        }
         let sas = self.sas(flow_id).await?;
         sas.mismatch()
             .await
@@ -501,6 +514,46 @@ impl NativeVerificationOwner {
             .get(flow_id)
             .map(|managed| managed.request.clone())
             .ok_or("v-crypto.1-flow-not-found")
+    }
+
+    /// The show-QR handle when the user must decide on a scan. SAS flows and
+    /// QR flows that were not scanned return `None` so SAS handling applies.
+    async fn scanned_show_qr(&self, flow_id: &str) -> Result<Option<QrVerification>, &'static str> {
+        let mut registry = self.registry.lock().await;
+        let managed = registry
+            .requests
+            .get_mut(flow_id)
+            .ok_or("v-crypto.1-flow-not-found")?;
+        refresh_sas(managed);
+        refresh_qr(managed);
+        if managed.sas.is_some() {
+            return Ok(None);
+        }
+        Ok(managed
+            .qr
+            .clone()
+            .filter(|qr| matches!(qr.state(), QrVerificationState::Scanned)))
+    }
+
+    async fn record_user_decision(
+        &self,
+        flow_id: &str,
+        confirmed: bool,
+    ) -> Result<NativeVerificationRequest, &'static str> {
+        let mut registry = self.registry.lock().await;
+        let managed = registry
+            .requests
+            .get_mut(flow_id)
+            .ok_or("v-crypto.1-flow-not-found")?;
+        if confirmed {
+            managed.user_confirmed = true;
+        } else {
+            managed.user_mismatched = true;
+        }
+        let projected = project_request(managed);
+        drop(registry);
+        self.signal();
+        Ok(projected)
     }
 
     async fn sas(&self, flow_id: &str) -> Result<SasVerification, &'static str> {
@@ -745,11 +798,10 @@ async fn watch_request(
                     VerificationRequestState::Transitioned {
                         verification: Verification::QrV1(qr),
                     } => {
+                        // A scanned code waits for the user: the QR owner never
+                        // confirms on the other device's word alone.
                         retain_show_qr(&registry, &flow_id, qr).await;
                         qr_stream = Some(qr.changes());
-                        if confirm_scanned_show_qr(&flow_id, qr).await.is_err() {
-                            mark_owner_failed(&registry, &flow_id).await;
-                        }
                     }
                     _ => {}
                 }
@@ -797,20 +849,6 @@ async fn watch_request(
                     None,
                     Some(qr_state_label(&state)),
                 );
-                if matches!(state, QrVerificationState::Scanned) {
-                    let qr = {
-                        let registry = registry.lock().await;
-                        registry
-                            .requests
-                            .get(&flow_id)
-                            .and_then(|managed| managed.qr.clone())
-                    };
-                    if let Some(qr) = qr {
-                        if confirm_scanned_show_qr(&flow_id, &qr).await.is_err() {
-                            mark_owner_failed(&registry, &flow_id).await;
-                        }
-                    }
-                }
                 emit(NativeVerificationUpdateSignal { session_generation });
             }
         }
@@ -888,18 +926,7 @@ fn project_request(managed: &mut ManagedVerification) -> NativeVerificationReque
             (NativeVerificationPhase::Started, None)
         }
     } else if let Some(qr) = managed.qr.as_ref() {
-        if qr.is_done() {
-            (NativeVerificationPhase::Done, None)
-        } else if qr.is_cancelled() {
-            (NativeVerificationPhase::Cancelled, None)
-        } else if matches!(
-            qr.state(),
-            QrVerificationState::Confirmed | QrVerificationState::Scanned
-        ) {
-            (NativeVerificationPhase::Confirmed, None)
-        } else {
-            (NativeVerificationPhase::Started, None)
-        }
+        (project_qr_phase(managed.user_mismatched, &qr.state()), None)
     } else {
         match managed.request.state() {
             VerificationRequestState::Created { .. }
@@ -923,6 +950,23 @@ fn project_request(managed: &mut ManagedVerification) -> NativeVerificationReque
         started_ts: managed.started_ts,
         sas,
         qr,
+    }
+}
+
+/// Phase for a show-QR flow. `Scanned` stays an explicit user decision: the
+/// other device reporting a scan is not proof the codes matched.
+fn project_qr_phase(user_mismatched: bool, state: &QrVerificationState) -> NativeVerificationPhase {
+    if user_mismatched {
+        return NativeVerificationPhase::Mismatched;
+    }
+    match state {
+        QrVerificationState::Done { .. } => NativeVerificationPhase::Done,
+        QrVerificationState::Cancelled(_) => NativeVerificationPhase::Cancelled,
+        QrVerificationState::Confirmed => NativeVerificationPhase::Confirmed,
+        QrVerificationState::Scanned => NativeVerificationPhase::QrScanned,
+        QrVerificationState::Started | QrVerificationState::Reciprocated => {
+            NativeVerificationPhase::Started
+        }
     }
 }
 
@@ -1026,17 +1070,17 @@ async fn retain_show_qr(
 }
 
 async fn confirm_scanned_show_qr(flow_id: &str, qr: &QrVerification) -> Result<(), &'static str> {
-    if !qr.has_been_scanned() {
-        return Ok(());
+    if !matches!(qr.state(), QrVerificationState::Scanned) {
+        return Err("v-crypto.1-confirm-before-sas");
     }
     match qr.confirm().await {
         Ok(()) => {
-            verification_trace(flow_id, "qr_owner_confirm", None, Some("scanned"));
+            verification_trace(flow_id, "qr_user_confirm", None, Some("scanned"));
             Ok(())
         }
         Err(_) => {
-            verification_trace(flow_id, "qr_owner_confirm_failed", None, Some("scanned"));
-            Err("v-crypto.1-qr-owner-confirm-failed")
+            verification_trace(flow_id, "qr_user_confirm_failed", None, Some("scanned"));
+            Err("v-crypto.1-confirm-failed")
         }
     }
 }
@@ -1206,5 +1250,38 @@ mod registration_lifecycle_tests {
         assert!(!lifecycle.active);
         assert!(lifecycle.handles.is_empty());
         assert!(dropped.load(Ordering::SeqCst));
+    }
+}
+
+#[cfg(test)]
+mod qr_phase_tests {
+    use super::*;
+
+    #[test]
+    fn scanned_qr_is_a_user_decision_not_confirmed() {
+        assert_eq!(
+            project_qr_phase(false, &QrVerificationState::Scanned),
+            NativeVerificationPhase::QrScanned
+        );
+        assert_eq!(
+            project_qr_phase(false, &QrVerificationState::Confirmed),
+            NativeVerificationPhase::Confirmed
+        );
+        assert_eq!(
+            project_qr_phase(false, &QrVerificationState::Started),
+            NativeVerificationPhase::Started
+        );
+        assert_eq!(
+            project_qr_phase(true, &QrVerificationState::Scanned),
+            NativeVerificationPhase::Mismatched
+        );
+    }
+
+    #[test]
+    fn qr_scanned_phase_serializes_for_renderer_and_ios() {
+        assert_eq!(
+            serde_json::to_value(NativeVerificationPhase::QrScanned).unwrap(),
+            serde_json::json!("qr_scanned")
+        );
     }
 }

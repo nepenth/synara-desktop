@@ -98,6 +98,7 @@ pub(super) fn verification_phase_as_str(phase: NativeVerificationPhase) -> Strin
         NativeVerificationPhase::Started => "started",
         NativeVerificationPhase::KeysExchanging => "keys_exchanging",
         NativeVerificationPhase::SasReady => "sas_ready",
+        NativeVerificationPhase::QrScanned => "qr_scanned",
         NativeVerificationPhase::Confirmed => "confirmed",
         NativeVerificationPhase::Done => "done",
         NativeVerificationPhase::Mismatched => "mismatched",

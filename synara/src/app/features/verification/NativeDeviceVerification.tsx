@@ -27,9 +27,11 @@ import {
   mismatchNativeVerification,
   nativeVerificationErrorMessage,
   NativeVerificationRequest,
+  QR_SCANNED_CONFIRMATION_PROMPT,
   selectNativeVerificationRequest,
   startNativeVerification,
   subscribeNativeVerificationUpdates,
+  verificationRequestAwaitsQrConfirmation,
   verificationRequestCanFallbackToSas,
   verificationRequestHasQr,
   verificationRequestHasSasCodes,
@@ -76,7 +78,7 @@ function NativeQr({
         />
       </Box>
       {request.qr?.scanned ? (
-        <Waiting>QR code scanned. Finishing verification…</Waiting>
+        <Waiting>QR code scanned. Waiting for your confirmation…</Waiting>
       ) : (
         <Waiting>Waiting for the other device to scan…</Waiting>
       )}
@@ -96,6 +98,53 @@ function NativeQr({
           <Text size="B400">Use emoji codes instead</Text>
         </Button>
       )}
+    </Box>
+  );
+}
+
+function NativeQrScanned({
+  request,
+  update,
+  fail,
+}: {
+  request: NativeVerificationRequest;
+  update: (request: NativeVerificationRequest) => void;
+  fail: () => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const act = async (
+    action: (flowId: string) => Promise<NativeVerificationRequest>
+  ): Promise<void> => {
+    setSubmitting(true);
+    try {
+      update(await action(request.flowId));
+    } catch {
+      fail();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  return (
+    <Box direction="Column" gap="400">
+      <Text>{QR_SCANNED_CONFIRMATION_PROMPT}</Text>
+      <Box direction="Column" gap="200">
+        <Button
+          variant="Primary"
+          fill="Soft"
+          disabled={submitting}
+          onClick={() => void act(confirmNativeVerification)}
+        >
+          <Text size="B400">Confirm</Text>
+        </Button>
+        <Button
+          variant="Critical"
+          fill="Soft"
+          disabled={submitting}
+          onClick={() => void act(mismatchNativeVerification)}
+        >
+          <Text size="B400">It doesn&apos;t match</Text>
+        </Button>
+      </Box>
     </Box>
   );
 }
@@ -354,6 +403,13 @@ export function NativeDeviceVerification({
                   )}
                   <NativeSas request={request} update={setRequest} fail={() => setError(true)} />
                 </Box>
+              )}
+              {verificationRequestAwaitsQrConfirmation(request) && (
+                <NativeQrScanned
+                  request={request}
+                  update={setRequest}
+                  fail={() => setError(true)}
+                />
               )}
               {request.phase === 'confirmed' && (
                 <Waiting>Waiting for the other device to finish…</Waiting>
