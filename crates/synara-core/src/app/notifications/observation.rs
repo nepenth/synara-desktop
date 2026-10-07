@@ -25,11 +25,14 @@
 //! prompt bodies remain inside Core. It carries no ciphertext, keys, tokens, or push
 //! verdicts.
 
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use futures_util::{Stream, StreamExt};
 use matrix_sdk::config::RequestConfig;
+use matrix_sdk::event_cache::RedecryptorReport;
 use matrix_sdk::event_handler::EventHandlerDropGuard;
 use matrix_sdk::ruma::events::room::encrypted::Relation as EncryptedRelation;
 use matrix_sdk::ruma::events::room::message::Relation as MessageRelation;
@@ -82,6 +85,10 @@ pub struct NativeNotificationObservationOwner {
     session_generation: u64,
     retired: Arc<AtomicBool>,
     follow_ups: Arc<Mutex<Vec<tokio::task::AbortHandle>>>,
+    /// Undecryptable candidates waiting for late room keys.
+    pending_utds: Arc<PendingUtds<PendingCandidate>>,
+    /// Consumes the event cache's decryption reports; aborted on retire.
+    reports_task: Option<tokio::task::AbortHandle>,
     _handler: EventHandlerDropGuard,
 }
 
@@ -99,10 +106,31 @@ impl NativeNotificationObservationOwner {
         let retired_for_handler = retired.clone();
         let follow_ups = Arc::new(Mutex::new(Vec::new()));
         let follow_ups_for_handler = follow_ups.clone();
+        let pending_utds = Arc::new(PendingUtds::default());
+        let pending_for_handler = pending_utds.clone();
+        let reports_task = tokio::runtime::Handle::try_current().ok().map(|runtime| {
+            let client = client.clone();
+            let context = LateResolutionContext {
+                pending: pending_utds.clone(),
+                own_user_id: own_user_id.clone(),
+                emit: emit.clone(),
+                retired: retired.clone(),
+                session_generation,
+            };
+            runtime
+                .spawn(async move {
+                    // The stream borrows the event cache, so it lives with
+                    // the client clone inside this task.
+                    let reports = client.event_cache().subscribe_to_decryption_reports();
+                    run_decryption_reports(reports, context).await;
+                })
+                .abort_handle()
+        });
         let handler =
             client.add_event_handler(move |event: AnySyncMessageLikeEvent, room: Room| {
                 let retired = retired_for_handler.clone();
                 let follow_ups = follow_ups_for_handler.clone();
+                let pending = pending_for_handler.clone();
                 let emit = emit.clone();
                 let own_user_id = own_user_id.clone();
                 async move {
@@ -131,6 +159,7 @@ impl NativeNotificationObservationOwner {
                                 own_user_id,
                                 emit,
                                 retired_for_task,
+                                pending,
                                 session_generation,
                             )
                             .await;
@@ -145,6 +174,8 @@ impl NativeNotificationObservationOwner {
             session_generation,
             retired,
             follow_ups,
+            pending_utds,
+            reports_task,
             _handler: client.event_handler_drop_guard(handler),
         })
     }
@@ -157,6 +188,10 @@ impl NativeNotificationObservationOwner {
     /// switch). Observations for a retired generation are never delivered.
     pub fn retire(&self) {
         self.retired.store(true, Ordering::Release);
+        if let Some(task) = &self.reports_task {
+            task.abort();
+        }
+        self.pending_utds.clear();
         for task in self
             .follow_ups
             .lock()
@@ -195,7 +230,263 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-const DECRYPT_FOLLOW_UP_DELAYS_MS: [u64; 7] = [150, 300, 500, 800, 1_200, 2_000, 3_000];
+/// Quick retries for keys that arrive with or right after the event. Keys that
+/// arrive later are handled by the event cache's decryption reports.
+const DECRYPT_FOLLOW_UP_DELAYS_MS: [u64; 5] = [150, 300, 500, 800, 1_200];
+
+/// Undecryptable candidates kept for late room keys. Anything older than the
+/// observation window would be rejected by [`project_observation`] anyway.
+const PENDING_UTD_LIMIT: usize = 128;
+const PENDING_UTD_TTL: Duration = Duration::from_millis(NOTIFICATION_OBSERVATION_WINDOW_MS);
+
+/// One undecryptable event waiting for its key.
+#[derive(Clone)]
+struct PendingCandidate {
+    room: Room,
+    original_event: AnySyncMessageLikeEvent,
+}
+
+struct PendingUtd<T> {
+    room_id: String,
+    event_id: String,
+    registered: Instant,
+    value: T,
+}
+
+/// Bounded, time-limited set of undecryptable candidates keyed by room and
+/// event id. Oldest entries are dropped first when the limit is reached.
+pub(crate) struct PendingUtds<T> {
+    entries: Mutex<VecDeque<PendingUtd<T>>>,
+}
+
+impl<T> Default for PendingUtds<T> {
+    fn default() -> Self {
+        Self {
+            entries: Mutex::new(VecDeque::new()),
+        }
+    }
+}
+
+impl<T> PendingUtds<T> {
+    fn lock(&self) -> std::sync::MutexGuard<'_, VecDeque<PendingUtd<T>>> {
+        self.entries
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn purge(entries: &mut VecDeque<PendingUtd<T>>, now: Instant) {
+        entries.retain(|entry| now.saturating_duration_since(entry.registered) <= PENDING_UTD_TTL);
+    }
+
+    /// Register a candidate. `registered` is when it was first seen, so a
+    /// re-registered candidate keeps its original deadline.
+    pub(crate) fn insert(
+        &self,
+        room_id: &str,
+        event_id: &str,
+        registered: Instant,
+        value: T,
+        now: Instant,
+    ) {
+        let mut entries = self.lock();
+        Self::purge(&mut entries, now);
+        entries.retain(|entry| !(entry.room_id == room_id && entry.event_id == event_id));
+        if now.saturating_duration_since(registered) > PENDING_UTD_TTL {
+            return;
+        }
+        while entries.len() >= PENDING_UTD_LIMIT {
+            entries.pop_front();
+        }
+        entries.push_back(PendingUtd {
+            room_id: room_id.to_owned(),
+            event_id: event_id.to_owned(),
+            registered,
+            value,
+        });
+    }
+
+    /// Remove and return the candidates in `room_id` whose event id matches.
+    pub(crate) fn take_matching(
+        &self,
+        room_id: &str,
+        resolved: impl Fn(&str) -> bool,
+        now: Instant,
+    ) -> Vec<(Instant, T)> {
+        let mut entries = self.lock();
+        Self::purge(&mut entries, now);
+        let (taken, kept): (VecDeque<_>, VecDeque<_>) = entries
+            .drain(..)
+            .partition(|entry| entry.room_id == room_id && resolved(&entry.event_id));
+        *entries = kept;
+        taken
+            .into_iter()
+            .map(|entry| (entry.registered, entry.value))
+            .collect()
+    }
+
+    /// Remove and return every live candidate (the SDK may have missed keys).
+    pub(crate) fn take_all(&self, now: Instant) -> Vec<(Instant, T)> {
+        let mut entries = self.lock();
+        Self::purge(&mut entries, now);
+        entries
+            .drain(..)
+            .map(|entry| (entry.registered, entry.value))
+            .collect()
+    }
+
+    pub(crate) fn clear(&self) {
+        self.lock().clear();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.lock().len()
+    }
+}
+
+/// What the event cache reported, reduced to what this owner acts on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum DecryptionReport {
+    /// These events of one room now decrypt.
+    Resolved {
+        room_id: String,
+        event_ids: Vec<String>,
+    },
+    /// Keys may have been missed, or a backup became available: re-check all.
+    Recheck,
+}
+
+impl DecryptionReport {
+    fn from_sdk<E>(report: Result<RedecryptorReport, E>) -> Self {
+        match report {
+            Ok(RedecryptorReport::ResolvedUtds { room_id, events }) => Self::Resolved {
+                room_id: room_id.to_string(),
+                event_ids: events.iter().map(ToString::to_string).collect(),
+            },
+            Ok(RedecryptorReport::Lagging | RedecryptorReport::BackupAvailable) | Err(_) => {
+                Self::Recheck
+            }
+        }
+    }
+}
+
+struct LateResolutionContext {
+    pending: Arc<PendingUtds<PendingCandidate>>,
+    own_user_id: OwnedUserId,
+    emit: NotificationObservationEmit,
+    retired: Arc<AtomicBool>,
+    session_generation: u64,
+}
+
+/// Outcome of re-reading one pending candidate after a decryption report.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LateOutcome {
+    /// Plaintext was observed (and emitted if it is still a candidate).
+    Resolved,
+    /// Still ciphertext or not loadable: keep waiting until the TTL.
+    StillEncrypted,
+}
+
+/// Project a late-decrypted event. A resolved event that is not a candidate
+/// (an edit, a redaction, an old event) is still resolved and never emitted.
+fn resolve_late_event(
+    event: Option<AnySyncTimelineEvent>,
+    room_id: &str,
+    own_user_id: &UserId,
+    emit: &NotificationObservationEmit,
+    session_generation: u64,
+) -> LateOutcome {
+    let Some(event) = event else {
+        return LateOutcome::StillEncrypted;
+    };
+    match event {
+        AnySyncTimelineEvent::MessageLike(ref message_like)
+            if needs_decryption_follow_up(message_like) =>
+        {
+            LateOutcome::StillEncrypted
+        }
+        AnySyncTimelineEvent::MessageLike(message_like) => {
+            if let Some(observation) = project_observation(
+                &message_like,
+                room_id,
+                own_user_id,
+                now_ms(),
+                session_generation,
+            ) {
+                emit(observation);
+            }
+            LateOutcome::Resolved
+        }
+        AnySyncTimelineEvent::State(_) => LateOutcome::Resolved,
+    }
+}
+
+async fn run_decryption_reports<S, E>(reports: S, context: LateResolutionContext)
+where
+    S: Stream<Item = Result<RedecryptorReport, E>>,
+{
+    futures_util::pin_mut!(reports);
+    while let Some(report) = reports.next().await {
+        if context.retired.load(Ordering::Acquire) {
+            return;
+        }
+        let now = Instant::now();
+        let candidates = match DecryptionReport::from_sdk(report) {
+            DecryptionReport::Resolved { room_id, event_ids } => context.pending.take_matching(
+                &room_id,
+                |event_id| event_ids.iter().any(|id| id == event_id),
+                now,
+            ),
+            DecryptionReport::Recheck => context.pending.take_all(now),
+        };
+        for (registered, candidate) in candidates {
+            if context.retired.load(Ordering::Acquire) {
+                return;
+            }
+            let room_id = candidate.room.room_id().to_string();
+            let event_id = candidate.original_event.event_id().to_owned();
+            let loaded = load_follow_up_event(&candidate.room, &event_id).await;
+            if context.retired.load(Ordering::Acquire) {
+                return;
+            }
+            if resolve_late_event(
+                loaded,
+                &room_id,
+                &context.own_user_id,
+                &context.emit,
+                context.session_generation,
+            ) == LateOutcome::StillEncrypted
+            {
+                context.pending.insert(
+                    &room_id,
+                    event_id.as_str(),
+                    registered,
+                    candidate,
+                    Instant::now(),
+                );
+            }
+        }
+    }
+}
+
+async fn load_follow_up_event(
+    room: &Room,
+    event_id: &matrix_sdk::ruma::EventId,
+) -> Option<AnySyncTimelineEvent> {
+    room.load_or_fetch_event(
+        event_id,
+        Some(
+            RequestConfig::new()
+                .timeout(Duration::from_secs(2))
+                .disable_retry(),
+        ),
+    )
+    .await
+    .ok()?
+    .raw()
+    .deserialize()
+    .ok()
+}
 
 fn needs_decryption_follow_up(event: &AnySyncMessageLikeEvent) -> bool {
     matches!(
@@ -208,17 +499,20 @@ fn needs_decryption_follow_up(event: &AnySyncMessageLikeEvent) -> bool {
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn follow_up_encrypted_observation(
     room: Room,
     original_event: AnySyncMessageLikeEvent,
     own_user_id: OwnedUserId,
     emit: NotificationObservationEmit,
     retired: Arc<AtomicBool>,
+    pending: Arc<PendingUtds<PendingCandidate>>,
     session_generation: u64,
 ) {
+    let registered = Instant::now();
     let event_id = original_event.event_id().to_owned();
     let room_id = room.room_id().to_string();
-    resolve_encrypted_observation(
+    let resolution = resolve_encrypted_observation(
         EncryptedObservationContext {
             original_event: &original_event,
             room_id: &room_id,
@@ -228,23 +522,31 @@ async fn follow_up_encrypted_observation(
             session_generation,
         },
         &DECRYPT_FOLLOW_UP_DELAYS_MS,
-        || async {
-            room.load_or_fetch_event(
-                &event_id,
-                Some(
-                    RequestConfig::new()
-                        .timeout(Duration::from_secs(2))
-                        .disable_retry(),
-                ),
-            )
-            .await
-            .ok()?
-            .raw()
-            .deserialize()
-            .ok()
-        },
+        || load_follow_up_event(&room, &event_id),
     )
     .await;
+    if resolution == EncryptedResolution::Unresolved && !retired.load(Ordering::Acquire) {
+        // Keep it for a late key; the decryption-report task re-reads it.
+        pending.insert(
+            &room_id,
+            event_id.as_str(),
+            registered,
+            PendingCandidate {
+                room,
+                original_event,
+            },
+            Instant::now(),
+        );
+    }
+}
+
+/// Result of the quick follow-up for one encrypted candidate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EncryptedResolution {
+    /// Plaintext was observed, or the follow-up was retired.
+    Resolved,
+    /// Still ciphertext after every quick retry.
+    Unresolved,
 }
 
 // Both the SDK loader and raw-event regressions run this bounded async path.
@@ -263,7 +565,8 @@ async fn resolve_encrypted_observation<F, Fut>(
     context: EncryptedObservationContext<'_>,
     delays_ms: &[u64],
     mut load: F,
-) where
+) -> EncryptedResolution
+where
     F: FnMut() -> Fut,
     Fut: std::future::Future<Output = Option<AnySyncTimelineEvent>>,
 {
@@ -277,17 +580,17 @@ async fn resolve_encrypted_observation<F, Fut>(
     } = context;
     for delay_ms in delays_ms {
         if retired.load(Ordering::Acquire) {
-            return;
+            return EncryptedResolution::Resolved;
         }
         tokio::time::sleep(Duration::from_millis(*delay_ms)).await;
         if retired.load(Ordering::Acquire) {
-            return;
+            return EncryptedResolution::Resolved;
         }
         let Some(event) = load().await else {
             continue;
         };
         if retired.load(Ordering::Acquire) {
-            return;
+            return EncryptedResolution::Resolved;
         }
         if matches!(
             event,
@@ -310,10 +613,10 @@ async fn resolve_encrypted_observation<F, Fut>(
                 emit(observation);
             }
         }
-        return;
+        return EncryptedResolution::Resolved;
     }
     if retired.load(Ordering::Acquire) {
-        return;
+        return EncryptedResolution::Resolved;
     }
     // Every retry remained encrypted or unavailable. Offer one bounded opaque
     // observation; decide still refuses ciphertext without recording dedup.
@@ -329,6 +632,7 @@ async fn resolve_encrypted_observation<F, Fut>(
     ) {
         emit(observation);
     }
+    EncryptedResolution::Unresolved
 }
 
 /// Pure projection of one synced message-like event onto an observation.
@@ -873,5 +1177,185 @@ mod tests {
         let late = tokio::spawn(std::future::pending::<()>());
         track_follow_up(&Mutex::new(Vec::new()), &retired, late.abort_handle());
         assert!(late.await.unwrap_err().is_cancelled());
+    }
+
+    #[test]
+    fn pending_utds_are_bounded_and_drop_the_oldest() {
+        let pending = PendingUtds::<u32>::default();
+        let now = Instant::now();
+        for index in 0..(PENDING_UTD_LIMIT as u32 + 5) {
+            pending.insert(ROOM, &format!("$event{index}"), now, index, now);
+        }
+        assert_eq!(pending.len(), PENDING_UTD_LIMIT);
+        let all = pending.take_all(now);
+        assert_eq!(all.first().map(|(_, value)| *value), Some(5));
+        assert_eq!(pending.len(), 0);
+    }
+
+    #[test]
+    fn pending_utds_expire_after_the_observation_window() {
+        let pending = PendingUtds::<u32>::default();
+        let start = Instant::now();
+        pending.insert(ROOM, "$old", start, 1, start);
+        pending.insert(
+            ROOM,
+            "$new",
+            start + Duration::from_secs(60),
+            2,
+            start + Duration::from_secs(60),
+        );
+        let later = start + PENDING_UTD_TTL + Duration::from_secs(1);
+        let live: Vec<u32> = pending
+            .take_all(later)
+            .into_iter()
+            .map(|(_, value)| value)
+            .collect();
+        assert_eq!(live, vec![2]);
+        // A candidate first seen before the window cannot be re-registered.
+        pending.insert(ROOM, "$old", start, 1, later);
+        assert_eq!(pending.len(), 0);
+    }
+
+    #[test]
+    fn resolved_report_takes_only_matching_room_and_events() {
+        let pending = PendingUtds::<&str>::default();
+        let now = Instant::now();
+        pending.insert(ROOM, "$a", now, "a", now);
+        pending.insert(ROOM, "$b", now, "b", now);
+        pending.insert("!other:example.org", "$a", now, "other", now);
+        let taken: Vec<&str> = pending
+            .take_matching(ROOM, |event_id| event_id == "$a", now)
+            .into_iter()
+            .map(|(_, value)| value)
+            .collect();
+        assert_eq!(taken, vec!["a"]);
+        assert_eq!(pending.len(), 2);
+        // Re-registering the same event replaces it rather than duplicating.
+        pending.insert(ROOM, "$b", now, "b2", now);
+        assert_eq!(pending.len(), 2);
+    }
+
+    #[test]
+    fn sdk_reports_reduce_to_resolved_or_recheck() {
+        use matrix_sdk::ruma::{owned_event_id, owned_room_id};
+        let report = RedecryptorReport::ResolvedUtds {
+            room_id: owned_room_id!("!room:example.org"),
+            events: [owned_event_id!("$a")].into_iter().collect(),
+        };
+        assert_eq!(
+            DecryptionReport::from_sdk::<()>(Ok(report)),
+            DecryptionReport::Resolved {
+                room_id: ROOM.to_owned(),
+                event_ids: vec!["$a".to_owned()],
+            }
+        );
+        assert_eq!(
+            DecryptionReport::from_sdk::<()>(Ok(RedecryptorReport::Lagging)),
+            DecryptionReport::Recheck
+        );
+        assert_eq!(
+            DecryptionReport::from_sdk::<()>(Ok(RedecryptorReport::BackupAvailable)),
+            DecryptionReport::Recheck
+        );
+        assert_eq!(
+            DecryptionReport::from_sdk::<&str>(Err("lagged")),
+            DecryptionReport::Recheck,
+            "a lagged broadcast receiver may have missed a report"
+        );
+    }
+
+    fn recording_emit() -> (
+        NotificationObservationEmit,
+        Arc<Mutex<Vec<NativeNotificationObservation>>>,
+    ) {
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let recorded = output.clone();
+        let emit: NotificationObservationEmit =
+            Arc::new(move |event| recorded.lock().unwrap().push(event));
+        (emit, output)
+    }
+
+    #[test]
+    fn a_key_that_arrives_late_still_produces_the_notification() {
+        let (emit, output) = recording_emit();
+        let approval = text(
+            user_id!("@bob:example.org"),
+            now_ms(),
+            "Approval Required: Dangerous Command\necho hello",
+        );
+        assert_eq!(
+            resolve_late_event(
+                Some(AnySyncTimelineEvent::MessageLike(approval)),
+                ROOM,
+                user_id!("@me:example.org"),
+                &emit,
+                7,
+            ),
+            LateOutcome::Resolved
+        );
+        let events = output.lock().unwrap().clone();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, "m.room.message");
+        assert!(events[0].agent_approval.is_some());
+    }
+
+    #[test]
+    fn late_reports_keep_ciphertext_waiting_and_never_emit_filtered_plaintext() {
+        let (emit, output) = recording_emit();
+        let at = now_ms();
+        assert_eq!(
+            resolve_late_event(
+                Some(AnySyncTimelineEvent::MessageLike(ciphertext(at))),
+                ROOM,
+                user_id!("@me:example.org"),
+                &emit,
+                7,
+            ),
+            LateOutcome::StillEncrypted
+        );
+        assert_eq!(
+            resolve_late_event(None, ROOM, user_id!("@me:example.org"), &emit, 7),
+            LateOutcome::StillEncrypted
+        );
+        let own = text(user_id!("@me:example.org"), at, "own");
+        assert_eq!(
+            resolve_late_event(
+                Some(AnySyncTimelineEvent::MessageLike(own)),
+                ROOM,
+                user_id!("@me:example.org"),
+                &emit,
+                7,
+            ),
+            LateOutcome::Resolved
+        );
+        assert!(output.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn quick_follow_up_reports_unresolved_ciphertext_for_late_keys() {
+        let (emit, _output) = recording_emit();
+        let original = ciphertext(now_ms());
+        let resolution = resolve_encrypted_observation(
+            EncryptedObservationContext {
+                original_event: &original,
+                room_id: ROOM,
+                own_user_id: user_id!("@me:example.org"),
+                emit: &emit,
+                retired: &AtomicBool::new(false),
+                session_generation: 7,
+            },
+            &[0, 0],
+            || async { None },
+        )
+        .await;
+        assert_eq!(resolution, EncryptedResolution::Unresolved);
+    }
+
+    #[test]
+    fn quick_follow_up_budget_is_short_because_late_keys_use_reports() {
+        let total: u64 = DECRYPT_FOLLOW_UP_DELAYS_MS.iter().sum();
+        assert!(total <= 3_000, "quick follow-up budget is {total} ms");
+        let source = include_str!("observation.rs");
+        assert!(source.contains(".subscribe_to_decryption_reports()"));
     }
 }
