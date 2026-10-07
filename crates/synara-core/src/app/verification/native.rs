@@ -21,6 +21,9 @@ pub enum NativeVerificationPhase {
     Started,
     KeysExchanging,
     SasReady,
+    /// The other device scanned the QR code this device shows. The user must
+    /// confirm the other device reported success before Core confirms.
+    QrScanned,
     Confirmed,
     Done,
     Mismatched,
@@ -80,7 +83,7 @@ pub fn phase_rank(phase: NativeVerificationPhase) -> u8 {
         NativeVerificationPhase::Ready => 1,
         NativeVerificationPhase::Started => 2,
         NativeVerificationPhase::KeysExchanging => 3,
-        NativeVerificationPhase::SasReady => 4,
+        NativeVerificationPhase::SasReady | NativeVerificationPhase::QrScanned => 4,
         NativeVerificationPhase::Confirmed => 5,
         NativeVerificationPhase::Done => 6,
         NativeVerificationPhase::Mismatched => 7,

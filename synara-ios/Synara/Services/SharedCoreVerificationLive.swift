@@ -96,6 +96,11 @@ enum SharedCoreVerificationLive {
             // contract. Surface the failure instead of leaving the user in an
             // endless waiting state with no possible confirmation action.
             return .failed
+        case "qr_scanned":
+            // iOS advertises SAS only and never shows a QR code, so Core cannot
+            // reach this phase here. Fail closed rather than confirm a scan the
+            // user was never asked about.
+            return .failed
         case "confirmed":
             return .confirmed
         case "done":

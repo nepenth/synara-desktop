@@ -217,7 +217,9 @@ fn advertised_methods_include_show_qr_and_sas_without_camera_scan() {
         .and_then(|rest| rest.split("async fn accept_transitioned_sas").next())
         .expect("verification watcher");
     assert!(watcher.contains("Verification::QrV1"));
-    assert!(watcher.contains("confirm_scanned_show_qr"));
+    // A scan is the other device's claim; only the user's confirm may act on it.
+    assert!(!watcher.contains("confirm_scanned_show_qr"));
+    assert!(!watcher.contains(".confirm()"));
     assert!(watcher.contains("try_generate_show_qr"));
     assert!(!watcher.contains("scan_qr_code"));
 }

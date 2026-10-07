@@ -3,6 +3,7 @@
 ## Unreleased
 
 - CI: fast pull-request gate plus a nightly heavy suite (XCUITests, live Synapse proofs, package builds, release-cache seeding); releases reuse the proven CI gate, keep warm compiler caches and retry notarization instead of rebuilding.
+- Verification: when another device scans the QR code Synara shows, ask the user to confirm that device reported success instead of confirming automatically.
 - Linux: closing the window hides Synara to the tray instead of minimizing it, matching macOS. Reopen from the tray or the launcher; quit from the tray menu.
 - Linux: drag the borderless window from the title strip on Wayland, keep it undecorated across relaunch, and keep double-click maximize.
 - Sessions: retire a rejected session locally on desktop and iOS, bound logout when the homeserver does not answer, show a closed command gate as Connection Lost, and log static diagnostic ids for rejected commands.
