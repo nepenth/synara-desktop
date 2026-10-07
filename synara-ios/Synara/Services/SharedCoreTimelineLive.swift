@@ -60,6 +60,22 @@ enum SharedCoreTimelineSignalBatch {
     }
 }
 
+/// Poll cadence for the shared live poller. Core exposes drain-style queues,
+/// not an awaitable listener, so the poller backs off while nothing arrives:
+/// 250 ms right after activity, doubling to 1 s when idle, and back to
+/// 250 ms as soon as any queue returns an update.
+enum SharedCoreLivePollBackoff {
+    static let activeNanoseconds: UInt64 = 250_000_000
+    static let idleNanoseconds: UInt64 = 1_000_000_000
+
+    static func next(after current: UInt64, receivedUpdates: Bool) -> UInt64 {
+        if receivedUpdates {
+            return activeNanoseconds
+        }
+        return min(max(current, activeNanoseconds) * 2, idleNanoseconds)
+    }
+}
+
 /// One SharedCore poller so two open rooms cannot steal each other's S14
 /// summaries. Starts only while a timeline stream is listening. NSE still
 /// cannot poll (the Core method fail-closes).
@@ -151,8 +167,9 @@ final class SharedCoreLivePoller: @unchecked Sendable {
         }
         let core = self.core
         pollTask = Task { [weak self] in
+            var delay = SharedCoreLivePollBackoff.activeNanoseconds
             while Task.isCancelled == false {
-                try? await Task.sleep(nanoseconds: 250_000_000)
+                try? await Task.sleep(nanoseconds: delay)
                 guard Task.isCancelled == false else {
                     return
                 }
@@ -177,6 +194,12 @@ final class SharedCoreLivePoller: @unchecked Sendable {
                 if owners.isEmpty == false {
                     self?.dispatchOwners(owners)
                 }
+                delay = SharedCoreLivePollBackoff.next(
+                    after: delay,
+                    receivedUpdates: updates.isEmpty == false
+                        || rooms.isEmpty == false
+                        || owners.isEmpty == false
+                )
             }
         }
     }

@@ -1004,6 +1004,20 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(coalesced.first(where: { $0.streamId == "view-b" })?.revision, 4)
     }
 
+    func testSharedCoreLivePollBacksOffWhileIdleAndResetsOnActivity() {
+        let active = SharedCoreLivePollBackoff.activeNanoseconds
+        let idle = SharedCoreLivePollBackoff.idleNanoseconds
+        var delay = active
+        delay = SharedCoreLivePollBackoff.next(after: delay, receivedUpdates: false)
+        XCTAssertEqual(delay, 500_000_000)
+        delay = SharedCoreLivePollBackoff.next(after: delay, receivedUpdates: false)
+        XCTAssertEqual(delay, idle)
+        delay = SharedCoreLivePollBackoff.next(after: delay, receivedUpdates: false)
+        XCTAssertEqual(delay, idle, "idle polling is capped")
+        delay = SharedCoreLivePollBackoff.next(after: delay, receivedUpdates: true)
+        XCTAssertEqual(delay, active, "any update restores the fast cadence")
+    }
+
     func testSharedCoreTimelineUpdatesWithoutSessionFailsClosedWithoutEcho() async {
         let host = SharedCoreProductHost(
             core: SharedCore(),

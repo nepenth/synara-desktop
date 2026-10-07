@@ -791,11 +791,15 @@ pub fn run() {
                 .map_err(|error| format!("Invalid packaged asset origin: {error}"))?;
 
             let app_handle = app.handle().clone();
+            // The secure-store probe can take seconds on a slow or locked
+            // keyring, so it must not delay the window. The bridge starts
+            // conservative; the renderer reads the real status through
+            // `desktop_secret_store_status`, which the warm-up below caches.
+            desktop::warm_secret_store_status();
             let bridge_script = format!(
-                "{}\nif (window.__SYNARA_DESKTOP__) {{ window.__SYNARA_DESKTOP__.supportsUpdater = {}; window.__SYNARA_DESKTOP__.supportsSecureSecretStore = {}; }}",
+                "{}\nif (window.__SYNARA_DESKTOP__) {{ window.__SYNARA_DESKTOP__.supportsUpdater = {}; window.__SYNARA_DESKTOP__.supportsSecureSecretStore = false; }}",
                 include_str!("desktop_bridge.js"),
                 updater_configured,
-                desktop::desktop_bridge_supports_secure_secret_store()
             );
             let window_builder = WebviewWindowBuilder::new(app, "main".to_string(), window_url)
                 .title("Synara")
@@ -863,9 +867,81 @@ pub fn run() {
                 let _ = desktop::show_main_window(app);
             }
 
-            #[cfg(not(target_os = "macos"))]
-            let _ = (app, event);
+            if let tauri::RunEvent::ExitRequested { api, code, .. } = &event {
+                if begin_exit_sync_stop() {
+                    // Stop sync so the SDK is not mid-request at exit, then
+                    // exit for real. The stop is bounded: quit never hangs.
+                    api.prevent_exit();
+                    let app = app.clone();
+                    let code = code.unwrap_or(0);
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(state) = app.try_state::<matrix::auth::MatrixAuthState>() {
+                            let _ = state.stop_sync_for_exit(EXIT_SYNC_STOP_BOUND).await;
+                        }
+                        app.exit(code);
+                    });
+                }
+            }
         });
+}
+
+/// Upper bound on stopping sync during quit.
+const EXIT_SYNC_STOP_BOUND: std::time::Duration = std::time::Duration::from_secs(2);
+
+static EXIT_SYNC_STOP_STARTED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// True only for the first exit request. The exit that follows the bounded
+/// sync stop must pass straight through instead of being prevented again.
+fn begin_exit_sync_stop() -> bool {
+    !EXIT_SYNC_STOP_STARTED.swap(true, std::sync::atomic::Ordering::AcqRel)
+}
+
+#[cfg(test)]
+mod exit_tests {
+    use super::*;
+
+    #[test]
+    fn only_the_first_exit_request_is_held_for_the_sync_stop() {
+        assert!(begin_exit_sync_stop());
+        assert!(!begin_exit_sync_stop());
+        assert!(!begin_exit_sync_stop());
+    }
+
+    #[tokio::test]
+    async fn exit_sync_stop_without_a_session_returns_at_once() {
+        let state = matrix::auth::MatrixAuthState::new();
+        let started = std::time::Instant::now();
+        assert!(!state.stop_sync_for_exit(EXIT_SYNC_STOP_BOUND).await);
+        assert!(started.elapsed() < EXIT_SYNC_STOP_BOUND);
+    }
+
+    #[tokio::test]
+    async fn exit_sync_stop_gives_up_when_the_session_lock_is_held() {
+        let state = std::sync::Arc::new(matrix::auth::MatrixAuthState::new());
+        let _held = state.hold_session_lock_for_test().await;
+        let bound = std::time::Duration::from_millis(100);
+        let started = std::time::Instant::now();
+        assert!(!state.stop_sync_for_exit(bound).await);
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
+    }
+
+    #[test]
+    fn window_setup_does_not_wait_for_the_secure_store_probe() {
+        let source = include_str!("lib.rs");
+        let setup = source
+            .split("let bridge_script = format!(")
+            .nth(1)
+            .and_then(|rest| rest.split(");").next())
+            .expect("bridge script");
+        assert!(setup.contains("supportsSecureSecretStore = false"));
+        assert!(!setup.contains("secret_store"));
+        assert!(source.contains("desktop::warm_secret_store_status();"));
+        let desktop = include_str!("desktop.rs");
+        assert!(desktop.contains("pub async fn desktop_secret_store_status()"));
+        assert!(desktop
+            .contains("spawn_blocking(crate::desktop_secret_store::platform_secret_store_status)"));
+    }
 }
 
 #[cfg(test)]

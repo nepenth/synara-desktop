@@ -44,8 +44,10 @@ pub struct SyncServiceOwner {
     service: Arc<SyncService>,
     session_generation: u64,
     offline_mode_enabled: bool,
-    /// Best-effort preflight verdict for server sliding-sync support.
-    sliding_sync_capable: Option<bool>,
+    /// Best-effort server sliding-sync verdict, filled in by a background
+    /// probe after install. `None` until the probe answers.
+    sliding_sync_capable: Arc<std::sync::OnceLock<bool>>,
+    sliding_sync_probe: tokio::task::JoinHandle<()>,
     room_subscriptions: Arc<Mutex<RoomSubscriptions>>,
     recovery_task: Option<tokio::task::JoinHandle<()>>,
     /// Re-enables send queues after recoverable send errors; aborted with
@@ -86,7 +88,7 @@ impl SyncServiceOwner {
         }
         let mut snapshot =
             snapshot_from_sdk_state(&current, self.session_generation, self.offline_mode_enabled)
-                .with_sliding_sync_capability(self.sliding_sync_capable);
+                .with_sliding_sync_capability(self.sliding_sync_capable.get().copied());
         if self.authentication_rejected.load(Ordering::Acquire) {
             snapshot.readiness = SyncReadiness::Failed;
             snapshot.failure_diagnostic_id =
@@ -276,14 +278,25 @@ pub async fn build_sync_service(
         ),
     );
     // Best-effort server capability probe: purely informational, never gates
-    // the sync path. On probe failure `None` is stored and sync proceeds.
-    let sliding_sync_capable = probe_sliding_sync(client).await;
+    // the sync path. It runs after install so restore does not wait up to
+    // the probe's 3 s timeout; readiness reports `None` until it answers.
+    let sliding_sync_capable = Arc::new(std::sync::OnceLock::new());
+    let sliding_sync_probe = {
+        let client = client.clone();
+        let verdict = Arc::clone(&sliding_sync_capable);
+        tokio::spawn(async move {
+            if let Some(capable) = probe_sliding_sync(&client).await {
+                let _ = verdict.set(capable);
+            }
+        })
+    };
 
     Ok(SyncServiceOwner {
         service,
         session_generation,
         offline_mode_enabled: config.offline_mode,
         sliding_sync_capable,
+        sliding_sync_probe,
         room_subscriptions,
         recovery_task,
         send_queue_recovery,
@@ -345,6 +358,7 @@ impl Drop for SyncServiceOwner {
             task.abort();
         }
         self.send_queue_recovery.abort();
+        self.sliding_sync_probe.abort();
     }
 }
 

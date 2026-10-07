@@ -83,6 +83,7 @@ pub(crate) fn unavailable_secret_store_status(reason: &'static str) -> DesktopSe
     }
 }
 
+#[cfg(test)]
 pub(crate) fn bridge_supports_secure_secret_store(status: &DesktopSecretStoreStatus) -> bool {
     status.available && status.can_persist_session
 }
