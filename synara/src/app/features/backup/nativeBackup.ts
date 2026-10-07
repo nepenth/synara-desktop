@@ -52,18 +52,6 @@ const announceStatusChange = (): void => {
 export const getNativeBackupStatus = (): Promise<NativeBackupStatus> =>
   invokeNativeBackup('matrix_backup_status');
 
-export const setupNativeBackup = async (
-  passphrase: string
-): Promise<NativeBackupOperationResult> => {
-  const result = await invokeNativeBackup<NativeBackupOperationResult>(
-    'matrix_backup_setup',
-    { passphrase },
-    'Encryption backup setup failed. Check your recovery passphrase and try again.'
-  );
-  announceStatusChange();
-  return result;
-};
-
 export const restoreNativeBackup = async (
   recoverySecret: string
 ): Promise<NativeBackupOperationResult> => {
