@@ -178,7 +178,8 @@ enum RejectedAuthenticationRetirement {
 
 /// Local retirement for a rejected refresh (spec FR-3).
 ///
-/// The only effects are the injected ones: forget the Core vault credentials,
+/// The only effects are the injected ones: retire the generation in Core
+/// (`retireRejectedSession`, which forgets the vault credentials locally),
 /// note the expiry, and sign the app shell out. There is no remote `/logout`,
 /// no refresh, and no store wipe. Signing the shell out deletes the app session
 /// record that drives launch restore, so the retired generation cannot come
@@ -458,28 +459,26 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     /// the rejected token, or delete the crypto store. One retirement runs per
     /// generation; a later poll may start another only after a failed sign-out.
     private func beginRejectedAuthenticationRetirement(generation: UInt64) {
-        let claim: (start: Bool, session: AuthenticatedSession?) = applyLock.withLock {
+        let start: Bool = applyLock.withLock {
             if retiringAuthenticationGeneration == generation {
-                return (false, nil)
+                return false
             }
             retiringAuthenticationGeneration = generation
-            return (true, lastSession)
+            return true
         }
-        guard claim.start else {
+        guard start else {
             return
         }
-        let session = claim.session
         let host = host
         let retirer = RejectedAuthenticationRetirer(
             forgetCredentials: { [weak self] in
-                if let session {
-                    // Stops sync (and this watch) first, then forgets the vault
-                    // credentials. Not a remote logout and not a store wipe.
-                    try await self?.forgetPersistedSession(session)
-                } else {
-                    await self?.stop()
-                    _ = try await host.core.logout()
-                }
+                // Stop the shell's sync bookkeeping (and this watch), then let
+                // Core retire exactly this generation: local teardown and a
+                // vault forget, never a remote /logout, never a store wipe.
+                // Core latched the rejection when the poll saw it, so the
+                // order of stop and retire does not matter.
+                await self?.stop()
+                _ = try await host.core.retireRejectedSession(sessionGeneration: generation)
             },
             noteSessionExpired: { host.sessionStore.noteSessionExpired() },
             signOut: { try host.sessionStore.signOut() }

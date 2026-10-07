@@ -1103,6 +1103,82 @@ fn failed_rotation_save_is_retried_with_backoff_and_stops_after_logout() {
 }
 
 #[test]
+fn rejected_session_retirement_forgets_credentials_locally_in_either_order() {
+    for stop_first in [false, true] {
+        let identity = alice();
+        let map = std::sync::Arc::new(Mutex::new(HashMap::new()));
+        let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(
+            std::sync::Arc::clone(&map),
+        )));
+        let root = temp_root(if stop_first {
+            "retire-rejected-after-logout"
+        } else {
+            "retire-rejected-live"
+        });
+        let rt = test_runtime();
+        let _enter = rt.enter();
+        rt.block_on(shared.persist_planted_session_for_test(
+            identity.user_id().to_owned(),
+            identity.homeserver_url().to_owned(),
+            root.to_string_lossy().into_owned(),
+            "DEVICEABC".to_owned(),
+            "syt_retire_success_access".to_owned(),
+            Some("syr_retire_success_refresh".to_owned()),
+        ))
+        .expect("planted session");
+        let generation = shared
+            .core
+            .session_snapshot()
+            .expect("projection")
+            .expect("session")
+            .session_generation;
+        let session_keys = |map: &Mutex<HashMap<String, Vec<u8>>>| {
+            map.lock()
+                .expect("vault")
+                .keys()
+                .filter(|key| key.starts_with("matrix-session:"))
+                .count()
+        };
+        assert_eq!(session_keys(&map), 1);
+
+        // The sync status poll observed the rejected refresh for this generation.
+        shared.note_authentication_rejection(Some(
+            crate::app::sync::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID,
+        ));
+        if stop_first {
+            // The shell already tore the session down locally; the latch, not
+            // the live sync owner, still identifies what to forget.
+            rt.block_on(shared.logout()).expect("local teardown");
+            assert_eq!(session_keys(&map), 1, "teardown alone keeps the vault");
+        }
+
+        // The homeserver in this fixture is unreachable, so success also shows
+        // retirement needs no remote call.
+        let ack = rt
+            .block_on(shared.retire_rejected_session(generation))
+            .expect("retire the rejected generation");
+        assert_eq!(ack.status, "retired");
+        assert_eq!(session_keys(&map), 0, "session material is forgotten");
+        assert!(shared.core.session_snapshot().unwrap().is_none());
+        assert!(
+            map.lock()
+                .expect("vault")
+                .keys()
+                .any(|key| key.starts_with("store-key:")),
+            "the store key and encrypted history stay"
+        );
+        let again = rt
+            .block_on(shared.retire_rejected_session(generation))
+            .expect("idempotent");
+        assert_eq!(again.status, "retired");
+        drop(shared);
+        drop(_enter);
+        drop(rt);
+        let _ = fs::remove_dir_all(&root);
+    }
+}
+
+#[test]
 fn rejected_session_retirement_is_generation_fenced_and_idempotent() {
     let identity = alice();
     let map = std::sync::Arc::new(Mutex::new(HashMap::new()));

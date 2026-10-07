@@ -875,6 +875,7 @@ impl SharedCore {
             media_retention_live: Arc::new(Mutex::new(None)),
             generations: crate::app::lifecycle::session::SessionGenerations::new(),
             save_retry_backoff: Mutex::new(crate::app::lifecycle::session::RetryBackoff::new()),
+            rejected_session: Mutex::new(None),
         }
     }
 
@@ -898,6 +899,7 @@ impl SharedCore {
             media_retention_live: Arc::new(Mutex::new(None)),
             generations: crate::app::lifecycle::session::SessionGenerations::new(),
             save_retry_backoff: Mutex::new(crate::app::lifecycle::session::RetryBackoff::new()),
+            rejected_session: Mutex::new(None),
         }
     }
 
@@ -1551,8 +1553,10 @@ impl SharedCore {
         // Swift polls this while the session is live; it is the iOS watchdog.
         self.retry_failed_session_save(std::time::Instant::now());
         if let Some(owner) = self.core.attached_sync_owner() {
+            let observed = owner.observe();
+            self.note_authentication_rejection(observed.failure_diagnostic_id);
             return sync_status_from_owner_snapshot(
-                owner.observe(),
+                observed,
                 self.core.attached_timeline_owner().is_some(),
             );
         }
@@ -1718,31 +1722,61 @@ impl SharedCore {
         session_generation: u64,
     ) -> Result<LeftoverAckDto, LeftoverCommandError> {
         let failed = || leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION);
+        let retired = || LeftoverAckDto {
+            status: "retired".to_owned(),
+        };
         if self.is_nse_read_only() {
             return Err(failed());
         }
-        let Some(snapshot) = self.core.session_snapshot().map_err(|_| failed())? else {
-            return Ok(LeftoverAckDto {
-                status: "retired".to_owned(),
-            });
-        };
-        let rejected = self
-            .core
-            .attached_sync_owner()
-            .and_then(|owner| owner.observe().failure_diagnostic_id)
-            == Some(SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID);
-        if snapshot.session_generation != session_generation || !rejected {
-            return Err(failed());
+        // Latch a rejection the live owner reports now, before any teardown.
+        if let Some(owner) = self.core.attached_sync_owner() {
+            self.note_authentication_rejection(owner.observe().failure_diagnostic_id);
         }
-        let identity = AccountIdentity::new(&snapshot.user_id, &snapshot.homeserver_url)
-            .map_err(|_| failed())?;
-        self.logout().await?;
+        let latched = self
+            .rejected_session
+            .lock()
+            .map_err(|_| failed())?
+            .clone()
+            .filter(|(generation, _)| *generation == session_generation);
+        let snapshot = self.core.session_snapshot().map_err(|_| failed())?;
+        let identity = match (&snapshot, latched) {
+            // A different live generation, or one that never reported the
+            // rejection, is refused and left alone.
+            (Some(snapshot), _) if snapshot.session_generation != session_generation => {
+                return Err(failed());
+            }
+            (Some(_), None) => return Err(failed()),
+            (_, Some((_, identity))) => identity,
+            // No live session and nothing latched for it: already retired.
+            (None, None) => return Ok(retired()),
+        };
+        if snapshot.is_some() {
+            // Local teardown only: logout() never contacts the homeserver.
+            self.logout().await?;
+        }
+        // Forgetting is idempotent, so a repeat call after a partial failure
+        // finishes the job. The store key and encrypted history stay.
         self.secret_store
             .delete(SessionMaterialId::from_identity(&identity).account())
             .map_err(|_| failed())?;
-        Ok(LeftoverAckDto {
-            status: "retired".to_owned(),
-        })
+        Ok(retired())
+    }
+
+    /// Remember the current generation when its sync reported a rejected
+    /// refresh. A later generation simply never matches the latch.
+    pub(crate) fn note_authentication_rejection(&self, failure_diagnostic_id: Option<&str>) {
+        if failure_diagnostic_id != Some(SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID) {
+            return;
+        }
+        let Ok(Some(snapshot)) = self.core.session_snapshot() else {
+            return;
+        };
+        let Ok(identity) = AccountIdentity::new(&snapshot.user_id, &snapshot.homeserver_url) else {
+            return;
+        };
+        if let Ok(mut latch) = self.rejected_session.lock() {
+            *latch = Some((snapshot.session_generation, identity));
+        }
     }
 
     pub async fn logout(&self) -> Result<LeftoverAckDto, LeftoverCommandError> {
