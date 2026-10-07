@@ -1038,16 +1038,7 @@ pub(super) struct LogoutPlan {
     remote_logout_allowed: bool,
 }
 
-/// Voluntary logout may attempt one remote `/logout`. A generation whose
-/// refresh was rejected never does, whether the watcher or the user asked.
-pub(super) fn remote_logout_allowed(
-    expected_session_generation: Option<u64>,
-    failure_diagnostic_id: Option<&str>,
-) -> bool {
-    expected_session_generation.is_none()
-        && failure_diagnostic_id
-            != Some(synara_core::app::sync::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID)
-}
+pub(super) use synara_core::app::lifecycle::session::remote_logout_allowed;
 
 /// Validate the installed session under the session mutex, then move it out of
 /// the slot before any teardown await. From here on, ordinary commands see no
@@ -1803,13 +1794,11 @@ where
 
 impl MatrixAuthState {
     pub(super) fn next_generation(&self) -> u64 {
-        self.next_session_generation
-            .fetch_add(1, Ordering::Relaxed)
-            .saturating_add(1)
+        self.generations.allocate()
     }
 
     pub(super) fn current_generation(&self) -> u64 {
-        self.next_session_generation.load(Ordering::Relaxed)
+        self.generations.current()
     }
 }
 

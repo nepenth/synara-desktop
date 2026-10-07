@@ -2640,9 +2640,11 @@ fn v_auth_native_session_credentials_never_cross_renderer_ipc() {
     }
 
     // The identity-only bootstrap DTO must never carry tokens to the frontend.
-    let product_source = include_str!("product.rs");
-    let identity_fn = product_source
-        .split("pub struct MatrixLoginIdentity {")
+    let locator_source =
+        include_str!("../../../../crates/synara-core/src/app/lifecycle/session/locator.rs");
+    assert!(include_str!("product.rs").contains("SessionLocator as MatrixLoginIdentity"));
+    let identity_fn = locator_source
+        .split("pub struct SessionLocator {")
         .nth(1)
         .and_then(|rest| rest.split('}').next())
         .expect("MatrixLoginIdentity fields");
@@ -2804,123 +2806,6 @@ fn installs_and_restore_wait_on_the_session_transition_gate() {
         .find("read_active_identity(&app_data_root)")
         .expect("restore reads the active identity");
     assert!(retry < read);
-}
-
-#[test]
-fn remote_logout_is_skipped_for_any_rejected_generation() {
-    let rejected = Some(synara_core::app::sync::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID);
-    assert!(remote_logout_allowed(None, None));
-    assert!(remote_logout_allowed(
-        None,
-        Some(synara_core::app::sync::SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID)
-    ));
-    // The watcher's retirement never POSTs.
-    assert!(!remote_logout_allowed(Some(4), rejected));
-    assert!(!remote_logout_allowed(Some(4), None));
-    // A user Sign Out that beats the watcher to a rejected generation does not
-    // POST the rejected credentials either.
-    assert!(!remote_logout_allowed(None, rejected));
-}
-
-#[test]
-fn rejection_logout_diagnostics_are_static_ids_only() {
-    assert_eq!(
-        static_rejection_logout_diagnostic("d0.1-session-rejection-stale"),
-        Some("d0.1-session-rejection-stale")
-    );
-    assert_eq!(
-        static_rejection_logout_diagnostic("p4.1-session-authentication-rejected"),
-        Some("p4.1-session-authentication-rejected")
-    );
-    assert_eq!(
-        static_rejection_logout_diagnostic("https://private.example/token"),
-        None
-    );
-    assert_eq!(static_rejection_logout_diagnostic("not-a-session-id"), None);
-}
-
-#[tokio::test]
-async fn rejection_tick_retires_once_logs_once_and_never_claims_success_without_core() {
-    use std::cell::RefCell;
-
-    let mut watch = AuthenticationRejectionWatch::default();
-    let lines = RefCell::new(Vec::<String>::new());
-    let retired = RefCell::new(Vec::<u64>::new());
-    let log = |line: &str| lines.borrow_mut().push(line.to_owned());
-
-    // No Core: log the rejection and the static no-core id once, never retire.
-    for _ in 0..2 {
-        let succeeded =
-            handle_authentication_rejection_tick(&mut watch, 4, false, log, |generation| {
-                retired.borrow_mut().push(generation);
-                async { Ok(()) }
-            })
-            .await;
-        assert!(!succeeded, "missing Core must not claim retirement");
-    }
-    assert!(retired.borrow().is_empty());
-    assert_eq!(
-        *lines.borrow(),
-        vec![
-            "session-authentication-rejected".to_owned(),
-            SESSION_REJECTION_NO_CORE_DIAGNOSTIC_ID.to_owned(),
-        ]
-    );
-
-    // Core present but local cleanup fails: retry on the next tick, log the
-    // static id once, and drop anything that is not a static id.
-    lines.borrow_mut().clear();
-    for _ in 0..2 {
-        let succeeded =
-            handle_authentication_rejection_tick(&mut watch, 4, true, log, |generation| {
-                retired.borrow_mut().push(generation);
-                async {
-                    Err(MatrixAuthCommandError::unavailable(
-                        "d0.1-session-clear-failed",
-                    ))
-                }
-            })
-            .await;
-        assert!(!succeeded);
-    }
-    assert_eq!(
-        *retired.borrow(),
-        vec![4, 4],
-        "a later tick retries local cleanup"
-    );
-    assert_eq!(
-        *lines.borrow(),
-        vec!["d0.1-session-clear-failed".to_owned()]
-    );
-
-    lines.borrow_mut().clear();
-    let succeeded = handle_authentication_rejection_tick(&mut watch, 4, true, log, |_| async {
-        Err(MatrixAuthCommandError::unavailable(
-            "https://private.example/token",
-        ))
-    })
-    .await;
-    assert!(!succeeded);
-    assert!(lines.borrow().is_empty(), "non-static ids are never logged");
-
-    // Success with the fenced generation.
-    retired.borrow_mut().clear();
-    let succeeded = handle_authentication_rejection_tick(&mut watch, 4, true, log, |generation| {
-        retired.borrow_mut().push(generation);
-        async { Ok(()) }
-    })
-    .await;
-    assert!(succeeded);
-    assert_eq!(*retired.borrow(), vec![4]);
-
-    // A new rejected generation is logged again.
-    lines.borrow_mut().clear();
-    let _ =
-        handle_authentication_rejection_tick(&mut watch, 5, true, log, |_| async { Ok(()) }).await;
-    assert_eq!(
-        *lines.borrow(),
-        vec!["session-authentication-rejected".to_owned()]
-    );
 }
 
 #[test]

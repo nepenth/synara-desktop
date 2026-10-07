@@ -876,8 +876,7 @@ impl SharedCore {
     /// generation (for example rejected-auth retirement) cannot match the
     /// session that replaced it.
     pub(super) fn allocate_session_generation(&self) -> u64 {
-        self.next_session_generation
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        self.generations.allocate()
     }
 
     /// Construct a real Core with the fail-closed iOS Platform.
@@ -897,7 +896,7 @@ impl SharedCore {
             room_list_live: Arc::new(Mutex::new(None)),
             own_profile_live: Arc::new(Mutex::new(None)),
             media_retention_live: Arc::new(Mutex::new(None)),
-            next_session_generation: std::sync::atomic::AtomicU64::new(1),
+            generations: crate::app::lifecycle::session::SessionGenerations::new(),
         }
     }
 
@@ -919,7 +918,7 @@ impl SharedCore {
             room_list_live: Arc::new(Mutex::new(None)),
             own_profile_live: Arc::new(Mutex::new(None)),
             media_retention_live: Arc::new(Mutex::new(None)),
-            next_session_generation: std::sync::atomic::AtomicU64::new(1),
+            generations: crate::app::lifecycle::session::SessionGenerations::new(),
         }
     }
 

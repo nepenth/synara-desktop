@@ -7,8 +7,6 @@ use std::fs;
 
 use std::path::{Path, PathBuf};
 
-use std::sync::atomic::{AtomicU64, Ordering};
-
 use std::sync::Arc;
 
 use std::time::{Duration, Instant, SystemTime};
@@ -154,13 +152,8 @@ use synara_core::app::media_cache::NativeMediaRetentionOwner;
 const ACTIVE_SESSION_FILE: &str = "active-session.json";
 const MATRIX_DATA_DIR: &str = "matrix";
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct MatrixLoginIdentity {
-    pub user_id: String,
-    pub device_id: String,
-    pub homeserver_url: String,
-}
+/// Non-secret account locator; the wire shape is owned by Core.
+pub use synara_core::app::lifecycle::session::SessionLocator as MatrixLoginIdentity;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
@@ -367,7 +360,7 @@ pub struct MatrixAuthState {
     /// slot. Restore refuses to reinstall it, and the watcher retries cleanup.
     pending_logout_cleanup: std::sync::Mutex<Option<MatrixLoginIdentity>>,
     store_recovery: Mutex<StoreRecoveryState>,
-    next_session_generation: AtomicU64,
+    generations: synara_core::app::lifecycle::session::SessionGenerations,
     recover_gate: Mutex<RecoverGate>,
 }
 
@@ -816,130 +809,16 @@ pub(super) fn retry_pending_logout_cleanup(
     Ok(())
 }
 
-pub(super) const SESSION_REJECTION_NO_CORE_DIAGNOSTIC_ID: &str = "d0.1-session-rejection-no-core";
-
-/// Per-generation log de-duplication for the rejection watcher. Concurrency
-/// with a user logout is the transition gate's job, not this struct's: every
-/// tick that still sees the rejected generation retries `matrix_logout`.
-#[derive(Debug, Default)]
-pub(super) struct AuthenticationRejectionWatch {
-    logged_rejection: Option<u64>,
-    logged_missing_core: Option<u64>,
-    logged_failure: Option<(u64, String)>,
-}
-
-impl AuthenticationRejectionWatch {
-    pub(super) fn should_log_rejection(&mut self, generation: u64) -> bool {
-        if self.logged_rejection == Some(generation) {
-            return false;
-        }
-        self.logged_rejection = Some(generation);
-        true
-    }
-
-    pub(super) fn should_log_missing_core(&mut self, generation: u64) -> bool {
-        if self.logged_missing_core == Some(generation) {
-            return false;
-        }
-        self.logged_missing_core = Some(generation);
-        true
-    }
-
-    fn should_log_failure(&mut self, generation: u64, diagnostic_id: &str) -> bool {
-        if self
-            .logged_failure
-            .as_ref()
-            .is_some_and(|(logged, id)| *logged == generation && id == diagnostic_id)
-        {
-            return false;
-        }
-        self.logged_failure = Some((generation, diagnostic_id.to_owned()));
-        true
-    }
-}
-
-/// One watcher tick for a sync snapshot that reports a rejected refresh.
-///
-/// `retire` is the local, generation-fenced `matrix_logout`; it is called only
-/// when Core is present. Every line passed to `log` is a fixed lifecycle word or
-/// a static `d0.1-*` / `p4.1-*` id. Returns whether retirement succeeded.
-pub(super) async fn handle_authentication_rejection_tick<Retire, RetireFuture>(
-    watch: &mut AuthenticationRejectionWatch,
-    generation: u64,
-    core_present: bool,
-    mut log: impl FnMut(&str),
-    retire: Retire,
-) -> bool
-where
-    Retire: FnOnce(u64) -> RetireFuture,
-    RetireFuture: std::future::Future<Output = Result<(), MatrixAuthCommandError>>,
-{
-    if watch.should_log_rejection(generation) {
-        log("session-authentication-rejected");
-    }
-    if !core_present {
-        if watch.should_log_missing_core(generation) {
-            log(SESSION_REJECTION_NO_CORE_DIAGNOSTIC_ID);
-        }
-        return false;
-    }
-    match retire(generation).await {
-        Ok(()) => true,
-        Err(error) => {
-            if let Some(diagnostic_id) = static_rejection_logout_diagnostic(&error.diagnostic_id) {
-                if watch.should_log_failure(generation, diagnostic_id) {
-                    log(diagnostic_id);
-                }
-            }
-            false
-        }
-    }
-}
-
-/// Log a logout failure id only when it is already a static session diagnostic.
-/// Anything else, including tokens and URLs, is dropped.
-pub(super) fn static_rejection_logout_diagnostic(diagnostic_id: &str) -> Option<&str> {
-    let static_id = diagnostic_id.starts_with("d0.1-") || diagnostic_id.starts_with("p4.1-");
-    let closed_alphabet = diagnostic_id
-        .chars()
-        .all(|character| character.is_ascii_alphanumeric() || character == '-' || character == '.')
-        && diagnostic_id.len() <= 80;
-    (static_id && closed_alphabet).then_some(diagnostic_id)
-}
-
 /// Upper bound for one watchdog keyring write before the tick moves on.
 const KEYRING_RETRY_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Exponential backoff for watchdog retries of synchronous keyring work:
-/// 5s after the first failure, doubling to at most 60s, reset on success.
-#[derive(Debug)]
-pub(super) struct RetryBackoff {
-    delay: Duration,
-    next_attempt: Option<Instant>,
-}
+pub(super) use synara_core::app::lifecycle::session::{
+    handle_authentication_rejection_tick, AuthenticationRejectionWatch, RetryBackoff,
+};
 
-impl RetryBackoff {
-    const INITIAL: Duration = Duration::from_secs(5);
-    const MAX: Duration = Duration::from_secs(60);
-
-    pub(super) fn new() -> Self {
-        Self {
-            delay: Self::INITIAL,
-            next_attempt: None,
-        }
-    }
-
-    pub(super) fn ready(&self, now: Instant) -> bool {
-        self.next_attempt.is_none_or(|at| now >= at)
-    }
-
-    pub(super) fn record(&mut self, now: Instant, succeeded: bool) {
-        if succeeded {
-            *self = Self::new();
-        } else {
-            self.next_attempt = Some(now + self.delay);
-            self.delay = (self.delay * 2).min(Self::MAX);
-        }
+impl synara_core::app::lifecycle::session::HasDiagnosticId for MatrixAuthCommandError {
+    fn diagnostic_id(&self) -> &str {
+        &self.diagnostic_id
     }
 }
 
@@ -1407,33 +1286,3 @@ use user_profile::{parse_avatar_mxc, parse_display_name};
 
 #[cfg(test)]
 use media::validate_media_download_size;
-
-#[cfg(test)]
-mod retry_backoff_tests {
-    use super::RetryBackoff;
-    use std::time::{Duration, Instant};
-
-    #[test]
-    fn keyring_retries_back_off_to_a_minute_and_reset_on_success() {
-        let start = Instant::now();
-        let mut backoff = RetryBackoff::new();
-        assert!(backoff.ready(start), "the first attempt runs immediately");
-
-        let mut now = start;
-        for expected in [5, 10, 20, 40, 60, 60] {
-            backoff.record(now, false);
-            assert!(!backoff.ready(now + Duration::from_secs(expected) - Duration::from_millis(1)));
-            now += Duration::from_secs(expected);
-            assert!(backoff.ready(now), "retry after {expected}s");
-        }
-
-        backoff.record(now, true);
-        assert!(backoff.ready(now), "success clears the wait");
-        backoff.record(now, false);
-        assert!(!backoff.ready(now + Duration::from_secs(4)));
-        assert!(
-            backoff.ready(now + Duration::from_secs(5)),
-            "success resets to 5s"
-        );
-    }
-}

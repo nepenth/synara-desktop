@@ -833,7 +833,7 @@ pub struct SharedCore {
     media_retention_live: Arc<Mutex<Option<NativeMediaRetentionOwner>>>,
     /// Monotonic per-instance session generation. A re-login in the same
     /// process must not reuse the generation a retired session carried.
-    next_session_generation: std::sync::atomic::AtomicU64,
+    generations: crate::app::lifecycle::session::SessionGenerations,
 }
 
 impl Default for SharedCore {
