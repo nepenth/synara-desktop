@@ -841,7 +841,7 @@ impl NativeTimelineOwner {
             source: source.source,
             format: matrix_sdk::media::MediaFormat::File,
         };
-        super::super::media::download_media_bounded(&self.client, &request, 32 * 1024 * 1024)
+        super::super::media::fetch_media_cached(&self.client, &request, 32 * 1024 * 1024)
             .await
             .map_err(|error| match error {
                 super::super::media::BoundedMediaError::TooLarge => "p4-s33-media-too-large",

@@ -40,6 +40,7 @@ getrandom = "0.4"
 # generator explicitly enables it alongside its CLI feature.
 uniffi = { version = "=0.32.2", default-features = false }
 sha2 = "0.11"
+hmac = "0.13"
 zeroize = "1"
 mime = "0.3"
 rustls = { version = "0.23.45", default-features = false }

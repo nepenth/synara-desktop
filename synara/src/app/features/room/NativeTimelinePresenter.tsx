@@ -78,6 +78,7 @@ import {
   runNativeLocalEchoRetry,
   nativeForwardEncryptionDecision,
   nativeThreadFocusEventId,
+  nativeTimelineInlineImageSrc,
   nativeTimelineMediaSrc,
   parseNativeTimelineAgentCard,
   type NativeLocalEchoActionResult,
@@ -1384,9 +1385,14 @@ const NativeTimelineMedia = ({
     return <img src={mediaSrc} alt="Sticker" style={mediaStyle(media, reservedBox)} />;
   }
   if (messageType === 'image') {
+    const inlineSrc = media ? nativeTimelineInlineImageSrc(media, reservedBox) : undefined;
     return (
       <Box direction="Column" gap="100">
-        <img src={mediaSrc} alt={caption || filename || 'Image'} style={mediaStyle(media)} />
+        <img
+          src={inlineSrc ?? mediaSrc}
+          alt={caption || filename || 'Image'}
+          style={mediaStyle(media)}
+        />
         {captionView}
       </Box>
     );

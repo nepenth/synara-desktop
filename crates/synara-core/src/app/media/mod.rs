@@ -9,6 +9,7 @@
 //! - `docs/matrix-rust-sdk/p7.2-media-download.md`
 
 mod bounded;
+mod cache;
 mod content;
 mod download_queue;
 mod error;
@@ -18,6 +19,10 @@ mod preview;
 mod upload_queue;
 
 pub use bounded::{download_media_bounded, BoundedMediaError};
+pub use cache::{
+    clear_hot_media_cache, fetch_media_cached, HotMediaCache, HOT_MEDIA_CACHE_MAX_BYTES,
+    HOT_MEDIA_CACHE_MAX_ITEM_BYTES,
+};
 pub use content::{
     parse_content_upload_mime, upload_content, validate_content_upload_filename,
     MAX_CONTENT_UPLOAD_BYTES,

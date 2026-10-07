@@ -973,7 +973,19 @@ mod media_pure {
                 None,
             )
             .unwrap();
-        let updated = registry
+        let reprojected = registry
+            .register(
+                "item-1",
+                MediaSource::Plain("mxc://example.org/one".into()),
+                Some("image/png".into()),
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        assert_eq!(first.handle_id, reprojected.handle_id);
+        // Edited media is a different source and gets its own handle.
+        let edited = registry
             .register(
                 "item-1",
                 MediaSource::Plain("mxc://example.org/two".into()),
@@ -983,11 +995,12 @@ mod media_pure {
                 None,
             )
             .unwrap();
-        assert_eq!(first.handle_id, updated.handle_id);
+        assert_ne!(first.handle_id, edited.handle_id);
+        assert!(registry.resolve(&first.handle_id).is_none());
         assert_eq!(registry.session_generation(), 7);
         assert_eq!(registry.stream_id(), "focused:!room:example.org:$event");
         registry.retain_items(["another-item"]);
-        assert!(registry.resolve(&first.handle_id).is_none());
+        assert!(registry.resolve(&edited.handle_id).is_none());
     }
 }
 

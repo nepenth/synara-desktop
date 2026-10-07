@@ -2,8 +2,13 @@
 
 use std::time::Duration;
 
-use super::index::MAX_TOTAL_BYTES;
-use crate::app::media::MAX_PLAIN_MEDIA_DOWNLOAD_BYTES;
+/// Total bytes the SDK media store may keep across all sessions on this
+/// device. Display reads now persist here, so the bound matters on iOS too.
+pub const MEDIA_STORE_MAX_CACHE_BYTES: u64 = 512 * 1024 * 1024;
+
+/// Largest single file the media store keeps. Videos and large attachments
+/// above this stream from the homeserver each time.
+pub const MEDIA_STORE_MAX_FILE_BYTES: u64 = 32 * 1024 * 1024;
 
 /// Product last-access expiry when no joined room has a stricter max_lifetime.
 pub const DEFAULT_LAST_ACCESS_EXPIRY: Duration = Duration::from_secs(30 * 24 * 60 * 60);
@@ -26,7 +31,7 @@ pub fn build_media_retention_policy_spec(
     joined_room_max_lifetimes: &[Duration],
     homeserver_max_upload_bytes: Option<u64>,
 ) -> MediaRetentionPolicySpec {
-    let product_file = MAX_PLAIN_MEDIA_DOWNLOAD_BYTES as u64;
+    let product_file = MEDIA_STORE_MAX_FILE_BYTES;
     let max_file_size = match homeserver_max_upload_bytes {
         Some(hs) if hs > 0 => hs.min(product_file),
         _ => product_file,
@@ -38,7 +43,7 @@ pub fn build_media_retention_policy_spec(
         .map(|strictest| strictest.min(DEFAULT_LAST_ACCESS_EXPIRY))
         .unwrap_or(DEFAULT_LAST_ACCESS_EXPIRY);
     MediaRetentionPolicySpec {
-        max_cache_size: MAX_TOTAL_BYTES,
+        max_cache_size: MEDIA_STORE_MAX_CACHE_BYTES,
         max_file_size,
         last_access_expiry,
         cleanup_frequency: DEFAULT_CLEANUP_FREQUENCY,
@@ -56,8 +61,8 @@ mod tests {
     #[test]
     fn no_policy_keeps_thirty_day_default() {
         let spec = build_media_retention_policy_spec(&[], None);
-        assert_eq!(spec.max_cache_size, MAX_TOTAL_BYTES);
-        assert_eq!(spec.max_file_size, MAX_PLAIN_MEDIA_DOWNLOAD_BYTES as u64);
+        assert_eq!(spec.max_cache_size, MEDIA_STORE_MAX_CACHE_BYTES);
+        assert_eq!(spec.max_file_size, MEDIA_STORE_MAX_FILE_BYTES);
         assert_eq!(spec.last_access_expiry, DEFAULT_LAST_ACCESS_EXPIRY);
         assert_eq!(spec.cleanup_frequency, DEFAULT_CLEANUP_FREQUENCY);
         assert!(shortest_joined_max_lifetime(&[]).is_none());
@@ -84,8 +89,9 @@ mod tests {
         let spec = build_media_retention_policy_spec(&[], Some(10 * 1024 * 1024));
         assert_eq!(spec.max_file_size, 10 * 1024 * 1024);
         let spec = build_media_retention_policy_spec(&[], Some(u64::MAX));
-        assert_eq!(spec.max_file_size, MAX_PLAIN_MEDIA_DOWNLOAD_BYTES as u64);
+        assert_eq!(spec.max_file_size, MEDIA_STORE_MAX_FILE_BYTES);
         let spec = build_media_retention_policy_spec(&[], Some(0));
-        assert_eq!(spec.max_file_size, MAX_PLAIN_MEDIA_DOWNLOAD_BYTES as u64);
+        assert_eq!(spec.max_file_size, MEDIA_STORE_MAX_FILE_BYTES);
+        const _: () = assert!(MEDIA_STORE_MAX_FILE_BYTES <= MEDIA_STORE_MAX_CACHE_BYTES);
     }
 }

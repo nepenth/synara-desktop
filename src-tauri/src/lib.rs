@@ -137,6 +137,188 @@ fn decode_synara_media_path(path: &str) -> Option<String> {
     Some(decoded)
 }
 
+/// Thumbnails are bounded well below original media.
+const THUMBNAIL_MEDIA_MAX_BYTES: usize = 8 * 1_048_576;
+
+/// Requested sizes snap to a small set so one thumbnail serves every avatar or
+/// preview of roughly that size (one cache entry, one server thumbnail).
+const THUMBNAIL_SIZE_BUCKETS: [u32; 12] = [32, 48, 64, 96, 128, 192, 256, 320, 480, 640, 800, 960];
+
+/// Renderer size hint carried in the protocol path:
+/// `thumbnail/<width>x<height>/<crop|scale>/<target>`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SynaraThumbnailHint {
+    width: u32,
+    height: u32,
+    crop: bool,
+}
+
+impl SynaraThumbnailHint {
+    fn media_format(self) -> matrix_sdk::media::MediaFormat {
+        let mut settings =
+            matrix_sdk::media::MediaThumbnailSettings::new(self.width.into(), self.height.into());
+        settings.method = if self.crop {
+            matrix_sdk::ruma::api::client::media::get_content_thumbnail::v3::Method::Crop
+        } else {
+            matrix_sdk::ruma::api::client::media::get_content_thumbnail::v3::Method::Scale
+        };
+        matrix_sdk::media::MediaFormat::Thumbnail(settings)
+    }
+}
+
+fn thumbnail_bucket(requested: u32) -> u32 {
+    THUMBNAIL_SIZE_BUCKETS
+        .iter()
+        .copied()
+        .find(|bucket| *bucket >= requested)
+        .unwrap_or(THUMBNAIL_SIZE_BUCKETS[THUMBNAIL_SIZE_BUCKETS.len() - 1])
+}
+
+/// Split an optional thumbnail hint off a decoded protocol path. `None` means
+/// a malformed hint, which is a 404 rather than a silent full download.
+fn split_thumbnail_hint(path: &str) -> Option<(Option<SynaraThumbnailHint>, &str)> {
+    let Some(rest) = path.strip_prefix("thumbnail/") else {
+        return Some((None, path));
+    };
+    let (size, rest) = rest.split_once('/')?;
+    let (method, target) = rest.split_once('/')?;
+    let (width, height) = size.split_once('x')?;
+    let parse = |value: &str| -> Option<u32> {
+        if value.is_empty() || value.len() > 5 || !value.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        value.parse::<u32>().ok().filter(|value| *value > 0)
+    };
+    let crop = match method {
+        "crop" => true,
+        "scale" => false,
+        _ => return None,
+    };
+    if target.is_empty() || target.starts_with("thumbnail/") {
+        return None;
+    }
+    Some((
+        Some(SynaraThumbnailHint {
+            width: thumbnail_bucket(parse(width)?),
+            height: thumbnail_bucket(parse(height)?),
+            crop,
+        }),
+        target,
+    ))
+}
+
+fn synara_media_status(status: tauri::http::StatusCode) -> tauri::http::Response<Vec<u8>> {
+    synara_media_response(status, Vec::new(), None)
+}
+
+/// Serve a server thumbnail of a plain source. `None` falls back to the
+/// original (no thumbnail, an encrypted source, or a non-image reply).
+async fn synara_thumbnail_response(
+    client: &matrix_sdk::Client,
+    source: &matrix_sdk::ruma::events::room::MediaSource,
+    hint: Option<SynaraThumbnailHint>,
+) -> Option<tauri::http::Response<Vec<u8>>> {
+    let hint = hint?;
+    // The homeserver cannot thumbnail an encrypted attachment.
+    let matrix_sdk::ruma::events::room::MediaSource::Plain(_) = source else {
+        return None;
+    };
+    let request = matrix_sdk::media::MediaRequestParameters {
+        source: source.clone(),
+        format: hint.media_format(),
+    };
+    let bytes =
+        synara_core::app::media::fetch_media_cached(client, &request, THUMBNAIL_MEDIA_MAX_BYTES)
+            .await
+            .ok()?;
+    let content_type = image_content_type(&bytes)?;
+    Some(synara_media_response(
+        tauri::http::StatusCode::OK,
+        bytes,
+        Some(content_type),
+    ))
+}
+
+async fn synara_original_response(
+    client: &matrix_sdk::Client,
+    source: matrix_sdk::ruma::events::room::MediaSource,
+    declared_mime_type: Option<&str>,
+) -> tauri::http::Response<Vec<u8>> {
+    let request = matrix_sdk::media::MediaRequestParameters {
+        source,
+        format: matrix_sdk::media::MediaFormat::File,
+    };
+    let Ok(bytes) =
+        synara_core::app::media::fetch_media_cached(client, &request, TIMELINE_MEDIA_MAX_BYTES)
+            .await
+    else {
+        return synara_media_status(tauri::http::StatusCode::NOT_FOUND);
+    };
+    let Some(content_type) = timeline_media_content_type(&bytes, declared_mime_type) else {
+        return synara_media_status(tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    };
+    synara_media_response(tauri::http::StatusCode::OK, bytes, Some(content_type))
+}
+
+async fn synara_media_for_path<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    path: &str,
+) -> tauri::http::Response<Vec<u8>> {
+    let Some((hint, handle)) = split_thumbnail_hint(path) else {
+        return synara_media_status(tauri::http::StatusCode::NOT_FOUND);
+    };
+    let state = app.state::<matrix::auth::MatrixAuthState>();
+    if matrix::timeline::is_timeline_media_handle(handle) {
+        let Some((client, source)) = state.resolve_timeline_media(handle).await else {
+            return synara_media_status(tauri::http::StatusCode::NOT_FOUND);
+        };
+        if let Some(response) = synara_thumbnail_response(&client, &source.source, hint).await {
+            return response;
+        }
+        return synara_original_response(
+            &client,
+            source.source,
+            source.declared_mime_type.as_deref(),
+        )
+        .await;
+    }
+    if let Ok(content_uri) = matrix::auth::product::parse_media_download_uri(handle) {
+        let Some(client) = state.media_client().await else {
+            return synara_media_status(tauri::http::StatusCode::NOT_FOUND);
+        };
+        let source = matrix_sdk::ruma::events::room::MediaSource::Plain(content_uri);
+        if let Some(response) = synara_thumbnail_response(&client, &source, hint).await {
+            return response;
+        }
+        return synara_original_response(&client, source, None).await;
+    }
+    if handle.len() != 64 || !handle.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return synara_media_status(tauri::http::StatusCode::NOT_FOUND);
+    }
+    let Some((client, source)) = state.resolve_invite_avatar(handle).await else {
+        return synara_media_status(tauri::http::StatusCode::NOT_FOUND);
+    };
+    let request = matrix_sdk::media::MediaRequestParameters {
+        source: matrix_sdk::ruma::events::room::MediaSource::Plain(source.mxc_uri),
+        format: matrix_sdk::media::MediaFormat::Thumbnail(
+            matrix_sdk::media::MediaThumbnailSettings::new(
+                matrix_sdk::ruma::UInt::from(96_u8),
+                matrix_sdk::ruma::UInt::from(96_u8),
+            ),
+        ),
+    };
+    let Ok(bytes) =
+        synara_core::app::media::fetch_media_cached(&client, &request, INVITE_AVATAR_MAX_BYTES)
+            .await
+    else {
+        return synara_media_status(tauri::http::StatusCode::NOT_FOUND);
+    };
+    let Some(content_type) = image_content_type(&bytes) else {
+        return synara_media_status(tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    };
+    synara_media_response(tauri::http::StatusCode::OK, bytes, Some(content_type))
+}
+
 fn register_synara_media_protocol<R: tauri::Runtime>(
     builder: tauri::Builder<R>,
 ) -> tauri::Builder<R> {
@@ -173,145 +355,8 @@ fn register_synara_media_protocol<R: tauri::Runtime>(
                     ));
                     return;
                 };
-                let state = app.state::<matrix::auth::MatrixAuthState>();
-                if matrix::timeline::is_timeline_media_handle(&handle) {
-                    let Some((client, source)) = state.resolve_timeline_media(&handle).await else {
-                        responder.respond(synara_media_response(
-                            tauri::http::StatusCode::NOT_FOUND,
-                            Vec::new(),
-                            None,
-                        ));
-                        return;
-                    };
-                    let request = matrix_sdk::media::MediaRequestParameters {
-                        source: source.source,
-                        format: matrix_sdk::media::MediaFormat::File,
-                    };
-                    let Ok(bytes) = synara_core::app::media::download_media_bounded(
-                        &client,
-                        &request,
-                        TIMELINE_MEDIA_MAX_BYTES,
-                    )
-                    .await
-                    else {
-                        responder.respond(synara_media_response(
-                            tauri::http::StatusCode::NOT_FOUND,
-                            Vec::new(),
-                            None,
-                        ));
-                        return;
-                    };
-                    let Some(content_type) =
-                        timeline_media_content_type(&bytes, source.declared_mime_type.as_deref())
-                    else {
-                        responder.respond(synara_media_response(
-                            tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
-                            Vec::new(),
-                            None,
-                        ));
-                        return;
-                    };
-                    responder.respond(synara_media_response(
-                        tauri::http::StatusCode::OK,
-                        bytes,
-                        Some(content_type),
-                    ));
-                    return;
-                }
-                if let Ok(content_uri) = matrix::auth::product::parse_media_download_uri(&handle) {
-                    let Some(client) = state.media_client().await else {
-                        responder.respond(synara_media_response(
-                            tauri::http::StatusCode::NOT_FOUND,
-                            Vec::new(),
-                            None,
-                        ));
-                        return;
-                    };
-                    let request = matrix_sdk::media::MediaRequestParameters {
-                        source: matrix_sdk::ruma::events::room::MediaSource::Plain(content_uri),
-                        format: matrix_sdk::media::MediaFormat::File,
-                    };
-                    let Ok(bytes) = synara_core::app::media::download_media_bounded(
-                        &client,
-                        &request,
-                        TIMELINE_MEDIA_MAX_BYTES,
-                    )
-                    .await
-                    else {
-                        responder.respond(synara_media_response(
-                            tauri::http::StatusCode::NOT_FOUND,
-                            Vec::new(),
-                            None,
-                        ));
-                        return;
-                    };
-                    let Some(content_type) = timeline_media_content_type(&bytes, None) else {
-                        responder.respond(synara_media_response(
-                            tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
-                            Vec::new(),
-                            None,
-                        ));
-                        return;
-                    };
-                    responder.respond(synara_media_response(
-                        tauri::http::StatusCode::OK,
-                        bytes,
-                        Some(content_type),
-                    ));
-                    return;
-                }
-                if handle.len() != 64 || !handle.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-                    responder.respond(synara_media_response(
-                        tauri::http::StatusCode::NOT_FOUND,
-                        Vec::new(),
-                        None,
-                    ));
-                    return;
-                }
-                let Some((client, source)) = state.resolve_invite_avatar(&handle).await else {
-                    responder.respond(synara_media_response(
-                        tauri::http::StatusCode::NOT_FOUND,
-                        Vec::new(),
-                        None,
-                    ));
-                    return;
-                };
-                let request = matrix_sdk::media::MediaRequestParameters {
-                    source: matrix_sdk::ruma::events::room::MediaSource::Plain(source.mxc_uri),
-                    format: matrix_sdk::media::MediaFormat::Thumbnail(
-                        matrix_sdk::media::MediaThumbnailSettings::new(
-                            matrix_sdk::ruma::UInt::from(96_u8),
-                            matrix_sdk::ruma::UInt::from(96_u8),
-                        ),
-                    ),
-                };
-                let Ok(bytes) = synara_core::app::media::download_media_bounded(
-                    &client,
-                    &request,
-                    INVITE_AVATAR_MAX_BYTES,
-                )
-                .await
-                else {
-                    responder.respond(synara_media_response(
-                        tauri::http::StatusCode::NOT_FOUND,
-                        Vec::new(),
-                        None,
-                    ));
-                    return;
-                };
-                let Some(content_type) = image_content_type(&bytes) else {
-                    responder.respond(synara_media_response(
-                        tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
-                        Vec::new(),
-                        None,
-                    ));
-                    return;
-                };
-                responder.respond(synara_media_response(
-                    tauri::http::StatusCode::OK,
-                    bytes,
-                    Some(content_type),
-                ));
+                let response = synara_media_for_path(&app, &handle).await;
+                responder.respond(response);
             });
         },
     )
@@ -825,7 +870,10 @@ pub fn run() {
 
 #[cfg(test)]
 mod protocol_path_tests {
-    use super::{decode_synara_media_path, timeline_media_content_type};
+    use super::{
+        decode_synara_media_path, split_thumbnail_hint, thumbnail_bucket,
+        timeline_media_content_type, SynaraThumbnailHint,
+    };
 
     #[test]
     fn timeline_media_requires_allowlisted_bytes_and_matching_mime() {
@@ -843,6 +891,51 @@ mod protocol_path_tests {
             timeline_media_content_type(b"# heading\n", Some("text/markdown")),
             None
         );
+    }
+
+    #[test]
+    fn media_protocol_thumbnail_hints_bucket_and_fail_closed() {
+        assert_eq!(
+            split_thumbnail_hint("timeline-media-ab"),
+            Some((None, "timeline-media-ab"))
+        );
+        assert_eq!(
+            split_thumbnail_hint("thumbnail/96x96/crop/mxc://example.org/avatar"),
+            Some((
+                Some(SynaraThumbnailHint {
+                    width: 96,
+                    height: 96,
+                    crop: true,
+                }),
+                "mxc://example.org/avatar"
+            ))
+        );
+        assert_eq!(
+            split_thumbnail_hint("thumbnail/100x70/scale/timeline-media-ab"),
+            Some((
+                Some(SynaraThumbnailHint {
+                    width: 128,
+                    height: 96,
+                    crop: false,
+                }),
+                "timeline-media-ab"
+            ))
+        );
+        assert_eq!(thumbnail_bucket(1), 32);
+        assert_eq!(thumbnail_bucket(96), 96);
+        assert_eq!(thumbnail_bucket(5000), 960);
+        for invalid in [
+            "thumbnail/",
+            "thumbnail/96x96/crop/",
+            "thumbnail/0x96/crop/mxc://example.org/a",
+            "thumbnail/96/crop/mxc://example.org/a",
+            "thumbnail/96x96/stretch/mxc://example.org/a",
+            "thumbnail/-1x96/crop/mxc://example.org/a",
+            "thumbnail/999999x96/crop/mxc://example.org/a",
+            "thumbnail/96x96/crop/thumbnail/96x96/crop/mxc://example.org/a",
+        ] {
+            assert_eq!(split_thumbnail_hint(invalid), None, "{invalid}");
+        }
     }
 
     #[test]

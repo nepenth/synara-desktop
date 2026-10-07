@@ -6730,6 +6730,7 @@ dependencies = [
  "eyeball-im",
  "futures-util",
  "getrandom 0.4.3",
+ "hmac 0.13.0",
  "matrix-sdk",
  "matrix-sdk-crypto",
  "matrix-sdk-sqlite",

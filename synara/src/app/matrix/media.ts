@@ -1,13 +1,25 @@
 import type { EncryptedAttachmentInfo } from '../../types/matrix/common';
 import { convertDesktopFileSrc, invokeDesktopWithAvailability } from '../utils/desktop';
 import { mxcUrlToHttp } from '../utils/matrix';
+import {
+  NATIVE_THUMBNAIL_PREFIX,
+  NATIVE_TIMELINE_MEDIA_HANDLE_PREFIX as TIMELINE_MEDIA_HANDLE_PREFIX,
+  stripNativeThumbnail,
+} from './nativeThumbnail';
 
-const TIMELINE_MEDIA_HANDLE_PREFIX = 'timeline-media-';
+export {
+  NATIVE_AVATAR_THUMBNAIL_PX,
+  nativeThumbnailContentUri,
+  type NativeThumbnailMethod,
+} from './nativeThumbnail';
 
 /** Prefer an opaque timeline handle over leftover `mxc://` or protocol URLs. */
 function timelineMediaHandleFromUri(contentUri: string): string | null {
   const trimmed = contentUri.trim();
-  if (trimmed.startsWith(TIMELINE_MEDIA_HANDLE_PREFIX)) {
+  if (
+    trimmed.startsWith(TIMELINE_MEDIA_HANDLE_PREFIX) ||
+    trimmed.startsWith(NATIVE_THUMBNAIL_PREFIX)
+  ) {
     return trimmed;
   }
   const match = /^synara-media:\/\/[^/]*\/(.+)$/i.exec(trimmed);
@@ -92,6 +104,11 @@ function resolvedMediaContentUri(contentUri: string): string {
   return timelineMediaHandleFromUri(contentUri) ?? contentUri.trim();
 }
 
+/** The original media behind an optional thumbnail wrapper (save, text preview). */
+function originalMediaContentUri(contentUri: string): string {
+  return stripNativeThumbnail(resolvedMediaContentUri(contentUri));
+}
+
 function assertDisplayableMedia(
   contentUri: string,
   encryptedInfo?: EncryptedAttachmentInfo
@@ -126,7 +143,7 @@ const mediaDiagnosticId = (error: unknown): string | undefined => {
 export async function previewMatrixMediaText(
   contentUri: string
 ): Promise<{ kind: 'ready'; text: string } | { kind: 'tooLarge' }> {
-  const resolved = resolvedMediaContentUri(contentUri);
+  const resolved = originalMediaContentUri(contentUri);
   if (!resolved) throw new Error('Could not open file.');
   try {
     const result = await invokeDesktopWithAvailability<{ text?: unknown }>(
@@ -147,7 +164,7 @@ export async function previewMatrixMediaText(
 
 /** Rust writes the file and returns its Downloads filename. No file bytes cross IPC. */
 export async function saveMatrixMediaFile(contentUri: string, filename: string): Promise<string> {
-  const resolved = resolvedMediaContentUri(contentUri);
+  const resolved = originalMediaContentUri(contentUri);
   if (!resolved) throw new Error('File attachment is unavailable.');
   const result = await invokeDesktopWithAvailability<{ filename?: unknown }>('matrix_media_save', {
     contentUri: resolved,
@@ -171,7 +188,8 @@ export function isNativeMediaContentUri(contentUri: string | undefined): boolean
   return (
     trimmed.startsWith('mxc://') ||
     trimmed.startsWith('synara-media://') ||
-    trimmed.startsWith(TIMELINE_MEDIA_HANDLE_PREFIX)
+    trimmed.startsWith(TIMELINE_MEDIA_HANDLE_PREFIX) ||
+    trimmed.startsWith(NATIVE_THUMBNAIL_PREFIX)
   );
 }
 

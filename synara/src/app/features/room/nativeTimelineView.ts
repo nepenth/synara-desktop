@@ -8,6 +8,7 @@ import {
 } from '../../utils/desktop';
 import { parseHermesAgentPayload, type HermesAgentPayload } from '../../utils/hermes';
 import type { RoomEncryptionStatus } from '../matrix-dto/room';
+import { devicePixelScale, nativeThumbnailContentUri } from '../../matrix/nativeThumbnail';
 
 const NATIVE_TIMELINE_VIEW_UPDATED_EVENT = 'matrix-timeline-view-updated';
 const TIMELINE_VIEW_SCHEMA_VERSION = 1;
@@ -1472,3 +1473,30 @@ export const useNativeTimelineView = (
 
 export const nativeTimelineMediaSrc = (handle: NativeTimelineMediaHandle): string | undefined =>
   convertDesktopFileSrc(handle.handleId, 'synara-media');
+
+/**
+ * Inline image source sized to the timeline box. A server thumbnail replaces
+ * the original only when the original is (or may be) larger than the box at
+ * this device pixel ratio. GIFs keep the original so they still animate.
+ */
+export const nativeTimelineInlineImageContentUri = (
+  handle: NativeTimelineMediaHandle,
+  boxCssPx: number,
+  scale: number = devicePixelScale()
+): string => {
+  if (handle.mimeType?.toLowerCase() === 'image/gif') return handle.handleId;
+  const deviceBox = boxCssPx * scale;
+  const fitsBox =
+    typeof handle.width === 'number' &&
+    typeof handle.height === 'number' &&
+    handle.width <= deviceBox &&
+    handle.height <= deviceBox;
+  if (fitsBox) return handle.handleId;
+  return nativeThumbnailContentUri(handle.handleId, boxCssPx, boxCssPx, 'scale', scale);
+};
+
+export const nativeTimelineInlineImageSrc = (
+  handle: NativeTimelineMediaHandle,
+  boxCssPx: number
+): string | undefined =>
+  convertDesktopFileSrc(nativeTimelineInlineImageContentUri(handle, boxCssPx), 'synara-media');

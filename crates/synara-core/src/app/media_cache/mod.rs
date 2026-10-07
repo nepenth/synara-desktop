@@ -18,7 +18,8 @@ pub use live::{
 };
 pub use policy::{
     build_media_retention_policy_spec, shortest_joined_max_lifetime, MediaRetentionPolicySpec,
-    DEFAULT_CLEANUP_FREQUENCY, DEFAULT_LAST_ACCESS_EXPIRY,
+    DEFAULT_CLEANUP_FREQUENCY, DEFAULT_LAST_ACCESS_EXPIRY, MEDIA_STORE_MAX_CACHE_BYTES,
+    MEDIA_STORE_MAX_FILE_BYTES,
 };
 
 #[cfg(test)]
