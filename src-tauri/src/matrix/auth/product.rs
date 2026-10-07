@@ -366,6 +366,32 @@ pub struct MatrixAuthState {
 }
 
 impl MatrixAuthState {
+    /// Stop the installed session's sync before the process exits, within
+    /// `bound`. Quit must never hang on a slow homeserver or a held session
+    /// lock, so both the lock wait and the stop share the bound. Returns
+    /// whether a sync owner was stopped in time.
+    #[cfg(test)]
+    pub(crate) async fn hold_session_lock_for_test(&self) -> impl Sized + '_ {
+        self.session.lock().await
+    }
+
+    pub async fn stop_sync_for_exit(&self, bound: Duration) -> bool {
+        tokio::time::timeout(bound, async {
+            let sync = self
+                .session
+                .lock()
+                .await
+                .as_ref()
+                .map(|active| Arc::clone(&active.sync));
+            match sync {
+                Some(sync) => sync.stop().await.is_ok(),
+                None => false,
+            }
+        })
+        .await
+        .unwrap_or(false)
+    }
+
     pub fn new() -> Self {
         Self::default()
     }

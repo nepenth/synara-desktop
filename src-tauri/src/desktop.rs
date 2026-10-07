@@ -5,9 +5,9 @@ use tauri_plugin_opener::OpenerExt;
 use crate::build_info;
 use crate::desktop_notification_sound;
 use crate::desktop_sanitize::sanitize_route;
+use crate::desktop_secret_store::DesktopSecretStoreStatus;
 #[cfg(any(target_os = "windows", test))]
 use crate::desktop_secret_store::DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED;
-use crate::desktop_secret_store::{bridge_supports_secure_secret_store, DesktopSecretStoreStatus};
 #[cfg(test)]
 use crate::desktop_secret_store::{
     unavailable_secret_store_status, DESKTOP_SECRET_STORE_BACKEND_NONE,
@@ -179,13 +179,30 @@ pub fn desktop_set_shortcuts(
     apply_desktop_shortcuts_command(&app, shortcuts)
 }
 
-pub fn desktop_bridge_supports_secure_secret_store() -> bool {
-    bridge_supports_secure_secret_store(&crate::desktop_secret_store::platform_secret_store_status())
+/// Run the platform secure-store probe on a background thread so its
+/// result is cached before the renderer asks for it. The probe can block for
+/// seconds on a slow or locked keyring.
+pub fn warm_secret_store_status() {
+    let spawned = std::thread::Builder::new()
+        .name("synara-secret-store-probe".to_owned())
+        .spawn(|| {
+            let _ = crate::desktop_secret_store::platform_secret_store_status();
+        });
+    if spawned.is_err() {
+        eprintln!("[synara] Unable to start the secure-store probe thread.");
+    }
 }
 
+/// Async so a cold probe runs on a blocking worker, never the main thread.
 #[tauri::command]
-pub fn desktop_secret_store_status() -> DesktopSecretStoreStatus {
-    crate::desktop_secret_store::platform_secret_store_status()
+pub async fn desktop_secret_store_status() -> DesktopSecretStoreStatus {
+    tauri::async_runtime::spawn_blocking(crate::desktop_secret_store::platform_secret_store_status)
+        .await
+        .unwrap_or_else(|_| {
+            crate::desktop_secret_store::unavailable_secret_store_status(
+                crate::desktop_secret_store::DESKTOP_SECRET_STORE_NOT_CONFIGURED,
+            )
+        })
 }
 
 #[tauri::command]
@@ -201,6 +218,7 @@ pub fn desktop_get_performance_capabilities() -> DesktopPerformanceCapabilities 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::desktop_secret_store::bridge_supports_secure_secret_store;
 
     #[test]
     fn performance_capabilities_reflect_platform_support() {
