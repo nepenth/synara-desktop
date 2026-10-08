@@ -473,8 +473,15 @@ pub async fn matrix_room_upgrade(
     core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     new_version: String,
+    additional_creators: Option<Vec<String>>,
 ) -> Result<synara_core::core_api::NativeRoomUpgradeResult, MatrixAuthCommandError> {
-    crate::bridge::native_extras::room_upgrade(core.inner().as_ref(), room_id, new_version).await
+    crate::bridge::native_extras::room_upgrade(
+        core.inner().as_ref(),
+        room_id,
+        new_version,
+        additional_creators.unwrap_or_default(),
+    )
+    .await
 }
 
 /// Redact recent events from the given users (`/delete`).

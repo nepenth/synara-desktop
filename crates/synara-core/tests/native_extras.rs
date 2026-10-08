@@ -328,23 +328,30 @@ async fn room_upgrade_requires_tombstone_power_and_returns_the_replacement() {
         .await;
 
     let upgraded = owner
-        .upgrade_room(admin_room.as_str(), "11")
+        .upgrade_room(admin_room.as_str(), "11", &[])
         .await
         .expect("upgrade");
     assert_eq!(upgraded.replacement_room_id, replacement.to_string());
     assert_eq!(
         owner
-            .upgrade_room(member_room.as_str(), "11")
+            .upgrade_room(member_room.as_str(), "11", &[])
             .await
             .unwrap_err(),
         "v-rooms-upgrade-forbidden"
     );
     assert_eq!(
         owner
-            .upgrade_room(admin_room.as_str(), "not a version!")
+            .upgrade_room(admin_room.as_str(), "not a version!", &[])
             .await
             .unwrap_err(),
         "v-rooms-upgrade-invalid-version"
+    );
+    assert_eq!(
+        owner
+            .upgrade_room(admin_room.as_str(), "12", &["not-a-user".to_owned()])
+            .await
+            .unwrap_err(),
+        "v-rooms-upgrade-invalid-creators"
     );
 }
 

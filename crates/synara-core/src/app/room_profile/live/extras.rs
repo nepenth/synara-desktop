@@ -34,6 +34,7 @@ const MAX_BULK_REDACT_EVENTS: usize = 500;
 const BULK_REDACT_PAGE_SIZE: u32 = 100;
 const MAX_REDACT_REASON_LEN: usize = 512;
 const MAX_BULK_REDACT_USERS: usize = 100;
+const MAX_UPGRADE_ADDITIONAL_CREATORS: usize = 50;
 
 #[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -121,6 +122,9 @@ pub struct NativeMutualRoomsRequest {
 pub struct NativeRoomUpgradeRequest {
     pub room_id: String,
     pub new_version: String,
+    /// Extra creators for room versions with creator power (v12+).
+    #[serde(default)]
+    pub additional_creators: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -226,7 +230,7 @@ impl NativeRoomJoinRuleOwner {
             .await
             .map(|_| ())
             .map_err(|error| match error.client_api_error_kind() {
-                Some(ErrorKind::Forbidden { .. }) => "v-rooms-alias-forbidden",
+                Some(ErrorKind::Forbidden) => "v-rooms-alias-forbidden",
                 _ if error.as_client_api_error().is_some_and(|api| {
                     api.status_code == matrix_sdk::reqwest::StatusCode::CONFLICT
                 }) =>
@@ -245,7 +249,7 @@ impl NativeRoomJoinRuleOwner {
             .await
             .map(|_| ())
             .map_err(|error| match error.client_api_error_kind() {
-                Some(ErrorKind::Forbidden { .. }) => "v-rooms-alias-forbidden",
+                Some(ErrorKind::Forbidden) => "v-rooms-alias-forbidden",
                 Some(ErrorKind::NotFound) => "v-rooms-alias-not-found",
                 _ => "v-rooms-alias-delete-failed",
             })
@@ -305,6 +309,7 @@ impl NativeRoomJoinRuleOwner {
         &self,
         room_id: &str,
         new_version: &str,
+        additional_creators: &[String],
     ) -> Result<NativeRoomUpgradeResult, &'static str> {
         self.ensure_live()?;
         let room_id = parse_room(room_id, "v-rooms-upgrade-invalid-room")?;
@@ -317,6 +322,14 @@ impl NativeRoomJoinRuleOwner {
         }
         let version =
             RoomVersionId::try_from(version).map_err(|_| "v-rooms-upgrade-invalid-version")?;
+        if additional_creators.len() > MAX_UPGRADE_ADDITIONAL_CREATORS {
+            return Err("v-rooms-upgrade-invalid-creators");
+        }
+        let additional_creators = additional_creators
+            .iter()
+            .map(|user| OwnedUserId::try_from(user.as_str()))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| "v-rooms-upgrade-invalid-creators")?;
         let room = self
             .client
             .get_room(&room_id)
@@ -332,15 +345,15 @@ impl NativeRoomJoinRuleOwner {
         if !crate::app::members::room_permission_capabilities(&levels, user_id).can_upgrade_room {
             return Err("v-rooms-upgrade-forbidden");
         }
-        let response = self
-            .client
-            .send(upgrade_room::v3::Request::new(room_id.clone(), version))
-            .await
-            .map_err(|error| match error.client_api_error_kind() {
-                Some(ErrorKind::Forbidden { .. }) => "v-rooms-upgrade-forbidden",
+        let mut request = upgrade_room::v3::Request::new(room_id.clone(), version);
+        request.additional_creators = additional_creators;
+        let response = self.client.send(request).await.map_err(|error| {
+            match error.client_api_error_kind() {
+                Some(ErrorKind::Forbidden) => "v-rooms-upgrade-forbidden",
                 Some(ErrorKind::UnsupportedRoomVersion) => "v-rooms-upgrade-unsupported-version",
                 _ => "v-rooms-upgrade-failed",
-            })?;
+            }
+        })?;
         Ok(NativeRoomUpgradeResult {
             room_id: room_id.to_string(),
             replacement_room_id: response.replacement_room.to_string(),

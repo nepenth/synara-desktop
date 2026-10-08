@@ -132,7 +132,11 @@ pub(super) async fn room_upgrade(
     payload: NativeRoomUpgradeRequest,
 ) -> Result<NativeRoomUpgradeResult, MatrixIpcError> {
     room_owner(state)?
-        .upgrade_room(&payload.room_id, &payload.new_version)
+        .upgrade_room(
+            &payload.room_id,
+            &payload.new_version,
+            &payload.additional_creators,
+        )
         .await
         .map_err(room_extras_error)
 }

@@ -173,10 +173,12 @@ pub(crate) async fn room_upgrade(
     core: &Core,
     room_id: String,
     new_version: String,
+    additional_creators: Vec<String>,
 ) -> Result<NativeRoomUpgradeResult, MatrixAuthCommandError> {
     core.room_upgrade(NativeRoomUpgradeRequest {
         room_id,
         new_version,
+        additional_creators,
     })
     .await
     .map_err(map_error)
