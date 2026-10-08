@@ -4,12 +4,12 @@ import { createRoot } from 'react-dom/client';
 import { Avatar, configClass, varsClass } from 'folds';
 import 'folds/dist/style.css';
 import { UserAvatar } from '../../src/app/components/user-avatar';
-import { MatrixClientProvider } from '../../src/app/hooks/useMatrixClient';
+import { setNativeIdentity } from '../../src/app/state/nativeIdentity';
 import { useNativeMatrixMediaSrc } from '../../src/app/hooks/useNativeMatrixMediaSrc';
-import type { MatrixClient } from '../../src/client/initMatrix';
 
-const clientA = {} as MatrixClient;
-const clientB = {} as MatrixClient;
+const accountA = { userId: '@a:example.test' };
+const accountBIdentity = { userId: '@b:example.test' };
+setNativeIdentity(accountA);
 window.__SYNARA_DESKTOP__ = {
   platform: 'tauri',
   invoke: async () => {
@@ -57,13 +57,17 @@ function Fixture() {
       <button type="button" onClick={() => setUri('mxc://example.test/avatar-new')}>
         Change avatar
       </button>
-      <button type="button" onClick={() => setAccountB(!accountB)}>
+      <button
+        type="button"
+        onClick={() => {
+          setNativeIdentity(accountB ? accountA : accountBIdentity);
+          setAccountB(!accountB);
+        }}
+      >
         Switch account
       </button>
-      <MatrixClientProvider value={accountB ? clientB : clientA}>
-        <div data-testid="room">Room {room}</div>
-        {room === 'A' ? <AvatarRow key="A" uri={uri} /> : <p>No avatar in this room.</p>}
-      </MatrixClientProvider>
+      <div data-testid="room">Room {room}</div>
+      {room === 'A' ? <AvatarRow key="A" uri={uri} /> : <p>No avatar in this room.</p>}
     </main>
   );
 }

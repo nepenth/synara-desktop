@@ -15,7 +15,6 @@ import {
 import { ApprovalsView } from '../../src/app/features/approvals/Approvals';
 import type { ApprovalInboxItem } from '../../src/app/features/approvals/nativeApprovalInbox';
 import { ApprovalsTab } from '../../src/app/pages/client/sidebar/ApprovalsTab';
-import { MatrixClientProvider } from '../../src/app/hooks/useMatrixClient';
 import {
   Sidebar,
   SidebarStack,
@@ -64,7 +63,6 @@ if (query.has('unparsed')) {
   items[0].body = '⚠️ Dangerous command requires approval';
   items[1].body = 'Unrecognized approval request: inspect the original operation';
 }
-const mx = {} as React.ComponentProps<typeof MatrixClientProvider>['value'];
 Object.assign(window, {
   __TAURI_INTERNALS__: {
     invoke: async (command: string, args?: Record<string, unknown>) => {
@@ -366,10 +364,8 @@ function Fixture() {
 }
 createRoot(document.getElementById('root')!).render(
   <MemoryRouter initialEntries={[query.has('idle') ? '/home/' : '/approvals/']}>
-    <MatrixClientProvider value={mx}>
-      <ApprovalInboxProvider>
-        <Fixture />
-      </ApprovalInboxProvider>
-    </MatrixClientProvider>
+    <ApprovalInboxProvider>
+      <Fixture />
+    </ApprovalInboxProvider>
   </MemoryRouter>
 );

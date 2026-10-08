@@ -14,7 +14,8 @@ import {
   ApprovalInboxContext,
   type ApprovalInboxContextValue,
 } from '../../src/app/features/approvals/ApprovalInboxProvider';
-import { MatrixClientProvider } from '../../src/app/hooks/useMatrixClient';
+import { setNativeSessionForTests, type NativeSession } from '../../src/app/native/nativeSession';
+import { setNativeIdentity } from '../../src/app/state/nativeIdentity';
 import { ScreenSize, ScreenSizeProvider } from '../../src/app/hooks/useScreenSize';
 import { useNavigateToApprovals } from '../../src/app/hooks/useNavigateToApprovals';
 import { BackRouteHandler } from '../../src/app/components/BackRouteHandler';
@@ -24,7 +25,6 @@ import {
   useNativeRoomListSnapshot,
 } from '../../src/app/state/room-list/roomList';
 import type { RoomSummary } from '../../src/app/features/matrix-dto/room';
-import type { MatrixClient } from '../../src/client/initMatrix';
 import {
   APPROVALS_PATH,
   HOME_PATH,
@@ -53,12 +53,11 @@ const room = (id: string, alias?: string) => ({
   getMember: () => ({ name: 'Hermes' }),
 });
 const rooms = [room(roomId, roomAlias), room(firstParent), room(originParent, originAlias)];
-const mx = {
+setNativeSessionForTests({
   getRoom: (id: string) => rooms.find((item) => item.roomId === id) ?? null,
   getRooms: () => rooms,
-  getSafeUserId: () => '@reader:example.test',
-  getUserId: () => '@reader:example.test',
-} as unknown as MatrixClient;
+} as unknown as NativeSession);
+setNativeIdentity({ userId: '@reader:example.test' });
 const store = createStore();
 store.set(roomToParentsAtom, {
   type: 'INITIALIZE',
@@ -180,25 +179,23 @@ document.body.classList.add(configClass, varsClass, darkTheme, 'dark-theme');
 createRoot(document.getElementById('root')!).render(
   <Provider store={store}>
     <NativeRoutingOwner>
-      <MatrixClientProvider value={mx}>
-        <ScreenSizeProvider value={ScreenSize.Mobile}>
-          <ApprovalInboxContext.Provider value={inbox}>
-            <MemoryRouter initialEntries={[origin]}>
-              <LocationOutput />
-              <Routes>
-                <Route path={APPROVALS_PATH} element={<Approvals />} />
-                <Route path={HOME_ROOM_PATH} element={<Destination />} />
-                <Route path={DIRECT_ROOM_PATH} element={<Destination />} />
-                <Route path={SPACE_ROOM_PATH} element={<Destination />} />
-                <Route path={HOME_PATH} element={<Entry />} />
-                <Route path={DIRECT_PATH} element={<Entry />} />
-                <Route path={`${INBOX_PATH}*`} element={<Entry />} />
-                <Route path={SPACE_PATH} element={<Entry />} />
-              </Routes>
-            </MemoryRouter>
-          </ApprovalInboxContext.Provider>
-        </ScreenSizeProvider>
-      </MatrixClientProvider>
+      <ScreenSizeProvider value={ScreenSize.Mobile}>
+        <ApprovalInboxContext.Provider value={inbox}>
+          <MemoryRouter initialEntries={[origin]}>
+            <LocationOutput />
+            <Routes>
+              <Route path={APPROVALS_PATH} element={<Approvals />} />
+              <Route path={HOME_ROOM_PATH} element={<Destination />} />
+              <Route path={DIRECT_ROOM_PATH} element={<Destination />} />
+              <Route path={SPACE_ROOM_PATH} element={<Destination />} />
+              <Route path={HOME_PATH} element={<Entry />} />
+              <Route path={DIRECT_PATH} element={<Entry />} />
+              <Route path={`${INBOX_PATH}*`} element={<Entry />} />
+              <Route path={SPACE_PATH} element={<Entry />} />
+            </Routes>
+          </MemoryRouter>
+        </ApprovalInboxContext.Provider>
+      </ScreenSizeProvider>
     </NativeRoutingOwner>
   </Provider>
 );
