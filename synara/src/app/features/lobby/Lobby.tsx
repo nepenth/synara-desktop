@@ -40,7 +40,12 @@ import { CanDropCallback, useDnDMonitor } from './DnD';
 import { ASCIILexicalTable, orderKeys } from '../../utils/ASCIILexicalTable';
 import { reparentRestrictedJoin, removeSpaceChild, setSpaceChild } from './nativeSpaceChild';
 import { useClosedLobbyCategoriesAtom } from '../../state/hooks/closedLobbyCategories';
-import { useSidebarItems } from '../../hooks/useSidebarItems';
+import {
+  makeSynaraSpacesContent,
+  saveSynaraSpacesContent,
+  sidebarItemWithout,
+  useSidebarItems,
+} from '../../hooks/useSidebarItems';
 import { useOrphanSpaces } from '../../state/hooks/roomList';
 import { roomToParentsAtom } from '../../state/room/roomToParents';
 import { SpaceHierarchy } from './SpaceHierarchy';
@@ -380,9 +385,16 @@ export function Lobby() {
     navigate(getSpaceRoomPath(pSpaceIdOrAlias, getCanonicalAliasOrRoomId(rId)));
   };
 
-  // Sidebar pins are account data (`in.synara.spaces`), which has no native
-  // write command yet, so pinning from the lobby has no effect.
-  const togglePinToSidebar = useCallback(() => undefined, []);
+  const togglePinToSidebar = useCallback(
+    (rId: string) => {
+      const newItems = sidebarItemWithout(sidebarItems, rId);
+      if (!sidebarSpaces.has(rId)) {
+        newItems.push(rId);
+      }
+      void saveSynaraSpacesContent(makeSynaraSpacesContent(newItems)).catch(() => undefined);
+    },
+    [sidebarItems, sidebarSpaces]
+  );
 
   return (
     <PowerLevelsContextProvider value={spacePowerLevels}>

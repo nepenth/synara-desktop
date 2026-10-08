@@ -25,6 +25,7 @@ const cache = new Map<string, AccountDataObject | null>();
 const tracked = new Map<string, { eventType: string; roomId?: string }>();
 const listeners = new Set<Listener>();
 let stopRefresh: (() => void) | undefined;
+let refreshEnabled = true;
 
 const cacheKey = (eventType: string, roomId?: string): string =>
   roomId ? `${roomId}\u0000${eventType}` : eventType;
@@ -34,6 +35,7 @@ const notify = () => listeners.forEach((listener) => listener());
 /** Route commands through a fake invoke and clear the cache (tests). */
 export const setNativeAccountDataInvokeForTests = (next: NativeInvoke): void => {
   invoke = next;
+  refreshEnabled = false;
   cache.clear();
   tracked.clear();
   stopRefresh?.();
@@ -59,7 +61,7 @@ export const parseAccountDataTypes = (value: unknown): string[] | undefined => {
 };
 
 const ensureRefresh = () => {
-  if (stopRefresh) return;
+  if (stopRefresh || !refreshEnabled) return;
   stopRefresh = startRoomListUpdateDrivenPoll(() => {
     tracked.forEach(({ eventType, roomId }) => {
       void loadNativeAccountData(eventType, roomId).catch(() => undefined);
@@ -134,4 +136,21 @@ export const useNativeAccountData = (
   return useSyncExternalStore(subscribeNativeAccountData, () =>
     enabled ? getCachedAccountData(eventType, roomId) : undefined
   );
+};
+
+/**
+ * Every account-data object Core has seen for one room (or globally), keyed by
+ * type. Types whose read fails or is absent are left out.
+ */
+export const loadAllNativeAccountData = async (
+  roomId?: string
+): Promise<Map<string, AccountDataObject>> => {
+  const types = await listNativeAccountDataTypes(roomId);
+  const entries = await Promise.all(
+    types.map(async (type) => {
+      const content = await loadNativeAccountData(type, roomId).catch(() => null);
+      return content ? ([type, content] as const) : undefined;
+    })
+  );
+  return new Map(entries.filter((entry) => entry !== undefined));
 };

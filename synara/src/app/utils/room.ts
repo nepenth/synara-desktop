@@ -21,6 +21,7 @@ import {
 import { getNativeRoom } from '../native/nativeSession';
 import { getMyUserId } from '../state/nativeIdentity';
 import { mxcUrlToNative } from '../native/nativeCommands';
+import { getCachedAccountData, loadNativeAccountData } from '../native/nativeAccountData';
 /**
  * SDK-neutral structural projections used by this utility boundary.
  *
@@ -152,14 +153,38 @@ export const getStateEvent = (
 export const getStateEvents = (room: RoomReading, eventType: StateEvent): MatrixEventReading[] =>
   getRoomCurrentState(room)?.getStateEvents(eventType) ?? [];
 
+/** Wrap raw account-data content in the event-reading shape legacy callers expect. */
+export const accountDataEventReading = (
+  eventType: string,
+  content: Record<string, unknown>,
+  roomId?: string
+): MatrixEventReading => ({
+  getContent: <T extends EventContentReading = EventContentReading>() => content as T,
+  getPrevContent: () => ({}),
+  getSender: () => undefined,
+  getType: () => eventType,
+  getStateKey: () => undefined,
+  getTs: () => 0,
+  getId: () => undefined,
+  getRoomId: () => roomId,
+  isRedacted: () => false,
+  isSending: () => false,
+  getRelation: () => null,
+  event: { type: eventType, content },
+});
+
 /**
- * Global account data. Native has no general account-data read (only
- * per-feature owners such as m.direct, Later and image packs), so these
- * legacy readers see none.
+ * Global account data from Core's raw account-data cache. The first read of a
+ * type starts a load and returns `undefined`; later reads see the cached
+ * content, which refreshes when Core reports an account-data change.
  */
 export const getAccountData = (eventType: AccountDataEvent): MatrixEventReading | undefined => {
-  void eventType;
-  return undefined;
+  const content = getCachedAccountData(eventType);
+  if (content === undefined) {
+    void loadNativeAccountData(eventType).catch(() => undefined);
+    return undefined;
+  }
+  return content ? accountDataEventReading(eventType, content) : undefined;
 };
 
 export const isSpace = (room: RoomReading | null): boolean => {

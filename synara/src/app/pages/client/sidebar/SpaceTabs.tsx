@@ -68,6 +68,7 @@ import {
   SidebarItems,
   TSidebarItem,
   makeSynaraSpacesContent,
+  saveSynaraSpacesContent,
   parseSidebar,
   sidebarItemWithout,
   useSidebarItems,
@@ -733,9 +734,8 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
         });
 
         const newSpacesContent = makeSynaraSpacesContent(newItems);
-        // Sidebar layout is account data (`in.synara.spaces`), which has no native
-        // write command yet: the change shows through the local echo only.
         localEchoSidebarItem(parseSidebar(orphanSpaces, newSpacesContent));
+        void saveSynaraSpacesContent(newSpacesContent).catch(() => undefined);
       },
       [sidebarItems, setOpenedFolder, localEchoSidebarItem, orphanSpaces]
     )
@@ -780,8 +780,8 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
       const newItems = sidebarItemWithout(sidebarItems, roomId);
 
       const newSpacesContent = makeSynaraSpacesContent(newItems);
-      // No native account-data write yet; see the reorder handler above.
       localEchoSidebarItem(parseSidebar(orphanSpaces, newSpacesContent));
+      void saveSynaraSpacesContent(newSpacesContent).catch(() => undefined);
     },
     [sidebarItems, orphanSpaces, localEchoSidebarItem]
   );

@@ -113,6 +113,8 @@ const tests = [
   'src/app/features/message-search/__tests__/roomMediaListing.test.ts',
   'src/app/native/__tests__/nativeSession.test.ts',
   'src/app/native/__tests__/nativeCommands.test.ts',
+  'src/app/native/__tests__/nativeRoomExtras.test.ts',
+  'src/app/native/__tests__/nativeAccountData.test.ts',
   'src/app/features/common-settings/general/__tests__/nativeRoomJoinRuleOwner.test.ts',
   'src/app/features/common-settings/general/__tests__/nativeRoomRetentionOwner.test.ts',
   'src/app/features/room/__tests__/nativeLinkUnfurl.test.ts',

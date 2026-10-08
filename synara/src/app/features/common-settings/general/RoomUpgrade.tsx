@@ -34,6 +34,7 @@ import {
   useAdditionalCreators,
 } from '../../../components/create-room';
 import { useAlive } from '../../../hooks/useAlive';
+import { upgradeRoom } from '../../../native/nativeRoomExtras';
 import { creatorsSupported } from '../../../utils/matrix';
 import { useRoomCreators } from '../../../hooks/useRoomCreators';
 import { BreakWord } from '../../../styles/Text.css';
@@ -60,14 +61,11 @@ function RoomUpgradeDialog({ requestClose }: { requestClose: () => void }) {
   const { additionalCreators, addAdditionalCreator, removeAdditionalCreator } =
     useAdditionalCreators(Array.from(creators));
 
+  const { navigateRoom, navigateSpace } = useRoomNavigate();
   const [upgradeState, upgrade] = useAsyncCallback(
-    useCallback<(version: string, additionalCreators?: string[]) => Promise<void>>(
-      // There is no native room-upgrade command. Fail instead of closing the
-      // dialog as if the upgrade had run.
-      async (): Promise<void> => {
-        throw new Error('Room upgrade is not available in the native client.');
-      },
-      []
+    useCallback<(version: string, additionalCreators?: string[]) => Promise<string>>(
+      (version, extraCreators) => upgradeRoom(room.roomId, version, extraCreators),
+      [room.roomId]
     )
   );
 
@@ -76,11 +74,14 @@ function RoomUpgradeDialog({ requestClose }: { requestClose: () => void }) {
   const handleUpgradeRoom = () => {
     const version = selectedRoomVersion;
 
-    upgrade(version, allowAdditionalCreators ? additionalCreators : undefined).then(() => {
-      if (alive()) {
+    upgrade(version, allowAdditionalCreators ? additionalCreators : undefined).then(
+      (replacementRoomId) => {
+        if (!alive()) return;
         requestClose();
+        if (room.isSpaceRoom()) navigateSpace(replacementRoomId);
+        else navigateRoom(replacementRoomId);
       }
-    });
+    );
   };
 
   return (

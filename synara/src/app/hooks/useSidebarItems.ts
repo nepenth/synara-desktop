@@ -1,9 +1,14 @@
 import { Dispatch, SetStateAction, useEffect, useState } from 'react';
 import { AccountDataEvent } from '../../types/matrix/accountData';
-import { getAccountData, isSpace } from '../utils/room';
+import { isSpace } from '../utils/room';
 import { Membership } from '../../types/matrix/room';
-
 import { getNativeRoom } from '../native/nativeSession';
+import {
+  getCachedAccountData,
+  setNativeAccountData,
+  useNativeAccountData,
+} from '../native/nativeAccountData';
+
 export type ISidebarFolder = {
   name?: string;
   id: string;
@@ -60,19 +65,15 @@ export const parseSidebar = (orphanSpaces: string[], content?: InSynaraSpacesCon
 export const useSidebarItems = (
   orphanSpaces: string[]
 ): [SidebarItems, Dispatch<SetStateAction<SidebarItems>>] => {
-  const [sidebarItems, setSidebarItems] = useState(() => {
-    const inSynaraSpacesContent = getAccountData(
-      AccountDataEvent.SynaraSpaces
-    )?.getContent<InSynaraSpacesContent>();
-    return parseSidebar(orphanSpaces, inSynaraSpacesContent);
-  });
+  const content = useNativeAccountData(AccountDataEvent.SynaraSpaces) as
+    InSynaraSpacesContent | null | undefined;
+  const [sidebarItems, setSidebarItems] = useState(() =>
+    parseSidebar(orphanSpaces, content ?? undefined)
+  );
 
   useEffect(() => {
-    const inSynaraSpacesContent = getAccountData(
-      AccountDataEvent.SynaraSpaces
-    )?.getContent<InSynaraSpacesContent>();
-    setSidebarItems(parseSidebar(orphanSpaces, inSynaraSpacesContent));
-  }, [orphanSpaces]);
+    setSidebarItems(parseSidebar(orphanSpaces, content ?? undefined));
+  }, [orphanSpaces, content]);
 
   return [sidebarItems, setSidebarItems];
 };
@@ -101,7 +102,7 @@ export const sidebarItemWithout = (items: SidebarItems, roomId: string) => {
 
 export const makeSynaraSpacesContent = (items: SidebarItems): InSynaraSpacesContent => {
   const currentInSpaces =
-    getAccountData(AccountDataEvent.SynaraSpaces)?.getContent<InSynaraSpacesContent>() ?? {};
+    (getCachedAccountData(AccountDataEvent.SynaraSpaces) as InSynaraSpacesContent | null) ?? {};
 
   const newSpacesContent: InSynaraSpacesContent = {
     ...currentInSpaces,
@@ -110,3 +111,10 @@ export const makeSynaraSpacesContent = (items: SidebarItems): InSynaraSpacesCont
 
   return newSpacesContent;
 };
+
+/**
+ * Persist the sidebar layout as `in.synara.spaces` account data. The cache
+ * updates at once; a rejected write is reverted by the next Core refresh.
+ */
+export const saveSynaraSpacesContent = (content: InSynaraSpacesContent): Promise<void> =>
+  setNativeAccountData(AccountDataEvent.SynaraSpaces, content as Record<string, unknown>);
