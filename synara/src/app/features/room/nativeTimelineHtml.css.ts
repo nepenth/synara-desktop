@@ -104,6 +104,8 @@ export const MessageActionDivider = style({
 
 export const TimelineAvatar = style([avatarSurface]);
 
+const messageHoverTint = `color-mix(in srgb, ${color.SurfaceVariant.ContainerHover} 10%, transparent)`;
+
 export const MessageRow = recipe({
   base: {
     paddingTop: config.space.S200,
@@ -122,20 +124,14 @@ export const MessageRow = recipe({
         border: `${config.borderWidth.B300} solid transparent`,
         boxShadow: 'none',
         borderRadius: config.radii.R400,
+        // Reading comes first: hover is only a faint tint, about a tenth of
+        // the old surface change, with no border, lift or shadow.
         selectors: {
-          [`${MessageActionSurface}:hover &`]: {
-            backgroundColor: color.SurfaceVariant.ContainerHover,
-            borderColor: color.SurfaceVariant.ContainerLine,
-            boxShadow: raisedShadow,
-          },
-          [`${MessageActionSurface}:focus-within &`]: {
-            backgroundColor: color.SurfaceVariant.ContainerHover,
-            borderColor: color.SurfaceVariant.ContainerLine,
-            boxShadow: raisedShadow,
+          [`${MessageActionSurface}:hover &, ${MessageActionSurface}:focus-within &`]: {
+            backgroundColor: messageHoverTint,
           },
         },
-        transition:
-          'background-color 140ms ease-out, border-color 140ms ease-out, box-shadow 140ms ease-out',
+        transition: 'background-color 80ms ease-out',
         '@media': {
           '(prefers-reduced-motion: reduce)': {
             transition: 'none',
