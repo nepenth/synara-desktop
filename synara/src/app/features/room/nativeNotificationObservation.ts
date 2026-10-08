@@ -1,5 +1,10 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { isSynaraDesktop } from '../../utils/desktop';
+import type { NativeNotificationObservation as WireNativeNotificationObservation } from '../matrix-dto/generated';
+import type { NullsToOptional } from '../matrix-dto/wireTypes';
+
+/** Parsed form of Core's `NativeNotificationObservation`: absent instead of `null`. */
+export type NativeNotificationObservation = NullsToOptional<WireNativeNotificationObservation>;
 
 /**
  * A9 Core→renderer notification observation stream.
@@ -22,16 +27,6 @@ export const NOTIFICATION_OBSERVED_EVENT = 'matrix-notification-observed';
 
 export type NativeNotificationObservationEventType =
   'm.room.message' | 'm.room.encrypted' | 'm.sticker';
-
-export type NativeNotificationObservation = {
-  sessionGeneration: number;
-  roomId: string;
-  eventId: string;
-  sender: string;
-  eventType: NativeNotificationObservationEventType;
-  originServerTs: number;
-  agentApproval?: { expiresAt: number; expired: boolean };
-};
 
 const OBSERVATION_KEYS = new Set([
   'sessionGeneration',

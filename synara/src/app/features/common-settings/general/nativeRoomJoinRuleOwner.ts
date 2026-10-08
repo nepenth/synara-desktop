@@ -1,5 +1,7 @@
 import type { DesktopEvent, DesktopInvokeResult, DesktopUnlisten } from '../../../utils/desktop';
 import { hasForbiddenWireFields, isObject } from '../../matrix-dto/parseUtil';
+import type { NativeRoomJoinRuleUpdate } from '../../matrix-dto/generated';
+export type { NativeRoomJoinRuleUpdate } from '../../matrix-dto/generated';
 
 export type NativeRoomJoinRule =
   'public' | 'knock' | 'invite' | 'restricted' | 'knock_restricted' | 'private';
@@ -10,19 +12,6 @@ export type NativeRoomJoinRuleSnapshot = {
   sessionGeneration: number;
   joinRule: NativeRoomJoinRule;
 };
-
-export type NativeRoomJoinRuleUpdate =
-  | {
-      status: 'ready';
-      roomId: string;
-      sessionGeneration: number;
-      joinRule: NativeRoomJoinRule;
-    }
-  | {
-      status: 'unavailable';
-      roomId: string;
-      sessionGeneration: number;
-    };
 
 type NativeSessionSnapshot = {
   status: 'logged_in';

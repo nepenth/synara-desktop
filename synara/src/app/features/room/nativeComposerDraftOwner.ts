@@ -7,26 +7,13 @@
  */
 
 import type { DesktopInvokeResult } from '../../utils/desktop';
+import type { NativeComposerReplyDraft } from '../matrix-dto/generated';
+import type { NativeComposerReplyDraftReadback } from '../matrix-dto/generated';
+export type { NativeComposerReplyDraftReadback } from '../matrix-dto/generated';
+export type { NativeComposerReplyDraft } from '../matrix-dto/generated';
 export const NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION = 2;
 
-export type NativeComposerReplyDraft = {
-  /** Core-issued opaque identity; pass back unchanged when clearing. */
-  draftRevision: number;
-  eventId: string;
-  senderId: string;
-  body: string;
-  formattedBody?: string;
-  threadRootEventId?: string;
-};
-
 export type NativeComposerReplyDraftStatus = 'set' | 'cleared' | 'empty';
-
-export type NativeComposerReplyDraftReadback = {
-  schemaVersion: number;
-  roomId: string;
-  status: NativeComposerReplyDraftStatus;
-  draft?: NativeComposerReplyDraft;
-};
 
 export type NativeComposerSendRelation = {
   draftRevision?: number;

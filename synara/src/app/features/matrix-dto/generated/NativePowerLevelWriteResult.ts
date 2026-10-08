@@ -4,4 +4,4 @@ import type { JsonValue } from "./serde_json/JsonValue";
 /**
  * V-ROOMS.R-POWERS-BULK — acknowledged complete state replacement.
  */
-export type NativePowerLevelWriteResult = { status: string, roomId: string, eventType: string, stateKey: string, sessionGeneration: number, content: JsonValue, };
+export type NativePowerLevelWriteResult = { status: "ok", roomId: string, eventType: "m.room.power_levels" | "in.synara.room.power_level_tags", stateKey: "", sessionGeneration: number, content: JsonValue, };

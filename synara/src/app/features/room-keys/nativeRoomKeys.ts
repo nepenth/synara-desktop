@@ -1,19 +1,15 @@
 import { invokeDesktopWithAvailability } from '../../utils/desktop';
+import type { NativeRoomKeyFileSelection } from '../matrix-dto/generated';
+import type { NativeRoomKeyTransferStatus as WireNativeRoomKeyTransferStatus } from '../matrix-dto/generated';
+import type { NullsToOptional } from '../matrix-dto/wireTypes';
 
-export type NativeRoomKeyTransferKind = 'export' | 'import';
-export type NativeRoomKeyTransferPhase =
-  'idle' | 'preparing' | 'in_flight' | 'succeeded' | 'failed' | 'cancelled';
-
-export type NativeRoomKeyTransferStatus = {
-  sessionGeneration: number;
-  kind?: NativeRoomKeyTransferKind;
-  phase: NativeRoomKeyTransferPhase;
-  progressPercent?: number;
-  keysProcessed: number;
-  roomsTouched: number;
-  fileLabel?: string;
-  failureDiagnosticId?: string;
-};
+/** Parsed form of Core's `NativeRoomKeyTransferStatus`: absent instead of `null`. */
+export type NativeRoomKeyTransferStatus = NullsToOptional<WireNativeRoomKeyTransferStatus>;
+export type {
+  NativeRoomKeyFileSelection,
+  NativeRoomKeyTransferKind,
+  NativeRoomKeyTransferPhase,
+} from '../matrix-dto/generated';
 
 export type NativeRoomKeyTransferResult = {
   outcome: 'complete';
@@ -22,11 +18,6 @@ export type NativeRoomKeyTransferResult = {
   roomsTouched: number;
   totalKeysFound?: number;
   status: NativeRoomKeyTransferStatus;
-};
-
-export type NativeRoomKeyFileSelection = {
-  selectionId: number;
-  fileLabel: string;
 };
 
 export const nativeRoomKeyErrorMessage = (): string =>

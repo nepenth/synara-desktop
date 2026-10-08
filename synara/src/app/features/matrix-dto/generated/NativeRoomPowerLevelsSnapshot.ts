@@ -5,7 +5,7 @@ import type { JsonValue } from "./serde_json/JsonValue";
 /**
  * V-ROOMS.MEMBERS-READ — live native room power-level projection.
  */
-export type NativeRoomPowerLevelsSnapshot = { status: string, sessionGeneration: number, roomId: string, eventType: string, stateKey: string, content: JsonValue, 
+export type NativeRoomPowerLevelsSnapshot = { status: "ok", sessionGeneration: number, roomId: string, eventType: "m.room.power_levels", stateKey: "", content: JsonValue, 
 /**
  * The signed-in user's permissions under these levels, evaluated with
  * the room version's rules. `None` when the SDK could not load them.

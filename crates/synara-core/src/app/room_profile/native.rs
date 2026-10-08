@@ -17,6 +17,12 @@ pub enum NativeRoomJoinRuleUpdate {
         #[serde(rename = "sessionGeneration")]
         session_generation: u64,
         #[serde(rename = "joinRule")]
+        #[cfg_attr(
+            feature = "ts-export",
+            ts(
+                type = "\"public\" | \"knock\" | \"invite\" | \"restricted\" | \"knock_restricted\" | \"private\""
+            )
+        )]
         join_rule: &'static str,
     },
     Unavailable {

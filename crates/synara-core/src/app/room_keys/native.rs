@@ -46,6 +46,7 @@ pub struct NativeRoomKeyTransferStatus {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomKeyTransferResult {
+    #[cfg_attr(feature = "ts-export", ts(type = "\"complete\""))]
     pub outcome: &'static str,
     pub file_label: String,
     pub keys_processed: u32,

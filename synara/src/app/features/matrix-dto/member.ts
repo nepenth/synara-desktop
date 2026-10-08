@@ -2,8 +2,7 @@
  * Room member DTO.
  */
 
-import type { RoomId, UserId } from './ids';
-import { isMembership, type Membership } from './room';
+import { isMembership } from './room';
 import {
   hasForbiddenWireFields,
   isObject,
@@ -12,16 +11,11 @@ import {
   reqNumber,
   reqString,
 } from './parseUtil';
+import type { RoomMember as WireRoomMember } from './generated';
+import type { NullsToOptional } from './wireTypes';
 
-export type RoomMember = {
-  roomId: RoomId;
-  userId: UserId;
-  displayName?: string;
-  avatarUrl?: string;
-  membership: Membership;
-  powerLevel: number;
-  isDirectTarget?: boolean;
-};
+/** Parsed form of Core's `RoomMember`: absent instead of `null`. */
+export type RoomMember = NullsToOptional<WireRoomMember>;
 
 export function parseRoomMember(value: unknown): RoomMember | null {
   if (!isObject(value) || hasForbiddenWireFields(value)) return null;

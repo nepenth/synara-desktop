@@ -62,6 +62,10 @@ pub struct NativeNotificationObservation {
     pub room_id: String,
     pub event_id: String,
     pub sender: String,
+    #[cfg_attr(
+        feature = "ts-export",
+        ts(type = "\"m.room.message\" | \"m.room.encrypted\" | \"m.sticker\"")
+    )]
     pub event_type: String,
     pub origin_server_ts: u64,
     /// Classification from the complete SDK plaintext body, never truncated renderer input.

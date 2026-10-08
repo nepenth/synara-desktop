@@ -25,10 +25,13 @@ pub struct NativeRoomMembersSnapshot {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomPowerLevelsSnapshot {
+    #[cfg_attr(feature = "ts-export", ts(type = "\"ok\""))]
     pub status: &'static str,
     pub session_generation: u64,
     pub room_id: String,
+    #[cfg_attr(feature = "ts-export", ts(type = "\"m.room.power_levels\""))]
     pub event_type: &'static str,
+    #[cfg_attr(feature = "ts-export", ts(type = "\"\""))]
     pub state_key: &'static str,
     pub content: serde_json::Value,
     /// The signed-in user's permissions under these levels, evaluated with
@@ -59,10 +62,16 @@ pub struct NativeRoomCreatorsSnapshot {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomPowerLevelTagsSnapshot {
+    #[cfg_attr(feature = "ts-export", ts(type = "\"ok\""))]
     pub status: &'static str,
     pub session_generation: u64,
     pub room_id: String,
+    #[cfg_attr(
+        feature = "ts-export",
+        ts(type = "\"in.synara.room.power_level_tags\"")
+    )]
     pub event_type: &'static str,
+    #[cfg_attr(feature = "ts-export", ts(type = "\"\""))]
     pub state_key: &'static str,
     pub content: serde_json::Value,
 }
@@ -72,9 +81,15 @@ pub struct NativeRoomPowerLevelTagsSnapshot {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativePowerLevelWriteResult {
+    #[cfg_attr(feature = "ts-export", ts(type = "\"ok\""))]
     pub status: &'static str,
     pub room_id: String,
+    #[cfg_attr(
+        feature = "ts-export",
+        ts(type = "\"m.room.power_levels\" | \"in.synara.room.power_level_tags\"")
+    )]
     pub event_type: &'static str,
+    #[cfg_attr(feature = "ts-export", ts(type = "\"\""))]
     pub state_key: &'static str,
     pub session_generation: u64,
     pub content: serde_json::Value,

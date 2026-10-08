@@ -1,34 +1,21 @@
 import { getSessionBootstrapResult } from '../../state/sessionBootstrap';
 import { invokeDesktopWithAvailability, isSynaraDesktop, listen } from '../../utils/desktop';
+import type {
+  NativeVerificationDirection,
+  NativeVerificationPhase,
+  NativeVerificationQr,
+} from '../matrix-dto/generated';
+import type { NativeVerificationSas as WireNativeVerificationSas } from '../matrix-dto/generated';
+import type { NullsToOptional } from '../matrix-dto/wireTypes';
 
-export type NativeVerificationDirection = 'incoming' | 'outgoing';
-export type NativeVerificationPhase =
-  | 'requested'
-  | 'ready'
-  | 'started'
-  | 'keys_exchanging'
-  | 'sas_ready'
-  | 'qr_scanned'
-  | 'confirmed'
-  | 'done'
-  | 'mismatched'
-  | 'cancelled'
-  | 'failed';
-
-export type NativeVerificationEmoji = {
-  symbol: string;
-  description: string;
-};
-
-export type NativeVerificationSas = {
-  emoji?: NativeVerificationEmoji[];
-  decimals?: [number, number, number];
-};
-
-export type NativeVerificationQr = {
-  imageDataUrl: string;
-  scanned: boolean;
-};
+/** Parsed form of Core's `NativeVerificationSas`: absent instead of `null`. */
+export type NativeVerificationSas = NullsToOptional<WireNativeVerificationSas>;
+export type {
+  NativeVerificationDirection,
+  NativeVerificationEmoji,
+  NativeVerificationPhase,
+  NativeVerificationQr,
+} from '../matrix-dto/generated';
 
 export type NativeVerificationRequest = {
   flowId: string;

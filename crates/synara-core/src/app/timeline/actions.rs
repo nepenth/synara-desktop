@@ -130,6 +130,12 @@ pub struct NativeTimelineActionReadback {
     /// write targeted.
     pub event_id: String,
     #[serde(deserialize_with = "deserialize_action_status")]
+    #[cfg_attr(
+        feature = "ts-export",
+        ts(
+            type = "\"sent\" | \"redacted\" | \"reported\" | \"pinned\" | \"unpinned\" | \"already_pinned\" | \"already_unpinned\" | \"voted\" | \"declined\" | \"queued\""
+        )
+    )]
     pub status: String,
 }
 

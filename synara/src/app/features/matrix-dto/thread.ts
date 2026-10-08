@@ -2,7 +2,6 @@
  * Thread summary DTO.
  */
 
-import type { EventId, RoomId } from './ids';
 import {
   hasForbiddenWireFields,
   isObject,
@@ -12,16 +11,11 @@ import {
   reqNumber,
   reqString,
 } from './parseUtil';
+import type { ThreadSummary as WireThreadSummary } from './generated';
+import type { NullsToOptional } from './wireTypes';
 
-export type ThreadSummary = {
-  roomId: RoomId;
-  rootEventId: EventId;
-  replyCount: number;
-  latestEventId?: EventId;
-  latestOriginServerTs?: number;
-  participated: boolean;
-  unreadCount?: number;
-};
+/** Parsed form of Core's `ThreadSummary`: absent instead of `null`. */
+export type ThreadSummary = NullsToOptional<WireThreadSummary>;
 
 export function parseThreadSummary(value: unknown): ThreadSummary | null {
   if (!isObject(value) || hasForbiddenWireFields(value)) return null;

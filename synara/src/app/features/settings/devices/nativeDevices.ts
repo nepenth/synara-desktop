@@ -1,4 +1,15 @@
 import { invokeDesktopWithAvailability, listen } from '../../../utils/desktop';
+import type {
+  NativeDeviceDeleteChallenge,
+  NativeDeviceTrust,
+  NativeOwnDeviceVerification,
+} from '../../matrix-dto/generated';
+export type {
+  NativeDeviceDeleteAuthentication,
+  NativeDeviceDeleteChallenge,
+  NativeDeviceTrust,
+  NativeOwnDeviceVerification,
+} from '../../matrix-dto/generated';
 
 // The shared native owner observes device lists, verification, recovery and
 // backup state. Signals invalidate status reads; they never carry secrets.
@@ -21,15 +32,6 @@ export const subscribeNativeDeviceUpdates = (
   };
 };
 
-export type NativeDeviceTrust =
-  | 'verified'
-  | 'verified_locally_only'
-  | 'verified_by_certificate'
-  | 'unverified'
-  | 'no_encryption'
-  | 'dehydrated';
-
-export type NativeOwnDeviceVerification = 'unknown' | 'unverified' | 'verified';
 export type VerificationStatus = NativeOwnDeviceVerification;
 
 export type NativeDevice = {
@@ -49,15 +51,6 @@ export type NativeDeviceSnapshot = {
   ownVerification: NativeOwnDeviceVerification;
   hasDevicesToVerifyAgainst: boolean | null;
   devices: NativeDevice[];
-};
-
-export type NativeDeviceDeleteAuthentication = 'password';
-
-export type NativeDeviceDeleteChallenge = {
-  operationId: number;
-  sessionGeneration: number;
-  authentication: NativeDeviceDeleteAuthentication;
-  authenticationFailed: boolean;
 };
 
 export type NativeDeviceDeleteResult =

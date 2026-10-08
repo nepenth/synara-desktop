@@ -70,6 +70,7 @@ pub struct NativeComposerReplyDraftReadback {
     pub room_id: String,
     /// `set`, `cleared`, or `empty`.
     #[serde(deserialize_with = "deserialize_reply_draft_status")]
+    #[cfg_attr(feature = "ts-export", ts(type = "\"set\" | \"cleared\" | \"empty\""))]
     pub status: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "ts-export", ts(optional))]
