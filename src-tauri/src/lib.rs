@@ -810,9 +810,12 @@ pub fn run() {
             // `desktop_secret_store_status`, which the warm-up below caches.
             desktop::warm_secret_store_status();
             let bridge_script = format!(
-                "{}\nif (window.__SYNARA_DESKTOP__) {{ window.__SYNARA_DESKTOP__.supportsUpdater = {}; window.__SYNARA_DESKTOP__.supportsSecureSecretStore = false; }}",
+                "{}\nif (window.__SYNARA_DESKTOP__) {{ window.__SYNARA_DESKTOP__.supportsUpdater = {}; window.__SYNARA_DESKTOP__.supportsSecureSecretStore = false; window.__SYNARA_DESKTOP__.os = {}; }}",
                 include_str!("desktop_bridge.js"),
                 updater_configured,
+                // WebKitGTK may present a macOS user agent; the renderer
+                // reads the real OS from here instead.
+                serde_json::to_string(std::env::consts::OS).unwrap_or_else(|_| "\"\"".to_owned()),
             );
             let window_builder = WebviewWindowBuilder::new(app, "main".to_string(), window_url)
                 .title("Synara")
