@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- iOS: agent approvals stamped slightly ahead of the device clock stay actionable in notifications as they already were in Core, four notification failure codes now record their specific diagnostics stage, and Swift no longer keeps its own Later codec or agent-card extraction; shared vectors pin the remaining Swift mirrors to Core.
 - Builds: the desktop crate builds only its rlib (no unused staticlib/cdylib link), and dependencies keep line tables only in dev/test builds, which shrinks a core test build from 6.4 GB to 5.4 GB.
 - Cleanup: remove the renderer's js-sdk read-marker engine, room-activity store and rollout flags, and iOS client policies that only tests used; Mark as Read on desktop goes only through the native Core owner.
 - Internals: pin the generated Swift API surface in CI, generate Swift bindings in UniFFI library mode, read session/sync/crypto status through typed Core methods on desktop and iOS, generate the renderer's status types from Rust, and start moving SharedCore methods to UniFFI proc-macro exports.

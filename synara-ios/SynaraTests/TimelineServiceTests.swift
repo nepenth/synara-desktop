@@ -1805,34 +1805,6 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(MatrixHTMLRenderer.codeLineCount("  printf 'x'  \n\n"), 2)
     }
 
-    func testAgentCardPayloadParserReadsHermesJSONMessageBody() throws {
-        let body = #"""
-        {
-          "hermes": true,
-          "payload": {
-            "title": "Approval required",
-            "status": "pending",
-            "summary": "Review the proposed action.",
-            "actions": [
-              {
-                "id": "approve",
-                "title": "Approve",
-                "kind": "approve",
-                "prompt": "approve request"
-              }
-            ]
-          }
-        }
-        """#
-
-        let card = try XCTUnwrap(SynaraAgentCardPayloadParser.parse(body: body))
-
-        XCTAssertEqual(card.title, "Approval required")
-        XCTAssertEqual(card.status, "pending")
-        XCTAssertEqual(card.actions.first?.id, "approve")
-        XCTAssertEqual(card.actions.first?.kind, "approve")
-    }
-
     func testAgentCardPayloadParserReadsBoundedProjectedPayload() throws {
         let payload = #"{"title":"Projected approval","status":"pending","summary":"Review","actions":[]}"#
         let card = try XCTUnwrap(SynaraAgentCardPayloadParser.parse(payloadJSON: payload))
@@ -2828,52 +2800,6 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(item.senderDisplayName, "Alice Example")
     }
 
-    func testSynaraLaterListSortingPrioritizesActiveItems() {
-        let now = 1_760_000_000_000
-        let items: SynaraLaterContent
-        do {
-            items = try SynaraLaterContent(
-                version: 1,
-                items: [
-                    "a": .init(
-                        id: "a",
-                        kind: .saved,
-                        roomId: "!room:example.org",
-                        eventId: "$one",
-                        createdAt: 5,
-                        dueTs: now + 3_600_000,
-                        completedAt: 9000
-                    ),
-                    "b": .init(
-                        id: "b",
-                        kind: .reminder,
-                        roomId: "!room:example.org",
-                        eventId: "$two",
-                        createdAt: 6,
-                        dueTs: now - 10000,
-                        completedAt: nil
-                    ),
-                    "c": .init(
-                        id: "c",
-                        kind: .saved,
-                        roomId: "!room:example.org",
-                        eventId: "$three",
-                        createdAt: 7,
-                        dueTs: now + 1000,
-                        completedAt: nil
-                    ),
-                ]
-            )
-        } catch {
-            XCTFail("Failed fixture: \(error)")
-            return
-        }
-
-        let sorted = SynaraLaterListItem.sorted(items: items, now: now)
-
-        XCTAssertEqual(sorted.map(\.id), ["b", "c", "a"])
-    }
-
     func testLaterDueUrgencyClassifiesOverdueSoonAndFuture() {
         let now = 1_760_000_000_000
 
@@ -2893,25 +2819,6 @@ final class TimelineServiceTests: XCTestCase {
             LaterDueUrgency.classify(dueTs: now + 3_600_000, isCompleted: true, now: now),
             .none
         )
-    }
-
-    func testLaterContentCompletingItemSetsCompletedAt() throws {
-        let content = try SynaraLaterContent(
-            version: 1,
-            items: [
-                "saved": .init(
-                    id: "saved",
-                    kind: .saved,
-                    roomId: "!room:example.org",
-                    eventId: "$one",
-                    createdAt: 1
-                ),
-            ]
-        )
-
-        let completed = try content.completingItem(id: "saved", at: 9999)
-
-        XCTAssertEqual(completed.items["saved"]?.completedAt, 9999)
     }
 
     func testMockLaterServiceCompletesActiveItem() async {

@@ -1,0 +1,53 @@
+{
+  "description": "Shared vectors for policies that iOS mirrors in Swift because Core does not expose them over the FFI. Rust tests (app/agent_approvals.rs, app/notifications/nse_error.rs) and Swift tests (NotificationPreviewSupportTests) both read this file, so a change on one side fails the other until both agree.",
+  "agentApprovalFreshness": {
+    "ttlMs": 300000,
+    "futureToleranceMs": 60000,
+    "nowMs": 2000000000,
+    "cases": [
+      { "name": "sent now", "originServerTs": 2000000000, "fresh": true },
+      { "name": "one millisecond before expiry", "originServerTs": 1999700001, "fresh": true },
+      { "name": "exactly at expiry", "originServerTs": 1999700000, "fresh": false },
+      { "name": "long expired", "originServerTs": 1000, "fresh": false },
+      { "name": "slightly ahead of this clock", "originServerTs": 2000000001, "fresh": true },
+      { "name": "at the future tolerance", "originServerTs": 2000060000, "fresh": true },
+      { "name": "beyond the future tolerance", "originServerTs": 2000060001, "fresh": false },
+      { "name": "missing timestamp", "originServerTs": 0, "fresh": false }
+    ]
+  },
+  "nsePreviewFailureStages": {
+    "fallbackStage": "core-resolution-failed",
+    "codes": {
+      "nse-preview-request-already-started": "core-resolution-failed",
+      "nse-preview-request-cancelled": "resolution-cancelled",
+      "nse-secret-vault-unavailable": "core-store-unavailable",
+      "p4-s11-nse-access-denied": "core-access-denied",
+      "p4-s11-nse-agent-policy-filtered": "agent-policy-filtered",
+      "p4-s11-nse-api-incompatible": "core-api-incompatible",
+      "p4-s11-nse-client-init-failed": "core-client-init-failed",
+      "p4-s11-nse-context-missing-event": "core-context-missing-event",
+      "p4-s11-nse-crypto-unavailable": "core-crypto-unavailable",
+      "p4-s11-nse-decryption-unavailable": "core-decryption-unavailable",
+      "p4-s11-nse-event-fetch-failed": "core-fetch-failed",
+      "p4-s11-nse-event-filtered": "core-event-filtered",
+      "p4-s11-nse-event-not-in-store": "core-event-unavailable",
+      "p4-s11-nse-event-redacted": "core-event-redacted",
+      "p4-s11-nse-invalid-event": "core-invalid-event",
+      "p4-s11-nse-invalid-response": "core-invalid-response",
+      "p4-s11-nse-network-timeout": "core-network-timeout",
+      "p4-s11-nse-network-unavailable": "core-network-unavailable",
+      "p4-s11-nse-payload-oversize": "payload-complexity-exceeded",
+      "p4-s11-nse-rate-limited": "core-rate-limited",
+      "p4-s11-nse-resolution-timeout": "core-resolution-timed-out",
+      "p4-s11-nse-room-unavailable": "core-room-unavailable",
+      "p4-s11-nse-session-rejected": "core-session-rejected",
+      "p4-s11-nse-sliding-sync-version-missing": "core-sliding-sync-version-missing",
+      "p4-s11-nse-store-lock-failed": "core-store-lock-failed",
+      "p4-s11-nse-store-unavailable": "core-store-unavailable",
+      "p4-s3b-identity-invalid": "core-session-unavailable",
+      "p4-s3b-material-missing": "core-session-unavailable",
+      "p4-s3b-restore-failed": "core-restore-failed",
+      "p4-s3b-store-root-invalid": "core-store-unavailable"
+    }
+  }
+}

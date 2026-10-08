@@ -664,4 +664,27 @@ mod tests {
             assert_eq!(plan.status, AgentApprovalDecisionStatus::AlreadyDecided);
         }
     }
+
+    /// iOS's NSE mirrors this rule in Swift (`SynaraAgentApprovalFreshness`)
+    /// and its XCTest reads the same vectors, so the two cannot drift.
+    #[test]
+    fn approval_freshness_matches_shared_vectors() {
+        let vectors: serde_json::Value = serde_json::from_str(include_str!(
+            "../../tests/support/notification-policy-vectors.json"
+        ))
+        .unwrap();
+        let freshness = &vectors["agentApprovalFreshness"];
+        assert_eq!(freshness["ttlMs"].as_u64(), Some(AGENT_APPROVAL_TTL_MS));
+        assert_eq!(freshness["futureToleranceMs"].as_u64(), Some(60_000));
+        let now_ms = freshness["nowMs"].as_u64().unwrap();
+        let cases = freshness["cases"].as_array().unwrap();
+        assert!(!cases.is_empty());
+        for case in cases {
+            let name = case["name"].as_str().unwrap();
+            let origin = case["originServerTs"].as_u64().unwrap();
+            let fresh = classify_agent_approval(PROMPT, HERMES, CURRENT_USER, origin, now_ms, [])
+                .is_ok_and(|classification| !classification.expired);
+            assert_eq!(fresh, case["fresh"].as_bool().unwrap(), "{name}");
+        }
+    }
 }
