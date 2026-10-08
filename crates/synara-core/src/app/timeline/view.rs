@@ -591,10 +591,13 @@ pub fn project_poll_answers(
         .collect()
 }
 
-/// Preserve distinct Matrix `formatted_body` protocol content for presenters.
+/// Preserve distinct Matrix `formatted_body` protocol content for presenters,
+/// reduced by Core to the Matrix specification's tag and attribute allowlist
+/// (compat mode, so deprecated tags older clients send still render) with the
+/// rich-reply fallback removed. Desktop and iOS receive the same HTML.
 ///
-/// The returned HTML remains untrusted. Every platform presenter must apply
-/// its output-context sanitizer and bounded parser before rendering it.
+/// Presenters keep their own output-context sanitizer and bounded parser as
+/// defense in depth; this is the shared first pass, not a trust boundary.
 pub fn project_formatted_body(msgtype: &MessageType) -> Option<String> {
     let formatted = match msgtype {
         MessageType::Text(content) => content.formatted.as_ref(),
@@ -609,11 +612,18 @@ pub fn project_formatted_body(msgtype: &MessageType) -> Option<String> {
     if formatted.format != MessageFormat::Html {
         return None;
     }
-    let html = formatted.body.trim();
+    let sanitized = sanitize_incoming_html(&formatted.body);
+    let html = sanitized.trim();
     if html.is_empty() || html == msgtype.body().trim() {
         return None;
     }
     Some(html.to_owned())
+}
+
+/// Reduce untrusted incoming message HTML to the Matrix allowlist.
+pub fn sanitize_incoming_html(html: &str) -> String {
+    use matrix_sdk::ruma::html::{sanitize_html, HtmlSanitizerMode, RemoveReplyFallback};
+    sanitize_html(html, HtmlSanitizerMode::Compat, RemoveReplyFallback::Yes)
 }
 
 /// Keep Matrix media filenames and captions distinct. The legacy `body`
@@ -1480,6 +1490,52 @@ mod tests {
             project_formatted_body(&emote).as_deref(),
             Some("<em>waves</em>")
         );
+    }
+
+    #[test]
+    fn formatted_body_strips_scripts_handlers_and_the_reply_fallback() {
+        let hostile = MessageType::Text(TextMessageEventContent::html(
+            "hi",
+            concat!(
+                "<mx-reply><blockquote>quoted</blockquote></mx-reply>",
+                "<p onclick=\"steal()\">hi <strong>there</strong></p>",
+                "<script>alert(1)</script>",
+                "<a href=\"javascript:alert(1)\">x</a>",
+                "<img src=\"https://evil.example/pixel.png\">",
+            ),
+        ));
+        let html = project_formatted_body(&hostile).expect("formatted body");
+        assert!(html.contains("<strong>there</strong>"));
+        for banned in [
+            "<script",
+            "onclick",
+            "javascript:",
+            "mx-reply",
+            "quoted",
+            "evil.example",
+        ] {
+            assert!(!html.contains(banned), "{banned} must be removed: {html}");
+        }
+    }
+
+    #[test]
+    fn formatted_body_keeps_matrix_markup_other_clients_send() {
+        let html = concat!(
+            "<p><span data-mx-spoiler>secret</span> ",
+            "<a href=\"https://matrix.to/#/@alice:example.org\">Alice</a> ",
+            "<font color=\"#ff0000\">red</font> ",
+            "<code>code</code></p>",
+        );
+        let message = MessageType::Text(TextMessageEventContent::html("x", html));
+        let projected = project_formatted_body(&message).expect("formatted body");
+        assert!(projected.contains("data-mx-spoiler"));
+        assert!(projected.contains("https://matrix.to/#/@alice:example.org"));
+        // Deprecated `<font color>` is rewritten to the spec's `data-mx-color`.
+        assert!(
+            projected.contains("<span data-mx-color=\"#ff0000\">red</span>"),
+            "{projected}"
+        );
+        assert!(projected.contains("<code>code</code>"));
     }
 
     #[test]
