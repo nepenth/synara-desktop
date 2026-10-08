@@ -71,7 +71,9 @@ pub async fn set_own_display_name(
         .map_err(|error| {
             profile_error_diagnostic(&error, "v-send.r-avatar-display-name-sdk-failed")
         })?;
-    Ok(MatrixProfileWriteResult { status: "ok" })
+    Ok(MatrixProfileWriteResult {
+        status: crate::dto::WriteAck::Ok,
+    })
 }
 
 pub async fn set_own_avatar(
@@ -84,7 +86,9 @@ pub async fn set_own_avatar(
         .set_avatar_url(mxc.as_deref())
         .await
         .map_err(|error| profile_error_diagnostic(&error, "v-send.r-avatar-set-sdk-failed"))?;
-    Ok(MatrixProfileWriteResult { status: "ok" })
+    Ok(MatrixProfileWriteResult {
+        status: crate::dto::WriteAck::Ok,
+    })
 }
 
 pub async fn get_own_profile(client: &Client) -> Result<MatrixOwnProfile, &'static str> {
@@ -238,7 +242,9 @@ pub async fn ignore_user(
         .ignore_user(&parsed)
         .await
         .map_err(|_| "v-profile.ignore-sdk-failed")?;
-    Ok(MatrixIgnoredUsersWriteResult { status: "ok" })
+    Ok(MatrixIgnoredUsersWriteResult {
+        status: crate::dto::WriteAck::Ok,
+    })
 }
 
 pub async fn unignore_user(
@@ -252,7 +258,9 @@ pub async fn unignore_user(
         .unignore_user(&parsed)
         .await
         .map_err(|_| "v-profile.unignore-sdk-failed")?;
-    Ok(MatrixIgnoredUsersWriteResult { status: "ok" })
+    Ok(MatrixIgnoredUsersWriteResult {
+        status: crate::dto::WriteAck::Ok,
+    })
 }
 
 fn parse_email_address(email: &str) -> Result<String, &'static str> {
@@ -309,7 +317,9 @@ pub async fn delete_threepid_email(
         .delete_3pid(&address, Medium::Email, None)
         .await
         .map_err(|_| "v-threepid.delete-failed")?;
-    Ok(MatrixThreepidWriteResult { status: "ok" })
+    Ok(MatrixThreepidWriteResult {
+        status: crate::dto::WriteAck::Ok,
+    })
 }
 
 pub async fn request_threepid_email_token(
@@ -359,7 +369,7 @@ pub async fn add_threepid_email(
                 *guard = None;
             }
             Ok(MatrixThreepidAddResult {
-                status: "ok".to_owned(),
+                status: crate::dto::ThreepidAddStatus::Ok,
             })
         }
         Err(error) => {
@@ -376,7 +386,7 @@ pub async fn add_threepid_email(
             let pending_state = guard.as_mut().ok_or("v-threepid.not-pending")?;
             pending_state.auth_session = Some(session);
             Ok(MatrixThreepidAddResult {
-                status: "authenticationRequired".to_owned(),
+                status: crate::dto::ThreepidAddStatus::AuthenticationRequired,
             })
         }
     }
@@ -418,7 +428,7 @@ pub async fn add_threepid_email_password(
                 *guard = None;
             }
             Ok(MatrixThreepidAddResult {
-                status: "ok".to_owned(),
+                status: crate::dto::ThreepidAddStatus::Ok,
             })
         }
         Err(error) => {

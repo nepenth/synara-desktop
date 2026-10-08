@@ -1,6 +1,7 @@
 //! Core command adapters for room administration.
 
 use super::*;
+use crate::dto::WriteAck;
 
 /// Fixed public missing-secret label vocabulary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -1429,7 +1430,7 @@ pub(super) fn matrix_enable_room_encrypted_state(
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MatrixEncryptedStateEventsSettingResult {
     /// Always `ok`.
-    pub status: String,
+    pub status: WriteAck,
     pub enabled: bool,
 }
 
@@ -1439,7 +1440,7 @@ pub(super) fn set_encrypted_state_events_setting(
 ) -> MatrixEncryptedStateEventsSettingResult {
     set_encrypted_state_events_setting_enabled(payload.enabled);
     MatrixEncryptedStateEventsSettingResult {
-        status: "ok".to_owned(),
+        status: crate::dto::WriteAck::Ok,
         enabled: payload.enabled,
     }
 }

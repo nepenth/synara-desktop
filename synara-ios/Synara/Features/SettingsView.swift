@@ -725,10 +725,10 @@ private struct AccountSettingsView: View {
             }
             let status = await environment.matrix.addThreepidEmail()
             await MainActor.run {
-                if status == "authenticationRequired" {
+                if status == .authenticationRequired {
                     needsEmailPassword = true
                     emailMessage = "Enter your account password to confirm this email."
-                } else if status == "ok" {
+                } else if status == .ok {
                     emailDraft = ""
                     needsEmailPassword = false
                     emailMessage = "Email attached."
@@ -746,7 +746,7 @@ private struct AccountSettingsView: View {
         Task {
             let status = await environment.matrix.addThreepidEmailPassword(password)
             await MainActor.run {
-                if status == "ok" {
+                if status == .ok {
                     emailDraft = ""
                     needsEmailPassword = false
                     emailMessage = "Email attached."

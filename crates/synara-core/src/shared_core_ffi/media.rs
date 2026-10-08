@@ -28,7 +28,7 @@ impl std::error::Error for MediaUploadError {}
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SendRoomAttachmentDto {
     pub event_id: String,
-    pub status: String,
+    pub status: SendStatusDto,
 }
 
 /// Static fail-closed room-attachment error. Fields are source constants only.
@@ -323,7 +323,7 @@ impl SharedCore {
             })?;
         Ok(SendRoomAttachmentDto {
             event_id: result.event_id,
-            status: result.status.to_owned(),
+            status: result.status.into(),
         })
     }
 

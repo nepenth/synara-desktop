@@ -147,7 +147,7 @@ pub struct PresenceSubscriptionDto {
 /// Privacy-safe presence SET ack. Status only; never echo state or statusMsg.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PresenceWriteDto {
-    pub status: String,
+    pub status: WriteAckDto,
 }
 
 /// Privacy-safe MatrixRTC transport. URLs only; no JWTs or tokens.
@@ -253,7 +253,7 @@ pub struct UserStatusSnapshotDto {
 /// Privacy-safe MSC4426 write ack. Status only; never echo emoji or text.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct UserStatusWriteDto {
-    pub status: String,
+    pub status: WriteAckDto,
 }
 
 /// Static fail-closed user-status error. Fields are source constants only.
@@ -588,7 +588,7 @@ impl SharedCore {
             .map_err(map_presence_set_core_error)?;
         let result: NativePresenceWriteResult = response;
         Ok(PresenceWriteDto {
-            status: result.status,
+            status: result.status.into(),
         })
     }
 
@@ -639,7 +639,7 @@ impl SharedCore {
             .map_err(|error| map_user_status_core_error(USER_STATUS_SET_NO_SESSION_CODE, error))?;
         let result: NativeUserStatusWriteResult = response;
         Ok(UserStatusWriteDto {
-            status: result.status,
+            status: result.status.into(),
         })
     }
 
@@ -649,7 +649,7 @@ impl SharedCore {
         })?;
         let result: NativeUserStatusWriteResult = response;
         Ok(UserStatusWriteDto {
-            status: result.status,
+            status: result.status.into(),
         })
     }
 }

@@ -88,7 +88,7 @@ pub struct ComposerReplyDraftPreviewDto {
 pub struct ComposerReplyDraftDto {
     pub schema_version: u32,
     pub room_id: String,
-    pub status: String,
+    pub status: ComposerDraftStatusDto,
     pub draft: Option<ComposerReplyDraftPreviewDto>,
 }
 
@@ -114,7 +114,7 @@ pub struct SendTextDto {
     pub room_id: String,
     pub event_id: String,
     pub local_txn_id: String,
-    pub status: String,
+    pub status: SendStatusDto,
 }
 
 /// Privacy-safe agent-approval write acknowledgement.
@@ -161,7 +161,7 @@ impl std::error::Error for SendTextError {}
 pub struct SendPollDto {
     pub room_id: String,
     pub event_id: String,
-    pub status: String,
+    pub status: SendStatusDto,
 }
 
 /// Static fail-closed send-poll error. Fields are source constants only.
@@ -186,7 +186,7 @@ pub struct EditMessageDto {
     pub room_id: String,
     pub event_id: String,
     pub local_txn_id: String,
-    pub status: String,
+    pub status: SendStatusDto,
 }
 
 /// Static fail-closed edit-message error. Fields are source constants only.
@@ -211,7 +211,7 @@ pub struct PollRespondDto {
     pub room_id: String,
     pub poll_event_id: String,
     pub event_id: String,
-    pub status: String,
+    pub status: SendStatusDto,
 }
 
 /// Static fail-closed poll-respond error. Fields are source constants only.
@@ -528,7 +528,7 @@ pub(super) fn map_composer_reply_draft_core_error(
 pub(super) struct ComposerReplyDraftReadbackWire {
     pub(super) schema_version: u32,
     pub(super) room_id: String,
-    pub(super) status: String,
+    pub(super) status: crate::dto::ComposerDraftStatus,
     #[serde(default)]
     pub(super) draft: Option<NativeComposerReplyDraft>,
 }
@@ -551,7 +551,7 @@ pub(super) fn composer_reply_draft_dto(
     ComposerReplyDraftDto {
         schema_version: readback.schema_version,
         room_id: readback.room_id,
-        status: readback.status,
+        status: readback.status.into(),
         draft: readback.draft.map(composer_reply_draft_preview_dto),
     }
 }
@@ -600,7 +600,7 @@ pub(super) struct SendTextResultWire {
     pub(super) room_id: String,
     pub(super) event_id: String,
     pub(super) local_txn_id: String,
-    pub(super) status: String,
+    pub(super) status: crate::dto::SendStatus,
 }
 
 pub(super) fn send_text_dto(result: SendTextResultWire) -> SendTextDto {
@@ -608,7 +608,7 @@ pub(super) fn send_text_dto(result: SendTextResultWire) -> SendTextDto {
         room_id: result.room_id,
         event_id: result.event_id,
         local_txn_id: result.local_txn_id,
-        status: result.status,
+        status: result.status.into(),
     }
 }
 
@@ -644,14 +644,14 @@ pub(super) fn map_send_poll_core_error(
 pub(super) struct SendPollResultWire {
     pub(super) room_id: String,
     pub(super) event_id: String,
-    pub(super) status: String,
+    pub(super) status: crate::dto::SendStatus,
 }
 
 pub(super) fn send_poll_dto(result: SendPollResultWire) -> SendPollDto {
     SendPollDto {
         room_id: result.room_id,
         event_id: result.event_id,
-        status: result.status,
+        status: result.status.into(),
     }
 }
 
@@ -689,7 +689,7 @@ pub(super) struct EditMessageResultWire {
     pub(super) room_id: String,
     pub(super) event_id: String,
     pub(super) local_txn_id: String,
-    pub(super) status: String,
+    pub(super) status: crate::dto::SendStatus,
 }
 
 pub(super) fn edit_message_dto(result: EditMessageResultWire) -> EditMessageDto {
@@ -697,7 +697,7 @@ pub(super) fn edit_message_dto(result: EditMessageResultWire) -> EditMessageDto 
         room_id: result.room_id,
         event_id: result.event_id,
         local_txn_id: result.local_txn_id,
-        status: result.status,
+        status: result.status.into(),
     }
 }
 
@@ -733,7 +733,7 @@ pub(super) struct PollRespondResultWire {
     pub(super) room_id: String,
     pub(super) poll_event_id: String,
     pub(super) event_id: String,
-    pub(super) status: String,
+    pub(super) status: crate::dto::SendStatus,
 }
 
 pub(super) fn poll_respond_dto(result: PollRespondResultWire) -> PollRespondDto {
@@ -741,7 +741,7 @@ pub(super) fn poll_respond_dto(result: PollRespondResultWire) -> PollRespondDto 
         room_id: result.room_id,
         poll_event_id: result.poll_event_id,
         event_id: result.event_id,
-        status: result.status,
+        status: result.status.into(),
     }
 }
 
@@ -1128,7 +1128,7 @@ impl From<crate::app::send::MatrixSendTextResult> for SendTextResultWire {
             room_id: result.room_id,
             event_id: result.event_id,
             local_txn_id: result.local_txn_id,
-            status: result.status.to_owned(),
+            status: result.status,
         }
     }
 }
@@ -1139,7 +1139,7 @@ impl From<crate::app::send::MatrixSendTextResult> for EditMessageResultWire {
             room_id: result.room_id,
             event_id: result.event_id,
             local_txn_id: result.local_txn_id,
-            status: result.status.to_owned(),
+            status: result.status,
         }
     }
 }
@@ -1149,7 +1149,7 @@ impl From<crate::app::send::MatrixSendPollResult> for SendPollResultWire {
         Self {
             room_id: result.room_id,
             event_id: result.event_id,
-            status: result.status.to_owned(),
+            status: result.status,
         }
     }
 }
@@ -1160,7 +1160,7 @@ impl From<crate::app::send::MatrixPollRespondResult> for PollRespondResultWire {
             room_id: result.room_id,
             poll_event_id: result.poll_event_id,
             event_id: result.event_id,
-            status: result.status.to_owned(),
+            status: result.status,
         }
     }
 }

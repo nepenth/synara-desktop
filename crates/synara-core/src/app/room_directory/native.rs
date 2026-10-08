@@ -2,6 +2,7 @@
 //!
 //! Live protocol listing lives in `live.rs`. Search request mapping stays desktop.
 
+use crate::dto::DirectorySearchStatus;
 use matrix_sdk::ruma::OwnedServerName;
 use serde::{Deserialize, Serialize};
 
@@ -102,7 +103,7 @@ pub struct NativeRoomDirectorySearchResponse {
         feature = "ts-export",
         ts(type = "\"ready\" | \"stale\" | \"cancelled\"")
     )]
-    pub status: &'static str,
+    pub status: DirectorySearchStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "ts-export", ts(optional))]
     pub page: Option<NativeRoomDirectoryPage>,

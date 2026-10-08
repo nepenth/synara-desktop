@@ -20,6 +20,7 @@ extension BackupStatusDto: Sendable
 extension BadgeSummary: Sendable
 extension BadgeSummaryInput: Sendable
 extension CommandGateDto: Sendable
+extension ComposerDraftStatusDto: Sendable
 extension ComposerReplyDraftDto: Sendable
 extension ComposerReplyDraftError: Sendable
 extension ComposerReplyDraftPreviewDto: Sendable
@@ -36,6 +37,7 @@ extension DeviceSnapshotDto: Sendable
 extension DeviceSummaryDto: Sendable
 extension DeviceTrustDto: Sendable
 extension DirectorySearchCommandError: Sendable
+extension DirectorySearchStatusDto: Sendable
 extension DirectoryVisibilityCommandError: Sendable
 extension EditMessageDto: Sendable
 extension EditMessageError: Sendable
@@ -81,6 +83,7 @@ extension MessageSearchError: Sendable
 extension MessageSearchGroupDto: Sendable
 extension MessageSearchItemDto: Sendable
 extension MissingSecretDto: Sendable
+extension MutationStatusDto: Sendable
 extension OwnDeviceVerificationDto: Sendable
 extension OwnProfileCommandError: Sendable
 extension OwnProfileDto: Sendable
@@ -173,6 +176,7 @@ extension SendPollDto: Sendable
 extension SendPollError: Sendable
 extension SendRoomAttachmentDto: Sendable
 extension SendRoomAttachmentError: Sendable
+extension SendStatusDto: Sendable
 extension SendTextDto: Sendable
 extension SendTextError: Sendable
 extension SessionAttachDto: Sendable
@@ -202,6 +206,7 @@ extension SyncStatusDto: Sendable
 extension SyncStopDto: Sendable
 extension SyncStopError: Sendable
 extension ThreepidAddDto: Sendable
+extension ThreepidAddStatusDto: Sendable
 extension ThreepidCommandError: Sendable
 extension ThreepidEmailDto: Sendable
 extension ThreepidEmailTokenDto: Sendable
@@ -269,6 +274,7 @@ extension VerificationQrDto: Sendable
 extension VerificationRequestDto: Sendable
 extension VerificationSasDto: Sendable
 extension VerificationSasError: Sendable
+extension WriteAckDto: Sendable
 open class HttpPusherOwner: HttpPusherOwnerProtocol, @unchecked Sendable
   open func deleteHttpPusher(pushKey: String, appId: String) async throws -> PusherWriteDto
   open func deleteHttpPushersForDevice(appId: String, lastPushKey: String?) async throws -> PusherWriteDto
@@ -510,6 +516,10 @@ public enum BackupRecoveryStateDto: Equatable, Hashable
 public enum CommandGateDto: Equatable, Hashable
   case `open`
   case closed
+public enum ComposerDraftStatusDto: Equatable, Hashable
+  case set
+  case cleared
+  case empty
 public enum ComposerReplyDraftError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -542,6 +552,10 @@ public enum DeviceTrustDto: Equatable, Hashable
 public enum DirectorySearchCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum DirectorySearchStatusDto: Equatable, Hashable
+  case ready
+  case stale
+  case cancelled
 public enum DirectoryVisibilityCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -606,6 +620,10 @@ public enum MissingSecretDto: Equatable, Hashable
   case crossSigningSelfSigning
   case crossSigningUserSigning
   case encryptionBackup
+public enum MutationStatusDto: Equatable, Hashable
+  case updated
+  case removed
+  case skipped
 public enum OwnDeviceVerificationDto: Equatable, Hashable
   case unknown
   case unverified
@@ -723,6 +741,9 @@ public enum SendPollError: Swift.Error, Equatable, Hashable, Foundation.Localize
 public enum SendRoomAttachmentError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum SendStatusDto: Equatable, Hashable
+  case sent
+  case queued
 public enum SendTextError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -772,6 +793,9 @@ public enum SyncStartError: Swift.Error, Equatable, Hashable, Foundation.Localiz
 public enum SyncStopError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum ThreepidAddStatusDto: Equatable, Hashable
+  case ok
+  case authenticationRequired
 public enum ThreepidCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -894,6 +918,8 @@ public enum VerificationPhaseDto: Equatable, Hashable
 public enum VerificationSasError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum WriteAckDto: Equatable, Hashable
+  case ok
 public func bindingScaffoldVersion() -> String
 public func loginFlows(homeserverUrl: String) async throws -> [LoginFlowDto]
 public func markdownToHtml(body: String) -> String?
@@ -1174,9 +1200,9 @@ public struct BadgeSummaryInput: Equatable, Hashable
 public struct ComposerReplyDraftDto: Equatable, Hashable
   public var schemaVersion: UInt32
   public var roomId: String
-  public var status: String
+  public var status: ComposerDraftStatusDto
   public var draft: ComposerReplyDraftPreviewDto?
-  public init(schemaVersion: UInt32, roomId: String, status: String, draft: ComposerReplyDraftPreviewDto?)
+  public init(schemaVersion: UInt32, roomId: String, status: ComposerDraftStatusDto, draft: ComposerReplyDraftPreviewDto?)
 public struct ComposerReplyDraftPreviewDto: Equatable, Hashable
   public var eventId: String
   public var senderId: String
@@ -1225,8 +1251,8 @@ public struct EditMessageDto: Equatable, Hashable
   public var roomId: String
   public var eventId: String
   public var localTxnId: String
-  public var status: String
-  public init(roomId: String, eventId: String, localTxnId: String, status: String)
+  public var status: SendStatusDto
+  public init(roomId: String, eventId: String, localTxnId: String, status: SendStatusDto)
 public struct GlobalImagePacksSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var packs: [ImagePackDto]
@@ -1235,8 +1261,8 @@ public struct IgnoredUsersSnapshotDto: Equatable, Hashable
   public var userIds: [String]
   public init(userIds: [String])
 public struct IgnoredUsersWriteDto: Equatable, Hashable
-  public var status: String
-  public init(status: String)
+  public var status: WriteAckDto
+  public init(status: WriteAckDto)
 public struct ImagePackDto: Equatable, Hashable
   public var id: String
   public var roomId: String?
@@ -1244,8 +1270,8 @@ public struct ImagePackDto: Equatable, Hashable
   public var contentJson: String
   public init(id: String, roomId: String?, stateKey: String?, contentJson: String)
 public struct ImagePackWriteDto: Equatable, Hashable
-  public var status: String
-  public init(status: String)
+  public var status: WriteAckDto
+  public init(status: WriteAckDto)
 public struct InboxNotificationDto: Equatable, Hashable
   public var roomId: String
   public var eventId: String
@@ -1309,8 +1335,8 @@ public struct LoginFlowDto: Equatable, Hashable
   public init(kind: String, matrixType: String, getLoginToken: Bool?)
 public struct MDirectMutationDto: Equatable, Hashable
   public var roomId: String
-  public var status: String
-  public init(roomId: String, status: String)
+  public var status: MutationStatusDto
+  public init(roomId: String, status: MutationStatusDto)
 public struct MDirectSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var roomIds: [String]
@@ -1374,8 +1400,8 @@ public struct OwnProfileUploadDto: Equatable, Hashable
   public var mxc: String
   public init(mxc: String)
 public struct OwnProfileWriteDto: Equatable, Hashable
-  public var status: String
-  public init(status: String)
+  public var status: WriteAckDto
+  public init(status: WriteAckDto)
 public struct OwnerUpdateDto: Equatable, Hashable
   public var family: String
   public var sessionGeneration: UInt64
@@ -1385,8 +1411,8 @@ public struct PollRespondDto: Equatable, Hashable
   public var roomId: String
   public var pollEventId: String
   public var eventId: String
-  public var status: String
-  public init(roomId: String, pollEventId: String, eventId: String, status: String)
+  public var status: SendStatusDto
+  public init(roomId: String, pollEventId: String, eventId: String, status: SendStatusDto)
 public struct PresenceSnapshotDto: Equatable, Hashable
   public var status: String
   public var sessionGeneration: UInt64
@@ -1402,8 +1428,8 @@ public struct PresenceSubscriptionDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public init(subscriptionId: String, userId: String, sessionGeneration: UInt64)
 public struct PresenceWriteDto: Equatable, Hashable
-  public var status: String
-  public init(status: String)
+  public var status: WriteAckDto
+  public init(status: WriteAckDto)
 public struct PushRuleMentionsDto: Equatable, Hashable
   public var userMention: Bool
   public var displayName: Bool
@@ -1420,11 +1446,11 @@ public struct PushRulesSnapshotDto: Equatable, Hashable
   public var keywords: [String]
   public init(dm: String, dmEncrypted: String, group: String, groupEncrypted: String, mentions: PushRuleMentionsDto, keywords: [String])
 public struct PushRulesWriteDto: Equatable, Hashable
-  public var status: String
-  public init(status: String)
+  public var status: WriteAckDto
+  public init(status: WriteAckDto)
 public struct PusherWriteDto: Equatable, Hashable
-  public var status: String
-  public init(status: String)
+  public var status: WriteAckDto
+  public init(status: WriteAckDto)
 public struct RegisterFlowsDto: Equatable, Hashable
   public var status: RegisterFlowsStatus
   public var session: String?
@@ -1435,12 +1461,12 @@ public struct RegisterUiaFlowDto: Equatable, Hashable
   public var stages: [String]
   public init(stages: [String])
 public struct RestoreBackupDto: Equatable, Hashable
-  public var status: String
-  public init(status: String)
+  public var status: WriteAckDto
+  public init(status: WriteAckDto)
 public struct RestrictedJoinReparentDto: Equatable, Hashable
   public var roomId: String
-  public var status: String
-  public init(roomId: String, status: String)
+  public var status: MutationStatusDto
+  public init(roomId: String, status: MutationStatusDto)
 public struct RoomBadgeSource: Equatable, Hashable
   public var total: UInt64
   public var highlight: UInt64?
@@ -1463,13 +1489,13 @@ public struct RoomCreateRequestDto: Equatable, Hashable
   public var parentRoomId: String?
   public init(name: String?, topic: String?, roomAliasName: String?, visibility: String?, preset: String?, isDirect: Bool, encryption: Bool, invite: [String], roomVersion: String?, joinRule: String?, knock: Bool, parentRoomId: String?)
 public struct RoomCreatorsSnapshotDto: Equatable, Hashable
-  public var status: String
+  public var status: WriteAckDto
   public var sessionGeneration: UInt64
   public var roomId: String
   public var eventType: String
   public var stateKey: String
   public var creators: [String]
-  public init(status: String, sessionGeneration: UInt64, roomId: String, eventType: String, stateKey: String, creators: [String])
+  public init(status: WriteAckDto, sessionGeneration: UInt64, roomId: String, eventType: String, stateKey: String, creators: [String])
 public struct RoomDirectoryHitDto: Equatable, Hashable
   public var roomId: String
   public var name: String?
@@ -1500,21 +1526,21 @@ public struct RoomDirectoryProtocolsDto: Equatable, Hashable
 public struct RoomDirectorySearchDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var requestId: UInt64
-  public var status: String
+  public var status: DirectorySearchStatusDto
   public var page: RoomDirectoryPageDto?
-  public init(sessionGeneration: UInt64, requestId: UInt64, status: String, page: RoomDirectoryPageDto?)
+  public init(sessionGeneration: UInt64, requestId: UInt64, status: DirectorySearchStatusDto, page: RoomDirectoryPageDto?)
 public struct RoomDirectoryVisibilityDto: Equatable, Hashable
-  public var status: String
+  public var status: WriteAckDto
   public var roomId: String
   public var sessionGeneration: UInt64
   public var visibility: String
-  public init(status: String, roomId: String, sessionGeneration: UInt64, visibility: String)
+  public init(status: WriteAckDto, roomId: String, sessionGeneration: UInt64, visibility: String)
 public struct RoomDirectoryVisibilityWriteDto: Equatable, Hashable
-  public var status: String
+  public var status: WriteAckDto
   public var roomId: String
   public var sessionGeneration: UInt64
   public var requestedVisibility: String
-  public init(status: String, roomId: String, sessionGeneration: UInt64, requestedVisibility: String)
+  public init(status: WriteAckDto, roomId: String, sessionGeneration: UInt64, requestedVisibility: String)
 public struct RoomIdentityWarningDto: Equatable, Hashable
   public var userId: String
   public var displayName: String?
@@ -1530,14 +1556,14 @@ public struct RoomImagePacksSnapshotDto: Equatable, Hashable
   public var packs: [ImagePackDto]
   public init(sessionGeneration: UInt64, roomId: String, packs: [ImagePackDto])
 public struct RoomJoinRuleSnapshotDto: Equatable, Hashable
-  public var status: String
+  public var status: WriteAckDto
   public var roomId: String
   public var sessionGeneration: UInt64
   public var joinRule: String
-  public init(status: String, roomId: String, sessionGeneration: UInt64, joinRule: String)
+  public init(status: WriteAckDto, roomId: String, sessionGeneration: UInt64, joinRule: String)
 public struct RoomJoinRuleWriteDto: Equatable, Hashable
-  public var status: String
-  public init(status: String)
+  public var status: WriteAckDto
+  public init(status: WriteAckDto)
 public struct RoomKeyTransferStatusDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var phase: RoomKeyTransferPhaseDto
@@ -1617,8 +1643,8 @@ public struct RoomNotificationSnapshotDto: Equatable, Hashable
   public var mode: String
   public init(roomId: String, mode: String)
 public struct RoomNotificationWriteDto: Equatable, Hashable
-  public var status: String
-  public init(status: String)
+  public var status: WriteAckDto
+  public init(status: WriteAckDto)
 public struct RoomNotificationsSnapshotDto: Equatable, Hashable
   public var rooms: [RoomNotificationSnapshotDto]
   public init(rooms: [RoomNotificationSnapshotDto])
@@ -1651,28 +1677,28 @@ public struct RoomPermissionCapabilitiesDto: Equatable, Hashable
   public var canManageSpaceChildren: Bool
   public init(ownPowerLevel: Int64?, isCreator: Bool, canSendMessage: Bool, canReact: Bool, canRedactOwn: Bool, canRedactOthers: Bool, canInvite: Bool, canKick: Bool, canBan: Bool, canNotifyRoom: Bool, canChangeName: Bool, canChangeTopic: Bool, canChangeAvatar: Bool, canChangeCanonicalAlias: Bool, canChangeHistoryVisibility: Bool, canChangeJoinRules: Bool, canEnableEncryption: Bool, canChangePowerLevels: Bool, canChangePinnedEvents: Bool, canUpgradeRoom: Bool, canManageSpaceChildren: Bool)
 public struct RoomPowerLevelTagsSnapshotDto: Equatable, Hashable
-  public var status: String
+  public var status: WriteAckDto
   public var sessionGeneration: UInt64
   public var roomId: String
   public var eventType: String
   public var stateKey: String
   public var contentJson: String
-  public init(status: String, sessionGeneration: UInt64, roomId: String, eventType: String, stateKey: String, contentJson: String)
+  public init(status: WriteAckDto, sessionGeneration: UInt64, roomId: String, eventType: String, stateKey: String, contentJson: String)
 public struct RoomPowerLevelWriteDto: Equatable, Hashable
   public var status: String
   public init(status: String)
 public struct RoomPowerLevelsSnapshotDto: Equatable, Hashable
-  public var status: String
+  public var status: WriteAckDto
   public var sessionGeneration: UInt64
   public var roomId: String
   public var eventType: String
   public var stateKey: String
   public var contentJson: String
   public var capabilities: RoomPermissionCapabilitiesDto?
-  public init(status: String, sessionGeneration: UInt64, roomId: String, eventType: String, stateKey: String, contentJson: String, capabilities: RoomPermissionCapabilitiesDto?)
+  public init(status: WriteAckDto, sessionGeneration: UInt64, roomId: String, eventType: String, stateKey: String, contentJson: String, capabilities: RoomPermissionCapabilitiesDto?)
 public struct RoomProfileWriteDto: Equatable, Hashable
-  public var status: String
-  public init(status: String)
+  public var status: WriteAckDto
+  public init(status: WriteAckDto)
 public struct RoomUnreadPresentationDto: Equatable, Hashable
   public var unreadCount: UInt64
   public var hasHighlight: Bool
@@ -1704,18 +1730,18 @@ public struct SecretStorageStatusDto: Equatable, Hashable
 public struct SendPollDto: Equatable, Hashable
   public var roomId: String
   public var eventId: String
-  public var status: String
-  public init(roomId: String, eventId: String, status: String)
+  public var status: SendStatusDto
+  public init(roomId: String, eventId: String, status: SendStatusDto)
 public struct SendRoomAttachmentDto: Equatable, Hashable
   public var eventId: String
-  public var status: String
-  public init(eventId: String, status: String)
+  public var status: SendStatusDto
+  public init(eventId: String, status: SendStatusDto)
 public struct SendTextDto: Equatable, Hashable
   public var roomId: String
   public var eventId: String
   public var localTxnId: String
-  public var status: String
-  public init(roomId: String, eventId: String, localTxnId: String, status: String)
+  public var status: SendStatusDto
+  public init(roomId: String, eventId: String, localTxnId: String, status: SendStatusDto)
 public struct SessionAttachDto: Equatable, Hashable
   public var owners: [String]
   public init(owners: [String])
@@ -1755,8 +1781,8 @@ public struct SpaceChildEdgeDto: Equatable, Hashable
 public struct SpaceChildMutationDto: Equatable, Hashable
   public var parentId: String
   public var childId: String
-  public var status: String
-  public init(parentId: String, childId: String, status: String)
+  public var status: MutationStatusDto
+  public init(parentId: String, childId: String, status: MutationStatusDto)
 public struct SpaceChildrenSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var edges: [SpaceChildEdgeDto]
@@ -1807,8 +1833,8 @@ public struct SyncStopDto: Equatable, Hashable
   public var offlineModeEnabled: Bool
   public init(readiness: SyncReadinessDto, sessionGeneration: UInt64, stopped: Bool, offlineModeEnabled: Bool)
 public struct ThreepidAddDto: Equatable, Hashable
-  public var status: String
-  public init(status: String)
+  public var status: ThreepidAddStatusDto
+  public init(status: ThreepidAddStatusDto)
 public struct ThreepidEmailDto: Equatable, Hashable
   public var address: String
   public init(address: String)
@@ -1819,8 +1845,8 @@ public struct ThreepidSnapshotDto: Equatable, Hashable
   public var emails: [ThreepidEmailDto]
   public init(emails: [ThreepidEmailDto])
 public struct ThreepidWriteDto: Equatable, Hashable
-  public var status: String
-  public init(status: String)
+  public var status: WriteAckDto
+  public init(status: WriteAckDto)
 public struct TimelineEventItemDto: Equatable, Hashable
   public var itemId: String
   public var eventId: String
@@ -2047,8 +2073,8 @@ public struct UserStatusSnapshotDto: Equatable, Hashable
   public var inCall: UserInCallDto?
   public init(sessionGeneration: UInt64, userId: String, userStatus: UserStatusFieldDto?, inCall: UserInCallDto?)
 public struct UserStatusWriteDto: Equatable, Hashable
-  public var status: String
-  public init(status: String)
+  public var status: WriteAckDto
+  public init(status: WriteAckDto)
 public struct VerificationEmojiDto: Equatable, Hashable
   public var symbol: String
   public var description: String

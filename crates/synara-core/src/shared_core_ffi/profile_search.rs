@@ -22,7 +22,7 @@ pub struct MediaConfigDto {
 /// Privacy-safe own-profile write ack. Status only; no display name or mxc.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct OwnProfileWriteDto {
-    pub status: String,
+    pub status: WriteAckDto,
 }
 
 /// Privacy-safe own-profile read. Avatar is an `mxc://` URI only; never bytes.
@@ -93,7 +93,7 @@ pub(super) fn own_profile_write_dto(
         own_profile_failed(OWN_PROFILE_FAILED_CODE, OWN_PROFILE_FAILED_DESCRIPTION)
     })?;
     Ok(OwnProfileWriteDto {
-        status: status.to_owned(),
+        status: status.into(),
     })
 }
 
@@ -121,7 +121,7 @@ pub struct IgnoredUsersSnapshotDto {
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct IgnoredUsersWriteDto {
-    pub status: String,
+    pub status: WriteAckDto,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
@@ -195,7 +195,7 @@ pub(super) fn ignored_users_write_dto(
         ignored_users_failed(IGNORED_USERS_FAILED_CODE, IGNORED_USERS_FAILED_DESCRIPTION)
     })?;
     Ok(IgnoredUsersWriteDto {
-        status: status.to_owned(),
+        status: status.into(),
     })
 }
 
@@ -455,7 +455,7 @@ pub struct ThreepidSnapshotDto {
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ThreepidWriteDto {
-    pub status: String,
+    pub status: WriteAckDto,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -465,7 +465,7 @@ pub struct ThreepidEmailTokenDto {
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ThreepidAddDto {
-    pub status: String,
+    pub status: ThreepidAddStatusDto,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
@@ -539,7 +539,7 @@ pub(super) fn threepid_write_dto(
     let status = Some(payload.status)
         .ok_or_else(|| threepid_failed(THREEPID_FAILED_CODE, THREEPID_FAILED_DESCRIPTION))?;
     Ok(ThreepidWriteDto {
-        status: status.to_owned(),
+        status: status.into(),
     })
 }
 
@@ -557,7 +557,7 @@ pub(super) fn threepid_add_dto(
 ) -> Result<ThreepidAddDto, ThreepidCommandError> {
     let result: crate::app::user_profile::MatrixThreepidAddResult = payload;
     Ok(ThreepidAddDto {
-        status: result.status,
+        status: result.status.into(),
     })
 }
 
@@ -801,7 +801,7 @@ impl SharedCore {
             })?;
         drop(password);
         Ok(ThreepidAddDto {
-            status: result.status,
+            status: result.status.into(),
         })
     }
 

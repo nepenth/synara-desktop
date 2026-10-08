@@ -35,7 +35,9 @@ pub(crate) async fn set_join_rule(
     })
     .await
     .map_err(map_join_rule_snapshot_core_error)?;
-    Ok(MatrixProfileWriteResult { status: "ok" })
+    Ok(MatrixProfileWriteResult {
+        status: synara_core::dto::WriteAck::Ok,
+    })
 }
 
 fn map_join_rule_snapshot_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {

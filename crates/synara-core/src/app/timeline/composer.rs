@@ -5,6 +5,7 @@
 //! presenter can re-home that affordance without selecting the native timeline
 //! presenter. Message body drafts stay local (Slate / localStorage).
 
+use crate::dto::ComposerDraftStatus;
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -69,26 +70,11 @@ pub struct NativeComposerReplyDraftReadback {
     pub schema_version: u32,
     pub room_id: String,
     /// `set`, `cleared`, or `empty`.
-    #[serde(deserialize_with = "deserialize_reply_draft_status")]
     #[cfg_attr(feature = "ts-export", ts(type = "\"set\" | \"cleared\" | \"empty\""))]
-    pub status: String,
+    pub status: ComposerDraftStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "ts-export", ts(optional))]
     pub draft: Option<NativeComposerReplyDraft>,
-}
-
-fn deserialize_reply_draft_status<'de, D>(deserializer: D) -> Result<String, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let value = String::deserialize(deserializer)?;
-    match value.as_str() {
-        "set" | "cleared" | "empty" => Ok(value),
-        other => Err(serde::de::Error::unknown_variant(
-            other,
-            &["set", "cleared", "empty"],
-        )),
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -165,13 +151,13 @@ impl ComposerDraftRegistry {
 
 pub fn reply_draft_readback(
     room_id: String,
-    status: &'static str,
+    status: ComposerDraftStatus,
     draft: Option<NativeComposerReplyDraft>,
 ) -> NativeComposerReplyDraftReadback {
     NativeComposerReplyDraftReadback {
         schema_version: NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION,
         room_id,
-        status: status.to_owned(),
+        status,
         draft,
     }
 }
@@ -200,7 +186,12 @@ mod tests {
             .is_none());
         assert!(registry.get("!room:example.org", None).is_none());
         assert_eq!(
-            reply_draft_readback("!room:example.org".into(), "cleared", None).status,
+            reply_draft_readback(
+                "!room:example.org".into(),
+                ComposerDraftStatus::Cleared,
+                None
+            )
+            .status,
             "cleared"
         );
     }

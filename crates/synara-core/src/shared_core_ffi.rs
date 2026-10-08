@@ -5,6 +5,8 @@
 //! never carry recovery secrets. Narrow NSE product builds use synara-nse-core.
 
 mod wire_enum;
+mod write_status;
+pub use write_status::*;
 
 mod agent_notification_preferences;
 pub use agent_notification_preferences::*;

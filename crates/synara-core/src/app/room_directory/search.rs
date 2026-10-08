@@ -117,7 +117,7 @@ pub fn cancelled_response(
     NativeRoomDirectorySearchResponse {
         session_generation,
         request_id,
-        status: "cancelled",
+        status: crate::dto::DirectorySearchStatus::Cancelled,
         page: None,
     }
 }
@@ -129,7 +129,7 @@ pub fn stale_response(
     NativeRoomDirectorySearchResponse {
         session_generation,
         request_id,
-        status: "stale",
+        status: crate::dto::DirectorySearchStatus::Stale,
         page: None,
     }
 }
@@ -295,7 +295,7 @@ pub async fn search_directory(
     Ok(NativeRoomDirectorySearchResponse {
         session_generation,
         request_id,
-        status: "ready",
+        status: crate::dto::DirectorySearchStatus::Ready,
         page: Some(page),
     })
 }

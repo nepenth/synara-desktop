@@ -312,6 +312,14 @@ impl QueuedSendOutcome {
         }
     }
 
+    /// The typed send status for a write whose success value is `sent`.
+    pub fn send_status(&self) -> crate::dto::SendStatus {
+        match self {
+            Self::Sent(_) => crate::dto::SendStatus::Sent,
+            Self::Queued { .. } => crate::dto::SendStatus::Queued,
+        }
+    }
+
     /// The server event id, or empty while the request is still queued.
     pub fn event_id(&self) -> String {
         match self {

@@ -2,6 +2,7 @@
 //!
 //! Live Client member/power-level I/O stays in the desktop shell.
 
+use crate::dto::WriteAck;
 use serde::{Deserialize, Serialize};
 
 use crate::dto::RoomMember;
@@ -26,7 +27,7 @@ pub struct NativeRoomMembersSnapshot {
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomPowerLevelsSnapshot {
     #[cfg_attr(feature = "ts-export", ts(type = "\"ok\""))]
-    pub status: &'static str,
+    pub status: WriteAck,
     pub session_generation: u64,
     pub room_id: String,
     #[cfg_attr(feature = "ts-export", ts(type = "\"m.room.power_levels\""))]
@@ -47,7 +48,7 @@ pub struct NativeRoomPowerLevelsSnapshot {
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomCreatorsSnapshot {
     #[cfg_attr(feature = "ts-export", ts(type = "\"ok\""))]
-    pub status: &'static str,
+    pub status: WriteAck,
     pub session_generation: u64,
     pub room_id: String,
     #[cfg_attr(feature = "ts-export", ts(type = "\"m.room.create\""))]
@@ -63,7 +64,7 @@ pub struct NativeRoomCreatorsSnapshot {
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomPowerLevelTagsSnapshot {
     #[cfg_attr(feature = "ts-export", ts(type = "\"ok\""))]
-    pub status: &'static str,
+    pub status: WriteAck,
     pub session_generation: u64,
     pub room_id: String,
     #[cfg_attr(
@@ -82,7 +83,7 @@ pub struct NativeRoomPowerLevelTagsSnapshot {
 #[serde(rename_all = "camelCase")]
 pub struct NativePowerLevelWriteResult {
     #[cfg_attr(feature = "ts-export", ts(type = "\"ok\""))]
-    pub status: &'static str,
+    pub status: WriteAck,
     pub room_id: String,
     #[cfg_attr(
         feature = "ts-export",

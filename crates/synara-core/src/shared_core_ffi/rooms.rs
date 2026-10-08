@@ -230,7 +230,7 @@ pub(super) fn invite_dto(invite: NativeInvite) -> InviteDto {
 /// Privacy-safe join-rule snapshot. Closed vocabulary only; no allow-list or tokens.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomJoinRuleSnapshotDto {
-    pub status: String,
+    pub status: WriteAckDto,
     pub room_id: String,
     pub session_generation: u64,
     pub join_rule: String,
@@ -239,7 +239,7 @@ pub struct RoomJoinRuleSnapshotDto {
 /// Privacy-safe join-rule write ack. Status only; no room id, join rule, or allow-list.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomJoinRuleWriteDto {
-    pub status: String,
+    pub status: WriteAckDto,
 }
 
 /// Static fail-closed join-rule error. Fields are source constants only.
@@ -396,7 +396,7 @@ pub(super) fn room_note_item_dto(item: SynaraRoomNoteItem) -> RoomNoteItemDto {
 /// Privacy-safe room-profile write ack. Status only; no room id, name, topic, or mxc.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomProfileWriteDto {
-    pub status: String,
+    pub status: WriteAckDto,
 }
 
 /// Static fail-closed room-profile-family error. Fields are source constants only.
@@ -463,7 +463,7 @@ pub(super) fn room_profile_write_dto(
     payload: crate::app::user_profile::MatrixProfileWriteResult,
 ) -> Result<RoomProfileWriteDto, RoomProfileCommandError> {
     Ok(RoomProfileWriteDto {
-        status: payload.status.to_owned(),
+        status: payload.status.into(),
     })
 }
 
@@ -782,13 +782,13 @@ impl WriteAck for () {
 
 impl WriteAck for crate::app::user_profile::MatrixProfileWriteResult {
     fn ack_status(&self) -> Option<&'static str> {
-        Some(self.status)
+        Some(self.status.as_str())
     }
 }
 
 impl WriteAck for crate::app::members::NativePowerLevelWriteResult {
     fn ack_status(&self) -> Option<&'static str> {
-        Some(self.status)
+        Some(self.status.as_str())
     }
 }
 
@@ -936,7 +936,7 @@ pub struct RoomMembersSnapshotDto {
 /// Privacy-safe power-levels snapshot. Content is JSON text.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomPowerLevelsSnapshotDto {
-    pub status: String,
+    pub status: WriteAckDto,
     pub session_generation: u64,
     pub room_id: String,
     pub event_type: String,
@@ -1006,7 +1006,7 @@ impl From<crate::app::members::RoomPermissionCapabilities> for RoomPermissionCap
 /// Privacy-safe creators snapshot. Creator user ids only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomCreatorsSnapshotDto {
-    pub status: String,
+    pub status: WriteAckDto,
     pub session_generation: u64,
     pub room_id: String,
     pub event_type: String,
@@ -1017,7 +1017,7 @@ pub struct RoomCreatorsSnapshotDto {
 /// Privacy-safe power-level-tags snapshot. Content is JSON text.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomPowerLevelTagsSnapshotDto {
-    pub status: String,
+    pub status: WriteAckDto,
     pub session_generation: u64,
     pub room_id: String,
     pub event_type: String,
@@ -1069,13 +1069,6 @@ pub(super) fn map_room_members_snapshot_core_error(
             ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
             ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
         ),
-    }
-}
-
-pub(super) fn closed_members_snapshot_status(value: &str) -> Option<&'static str> {
-    match value {
-        "ok" => Some("ok"),
-        _ => None,
     }
 }
 
@@ -1139,11 +1132,10 @@ pub(super) fn room_members_snapshot_dto(
 pub(super) fn room_power_levels_snapshot_dto(
     payload: NativeRoomPowerLevelsSnapshot,
 ) -> Result<RoomPowerLevelsSnapshotDto, RoomMembersSnapshotError> {
-    let status = closed_members_snapshot_status(payload.status).ok_or_else(members_failed)?;
     let event_type =
         closed_power_levels_event_type(payload.event_type).ok_or_else(members_failed)?;
     Ok(RoomPowerLevelsSnapshotDto {
-        status: status.to_owned(),
+        status: payload.status.into(),
         session_generation: payload.session_generation,
         room_id: non_empty(payload.room_id)?,
         event_type: event_type.to_owned(),
@@ -1156,7 +1148,6 @@ pub(super) fn room_power_levels_snapshot_dto(
 pub(super) fn room_creators_snapshot_dto(
     payload: NativeRoomCreatorsSnapshot,
 ) -> Result<RoomCreatorsSnapshotDto, RoomMembersSnapshotError> {
-    let status = closed_members_snapshot_status(payload.status).ok_or_else(members_failed)?;
     let event_type = closed_creators_event_type(payload.event_type).ok_or_else(members_failed)?;
     let creators = payload
         .creators
@@ -1164,7 +1155,7 @@ pub(super) fn room_creators_snapshot_dto(
         .map(non_empty)
         .collect::<Result<Vec<_>, _>>()?;
     Ok(RoomCreatorsSnapshotDto {
-        status: status.to_owned(),
+        status: payload.status.into(),
         session_generation: payload.session_generation,
         room_id: non_empty(payload.room_id)?,
         event_type: event_type.to_owned(),
@@ -1176,11 +1167,10 @@ pub(super) fn room_creators_snapshot_dto(
 pub(super) fn room_power_level_tags_snapshot_dto(
     payload: NativeRoomPowerLevelTagsSnapshot,
 ) -> Result<RoomPowerLevelTagsSnapshotDto, RoomMembersSnapshotError> {
-    let status = closed_members_snapshot_status(payload.status).ok_or_else(members_failed)?;
     let event_type =
         closed_power_level_tags_event_type(payload.event_type).ok_or_else(members_failed)?;
     Ok(RoomPowerLevelTagsSnapshotDto {
-        status: status.to_owned(),
+        status: payload.status.into(),
         session_generation: payload.session_generation,
         room_id: non_empty(payload.room_id)?,
         event_type: event_type.to_owned(),
@@ -1446,7 +1436,7 @@ impl SharedCore {
             .map_err(map_join_rule_core_error)?;
         let snapshot: MatrixRoomJoinRuleSnapshot = response;
         Ok(RoomJoinRuleSnapshotDto {
-            status: snapshot.status,
+            status: snapshot.status.into(),
             room_id: snapshot.room_id,
             session_generation: snapshot.session_generation,
             join_rule: snapshot.join_rule,
@@ -1476,7 +1466,7 @@ impl SharedCore {
             })?;
         let status = response.status;
         Ok(RoomJoinRuleWriteDto {
-            status: status.to_owned(),
+            status: status.into(),
         })
     }
 

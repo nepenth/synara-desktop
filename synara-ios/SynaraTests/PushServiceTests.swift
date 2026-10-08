@@ -1280,13 +1280,13 @@ private final class RecordingSharedCoreHttpPusherOwner: SharedCoreHttpPusherOwni
         _ = appDisplayName
         _ = lang
         registeredPushKeys.append(pushKey)
-        return PusherWriteDto(status: "ok")
+        return PusherWriteDto(status: .ok)
     }
 
     func deleteHttpPusher(pushKey: String, appId: String) async throws -> PusherWriteDto {
         _ = appId
         deletedPushKeys.append(pushKey)
-        return PusherWriteDto(status: "ok")
+        return PusherWriteDto(status: .ok)
     }
 
     func deleteHttpPushersForDevice(
@@ -1296,6 +1296,6 @@ private final class RecordingSharedCoreHttpPusherOwner: SharedCoreHttpPusherOwni
         _ = appId
         _ = lastPushKey
         deleteForDeviceCount += 1
-        return PusherWriteDto(status: "ok")
+        return PusherWriteDto(status: .ok)
     }
 }

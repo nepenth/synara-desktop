@@ -56,7 +56,7 @@ pub struct GlobalImagePacksSnapshotDto {
 /// Privacy-safe pack write ack. Status only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ImagePackWriteDto {
-    pub status: String,
+    pub status: WriteAckDto,
 }
 
 /// Static fail-closed image-pack-family error. Fields are source constants only.
@@ -131,7 +131,7 @@ pub(super) fn image_pack_write_dto(
     let status = Some(payload.status)
         .ok_or_else(|| image_pack_failed(IMAGE_PACK_FAILED_CODE, IMAGE_PACK_FAILED_DESCRIPTION))?;
     Ok(ImagePackWriteDto {
-        status: status.to_owned(),
+        status: status.into(),
     })
 }
 
@@ -282,7 +282,7 @@ pub struct MDirectSnapshotDto {
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct MDirectMutationDto {
     pub room_id: String,
-    pub status: String,
+    pub status: MutationStatusDto,
 }
 
 /// Static fail-closed m.direct-family error. Fields are source constants only.
@@ -362,7 +362,7 @@ pub(super) fn mdirect_mutation_dto(
     }
     Ok(MDirectMutationDto {
         room_id: room_id.to_owned(),
-        status: status.to_owned(),
+        status: status.into(),
     })
 }
 
@@ -447,7 +447,7 @@ pub(super) fn room_notes_snapshot_dto(
 /// Privacy-safe directory-visibility read. Visibility is public/private only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomDirectoryVisibilityDto {
-    pub status: String,
+    pub status: WriteAckDto,
     pub room_id: String,
     pub session_generation: u64,
     pub visibility: String,
@@ -456,7 +456,7 @@ pub struct RoomDirectoryVisibilityDto {
 /// Privacy-safe directory-visibility write ack. Visibility is public/private only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomDirectoryVisibilityWriteDto {
-    pub status: String,
+    pub status: WriteAckDto,
     pub room_id: String,
     pub session_generation: u64,
     pub requested_visibility: String,
@@ -492,7 +492,7 @@ pub(super) fn room_directory_visibility_dto(
             )
         })?;
     Ok(RoomDirectoryVisibilityDto {
-        status: status.to_owned(),
+        status: status.into(),
         room_id: room_id.to_owned(),
         session_generation,
         visibility: visibility.to_owned(),
@@ -529,7 +529,7 @@ pub(super) fn room_directory_visibility_write_dto(
             )
         })?;
     Ok(RoomDirectoryVisibilityWriteDto {
-        status: status.to_owned(),
+        status: status.into(),
         room_id: room_id.to_owned(),
         session_generation,
         requested_visibility: requested_visibility.to_owned(),
@@ -580,7 +580,7 @@ pub struct RoomDirectoryPageDto {
 pub struct RoomDirectorySearchDto {
     pub session_generation: u64,
     pub request_id: u64,
-    pub status: String,
+    pub status: DirectorySearchStatusDto,
     pub page: Option<RoomDirectoryPageDto>,
 }
 
@@ -644,11 +644,10 @@ pub(super) fn room_directory_page_dto(
 pub(super) fn room_directory_search_dto(
     payload: NativeRoomDirectorySearchResponse,
 ) -> Result<RoomDirectorySearchDto, DirectorySearchCommandError> {
-    let status = closed_directory_search_status(payload.status).ok_or_else(directory_failed)?;
     Ok(RoomDirectorySearchDto {
         session_generation: payload.session_generation,
         request_id: payload.request_id,
-        status: status.to_owned(),
+        status: payload.status.into(),
         page: payload.page.map(room_directory_page_dto).transpose()?,
     })
 }

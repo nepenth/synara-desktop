@@ -4,6 +4,7 @@
 //! `Core::command` JSON. Failed errors are static and never echo push keys,
 //! gateway URLs, tokens, or app ids.
 
+use crate::dto::WriteAck;
 use matrix_sdk::ruma::api::client::push::{get_pushers, Pusher, PusherIds, PusherInit, PusherKind};
 use matrix_sdk::ruma::push::{HttpPusherData, PushFormat};
 use matrix_sdk::Client;
@@ -22,7 +23,7 @@ const APPEND_NEW_PUSHER: bool = false;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatrixHttpPusherWriteResult {
-    pub status: &'static str,
+    pub status: WriteAck,
 }
 
 /// Account-bound owner for HTTP-pusher writes.
@@ -132,7 +133,9 @@ impl NativeHttpPusherOwner {
         if let Some(diagnostic) = first_error {
             return Err(diagnostic);
         }
-        Ok(MatrixHttpPusherWriteResult { status: "ok" })
+        Ok(MatrixHttpPusherWriteResult {
+            status: crate::dto::WriteAck::Ok,
+        })
     }
 }
 
@@ -236,7 +239,9 @@ pub async fn register_http_pusher(
         .set(pusher, APPEND_NEW_PUSHER)
         .await
         .map_err(|_| "v-pusher.sdk-failed")?;
-    Ok(MatrixHttpPusherWriteResult { status: "ok" })
+    Ok(MatrixHttpPusherWriteResult {
+        status: crate::dto::WriteAck::Ok,
+    })
 }
 
 fn build_http_pusher(
@@ -288,7 +293,9 @@ pub async fn delete_http_pusher(
         .delete(PusherIds::new(push_key, app_id))
         .await
         .map_err(|_| "v-pusher.sdk-failed")?;
-    Ok(MatrixHttpPusherWriteResult { status: "ok" })
+    Ok(MatrixHttpPusherWriteResult {
+        status: crate::dto::WriteAck::Ok,
+    })
 }
 
 #[cfg(test)]

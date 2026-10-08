@@ -113,7 +113,7 @@ pub fn retention_snapshot(
 ) -> MatrixRoomRetentionSnapshot {
     let copy = format_retention_copy(max_lifetime, min_lifetime, shortest_joined_max_lifetime);
     MatrixRoomRetentionSnapshot {
-        status: "ok".to_owned(),
+        status: crate::dto::WriteAck::Ok,
         room_id,
         session_generation,
         advertised: copy.advertised,

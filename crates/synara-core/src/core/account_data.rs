@@ -1,6 +1,7 @@
 //! Core command adapters for account data.
 
 use super::*;
+use crate::dto::WriteAck;
 
 /// Exact React/Tauri envelope payload for `matrix_get_room_image_packs`.
 #[derive(Deserialize)]
@@ -444,13 +445,13 @@ pub(super) fn matrix_get_room_image_packs(
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MatrixStatusOk {
     /// Always `ok`.
-    pub status: String,
+    pub status: WriteAck,
 }
 
 impl MatrixStatusOk {
     pub(super) fn ok() -> Self {
         Self {
-            status: "ok".to_owned(),
+            status: crate::dto::WriteAck::Ok,
         }
     }
 }
