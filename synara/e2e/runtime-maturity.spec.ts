@@ -15,7 +15,9 @@ for (const readiness of ['idle', 'offline', 'failed', 'terminated']) {
     await expect(page.getByText('Heating up', { exact: true })).toBeVisible();
     await expect(
       page.getByText(
-        readiness === 'failed'
+        // A terminated SyncService maps to ERROR like failed (shared
+        // desktop/iOS readiness table), so both read as retrying.
+        readiness === 'failed' || readiness === 'terminated'
           ? 'Sync is retrying'
           : readiness === 'offline'
             ? 'Reconnecting'
@@ -477,7 +479,11 @@ test('the production Slate composer edits, formats, splits paragraphs and restor
   await expect.poll(() => page.getByTestId('composer-state').textContent()).toContain('second');
   await page.keyboard.press('ControlOrMeta+z');
   await expect(editor).not.toContainText('second');
-  await page.keyboard.press('ControlOrMeta+Shift+z');
+  // Slate picks the redo chord from the user agent (Cmd+Shift+Z on Apple,
+  // Ctrl+Shift+Z elsewhere). Playwright's WebKit reports a Mac user agent on a
+  // Linux host, so a host-derived ControlOrMeta chord would never redo there.
+  const appleUserAgent = await page.evaluate(() => /Mac OS X/.test(navigator.userAgent));
+  await page.keyboard.press(appleUserAgent ? 'Meta+Shift+z' : 'Control+Shift+z');
   await expect(editor).toContainText('second');
   expect(errors).toEqual([]);
 });
