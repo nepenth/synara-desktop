@@ -15,7 +15,9 @@ for (const readiness of ['idle', 'offline', 'failed', 'terminated']) {
     await expect(page.getByText('Heating up', { exact: true })).toBeVisible();
     await expect(
       page.getByText(
-        readiness === 'failed'
+        // A terminated SyncService maps to ERROR like failed (shared
+        // desktop/iOS readiness table), so both read as retrying.
+        readiness === 'failed' || readiness === 'terminated'
           ? 'Sync is retrying'
           : readiness === 'offline'
             ? 'Reconnecting'

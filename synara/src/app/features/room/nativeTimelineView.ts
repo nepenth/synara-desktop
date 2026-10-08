@@ -503,6 +503,18 @@ const isValidIndex = (index: number, length: number, allowEnd = false): boolean 
  */
 export const NATIVE_TIMELINE_SAFETY_NET_POLL_MS = 10_000;
 export const NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS = 750;
+/**
+ * One early safety-net poll after open. A batch dropped around the open
+ * readback is the likeliest gap, so check it soon, then fall back to the slow
+ * cadence.
+ */
+export const NATIVE_TIMELINE_FIRST_SAFETY_NET_POLL_MS = 1_500;
+
+/** Delay before the next snapshot poll, given whether deltas are live. */
+export const nativeTimelinePollDelay = (deltasLive: boolean, firstPoll: boolean): number => {
+  if (!deltasLive) return NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS;
+  return firstPoll ? NATIVE_TIMELINE_FIRST_SAFETY_NET_POLL_MS : NATIVE_TIMELINE_SAFETY_NET_POLL_MS;
+};
 
 /**
  * True when `next` carries nothing new. The revision counts SDK timeline
@@ -1430,12 +1442,17 @@ export const useNativeTimelineView = (
         selectedPositionRef.current = readback.position;
         setState({ status: 'ready', snapshot, selectedPosition: readback.position });
         if (!disposed) {
-          pollTimer = window.setInterval(
-            () => {
-              void pollSnapshot();
-            },
-            unlisten ? NATIVE_TIMELINE_SAFETY_NET_POLL_MS : NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS
-          );
+          const schedulePoll = (firstPoll: boolean) => {
+            pollTimer = window.setTimeout(
+              () => {
+                if (disposed) return;
+                void pollSnapshot();
+                schedulePoll(false);
+              },
+              nativeTimelinePollDelay(Boolean(unlisten), firstPoll)
+            );
+          };
+          schedulePoll(true);
         }
       } catch (error) {
         if (!disposed) {
@@ -1463,7 +1480,7 @@ export const useNativeTimelineView = (
           request: { streamId },
         });
       }
-      if (pollTimer !== undefined) window.clearInterval(pollTimer);
+      if (pollTimer !== undefined) window.clearTimeout(pollTimer);
       unlisten?.();
     };
   }, [acceptSnapshot, beginOpen, finishOpen, nativeRequest]);
