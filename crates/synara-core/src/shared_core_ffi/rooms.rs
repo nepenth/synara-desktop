@@ -59,6 +59,20 @@ pub struct RoomListSnapshotDto {
     pub rooms: Vec<RoomListRoomDto>,
 }
 
+super::wire_enum::wire_enum! {
+    /// The signed-in user's (or a member's) room membership.
+    pub enum RoomMembershipDto {
+        Invite => "invite",
+        Join => "join",
+        Knock => "knock",
+        Leave => "leave",
+        Ban => "ban",
+    }
+}
+super::wire_enum::wire_enum_from!(crate::dto::Membership => RoomMembershipDto {
+    Invite, Join, Knock, Leave, Ban
+});
+
 /// One privacy-safe room-list row. No tokens or password.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomListRoomDto {
@@ -66,7 +80,7 @@ pub struct RoomListRoomDto {
     pub name: Option<String>,
     pub canonical_alias: Option<String>,
     pub avatar_url: Option<String>,
-    pub membership: String,
+    pub membership: RoomMembershipDto,
     pub is_direct: bool,
     pub direct_user_id: Option<String>,
     pub is_space: bool,
@@ -906,7 +920,7 @@ pub struct RoomMemberDto {
     pub user_id: String,
     pub display_name: Option<String>,
     pub avatar_url: Option<String>,
-    pub membership: String,
+    pub membership: RoomMembershipDto,
     pub power_level: i32,
     pub is_direct_target: Option<bool>,
 }
@@ -1058,17 +1072,6 @@ pub(super) fn map_room_members_snapshot_core_error(
     }
 }
 
-pub(super) fn closed_room_member_membership(value: &str) -> Option<&'static str> {
-    match value {
-        "invite" => Some("invite"),
-        "join" => Some("join"),
-        "knock" => Some("knock"),
-        "leave" => Some("leave"),
-        "ban" => Some("ban"),
-        _ => None,
-    }
-}
-
 pub(super) fn closed_members_snapshot_status(value: &str) -> Option<&'static str> {
     match value {
         "ok" => Some("ok"),
@@ -1107,14 +1110,12 @@ fn non_empty(value: String) -> Result<String, RoomMembersSnapshotError> {
 pub(super) fn room_member_dto(
     member: crate::dto::RoomMember,
 ) -> Result<RoomMemberDto, RoomMembersSnapshotError> {
-    let membership = closed_room_member_membership(&wire_label(&member.membership))
-        .ok_or_else(members_failed)?;
     Ok(RoomMemberDto {
         room_id: non_empty(member.room_id)?,
         user_id: non_empty(member.user_id)?,
         display_name: member.display_name,
         avatar_url: member.avatar_url,
-        membership: membership.to_owned(),
+        membership: member.membership.into(),
         power_level: member.power_level,
         is_direct_target: member.is_direct_target,
     })
@@ -1395,7 +1396,7 @@ impl SharedCore {
                     name: room.name,
                     canonical_alias: room.canonical_alias,
                     avatar_url: room.avatar_url,
-                    membership: room.membership.as_str().to_owned(),
+                    membership: room.membership.into(),
                     is_direct: room.is_direct,
                     direct_user_id: room.direct_user_id,
                     is_space: room.is_space,

@@ -1260,13 +1260,13 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 SharedCoreRoomDetails.MemberRow(
                     userId: "@alice:example.org",
                     displayName: "Alice",
-                    membership: "join",
+                    membership: .join,
                     powerLevel: 100
                 ),
                 SharedCoreRoomDetails.MemberRow(
                     userId: "@bob:example.org",
                     displayName: nil,
-                    membership: "leave",
+                    membership: .leave,
                     powerLevel: 0
                 ),
             ],
@@ -1354,7 +1354,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     roomId: "!s25:example.org",
                     name: "Ops",
                     avatarUrl: "mxc://example.org/room",
-                    membership: "invite",
+                    membership: .invite,
                     isDirect: false,
                     unreadCount: 0,
                     highlightCount: 0,
@@ -1373,7 +1373,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     roomId: "!space:example.org",
                     name: "Team",
                     avatarUrl: nil,
-                    membership: "join",
+                    membership: .join,
                     isDirect: false,
                     unreadCount: 0,
                     highlightCount: 0,
@@ -1592,22 +1592,22 @@ final class SynaraCoreBindingsTests: XCTestCase {
         let joinedRows = [
             SharedCoreCryptoStatusService.JoinedRoomEncryptionRow(
                 roomID: "!encrypted:example.org",
-                membership: "join",
+                membership: .join,
                 encryption: .encrypted
             ),
             SharedCoreCryptoStatusService.JoinedRoomEncryptionRow(
                 roomID: "!clear:example.org",
-                membership: "join",
+                membership: .join,
                 encryption: .notEncrypted
             ),
             SharedCoreCryptoStatusService.JoinedRoomEncryptionRow(
                 roomID: "!unknown:example.org",
-                membership: "join",
+                membership: .join,
                 encryption: .unknown
             ),
             SharedCoreCryptoStatusService.JoinedRoomEncryptionRow(
                 roomID: "!invite:example.org",
-                membership: "invite",
+                membership: .invite,
                 encryption: .notEncrypted
             ),
         ]
@@ -1762,14 +1762,14 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
         XCTAssertEqual(
             SharedCoreRtcTransports.diagnosticCopy(
-                SharedCoreRtcTransportsSnapshot(status: "unsupported", transports: [])
+                SharedCoreRtcTransportsSnapshot(status: .unsupported, transports: [])
             ),
             "This homeserver does not advertise a call transport"
         )
         XCTAssertEqual(
             SharedCoreRtcTransports.diagnosticCopy(
                 SharedCoreRtcTransportsSnapshot(
-                    status: "ready",
+                    status: .ready,
                     transports: [
                         SharedCoreRtcTransport(kind: "livekit", serviceURL: "https://livekit.example.org")
                     ]
@@ -2289,7 +2289,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         let core = SharedCore()
         let item = LaterItemDto(
             id: "later-s95",
-            kind: "saved",
+            kind: .saved,
             roomId: "!s95later:example.org",
             eventId: "$s95event",
             createdAt: 1_700_000_000_000,

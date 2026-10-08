@@ -157,11 +157,22 @@ pub struct RtcTransportDto {
     pub service_url: Option<String>,
 }
 
+super::wire_enum::wire_enum! {
+    pub enum RtcTransportsStatusDto {
+        Ready => "ready",
+        Unsupported => "unsupported",
+        Unavailable => "unavailable",
+    }
+}
+super::wire_enum::wire_enum_from!(crate::app::rtc_transports::NativeRtcTransportsStatus => RtcTransportsStatusDto {
+    Ready, Unsupported, Unavailable
+});
+
 /// Privacy-safe MatrixRTC discovery snapshot.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RtcTransportsSnapshotDto {
     pub session_generation: u64,
-    pub status: String,
+    pub status: RtcTransportsStatusDto,
     pub transports: Vec<RtcTransportDto>,
 }
 
@@ -211,15 +222,7 @@ pub(super) fn rtc_transports_snapshot_dto(
 ) -> RtcTransportsSnapshotDto {
     RtcTransportsSnapshotDto {
         session_generation: snapshot.session_generation,
-        status: match snapshot.status {
-            crate::app::rtc_transports::NativeRtcTransportsStatus::Ready => "ready".to_owned(),
-            crate::app::rtc_transports::NativeRtcTransportsStatus::Unsupported => {
-                "unsupported".to_owned()
-            }
-            crate::app::rtc_transports::NativeRtcTransportsStatus::Unavailable => {
-                "unavailable".to_owned()
-            }
-        },
+        status: snapshot.status.into(),
         transports: snapshot
             .transports
             .into_iter()

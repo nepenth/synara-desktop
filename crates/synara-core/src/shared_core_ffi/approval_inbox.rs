@@ -7,6 +7,17 @@ use crate::app::timeline::{
 };
 use crate::transport::MatrixIpcErrorCategory;
 
+super::wire_enum::wire_enum! {
+    pub enum AgentApprovalInboxStatusDto {
+        Pending => "pending",
+        Decided => "decided",
+        Expired => "expired",
+    }
+}
+super::wire_enum::wire_enum_from!(NativeAgentApprovalInboxStatus => AgentApprovalInboxStatusDto {
+    Pending, Decided, Expired
+});
+
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct AgentApprovalInboxItemDto {
     pub room_id: String,
@@ -15,7 +26,7 @@ pub struct AgentApprovalInboxItemDto {
     pub body: String,
     pub origin_server_ts: u64,
     pub expires_at: u64,
-    pub status: String,
+    pub status: AgentApprovalInboxStatusDto,
     pub can_send_reaction: bool,
     pub body_truncated: bool,
 }
@@ -82,12 +93,7 @@ fn snapshot_dto(snapshot: NativeAgentApprovalInboxSnapshot) -> AgentApprovalInbo
                 body: item.body,
                 origin_server_ts: item.origin_server_ts,
                 expires_at: item.expires_at,
-                status: match item.status {
-                    NativeAgentApprovalInboxStatus::Pending => "pending",
-                    NativeAgentApprovalInboxStatus::Decided => "decided",
-                    NativeAgentApprovalInboxStatus::Expired => "expired",
-                }
-                .to_owned(),
+                status: item.status.into(),
                 can_send_reaction: item.can_send_reaction,
                 body_truncated: item.body_truncated,
             })

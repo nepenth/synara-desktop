@@ -300,9 +300,9 @@ final class AppEnvironmentTests: XCTestCase {
         let updated = await service.roomDetails(roomID: "!project:matrix.org")
         XCTAssertEqual(service.kickedUsers.map(\.userID), ["@bob:matrix.org"])
         XCTAssertEqual(service.bannedUsers.map(\.reason), ["abuse"])
-        XCTAssertEqual(updated?.members.first(where: { $0.userID == "@bob:matrix.org" })?.membership, "leave")
+        XCTAssertEqual(updated?.members.first(where: { $0.userID == "@bob:matrix.org" })?.membership, .leave)
         XCTAssertEqual(updated?.members.first(where: { $0.userID == "@bob:matrix.org" })?.powerLevel, 50)
-        XCTAssertEqual(updated?.members.first(where: { $0.userID == "@carol:matrix.org" })?.membership, "leave")
+        XCTAssertEqual(updated?.members.first(where: { $0.userID == "@carol:matrix.org" })?.membership, .leave)
     }
 
     func testMockRoomManagementUpdatesRoomProfile() async throws {

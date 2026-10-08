@@ -19,7 +19,7 @@ enum SharedCoreRoomDetails {
     struct MemberRow {
         let userId: String
         let displayName: String?
-        let membership: String
+        let membership: RoomMembershipDto
         let powerLevel: Int
     }
 
@@ -51,7 +51,7 @@ enum SharedCoreRoomDetails {
             aliases: aliases,
             encryptionStatus: encryptionStatus,
             isPublic: joinRule.map { $0 == "public" },
-            memberCount: members.filter { $0.membership == "join" }.count,
+            memberCount: members.filter { $0.membership == .join }.count,
             canInvite: power?.canInvite ?? false,
             canEditName: power?.canEditName ?? false,
             canEditTopic: power?.canEditTopic ?? false,

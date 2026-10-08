@@ -116,8 +116,11 @@ final class SharedCoreAgentApprovalHistoryService: AgentApprovalHistoryServicing
     }
 
     static func inboxRecord(from item: AgentApprovalInboxItemDto) -> AgentApprovalInboxRecord? {
-        guard let status = AgentApprovalInboxStatus(rawValue: item.status) else {
-            return nil
+        let status: AgentApprovalInboxStatus
+        switch item.status {
+        case .pending: status = .pending
+        case .decided: status = .decided
+        case .expired: status = .expired
         }
         return AgentApprovalInboxRecord(
             roomId: item.roomId,
@@ -133,8 +136,11 @@ final class SharedCoreAgentApprovalHistoryService: AgentApprovalHistoryServicing
     }
 
     static func historyRecord(from item: AgentApprovalHistoryItemDto) -> AgentApprovalHistoryRecord? {
-        guard let decision = AgentApprovalHistoryDecision(rawValue: item.decision) else {
-            return nil
+        let decision: AgentApprovalHistoryDecision
+        switch item.decision {
+        case .approveOnce: decision = .approveOnce
+        case .approveAlways: decision = .approveAlways
+        case .deny: decision = .deny
         }
         return AgentApprovalHistoryRecord(
             roomId: item.roomId,

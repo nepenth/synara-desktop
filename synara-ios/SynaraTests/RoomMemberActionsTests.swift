@@ -1,5 +1,6 @@
 import XCTest
 @testable import Synara
+import SynaraCore
 
 final class RoomMemberActionsTests: XCTestCase {
     func testCreatorOutranksEveryIntegerLevel() {
@@ -8,7 +9,7 @@ final class RoomMemberActionsTests: XCTestCase {
         let member = RoomMemberSummary(
             userID: "@bob:matrix.org",
             displayName: "Bob",
-            membership: "join",
+            membership: .join,
             powerLevel: 100
         )
         let plan = RoomMemberActionPlan.plan(
@@ -25,7 +26,7 @@ final class RoomMemberActionsTests: XCTestCase {
         let member = RoomMemberSummary(
             userID: "@bob:matrix.org",
             displayName: "Bob",
-            membership: "join",
+            membership: .join,
             powerLevel: 0
         )
         let plan = RoomMemberActionPlan.plan(
@@ -47,7 +48,7 @@ final class RoomMemberActionsTests: XCTestCase {
         let member = RoomMemberSummary(
             userID: "@carol:matrix.org",
             displayName: "Carol",
-            membership: "leave",
+            membership: .leave,
             powerLevel: 0
         )
         let plan = RoomMemberActionPlan.plan(
@@ -66,7 +67,7 @@ final class RoomMemberActionsTests: XCTestCase {
         let selfMember = RoomMemberSummary(
             userID: "@alice:matrix.org",
             displayName: "Alice",
-            membership: "join",
+            membership: .join,
             powerLevel: 100
         )
         let selfPlan = RoomMemberActionPlan.plan(
@@ -81,7 +82,7 @@ final class RoomMemberActionsTests: XCTestCase {
         let peerAdmin = RoomMemberSummary(
             userID: "@bob:matrix.org",
             displayName: "Bob",
-            membership: "join",
+            membership: .join,
             powerLevel: 100
         )
         let equalPlan = RoomMemberActionPlan.plan(
@@ -98,7 +99,7 @@ final class RoomMemberActionsTests: XCTestCase {
         let member = RoomMemberSummary(
             userID: "@carol:matrix.org",
             displayName: "Carol",
-            membership: "ban",
+            membership: .ban,
             powerLevel: 0
         )
         let plan = RoomMemberActionPlan.plan(
@@ -118,7 +119,7 @@ final class RoomMemberActionsTests: XCTestCase {
         let member = RoomMemberSummary(
             userID: "@bob:matrix.org",
             displayName: "Bob",
-            membership: "ban",
+            membership: .ban,
             powerLevel: 100
         )
         let plan = RoomMemberActionPlan.plan(
@@ -136,7 +137,7 @@ final class RoomMemberActionsTests: XCTestCase {
         let member = RoomMemberSummary(
             userID: "@dana:matrix.org",
             displayName: "Dana",
-            membership: "knock",
+            membership: .knock,
             powerLevel: 0
         )
         let plan = RoomMemberActionPlan.plan(

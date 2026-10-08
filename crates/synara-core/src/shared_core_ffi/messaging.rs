@@ -38,12 +38,22 @@ pub struct TimelineReactionMutationDto {
     pub readback: Option<TimelineReactionDto>,
 }
 
+super::wire_enum::wire_enum! {
+    pub enum AgentApprovalDecisionStatusDto {
+        Applied => "applied",
+        AlreadyDecided => "already_decided",
+    }
+}
+super::wire_enum::wire_enum_from!(crate::app::agent_approvals::AgentApprovalDecisionStatus => AgentApprovalDecisionStatusDto {
+    Applied, AlreadyDecided
+});
+
 /// Privacy-safe result of the shared-core approval decision route.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct AgentApprovalDecisionDto {
     pub room_id: String,
     pub event_id: String,
-    pub status: String,
+    pub status: AgentApprovalDecisionStatusDto,
     pub reaction: Option<TimelineReactionMutationDto>,
 }
 
@@ -1367,13 +1377,7 @@ impl SharedCore {
         Ok(AgentApprovalDecisionDto {
             room_id: result.room_id,
             event_id: result.event_id,
-            status: match result.status {
-                crate::app::agent_approvals::AgentApprovalDecisionStatus::Applied => "applied",
-                crate::app::agent_approvals::AgentApprovalDecisionStatus::AlreadyDecided => {
-                    "already_decided"
-                }
-            }
-            .to_owned(),
+            status: result.status.into(),
             reaction: result.reaction.map(timeline_reaction_mutation_dto),
         })
     }

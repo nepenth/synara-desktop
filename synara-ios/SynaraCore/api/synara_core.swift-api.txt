@@ -1,10 +1,13 @@
 extension AgentApprovalDecisionDto: Sendable
+extension AgentApprovalDecisionStatusDto: Sendable
 extension AgentApprovalHistoryCommandError: Sendable
+extension AgentApprovalHistoryDecisionDto: Sendable
 extension AgentApprovalHistoryItemDto: Sendable
 extension AgentApprovalHistorySnapshotDto: Sendable
 extension AgentApprovalInboxDto: Sendable
 extension AgentApprovalInboxError: Sendable
 extension AgentApprovalInboxItemDto: Sendable
+extension AgentApprovalInboxStatusDto: Sendable
 extension AgentApprovalSendDto: Sendable
 extension AgentApprovalSendError: Sendable
 extension AgentNotificationPreferencesDto: Sendable
@@ -56,6 +59,7 @@ extension IosSecretVaultError: Sendable
 extension JoinRuleCommandError: Sendable
 extension LaterCommandError: Sendable
 extension LaterItemDto: Sendable
+extension LaterItemKindDto: Sendable
 extension LaterSnapshotDto: Sendable
 extension LeftoverAckDto: Sendable
 extension LeftoverAckStatusDto: Sendable
@@ -136,6 +140,7 @@ extension RoomMemberDto: Sendable
 extension RoomMembersSnapshotDto: Sendable
 extension RoomMembersSnapshotError: Sendable
 extension RoomMembershipCommandError: Sendable
+extension RoomMembershipDto: Sendable
 extension RoomMembershipWriteDto: Sendable
 extension RoomModerationCommandError: Sendable
 extension RoomModerationWriteDto: Sendable
@@ -159,6 +164,7 @@ extension RoomUnreadPresentationDto: Sendable
 extension RtcTransportDto: Sendable
 extension RtcTransportsCommandError: Sendable
 extension RtcTransportsSnapshotDto: Sendable
+extension RtcTransportsStatusDto: Sendable
 extension SecretStorageActionDto: Sendable
 extension SecretStorageSetupDto: Sendable
 extension SecretStorageStateDto: Sendable
@@ -458,12 +464,23 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func wipePersistedStores(storeRoot: String) async throws -> LeftoverAckDto
   public convenience init()
   public static func newWithSecretStore(store: IosSecretVault) -> SharedCore
+public enum AgentApprovalDecisionStatusDto: Equatable, Hashable
+  case applied
+  case alreadyDecided
 public enum AgentApprovalHistoryCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum AgentApprovalHistoryDecisionDto: Equatable, Hashable
+  case approveOnce
+  case approveAlways
+  case deny
 public enum AgentApprovalInboxError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum AgentApprovalInboxStatusDto: Equatable, Hashable
+  case pending
+  case decided
+  case expired
 public enum AgentApprovalSendError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -561,6 +578,9 @@ public enum JoinRuleCommandError: Swift.Error, Equatable, Hashable, Foundation.L
 public enum LaterCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum LaterItemKindDto: Equatable, Hashable
+  case saved
+  case reminder
 public enum LeftoverAckStatusDto: Equatable, Hashable
   case wiped
   case forgotten
@@ -657,6 +677,12 @@ public enum RoomMembersSnapshotError: Swift.Error, Equatable, Hashable, Foundati
 public enum RoomMembershipCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum RoomMembershipDto: Equatable, Hashable
+  case invite
+  case join
+  case knock
+  case leave
+  case ban
 public enum RoomModerationCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -678,6 +704,10 @@ public enum RoomUnreadMembership: Equatable, Hashable
 public enum RtcTransportsCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum RtcTransportsStatusDto: Equatable, Hashable
+  case ready
+  case unsupported
+  case unavailable
 public enum SecretStorageActionDto: Equatable, Hashable
   case bootstrapRequired
   case unlockRequired
@@ -1072,19 +1102,19 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
 public struct AgentApprovalDecisionDto: Equatable, Hashable
   public var roomId: String
   public var eventId: String
-  public var status: String
+  public var status: AgentApprovalDecisionStatusDto
   public var reaction: TimelineReactionMutationDto?
-  public init(roomId: String, eventId: String, status: String, reaction: TimelineReactionMutationDto?)
+  public init(roomId: String, eventId: String, status: AgentApprovalDecisionStatusDto, reaction: TimelineReactionMutationDto?)
 public struct AgentApprovalHistoryItemDto: Equatable, Hashable
   public var roomId: String
   public var eventId: String
   public var sender: String
-  public var decision: String
+  public var decision: AgentApprovalHistoryDecisionDto
   public var decidedAt: Double
   public var originServerTs: Double
   public var expiresAt: Double
   public var summary: String
-  public init(roomId: String, eventId: String, sender: String, decision: String, decidedAt: Double, originServerTs: Double, expiresAt: Double, summary: String)
+  public init(roomId: String, eventId: String, sender: String, decision: AgentApprovalHistoryDecisionDto, decidedAt: Double, originServerTs: Double, expiresAt: Double, summary: String)
 public struct AgentApprovalHistorySnapshotDto: Equatable, Hashable
   public var items: [AgentApprovalHistoryItemDto]
   public init(items: [AgentApprovalHistoryItemDto])
@@ -1103,10 +1133,10 @@ public struct AgentApprovalInboxItemDto: Equatable, Hashable
   public var body: String
   public var originServerTs: UInt64
   public var expiresAt: UInt64
-  public var status: String
+  public var status: AgentApprovalInboxStatusDto
   public var canSendReaction: Bool
   public var bodyTruncated: Bool
-  public init(roomId: String, eventId: String, sender: String, body: String, originServerTs: UInt64, expiresAt: UInt64, status: String, canSendReaction: Bool, bodyTruncated: Bool)
+  public init(roomId: String, eventId: String, sender: String, body: String, originServerTs: UInt64, expiresAt: UInt64, status: AgentApprovalInboxStatusDto, canSendReaction: Bool, bodyTruncated: Bool)
 public struct AgentApprovalSendDto: Equatable, Hashable
   public var eventId: String
   public var status: String
@@ -1253,14 +1283,14 @@ public struct InviteSnapshotDto: Equatable, Hashable
   public init(sessionGeneration: UInt64, invites: [InviteDto])
 public struct LaterItemDto: Equatable, Hashable
   public var id: String
-  public var kind: String
+  public var kind: LaterItemKindDto
   public var roomId: String
   public var eventId: String
   public var createdAt: Double
   public var dueTs: Double?
   public var remindedAt: Double?
   public var completedAt: Double?
-  public init(id: String, kind: String, roomId: String, eventId: String, createdAt: Double, dueTs: Double?, remindedAt: Double?, completedAt: Double?)
+  public init(id: String, kind: LaterItemKindDto, roomId: String, eventId: String, createdAt: Double, dueTs: Double?, remindedAt: Double?, completedAt: Double?)
 public struct LaterSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var version: UInt32
@@ -1518,7 +1548,7 @@ public struct RoomListRoomDto: Equatable, Hashable
   public var name: String?
   public var canonicalAlias: String?
   public var avatarUrl: String?
-  public var membership: String
+  public var membership: RoomMembershipDto
   public var isDirect: Bool
   public var directUserId: String?
   public var isSpace: Bool
@@ -1535,7 +1565,7 @@ public struct RoomListRoomDto: Equatable, Hashable
   public var isEncrypted: Bool
   public var encryptionStatus: RoomEncryptionStatus
   public var notificationMode: String?
-  public init(roomId: String, name: String?, canonicalAlias: String?, avatarUrl: String?, membership: String, isDirect: Bool, directUserId: String?, isSpace: Bool, isFavorite: Bool, isCall: Bool, hasActiveCall: Bool, activeCallParticipantCount: UInt32, unreadCount: UInt32, highlightCount: UInt32, markedUnread: Bool, lastActivityTs: UInt64?, lastMessagePreview: String?, lastMessageIsAgentApproval: Bool, isEncrypted: Bool, encryptionStatus: RoomEncryptionStatus, notificationMode: String?)
+  public init(roomId: String, name: String?, canonicalAlias: String?, avatarUrl: String?, membership: RoomMembershipDto, isDirect: Bool, directUserId: String?, isSpace: Bool, isFavorite: Bool, isCall: Bool, hasActiveCall: Bool, activeCallParticipantCount: UInt32, unreadCount: UInt32, highlightCount: UInt32, markedUnread: Bool, lastActivityTs: UInt64?, lastMessagePreview: String?, lastMessageIsAgentApproval: Bool, isEncrypted: Bool, encryptionStatus: RoomEncryptionStatus, notificationMode: String?)
 public struct RoomListSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var orderedRoomIds: [String]
@@ -1549,10 +1579,10 @@ public struct RoomMemberDto: Equatable, Hashable
   public var userId: String
   public var displayName: String?
   public var avatarUrl: String?
-  public var membership: String
+  public var membership: RoomMembershipDto
   public var powerLevel: Int32
   public var isDirectTarget: Bool?
-  public init(roomId: String, userId: String, displayName: String?, avatarUrl: String?, membership: String, powerLevel: Int32, isDirectTarget: Bool?)
+  public init(roomId: String, userId: String, displayName: String?, avatarUrl: String?, membership: RoomMembershipDto, powerLevel: Int32, isDirectTarget: Bool?)
 public struct RoomMembersSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var roomId: String
@@ -1653,9 +1683,9 @@ public struct RtcTransportDto: Equatable, Hashable
   public init(kind: String, serviceUrl: String?)
 public struct RtcTransportsSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
-  public var status: String
+  public var status: RtcTransportsStatusDto
   public var transports: [RtcTransportDto]
-  public init(sessionGeneration: UInt64, status: String, transports: [RtcTransportDto])
+  public init(sessionGeneration: UInt64, status: RtcTransportsStatusDto, transports: [RtcTransportDto])
 public struct SecretStorageSetupDto: Equatable, Hashable
   public var status: SecretStorageStatusDto
   public var recoveryKey: String?

@@ -1514,7 +1514,7 @@ final class SharedCoreLaterService: LaterServicing {
                     id: item.id,
                     roomID: item.roomId,
                     eventID: item.eventId,
-                    kind: item.kind == "reminder" ? .reminder : .saved,
+                    kind: item.kind == .reminder ? .reminder : .saved,
                     dueTs: item.dueTs.map { Int($0) },
                     completedAt: item.completedAt.map { Int($0) },
                     createdAt: Int(item.createdAt),
@@ -1985,12 +1985,10 @@ final class SharedCoreAgentApprovalDecisionService: AgentApprovalDecisionServici
                 actionId: request.actionIdentifier
             )
             switch result.status {
-            case "applied":
+            case .applied:
                 return .applied
-            case "already_decided":
+            case .alreadyDecided:
                 return .alreadyDecided
-            default:
-                throw SynaraAgentApprovalError.failed
             }
         } catch {
             throw SynaraAgentApprovalError.failed
@@ -2001,7 +1999,7 @@ final class SharedCoreAgentApprovalDecisionService: AgentApprovalDecisionServici
 final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     struct JoinedRoomEncryptionRow: Equatable {
         let roomID: String
-        let membership: String
+        let membership: RoomMembershipDto
         let encryption: SynaraRoomEncryptionStatus
     }
 
@@ -2330,7 +2328,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         rows: [JoinedRoomEncryptionRow]?
     ) -> SynaraRoomEncryptionStatus {
         guard let row = rows?.first(where: {
-            $0.roomID == roomID && $0.membership == "join"
+            $0.roomID == roomID && $0.membership == .join
         }) else {
             return .unknown
         }
@@ -2621,7 +2619,7 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
             roomListReadFailed = true
         }
         let room = list?.rooms.first(where: {
-            $0.roomId == roomID && $0.membership == "join"
+            $0.roomId == roomID && $0.membership == .join
         })
         let members = try? await SharedCoreRoomMembersSnapshots.roomMembersSnapshot(
             core: host.core,

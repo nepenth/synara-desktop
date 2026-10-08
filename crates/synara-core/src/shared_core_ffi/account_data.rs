@@ -135,11 +135,19 @@ pub(super) fn image_pack_write_dto(
     })
 }
 
+super::wire_enum::wire_enum! {
+    pub enum LaterItemKindDto {
+        Saved => "saved",
+        Reminder => "reminder",
+    }
+}
+super::wire_enum::wire_enum_from!(SynaraLaterItemKind => LaterItemKindDto { Saved, Reminder });
+
 /// Privacy-safe later item. Room/event ids and timestamps only; no tokens.
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct LaterItemDto {
     pub id: String,
-    pub kind: String,
+    pub kind: LaterItemKindDto,
     pub room_id: String,
     pub event_id: String,
     pub created_at: f64,
@@ -207,15 +215,9 @@ pub(super) fn later_envelope_payload(
 pub(super) fn later_item_from_dto(
     item: LaterItemDto,
 ) -> Result<SynaraLaterItem, LaterCommandError> {
-    let kind = match item.kind.as_str() {
-        "saved" => SynaraLaterItemKind::Saved,
-        "reminder" => SynaraLaterItemKind::Reminder,
-        _ => {
-            return Err(later_failed(
-                LATER_INVALID_ITEM_CODE,
-                LATER_INVALID_ITEM_DESCRIPTION,
-            ))
-        }
+    let kind = match item.kind {
+        LaterItemKindDto::Saved => SynaraLaterItemKind::Saved,
+        LaterItemKindDto::Reminder => SynaraLaterItemKind::Reminder,
     };
     if item.id.is_empty()
         || item.room_id.is_empty()
@@ -242,10 +244,7 @@ pub(super) fn later_item_from_dto(
 pub(super) fn later_item_dto(item: SynaraLaterItem) -> LaterItemDto {
     LaterItemDto {
         id: item.id,
-        kind: match item.kind {
-            SynaraLaterItemKind::Saved => "saved".to_owned(),
-            SynaraLaterItemKind::Reminder => "reminder".to_owned(),
-        },
+        kind: item.kind.into(),
         room_id: item.room_id,
         event_id: item.event_id,
         created_at: item.created_at,
