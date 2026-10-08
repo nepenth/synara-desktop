@@ -1082,12 +1082,6 @@ impl SharedCore {
     pub async fn poll_timeline_view_updates(
         &self,
     ) -> Result<Vec<TimelineViewUpdateDto>, TimelineViewUpdateError> {
-        if self.is_nse_read_only() {
-            return Err(timeline_view_poll_failed(
-                NSE_FORBIDS_POLL_CODE,
-                NSE_FORBIDS_POLL_DESCRIPTION,
-            ));
-        }
         let mut guard = self.timeline_view_updates.lock().map_err(|_| {
             timeline_view_poll_failed(
                 TIMELINE_VIEW_POLL_FAILED_CODE,

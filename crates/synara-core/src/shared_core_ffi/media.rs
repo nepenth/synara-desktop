@@ -388,12 +388,6 @@ impl SharedCore {
         &self,
         handle_id: String,
     ) -> Result<LeftoverBytesDto, TimelineMediaError> {
-        if self.is_nse_read_only() {
-            return Err(timeline_media_failed(
-                NSE_FORBIDS_MEDIA_CODE,
-                NSE_FORBIDS_MEDIA_DESCRIPTION,
-            ));
-        }
         let Some(owner) = self.core.attached_timeline_owner() else {
             return Err(timeline_media_failed(
                 TIMELINE_MEDIA_NO_SESSION_CODE,

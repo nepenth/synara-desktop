@@ -1636,12 +1636,6 @@ impl SharedCore {
     pub async fn poll_room_list_updates(
         &self,
     ) -> Result<Vec<RoomListUpdateDto>, RoomListUpdateError> {
-        if self.is_nse_read_only() {
-            return Err(room_list_update_poll_failed(
-                NSE_FORBIDS_ROOM_LIST_POLL_CODE,
-                NSE_FORBIDS_ROOM_LIST_POLL_DESCRIPTION,
-            ));
-        }
         let mut guard = self.room_list_updates.lock().map_err(|_| {
             room_list_update_poll_failed(
                 ROOM_LIST_UPDATE_POLL_FAILED_CODE,

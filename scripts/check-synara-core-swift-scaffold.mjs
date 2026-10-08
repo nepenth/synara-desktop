@@ -57,7 +57,6 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreInviteActions.swift",
   "synara-ios/Synara/Services/SharedCoreTimelineReadState.swift",
   "synara-ios/Synara/Services/SharedCoreAgentApprovals.swift",
-  "synara-ios/Synara/Services/SharedCoreNseStore.swift",
   "synara-ios/Synara/Services/SharedCoreLeftovers.swift",
   "synara-ios/Synara/Services/SharedCoreProductServices.swift",
   "synara-ios/Synara/Services/MatrixClientPolicies.swift",
@@ -268,10 +267,6 @@ const sharedCoreTimelineForward = readFileSync(
 );
 const sharedCoreSessionStatus = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreSessionStatus.swift"),
-  "utf8"
-);
-const sharedCoreNseStore = readFileSync(
-  resolve(root, "synara-ios/Synara/Services/SharedCoreNseStore.swift"),
   "utf8"
 );
 const sharedCoreLeftovers = readFileSync(
@@ -968,23 +963,8 @@ const assertions = [
   [sharedCoreSessionStatus, "core: SharedCore", "P4-S9-31 helper takes an already-constructed SharedCore"],
   [sharedCoreSessionStatus, "core.sessionSnapshot", "P4-S9-31 helper reads session on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreSessionStatus.swift in Sources", "P4-S9-31 helper in Xcode target"],
-  [sharedCoreFfi, "nse_open_read_only_store", "P4-S11 NSE read-only store open FFI"],
-  [sharedCoreFfi, "nse_store_status", "P4-S11 NSE store status FFI"],
-  [sharedCoreFfi, "nse_event_preview", "P4-S11 NSE local event preview FFI"],
-  [sharedCoreFfi, "p4-s11-nse-read-only-forbids-attach", "P4-S11 NSE path forbids owner attach"],
-  [udl, "NseStoreDto nse_open_read_only_store(", "P4-S11 SharedCore NSE open"],
-  [udl, "NseStoreDto nse_store_status()", "P4-S11 SharedCore NSE status"],
-  [udl, "NseEventPreviewDto nse_event_preview(", "P4-S11 SharedCore NSE preview"],
-  [udl, "interface NseStoreError", "P4-S11 static NSE store error"],
   [udl, "constructor();", "UniFFI 0.32 primary SharedCore constructor"],
   [udl, "[Name=\"new_with_secret_store\"]", "UniFFI 0.32 named secret-store constructor"],
-  [swiftBindingsTests, "testSharedCoreNseStoreWithoutSessionFailsClosed", "Swift P4-S11 fail-closed NSE store test"],
-  [sharedCoreNseStore, "openReadOnly", "P4-S11 product NSE open helper"],
-  [sharedCoreNseStore, "eventPreview", "P4-S11 product NSE preview helper"],
-  [sharedCoreNseStore, "core: SharedCore", "P4-S11 helper takes an already-constructed SharedCore"],
-  [sharedCoreNseStore, "core.nseOpenReadOnlyStore", "P4-S11 helper opens the caller-owned instance"],
-  [sharedCoreNseStore, "never starts SyncService", "P4-S11 helper documents no sync start"],
-  [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreNseStore.swift in Sources", "P4-S11 helper in Xcode target"],
   [sharedCoreFfi, "backup_status", "P4-S10 leftover backup-status FFI"],
   [sharedCoreFfi, "crypto_status", "P4-S10 leftover crypto-status FFI"],
   [sharedCoreFfi, "wipe_persisted_stores", "P4-S10 leftover wipe FFI"],

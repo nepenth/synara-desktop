@@ -21,16 +21,9 @@ pub use inbox_notifications::{
 
 use std::path::{Component, Path};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
-use matrix_sdk::ruma::events::{
-    room::message::MessageType, AnySyncMessageLikeEvent, AnySyncTimelineEvent,
-};
 use matrix_sdk::store::RoomLoadSettings;
 use matrix_sdk::Client;
-use matrix_sdk_ui::notification_client::{
-    NotificationClient, NotificationEvent, NotificationProcessSetup, NotificationStatus,
-};
 use zeroize::Zeroizing;
 
 use crate::app::account_data::{
@@ -44,7 +37,7 @@ use crate::app::auth::{
     existing_sqlite_crypto_device_id, login_with_password as core_login_with_password,
     DevicePlatform, LoginOptions,
 };
-use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig, TimeoutPolicy};
+use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig};
 use crate::app::dehydrated_devices::NativeDehydratedDevicesOwner;
 use crate::app::devices::{
     NativeDeviceDeleteAuthentication, NativeDeviceDeleteResult, NativeDeviceOwner,
@@ -134,23 +127,6 @@ const ATTACH_ALREADY_CODE: &str = "p4-s3d-already-attached";
 const ATTACH_ALREADY_DESCRIPTION: &str = "Session owners are already attached.";
 const ATTACH_FAILED_CODE: &str = "p4-s3d-attach-failed";
 const ATTACH_FAILED_DESCRIPTION: &str = "Session owners could not be attached.";
-const NSE_STORE_NOT_OPEN_CODE: &str = "p4-s11-nse-store-not-open";
-const NSE_STORE_NOT_OPEN_DESCRIPTION: &str = "The NSE read-only store is not open.";
-const NSE_EVENT_NOT_IN_STORE_CODE: &str = "p4-s11-nse-event-not-in-store";
-const NSE_EVENT_NOT_IN_STORE_DESCRIPTION: &str =
-    "The notification event is not in the local store.";
-const NSE_PAYLOAD_OVERSIZE_CODE: &str = "p4-s11-nse-payload-oversize";
-const NSE_PAYLOAD_OVERSIZE_DESCRIPTION: &str = "The NSE store request exceeds the payload limit.";
-const NSE_FORBIDS_ATTACH_CODE: &str = "p4-s11-nse-read-only-forbids-attach";
-const NSE_FORBIDS_ATTACH_DESCRIPTION: &str =
-    "The NSE read-only store cannot attach session owners.";
-const NSE_FORBIDS_START_CODE: &str = "p4-s12-nse-forbids-start";
-const NSE_FORBIDS_START_DESCRIPTION: &str = "The NSE read-only store cannot start SyncService.";
-const NSE_FORBIDS_STOP_CODE: &str = "p4-s12-nse-forbids-stop";
-const NSE_FORBIDS_STOP_DESCRIPTION: &str = "The NSE read-only store cannot stop SyncService.";
-const NSE_FORBIDS_MEDIA_CODE: &str = "p4-s33-nse-forbids-media";
-const NSE_FORBIDS_MEDIA_DESCRIPTION: &str =
-    "The NSE read-only store cannot download timeline media.";
 const TIMELINE_MEDIA_NO_SESSION_CODE: &str = "p4-s33-media-no-session";
 const TIMELINE_MEDIA_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
 const TIMELINE_MEDIA_UNKNOWN_HANDLE_CODE: &str = "p4-s33-media-unknown-handle";
@@ -169,41 +145,15 @@ const SYNC_STOP_FAILED_CODE: &str = "p4-s12-sync-stop-failed";
 const SYNC_STOP_FAILED_DESCRIPTION: &str = "SyncService could not be stopped.";
 const CLIENT_PAUSE_FAILED_CODE: &str = "p4-s12-client-pause-failed";
 const CLIENT_PAUSE_FAILED_DESCRIPTION: &str = "The Matrix client stores could not be paused.";
-const NSE_FORBIDS_POLL_CODE: &str = "p4-s14-nse-forbids-poll";
-const NSE_FORBIDS_POLL_DESCRIPTION: &str =
-    "The NSE read-only store cannot poll timeline view updates.";
 const TIMELINE_VIEW_POLL_FAILED_CODE: &str = "p4-s14-timeline-view-poll-failed";
 const TIMELINE_VIEW_POLL_FAILED_DESCRIPTION: &str = "Timeline view updates could not be polled.";
 const TIMELINE_VIEW_UPDATE_QUEUE_CAP: usize = 32;
-const NSE_FORBIDS_OWNER_POLL_CODE: &str = "p4-s17-nse-forbids-poll";
-const NSE_FORBIDS_OWNER_POLL_DESCRIPTION: &str =
-    "The NSE read-only store cannot poll owner updates.";
 const OWNER_UPDATE_POLL_FAILED_CODE: &str = "p4-s17-owner-update-poll-failed";
 const OWNER_UPDATE_POLL_FAILED_DESCRIPTION: &str = "Owner updates could not be polled.";
 const OWNER_UPDATE_QUEUE_CAP: usize = 32;
-const NSE_FORBIDS_ROOM_LIST_POLL_CODE: &str = "p4-s19-nse-forbids-poll";
-const NSE_FORBIDS_ROOM_LIST_POLL_DESCRIPTION: &str =
-    "The NSE read-only store cannot poll room list updates.";
 const ROOM_LIST_UPDATE_POLL_FAILED_CODE: &str = "p4-s19-room-list-update-poll-failed";
 const ROOM_LIST_UPDATE_POLL_FAILED_DESCRIPTION: &str = "Room list updates could not be polled.";
 const ROOM_LIST_UPDATE_QUEUE_CAP: usize = 32;
-const NSE_OWNERS_ATTACHED_CODE: &str = "p4-s11-nse-owners-already-attached";
-const NSE_OWNERS_ATTACHED_DESCRIPTION: &str =
-    "The NSE read-only store cannot open after owners attach.";
-const NSE_FAILED_CODE: &str = "p4-s11-nse-store-failed";
-const NSE_FAILED_DESCRIPTION: &str = "The NSE read-only store request could not be completed.";
-const NSE_RESTORE_FAILED_CODE: &str = "p4-s11-nse-restore-failed";
-const NSE_RESTORE_FAILED_DESCRIPTION: &str = "The NSE session could not be restored.";
-const NSE_CLIENT_INIT_FAILED_DESCRIPTION: &str =
-    "The NSE notification client could not be initialized.";
-const NSE_EVENT_FETCH_FAILED_DESCRIPTION: &str = "The NSE notification event could not be fetched.";
-const NSE_RESOLUTION_TIMEOUT_CODE: &str = "p4-s11-nse-resolution-timeout";
-const NSE_RESOLUTION_TIMEOUT_DESCRIPTION: &str = "The NSE notification resolution timed out.";
-const NSE_CLOSE_FAILED_CODE: &str = "p4-s11-nse-close-failed";
-const NSE_CLOSE_FAILED_DESCRIPTION: &str = "The NSE read-only store could not be closed.";
-const NSE_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
-const NSE_RESOLUTION_TIMEOUT: Duration = Duration::from_secs(20);
-const NSE_STORE_LOCK_HOLDER: &str = "synara-nse-parent";
 const LEFTOVER_NO_SESSION_CODE: &str = "p4-s10-leftover-no-session";
 const LEFTOVER_NO_SESSION_DESCRIPTION: &str = "The leftover command requires a session.";
 const LEFTOVER_OVERSIZE_CODE: &str = "p4-s10-leftover-oversize";
@@ -822,7 +772,6 @@ pub struct SharedCore {
     /// Shell-side ordering remains useful, but the persistence boundary must
     /// remain correct for every current and future FFI caller.
     sync_lifecycle: tokio::sync::Mutex<()>,
-    nse_read_only: Mutex<bool>,
     timeline_view_updates: Arc<Mutex<Vec<TimelineViewDeltaBatch>>>,
     owner_updates: Arc<Mutex<Vec<OwnerUpdateDto>>>,
     room_list_updates: Arc<Mutex<Vec<RoomListUpdateDto>>>,
@@ -857,8 +806,8 @@ mod media;
 pub use media::*;
 mod messaging;
 pub use messaging::*;
-mod nse_preview;
-pub use nse_preview::*;
+mod store_keys;
+use store_keys::*;
 mod profile_search;
 pub use profile_search::*;
 mod push_preferences;

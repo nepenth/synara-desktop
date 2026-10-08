@@ -290,41 +290,6 @@ fn sync_stop_closes_retained_client_stores_and_start_reopens_them() {
 }
 
 #[test]
-fn nse_store_key_lookup_never_mints_a_missing_key() {
-    let values = std::sync::Arc::new(Mutex::new(HashMap::new()));
-    let store: Arc<dyn SecretVault + Send + Sync> = Arc::new(CallbackSecretVault {
-        inner: Box::new(MemoryCallbackVault(std::sync::Arc::clone(&values))),
-    });
-
-    let error = store_key_for_read_only(&store, &alice()).expect_err("missing key");
-
-    assert!(matches!(
-        error,
-        SessionRestoreError::Failed { ref code, .. } if code == RESTORE_FAILED_CODE
-    ));
-    assert!(values.lock().expect("vault").is_empty());
-}
-
-#[test]
-fn nse_store_key_lookup_returns_the_existing_current_key() {
-    let values = std::sync::Arc::new(Mutex::new(HashMap::new()));
-    let store: Arc<dyn SecretVault + Send + Sync> = Arc::new(CallbackSecretVault {
-        inner: Box::new(MemoryCallbackVault(std::sync::Arc::clone(&values))),
-    });
-    let identity = alice();
-    let expected = StoreKeyMaterial::from_bytes([7; STORE_KEY_LEN]);
-    values.lock().expect("vault").insert(
-        StoreKeyId::from_identity(&identity).account().to_owned(),
-        expected.as_bytes().to_vec(),
-    );
-
-    let actual = store_key_for_read_only(&store, &identity).expect("existing key");
-
-    assert_eq!(actual.as_bytes(), expected.as_bytes());
-    assert_eq!(values.lock().expect("vault").len(), 1);
-}
-
-#[test]
 fn callback_vault_maps_foreign_failure_to_static_store_unavailable() {
     struct FailingVault;
     impl IosSecretVault for FailingVault {

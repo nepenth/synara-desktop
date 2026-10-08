@@ -759,7 +759,6 @@ impl SharedCore {
         user_id: String,
         homeserver_url: String,
         store_root: String,
-        nse_read_only: bool,
         room_load_settings: Option<RoomLoadSettings>,
     ) -> Result<SessionRestoreDto, SessionRestoreError> {
         let identity = AccountIdentity::new(&user_id, &homeserver_url)
@@ -780,39 +779,20 @@ impl SharedCore {
             ));
         }
 
-        let store_key = if nse_read_only {
-            store_key_for_read_only(&self.secret_store, &identity)?
-        } else {
-            store_key_for(&self.secret_store, &identity)?
-        };
-        let mut config =
-            ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))
-                .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
-        if nse_read_only {
-            config = config
-                .with_timeouts(TimeoutPolicy {
-                    request_timeout: NSE_REQUEST_TIMEOUT,
-                    retry_limit: 0,
-                })
-                .and_then(|config| {
-                    config.with_cross_process_store_lock_holder(NSE_STORE_LOCK_HOLDER)
-                })
-                .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
-            config.handle_refresh_tokens = false;
-        }
+        let store_key = store_key_for(&self.secret_store, &identity)?;
+        let config = ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))
+            .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
         let client = build_unauthenticated_client(&config)
             .await
             .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
         let persistence = SessionPersistenceOwner::new();
-        if !nse_read_only {
-            install_session_rotation_callbacks(
-                &client,
-                identity.clone(),
-                Arc::clone(&self.secret_store),
-                persistence.callback_lease(),
-            )
-            .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
-        }
+        install_session_rotation_callbacks(
+            &client,
+            identity.clone(),
+            Arc::clone(&self.secret_store),
+            persistence.callback_lease(),
+        )
+        .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
         let outcome = if let Some(room_load_settings) = room_load_settings {
             restore_session_from_vault_with_room_load_settings(
                 &client,
@@ -1152,17 +1132,12 @@ impl SharedCore {
             .unwrap_or(false)
     }
 
-    pub(super) fn retained_client(&self) -> Result<Client, NseStoreError> {
-        let guard = self
-            .restored_client
-            .lock()
-            .map_err(|_| nse_failed(NSE_FAILED_CODE, NSE_FAILED_DESCRIPTION))?;
+    /// The retained SDK client, if a restore or login installed one.
+    pub(super) fn retained_client(&self) -> Result<Client, ()> {
+        let guard = self.restored_client.lock().map_err(|_| ())?;
         match &*guard {
             RestoredClientSlot::Ready(client, _) => Ok(client.clone()),
-            RestoredClientSlot::Empty | RestoredClientSlot::InFlight => Err(nse_failed(
-                NSE_STORE_NOT_OPEN_CODE,
-                NSE_STORE_NOT_OPEN_DESCRIPTION,
-            )),
+            RestoredClientSlot::Empty | RestoredClientSlot::InFlight => Err(()),
         }
     }
 
@@ -1198,7 +1173,6 @@ impl SharedCore {
             restored_client: Mutex::new(RestoredClientSlot::Empty),
             owner_attach: Mutex::new(OwnerAttachSlot::Empty),
             sync_lifecycle: tokio::sync::Mutex::new(()),
-            nse_read_only: Mutex::new(false),
             timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
             owner_updates: Arc::new(Mutex::new(Vec::new())),
             room_list_updates: Arc::new(Mutex::new(Vec::new())),
@@ -1223,7 +1197,6 @@ impl SharedCore {
             restored_client: Mutex::new(RestoredClientSlot::Empty),
             owner_attach: Mutex::new(OwnerAttachSlot::Empty),
             sync_lifecycle: tokio::sync::Mutex::new(()),
-            nse_read_only: Mutex::new(false),
             timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
             owner_updates: Arc::new(Mutex::new(Vec::new())),
             room_list_updates: Arc::new(Mutex::new(Vec::new())),
@@ -1247,7 +1220,7 @@ impl SharedCore {
         homeserver_url: String,
         store_root: String,
     ) -> Result<SessionRestoreDto, SessionRestoreError> {
-        self.restore_persisted_session_with_policy(user_id, homeserver_url, store_root, false, None)
+        self.restore_persisted_session_with_policy(user_id, homeserver_url, store_root, None)
             .await
     }
 
@@ -1276,12 +1249,6 @@ impl SharedCore {
     /// P4-S12 `start_sync` starts it. Fail-closed if no Client is
     /// retained or owners are already attached.
     pub async fn attach_session_owners(&self) -> Result<SessionAttachDto, SessionAttachError> {
-        if self.is_nse_read_only() {
-            return Err(attach_failed(
-                NSE_FORBIDS_ATTACH_CODE,
-                NSE_FORBIDS_ATTACH_DESCRIPTION,
-            ));
-        }
         let claim = AttachClaim::acquire(&self.owner_attach)?;
         let client = {
             let guard = self
@@ -1486,12 +1453,6 @@ impl SharedCore {
     /// one lifecycle route. A second start is a restart of the same owner.
     /// This is not iOS-on-engine and not P4 acceptance.
     pub async fn start_sync(&self) -> Result<SyncStartDto, SyncStartError> {
-        if self.is_nse_read_only() {
-            return Err(sync_start_failed(
-                NSE_FORBIDS_START_CODE,
-                NSE_FORBIDS_START_DESCRIPTION,
-            ));
-        }
         let _lifecycle = self.sync_lifecycle.lock().await;
         if !self.owners_attached() {
             return Err(sync_start_failed(
@@ -1530,12 +1491,6 @@ impl SharedCore {
     /// Returning `stopped = true` therefore means the complete persistence
     /// boundary is safe for OS suspension, not merely that network sync ended.
     pub async fn stop_sync(&self) -> Result<SyncStopDto, SyncStopError> {
-        if self.is_nse_read_only() {
-            return Err(sync_stop_failed(
-                NSE_FORBIDS_STOP_CODE,
-                NSE_FORBIDS_STOP_DESCRIPTION,
-            ));
-        }
         let _lifecycle = self.sync_lifecycle.lock().await;
         if !self.owners_attached() {
             return Err(sync_stop_failed(
@@ -1607,7 +1562,7 @@ impl SharedCore {
                 .ok()
                 .as_ref()
                 == Some(&identity);
-        if !matches || self.is_nse_read_only() {
+        if !matches {
             return Err(leftover_failed(
                 LEFTOVER_FAILED_CODE,
                 LEFTOVER_FAILED_DESCRIPTION,
@@ -1648,12 +1603,6 @@ impl SharedCore {
     ) -> Result<LeftoverAckDto, LeftoverCommandError> {
         let identity = AccountIdentity::new(&user_id, &homeserver_url)
             .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
-        if self.is_nse_read_only() {
-            return Err(leftover_failed(
-                LEFTOVER_FAILED_CODE,
-                LEFTOVER_FAILED_DESCRIPTION,
-            ));
-        }
         if let Some(snapshot) = self
             .core
             .session_snapshot()
@@ -1694,9 +1643,6 @@ impl SharedCore {
         let retired = || LeftoverAckDto {
             status: "retired".to_owned(),
         };
-        if self.is_nse_read_only() {
-            return Err(failed());
-        }
         // Latch a rejection the live owner reports now, before any teardown.
         if let Some(owner) = self.core.attached_sync_owner() {
             self.note_authentication_rejection(owner.observe().failure_diagnostic_id);

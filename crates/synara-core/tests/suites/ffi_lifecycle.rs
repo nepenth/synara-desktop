@@ -7,8 +7,6 @@
 mod ffi_surface;
 #[path = "../p4_s10_leftovers.rs"]
 mod p4_s10_leftovers;
-#[path = "../p4_s11_nse_store.rs"]
-mod p4_s11_nse_store;
 #[path = "../p4_s12_start_sync.rs"]
 mod p4_s12_start_sync;
 #[path = "../p4_s13_session_bootstrap.rs"]

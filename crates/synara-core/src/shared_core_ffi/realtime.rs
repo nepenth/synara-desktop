@@ -502,12 +502,6 @@ impl SharedCore {
     /// NSE forbids this. An empty queue returns an empty list. Presence
     /// user ids are never included. This is not Platform::emit.
     pub async fn poll_owner_updates(&self) -> Result<Vec<OwnerUpdateDto>, OwnerUpdateError> {
-        if self.is_nse_read_only() {
-            return Err(owner_update_poll_failed(
-                NSE_FORBIDS_OWNER_POLL_CODE,
-                NSE_FORBIDS_OWNER_POLL_DESCRIPTION,
-            ));
-        }
         let mut guard = self.owner_updates.lock().map_err(|_| {
             owner_update_poll_failed(
                 OWNER_UPDATE_POLL_FAILED_CODE,

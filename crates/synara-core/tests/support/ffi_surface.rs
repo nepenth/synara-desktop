@@ -356,4 +356,8 @@ fn rendered_surface_uses_udl_vocabulary() {
     assert!(udl.contains("callback interface IosSecretVault {"));
     assert!(udl.contains("[Async, Throws] SyncStatusDto sync_status();"));
     assert!(udl.contains("enum RoomEncryptionStatus {"));
+    // The notification extension uses SynaraNseCore only; SharedCore has no
+    // second read-only NSE store path.
+    assert!(!udl.contains(" nse_"));
+    assert!(!udl.contains("NseStore"));
 }

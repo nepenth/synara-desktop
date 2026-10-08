@@ -59,9 +59,6 @@ extension MessageSearchDto: Sendable
 extension MessageSearchError: Sendable
 extension MessageSearchGroupDto: Sendable
 extension MessageSearchItemDto: Sendable
-extension NseEventPreviewDto: Sendable
-extension NseStoreDto: Sendable
-extension NseStoreError: Sendable
 extension OwnProfileCommandError: Sendable
 extension OwnProfileDto: Sendable
 extension OwnProfileUploadDto: Sendable
@@ -288,11 +285,6 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func mediaThumbnail(mxc: String, width: UInt64, height: UInt64) async throws -> LeftoverBytesDto
   open func mediaUpload(payload: Data, mimeType: String, filename: String) async throws -> LeftoverAckDto
   open func messageSearch(term: String, nextToken: String?, rooms: [String]?, senders: [String]?, order: String?) async throws -> MessageSearchDto
-  open func nseCloseReadOnlyStore() async throws
-  open func nseEventPreview(roomId: String, eventId: String) async throws -> NseEventPreviewDto
-  open func nseOpenReadOnlyStore(userId: String, homeserverUrl: String, storeRoot: String) async throws -> NseStoreDto
-  open func nseResolveEventPreview(userId: String, homeserverUrl: String, storeRoot: String, roomId: String, eventId: String) async throws -> NseEventPreviewDto
-  open func nseStoreStatus() async throws -> NseStoreDto
   open func pollOwnerUpdates() async throws -> [OwnerUpdateDto]
   open func pollRespond(roomId: String, pollEventId: String, answerIds: [String]) async throws -> PollRespondDto
   open func pollRoomListUpdates() async throws -> [RoomListUpdateDto]
@@ -485,9 +477,6 @@ public enum MediaUploadError: Swift.Error, Equatable, Hashable, Foundation.Local
   case Failed(code: String, description: String)
   public var errorDescription: String?
 public enum MessageSearchError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
-  case Failed(code: String, description: String)
-  public var errorDescription: String?
-public enum NseStoreError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
 public enum OwnProfileCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
@@ -729,11 +718,6 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func mediaThumbnail(mxc: String, width: UInt64, height: UInt64) async throws -> LeftoverBytesDto
   func mediaUpload(payload: Data, mimeType: String, filename: String) async throws -> LeftoverAckDto
   func messageSearch(term: String, nextToken: String?, rooms: [String]?, senders: [String]?, order: String?) async throws -> MessageSearchDto
-  func nseCloseReadOnlyStore() async throws
-  func nseEventPreview(roomId: String, eventId: String) async throws -> NseEventPreviewDto
-  func nseOpenReadOnlyStore(userId: String, homeserverUrl: String, storeRoot: String) async throws -> NseStoreDto
-  func nseResolveEventPreview(userId: String, homeserverUrl: String, storeRoot: String, roomId: String, eventId: String) async throws -> NseEventPreviewDto
-  func nseStoreStatus() async throws -> NseStoreDto
   func pollOwnerUpdates() async throws -> [OwnerUpdateDto]
   func pollRespond(roomId: String, pollEventId: String, answerIds: [String]) async throws -> PollRespondDto
   func pollRoomListUpdates() async throws -> [RoomListUpdateDto]
@@ -1088,17 +1072,6 @@ public struct MessageSearchItemDto: Equatable, Hashable
   public var body: String
   public var roomId: String
   public init(rank: Double, eventId: String, sender: String, originServerTs: UInt64, body: String, roomId: String)
-public struct NseEventPreviewDto: Equatable, Hashable
-  public var eventType: String
-  public var senderId: String?
-  public var body: String?
-  public var messageType: String?
-  public init(eventType: String, senderId: String?, body: String?, messageType: String?)
-public struct NseStoreDto: Equatable, Hashable
-  public var readOnly: Bool
-  public var ownersAttached: Bool
-  public var syncStarted: Bool
-  public init(readOnly: Bool, ownersAttached: Bool, syncStarted: Bool)
 public struct OwnProfileDto: Equatable, Hashable
   public var userId: String
   public var displayName: String?
