@@ -29,6 +29,7 @@ import {
   AccountDataEditor,
   AccountDataSubmitCallback,
 } from '../../../components/AccountDataEditor';
+import { setNativeAccountData } from '../../../native/nativeAccountData';
 
 type DeveloperToolsProps = {
   requestClose: () => void;
@@ -54,11 +55,10 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
     setAccountDataType(undefined);
   }, []);
 
-  // Room account data has no native write command, so the editor reports
-  // failure instead of appearing to save.
-  const submitAccountData: AccountDataSubmitCallback = useCallback(async () => {
-    throw new Error('Room account data writes are not available in the native client.');
-  }, []);
+  const submitAccountData: AccountDataSubmitCallback = useCallback(
+    (type, content) => setNativeAccountData(type, content as Record<string, unknown>, room.roomId),
+    [room.roomId]
+  );
 
   if (accountDataType !== undefined) {
     return (

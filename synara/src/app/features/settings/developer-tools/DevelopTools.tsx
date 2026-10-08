@@ -22,6 +22,7 @@ import {
   platformSessionStore,
   type PlatformSecretStoreStatus,
 } from '../../../platform';
+import { setNativeAccountData, useNativeAccountData } from '../../../native/nativeAccountData';
 
 function NativeSessionStoreStatus() {
   const [status, setStatus] = useState<PlatformSecretStoreStatus>();
@@ -86,17 +87,21 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
     setEncryptedStateEventsSetting(value);
   };
 
-  // Global account data has no native read or write command, so the editor
-  // starts empty and reports failure instead of appearing to save.
-  const submitAccountData: AccountDataSubmitCallback = useCallback(async () => {
-    throw new Error('Account data writes are not available in the native client.');
-  }, []);
+  const editingContent = useNativeAccountData(
+    accountDataType ?? '',
+    undefined,
+    typeof accountDataType === 'string'
+  );
+  const submitAccountData: AccountDataSubmitCallback = useCallback(
+    (type, content) => setNativeAccountData(type, content as Record<string, unknown>),
+    []
+  );
 
   if (accountDataType !== undefined) {
     return (
       <AccountDataEditor
         type={accountDataType ?? undefined}
-        content={undefined}
+        content={accountDataType ? (editingContent ?? undefined) : undefined}
         submitChange={submitAccountData}
         requestClose={() => setAccountDataType(undefined)}
       />

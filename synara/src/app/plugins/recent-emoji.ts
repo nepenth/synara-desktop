@@ -1,4 +1,5 @@
 import { getAccountData } from '../utils/room';
+import { getCachedAccountData, setNativeAccountData } from '../native/nativeAccountData';
 import { IEmoji, emojis } from './emoji';
 import { AccountDataEvent } from '../../types/matrix/accountData';
 
@@ -24,10 +25,37 @@ export const getRecentEmojis = (limit?: number): IEmoji[] => {
     }, []);
 };
 
-/**
- * Record an emoji use. Recent emoji is account data, which has no native write
- * command, so nothing is recorded yet.
- */
+/** Most-recent-first usage list after one more use of `unicode`, capped at 100. */
+export const nextRecentEmoji = (
+  current: unknown,
+  unicode: EmojiUnicode
+): [EmojiUnicode, EmojiUsageCount][] => {
+  const recentEmoji: [EmojiUnicode, EmojiUsageCount][] = Array.isArray(current)
+    ? current
+        .filter(
+          (entry): entry is [EmojiUnicode, EmojiUsageCount] =>
+            Array.isArray(entry) && typeof entry[0] === 'string' && typeof entry[1] === 'number'
+        )
+        .map(([u, count]) => [u, count])
+    : [];
+  const emojiIndex = recentEmoji.findIndex(([u]) => u === unicode);
+  let entry: [EmojiUnicode, EmojiUsageCount];
+  if (emojiIndex < 0) {
+    entry = [unicode, 1];
+  } else {
+    [entry] = recentEmoji.splice(emojiIndex, 1);
+    entry = [entry[0], entry[1] + 1];
+  }
+  recentEmoji.unshift(entry);
+  return recentEmoji.slice(0, 100);
+};
+
+/** Record an emoji use in the `io.element.recent_emoji` account data. */
 export function addRecentEmoji(unicode: string): void {
-  void unicode;
+  const current = getCachedAccountData(AccountDataEvent.ElementRecentEmoji) as
+    IRecentEmojiContent | null | undefined;
+  void setNativeAccountData(AccountDataEvent.ElementRecentEmoji, {
+    ...(current ?? {}),
+    recent_emoji: nextRecentEmoji(current?.recent_emoji, unicode),
+  }).catch(() => undefined);
 }

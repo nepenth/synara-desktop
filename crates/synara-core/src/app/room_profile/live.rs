@@ -1265,6 +1265,14 @@ fn parse_room_favorite_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
         .map_err(|_| "v-rooms-room-favorite-invalid-room")
 }
 
+mod extras;
+pub use extras::{
+    NativeBulkRedactRequest, NativeBulkRedactResult, NativeMutualRooms, NativeMutualRoomsRequest,
+    NativeRoomAliasAvailability, NativeRoomAliasCheck, NativeRoomAliasCreateRequest,
+    NativeRoomAliasRequest, NativeRoomIdRequest, NativeRoomLocalAliases, NativeRoomUpgradeRequest,
+    NativeRoomUpgradeResult,
+};
+
 #[cfg(test)]
 mod favorite_id_tests {
     use super::parse_room_favorite_id;

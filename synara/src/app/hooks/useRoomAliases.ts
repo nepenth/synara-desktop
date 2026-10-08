@@ -9,6 +9,7 @@ import { getStateEvent } from '../utils/room';
 import { sendLeftoverStateEvent } from '../components/nativeStateEventOwner';
 
 import { sendNativeStateEvent } from '../native/nativeCommands';
+import { createLocalAlias, deleteLocalAlias, fetchLocalAliases } from '../native/nativeRoomExtras';
 type RoomCanonicalAliasEventContent = {
   alias?: string;
   alt_aliases?: string[];
@@ -149,30 +150,38 @@ export const usePublishUnpublishAliases = (
   };
 };
 
-export const useLocalAliases = (): {
+export const useLocalAliases = (
+  roomId: string
+): {
   localAliasesState: AsyncState<string[], MatrixError>;
   addLocalAlias: (alias: string) => Promise<void>;
   removeLocalAlias: (alias: string) => Promise<void>;
 } => {
   const alive = useAlive();
 
-  // Native has no local-alias (`/rooms/{id}/aliases`, alias create/delete)
-  // commands: the list is empty and add/remove only reload it.
   const [aliasesState, loadAliases] = useAsyncCallback<string[], MatrixError, []>(
-    useCallback(async (): Promise<string[]> => [], [])
+    useCallback(async (): Promise<string[]> => fetchLocalAliases(roomId), [roomId])
   );
 
   useEffect(() => {
     loadAliases();
   }, [loadAliases]);
 
-  const addLocalAlias = useCallback(async () => {
-    if (alive()) await loadAliases();
-  }, [loadAliases, alive]);
+  const addLocalAlias = useCallback(
+    async (alias: string) => {
+      await createLocalAlias(alias, roomId);
+      if (alive()) await loadAliases();
+    },
+    [roomId, loadAliases, alive]
+  );
 
-  const removeLocalAlias = useCallback(async () => {
-    if (alive()) await loadAliases();
-  }, [loadAliases, alive]);
+  const removeLocalAlias = useCallback(
+    async (alias: string) => {
+      await deleteLocalAlias(alias);
+      if (alive()) await loadAliases();
+    },
+    [loadAliases, alive]
+  );
 
   return {
     localAliasesState: aliasesState,

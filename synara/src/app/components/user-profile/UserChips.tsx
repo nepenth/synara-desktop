@@ -237,7 +237,7 @@ type MutualRoomsData = {
 
 export function MutualRoomsChip({ userId }: { userId: string }) {
   const mutualRoomSupported = useMutualRoomsSupport();
-  const mutualRoomsState = useMutualRooms();
+  const mutualRoomsState = useMutualRooms(userId);
   const { navigateRoom, navigateSpace } = useRoomNavigate();
   const closeUserRoomProfile = useCloseUserRoomProfile();
   const directs = useDirectRooms();

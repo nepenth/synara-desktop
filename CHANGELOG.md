@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Desktop: sidebar space order and pins, recent emoji and Developer Tools account data persist through Core again; mutual rooms, local room addresses and alias availability load natively; room upgrades run natively (including extra creators) and open the replacement room; `/delete` redacts through Core's bounded bulk redaction.
 - Desktop: the renderer no longer goes through a js-sdk-shaped client object. Rooms, identity and sync state come from the native session module and writes call native commands directly. `/ignore` and `/unignore` now work, jump-to-date uses the native timestamp lookup, and room upgrade, account-data developer tools and `/delete` say native has no command instead of appearing to succeed.
 - Encryption: a banner above the composer warns when a room member's cryptographic identity changed, on desktop and iOS. Dismiss accepts a changed identity; a verified member whose identity changed offers Withdraw verification instead.
 - Encryption: messages in encrypted rooms show the SDK's authenticity shield on desktop and iOS — red when a verified sender's identity changed or the sender doesn't match the encrypting device, grey for unknown devices, unverified devices, authenticity that can't be guaranteed, or plaintext.

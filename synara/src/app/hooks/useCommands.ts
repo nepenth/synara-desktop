@@ -35,6 +35,7 @@ import {
   nativeIgnoredUsersIgnore,
   nativeIgnoredUsersUnignore,
 } from '../features/settings/account/nativeIgnoredUsers';
+import { bulkRedact } from '../native/nativeRoomExtras';
 
 type ServerMemberReading = MemberReading & { membership: string };
 
@@ -509,11 +510,16 @@ export const useCommands = (
             });
           }
 
-          // Walking server history to collect events (`/context`, `/messages`)
-          // has no native command, so bulk deletion cannot run here.
-          void reason;
-          void messageTypes;
-          throw new Error('Bulk message deletion is not available in the native client.');
+          if (users.length === 0) return;
+          // Core walks history newest-first from the live end, so events
+          // newer than `ts` are reached without a start-event lookup.
+          await bulkRedact({
+            roomId: room.roomId,
+            userIds: users,
+            sinceTs: ts,
+            eventTypes: messageTypes.length > 0 ? messageTypes : undefined,
+            reason,
+          });
         },
       },
       [Command.Acl]: {

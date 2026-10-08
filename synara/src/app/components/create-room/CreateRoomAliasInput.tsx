@@ -13,6 +13,7 @@ import { replaceSpaceWithDash } from '../../utils/common';
 import { AsyncState, AsyncStatus, useAsync } from '../../hooks/useAsyncCallback';
 import { useDebounce } from '../../hooks/useDebounce';
 import { getSafeMyUserId } from '../../state/nativeIdentity';
+import { checkAliasAvailability } from '../../native/nativeRoomExtras';
 
 export function CreateRoomAliasInput({ disabled }: { disabled?: boolean }) {
   const aliasInputRef = useRef<HTMLInputElement>(null);
@@ -27,12 +28,10 @@ export function CreateRoomAliasInput({ disabled }: { disabled?: boolean }) {
   }, [aliasAvail]);
 
   const checkAliasAvail = useAsync(
-    useCallback<(aliasLocalPart: string) => Promise<boolean>>(
-      // Native has no alias-resolution command, so every alias reads as
-      // available; room creation reports a taken alias.
-      async () => true,
-      []
-    ),
+    useCallback<(aliasLocalPart: string) => Promise<boolean>>(async (aliasLocalPart) => {
+      const roomAlias = `#${aliasLocalPart}:${getMxIdServer(getSafeMyUserId())}`;
+      return (await checkAliasAvailability(roomAlias)) === 'available';
+    }, []),
     setAliasAvail
   );
   const aliasAvailable: boolean | undefined =

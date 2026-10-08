@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-account-data-types"
+description = "Enables the matrix_account_data_types command without any pre-configured scope."
+commands.allow = ["matrix_account_data_types"]
+
+[[permission]]
+identifier = "deny-matrix-account-data-types"
+description = "Denies the matrix_account_data_types command without any pre-configured scope."
+commands.deny = ["matrix_account_data_types"]
