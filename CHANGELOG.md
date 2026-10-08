@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Composer: desktop markdown is rendered by Core, the same renderer iOS uses, so a message formats the same on both. Typed `<` and `&` stay literal in prose and code, mentions and custom emoji keep their links, and markdown attachment previews use the same renderer. The renderer's own markdown parser is removed.
 - Messages: Core reduces incoming formatted message HTML to the Matrix allowlist (and removes the rich-reply fallback) before either app renders it, so desktop and iOS start from the same safe markup; both renderers keep their own sanitizer as a second pass.
 - Permissions: Core evaluates what you may do in a room with the room version's rules (room v12 creators outrank every level) for desktop and iOS, and plans the iOS member menu. The renderer and Swift no longer compare raw power-level numbers, and permission checks are denied when Core has not evaluated them.
 - Room list: Core now owns section ordering, name normalization, the favorites split, which rooms count as unread, the space unread rollup and badge totals for desktop and iOS. The desktop app badge no longer counts a room inside a space once for the room and again for each space above it.

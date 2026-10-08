@@ -173,6 +173,7 @@ import {
   hasTrailingAttachmentText,
   makeOrReuseAttachmentSendPlan,
 } from './attachmentSendPlan';
+import { renderComposerHtml } from '../../components/editor/composerMarkdown';
 
 interface RoomInputProps {
   editor: Editor;
@@ -638,11 +639,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       const commandName = getBeginCommand(editor);
       let plainText = toPlainText(editor.children, isMarkdown).trim();
       let customHtml = trimCustomHtml(
-        toMatrixCustomHTML(editor.children, {
-          allowTextFormatting: true,
-          allowBlockMarkdown: isMarkdown,
-          allowInlineMarkdown: isMarkdown,
-        })
+        isMarkdown
+          ? await renderComposerHtml(editor.children)
+          : toMatrixCustomHTML(editor.children, { allowTextFormatting: true })
       );
       let msgType: 'm.text' | 'm.emote' | 'm.notice' = MsgType.Text;
 

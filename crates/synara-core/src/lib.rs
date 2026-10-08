@@ -39,6 +39,187 @@ pub fn markdown_to_html(body: String) -> Option<String> {
     Some(formatted.body)
 }
 
+/// Opens a composer placeholder: `PLACEHOLDER_OPEN`, a decimal fragment index,
+/// `PLACEHOLDER_CLOSE`. Private-use code points the composer strips from typed
+/// text, so a user cannot forge one.
+pub const COMPOSER_PLACEHOLDER_OPEN: char = '\u{E000}';
+pub const COMPOSER_PLACEHOLDER_CLOSE: char = '\u{E001}';
+/// Stand-ins that keep typed `<` and `&` literal through markdown, in prose
+/// and in code alike. Also stripped from typed text by the composer.
+const COMPOSER_LITERAL_LT: char = '\u{E002}';
+const COMPOSER_LITERAL_AMP: char = '\u{E003}';
+
+/// Render composer markdown the way [`markdown_to_html`] does, with inline
+/// constructs markdown cannot express (mentions, custom emoji, links, spoilers,
+/// underline) passed as HTML fragments behind placeholders.
+///
+/// Typed text is literal: `<b>` stays text rather than raw HTML, as it always
+/// has in the desktop composer. Every fragment is reduced to the Matrix
+/// allowlist before substitution, and placeholders with an unknown index are
+/// dropped. Returns `None` when the message is plain text with no fragments,
+/// so callers omit `formatted_body`.
+#[cfg(feature = "full-app")]
+pub fn render_composer_markdown(source: &str, fragments: &[String]) -> Option<String> {
+    use matrix_sdk::ruma::html::{sanitize_html, HtmlSanitizerMode, RemoveReplyFallback};
+
+    let used_fragment = source.contains(COMPOSER_PLACEHOLDER_OPEN) && !fragments.is_empty();
+    let shielded: String = source
+        .chars()
+        .map(|ch| match ch {
+            '<' => COMPOSER_LITERAL_LT,
+            '&' => COMPOSER_LITERAL_AMP,
+            other => other,
+        })
+        .collect();
+    let html = match markdown_to_html(shielded.clone()) {
+        Some(html) => html,
+        None if used_fragment => escape_plain_html(&shielded),
+        None => return None,
+    };
+    let html = html
+        .replace(COMPOSER_LITERAL_LT, "&lt;")
+        .replace(COMPOSER_LITERAL_AMP, "&amp;");
+    let safe: Vec<String> = fragments
+        .iter()
+        .map(|fragment| {
+            sanitize_html(
+                fragment,
+                HtmlSanitizerMode::Strict,
+                RemoveReplyFallback::Yes,
+            )
+        })
+        .collect();
+    Some(substitute_placeholders(&html, &safe))
+}
+
+#[cfg(feature = "full-app")]
+fn escape_plain_html(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#39;"),
+            '\n' => out.push_str("<br />\n"),
+            other => out.push(other),
+        }
+    }
+    out
+}
+
+#[cfg(feature = "full-app")]
+fn substitute_placeholders(html: &str, fragments: &[String]) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+    while let Some(start) = rest.find(COMPOSER_PLACEHOLDER_OPEN) {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + COMPOSER_PLACEHOLDER_OPEN.len_utf8()..];
+        match after.find(COMPOSER_PLACEHOLDER_CLOSE) {
+            Some(end) => {
+                if let Some(fragment) = after[..end]
+                    .parse::<usize>()
+                    .ok()
+                    .and_then(|index| fragments.get(index))
+                {
+                    out.push_str(fragment);
+                }
+                rest = &after[end + COMPOSER_PLACEHOLDER_CLOSE.len_utf8()..];
+            }
+            None => {
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out.replace(COMPOSER_PLACEHOLDER_CLOSE, "")
+}
+
+#[cfg(all(test, feature = "full-app"))]
+mod composer_markdown_tests {
+    use super::*;
+
+    fn token(index: usize) -> String {
+        format!("{COMPOSER_PLACEHOLDER_OPEN}{index}{COMPOSER_PLACEHOLDER_CLOSE}")
+    }
+
+    #[test]
+    fn plain_text_without_fragments_has_no_formatted_body() {
+        assert_eq!(render_composer_markdown("hello there", &[]), None);
+    }
+
+    #[test]
+    fn markdown_renders_and_fragments_land_in_place() {
+        let mention = r#"<a href="https://matrix.to/#/@alice:example.org">Alice</a>"#.to_owned();
+        let source = format!("**hi** {}\n- one\n- two", token(0));
+        let html = render_composer_markdown(&source, &[mention]).expect("html");
+        assert!(html.contains("<strong>hi</strong>"), "{html}");
+        assert!(
+            html.contains(r#"<a href="https://matrix.to/#/@alice:example.org">Alice</a>"#),
+            "{html}"
+        );
+        assert!(html.contains("<ul>"), "{html}");
+        assert!(!html.contains(COMPOSER_PLACEHOLDER_OPEN));
+    }
+
+    #[test]
+    fn a_fragment_alone_still_yields_html_with_escaped_text() {
+        let spoiler = "<span data-mx-spoiler>secret</span>".to_owned();
+        let source = format!("a <b> & {}", token(0));
+        let html = render_composer_markdown(&source, &[spoiler]).expect("html");
+        assert!(html.contains("data-mx-spoiler"), "{html}");
+        assert!(!html.contains("<b>"), "{html}");
+    }
+
+    #[test]
+    fn fragments_are_sanitized_and_unknown_indexes_dropped() {
+        let hostile = r#"<a href="javascript:alert(1)" onclick="x()">x</a><script>bad()</script>"#;
+        let source = format!("**x** {} {}", token(0), token(7));
+        let html = render_composer_markdown(&source, &[hostile.to_owned()]).expect("html");
+        for banned in ["javascript:", "onclick", "<script"] {
+            assert!(!html.contains(banned), "{banned}: {html}");
+        }
+        assert!(!html.contains('7'), "{html}");
+    }
+
+    #[test]
+    fn typed_angle_brackets_and_ampersands_stay_literal_in_text_and_code() {
+        let html = render_composer_markdown("use **<b>** & `a<b && c`", &[]).expect("html");
+        assert!(html.contains("<strong>&lt;b&gt;</strong>"), "{html}");
+        assert!(html.contains("&amp; "), "{html}");
+        assert!(html.contains("<code>a&lt;b &amp;&amp; c</code>"), "{html}");
+        assert!(!html.contains("<b>"), "{html}");
+    }
+
+    #[test]
+    fn markdown_files_and_messages_render_the_common_blocks() {
+        let html = render_composer_markdown(
+            "# Agent notes\n\nUse **bold** and ~~old~~ plus `code`.\n\n- dash\n\n* star\n\n10. ten\n11. eleven\n\n| Name | Role |\n| --- | --- |\n| Ada | Lead |\n",
+            &[],
+        )
+        .expect("html");
+        for expected in [
+            "<h1>Agent notes</h1>",
+            "<strong>bold</strong>",
+            "<del>old</del>",
+            "<code>code</code>",
+            "<ul>",
+            "<ol start=\"10\">",
+            "<table>",
+            "<th>Name</th>",
+        ] {
+            assert!(html.contains(expected), "{expected}: {html}");
+        }
+    }
+
+    #[test]
+    fn newlines_are_hard_breaks_like_the_composer() {
+        let html = render_composer_markdown("line one\nline **two**", &[]).expect("html");
+        assert!(html.contains("<br"), "{html}");
+    }
+}
+
 #[cfg(all(test, feature = "full-app"))]
 mod markdown_tests {
     use super::markdown_to_html;

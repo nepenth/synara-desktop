@@ -439,6 +439,7 @@ pub fn run() {
             desktop::desktop_window_minimize,
             desktop::desktop_window_toggle_maximize,
             desktop::desktop_window_close,
+            desktop::desktop_render_markdown,
             desktop::desktop_navigate,
             desktop::desktop_set_badge_count,
             desktop::desktop_play_notification_sound,

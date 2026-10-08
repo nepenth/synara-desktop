@@ -664,7 +664,7 @@ test('markdown file attachments preview in-client and still download', async ({ 
   await expect(preview.locator('ol')).toContainText('ordered');
   await expect(preview.locator('table')).toContainText('Ada');
   await expect(preview.getByText('[x] done task')).toBeVisible();
-  await expect(preview.locator('s')).toContainText('strike');
+  await expect(preview.locator('del')).toContainText('strike');
   await expect(preview.locator('code')).toContainText('inline code');
   await preview.getByRole('button', { name: 'Download notes.md' }).click();
   await expect
