@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Encryption: a banner above the composer warns when a room member's cryptographic identity changed, on desktop and iOS. Dismiss accepts a changed identity; a verified member whose identity changed offers Withdraw verification instead.
+- Encryption: messages in encrypted rooms show the SDK's authenticity shield on desktop and iOS — red when a verified sender's identity changed or the sender doesn't match the encrypting device, grey for unknown devices, unverified devices, authenticity that can't be guaranteed, or plaintext.
 - Internals: pin the generated Swift API surface in CI, generate Swift bindings in UniFFI library mode from proc-macro exports (no UDL), call one typed Core method per matrix command from desktop and iOS instead of JSON envelopes (the envelope registry is now test-only), and generate the renderer's native wire types from Rust.
 - iOS: agent approvals stamped slightly ahead of the device clock stay actionable in notifications as they already were in Core, four notification failure codes now record their specific diagnostics stage, and Swift no longer keeps its own Later codec or agent-card extraction; shared vectors pin the remaining Swift mirrors to Core.
 - Builds: the desktop crate builds only its rlib (no unused staticlib/cdylib link), and dependencies keep line tables only in dev/test builds, which shrinks a core test build from 6.4 GB to 5.4 GB.

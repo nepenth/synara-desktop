@@ -709,7 +709,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 mediaMimeType: nil,
                 mediaWidth: nil,
                 mediaHeight: nil,
-                mediaDurationMs: nil
+                mediaDurationMs: nil,
+                encryptionShield: nil
             )
         )
         XCTAssertEqual(mappedRow?.senderProfileDisplayName, "Alice Example")
@@ -869,7 +870,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 mediaMimeType: nil,
                 mediaWidth: nil,
                 mediaHeight: nil,
-                mediaDurationMs: nil
+                mediaDurationMs: nil,
+                encryptionShield: nil
             )
         }
 
@@ -3769,5 +3771,77 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertTrue(fileManager.fileExists(atPath: legacy.appendingPathComponent("legacy-store").path))
         XCTAssertTrue(fileManager.fileExists(atPath: shared.appendingPathComponent("unexpected-store").path))
         XCTAssertFalse(SynaraSharedConstants.sharedCoreStoreIsReady(at: shared, fileManager: fileManager))
+    }
+
+    func testEncryptionShieldMapsOnlyClosedToneAndCode() {
+        XCTAssertNil(SharedCoreTimelineRows.encryptionShield(from: nil))
+        XCTAssertNil(SharedCoreTimelineRows.encryptionShield(
+            from: TimelineViewEncryptionShieldDto(tone: "blue", code: "unknown_device")
+        ))
+        XCTAssertNil(SharedCoreTimelineRows.encryptionShield(
+            from: TimelineViewEncryptionShieldDto(tone: "red", code: "made_up")
+        ))
+
+        let violation = SharedCoreTimelineRows.encryptionShield(
+            from: TimelineViewEncryptionShieldDto(tone: "red", code: "verification_violation")
+        )
+        XCTAssertEqual(violation, TimelineEncryptionShield(tone: .red, code: .verificationViolation))
+        XCTAssertEqual(violation?.systemImageName, "exclamationmark.shield")
+        XCTAssertEqual(violation?.label, "The sender's verified identity has changed.")
+
+        let clear = SharedCoreTimelineRows.encryptionShield(
+            from: TimelineViewEncryptionShieldDto(tone: "grey", code: "sent_in_clear")
+        )
+        XCTAssertEqual(clear?.tone, .grey)
+        XCTAssertEqual(clear?.systemImageName, "lock.open")
+
+        let unknownDevice = TimelineEncryptionShield(tone: "grey", code: "unknown_device")
+        XCTAssertEqual(unknownDevice?.systemImageName, "shield")
+    }
+
+    func testRoomIdentityWarningsMapClosedKindsAndPickTheMostSeriousBanner() {
+        let dto = RoomIdentityWarningsDto(
+            roomId: "!room:example.org",
+            warnings: [
+                RoomIdentityWarningDto(userId: "@amy:example.org", displayName: "Amy", kind: "pin_violation"),
+                RoomIdentityWarningDto(userId: "@bob:example.org", displayName: "  ", kind: "verification_violation"),
+                RoomIdentityWarningDto(userId: "eve", displayName: nil, kind: "pin_violation"),
+                RoomIdentityWarningDto(userId: "@zed:example.org", displayName: nil, kind: "verified"),
+            ]
+        )
+        XCTAssertEqual(
+            SharedCoreCryptoStatusService.identityWarnings(from: dto, roomID: "!other:example.org"),
+            []
+        )
+        let warnings = SharedCoreCryptoStatusService.identityWarnings(from: dto, roomID: "!room:example.org")
+        XCTAssertEqual(warnings.map(\.userID), ["@amy:example.org", "@bob:example.org"])
+        XCTAssertNil(warnings[1].displayName)
+
+        let banner = try? XCTUnwrap(RoomIdentityWarning.banner(for: warnings))
+        XCTAssertEqual(banner?.userID, "@bob:example.org")
+        XCTAssertEqual(banner?.message, "@bob:example.org's verified identity changed.")
+        XCTAssertEqual(banner?.resolveAction, "withdraw_verification")
+        XCTAssertEqual(banner?.actionTitle, "Withdraw verification")
+
+        let pinned = RoomIdentityWarning.banner(for: [warnings[0]])
+        XCTAssertEqual(pinned?.message, "Amy's identity changed.")
+        XCTAssertEqual(pinned?.resolveAction, "dismiss")
+        XCTAssertNil(RoomIdentityWarning.banner(for: []))
+    }
+
+    func testEncryptionShieldSurvivesTimelineItemCopies() {
+        var item = TimelineItem(
+            id: "item",
+            eventID: "$event:example.org",
+            senderID: "@alice:example.org",
+            timestamp: Date(timeIntervalSince1970: 0),
+            kind: .text("hello"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+        item.encryptionShield = TimelineEncryptionShield(tone: .grey, code: .unknownDevice)
+        XCTAssertEqual(item.withDeliveryStatus(nil).encryptionShield, item.encryptionShield)
+        XCTAssertEqual(item.withSenderAvatarURL(nil).encryptionShield, item.encryptionShield)
     }
 }

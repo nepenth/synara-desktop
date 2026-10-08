@@ -1503,4 +1503,86 @@ pub(super) fn register_commands(registry: &mut CommandRegistry) {
     registry
         .register("matrix_device_delete_cancel", matrix_device_delete_cancel)
         .expect("built-in matrix_device_delete_cancel must remain in the command census");
+    registry
+        .register(
+            "matrix_room_identity_warnings",
+            matrix_room_identity_warnings,
+        )
+        .expect("built-in matrix_room_identity_warnings must remain in the command census");
+    registry
+        .register(
+            "matrix_room_identity_warning_resolve",
+            matrix_room_identity_warning_resolve,
+        )
+        .expect("built-in matrix_room_identity_warning_resolve must remain in the command census");
+}
+
+fn identity_warning_owner_error(error: IdentityWarningError) -> MatrixIpcError {
+    let category = match error {
+        IdentityWarningError::InvalidRoom
+        | IdentityWarningError::InvalidUser
+        | IdentityWarningError::RoomNotFound
+        | IdentityWarningError::IdentityUnavailable
+        | IdentityWarningError::ActionNotApplicable => MatrixIpcErrorCategory::SdkInvariant,
+        IdentityWarningError::StoreFailed => MatrixIpcErrorCategory::CryptoFailure,
+    };
+    MatrixIpcError::new(category).with_diagnostic(error.diagnostic_id())
+}
+
+/// Typed `matrix_room_identity_warnings`.
+pub(super) async fn room_identity_warnings(
+    state: &Arc<CoreState>,
+    payload: NativeRoomIdentityWarningsRequest,
+) -> Result<NativeRoomIdentityWarnings, MatrixIpcError> {
+    let owner = state.verification_owner()?.ok_or_else(|| {
+        MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+            .with_diagnostic("v-crypto.identity-warning-requires-session")
+    })?;
+    owner
+        .room_identity_warnings(&payload.room_id)
+        .await
+        .map_err(identity_warning_owner_error)
+}
+
+/// Typed `matrix_room_identity_warning_resolve`.
+pub(super) async fn room_identity_warning_resolve(
+    state: &Arc<CoreState>,
+    payload: NativeIdentityWarningResolveRequest,
+) -> Result<NativeRoomIdentityWarnings, MatrixIpcError> {
+    let owner = state.verification_owner()?.ok_or_else(|| {
+        MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+            .with_diagnostic("v-crypto.identity-warning-requires-session")
+    })?;
+    owner
+        .resolve_identity_warning(payload)
+        .await
+        .map_err(identity_warning_owner_error)
+}
+
+#[cfg(test)]
+pub(super) fn matrix_room_identity_warnings(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: NativeRoomIdentityWarningsRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("v-crypto.identity-warning-invalid-payload"))?;
+        let response = room_identity_warnings(&state, payload).await?;
+        serde_json::to_value(response)
+            .map_err(|_| core_state_error("v-crypto.identity-warning-serialization-failed"))
+    })
+}
+
+#[cfg(test)]
+pub(super) fn matrix_room_identity_warning_resolve(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: NativeIdentityWarningResolveRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("v-crypto.identity-warning-invalid-payload"))?;
+        let response = room_identity_warning_resolve(&state, payload).await?;
+        serde_json::to_value(response)
+            .map_err(|_| core_state_error("v-crypto.identity-warning-serialization-failed"))
+    })
 }

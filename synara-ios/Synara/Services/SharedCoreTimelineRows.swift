@@ -54,7 +54,7 @@ enum SharedCoreTimelineRows {
         }
         let eventID = row.eventId.isEmpty ? row.itemId : row.eventId
         let timestamp = Date(timeIntervalSince1970: TimeInterval(row.originServerTs) / 1000)
-        return TimelineItem(
+        var item = TimelineItem(
             id: row.itemId,
             eventID: eventID,
             senderID: row.sender,
@@ -75,6 +75,15 @@ enum SharedCoreTimelineRows {
             reactionOwnership: reactionOwnership(from: row.reactions),
             isEncrypted: row.kind == "encrypted"
         )
+        item.encryptionShield = encryptionShield(from: row.encryptionShield)
+        return item
+    }
+
+    static func encryptionShield(
+        from dto: TimelineViewEncryptionShieldDto?
+    ) -> TimelineEncryptionShield? {
+        guard let dto else { return nil }
+        return TimelineEncryptionShield(tone: dto.tone, code: dto.code)
     }
 
     /// Timeline avatars are metadata-only Matrix content URIs. Reject every

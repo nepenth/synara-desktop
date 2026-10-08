@@ -98,6 +98,9 @@ extension RoomDirectorySearchDto: Sendable
 extension RoomDirectoryVisibilityDto: Sendable
 extension RoomDirectoryVisibilityWriteDto: Sendable
 extension RoomEncryptionStatus: Sendable
+extension RoomIdentityWarningDto: Sendable
+extension RoomIdentityWarningError: Sendable
+extension RoomIdentityWarningsDto: Sendable
 extension RoomImagePacksSnapshotDto: Sendable
 extension RoomJoinRuleSnapshotDto: Sendable
 extension RoomJoinRuleWriteDto: Sendable
@@ -189,6 +192,7 @@ extension TimelineReactionSenderDto: Sendable
 extension TimelineReadStateDto: Sendable
 extension TimelineReadStateError: Sendable
 extension TimelineSnapshotDto: Sendable
+extension TimelineViewEncryptionShieldDto: Sendable
 extension TimelineViewPollAnswerDto: Sendable
 extension TimelineViewPollDto: Sendable
 extension TimelineViewPositionDto: Sendable
@@ -304,6 +308,7 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func reactionRedact(roomId: String, targetEventId: String, reactionEventId: String, key: String) async throws -> TimelineReactionMutationDto
   open func recover(recoveryKey: String) async throws -> LeftoverAckDto
   open func registerHttpPusher(pushKey: String, appId: String, gatewayUrl: String, appDisplayName: String, lang: String) async throws -> PusherWriteDto
+  open func resolveRoomIdentityWarning(roomId: String, userId: String, action: String) async throws -> RoomIdentityWarningsDto
   open func restoreBackup(recoverySecret: String) async throws -> RestoreBackupDto
   open func restorePersistedSession(userId: String, homeserverUrl: String, storeRoot: String) async throws -> SessionRestoreDto
   open func restrictedJoinReparent(roomId: String, removeParentId: String?, addParentId: String) async throws -> RestrictedJoinReparentDto
@@ -316,6 +321,7 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func roomDirectoryCancel(sessionGeneration: UInt64, requestId: UInt64) async throws -> RoomDirectorySearchDto
   open func roomDirectoryProtocols() async throws -> RoomDirectoryProtocolsDto
   open func roomDirectorySearch(sessionGeneration: UInt64, requestId: UInt64, serverName: String?, term: String?, roomType: String?, thirdPartyInstanceId: String?, limit: UInt64, since: String?) async throws -> RoomDirectorySearchDto
+  open func roomIdentityWarnings(roomId: String) async throws -> RoomIdentityWarningsDto
   open func roomInvite(roomId: String, userId: String, reason: String?) async throws -> RoomModerationWriteDto
   open func roomJoin(roomIdOrAlias: String, viaServers: [String]?) async throws -> RoomMembershipWriteDto
   open func roomJoinRuleSnapshot(roomId: String, sessionGeneration: UInt64) async throws -> RoomJoinRuleSnapshotDto
@@ -521,6 +527,9 @@ public enum RoomEncryptionStatus: Equatable, Hashable
   case encrypted
   case notEncrypted
   case unknown
+public enum RoomIdentityWarningError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
+  case Failed(code: String, description: String)
+  public var errorDescription: String?
 public enum RoomListSnapshotError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -737,6 +746,7 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func reactionRedact(roomId: String, targetEventId: String, reactionEventId: String, key: String) async throws -> TimelineReactionMutationDto
   func recover(recoveryKey: String) async throws -> LeftoverAckDto
   func registerHttpPusher(pushKey: String, appId: String, gatewayUrl: String, appDisplayName: String, lang: String) async throws -> PusherWriteDto
+  func resolveRoomIdentityWarning(roomId: String, userId: String, action: String) async throws -> RoomIdentityWarningsDto
   func restoreBackup(recoverySecret: String) async throws -> RestoreBackupDto
   func restorePersistedSession(userId: String, homeserverUrl: String, storeRoot: String) async throws -> SessionRestoreDto
   func restrictedJoinReparent(roomId: String, removeParentId: String?, addParentId: String) async throws -> RestrictedJoinReparentDto
@@ -749,6 +759,7 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func roomDirectoryCancel(sessionGeneration: UInt64, requestId: UInt64) async throws -> RoomDirectorySearchDto
   func roomDirectoryProtocols() async throws -> RoomDirectoryProtocolsDto
   func roomDirectorySearch(sessionGeneration: UInt64, requestId: UInt64, serverName: String?, term: String?, roomType: String?, thirdPartyInstanceId: String?, limit: UInt64, since: String?) async throws -> RoomDirectorySearchDto
+  func roomIdentityWarnings(roomId: String) async throws -> RoomIdentityWarningsDto
   func roomInvite(roomId: String, userId: String, reason: String?) async throws -> RoomModerationWriteDto
   func roomJoin(roomIdOrAlias: String, viaServers: [String]?) async throws -> RoomMembershipWriteDto
   func roomJoinRuleSnapshot(roomId: String, sessionGeneration: UInt64) async throws -> RoomJoinRuleSnapshotDto
@@ -1218,6 +1229,15 @@ public struct RoomDirectoryVisibilityWriteDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var requestedVisibility: String
   public init(status: String, roomId: String, sessionGeneration: UInt64, requestedVisibility: String)
+public struct RoomIdentityWarningDto: Equatable, Hashable
+  public var userId: String
+  public var displayName: String?
+  public var kind: String
+  public init(userId: String, displayName: String?, kind: String)
+public struct RoomIdentityWarningsDto: Equatable, Hashable
+  public var roomId: String
+  public var warnings: [RoomIdentityWarningDto]
+  public init(roomId: String, warnings: [RoomIdentityWarningDto])
 public struct RoomImagePacksSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var roomId: String
@@ -1582,6 +1602,10 @@ public struct TimelineSnapshotDto: Equatable, Hashable
   public var canRedactOther: Bool
   public var rows: [TimelineViewRowDto]
   public init(schemaVersion: UInt32, sessionGeneration: UInt64, roomId: String, revision: UInt64, position: TimelineViewPositionDto, paginationBackward: String, paginationForward: String, visibleTailEventId: String?, receiptTailEventId: String?, ownReadEventId: String?, unreadAnchorEventId: String?, isMarkedUnread: Bool, pinnedEventIds: [String], rowCount: UInt32, markRead: Bool, markUnread: Bool, paginateBackward: Bool, paginateForward: Bool, canRedactOwn: Bool, canRedactOther: Bool, rows: [TimelineViewRowDto])
+public struct TimelineViewEncryptionShieldDto: Equatable, Hashable
+  public var tone: String
+  public var code: String
+  public init(tone: String, code: String)
 public struct TimelineViewPollAnswerDto: Equatable, Hashable
   public var id: String
   public var text: String
@@ -1651,7 +1675,8 @@ public struct TimelineViewRowDto: Equatable, Hashable
   public var mediaWidth: UInt32?
   public var mediaHeight: UInt32?
   public var mediaDurationMs: UInt64?
-  public init(kind: String, itemId: String, eventId: String, sender: String, senderName: String, senderAvatarUrl: String?, body: String, originServerTs: UInt64, edited: Bool, replyToEventId: String?, replyPreview: TimelineViewReplyPreviewDto?, threadRootEventId: String?, threadSummary: TimelineViewThreadSummaryDto?, poll: TimelineViewPollDto?, capabilities: TimelineViewRowCapabilitiesDto?, decryptionState: String?, messageType: String?, forwardTransport: String?, formattedBody: String?, agentCardJson: String?, isAgentApproval: Bool, mediaFilename: String?, mediaCaption: String?, reactions: [TimelineViewReactionDto], mediaHandleId: String?, mediaMimeType: String?, mediaWidth: UInt32?, mediaHeight: UInt32?, mediaDurationMs: UInt64?)
+  public var encryptionShield: TimelineViewEncryptionShieldDto?
+  public init(kind: String, itemId: String, eventId: String, sender: String, senderName: String, senderAvatarUrl: String?, body: String, originServerTs: UInt64, edited: Bool, replyToEventId: String?, replyPreview: TimelineViewReplyPreviewDto?, threadRootEventId: String?, threadSummary: TimelineViewThreadSummaryDto?, poll: TimelineViewPollDto?, capabilities: TimelineViewRowCapabilitiesDto?, decryptionState: String?, messageType: String?, forwardTransport: String?, formattedBody: String?, agentCardJson: String?, isAgentApproval: Bool, mediaFilename: String?, mediaCaption: String?, reactions: [TimelineViewReactionDto], mediaHandleId: String?, mediaMimeType: String?, mediaWidth: UInt32?, mediaHeight: UInt32?, mediaDurationMs: UInt64?, encryptionShield: TimelineViewEncryptionShieldDto?)
 public struct TimelineViewThreadSummaryDto: Equatable, Hashable
   public var rootEventId: String
   public var replyCount: UInt32

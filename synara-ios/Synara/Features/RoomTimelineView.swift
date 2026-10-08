@@ -480,6 +480,7 @@ struct RoomTimelineView: View {
             if let typingText = RoomTypingPresentation.text(for: typingUserIDs) {
                 RoomTypingIndicator(text: typingText)
             }
+            RoomIdentityWarningBanner(roomID: roomID, crypto: environment.crypto)
             Divider()
             ComposerView(
                 roomID: roomID,
@@ -3318,6 +3319,82 @@ private struct TimelineAvailabilityBanner: View {
     }
 }
 
+/// Warns above the composer when a room member's cryptographic identity changed.
+private struct RoomIdentityWarningBanner: View {
+    private static let refreshNanoseconds: UInt64 = 30_000_000_000
+
+    let roomID: String
+    let crypto: CryptoStatusServicing
+    @State private var warnings: [RoomIdentityWarning] = []
+    @State private var isResolving = false
+    @State private var failed = false
+
+    var body: some View {
+        Group {
+            if let warning = RoomIdentityWarning.banner(for: warnings) {
+                content(for: warning)
+            }
+        }
+        .task(id: roomID) {
+            warnings = []
+            failed = false
+            while Task.isCancelled == false {
+                let next = await crypto.roomIdentityWarnings(roomID: roomID)
+                if Task.isCancelled { break }
+                warnings = next
+                try? await Task.sleep(nanoseconds: Self.refreshNanoseconds)
+            }
+        }
+    }
+
+    private func content(for warning: RoomIdentityWarning) -> some View {
+        let critical = warning.kind == .verificationViolation
+        return HStack(spacing: SynaraSpacing.small) {
+            Image(systemName: critical ? "exclamationmark.shield" : "shield")
+                .foregroundStyle(critical ? SynaraColor.critical : SynaraColor.warning)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(warning.message)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                if failed {
+                    Text("Couldn't update this identity change.")
+                        .font(SynaraTypography.messageMeta)
+                        .foregroundStyle(SynaraColor.critical)
+                }
+            }
+            Spacer(minLength: SynaraSpacing.small)
+            Button(warning.actionTitle) {
+                resolve(warning)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(isResolving)
+            .accessibilityIdentifier("RoomIdentityWarningAction")
+        }
+        .padding(.horizontal, SynaraSpacing.medium)
+        .padding(.vertical, SynaraSpacing.xSmall)
+        .background(SynaraColor.surface)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("RoomIdentityWarningBanner")
+    }
+
+    private func resolve(_ warning: RoomIdentityWarning) {
+        guard isResolving == false else { return }
+        isResolving = true
+        failed = false
+        Task {
+            let next = await crypto.resolveRoomIdentityWarning(roomID: roomID, warning: warning)
+            if let next {
+                warnings = next
+            } else {
+                failed = true
+            }
+            isResolving = false
+        }
+    }
+}
+
 private struct RoomTypingIndicator: View {
     let text: String
 
@@ -6098,7 +6175,8 @@ private struct TimelineRow: View {
                     isGrouped: isGroupedWithPrevious,
                     deliveryStatus: item.deliveryStatus,
                     statusEventID: item.eventID,
-                    onRetryFailedSend: item.deliveryStatus == .failed ? onRetryFailedSend : nil
+                    onRetryFailedSend: item.deliveryStatus == .failed ? onRetryFailedSend : nil,
+                    encryptionShield: item.encryptionShield
                 )
             case let .formattedText(body, html):
                 SynaraMessageBubble(
@@ -6109,7 +6187,8 @@ private struct TimelineRow: View {
                     showsBackground: SynaraSurfaceDepthRole.standardMessageShowsBackground,
                     deliveryStatus: item.deliveryStatus,
                     statusEventID: item.eventID,
-                    onRetryFailedSend: item.deliveryStatus == .failed ? onRetryFailedSend : nil
+                    onRetryFailedSend: item.deliveryStatus == .failed ? onRetryFailedSend : nil,
+                    encryptionShield: item.encryptionShield
                 ) {
                     MatrixFormattedMessageView(
                         fallbackBody: body,

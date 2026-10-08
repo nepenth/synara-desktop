@@ -29,6 +29,7 @@ use crate::app::agent_approvals::is_eligible_agent_approval_prompt;
 use crate::dto::{EventId, LocalEchoState, RoomId, TimelineItemId, UserId};
 
 use super::reactions::project_view_reaction_senders;
+use super::shield::{project_encryption_shield, TimelineEncryptionShield, STRICT_SHIELDS};
 use super::TimelineMediaRegistry;
 
 pub const TIMELINE_VIEW_SCHEMA_VERSION: u32 = 1;
@@ -215,6 +216,11 @@ pub struct TimelineEventRowBase {
     /// retry address this id; it is not a server event id.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transaction_id: Option<String>,
+    /// SDK authenticity shield for an event in an encrypted room. Absent when
+    /// the event is trusted, in an unencrypted room, a local echo, or
+    /// undecryptable, and on older snapshots.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encryption_shield: Option<TimelineEncryptionShield>,
     pub capabilities: TimelineRowCapabilities,
 }
 
@@ -286,6 +292,7 @@ fn project_event_row_base_for_user(
         origin_server_ts: event.timestamp().get().into(),
         local_echo_state: delivery.state,
         transaction_id: event.transaction_id().map(ToString::to_string),
+        encryption_shield: project_encryption_shield(event.get_shield(STRICT_SHIELDS)),
         capabilities: project_row_action_capabilities(event, own_user_id, authority),
     }
 }
@@ -1693,6 +1700,7 @@ mod tests {
                 origin_server_ts: 1,
                 local_echo_state: None,
                 transaction_id: None,
+                encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
                     react: true,
                     reply: false,
@@ -1824,6 +1832,7 @@ mod tests {
                 origin_server_ts: 1,
                 local_echo_state: None,
                 transaction_id: None,
+                encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
                     react: true,
                     reply: true,
@@ -1979,6 +1988,7 @@ mod tests {
             origin_server_ts: 1,
             local_echo_state: failed.state,
             transaction_id: Some("txn-failed".into()),
+            encryption_shield: None,
             capabilities: TimelineRowCapabilities {
                 react: false,
                 reply: false,

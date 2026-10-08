@@ -12,6 +12,7 @@ import { NativeTimelinePresenter } from './NativeTimelinePresenter';
 import { RoomViewTyping } from './RoomViewTyping';
 import { RoomTombstone } from './RoomTombstone';
 import { RoomInput } from './RoomInput';
+import { RoomIdentityWarningBanner } from './RoomIdentityWarningBanner';
 import { RoomViewFollowing, RoomViewFollowingPlaceholder } from './RoomViewFollowing';
 import { Page } from '../../components/page';
 import { useKeyDown } from '../../hooks/useKeyDown';
@@ -128,6 +129,7 @@ export function RoomView({
             />
           ) : (
             <>
+              <RoomIdentityWarningBanner roomId={roomId} />
               {canMessage && (
                 <RoomInput room={room} editor={editor} roomId={roomId} ref={roomInputRef} />
               )}

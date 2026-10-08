@@ -88,6 +88,22 @@ pub struct NativeVerificationOwner {
 }
 
 impl NativeVerificationOwner {
+    /// Members of `room_id` whose identity changed and need acknowledgement.
+    pub async fn room_identity_warnings(
+        &self,
+        room_id: &str,
+    ) -> Result<super::NativeRoomIdentityWarnings, super::IdentityWarningError> {
+        super::identity_warnings::room_identity_warnings(&self.client, room_id).await
+    }
+
+    /// Pin a changed identity or withdraw an old verification, then re-read.
+    pub async fn resolve_identity_warning(
+        &self,
+        request: super::NativeIdentityWarningResolveRequest,
+    ) -> Result<super::NativeRoomIdentityWarnings, super::IdentityWarningError> {
+        super::identity_warnings::resolve_identity_warning(&self.client, request).await
+    }
+
     pub fn new(client: &Client, session_generation: u64) -> Self {
         Self::with_emit(client, Arc::new(|_| {}), session_generation)
     }

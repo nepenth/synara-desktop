@@ -72,6 +72,7 @@ import {
   filterNativeForwardTargets,
   isNativeTimelineEventPinned,
   nativeTimelineEchoFields,
+  nativeTimelineRowShield,
   nativeTimelineUnsentDelivery,
   NativeLocalEchoActionGuard,
   runNativeLocalEchoDiscard,
@@ -92,6 +93,10 @@ import {
   type NativeTimelineViewRow,
   useNativeTimelineView,
 } from './nativeTimelineView';
+import {
+  nativeTimelineShieldPresentation,
+  type NativeTimelineShieldPresentation,
+} from './nativeTimelineShield';
 import type { RoomEncryptionStatus } from '../matrix-dto/room';
 import { incomingCallLabel } from '../matrix-rtc/liveCallChrome';
 import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
@@ -1112,7 +1117,20 @@ type NativeTimelineRowActionSurfaceProps = {
   unsentPending?: boolean;
   onDiscardUnsent?: (transactionId: string) => void;
   onRetryUnsent?: (transactionId: string) => void;
+  shield?: NativeTimelineShieldPresentation;
 };
+
+const NativeTimelineShieldBadge = ({ shield }: { shield: NativeTimelineShieldPresentation }) => (
+  <span
+    className={htmlCss.EncryptionShield}
+    data-native-timeline-shield={shield.tone}
+    role="img"
+    aria-label={shield.label}
+    title={shield.label}
+  >
+    <Icon src={shield.icon === 'unencrypted' ? Icons.Warning : Icons.Shield} size="50" />
+  </span>
+);
 
 /**
  * The native presenter owns the action UI as well as the data/actions behind it.
@@ -1128,6 +1146,7 @@ const NativeTimelineRowActionSurface = ({
   unsentPending = false,
   onDiscardUnsent,
   onRetryUnsent,
+  shield,
 }: NativeTimelineRowActionSurfaceProps) => {
   const { eventId, capabilities } = actionProps;
   const [hovered, setHovered] = useState(false);
@@ -1253,6 +1272,7 @@ const NativeTimelineRowActionSurface = ({
           onRetry={onRetryUnsent}
         />
       ) : null}
+      {shield ? <NativeTimelineShieldBadge shield={shield} /> : null}
       {children}
     </div>
   );
@@ -1846,6 +1866,7 @@ const NativeTimelineRow = ({
     }
   }, [eventId, roomId, row, sessionGeneration]);
   const unsentDelivery = nativeTimelineUnsentDelivery(nativeTimelineEchoFields(row));
+  const shield = nativeTimelineShieldPresentation(nativeTimelineRowShield(row));
   const [unsentPending, setUnsentPending] = useState(() =>
     unsentDelivery?.transactionId
       ? nativeLocalEchoActions.isPending(roomId, unsentDelivery.transactionId)
@@ -1909,6 +1930,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
           unsent={unsentDelivery}
+          shield={shield}
           unsentPending={unsentPending}
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}
@@ -2063,6 +2085,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
           unsent={unsentDelivery}
+          shield={shield}
           unsentPending={unsentPending}
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}
@@ -2090,6 +2113,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
           unsent={unsentDelivery}
+          shield={shield}
           unsentPending={unsentPending}
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}
@@ -2145,6 +2169,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
           unsent={unsentDelivery}
+          shield={shield}
           unsentPending={unsentPending}
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}
@@ -2213,6 +2238,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
           unsent={unsentDelivery}
+          shield={shield}
           unsentPending={unsentPending}
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}
@@ -2240,6 +2266,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
           unsent={unsentDelivery}
+          shield={shield}
           unsentPending={unsentPending}
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}
@@ -2268,6 +2295,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
           unsent={unsentDelivery}
+          shield={shield}
           unsentPending={unsentPending}
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}
@@ -2296,6 +2324,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
           unsent={unsentDelivery}
+          shield={shield}
           unsentPending={unsentPending}
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}

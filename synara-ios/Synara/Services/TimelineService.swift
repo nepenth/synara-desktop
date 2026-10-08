@@ -202,6 +202,8 @@ struct TimelineItem: Identifiable, Equatable {
     let serverEventID: String?
     /// Core's receipt frontier paired with this displayed remote tail.
     var readReceiptEventID: String? = nil
+    /// SDK authenticity shield for a message in an encrypted room; nil when trusted.
+    var encryptionShield: TimelineEncryptionShield? = nil
     let senderID: String
     /// Core-resolved profile display name. Mock/local items leave this nil and
     /// continue through the deterministic sender-ID fallback.
@@ -311,6 +313,7 @@ struct TimelineItem: Identifiable, Equatable {
             hasCurrentUserReadReceipt: hasCurrentUserReadReceipt
         )
         item.readReceiptEventID = readReceiptEventID
+        item.encryptionShield = encryptionShield
         return item
     }
 
@@ -340,6 +343,7 @@ struct TimelineItem: Identifiable, Equatable {
             hasCurrentUserReadReceipt: hasCurrentUserReadReceipt
         )
         item.readReceiptEventID = readReceiptEventID
+        item.encryptionShield = encryptionShield
         return item
     }
 
@@ -4024,5 +4028,65 @@ private extension String {
         }
 
         return ["https", "http", "ftp", "mailto", "magnet"].contains(scheme)
+    }
+}
+
+
+/// Closed authenticity shield copied from Core's timeline row.
+///
+/// Core takes the decision from matrix-rust-sdk. Unknown tones or codes are
+/// dropped at this boundary instead of being shown as free text.
+struct TimelineEncryptionShield: Equatable {
+    enum Tone: String, Equatable {
+        case red
+        case grey
+    }
+
+    enum Code: String, Equatable {
+        case authenticityNotGuaranteed = "authenticity_not_guaranteed"
+        case unknownDevice = "unknown_device"
+        case unsignedDevice = "unsigned_device"
+        case unverifiedIdentity = "unverified_identity"
+        case verificationViolation = "verification_violation"
+        case mismatchedSender = "mismatched_sender"
+        case sentInClear = "sent_in_clear"
+    }
+
+    let tone: Tone
+    let code: Code
+
+    init(tone: Tone, code: Code) {
+        self.tone = tone
+        self.code = code
+    }
+
+    init?(tone rawTone: String, code rawCode: String) {
+        guard let tone = Tone(rawValue: rawTone), let code = Code(rawValue: rawCode) else {
+            return nil
+        }
+        self.init(tone: tone, code: code)
+    }
+
+    /// SF Symbol for the badge; plaintext in an encrypted room uses an open lock.
+    var systemImageName: String {
+        switch code {
+        case .sentInClear: "lock.open"
+        case .verificationViolation, .mismatchedSender: "exclamationmark.shield"
+        default: "shield"
+        }
+    }
+
+    /// Fixed copy for the accessibility label and tooltip.
+    var label: String {
+        switch code {
+        case .authenticityNotGuaranteed:
+            "The authenticity of this encrypted message can't be guaranteed on this device."
+        case .unknownDevice: "Encrypted by an unknown or deleted device."
+        case .unsignedDevice: "Encrypted by a device not verified by its owner."
+        case .unverifiedIdentity: "Encrypted by an unverified user."
+        case .verificationViolation: "The sender's verified identity has changed."
+        case .mismatchedSender: "The sender of this message does not match the device that encrypted it."
+        case .sentInClear: "Not encrypted."
+        }
     }
 }

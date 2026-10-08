@@ -88,7 +88,9 @@ use crate::app::user_status::{
     NativeUserStatusOwner, NativeUserStatusSnapshot, NativeUserStatusWriteResult,
 };
 use crate::app::verification::{
-    NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
+    IdentityWarningError, NativeIdentityWarningResolveRequest, NativeRoomIdentityWarnings,
+    NativeRoomIdentityWarningsRequest, NativeVerificationInbox, NativeVerificationOwner,
+    NativeVerificationRequest,
 };
 use crate::app::widgets::{
     AgentWidgetEntry, NativeWidgetOwner, WidgetGrantPolicy, WidgetKind, WidgetListSnapshot,

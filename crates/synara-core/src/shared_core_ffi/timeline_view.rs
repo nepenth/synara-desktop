@@ -130,6 +130,28 @@ pub struct TimelineViewRowDto {
     pub media_width: Option<u32>,
     pub media_height: Option<u32>,
     pub media_duration_ms: Option<u64>,
+    /// SDK authenticity shield for an event in an encrypted room. Absent when
+    /// the event is trusted or no shield applies.
+    pub encryption_shield: Option<TimelineViewEncryptionShieldDto>,
+}
+
+/// Closed authenticity shield. `tone` is `red` or `grey`; `code` is one of
+/// `authenticity_not_guaranteed`, `unknown_device`, `unsigned_device`,
+/// `unverified_identity`, `verification_violation`, `mismatched_sender` or
+/// `sent_in_clear`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct TimelineViewEncryptionShieldDto {
+    pub tone: String,
+    pub code: String,
+}
+
+fn view_encryption_shield_dto(
+    shield: crate::app::timeline::TimelineEncryptionShield,
+) -> TimelineViewEncryptionShieldDto {
+    TimelineViewEncryptionShieldDto {
+        tone: shield.tone.as_str().to_owned(),
+        code: shield.code.as_str().to_owned(),
+    }
 }
 
 /// Privacy-safe reply preview projected by Core. No raw event content.
@@ -547,6 +569,10 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 media_width,
                 media_height,
                 media_duration_ms,
+                encryption_shield: message
+                    .event
+                    .encryption_shield
+                    .map(view_encryption_shield_dto),
             }
         }
         TimelineViewRow::Sticker {
@@ -595,6 +621,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 media_width,
                 media_height,
                 media_duration_ms,
+                encryption_shield: event.encryption_shield.map(view_encryption_shield_dto),
             }
         }
         TimelineViewRow::Poll(poll) => {
@@ -634,6 +661,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 media_width: None,
                 media_height: None,
                 media_duration_ms: None,
+                encryption_shield: poll.event.encryption_shield.map(view_encryption_shield_dto),
             }
         }
         TimelineViewRow::Membership(membership) => TimelineViewRowDto {
@@ -666,6 +694,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_width: None,
             media_height: None,
             media_duration_ms: None,
+            encryption_shield: None,
         },
         TimelineViewRow::State(state) => TimelineViewRowDto {
             kind: "state".to_owned(),
@@ -697,6 +726,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_width: None,
             media_height: None,
             media_duration_ms: None,
+            encryption_shield: None,
         },
         TimelineViewRow::Call(call) => TimelineViewRowDto {
             kind: "call".to_owned(),
@@ -728,6 +758,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_width: None,
             media_height: None,
             media_duration_ms: None,
+            encryption_shield: None,
         },
         TimelineViewRow::Redacted(redacted) => TimelineViewRowDto {
             kind: "redacted".to_owned(),
@@ -759,6 +790,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_width: None,
             media_height: None,
             media_duration_ms: None,
+            encryption_shield: None,
         },
         TimelineViewRow::EncryptedUnavailable(encrypted) => TimelineViewRowDto {
             kind: "encrypted".to_owned(),
@@ -790,6 +822,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_width: None,
             media_height: None,
             media_duration_ms: None,
+            encryption_shield: None,
         },
         TimelineViewRow::Other(other) => {
             let (sender, sender_name, sender_avatar_url, origin_server_ts, capabilities) = other
@@ -836,6 +869,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 media_width: None,
                 media_height: None,
                 media_duration_ms: None,
+                encryption_shield: None,
             }
         }
         TimelineViewRow::DateSeparator {
@@ -871,6 +905,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_width: None,
             media_height: None,
             media_duration_ms: None,
+            encryption_shield: None,
         },
         TimelineViewRow::ReadMarker { item_id } => virtual_row_dto("read_marker", item_id),
         TimelineViewRow::UnreadMarker { item_id } => virtual_row_dto("unread_marker", item_id),
@@ -910,6 +945,7 @@ pub(super) fn virtual_row_dto(kind: &str, item_id: String) -> TimelineViewRowDto
         media_width: None,
         media_height: None,
         media_duration_ms: None,
+        encryption_shield: None,
     }
 }
 

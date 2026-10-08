@@ -7,6 +7,7 @@
 //! Authoritative design note: `docs/matrix-rust-sdk/p8.3-verification.md`
 
 mod error;
+mod identity_warnings;
 mod inbox;
 mod live;
 mod native;
@@ -17,6 +18,12 @@ mod publication_tests;
 mod two_device_tests;
 
 pub use error::VerificationError;
+pub use identity_warnings::{
+    warnings_from_states, IdentityWarningError, NativeIdentityWarningAction,
+    NativeIdentityWarningKind, NativeIdentityWarningResolveRequest, NativeRoomIdentityWarning,
+    NativeRoomIdentityWarnings, NativeRoomIdentityWarningsRequest,
+    NATIVE_ROOM_IDENTITY_WARNINGS_SCHEMA_VERSION,
+};
 pub use inbox::{
     VerificationDirection, VerificationFlow, VerificationInbox, VerificationPhase, MAX_OPEN_FLOWS,
     MAX_SAS_EMOJI,

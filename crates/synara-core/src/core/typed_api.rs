@@ -1011,6 +1011,22 @@ impl Core {
         verification_list(&self.state).await
     }
 
+    /// Typed `matrix_room_identity_warnings`.
+    pub async fn room_identity_warnings(
+        &self,
+        request: NativeRoomIdentityWarningsRequest,
+    ) -> Result<NativeRoomIdentityWarnings, MatrixIpcError> {
+        room_identity_warnings(&self.state, request).await
+    }
+
+    /// Typed `matrix_room_identity_warning_resolve`.
+    pub async fn room_identity_warning_resolve(
+        &self,
+        request: NativeIdentityWarningResolveRequest,
+    ) -> Result<NativeRoomIdentityWarnings, MatrixIpcError> {
+        room_identity_warning_resolve(&self.state, request).await
+    }
+
     /// Typed `matrix_verification_accept`.
     pub async fn verification_accept(
         &self,

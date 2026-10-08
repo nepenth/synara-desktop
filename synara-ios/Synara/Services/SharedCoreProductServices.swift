@@ -2015,6 +2015,39 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         self.host = host
     }
 
+    func roomIdentityWarnings(roomID: String) async -> [RoomIdentityWarning] {
+        guard let dto = try? await host.core.roomIdentityWarnings(roomId: roomID) else {
+            return []
+        }
+        return Self.identityWarnings(from: dto, roomID: roomID)
+    }
+
+    func resolveRoomIdentityWarning(
+        roomID: String,
+        warning: RoomIdentityWarning
+    ) async -> [RoomIdentityWarning]? {
+        do {
+            let dto = try await host.core.resolveRoomIdentityWarning(
+                roomId: roomID,
+                userId: warning.userID,
+                action: warning.resolveAction
+            )
+            return Self.identityWarnings(from: dto, roomID: roomID)
+        } catch {
+            return nil
+        }
+    }
+
+    static func identityWarnings(
+        from dto: RoomIdentityWarningsDto,
+        roomID: String
+    ) -> [RoomIdentityWarning] {
+        guard dto.roomId == roomID else { return [] }
+        return dto.warnings.compactMap {
+            RoomIdentityWarning(userID: $0.userId, displayName: $0.displayName, kind: $0.kind)
+        }
+    }
+
     func roomStatus(roomID: String) async -> RoomCryptoStatus {
         let session = await sessionStatus()
         // Timeline actions address joined rooms. Their encryption authority is

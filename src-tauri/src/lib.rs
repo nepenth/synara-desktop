@@ -497,6 +497,8 @@ pub fn run() {
             matrix::auth::product::matrix_room_key_export,
             matrix::auth::product::matrix_room_key_import_select,
             matrix::auth::product::matrix_room_key_import,
+            matrix::auth::product::matrix_room_identity_warnings,
+            matrix::auth::product::matrix_room_identity_warning_resolve,
             matrix::auth::product::matrix_verification_list,
             matrix::auth::product::matrix_verification_start,
             matrix::auth::product::matrix_verification_accept,
