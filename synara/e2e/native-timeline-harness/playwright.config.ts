@@ -15,7 +15,10 @@ export default defineConfig({
     command:
       'node node_modules/vite/bin/vite.js --config e2e/native-timeline-harness/vite.config.ts',
     url: 'http://127.0.0.1:4181',
-    reuseExistingServer: !process.env.CI,
+    // Never reuse a server already on this fixed port: it may belong to another
+    // checkout, so every test would silently run against the wrong code. With
+    // strictPort in the harness Vite config, a busy port fails at startup instead.
+    reuseExistingServer: false,
     timeout: 30000,
   },
   projects: [
