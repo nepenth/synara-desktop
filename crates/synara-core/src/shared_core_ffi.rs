@@ -96,9 +96,13 @@ use crate::app::verification::{
 use crate::core::Core;
 use crate::dto::{SessionLifecycle, SessionSnapshot};
 use crate::platform::{IosFailClosedPlatform, Platform, SecretVault};
-use crate::transport::{
-    CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory, MAX_ENVELOPE_PAYLOAD_JSON_BYTES,
-};
+use crate::transport::{MatrixIpcError, MatrixIpcErrorCategory, MAX_ENVELOPE_PAYLOAD_JSON_BYTES};
+
+/// Whether `request`'s wire JSON fits the envelope cap that Core enforces on
+/// shell payloads; oversized writes fail closed before reaching an owner.
+pub(crate) fn within_envelope_cap<T: serde::Serialize>(request: &T) -> bool {
+    serde_json::to_vec(request).is_ok_and(|json| json.len() <= MAX_ENVELOPE_PAYLOAD_JSON_BYTES)
+}
 use serde::Deserialize;
 
 const VAULT_UNAVAILABLE_CODE: &str = "p4-s3b-secret-vault-unavailable";
@@ -170,11 +174,6 @@ const AGENT_APPROVAL_INVALID_CODE: &str = "p4-s34-agent-approval-invalid";
 const AGENT_APPROVAL_INVALID_DESCRIPTION: &str = "The agent approval request is invalid.";
 const AGENT_APPROVAL_FAILED_CODE: &str = "p4-s34-agent-approval-failed";
 const AGENT_APPROVAL_FAILED_DESCRIPTION: &str = "The agent approval could not be sent.";
-const BACKUP_STATUS_COMMAND: &str = "matrix_backup_status";
-const CRYPTO_STATUS_COMMAND: &str = "matrix_crypto_status";
-const CROSS_SIGNING_STATUS_COMMAND: &str = "matrix_cross_signing_status";
-const ROOM_KEY_TRANSFER_STATUS_COMMAND: &str = "matrix_room_key_transfer_status";
-const LEFTOVER_STATUS_GENERATION: u64 = 0;
 const ATTACHED_OWNER_NAMES: &[&str] = &[
     "typing",
     "presence",
@@ -189,25 +188,16 @@ const ATTACHED_OWNER_NAMES: &[&str] = &[
     "timelines",
     "sync",
 ];
-const ROOM_LIST_COMMAND: &str = "matrix_room_list_snapshot";
-const ROOM_LIST_READ_ONLY_GENERATION: u64 = 0;
 const ROOM_LIST_NO_SESSION_CODE: &str = "p2-room-list-snapshot-no-session";
 const ROOM_LIST_NO_SESSION_DESCRIPTION: &str = "No room list session is available.";
 const ROOM_LIST_SYNC_NOT_STARTED_CODE: &str = "p4-s4-sync-not-started";
 const ROOM_LIST_SYNC_NOT_STARTED_DESCRIPTION: &str = "The room list is not live.";
 const ROOM_LIST_FAILED_CODE: &str = "p4-s4-snapshot-failed";
 const ROOM_LIST_FAILED_DESCRIPTION: &str = "The room list could not be loaded.";
-const INVITES_COMMAND: &str = "matrix_invites_snapshot";
-const INVITES_READ_ONLY_GENERATION: u64 = 0;
 const INVITES_NO_SESSION_CODE: &str = "p2-invites-snapshot-no-session";
 const INVITES_NO_SESSION_DESCRIPTION: &str = "No invite session is available.";
 const INVITES_FAILED_CODE: &str = "p4-s5-snapshot-failed";
 const INVITES_FAILED_DESCRIPTION: &str = "The invite inbox could not be loaded.";
-const TIMELINE_READ_ONLY_GENERATION: u64 = 0;
-const TIMELINE_OPEN_COMMAND: &str = "matrix_timeline_open";
-const TIMELINE_CLOSE_COMMAND: &str = "matrix_timeline_close";
-const TIMELINE_PAGINATE_COMMAND: &str = "matrix_timeline_paginate";
-const TIMELINE_SNAPSHOT_COMMAND: &str = "matrix_timeline_snapshot";
 const TIMELINE_OPEN_NO_SESSION_CODE: &str = "p2-timeline-open-no-session";
 const TIMELINE_CLOSE_NO_SESSION_CODE: &str = "p2-timeline-close-no-session";
 const TIMELINE_PAGINATE_NO_SESSION_CODE: &str = "p2-timeline-paginate-no-session";
@@ -225,23 +215,11 @@ const TIMELINE_INVALID_ROOM_CODE: &str = "d0.3-timeline-invalid-room-id";
 const TIMELINE_INVALID_ROOM_DESCRIPTION: &str = "The timeline room id is invalid.";
 const TIMELINE_VIEW_NOT_OPEN_CODE: &str = "v-timeline-view-not-open";
 const TIMELINE_VIEW_NOT_OPEN_DESCRIPTION: &str = "The timeline view is not open.";
-const TYPING_PRESENCE_GENERATION: u64 = 0;
-const TYPING_SNAPSHOT_COMMAND: &str = "matrix_typing_snapshot";
-const TYPING_SET_COMMAND: &str = "matrix_typing_set";
-const PRESENCE_SNAPSHOT_COMMAND: &str = "matrix_presence_snapshot";
-const PRESENCE_SUBSCRIBE_COMMAND: &str = "matrix_presence_subscribe";
-const PRESENCE_UNSUBSCRIBE_COMMAND: &str = "matrix_presence_unsubscribe";
-const PRESENCE_SET_COMMAND: &str = "matrix_presence_set";
-const RTC_TRANSPORTS_SNAPSHOT_COMMAND: &str = "matrix_rtc_transports_snapshot";
-const RTC_TRANSPORTS_REFRESH_COMMAND: &str = "matrix_rtc_transports_refresh";
 const RTC_TRANSPORTS_NO_SESSION_CODE: &str = "p2-rtc-transports-snapshot-no-session";
 const RTC_TRANSPORTS_REFRESH_NO_SESSION_CODE: &str = "p2-rtc-transports-refresh-no-session";
 const RTC_TRANSPORTS_NO_SESSION_DESCRIPTION: &str = "No MatrixRTC transport session is available.";
 const RTC_TRANSPORTS_FAILED_CODE: &str = "p4-rtc-transports-snapshot-failed";
 const RTC_TRANSPORTS_FAILED_DESCRIPTION: &str = "MatrixRTC transports could not be loaded.";
-const USER_STATUS_SNAPSHOT_COMMAND: &str = "matrix_user_status_snapshot";
-const USER_STATUS_SET_COMMAND: &str = "matrix_user_status_set";
-const USER_STATUS_CLEAR_COMMAND: &str = "matrix_user_status_clear";
 const USER_STATUS_SNAPSHOT_NO_SESSION_CODE: &str = "p2-user-status-snapshot-no-session";
 const USER_STATUS_SET_NO_SESSION_CODE: &str = "p2-user-status-set-no-session";
 const USER_STATUS_CLEAR_NO_SESSION_CODE: &str = "p2-user-status-clear-no-session";
@@ -282,20 +260,10 @@ const PRESENCE_INVALID_STATE_CODE: &str = "v-presence-state-unsupported";
 const PRESENCE_INVALID_STATE_DESCRIPTION: &str = "The presence state is invalid.";
 const PRESENCE_STATUS_MSG_CAP_CODE: &str = "p4.7-status-msg-cap";
 const PRESENCE_STATUS_MSG_CAP_DESCRIPTION: &str = "The presence status message is too long.";
-const VERIFICATION_LIST_COMMAND: &str = "matrix_verification_list";
-const VERIFICATION_LIST_GENERATION: u64 = 0;
 const VERIFICATION_LIST_NO_SESSION_CODE: &str = "p2-verification-list-no-session";
 const VERIFICATION_LIST_NO_SESSION_DESCRIPTION: &str = "No verification session is available.";
 const VERIFICATION_LIST_FAILED_CODE: &str = "p4-s8-list-failed";
 const VERIFICATION_LIST_FAILED_DESCRIPTION: &str = "The verification inbox could not be loaded.";
-const VERIFICATION_SAS_GENERATION: u64 = 0;
-const VERIFICATION_START_COMMAND: &str = "matrix_verification_start";
-const VERIFICATION_ACCEPT_COMMAND: &str = "matrix_verification_accept";
-const VERIFICATION_BEGIN_SAS_COMMAND: &str = "matrix_verification_begin_sas";
-const VERIFICATION_CONFIRM_COMMAND: &str = "matrix_verification_confirm";
-const VERIFICATION_MISMATCH_COMMAND: &str = "matrix_verification_mismatch";
-const VERIFICATION_CANCEL_COMMAND: &str = "matrix_verification_cancel";
-const VERIFICATION_DISMISS_COMMAND: &str = "matrix_verification_dismiss";
 const VERIFICATION_START_NO_SESSION_CODE: &str = "p2-verification-start-no-session";
 const VERIFICATION_ACCEPT_NO_SESSION_CODE: &str = "p2-verification-accept-no-session";
 const VERIFICATION_BEGIN_SAS_NO_SESSION_CODE: &str = "p2-verification-begin-sas-no-session";
@@ -308,11 +276,6 @@ const VERIFICATION_SAS_FAILED_CODE: &str = "p4-s9-sas-failed";
 const VERIFICATION_SAS_FAILED_DESCRIPTION: &str =
     "The verification request could not be completed.";
 const VERIFICATION_SAS_OWNER_DESCRIPTION: &str = "The verification request is not available.";
-const DEVICE_COMMAND_GENERATION: u64 = 0;
-const DEVICE_SNAPSHOT_COMMAND: &str = "matrix_device_snapshot";
-const DEVICE_RENAME_COMMAND: &str = "matrix_device_rename";
-const DEVICE_DELETE_START_COMMAND: &str = "matrix_device_delete_start";
-const DEVICE_DELETE_CANCEL_COMMAND: &str = "matrix_device_delete_cancel";
 const DEVICE_DELETE_PASSWORD_NO_SESSION_CODE: &str = "p2-device-delete-password-no-session";
 const DEVICE_SNAPSHOT_NO_SESSION_CODE: &str = "p2-device-snapshot-no-session";
 const DEVICE_RENAME_NO_SESSION_CODE: &str = "p2-device-rename-no-session";
@@ -322,21 +285,12 @@ const DEVICE_NO_SESSION_DESCRIPTION: &str = "No device session is available.";
 const DEVICE_FAILED_CODE: &str = "p4-s9-2-device-failed";
 const DEVICE_FAILED_DESCRIPTION: &str = "The device request could not be completed.";
 const DEVICE_OWNER_DESCRIPTION: &str = "The device request is not available.";
-const JOIN_RULE_SNAPSHOT_COMMAND: &str = "matrix_room_join_rule_snapshot";
-const JOIN_RULE_SET_COMMAND: &str = "matrix_room_set_join_rule";
 const JOIN_RULE_SNAPSHOT_NO_SESSION_CODE: &str = "p2-join-rule-snapshot-no-session";
 const JOIN_RULE_SET_NO_SESSION_CODE: &str = "p2-room-set-join-rule-no-session";
 const JOIN_RULE_NO_SESSION_DESCRIPTION: &str = "No join-rule session is available.";
 const JOIN_RULE_FAILED_CODE: &str = "p4-s9-3-join-rule-failed";
 const JOIN_RULE_FAILED_DESCRIPTION: &str = "The join-rule request could not be completed.";
 const JOIN_RULE_OWNER_DESCRIPTION: &str = "The join-rule request is not available.";
-const IMAGE_PACK_COMMAND_GENERATION: u64 = 0;
-const GET_GLOBAL_IMAGE_PACKS_COMMAND: &str = "matrix_get_global_image_packs";
-const GET_USER_IMAGE_PACK_COMMAND: &str = "matrix_get_user_image_pack";
-const GET_ROOM_IMAGE_PACKS_COMMAND: &str = "matrix_get_room_image_packs";
-const SET_USER_IMAGE_PACK_COMMAND: &str = "matrix_set_user_image_pack";
-const SET_GLOBAL_IMAGE_PACKS_COMMAND: &str = "matrix_set_global_image_packs";
-const SET_ROOM_IMAGE_PACK_COMMAND: &str = "matrix_set_room_image_pack";
 const GET_GLOBAL_IMAGE_PACKS_NO_SESSION_CODE: &str = "p2-global-image-packs-no-session";
 const GET_USER_IMAGE_PACK_NO_SESSION_CODE: &str = "p2-user-image-pack-no-session";
 const GET_ROOM_IMAGE_PACKS_NO_SESSION_CODE: &str = "p2-room-image-packs-no-session";
@@ -349,13 +303,6 @@ const IMAGE_PACK_FAILED_DESCRIPTION: &str = "The image-pack request could not be
 const IMAGE_PACK_INVALID_JSON_CODE: &str = "p4-s9-4-image-pack-invalid-json";
 const IMAGE_PACK_INVALID_JSON_DESCRIPTION: &str = "The image-pack content is invalid.";
 const IMAGE_PACK_OWNER_DESCRIPTION: &str = "The image-pack request is not available.";
-const LATER_COMMAND_GENERATION: u64 = 0;
-const LATER_SNAPSHOT_COMMAND: &str = "matrix_later_snapshot";
-const LATER_UPSERT_COMMAND: &str = "matrix_later_upsert";
-const LATER_COMPLETE_COMMAND: &str = "matrix_later_complete";
-const LATER_SNOOZE_COMMAND: &str = "matrix_later_snooze";
-const LATER_CLEAR_COMPLETED_COMMAND: &str = "matrix_later_clear_completed";
-const LATER_MARK_REMINDED_COMMAND: &str = "matrix_later_mark_reminded";
 const LATER_SNAPSHOT_NO_SESSION_CODE: &str = "p2-later-snapshot-no-session";
 const LATER_UPSERT_NO_SESSION_CODE: &str = "p2-later-upsert-no-session";
 const LATER_COMPLETE_NO_SESSION_CODE: &str = "p2-later-complete-no-session";
@@ -368,10 +315,6 @@ const LATER_FAILED_DESCRIPTION: &str = "The later request could not be completed
 const LATER_INVALID_ITEM_CODE: &str = "p4-s9-5-later-invalid-item";
 const LATER_INVALID_ITEM_DESCRIPTION: &str = "The later item is invalid.";
 const LATER_OWNER_DESCRIPTION: &str = "The later request is not available.";
-const MDIRECT_COMMAND_GENERATION: u64 = 0;
-const MDIRECT_SNAPSHOT_COMMAND: &str = "matrix_mdirect_snapshot";
-const MDIRECT_ADD_COMMAND: &str = "matrix_mdirect_add";
-const MDIRECT_REMOVE_COMMAND: &str = "matrix_mdirect_remove";
 const MDIRECT_SNAPSHOT_NO_SESSION_CODE: &str = "p2-mdirect-snapshot-no-session";
 const MDIRECT_ADD_NO_SESSION_CODE: &str = "p2-mdirect-add-no-session";
 const MDIRECT_REMOVE_NO_SESSION_CODE: &str = "p2-mdirect-remove-no-session";
@@ -379,12 +322,6 @@ const MDIRECT_NO_SESSION_DESCRIPTION: &str = "No m.direct session is available."
 const MDIRECT_FAILED_CODE: &str = "p4-s9-6-mdirect-failed";
 const MDIRECT_FAILED_DESCRIPTION: &str = "The m.direct request could not be completed.";
 const MDIRECT_OWNER_DESCRIPTION: &str = "The m.direct request is not available.";
-const ROOM_NOTES_COMMAND_GENERATION: u64 = 0;
-const ROOM_NOTES_SNAPSHOT_COMMAND: &str = "matrix_room_notes_snapshot";
-const ROOM_NOTES_UPSERT_COMMAND: &str = "matrix_room_notes_upsert";
-const ROOM_NOTES_DELETE_COMMAND: &str = "matrix_room_notes_delete";
-const ROOM_NOTES_COMPLETE_TODO_COMMAND: &str = "matrix_room_notes_complete_todo";
-const ROOM_NOTES_MOVE_TODO_COMMAND: &str = "matrix_room_notes_move_todo";
 const ROOM_NOTES_SNAPSHOT_NO_SESSION_CODE: &str = "p2-room-notes-snapshot-no-session";
 const ROOM_NOTES_UPSERT_NO_SESSION_CODE: &str = "p2-room-notes-upsert-no-session";
 const ROOM_NOTES_DELETE_NO_SESSION_CODE: &str = "p2-room-notes-delete-no-session";
@@ -396,10 +333,6 @@ const ROOM_NOTES_FAILED_DESCRIPTION: &str = "The room-notes request could not be
 const ROOM_NOTES_INVALID_ITEM_CODE: &str = "p4-s9-7-room-notes-invalid-item";
 const ROOM_NOTES_INVALID_ITEM_DESCRIPTION: &str = "The room-notes item is invalid.";
 const ROOM_NOTES_OWNER_DESCRIPTION: &str = "The room-notes request is not available.";
-const OWN_PROFILE_COMMAND_GENERATION: u64 = 0;
-const SET_OWN_DISPLAY_NAME_COMMAND: &str = "matrix_set_own_display_name";
-const SET_OWN_AVATAR_COMMAND: &str = "matrix_set_own_avatar";
-const GET_OWN_PROFILE_COMMAND: &str = "matrix_get_own_profile";
 const SET_OWN_DISPLAY_NAME_NO_SESSION_CODE: &str = "p2-set-own-display-name-no-session";
 const SET_OWN_AVATAR_NO_SESSION_CODE: &str = "p2-set-own-avatar-no-session";
 const GET_OWN_PROFILE_NO_SESSION_CODE: &str = "p2-get-own-profile-no-session";
@@ -407,10 +340,6 @@ const OWN_PROFILE_NO_SESSION_DESCRIPTION: &str = "No own-profile session is avai
 const OWN_PROFILE_FAILED_CODE: &str = "p4-s9-8-own-profile-failed";
 const OWN_PROFILE_FAILED_DESCRIPTION: &str = "The own-profile request could not be completed.";
 const OWN_PROFILE_OWNER_DESCRIPTION: &str = "The own-profile request is not available.";
-const IGNORED_USERS_COMMAND_GENERATION: u64 = 0;
-const IGNORED_USERS_SNAPSHOT_COMMAND: &str = "matrix_ignored_users_snapshot";
-const IGNORED_USERS_IGNORE_COMMAND: &str = "matrix_ignored_users_ignore";
-const IGNORED_USERS_UNIGNORE_COMMAND: &str = "matrix_ignored_users_unignore";
 const IGNORED_USERS_SNAPSHOT_NO_SESSION_CODE: &str = "p2-ignored-users-snapshot-no-session";
 const IGNORED_USERS_IGNORE_NO_SESSION_CODE: &str = "p2-ignored-users-ignore-no-session";
 const IGNORED_USERS_UNIGNORE_NO_SESSION_CODE: &str = "p2-ignored-users-unignore-no-session";
@@ -418,8 +347,6 @@ const IGNORED_USERS_NO_SESSION_DESCRIPTION: &str = "No ignored-users session is 
 const IGNORED_USERS_FAILED_CODE: &str = "p4-s9-ignored-users-failed";
 const IGNORED_USERS_FAILED_DESCRIPTION: &str = "The ignored-users request could not be completed.";
 const IGNORED_USERS_OWNER_DESCRIPTION: &str = "The ignored-users request is not available.";
-const USER_DIRECTORY_SEARCH_COMMAND_GENERATION: u64 = 0;
-const USER_DIRECTORY_SEARCH_COMMAND: &str = "matrix_user_directory_search";
 const USER_DIRECTORY_SEARCH_NO_SESSION_CODE: &str = "p2-user-directory-search-no-session";
 const USER_DIRECTORY_SEARCH_NO_SESSION_DESCRIPTION: &str =
     "No user-directory session is available.";
@@ -428,20 +355,12 @@ const USER_DIRECTORY_SEARCH_FAILED_DESCRIPTION: &str =
     "The user-directory search request could not be completed.";
 const USER_DIRECTORY_SEARCH_OWNER_DESCRIPTION: &str =
     "The user-directory search request is not available.";
-const MESSAGE_SEARCH_COMMAND_GENERATION: u64 = 0;
-const MESSAGE_SEARCH_COMMAND: &str = "matrix_message_search";
 const MESSAGE_SEARCH_NO_SESSION_CODE: &str = "p2-message-search-no-session";
 const MESSAGE_SEARCH_NO_SESSION_DESCRIPTION: &str = "No message-search session is available.";
 const MESSAGE_SEARCH_FAILED_CODE: &str = "p4-s9-message-search-failed";
 const MESSAGE_SEARCH_FAILED_DESCRIPTION: &str =
     "The message-search request could not be completed.";
 const MESSAGE_SEARCH_OWNER_DESCRIPTION: &str = "The message-search request is not available.";
-const PUSH_RULES_COMMAND_GENERATION: u64 = 0;
-const PUSH_RULES_SNAPSHOT_COMMAND: &str = "matrix_push_rules_snapshot";
-const PUSH_RULES_SET_DEFAULT_COMMAND: &str = "matrix_push_rules_set_default";
-const PUSH_RULES_SET_MENTION_COMMAND: &str = "matrix_push_rules_set_mention";
-const PUSH_RULES_ADD_KEYWORD_COMMAND: &str = "matrix_push_rules_add_keyword";
-const PUSH_RULES_REMOVE_KEYWORD_COMMAND: &str = "matrix_push_rules_remove_keyword";
 const PUSH_RULES_SNAPSHOT_NO_SESSION_CODE: &str = "p2-push-rules-snapshot-no-session";
 const PUSH_RULES_SET_DEFAULT_NO_SESSION_CODE: &str = "p2-push-rules-set-default-no-session";
 const PUSH_RULES_SET_MENTION_NO_SESSION_CODE: &str = "p2-push-rules-set-mention-no-session";
@@ -451,10 +370,6 @@ const PUSH_RULES_NO_SESSION_DESCRIPTION: &str = "No push-rules session is availa
 const PUSH_RULES_FAILED_CODE: &str = "p4-s9-push-rules-failed";
 const PUSH_RULES_FAILED_DESCRIPTION: &str = "The push-rules request could not be completed.";
 const PUSH_RULES_OWNER_DESCRIPTION: &str = "The push-rules request is not available.";
-const ROOM_NOTIFICATION_COMMAND_GENERATION: u64 = 0;
-const ROOM_NOTIFICATION_SNAPSHOT_COMMAND: &str = "matrix_room_notification_snapshot";
-const ROOM_NOTIFICATION_SET_COMMAND: &str = "matrix_room_notification_set";
-const ROOM_NOTIFICATIONS_SNAPSHOT_COMMAND: &str = "matrix_room_notifications_snapshot";
 const ROOM_NOTIFICATION_SNAPSHOT_NO_SESSION_CODE: &str = "p2-room-notification-snapshot-no-session";
 const ROOM_NOTIFICATION_SET_NO_SESSION_CODE: &str = "p2-room-notification-set-no-session";
 const ROOM_NOTIFICATIONS_SNAPSHOT_NO_SESSION_CODE: &str =
@@ -464,11 +379,6 @@ const ROOM_NOTIFICATION_FAILED_CODE: &str = "p4-s9-room-notification-failed";
 const ROOM_NOTIFICATION_FAILED_DESCRIPTION: &str =
     "The room-notification request could not be completed.";
 const ROOM_NOTIFICATION_OWNER_DESCRIPTION: &str = "The room-notification request is not available.";
-const THREEPID_COMMAND_GENERATION: u64 = 0;
-const THREEPID_SNAPSHOT_COMMAND: &str = "matrix_threepid_snapshot";
-const THREEPID_DELETE_COMMAND: &str = "matrix_threepid_delete";
-const THREEPID_REQUEST_EMAIL_TOKEN_COMMAND: &str = "matrix_threepid_request_email_token";
-const THREEPID_ADD_EMAIL_COMMAND: &str = "matrix_threepid_add_email";
 const THREEPID_SNAPSHOT_NO_SESSION_CODE: &str = "p2-threepid-snapshot-no-session";
 const THREEPID_DELETE_NO_SESSION_CODE: &str = "p2-threepid-delete-no-session";
 const THREEPID_REQUEST_EMAIL_TOKEN_NO_SESSION_CODE: &str =
@@ -515,10 +425,6 @@ const RESTORE_BACKUP_FAILED_CODE: &str = "p4-s9-backup-restore-failed";
 const RESTORE_BACKUP_FAILED_DESCRIPTION: &str =
     "The backup restore request could not be completed.";
 const RESTORE_BACKUP_OWNER_DESCRIPTION: &str = "The backup restore request is not available.";
-const ROOM_PROFILE_COMMAND_GENERATION: u64 = 0;
-const SET_ROOM_NAME_COMMAND: &str = "matrix_set_room_name";
-const SET_ROOM_TOPIC_COMMAND: &str = "matrix_set_room_topic";
-const SET_ROOM_AVATAR_COMMAND: &str = "matrix_set_room_avatar";
 const SET_ROOM_NAME_NO_SESSION_CODE: &str = "p2-set-room-name-no-session";
 const SET_ROOM_TOPIC_NO_SESSION_CODE: &str = "p2-set-room-topic-no-session";
 const SET_ROOM_AVATAR_NO_SESSION_CODE: &str = "p2-set-room-avatar-no-session";
@@ -526,8 +432,6 @@ const ROOM_PROFILE_NO_SESSION_DESCRIPTION: &str = "No room-profile session is av
 const ROOM_PROFILE_FAILED_CODE: &str = "p4-s9-9-room-profile-failed";
 const ROOM_PROFILE_FAILED_DESCRIPTION: &str = "The room-profile request could not be completed.";
 const ROOM_PROFILE_OWNER_DESCRIPTION: &str = "The room-profile request is not available.";
-const GET_ROOM_DIRECTORY_VISIBILITY_COMMAND: &str = "matrix_get_room_directory_visibility";
-const SET_ROOM_DIRECTORY_VISIBILITY_COMMAND: &str = "matrix_set_room_directory_visibility";
 const GET_ROOM_DIRECTORY_VISIBILITY_NO_SESSION_CODE: &str =
     "p2-get-room-directory-visibility-no-session";
 const SET_ROOM_DIRECTORY_VISIBILITY_NO_SESSION_CODE: &str =
@@ -539,10 +443,6 @@ const DIRECTORY_VISIBILITY_FAILED_DESCRIPTION: &str =
     "The room-directory-visibility request could not be completed.";
 const DIRECTORY_VISIBILITY_OWNER_DESCRIPTION: &str =
     "The room-directory-visibility request is not available.";
-const DIRECTORY_SEARCH_ENVELOPE_GENERATION: u64 = 0;
-const ROOM_DIRECTORY_PROTOCOLS_COMMAND: &str = "matrix_room_directory_protocols";
-const ROOM_DIRECTORY_SEARCH_COMMAND: &str = "matrix_room_directory_search";
-const ROOM_DIRECTORY_CANCEL_COMMAND: &str = "matrix_room_directory_cancel";
 const ROOM_DIRECTORY_PROTOCOLS_NO_SESSION_CODE: &str = "p2-room-directory-protocols-no-session";
 const ROOM_DIRECTORY_SEARCH_NO_SESSION_CODE: &str = "p2-room-directory-search-no-session";
 const ROOM_DIRECTORY_CANCEL_NO_SESSION_CODE: &str = "p2-room-directory-cancel-no-session";
@@ -553,10 +453,6 @@ const DIRECTORY_SEARCH_FAILED_DESCRIPTION: &str =
     "The room-directory-search request could not be completed.";
 const DIRECTORY_SEARCH_OWNER_DESCRIPTION: &str =
     "The room-directory-search request is not available.";
-const ROOM_MEMBERSHIP_COMMAND_GENERATION: u64 = 0;
-const ROOM_LEAVE_COMMAND: &str = "matrix_room_leave";
-const ROOM_JOIN_COMMAND: &str = "matrix_room_join";
-const ROOM_SET_FAVORITE_COMMAND: &str = "matrix_room_set_favorite";
 const ROOM_LEAVE_NO_SESSION_CODE: &str = "p2-room-leave-no-session";
 const ROOM_JOIN_NO_SESSION_CODE: &str = "p2-room-join-no-session";
 const ROOM_SET_FAVORITE_NO_SESSION_CODE: &str = "p2-room-set-favorite-no-session";
@@ -565,11 +461,6 @@ const ROOM_MEMBERSHIP_FAILED_CODE: &str = "p4-s9-12-room-membership-failed";
 const ROOM_MEMBERSHIP_FAILED_DESCRIPTION: &str =
     "The room-membership request could not be completed.";
 const ROOM_MEMBERSHIP_OWNER_DESCRIPTION: &str = "The room-membership request is not available.";
-const ROOM_MODERATION_COMMAND_GENERATION: u64 = 0;
-const ROOM_INVITE_COMMAND: &str = "matrix_room_invite";
-const ROOM_KICK_COMMAND: &str = "matrix_room_kick";
-const ROOM_BAN_COMMAND: &str = "matrix_room_ban";
-const ROOM_UNBAN_COMMAND: &str = "matrix_room_unban";
 const ROOM_INVITE_NO_SESSION_CODE: &str = "p2-room-invite-no-session";
 const ROOM_KICK_NO_SESSION_CODE: &str = "p2-room-kick-no-session";
 const ROOM_BAN_NO_SESSION_CODE: &str = "p2-room-ban-no-session";
@@ -579,10 +470,6 @@ const ROOM_MODERATION_FAILED_CODE: &str = "p4-s9-13-room-moderation-failed";
 const ROOM_MODERATION_FAILED_DESCRIPTION: &str =
     "The room-moderation request could not be completed.";
 const ROOM_MODERATION_OWNER_DESCRIPTION: &str = "The room-moderation request is not available.";
-const ROOM_POWER_LEVEL_COMMAND_GENERATION: u64 = 0;
-const ROOM_SET_POWER_LEVEL_COMMAND: &str = "matrix_room_set_power_level";
-const ROOM_SET_POWER_LEVELS_COMMAND: &str = "matrix_room_set_power_levels";
-const ROOM_SET_POWER_LEVEL_TAGS_COMMAND: &str = "matrix_room_set_power_level_tags";
 const ROOM_SET_POWER_LEVEL_NO_SESSION_CODE: &str = "p2-room-set-power-level-no-session";
 const ROOM_SET_POWER_LEVELS_NO_SESSION_CODE: &str = "p2-room-set-power-levels-no-session";
 const ROOM_SET_POWER_LEVEL_TAGS_NO_SESSION_CODE: &str = "p2-room-set-power-level-tags-no-session";
@@ -591,18 +478,11 @@ const ROOM_POWER_LEVEL_FAILED_CODE: &str = "p4-s9-14-room-power-levels-failed";
 const ROOM_POWER_LEVEL_FAILED_DESCRIPTION: &str =
     "The room-power-level request could not be completed.";
 const ROOM_POWER_LEVEL_OWNER_DESCRIPTION: &str = "The room-power-level request is not available.";
-const ROOM_CREATE_COMMAND_GENERATION: u64 = 0;
-const ROOM_CREATE_COMMAND: &str = "matrix_room_create";
 const ROOM_CREATE_NO_SESSION_CODE: &str = "p2-room-create-no-session";
 const ROOM_CREATE_NO_SESSION_DESCRIPTION: &str = "No room-create session is available.";
 const ROOM_CREATE_FAILED_CODE: &str = "p4-s9-15-room-create-failed";
 const ROOM_CREATE_FAILED_DESCRIPTION: &str = "The room-create request could not be completed.";
 const ROOM_CREATE_OWNER_DESCRIPTION: &str = "The room-create request is not available.";
-const ROOM_MEMBERS_SNAPSHOT_COMMAND_GENERATION: u64 = 0;
-const ROOM_MEMBERS_SNAPSHOT_COMMAND: &str = "matrix_room_members_snapshot";
-const ROOM_POWER_LEVELS_SNAPSHOT_COMMAND: &str = "matrix_room_power_levels_snapshot";
-const ROOM_CREATORS_SNAPSHOT_COMMAND: &str = "matrix_room_creators_snapshot";
-const ROOM_POWER_LEVEL_TAGS_SNAPSHOT_COMMAND: &str = "matrix_room_power_level_tags_snapshot";
 const ROOM_MEMBERS_SNAPSHOT_NO_SESSION_CODE: &str = "p2-room-members-snapshot-no-session";
 const ROOM_POWER_LEVELS_SNAPSHOT_NO_SESSION_CODE: &str = "p2-room-power-levels-snapshot-no-session";
 const ROOM_CREATORS_SNAPSHOT_NO_SESSION_CODE: &str = "p2-room-creators-snapshot-no-session";
@@ -614,13 +494,6 @@ const ROOM_MEMBERS_SNAPSHOT_FAILED_CODE: &str = "p4-s9-16-room-members-snapshots
 const ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION: &str =
     "The room-members snapshot could not be loaded.";
 const ROOM_MEMBERS_SNAPSHOT_OWNER_DESCRIPTION: &str = "The room-members snapshot is not available.";
-const SPACE_COMMAND_GENERATION: u64 = 0;
-const SPACE_PARENTS_SNAPSHOT_COMMAND: &str = "matrix_space_parents_snapshot";
-const SPACE_HIERARCHY_SNAPSHOT_COMMAND: &str = "matrix_space_hierarchy_snapshot";
-const SPACE_CHILDREN_SNAPSHOT_COMMAND: &str = "matrix_space_children_snapshot";
-const SPACE_CHILD_SET_COMMAND: &str = "matrix_space_child_set";
-const SPACE_CHILD_REMOVE_COMMAND: &str = "matrix_space_child_remove";
-const RESTRICTED_JOIN_REPARENT_COMMAND: &str = "matrix_restricted_join_reparent";
 const SPACE_PARENTS_SNAPSHOT_NO_SESSION_CODE: &str = "p2-space-parents-snapshot-no-session";
 const SPACE_HIERARCHY_SNAPSHOT_NO_SESSION_CODE: &str = "p2-space-hierarchy-snapshot-no-session";
 const SPACE_CHILDREN_SNAPSHOT_NO_SESSION_CODE: &str = "p2-space-children-snapshot-no-session";
@@ -631,11 +504,6 @@ const SPACE_NO_SESSION_DESCRIPTION: &str = "No space session is available.";
 const SPACE_FAILED_CODE: &str = "p4-s9-17-spaces-failed";
 const SPACE_FAILED_DESCRIPTION: &str = "The space request could not be completed.";
 const SPACE_OWNER_DESCRIPTION: &str = "The space request is not available.";
-const INVITE_ACTION_GENERATION: u64 = 0;
-const INVITES_ACCEPT_COMMAND: &str = "matrix_invites_accept";
-const INVITES_DECLINE_COMMAND: &str = "matrix_invites_decline";
-const INVITES_REPORT_SPAM_COMMAND: &str = "matrix_invites_report_spam";
-const INVITES_BLOCK_SENDER_COMMAND: &str = "matrix_invites_block_sender";
 const INVITES_ACCEPT_NO_SESSION_CODE: &str = "p2-invites-accept-no-session";
 const INVITES_DECLINE_NO_SESSION_CODE: &str = "p2-invites-decline-no-session";
 const INVITES_REPORT_SPAM_NO_SESSION_CODE: &str = "p2-invites-report-spam-no-session";
@@ -644,10 +512,6 @@ const INVITE_ACTION_NO_SESSION_DESCRIPTION: &str = "No invite-action session is 
 const INVITE_ACTION_FAILED_CODE: &str = "p4-s9-18-invite-actions-failed";
 const INVITE_ACTION_FAILED_DESCRIPTION: &str = "The invite action could not be completed.";
 const INVITE_ACTION_OWNER_DESCRIPTION: &str = "The invite action is not available.";
-const TIMELINE_READ_STATE_GENERATION: u64 = 0;
-const TIMELINE_EVENT_READBACK_COMMAND: &str = "matrix_timeline_event_readback";
-const TIMELINE_SET_READ_STATE_COMMAND: &str = "matrix_timeline_set_read_state";
-const TIMELINE_JUMP_LATEST_COMMAND: &str = "matrix_timeline_jump_latest";
 const TIMELINE_EVENT_READBACK_NO_SESSION_CODE: &str = "p2-timeline-event-readback-no-session";
 const TIMELINE_SET_READ_STATE_NO_SESSION_CODE: &str = "p2-timeline-set-read-state-no-session";
 const TIMELINE_JUMP_LATEST_NO_SESSION_CODE: &str = "p2-timeline-jump-latest-no-session";
@@ -657,11 +521,6 @@ const TIMELINE_READ_STATE_FAILED_DESCRIPTION: &str =
     "The timeline read-state request could not be completed.";
 const TIMELINE_READ_STATE_OWNER_DESCRIPTION: &str =
     "The timeline read-state request is not available.";
-const TIMELINE_REACTION_GENERATION: u64 = 0;
-const REACTION_ENSURE_COMMAND: &str = "matrix_reaction_ensure";
-const AGENT_APPROVAL_DECIDE_COMMAND: &str = "matrix_agent_approval_decide";
-const REACTION_REDACT_COMMAND: &str = "matrix_reaction_redact";
-const TIMELINE_REACTION_TOGGLE_COMMAND: &str = "matrix_timeline_reaction_toggle";
 const REACTION_ENSURE_NO_SESSION_CODE: &str = "p2-reaction-ensure-no-session";
 const REACTION_REDACT_NO_SESSION_CODE: &str = "p2-reaction-redact-no-session";
 const TIMELINE_REACTION_TOGGLE_NO_SESSION_CODE: &str = "p2-timeline-reaction-toggle-no-session";
@@ -670,10 +529,6 @@ const TIMELINE_REACTION_FAILED_CODE: &str = "p4-s9-20-timeline-reactions-failed"
 const TIMELINE_REACTION_FAILED_DESCRIPTION: &str =
     "The timeline reaction request could not be completed.";
 const TIMELINE_REACTION_OWNER_DESCRIPTION: &str = "The timeline reaction request is not available.";
-const COMPOSER_REPLY_DRAFT_GENERATION: u64 = 0;
-const COMPOSER_SET_REPLY_DRAFT_COMMAND: &str = "matrix_composer_set_reply_draft";
-const COMPOSER_GET_REPLY_DRAFT_COMMAND: &str = "matrix_composer_get_reply_draft";
-const COMPOSER_CLEAR_REPLY_DRAFT_COMMAND: &str = "matrix_composer_clear_reply_draft";
 const COMPOSER_SET_REPLY_DRAFT_NO_SESSION_CODE: &str = "p2-composer-set-reply-draft-no-session";
 const COMPOSER_GET_REPLY_DRAFT_NO_SESSION_CODE: &str = "p2-composer-get-reply-draft-no-session";
 const COMPOSER_CLEAR_REPLY_DRAFT_NO_SESSION_CODE: &str = "p2-composer-clear-reply-draft-no-session";
@@ -683,38 +538,26 @@ const COMPOSER_REPLY_DRAFT_FAILED_DESCRIPTION: &str =
     "The composer reply-draft request could not be completed.";
 const COMPOSER_REPLY_DRAFT_OWNER_DESCRIPTION: &str =
     "The composer reply-draft request is not available.";
-const SEND_TEXT_GENERATION: u64 = 0;
-const SEND_TEXT_COMMAND: &str = "matrix_send_text";
 const SEND_TEXT_NO_SESSION_CODE: &str = "p2-send-text-no-session";
 const SEND_TEXT_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
 const SEND_TEXT_FAILED_CODE: &str = "p4-s9-22-send-text-failed";
 const SEND_TEXT_FAILED_DESCRIPTION: &str = "The send-text request could not be completed.";
 const SEND_TEXT_OWNER_DESCRIPTION: &str = "The send-text request is not available.";
-const SEND_POLL_GENERATION: u64 = 0;
-const SEND_POLL_COMMAND: &str = "matrix_send_poll";
 const SEND_POLL_NO_SESSION_CODE: &str = "p2-send-poll-no-session";
 const SEND_POLL_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
 const SEND_POLL_FAILED_CODE: &str = "p4-s9-24-send-poll-failed";
 const SEND_POLL_FAILED_DESCRIPTION: &str = "The send-poll request could not be completed.";
 const SEND_POLL_OWNER_DESCRIPTION: &str = "The send-poll request is not available.";
-const EDIT_MESSAGE_GENERATION: u64 = 0;
-const EDIT_MESSAGE_COMMAND: &str = "matrix_edit_message";
 const EDIT_MESSAGE_NO_SESSION_CODE: &str = "p2-edit-message-no-session";
 const EDIT_MESSAGE_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
 const EDIT_MESSAGE_FAILED_CODE: &str = "p4-s9-25-edit-message-failed";
 const EDIT_MESSAGE_FAILED_DESCRIPTION: &str = "The edit-message request could not be completed.";
 const EDIT_MESSAGE_OWNER_DESCRIPTION: &str = "The edit-message request is not available.";
-const POLL_RESPOND_GENERATION: u64 = 0;
-const POLL_RESPOND_COMMAND: &str = "matrix_poll_respond";
 const POLL_RESPOND_NO_SESSION_CODE: &str = "p2-poll-respond-no-session";
 const POLL_RESPOND_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
 const POLL_RESPOND_FAILED_CODE: &str = "p4-s9-26-poll-respond-failed";
 const POLL_RESPOND_FAILED_DESCRIPTION: &str = "The poll-respond request could not be completed.";
 const POLL_RESPOND_OWNER_DESCRIPTION: &str = "The poll-respond request is not available.";
-const TIMELINE_MUTATE_GENERATION: u64 = 0;
-const TIMELINE_EDIT_TEXT_COMMAND: &str = "matrix_timeline_edit_text";
-const TIMELINE_REDACT_COMMAND: &str = "matrix_timeline_redact";
-const TIMELINE_REPORT_COMMAND: &str = "matrix_timeline_report";
 const TIMELINE_EDIT_TEXT_NO_SESSION_CODE: &str = "p2-timeline-edit-text-no-session";
 const TIMELINE_REDACT_NO_SESSION_CODE: &str = "p2-timeline-redact-no-session";
 const TIMELINE_REPORT_NO_SESSION_CODE: &str = "p2-timeline-report-no-session";
@@ -723,18 +566,12 @@ const TIMELINE_MUTATE_FAILED_CODE: &str = "p4-s9-27-timeline-mutate-failed";
 const TIMELINE_MUTATE_FAILED_DESCRIPTION: &str =
     "The timeline mutation request could not be completed.";
 const TIMELINE_MUTATE_OWNER_DESCRIPTION: &str = "The timeline mutation request is not available.";
-const TIMELINE_PIN_GENERATION: u64 = 0;
-const TIMELINE_PIN_COMMAND: &str = "matrix_timeline_pin";
-const TIMELINE_UNPIN_COMMAND: &str = "matrix_timeline_unpin";
 const TIMELINE_PIN_NO_SESSION_CODE: &str = "p2-timeline-pin-no-session";
 const TIMELINE_UNPIN_NO_SESSION_CODE: &str = "p2-timeline-unpin-no-session";
 const TIMELINE_PIN_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
 const TIMELINE_PIN_FAILED_CODE: &str = "p4-s9-28-timeline-pin-failed";
 const TIMELINE_PIN_FAILED_DESCRIPTION: &str = "The timeline pin request could not be completed.";
 const TIMELINE_PIN_OWNER_DESCRIPTION: &str = "The timeline pin request is not available.";
-const TIMELINE_VOTE_DECLINE_GENERATION: u64 = 0;
-const TIMELINE_POLL_VOTE_COMMAND: &str = "matrix_timeline_poll_vote";
-const TIMELINE_CALL_DECLINE_COMMAND: &str = "matrix_timeline_call_decline";
 const TIMELINE_POLL_VOTE_NO_SESSION_CODE: &str = "p2-timeline-poll-vote-no-session";
 const TIMELINE_CALL_DECLINE_NO_SESSION_CODE: &str = "p2-timeline-call-decline-no-session";
 const TIMELINE_VOTE_DECLINE_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
@@ -743,9 +580,6 @@ const TIMELINE_VOTE_DECLINE_FAILED_DESCRIPTION: &str =
     "The timeline vote or decline request could not be completed.";
 const TIMELINE_VOTE_DECLINE_OWNER_DESCRIPTION: &str =
     "The timeline vote or decline request is not available.";
-const TIMELINE_FORWARD_GENERATION: u64 = 0;
-const TIMELINE_FORWARD_TEXT_COMMAND: &str = "matrix_timeline_forward_text";
-const TIMELINE_FORWARD_MEDIA_COMMAND: &str = "matrix_timeline_forward_media";
 const TIMELINE_FORWARD_TEXT_NO_SESSION_CODE: &str = "p2-timeline-forward-text-no-session";
 const TIMELINE_FORWARD_MEDIA_NO_SESSION_CODE: &str = "p2-timeline-forward-media-no-session";
 const TIMELINE_FORWARD_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
@@ -753,9 +587,6 @@ const TIMELINE_FORWARD_FAILED_CODE: &str = "p4-s9-30-timeline-forward-failed";
 const TIMELINE_FORWARD_FAILED_DESCRIPTION: &str =
     "The timeline forward request could not be completed.";
 const TIMELINE_FORWARD_OWNER_DESCRIPTION: &str = "The timeline forward request is not available.";
-const SESSION_STATUS_GENERATION: u64 = 0;
-const MEDIA_CONFIG_COMMAND: &str = "matrix_media_config";
-const SECRET_STORAGE_STATUS_COMMAND: &str = "matrix_secret_storage_status";
 const SESSION_STATUS_FAILED_CODE: &str = "p4-s9-31-session-status-failed";
 const SESSION_STATUS_FAILED_DESCRIPTION: &str =
     "The session or status request could not be completed.";
@@ -808,6 +639,14 @@ mod messaging;
 pub use messaging::*;
 mod store_keys;
 use store_keys::*;
+
+/// The serde label of a closed Core enum (`snake_case`), for string DTO fields.
+pub(super) fn wire_label<T: serde::Serialize>(value: &T) -> String {
+    match serde_json::to_value(value) {
+        Ok(serde_json::Value::String(label)) => label,
+        _ => String::new(),
+    }
+}
 mod profile_search;
 pub use profile_search::*;
 mod push_preferences;

@@ -191,14 +191,9 @@ pub(super) fn map_verification_sas_core_error(
 }
 
 pub(super) fn parse_verification_sas_request(
-    payload: serde_json::Value,
+    payload: NativeVerificationRequest,
 ) -> Result<VerificationRequestDto, VerificationSasError> {
-    let request: NativeVerificationRequest = serde_json::from_value(payload).map_err(|_| {
-        verification_sas_failed(
-            VERIFICATION_SAS_FAILED_CODE,
-            VERIFICATION_SAS_FAILED_DESCRIPTION,
-        )
-    })?;
+    let request: NativeVerificationRequest = payload;
     Ok(verification_request_dto_with_sas(request))
 }
 
@@ -345,39 +340,24 @@ pub(super) fn device_delete_dto(result: NativeDeviceDeleteResult) -> DeviceDelet
 impl SharedCore {
     pub(super) async fn verification_flow_command(
         &self,
-        command: &'static str,
         no_session: &'static str,
-        flow_id: String,
+        request: impl std::future::Future<Output = Result<NativeVerificationRequest, MatrixIpcError>>,
     ) -> Result<VerificationRequestDto, VerificationSasError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: VERIFICATION_SAS_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "flowId": flow_id }),
-            })
+        let response = request
             .await
             .map_err(|error| map_verification_sas_core_error(no_session, error))?;
-        parse_verification_sas_request(response.payload)
+        parse_verification_sas_request(response)
     }
 
-    pub(super) async fn device_null_command(
+    pub(super) async fn device_null_command<T>(
         &self,
-        command: &'static str,
         no_session: &'static str,
-    ) -> Result<serde_json::Value, DeviceCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: DEVICE_COMMAND_GENERATION,
-                request_id: None,
-                payload: serde_json::Value::Null,
-            })
+        request: impl std::future::Future<Output = Result<T, MatrixIpcError>>,
+    ) -> Result<T, DeviceCommandError> {
+        let response = request
             .await
             .map_err(|error| map_device_core_error(no_session, error))?;
-        Ok(response.payload)
+        Ok(response)
     }
 }
 
@@ -386,21 +366,10 @@ impl SharedCore {
     pub async fn verification_list(&self) -> Result<VerificationInboxDto, VerificationListError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: VERIFICATION_LIST_COMMAND.to_owned(),
-                session_generation: VERIFICATION_LIST_GENERATION,
-                request_id: None,
-                payload: serde_json::Value::Null,
-            })
+            .verification_list()
             .await
             .map_err(map_verification_list_core_error)?;
-        let inbox: NativeVerificationInbox =
-            serde_json::from_value(response.payload).map_err(|_| {
-                verification_list_failed(
-                    VERIFICATION_LIST_FAILED_CODE,
-                    VERIFICATION_LIST_FAILED_DESCRIPTION,
-                )
-            })?;
+        let inbox: NativeVerificationInbox = response;
         Ok(VerificationInboxDto {
             session_generation: inbox.session_generation,
             requests: inbox
@@ -420,17 +389,12 @@ impl SharedCore {
     ) -> Result<VerificationRequestDto, VerificationSasError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: VERIFICATION_START_COMMAND.to_owned(),
-                session_generation: VERIFICATION_SAS_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "deviceId": device_id }),
-            })
+            .verification_start(crate::core_api::MatrixVerificationStartRequest { device_id })
             .await
             .map_err(|error| {
                 map_verification_sas_core_error(VERIFICATION_START_NO_SESSION_CODE, error)
             })?;
-        parse_verification_sas_request(response.payload)
+        parse_verification_sas_request(response)
     }
 
     pub async fn verification_accept(
@@ -438,9 +402,9 @@ impl SharedCore {
         flow_id: String,
     ) -> Result<VerificationRequestDto, VerificationSasError> {
         self.verification_flow_command(
-            VERIFICATION_ACCEPT_COMMAND,
             VERIFICATION_ACCEPT_NO_SESSION_CODE,
-            flow_id,
+            self.core
+                .verification_accept(crate::core_api::MatrixVerificationAcceptRequest { flow_id }),
         )
         .await
     }
@@ -450,9 +414,11 @@ impl SharedCore {
         flow_id: String,
     ) -> Result<VerificationRequestDto, VerificationSasError> {
         self.verification_flow_command(
-            VERIFICATION_BEGIN_SAS_COMMAND,
             VERIFICATION_BEGIN_SAS_NO_SESSION_CODE,
-            flow_id,
+            self.core
+                .verification_begin_sas(crate::core_api::MatrixVerificationBeginSasRequest {
+                    flow_id,
+                }),
         )
         .await
     }
@@ -462,9 +428,11 @@ impl SharedCore {
         flow_id: String,
     ) -> Result<VerificationRequestDto, VerificationSasError> {
         self.verification_flow_command(
-            VERIFICATION_CONFIRM_COMMAND,
             VERIFICATION_CONFIRM_NO_SESSION_CODE,
-            flow_id,
+            self.core
+                .verification_confirm(crate::core_api::MatrixVerificationConfirmRequest {
+                    flow_id,
+                }),
         )
         .await
     }
@@ -474,9 +442,11 @@ impl SharedCore {
         flow_id: String,
     ) -> Result<VerificationRequestDto, VerificationSasError> {
         self.verification_flow_command(
-            VERIFICATION_MISMATCH_COMMAND,
             VERIFICATION_MISMATCH_NO_SESSION_CODE,
-            flow_id,
+            self.core
+                .verification_mismatch(crate::core_api::MatrixVerificationMismatchRequest {
+                    flow_id,
+                }),
         )
         .await
     }
@@ -486,21 +456,16 @@ impl SharedCore {
         flow_id: String,
     ) -> Result<VerificationRequestDto, VerificationSasError> {
         self.verification_flow_command(
-            VERIFICATION_CANCEL_COMMAND,
             VERIFICATION_CANCEL_NO_SESSION_CODE,
-            flow_id,
+            self.core
+                .verification_cancel(crate::core_api::MatrixVerificationCancelRequest { flow_id }),
         )
         .await
     }
 
     pub async fn verification_dismiss(&self, flow_id: String) -> Result<(), VerificationSasError> {
         self.core
-            .command(CommandEnvelope {
-                command: VERIFICATION_DISMISS_COMMAND.to_owned(),
-                session_generation: VERIFICATION_SAS_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "flowId": flow_id }),
-            })
+            .verification_dismiss(crate::core_api::MatrixVerificationDismissRequest { flow_id })
             .await
             .map_err(|error| {
                 map_verification_sas_core_error(VERIFICATION_DISMISS_NO_SESSION_CODE, error)
@@ -510,10 +475,9 @@ impl SharedCore {
 
     pub async fn device_snapshot(&self) -> Result<DeviceSnapshotDto, DeviceCommandError> {
         let response = self
-            .device_null_command(DEVICE_SNAPSHOT_COMMAND, DEVICE_SNAPSHOT_NO_SESSION_CODE)
+            .device_null_command(DEVICE_SNAPSHOT_NO_SESSION_CODE, self.core.device_snapshot())
             .await?;
-        let snapshot: NativeDeviceSnapshot = serde_json::from_value(response)
-            .map_err(|_| device_failed(DEVICE_FAILED_CODE, DEVICE_FAILED_DESCRIPTION))?;
+        let snapshot: NativeDeviceSnapshot = response;
         Ok(device_snapshot_dto(snapshot))
     }
 
@@ -524,19 +488,13 @@ impl SharedCore {
     ) -> Result<DeviceSnapshotDto, DeviceCommandError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: DEVICE_RENAME_COMMAND.to_owned(),
-                session_generation: DEVICE_COMMAND_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({
-                    "deviceId": device_id,
-                    "displayName": display_name,
-                }),
+            .device_rename(crate::core_api::MatrixDeviceRenameRequest {
+                device_id,
+                display_name,
             })
             .await
             .map_err(|error| map_device_core_error(DEVICE_RENAME_NO_SESSION_CODE, error))?;
-        let snapshot: NativeDeviceSnapshot = serde_json::from_value(response.payload)
-            .map_err(|_| device_failed(DEVICE_FAILED_CODE, DEVICE_FAILED_DESCRIPTION))?;
+        let snapshot: NativeDeviceSnapshot = response;
         Ok(device_snapshot_dto(snapshot))
     }
 
@@ -546,16 +504,10 @@ impl SharedCore {
     ) -> Result<DeviceDeleteDto, DeviceCommandError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: DEVICE_DELETE_START_COMMAND.to_owned(),
-                session_generation: DEVICE_COMMAND_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "deviceIds": device_ids }),
-            })
+            .device_delete_start(crate::core_api::MatrixDeviceDeleteStartRequest { device_ids })
             .await
             .map_err(|error| map_device_core_error(DEVICE_DELETE_START_NO_SESSION_CODE, error))?;
-        let result: NativeDeviceDeleteResult = serde_json::from_value(response.payload)
-            .map_err(|_| device_failed(DEVICE_FAILED_CODE, DEVICE_FAILED_DESCRIPTION))?;
+        let result: NativeDeviceDeleteResult = response;
         Ok(device_delete_dto(result))
     }
 
@@ -565,14 +517,9 @@ impl SharedCore {
         session_generation: u64,
     ) -> Result<(), DeviceCommandError> {
         self.core
-            .command(CommandEnvelope {
-                command: DEVICE_DELETE_CANCEL_COMMAND.to_owned(),
-                session_generation: DEVICE_COMMAND_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({
-                    "operationId": operation_id,
-                    "sessionGeneration": session_generation,
-                }),
+            .device_delete_cancel(crate::core_api::MatrixDeviceDeleteCancelRequest {
+                operation_id,
+                session_generation,
             })
             .await
             .map_err(|error| map_device_core_error(DEVICE_DELETE_CANCEL_NO_SESSION_CODE, error))?;

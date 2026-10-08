@@ -5,9 +5,8 @@ use crate::app::account_data::{
     NativeAgentApprovalHistorySnapshot, SynaraAgentApprovalHistoryDecision,
     SynaraAgentApprovalHistoryItem,
 };
-use crate::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use crate::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 
-const HISTORY_SNAPSHOT_COMMAND: &str = "matrix_agent_approval_history_snapshot";
 const HISTORY_NO_SESSION_CODE: &str = "agent-approval-history-no-session";
 const HISTORY_NO_SESSION_DESCRIPTION: &str = "No native Matrix session is active.";
 const HISTORY_FAILED_CODE: &str = "agent-approval-history-load-failed";
@@ -100,10 +99,9 @@ fn item_dto(
 }
 
 fn snapshot_dto(
-    payload: serde_json::Value,
+    payload: NativeAgentApprovalHistorySnapshot,
 ) -> Result<AgentApprovalHistorySnapshotDto, AgentApprovalHistoryCommandError> {
-    let snapshot: NativeAgentApprovalHistorySnapshot = serde_json::from_value(payload)
-        .map_err(|_| history_failed(HISTORY_FAILED_CODE, HISTORY_FAILED_DESCRIPTION))?;
+    let snapshot: NativeAgentApprovalHistorySnapshot = payload;
     Ok(AgentApprovalHistorySnapshotDto {
         items: snapshot
             .items
@@ -120,24 +118,16 @@ impl SharedCore {
     ) -> Result<AgentApprovalHistorySnapshotDto, AgentApprovalHistoryCommandError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: HISTORY_SNAPSHOT_COMMAND.to_owned(),
-                session_generation: 0,
-                request_id: None,
-                payload: serde_json::Value::Null,
-            })
+            .agent_approval_history_snapshot()
             .await
             .map_err(map_history_core_error)?;
-        snapshot_dto(response.payload)
+        snapshot_dto(response)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::CoreState;
-    use crate::transport::{CommandFuture, CommandRegistry};
-    use std::sync::Arc;
 
     #[tokio::test]
     async fn ffi_approval_history_snapshot_without_session_fails_closed() {
@@ -150,37 +140,25 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn ffi_approval_history_snapshot_maps_core_items() {
-        let mut registry = CommandRegistry::new();
-        registry
-            .register(
-                HISTORY_SNAPSHOT_COMMAND,
-                |_state: Arc<CoreState>, request: CommandEnvelope| -> CommandFuture {
-                    Box::pin(async move {
-                        assert!(request.payload.is_null());
-                        Ok(serde_json::json!({
-                            "items": [{
-                                "roomId": "!room:example.org",
-                                "eventId": "$prompt",
-                                "sender": "@hermes:example.org",
-                                "decision": "approve_always",
-                                "decidedAt": 9_000.0,
-                                "originServerTs": 1_000.0,
-                                "expiresAt": 301_000.0,
-                                "summary": "rm file"
-                            }]
-                        }))
-                    })
-                },
-            )
-            .unwrap();
-        let mut shared = SharedCore::new();
-        shared.core = crate::Core::with_registry(
-            Arc::new(crate::platform::IosFailClosedPlatform::new()),
-            registry,
-        );
-        let snapshot = shared.agent_approval_history_snapshot().await.unwrap();
+    fn core_snapshot() -> NativeAgentApprovalHistorySnapshot {
+        serde_json::from_value(serde_json::json!({
+            "items": [{
+                "roomId": "!room:example.org",
+                "eventId": "$prompt",
+                "sender": "@hermes:example.org",
+                "decision": "approve_always",
+                "decidedAt": 9_000.0,
+                "originServerTs": 1_000.0,
+                "expiresAt": 301_000.0,
+                "summary": "rm file"
+            }]
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn ffi_approval_history_snapshot_maps_core_items() {
+        let snapshot = snapshot_dto(core_snapshot()).unwrap();
         assert_eq!(snapshot.items.len(), 1);
         assert_eq!(snapshot.items[0].room_id, "!room:example.org");
         assert_eq!(snapshot.items[0].event_id, "$prompt");
@@ -189,37 +167,12 @@ mod tests {
         assert_eq!(snapshot.items[0].summary, "rm file");
     }
 
-    #[tokio::test]
-    async fn ffi_approval_history_snapshot_rejects_non_finite_timestamps() {
-        let mut registry = CommandRegistry::new();
-        registry
-            .register(
-                HISTORY_SNAPSHOT_COMMAND,
-                |_state: Arc<CoreState>, _request: CommandEnvelope| -> CommandFuture {
-                    Box::pin(async move {
-                        Ok(serde_json::json!({
-                            "items": [{
-                                "roomId": "!room:example.org",
-                                "eventId": "$prompt",
-                                "sender": "@hermes:example.org",
-                                "decision": "deny",
-                                "decidedAt": null,
-                                "originServerTs": 1_000.0,
-                                "expiresAt": 301_000.0,
-                                "summary": "rm"
-                            }]
-                        }))
-                    })
-                },
-            )
-            .unwrap();
-        let mut shared = SharedCore::new();
-        shared.core = crate::Core::with_registry(
-            Arc::new(crate::platform::IosFailClosedPlatform::new()),
-            registry,
-        );
+    #[test]
+    fn ffi_approval_history_snapshot_rejects_non_finite_timestamps() {
+        let mut snapshot = core_snapshot();
+        snapshot.items[0].decided_at = f64::NAN;
         assert_eq!(
-            shared.agent_approval_history_snapshot().await.unwrap_err(),
+            snapshot_dto(snapshot).unwrap_err(),
             history_failed(HISTORY_FAILED_CODE, HISTORY_FAILED_DESCRIPTION)
         );
     }

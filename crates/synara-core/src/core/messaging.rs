@@ -80,7 +80,7 @@ pub struct MatrixTimelineFollowLiveRequest {
 }
 
 /// Exact React/Tauri envelope payload for reaction toggle/ensure.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixTimelineReactionKeyRequest {
     pub room_id: String,
@@ -98,7 +98,7 @@ pub struct MatrixAgentApprovalDecisionRequest {
 }
 
 /// Exact React/Tauri envelope payload for `matrix_reaction_redact`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixReactionRedactRequest {
     pub room_id: String,
@@ -116,7 +116,7 @@ pub struct MatrixLocalEchoRequest {
 }
 
 /// Exact React/Tauri envelope payload for `matrix_send_text`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixSendTextRequest {
     pub room_id: String,
@@ -138,7 +138,7 @@ pub struct MatrixSendTextRequest {
 }
 
 /// Exact React/Tauri envelope payload for `matrix_send_poll`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixSendPollRequest {
     pub room_id: String,
@@ -152,7 +152,7 @@ pub struct MatrixSendPollRequest {
 }
 
 /// Exact React/Tauri envelope payload for `matrix_poll_respond`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixPollRespondRequest {
     pub room_id: String,
@@ -161,7 +161,7 @@ pub struct MatrixPollRespondRequest {
 }
 
 /// Exact React/Tauri envelope payload for `matrix_edit_message`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixEditMessageRequest {
     pub room_id: String,
@@ -180,7 +180,7 @@ pub struct MatrixEditMessageRequest {
 }
 
 /// Exact React/Tauri envelope payload for `matrix_timeline_edit_text`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixTimelineEditTextRequest {
     pub room_id: String,
@@ -191,7 +191,7 @@ pub struct MatrixTimelineEditTextRequest {
 }
 
 /// Exact React/Tauri envelope payload for `matrix_timeline_redact`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixTimelineRedactRequest {
     pub room_id: String,
@@ -201,7 +201,7 @@ pub struct MatrixTimelineRedactRequest {
 }
 
 /// Exact React/Tauri envelope payload for `matrix_timeline_report`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixTimelineReportRequest {
     pub room_id: String,
@@ -211,7 +211,7 @@ pub struct MatrixTimelineReportRequest {
 }
 
 /// Exact React/Tauri envelope payload for `matrix_timeline_pin` / `matrix_timeline_unpin`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixTimelinePinRequest {
     pub room_id: String,
@@ -226,7 +226,7 @@ pub struct MatrixPinnedEventsRequest {
 }
 
 /// Exact React/Tauri envelope payload for `matrix_timeline_poll_vote`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixTimelinePollVoteRequest {
     pub room_id: String,
@@ -236,7 +236,7 @@ pub struct MatrixTimelinePollVoteRequest {
 }
 
 /// Exact React/Tauri envelope payload for `matrix_timeline_call_decline`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixTimelineCallDeclineRequest {
     pub room_id: String,
@@ -244,7 +244,7 @@ pub struct MatrixTimelineCallDeclineRequest {
 }
 
 /// Exact React/Tauri envelope payload for `matrix_timeline_forward_text`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixTimelineForwardTextRequest {
     pub source_room_id: String,
@@ -256,7 +256,7 @@ pub struct MatrixTimelineForwardTextRequest {
 }
 
 /// Exact React/Tauri envelope payload for `matrix_timeline_forward_media`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixTimelineForwardMediaRequest {
     pub source_room_id: String,
@@ -266,7 +266,7 @@ pub struct MatrixTimelineForwardMediaRequest {
 }
 
 /// Exact React/Tauri envelope payload for `matrix_composer_set_reply_draft`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixComposerSetReplyDraftRequest {
     pub room_id: String,
@@ -276,7 +276,7 @@ pub struct MatrixComposerSetReplyDraftRequest {
 }
 
 /// Exact React/Tauri envelope payload for composer get reply-draft.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixComposerReplyDraftRoomRequest {
     pub room_id: String,
@@ -285,7 +285,7 @@ pub struct MatrixComposerReplyDraftRoomRequest {
 }
 
 /// Exact React/Tauri envelope payload for composer compare-and-clear.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixComposerClearReplyDraftRequest {
     pub room_id: String,

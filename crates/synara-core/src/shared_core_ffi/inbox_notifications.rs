@@ -2,9 +2,7 @@
 //! This wrapper owns no Matrix policy or client and cannot fetch independently.
 use super::SharedCore;
 use crate::app::notifications::MatrixInboxNotificationsPage;
-use crate::transport::{
-    CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory, MAX_ENVELOPE_PAYLOAD_JSON_BYTES,
-};
+use crate::transport::{MatrixIpcError, MatrixIpcErrorCategory, MAX_ENVELOPE_PAYLOAD_JSON_BYTES};
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct InboxNotificationDto {
@@ -68,10 +66,8 @@ fn map_core_error(error: MatrixIpcError) -> InboxNotificationsError {
 }
 
 fn page_dto(
-    payload: serde_json::Value,
+    page: MatrixInboxNotificationsPage,
 ) -> Result<InboxNotificationsPageDto, InboxNotificationsError> {
-    let page: MatrixInboxNotificationsPage =
-        serde_json::from_value(payload).map_err(|_| unavailable())?;
     let notifications = page
         .notifications
         .into_iter()
@@ -109,7 +105,7 @@ impl SharedCore {
         limit: Option<u16>,
         only: Option<String>,
     ) -> Result<InboxNotificationsPageDto, InboxNotificationsError> {
-        let payload = serde_json::json!({ "from": from, "limit": limit, "only": only });
+        let payload = serde_json::json!({ "from": &from, "limit": limit, "only": &only });
         if serde_json::to_vec(&payload)
             .map_err(|_| unavailable())?
             .len()
@@ -122,15 +118,14 @@ impl SharedCore {
         }
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: "matrix_inbox_notifications".to_owned(),
-                session_generation: 0,
-                request_id: None,
-                payload,
+            .inbox_notifications(crate::app::notifications::MatrixInboxNotificationsRequest {
+                from,
+                limit,
+                only,
             })
             .await
             .map_err(map_core_error)?;
-        page_dto(response.payload)
+        page_dto(response)
     }
 }
 
@@ -138,14 +133,18 @@ impl SharedCore {
 mod tests {
     use super::*;
 
+    fn core_page(value: serde_json::Value) -> MatrixInboxNotificationsPage {
+        serde_json::from_value(value).unwrap()
+    }
+
     #[test]
     fn ffi_page_preserves_native_fields_and_opaque_pagination() {
-        let page = page_dto(serde_json::json!({
+        let page = page_dto(core_page(serde_json::json!({
             "next_token": "opaque/token+1",
             "notifications": [{ "room_id": "!room:example.org", "ts": 123, "read": false,
                 "event": { "event_id": "$event", "sender": "@alice:example.org", "type": "m.room.message", "origin_server_ts": 120,
                     "content": { "msgtype": "m.text", "body": "hello" }, "unsigned": { "age": 3 } } }]
-        })).unwrap();
+        }))).unwrap();
         assert_eq!(page.next_token.as_deref(), Some("opaque/token+1"));
         let item = &page.notifications[0];
         assert_eq!(item.event_id, "$event");
@@ -158,52 +157,15 @@ mod tests {
             "hello"
         );
         assert_eq!(item.unsigned_json.as_deref(), Some("{\"age\":3}"));
-        assert!(page_dto(serde_json::json!({})).is_err());
-        assert!(page_dto(serde_json::json!({ "notifications": [] }))
-            .unwrap()
-            .notifications
-            .is_empty());
-    }
-
-    #[tokio::test]
-    async fn ffi_inbox_dispatches_the_shared_command_and_preserves_query() {
-        use crate::core::CoreState;
-        use crate::transport::{CommandFuture, CommandRegistry};
-        use std::sync::Arc;
-
-        let mut registry = CommandRegistry::new();
-        registry
-            .register(
-                "matrix_inbox_notifications",
-                |_state: Arc<CoreState>, request: CommandEnvelope| -> CommandFuture {
-                    Box::pin(async move {
-                        assert_eq!(request.session_generation, 0);
-                        assert_eq!(
-                            request.payload,
-                            serde_json::json!({
-                                "from": "opaque/token+1", "limit": 24, "only": "highlight"
-                            })
-                        );
-                        Ok(serde_json::json!({ "notifications": [], "next_token": "next-page" }))
-                    })
-                },
-            )
-            .unwrap();
-        let mut shared = SharedCore::new();
-        shared.core = crate::Core::with_registry(
-            Arc::new(super::super::IosFailClosedPlatform::new()),
-            registry,
+        assert!(
+            serde_json::from_value::<MatrixInboxNotificationsPage>(serde_json::json!({})).is_err()
         );
-        let page = shared
-            .inbox_notifications(
-                Some("opaque/token+1".into()),
-                Some(24),
-                Some("highlight".into()),
-            )
-            .await
-            .unwrap();
-        assert!(page.notifications.is_empty());
-        assert_eq!(page.next_token.as_deref(), Some("next-page"));
+        assert!(
+            page_dto(core_page(serde_json::json!({ "notifications": [] })))
+                .unwrap()
+                .notifications
+                .is_empty()
+        );
     }
 
     #[tokio::test]

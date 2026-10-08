@@ -289,10 +289,6 @@ pub(super) enum OwnerAttachSlot {
     Ready,
 }
 
-pub(super) fn json_optional_string(value: Option<&serde_json::Value>) -> Option<String> {
-    value.and_then(|value| value.as_str()).map(str::to_owned)
-}
-
 pub(super) fn closed_creators_event_type(value: &str) -> Option<&'static str> {
     match value {
         "m.room.create" => Some("m.room.create"),
@@ -341,21 +337,6 @@ pub(super) fn map_session_status_core_error(error: MatrixIpcError) -> SessionSta
             SESSION_STATUS_FAILED_DESCRIPTION,
         ),
     }
-}
-
-pub(super) fn session_status_envelope_payload(
-    payload: serde_json::Value,
-) -> Result<serde_json::Value, SessionStatusError> {
-    let size = serde_json::to_vec(&payload)
-        .map(|bytes| bytes.len())
-        .unwrap_or(usize::MAX);
-    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
-        return Err(session_status_failed(
-            SESSION_STATUS_FAILED_CODE,
-            SESSION_STATUS_FAILED_DESCRIPTION,
-        ));
-    }
-    Ok(payload)
 }
 
 pub(super) fn closed_missing_secret(value: &str) -> Option<&'static str> {
@@ -616,16 +597,6 @@ pub(super) fn leftover_reject_oversize(size: usize) -> Result<(), LeftoverComman
         ));
     }
     Ok(())
-}
-
-pub(super) fn leftover_status_envelope_payload(
-    payload: serde_json::Value,
-) -> Result<serde_json::Value, LeftoverCommandError> {
-    let size = serde_json::to_vec(&payload)
-        .map(|bytes| bytes.len())
-        .unwrap_or(usize::MAX);
-    leftover_reject_oversize(size)?;
-    Ok(payload)
 }
 
 pub(super) fn map_leftover_status_core_error(error: MatrixIpcError) -> LeftoverCommandError {
@@ -1100,22 +1071,12 @@ impl SharedCore {
         }
     }
 
-    pub(super) async fn leftover_status_command(
+    pub(super) async fn leftover_status_command<T>(
         &self,
-        command: &'static str,
-    ) -> Result<serde_json::Value, LeftoverCommandError> {
-        let payload = leftover_status_envelope_payload(serde_json::Value::Null)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: LEFTOVER_STATUS_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(map_leftover_status_core_error)?;
-        Ok(response.payload)
+        request: impl std::future::Future<Output = Result<T, MatrixIpcError>>,
+    ) -> Result<T, LeftoverCommandError> {
+        let response = request.await.map_err(map_leftover_status_core_error)?;
+        Ok(response)
     }
 
     pub(super) fn has_retained_client(&self) -> bool {
@@ -1141,22 +1102,12 @@ impl SharedCore {
         }
     }
 
-    pub(super) async fn session_status_command(
+    pub(super) async fn session_status_command<T>(
         &self,
-        command: &'static str,
-    ) -> Result<serde_json::Value, SessionStatusError> {
-        let payload = session_status_envelope_payload(serde_json::Value::Null)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: SESSION_STATUS_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(map_session_status_core_error)?;
-        Ok(response.payload)
+        request: impl std::future::Future<Output = Result<T, MatrixIpcError>>,
+    ) -> Result<T, SessionStatusError> {
+        let response = request.await.map_err(map_session_status_core_error)?;
+        Ok(response)
     }
 }
 

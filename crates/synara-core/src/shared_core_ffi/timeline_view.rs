@@ -1053,23 +1053,15 @@ impl SharedCore {
         }
     }
 
-    pub(super) async fn timeline_read_state_command(
+    pub(super) async fn timeline_read_state_command<T>(
         &self,
-        command: &'static str,
         no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<serde_json::Value, TimelineReadStateError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: TIMELINE_READ_STATE_GENERATION,
-                request_id: None,
-                payload,
-            })
+        request: impl std::future::Future<Output = Result<T, MatrixIpcError>>,
+    ) -> Result<T, TimelineReadStateError> {
+        let response = request
             .await
             .map_err(|error| map_timeline_read_state_core_error(no_session, error))?;
-        Ok(response.payload)
+        Ok(response)
     }
 }
 
@@ -1099,21 +1091,10 @@ impl SharedCore {
         let position = open_position_from_dto(position)?;
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: TIMELINE_OPEN_COMMAND.to_owned(),
-                session_generation: TIMELINE_READ_ONLY_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({
-                    "roomId": room_id,
-                    "position": position,
-                }),
-            })
+            .timeline_open(crate::core_api::MatrixTimelineOpenRequest { room_id, position })
             .await
             .map_err(map_timeline_open_core_error)?;
-        let readback: NativeTimelineOpenReadback = serde_json::from_value(response.payload)
-            .map_err(|_| {
-                timeline_failed(TIMELINE_OPEN_FAILED_CODE, TIMELINE_OPEN_FAILED_DESCRIPTION)
-            })?;
+        let readback: NativeTimelineOpenReadback = response;
         Ok(TimelineOpenDto {
             schema_version: readback.schema_version,
             stream_id: readback.stream_id,
@@ -1125,20 +1106,10 @@ impl SharedCore {
     pub async fn timeline_close(&self, stream_id: String) -> Result<bool, TimelineError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: TIMELINE_CLOSE_COMMAND.to_owned(),
-                session_generation: TIMELINE_READ_ONLY_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "streamId": stream_id }),
-            })
+            .timeline_close(crate::core_api::MatrixTimelineCloseRequest { stream_id })
             .await
             .map_err(map_timeline_close_core_error)?;
-        serde_json::from_value(response.payload).map_err(|_| {
-            timeline_failed(
-                TIMELINE_CLOSE_FAILED_CODE,
-                TIMELINE_CLOSE_FAILED_DESCRIPTION,
-            )
-        })
+        Ok(response)
     }
 
     pub async fn timeline_snapshot(
@@ -1147,18 +1118,10 @@ impl SharedCore {
     ) -> Result<TimelineSnapshotDto, TimelineError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: TIMELINE_SNAPSHOT_COMMAND.to_owned(),
-                session_generation: TIMELINE_READ_ONLY_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "streamId": stream_id }),
-            })
+            .timeline_snapshot(crate::core_api::MatrixTimelineSnapshotRequest { stream_id })
             .await
             .map_err(map_timeline_snapshot_core_error)?;
-        let snapshot: TimelineViewSnapshot =
-            serde_json::from_value(response.payload).map_err(|_| {
-                timeline_failed(TIMELINE_OPEN_FAILED_CODE, TIMELINE_OPEN_FAILED_DESCRIPTION)
-            })?;
+        let snapshot: TimelineViewSnapshot = response;
         Ok(timeline_snapshot_dto(snapshot))
     }
 
@@ -1168,12 +1131,7 @@ impl SharedCore {
     ) -> Result<bool, TimelineError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: "matrix_timeline_retry_decryption".to_owned(),
-                session_generation: TIMELINE_READ_ONLY_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "streamId": stream_id }),
-            })
+            .timeline_retry_decryption(crate::core_api::MatrixTimelineSnapshotRequest { stream_id })
             .await
             .map_err(|error| match error.diagnostic_id.as_deref() {
                 Some("p2-timeline-retry-decryption-no-session") => timeline_failed(
@@ -1189,12 +1147,7 @@ impl SharedCore {
                     "Decryption could not be retried.",
                 ),
             })?;
-        serde_json::from_value(response.payload).map_err(|_| {
-            timeline_failed(
-                "p4-retry-decryption-failed",
-                "Decryption could not be retried.",
-            )
-        })
+        Ok(response)
     }
 
     pub async fn timeline_paginate(
@@ -1205,24 +1158,13 @@ impl SharedCore {
         let direction = paginate_direction(&direction)?;
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: TIMELINE_PAGINATE_COMMAND.to_owned(),
-                session_generation: TIMELINE_READ_ONLY_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({
-                    "streamId": stream_id,
-                    "direction": direction,
-                }),
+            .timeline_paginate(crate::core_api::MatrixTimelinePaginateRequest {
+                stream_id,
+                direction,
             })
             .await
             .map_err(map_timeline_paginate_core_error)?;
-        let snapshot: TimelineViewSnapshot =
-            serde_json::from_value(response.payload).map_err(|_| {
-                timeline_failed(
-                    TIMELINE_PAGINATE_FAILED_CODE,
-                    TIMELINE_PAGINATE_FAILED_DESCRIPTION,
-                )
-            })?;
+        let snapshot: TimelineViewSnapshot = response;
         Ok(timeline_snapshot_dto(snapshot))
     }
 
@@ -1231,24 +1173,19 @@ impl SharedCore {
         room_id: String,
         event_id: String,
     ) -> Result<TimelineEventReadbackDto, TimelineReadStateError> {
-        let payload = timeline_read_state_envelope_payload(serde_json::json!({
+        timeline_read_state_envelope_payload(serde_json::json!({
             "roomId": room_id,
             "eventId": event_id,
         }))?;
         let response = self
             .timeline_read_state_command(
-                TIMELINE_EVENT_READBACK_COMMAND,
                 TIMELINE_EVENT_READBACK_NO_SESSION_CODE,
-                payload,
+                self.core.timeline_event_readback(
+                    crate::core_api::MatrixTimelineEventReadbackRequest { room_id, event_id },
+                ),
             )
             .await?;
-        let readback: NativeTimelineEventReadback =
-            serde_json::from_value(response).map_err(|_| {
-                timeline_read_state_failed(
-                    TIMELINE_READ_STATE_FAILED_CODE,
-                    TIMELINE_READ_STATE_FAILED_DESCRIPTION,
-                )
-            })?;
+        let readback: NativeTimelineEventReadback = response;
         Ok(TimelineEventReadbackDto {
             session_generation: readback.session_generation,
             room_id: readback.room_id,
@@ -1266,7 +1203,7 @@ impl SharedCore {
     ) -> Result<TimelineReadStateDto, TimelineReadStateError> {
         let action = read_action_from_str(&action)?;
         let intent = read_intent_from_str(&intent)?;
-        let payload = timeline_read_state_envelope_payload(serde_json::json!({
+        timeline_read_state_envelope_payload(serde_json::json!({
             "streamId": stream_id,
             "action": read_action_as_str(action),
             "intent": read_intent_as_str(intent),
@@ -1274,18 +1211,18 @@ impl SharedCore {
         }))?;
         let response = self
             .timeline_read_state_command(
-                TIMELINE_SET_READ_STATE_COMMAND,
                 TIMELINE_SET_READ_STATE_NO_SESSION_CODE,
-                payload,
+                self.core.timeline_set_read_state(
+                    crate::core_api::MatrixTimelineSetReadStateRequest {
+                        stream_id,
+                        action,
+                        intent,
+                        observed_live_tail_event_id,
+                    },
+                ),
             )
             .await?;
-        let readback: NativeTimelineReadStateReadback =
-            serde_json::from_value(response).map_err(|_| {
-                timeline_read_state_failed(
-                    TIMELINE_READ_STATE_FAILED_CODE,
-                    TIMELINE_READ_STATE_FAILED_DESCRIPTION,
-                )
-            })?;
+        let readback: NativeTimelineReadStateReadback = response;
         Ok(TimelineReadStateDto {
             action: read_action_as_str(readback.action).to_owned(),
             receipt_sent: readback.receipt_sent,
@@ -1298,23 +1235,19 @@ impl SharedCore {
         &self,
         stream_id: String,
     ) -> Result<TimelineOpenDto, TimelineReadStateError> {
-        let payload = timeline_read_state_envelope_payload(serde_json::json!({
+        timeline_read_state_envelope_payload(serde_json::json!({
             "streamId": stream_id,
         }))?;
         let response = self
             .timeline_read_state_command(
-                TIMELINE_JUMP_LATEST_COMMAND,
                 TIMELINE_JUMP_LATEST_NO_SESSION_CODE,
-                payload,
+                self.core
+                    .timeline_jump_latest(crate::core_api::MatrixTimelineJumpLatestRequest {
+                        stream_id,
+                    }),
             )
             .await?;
-        let readback: NativeTimelineOpenReadback =
-            serde_json::from_value(response).map_err(|_| {
-                timeline_read_state_failed(
-                    TIMELINE_READ_STATE_FAILED_CODE,
-                    TIMELINE_READ_STATE_FAILED_DESCRIPTION,
-                )
-            })?;
+        let readback: NativeTimelineOpenReadback = response;
         Ok(TimelineOpenDto {
             schema_version: readback.schema_version,
             stream_id: readback.stream_id,

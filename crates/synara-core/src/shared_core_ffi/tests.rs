@@ -174,21 +174,6 @@ fn test_runtime() -> tokio::runtime::Runtime {
 }
 
 #[test]
-fn session_status_oversize_payload_fails_closed_without_truncate_or_echo() {
-    let marker = "s931OversizeMarker";
-    let payload = serde_json::json!({
-        "pad": format!("{marker}{}", "x".repeat(MAX_ENVELOPE_PAYLOAD_JSON_BYTES + 8))
-    });
-    let error = session_status_envelope_payload(payload)
-        .expect_err("oversize session/status payload must fail closed");
-    let text = format!("{error:?}{error}");
-    assert!(text.contains(SESSION_STATUS_FAILED_CODE));
-    assert!(!text.contains(marker));
-    assert!(!text.contains("syt_"));
-    assert!(!text.contains("@alice"));
-}
-
-#[test]
 fn shared_core_constructs_and_retains_the_built_in_core() {
     let shared_core = SharedCore::new();
     assert!(

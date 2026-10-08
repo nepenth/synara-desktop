@@ -1,6 +1,17 @@
 //! Typed SharedCore operations and projections for profile search.
 
 use super::*;
+use crate::app::search::MatrixMessageSearchResult;
+use crate::app::user_profile::MatrixIgnoredUsersSnapshot;
+use crate::app::user_profile::MatrixIgnoredUsersWriteResult;
+use crate::app::user_profile::MatrixOwnProfile;
+use crate::app::user_profile::MatrixProfileWriteResult;
+use crate::app::user_profile::MatrixThreepidAddResult;
+use crate::app::user_profile::MatrixThreepidEmailTokenResult;
+use crate::app::user_profile::MatrixThreepidSnapshot;
+use crate::app::user_profile::MatrixThreepidWriteResult;
+use crate::app::user_profile::MatrixUserDirectorySearchResult;
+use crate::core_api::MatrixMediaConfigResponse;
 
 /// Privacy-safe media upload-size config from the registered Core command.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -76,24 +87,20 @@ pub(super) fn own_profile_envelope_payload(
 }
 
 pub(super) fn own_profile_write_dto(
-    payload: serde_json::Value,
+    payload: MatrixProfileWriteResult,
 ) -> Result<OwnProfileWriteDto, OwnProfileCommandError> {
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
-        .ok_or_else(|| {
-            own_profile_failed(OWN_PROFILE_FAILED_CODE, OWN_PROFILE_FAILED_DESCRIPTION)
-        })?;
+    let status = Some(payload.status).ok_or_else(|| {
+        own_profile_failed(OWN_PROFILE_FAILED_CODE, OWN_PROFILE_FAILED_DESCRIPTION)
+    })?;
     Ok(OwnProfileWriteDto {
         status: status.to_owned(),
     })
 }
 
 pub(super) fn own_profile_dto(
-    payload: serde_json::Value,
+    payload: MatrixOwnProfile,
 ) -> Result<OwnProfileDto, OwnProfileCommandError> {
-    let profile: crate::app::user_profile::MatrixOwnProfile = serde_json::from_value(payload)
-        .map_err(|_| own_profile_failed(OWN_PROFILE_FAILED_CODE, OWN_PROFILE_FAILED_DESCRIPTION))?;
+    let profile: crate::app::user_profile::MatrixOwnProfile = payload;
     let avatar_url = profile.avatar_url.filter(|mxc| mxc.starts_with("mxc://"));
     Ok(OwnProfileDto {
         user_id: profile.user_id,
@@ -173,26 +180,20 @@ pub(super) fn ignored_users_envelope_payload(
 }
 
 pub(super) fn ignored_users_snapshot_dto(
-    payload: serde_json::Value,
+    payload: MatrixIgnoredUsersSnapshot,
 ) -> Result<IgnoredUsersSnapshotDto, IgnoredUsersCommandError> {
-    let snapshot: crate::app::user_profile::MatrixIgnoredUsersSnapshot =
-        serde_json::from_value(payload).map_err(|_| {
-            ignored_users_failed(IGNORED_USERS_FAILED_CODE, IGNORED_USERS_FAILED_DESCRIPTION)
-        })?;
+    let snapshot: crate::app::user_profile::MatrixIgnoredUsersSnapshot = payload;
     Ok(IgnoredUsersSnapshotDto {
         user_ids: snapshot.user_ids,
     })
 }
 
 pub(super) fn ignored_users_write_dto(
-    payload: serde_json::Value,
+    payload: MatrixIgnoredUsersWriteResult,
 ) -> Result<IgnoredUsersWriteDto, IgnoredUsersCommandError> {
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
-        .ok_or_else(|| {
-            ignored_users_failed(IGNORED_USERS_FAILED_CODE, IGNORED_USERS_FAILED_DESCRIPTION)
-        })?;
+    let status = Some(payload.status).ok_or_else(|| {
+        ignored_users_failed(IGNORED_USERS_FAILED_CODE, IGNORED_USERS_FAILED_DESCRIPTION)
+    })?;
     Ok(IgnoredUsersWriteDto {
         status: status.to_owned(),
     })
@@ -270,15 +271,9 @@ pub(super) fn user_directory_search_envelope_payload(
 }
 
 pub(super) fn user_directory_search_dto(
-    payload: serde_json::Value,
+    payload: MatrixUserDirectorySearchResult,
 ) -> Result<UserDirectorySearchDto, UserDirectorySearchError> {
-    let result: crate::app::user_profile::MatrixUserDirectorySearchResult =
-        serde_json::from_value(payload).map_err(|_| {
-            user_directory_search_failed(
-                USER_DIRECTORY_SEARCH_FAILED_CODE,
-                USER_DIRECTORY_SEARCH_FAILED_DESCRIPTION,
-            )
-        })?;
+    let result: crate::app::user_profile::MatrixUserDirectorySearchResult = payload;
     let mut results = Vec::with_capacity(result.results.len());
     for hit in result.results {
         if matrix_sdk::ruma::UserId::parse(hit.user_id.as_str()).is_err() {
@@ -376,15 +371,9 @@ pub(super) fn message_search_envelope_payload(
 }
 
 pub(super) fn message_search_dto(
-    payload: serde_json::Value,
+    payload: MatrixMessageSearchResult,
 ) -> Result<MessageSearchDto, MessageSearchError> {
-    let result: crate::app::search::MatrixMessageSearchResult = serde_json::from_value(payload)
-        .map_err(|_| {
-            message_search_failed(
-                MESSAGE_SEARCH_FAILED_CODE,
-                MESSAGE_SEARCH_FAILED_DESCRIPTION,
-            )
-        })?;
+    let result: crate::app::search::MatrixMessageSearchResult = payload;
     let mut highlights = Vec::new();
     for highlight in result.highlights {
         let trimmed = highlight.trim();
@@ -530,11 +519,9 @@ pub(super) fn threepid_envelope_payload(
 }
 
 pub(super) fn threepid_snapshot_dto(
-    payload: serde_json::Value,
+    payload: MatrixThreepidSnapshot,
 ) -> Result<ThreepidSnapshotDto, ThreepidCommandError> {
-    let snapshot: crate::app::user_profile::MatrixThreepidSnapshot =
-        serde_json::from_value(payload)
-            .map_err(|_| threepid_failed(THREEPID_FAILED_CODE, THREEPID_FAILED_DESCRIPTION))?;
+    let snapshot: crate::app::user_profile::MatrixThreepidSnapshot = payload;
     Ok(ThreepidSnapshotDto {
         emails: snapshot
             .emails
@@ -547,11 +534,9 @@ pub(super) fn threepid_snapshot_dto(
 }
 
 pub(super) fn threepid_write_dto(
-    payload: serde_json::Value,
+    payload: MatrixThreepidWriteResult,
 ) -> Result<ThreepidWriteDto, ThreepidCommandError> {
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
+    let status = Some(payload.status)
         .ok_or_else(|| threepid_failed(THREEPID_FAILED_CODE, THREEPID_FAILED_DESCRIPTION))?;
     Ok(ThreepidWriteDto {
         status: status.to_owned(),
@@ -559,102 +544,61 @@ pub(super) fn threepid_write_dto(
 }
 
 pub(super) fn threepid_email_token_dto(
-    payload: serde_json::Value,
+    payload: MatrixThreepidEmailTokenResult,
 ) -> Result<ThreepidEmailTokenDto, ThreepidCommandError> {
-    let result: crate::app::user_profile::MatrixThreepidEmailTokenResult =
-        serde_json::from_value(payload)
-            .map_err(|_| threepid_failed(THREEPID_FAILED_CODE, THREEPID_FAILED_DESCRIPTION))?;
+    let result: crate::app::user_profile::MatrixThreepidEmailTokenResult = payload;
     Ok(ThreepidEmailTokenDto {
         session_id: result.session_id,
     })
 }
 
 pub(super) fn threepid_add_dto(
-    payload: serde_json::Value,
+    payload: MatrixThreepidAddResult,
 ) -> Result<ThreepidAddDto, ThreepidCommandError> {
-    let result: crate::app::user_profile::MatrixThreepidAddResult = serde_json::from_value(payload)
-        .map_err(|_| threepid_failed(THREEPID_FAILED_CODE, THREEPID_FAILED_DESCRIPTION))?;
+    let result: crate::app::user_profile::MatrixThreepidAddResult = payload;
     Ok(ThreepidAddDto {
         status: result.status,
     })
 }
 
-#[derive(Debug, Deserialize)]
-pub(super) struct MediaConfigResultWire {
-    #[serde(rename = "m.upload.size")]
-    pub(super) upload_size: u64,
-}
-
-pub(super) fn media_config_dto(
-    payload: serde_json::Value,
-) -> Result<MediaConfigDto, SessionStatusError> {
-    let result: MediaConfigResultWire = serde_json::from_value(payload).map_err(|_| {
-        session_status_failed(
-            SESSION_STATUS_FAILED_CODE,
-            SESSION_STATUS_FAILED_DESCRIPTION,
-        )
-    })?;
-    Ok(MediaConfigDto {
+pub(super) fn media_config_dto(result: MatrixMediaConfigResponse) -> MediaConfigDto {
+    MediaConfigDto {
         upload_size: result.upload_size,
-    })
+    }
 }
 
 impl SharedCore {
-    pub(super) async fn own_profile_command(
+    pub(super) async fn own_profile_command<T>(
         &self,
-        command: &'static str,
         no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<serde_json::Value, OwnProfileCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: OWN_PROFILE_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
+        request: impl std::future::Future<Output = Result<T, MatrixIpcError>>,
+    ) -> Result<T, OwnProfileCommandError> {
+        let response = request
             .await
             .map_err(|error| map_own_profile_core_error(no_session, error))?;
-        Ok(response.payload)
+        Ok(response)
     }
 
-    pub(super) async fn ignored_users_command(
+    pub(super) async fn ignored_users_command<T>(
         &self,
-        command: &'static str,
         no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<serde_json::Value, IgnoredUsersCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: IGNORED_USERS_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
+        request: impl std::future::Future<Output = Result<T, MatrixIpcError>>,
+    ) -> Result<T, IgnoredUsersCommandError> {
+        let response = request
             .await
             .map_err(|error| map_ignored_users_core_error(no_session, error))?;
-        Ok(response.payload)
+        Ok(response)
     }
 
-    pub(super) async fn threepid_command(
+    pub(super) async fn threepid_command<T>(
         &self,
-        command: &'static str,
         no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<serde_json::Value, ThreepidCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: THREEPID_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
+        request: impl std::future::Future<Output = Result<T, MatrixIpcError>>,
+    ) -> Result<T, ThreepidCommandError> {
+        let response = request
             .await
             .map_err(|error| map_threepid_core_error(no_session, error))?;
-        Ok(response.payload)
+        Ok(response)
     }
 }
 
@@ -664,13 +608,14 @@ impl SharedCore {
         &self,
         display_name: String,
     ) -> Result<OwnProfileWriteDto, OwnProfileCommandError> {
-        let payload = own_profile_envelope_payload(serde_json::json!({
-            "displayName": display_name,
-        }))?;
+        own_profile_envelope_payload(serde_json::json!({
+            "displayName": display_name}))?;
         self.own_profile_command(
-            SET_OWN_DISPLAY_NAME_COMMAND,
             SET_OWN_DISPLAY_NAME_NO_SESSION_CODE,
-            payload,
+            self.core
+                .set_own_display_name(crate::core_api::MatrixSetOwnDisplayNameRequest {
+                    display_name,
+                }),
         )
         .await
         .and_then(own_profile_write_dto)
@@ -680,33 +625,28 @@ impl SharedCore {
         &self,
         mxc: String,
     ) -> Result<OwnProfileWriteDto, OwnProfileCommandError> {
-        let payload = own_profile_envelope_payload(serde_json::json!({ "mxc": mxc }))?;
+        own_profile_envelope_payload(serde_json::json!({ "mxc": mxc }))?;
         self.own_profile_command(
-            SET_OWN_AVATAR_COMMAND,
             SET_OWN_AVATAR_NO_SESSION_CODE,
-            payload,
+            self.core
+                .set_own_avatar(crate::core_api::MatrixSetOwnAvatarRequest { mxc }),
         )
         .await
         .and_then(own_profile_write_dto)
     }
 
     pub async fn get_own_profile(&self) -> Result<OwnProfileDto, OwnProfileCommandError> {
-        self.own_profile_command(
-            GET_OWN_PROFILE_COMMAND,
-            GET_OWN_PROFILE_NO_SESSION_CODE,
-            serde_json::Value::Null,
-        )
-        .await
-        .and_then(own_profile_dto)
+        self.own_profile_command(GET_OWN_PROFILE_NO_SESSION_CODE, self.core.get_own_profile())
+            .await
+            .and_then(own_profile_dto)
     }
 
     pub async fn ignored_users_snapshot(
         &self,
     ) -> Result<IgnoredUsersSnapshotDto, IgnoredUsersCommandError> {
         self.ignored_users_command(
-            IGNORED_USERS_SNAPSHOT_COMMAND,
             IGNORED_USERS_SNAPSHOT_NO_SESSION_CODE,
-            serde_json::Value::Null,
+            self.core.ignored_users_snapshot(),
         )
         .await
         .and_then(ignored_users_snapshot_dto)
@@ -716,11 +656,11 @@ impl SharedCore {
         &self,
         user_id: String,
     ) -> Result<IgnoredUsersWriteDto, IgnoredUsersCommandError> {
-        let payload = ignored_users_envelope_payload(serde_json::json!({ "userId": user_id }))?;
+        ignored_users_envelope_payload(serde_json::json!({ "userId": user_id }))?;
         self.ignored_users_command(
-            IGNORED_USERS_IGNORE_COMMAND,
             IGNORED_USERS_IGNORE_NO_SESSION_CODE,
-            payload,
+            self.core
+                .ignored_users_ignore(crate::core_api::MatrixIgnoredUsersUserRequest { user_id }),
         )
         .await
         .and_then(ignored_users_write_dto)
@@ -730,11 +670,11 @@ impl SharedCore {
         &self,
         user_id: String,
     ) -> Result<IgnoredUsersWriteDto, IgnoredUsersCommandError> {
-        let payload = ignored_users_envelope_payload(serde_json::json!({ "userId": user_id }))?;
+        ignored_users_envelope_payload(serde_json::json!({ "userId": user_id }))?;
         self.ignored_users_command(
-            IGNORED_USERS_UNIGNORE_COMMAND,
             IGNORED_USERS_UNIGNORE_NO_SESSION_CODE,
-            payload,
+            self.core
+                .ignored_users_unignore(crate::core_api::MatrixIgnoredUsersUserRequest { user_id }),
         )
         .await
         .and_then(ignored_users_write_dto)
@@ -745,23 +685,20 @@ impl SharedCore {
         term: String,
         limit: Option<u64>,
     ) -> Result<UserDirectorySearchDto, UserDirectorySearchError> {
-        let payload = user_directory_search_envelope_payload(serde_json::json!({
+        user_directory_search_envelope_payload(serde_json::json!({
             "term": term,
-            "limit": limit,
-        }))?;
+            "limit": limit}))?;
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: USER_DIRECTORY_SEARCH_COMMAND.to_owned(),
-                session_generation: USER_DIRECTORY_SEARCH_COMMAND_GENERATION,
-                request_id: None,
-                payload,
+            .user_directory_search(crate::core_api::MatrixUserDirectorySearchRequest {
+                term,
+                limit,
             })
             .await
             .map_err(|error| {
                 map_user_directory_search_core_error(USER_DIRECTORY_SEARCH_NO_SESSION_CODE, error)
             })?;
-        user_directory_search_dto(response.payload)
+        user_directory_search_dto(response)
     }
 
     pub async fn message_search(
@@ -772,33 +709,35 @@ impl SharedCore {
         senders: Option<Vec<String>>,
         order: Option<String>,
     ) -> Result<MessageSearchDto, MessageSearchError> {
-        let payload = message_search_envelope_payload(serde_json::json!({
+        message_search_envelope_payload(serde_json::json!({
             "term": term,
             "nextToken": next_token,
             "rooms": rooms,
             "senders": senders,
-            "order": order,
-        }))?;
+            "order": order}))?;
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: MESSAGE_SEARCH_COMMAND.to_owned(),
-                session_generation: MESSAGE_SEARCH_COMMAND_GENERATION,
-                request_id: None,
-                payload,
+            .message_search(crate::core_api::MatrixMessageSearchRequest {
+                from_ts: Default::default(),
+                listing_kind: Default::default(),
+                to_ts: Default::default(),
+                term,
+                next_token,
+                rooms,
+                senders,
+                order,
             })
             .await
             .map_err(|error| {
                 map_message_search_core_error(MESSAGE_SEARCH_NO_SESSION_CODE, error)
             })?;
-        message_search_dto(response.payload)
+        message_search_dto(response)
     }
 
     pub async fn threepid_snapshot(&self) -> Result<ThreepidSnapshotDto, ThreepidCommandError> {
         self.threepid_command(
-            THREEPID_SNAPSHOT_COMMAND,
             THREEPID_SNAPSHOT_NO_SESSION_CODE,
-            serde_json::Value::Null,
+            self.core.threepid_snapshot(),
         )
         .await
         .and_then(threepid_snapshot_dto)
@@ -808,11 +747,11 @@ impl SharedCore {
         &self,
         address: String,
     ) -> Result<ThreepidWriteDto, ThreepidCommandError> {
-        let payload = threepid_envelope_payload(serde_json::json!({ "address": address }))?;
+        threepid_envelope_payload(serde_json::json!({ "address": address }))?;
         self.threepid_command(
-            THREEPID_DELETE_COMMAND,
             THREEPID_DELETE_NO_SESSION_CODE,
-            payload,
+            self.core
+                .threepid_delete(crate::core_api::MatrixThreepidAddressRequest { address }),
         )
         .await
         .and_then(threepid_write_dto)
@@ -822,11 +761,13 @@ impl SharedCore {
         &self,
         email: String,
     ) -> Result<ThreepidEmailTokenDto, ThreepidCommandError> {
-        let payload = threepid_envelope_payload(serde_json::json!({ "email": email }))?;
+        threepid_envelope_payload(serde_json::json!({ "email": email }))?;
         self.threepid_command(
-            THREEPID_REQUEST_EMAIL_TOKEN_COMMAND,
             THREEPID_REQUEST_EMAIL_TOKEN_NO_SESSION_CODE,
-            payload,
+            self.core
+                .threepid_request_email_token(crate::core_api::MatrixThreepidEmailRequest {
+                    email,
+                }),
         )
         .await
         .and_then(threepid_email_token_dto)
@@ -834,9 +775,8 @@ impl SharedCore {
 
     pub async fn threepid_add_email(&self) -> Result<ThreepidAddDto, ThreepidCommandError> {
         self.threepid_command(
-            THREEPID_ADD_EMAIL_COMMAND,
             THREEPID_ADD_EMAIL_NO_SESSION_CODE,
-            serde_json::Value::Null,
+            self.core.threepid_add_email(),
         )
         .await
         .and_then(threepid_add_dto)
@@ -866,7 +806,9 @@ impl SharedCore {
     }
 
     pub async fn media_config(&self) -> Result<MediaConfigDto, SessionStatusError> {
-        let payload = self.session_status_command(MEDIA_CONFIG_COMMAND).await?;
-        media_config_dto(payload)
+        let payload = self
+            .session_status_command(self.core.media_config())
+            .await?;
+        Ok(media_config_dto(payload))
     }
 }

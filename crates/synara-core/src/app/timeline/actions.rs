@@ -24,6 +24,23 @@ pub enum NativeTimelineActionKind {
     CallDecline,
 }
 
+impl NativeTimelineActionKind {
+    /// The snake_case wire label of this action.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::EditText => "edit_text",
+            Self::Redact => "redact",
+            Self::ForwardText => "forward_text",
+            Self::ForwardMedia => "forward_media",
+            Self::Report => "report",
+            Self::Pin => "pin",
+            Self::Unpin => "unpin",
+            Self::PollVote => "poll_vote",
+            Self::CallDecline => "call_decline",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineEditTextRequest {

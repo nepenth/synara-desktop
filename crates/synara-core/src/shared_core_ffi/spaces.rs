@@ -1,6 +1,11 @@
 //! Typed SharedCore operations and projections for spaces.
 
 use super::*;
+use crate::app::spaces::NativeRestrictedJoinReparentResult;
+use crate::app::spaces::NativeSpaceChildMutationResult;
+use crate::app::spaces::NativeSpaceChildrenSnapshot;
+use crate::app::spaces::NativeSpaceHierarchySnapshot;
+use crate::app::spaces::NativeSpaceParentsSnapshot;
 
 /// Privacy-safe space parent row. Child room id plus parent room ids only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -156,223 +161,141 @@ pub(super) fn closed_restricted_join_reparent_status(value: &str) -> Option<&'st
     }
 }
 
-pub(super) fn required_space_id(
-    value: Option<&serde_json::Value>,
-) -> Result<String, SpaceCommandError> {
-    value
-        .and_then(|item| item.as_str())
-        .filter(|item| !item.is_empty())
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))
+pub(super) fn required_space_id(value: String) -> Result<String, SpaceCommandError> {
+    if value.is_empty() {
+        return Err(space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION));
+    }
+    Ok(value)
 }
 
-pub(super) fn optional_space_string(value: Option<&serde_json::Value>) -> Option<String> {
-    value.and_then(|item| item.as_str()).map(ToOwned::to_owned)
-}
-
-pub(super) fn space_string_list(
-    value: Option<&serde_json::Value>,
-) -> Result<Vec<String>, SpaceCommandError> {
-    value
-        .and_then(|item| item.as_array())
-        .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?
-        .iter()
-        .map(|item| required_space_id(Some(item)))
-        .collect()
+pub(super) fn space_string_list(values: Vec<String>) -> Result<Vec<String>, SpaceCommandError> {
+    values.into_iter().map(required_space_id).collect()
 }
 
 pub(super) fn space_parent_entry_dto(
-    value: &serde_json::Value,
+    entry: crate::app::spaces::NativeSpaceParentEntry,
 ) -> Result<SpaceParentEntryDto, SpaceCommandError> {
     Ok(SpaceParentEntryDto {
-        room_id: required_space_id(value.get("roomId"))?,
-        parent_ids: space_string_list(value.get("parentIds"))?,
+        room_id: required_space_id(entry.room_id)?,
+        parent_ids: space_string_list(entry.parent_ids)?,
     })
 }
 
 pub(super) fn space_parents_snapshot_dto(
-    payload: serde_json::Value,
+    payload: NativeSpaceParentsSnapshot,
 ) -> Result<SpaceParentsSnapshotDto, SpaceCommandError> {
-    let session_generation = payload
-        .get("sessionGeneration")
-        .and_then(|value| value.as_u64())
-        .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?;
     let entries = payload
-        .get("entries")
-        .and_then(|value| value.as_array())
-        .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?
-        .iter()
+        .entries
+        .into_iter()
         .map(space_parent_entry_dto)
         .collect::<Result<Vec<_>, _>>()?;
     Ok(SpaceParentsSnapshotDto {
-        session_generation,
+        session_generation: payload.session_generation,
         entries,
     })
 }
 
 pub(super) fn space_hierarchy_room_dto(
-    value: &serde_json::Value,
+    room: crate::app::spaces::NativeSpaceHierarchyRoom,
 ) -> Result<SpaceHierarchyRoomDto, SpaceCommandError> {
-    let join_rule = value
-        .get("joinRule")
-        .and_then(|item| item.as_str())
-        .and_then(closed_space_join_rule)
+    let join_rule = closed_space_join_rule(&room.join_rule)
         .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?;
-    let num_joined_members = value
-        .get("numJoinedMembers")
-        .and_then(|item| item.as_u64())
-        .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?;
-    let world_readable = value
-        .get("worldReadable")
-        .and_then(|item| item.as_bool())
-        .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?;
-    let guest_can_join = value
-        .get("guestCanJoin")
-        .and_then(|item| item.as_bool())
-        .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?;
-    let allowed_room_ids = value
-        .get("allowedRoomIds")
-        .and_then(|item| item.as_array())
-        .filter(|items| items.len() <= 5_000)
-        .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?
-        .iter()
-        .map(|item| required_space_id(Some(item)))
-        .collect::<Result<Vec<_>, _>>()?;
+    if room.allowed_room_ids.len() > 5_000 {
+        return Err(space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION));
+    }
+    let allowed_room_ids = space_string_list(room.allowed_room_ids)?;
     if !matches!(join_rule, "restricted" | "knock_restricted") && !allowed_room_ids.is_empty() {
         return Err(space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION));
     }
     Ok(SpaceHierarchyRoomDto {
-        room_id: required_space_id(value.get("roomId"))?,
-        name: optional_space_string(value.get("name")),
-        canonical_alias: optional_space_string(value.get("canonicalAlias")),
-        topic: optional_space_string(value.get("topic")),
-        avatar_url: optional_space_string(value.get("avatarUrl")),
-        room_type: optional_space_string(value.get("roomType")),
-        num_joined_members,
+        room_id: required_space_id(room.room_id)?,
+        name: room.name,
+        canonical_alias: room.canonical_alias,
+        topic: room.topic,
+        avatar_url: room.avatar_url,
+        room_type: room.room_type,
+        num_joined_members: room.num_joined_members,
         join_rule: join_rule.to_owned(),
         allowed_room_ids,
-        world_readable,
-        guest_can_join,
+        world_readable: room.world_readable,
+        guest_can_join: room.guest_can_join,
     })
 }
 
 pub(super) fn space_hierarchy_snapshot_dto(
-    payload: serde_json::Value,
+    payload: NativeSpaceHierarchySnapshot,
 ) -> Result<SpaceHierarchySnapshotDto, SpaceCommandError> {
-    let session_generation = payload
-        .get("sessionGeneration")
-        .and_then(|value| value.as_u64())
-        .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?;
     let rooms = payload
-        .get("rooms")
-        .and_then(|value| value.as_array())
-        .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?
-        .iter()
+        .rooms
+        .into_iter()
         .map(space_hierarchy_room_dto)
         .collect::<Result<Vec<_>, _>>()?;
     Ok(SpaceHierarchySnapshotDto {
-        session_generation,
+        session_generation: payload.session_generation,
         rooms,
     })
 }
 
 pub(super) fn space_child_edge_dto(
-    value: &serde_json::Value,
+    edge: crate::app::spaces::NativeSpaceChildEdge,
 ) -> Result<SpaceChildEdgeDto, SpaceCommandError> {
-    let suggested = value
-        .get("suggested")
-        .and_then(|item| item.as_bool())
-        .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?;
-    let origin_server_ts = value
-        .get("originServerTs")
-        .and_then(|item| item.as_u64())
-        .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?;
     Ok(SpaceChildEdgeDto {
-        parent_id: required_space_id(value.get("parentId"))?,
-        child_id: required_space_id(value.get("childId"))?,
-        order: optional_space_string(value.get("order")),
-        suggested,
-        via: space_string_list(value.get("via"))?,
-        origin_server_ts,
+        parent_id: required_space_id(edge.parent_id)?,
+        child_id: required_space_id(edge.child_id)?,
+        order: edge.order,
+        suggested: edge.suggested,
+        via: space_string_list(edge.via)?,
+        origin_server_ts: edge.origin_server_ts,
     })
 }
 
 pub(super) fn space_children_snapshot_dto(
-    payload: serde_json::Value,
+    payload: NativeSpaceChildrenSnapshot,
 ) -> Result<SpaceChildrenSnapshotDto, SpaceCommandError> {
-    let session_generation = payload
-        .get("sessionGeneration")
-        .and_then(|value| value.as_u64())
-        .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?;
     let edges = payload
-        .get("edges")
-        .and_then(|value| value.as_array())
-        .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?
-        .iter()
+        .edges
+        .into_iter()
         .map(space_child_edge_dto)
         .collect::<Result<Vec<_>, _>>()?;
     Ok(SpaceChildrenSnapshotDto {
-        session_generation,
+        session_generation: payload.session_generation,
         edges,
     })
 }
 
 pub(super) fn space_child_mutation_dto(
-    payload: serde_json::Value,
+    payload: NativeSpaceChildMutationResult,
 ) -> Result<SpaceChildMutationDto, SpaceCommandError> {
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
-        .and_then(closed_space_child_status)
+    let status = closed_space_child_status(payload.status)
         .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?;
     Ok(SpaceChildMutationDto {
-        parent_id: required_space_id(payload.get("parentId"))?,
-        child_id: required_space_id(payload.get("childId"))?,
+        parent_id: required_space_id(payload.parent_id)?,
+        child_id: required_space_id(payload.child_id)?,
         status: status.to_owned(),
     })
 }
 
 pub(super) fn restricted_join_reparent_dto(
-    payload: serde_json::Value,
+    payload: NativeRestrictedJoinReparentResult,
 ) -> Result<RestrictedJoinReparentDto, SpaceCommandError> {
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
-        .and_then(closed_restricted_join_reparent_status)
+    let status = closed_restricted_join_reparent_status(payload.status)
         .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?;
     Ok(RestrictedJoinReparentDto {
-        room_id: required_space_id(payload.get("roomId"))?,
+        room_id: required_space_id(payload.room_id)?,
         status: status.to_owned(),
     })
 }
 
 impl SharedCore {
-    pub(super) async fn space_null_command(
+    pub(super) async fn space_command<T>(
         &self,
-        command: &'static str,
         no_session: &'static str,
-    ) -> Result<serde_json::Value, SpaceCommandError> {
-        self.space_command(command, no_session, serde_json::Value::Null)
-            .await
-    }
-
-    pub(super) async fn space_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<serde_json::Value, SpaceCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: SPACE_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
+        request: impl std::future::Future<Output = Result<T, MatrixIpcError>>,
+    ) -> Result<T, SpaceCommandError> {
+        let response = request
             .await
             .map_err(|error| map_space_core_error(no_session, error))?;
-        Ok(response.payload)
+        Ok(response)
     }
 }
 
@@ -382,9 +305,9 @@ impl SharedCore {
         &self,
     ) -> Result<SpaceParentsSnapshotDto, SpaceCommandError> {
         let payload = self
-            .space_null_command(
-                SPACE_PARENTS_SNAPSHOT_COMMAND,
+            .space_command(
                 SPACE_PARENTS_SNAPSHOT_NO_SESSION_CODE,
+                self.core.space_parents_snapshot(),
             )
             .await?;
         space_parents_snapshot_dto(payload)
@@ -394,14 +317,15 @@ impl SharedCore {
         &self,
         room_id: String,
     ) -> Result<SpaceHierarchySnapshotDto, SpaceCommandError> {
-        let payload = space_envelope_payload(serde_json::json!({
+        space_envelope_payload(serde_json::json!({
             "roomId": room_id,
         }))?;
         let response = self
             .space_command(
-                SPACE_HIERARCHY_SNAPSHOT_COMMAND,
                 SPACE_HIERARCHY_SNAPSHOT_NO_SESSION_CODE,
-                payload,
+                self.core.space_hierarchy_snapshot(
+                    crate::core_api::MatrixSpaceHierarchySnapshotRequest { room_id },
+                ),
             )
             .await?;
         space_hierarchy_snapshot_dto(response)
@@ -411,9 +335,9 @@ impl SharedCore {
         &self,
     ) -> Result<SpaceChildrenSnapshotDto, SpaceCommandError> {
         let payload = self
-            .space_null_command(
-                SPACE_CHILDREN_SNAPSHOT_COMMAND,
+            .space_command(
                 SPACE_CHILDREN_SNAPSHOT_NO_SESSION_CODE,
+                self.core.space_children_snapshot(),
             )
             .await?;
         space_children_snapshot_dto(payload)
@@ -427,7 +351,7 @@ impl SharedCore {
         order: Option<String>,
         suggested: Option<bool>,
     ) -> Result<SpaceChildMutationDto, SpaceCommandError> {
-        let payload = space_envelope_payload(serde_json::json!({
+        space_envelope_payload(serde_json::json!({
             "parentId": parent_id,
             "childId": child_id,
             "via": via,
@@ -436,9 +360,15 @@ impl SharedCore {
         }))?;
         let response = self
             .space_command(
-                SPACE_CHILD_SET_COMMAND,
                 SPACE_CHILD_SET_NO_SESSION_CODE,
-                payload,
+                self.core
+                    .space_child_set(crate::core_api::MatrixSpaceChildSetRequest {
+                        parent_id,
+                        child_id,
+                        via,
+                        order,
+                        suggested,
+                    }),
             )
             .await?;
         space_child_mutation_dto(response)
@@ -449,15 +379,18 @@ impl SharedCore {
         parent_id: String,
         child_id: String,
     ) -> Result<SpaceChildMutationDto, SpaceCommandError> {
-        let payload = space_envelope_payload(serde_json::json!({
+        space_envelope_payload(serde_json::json!({
             "parentId": parent_id,
             "childId": child_id,
         }))?;
         let response = self
             .space_command(
-                SPACE_CHILD_REMOVE_COMMAND,
                 SPACE_CHILD_REMOVE_NO_SESSION_CODE,
-                payload,
+                self.core
+                    .space_child_remove(crate::core_api::MatrixSpaceChildRemoveRequest {
+                        parent_id,
+                        child_id,
+                    }),
             )
             .await?;
         space_child_mutation_dto(response)
@@ -469,16 +402,21 @@ impl SharedCore {
         remove_parent_id: Option<String>,
         add_parent_id: String,
     ) -> Result<RestrictedJoinReparentDto, SpaceCommandError> {
-        let payload = space_envelope_payload(serde_json::json!({
+        space_envelope_payload(serde_json::json!({
             "roomId": room_id,
             "removeParentId": remove_parent_id,
             "addParentId": add_parent_id,
         }))?;
         let response = self
             .space_command(
-                RESTRICTED_JOIN_REPARENT_COMMAND,
                 RESTRICTED_JOIN_REPARENT_NO_SESSION_CODE,
-                payload,
+                self.core.restricted_join_reparent(
+                    crate::core_api::MatrixRestrictedJoinReparentRequest {
+                        room_id,
+                        remove_parent_id,
+                        add_parent_id,
+                    },
+                ),
             )
             .await?;
         restricted_join_reparent_dto(response)

@@ -1,6 +1,10 @@
 //! Typed SharedCore operations and projections for rooms.
 
 use super::*;
+use crate::app::members::NativeRoomCreatorsSnapshot;
+use crate::app::members::NativeRoomMembersSnapshot;
+use crate::app::members::NativeRoomPowerLevelTagsSnapshot;
+use crate::app::members::NativeRoomPowerLevelsSnapshot;
 
 /// Privacy-safe room-list wake-up. No room ids, names, tokens, or password.
 /// iOS re-fetches via the existing snapshot command.
@@ -442,16 +446,10 @@ pub(super) fn room_profile_envelope_payload(
 }
 
 pub(super) fn room_profile_write_dto(
-    payload: serde_json::Value,
+    payload: crate::app::user_profile::MatrixProfileWriteResult,
 ) -> Result<RoomProfileWriteDto, RoomProfileCommandError> {
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
-        .ok_or_else(|| {
-            room_profile_failed(ROOM_PROFILE_FAILED_CODE, ROOM_PROFILE_FAILED_DESCRIPTION)
-        })?;
     Ok(RoomProfileWriteDto {
-        status: status.to_owned(),
+        status: payload.status.to_owned(),
     })
 }
 
@@ -533,23 +531,19 @@ pub(super) fn closed_room_membership_status(value: &str) -> Option<&'static str>
 }
 
 pub(super) fn room_membership_write_dto(
-    payload: serde_json::Value,
+    status: Option<&'static str>,
 ) -> Result<RoomMembershipWriteDto, RoomMembershipCommandError> {
-    if payload.is_null() {
+    let Some(status) = status else {
         return Ok(RoomMembershipWriteDto {
             status: "ok".to_owned(),
         });
-    }
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
-        .and_then(closed_room_membership_status)
-        .ok_or_else(|| {
-            room_membership_failed(
-                ROOM_MEMBERSHIP_FAILED_CODE,
-                ROOM_MEMBERSHIP_FAILED_DESCRIPTION,
-            )
-        })?;
+    };
+    let status = closed_room_membership_status(status).ok_or_else(|| {
+        room_membership_failed(
+            ROOM_MEMBERSHIP_FAILED_CODE,
+            ROOM_MEMBERSHIP_FAILED_DESCRIPTION,
+        )
+    })?;
     Ok(RoomMembershipWriteDto {
         status: status.to_owned(),
     })
@@ -631,23 +625,19 @@ pub(super) fn closed_room_moderation_status(value: &str) -> Option<&'static str>
 }
 
 pub(super) fn room_moderation_write_dto(
-    payload: serde_json::Value,
+    status: Option<&'static str>,
 ) -> Result<RoomModerationWriteDto, RoomModerationCommandError> {
-    if payload.is_null() {
+    let Some(status) = status else {
         return Ok(RoomModerationWriteDto {
             status: "ok".to_owned(),
         });
-    }
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
-        .and_then(closed_room_moderation_status)
-        .ok_or_else(|| {
-            room_moderation_failed(
-                ROOM_MODERATION_FAILED_CODE,
-                ROOM_MODERATION_FAILED_DESCRIPTION,
-            )
-        })?;
+    };
+    let status = closed_room_moderation_status(status).ok_or_else(|| {
+        room_moderation_failed(
+            ROOM_MODERATION_FAILED_CODE,
+            ROOM_MODERATION_FAILED_DESCRIPTION,
+        )
+    })?;
     Ok(RoomModerationWriteDto {
         status: status.to_owned(),
     })
@@ -747,26 +737,45 @@ pub(super) fn closed_room_power_level_status(value: &str) -> Option<&'static str
 }
 
 pub(super) fn room_power_level_write_dto(
-    payload: serde_json::Value,
+    status: Option<&'static str>,
 ) -> Result<RoomPowerLevelWriteDto, RoomPowerLevelCommandError> {
-    if payload.is_null() {
+    let Some(status) = status else {
         return Ok(RoomPowerLevelWriteDto {
             status: "ok".to_owned(),
         });
-    }
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
-        .and_then(closed_room_power_level_status)
-        .ok_or_else(|| {
-            room_power_level_failed(
-                ROOM_POWER_LEVEL_FAILED_CODE,
-                ROOM_POWER_LEVEL_FAILED_DESCRIPTION,
-            )
-        })?;
+    };
+    let status = closed_room_power_level_status(status).ok_or_else(|| {
+        room_power_level_failed(
+            ROOM_POWER_LEVEL_FAILED_CODE,
+            ROOM_POWER_LEVEL_FAILED_DESCRIPTION,
+        )
+    })?;
     Ok(RoomPowerLevelWriteDto {
         status: status.to_owned(),
     })
+}
+
+/// Status of a room write: `()` for an implicit ok, otherwise Core's label.
+pub(super) trait WriteAck {
+    fn ack_status(&self) -> Option<&'static str>;
+}
+
+impl WriteAck for () {
+    fn ack_status(&self) -> Option<&'static str> {
+        None
+    }
+}
+
+impl WriteAck for crate::app::user_profile::MatrixProfileWriteResult {
+    fn ack_status(&self) -> Option<&'static str> {
+        Some(self.status)
+    }
+}
+
+impl WriteAck for crate::app::members::NativePowerLevelWriteResult {
+    fn ack_status(&self) -> Option<&'static str> {
+        Some(self.status)
+    }
 }
 
 /// Typed room-create request. Core scalar fields only.
@@ -834,21 +843,41 @@ pub(super) fn map_room_create_core_error(
     }
 }
 
-pub(super) fn closed_room_create_visibility(value: &str) -> Option<&'static str> {
-    match value {
-        "private" => Some("private"),
-        "public" => Some("public"),
-        _ => None,
-    }
-}
-
-pub(super) fn closed_room_create_preset(value: &str) -> Option<&'static str> {
-    match value {
-        "private_chat" => Some("private_chat"),
-        "public_chat" => Some("public_chat"),
-        "trusted_private_chat" => Some("trusted_private_chat"),
-        _ => None,
-    }
+pub(super) fn room_create_request(
+    request: RoomCreateRequestDto,
+) -> Result<crate::app::room_ops::MatrixRoomCreateRequest, RoomCreateCommandError> {
+    use crate::app::room_ops::{MatrixRoomCreatePreset, MatrixRoomCreateVisibility};
+    let invalid = || room_create_failed(ROOM_CREATE_FAILED_CODE, ROOM_CREATE_FAILED_DESCRIPTION);
+    let visibility = match request.visibility.as_deref() {
+        None => None,
+        Some("private") => Some(MatrixRoomCreateVisibility::Private),
+        Some("public") => Some(MatrixRoomCreateVisibility::Public),
+        Some(_) => return Err(invalid()),
+    };
+    let preset = match request.preset.as_deref() {
+        None => None,
+        Some("private_chat") => Some(MatrixRoomCreatePreset::Private),
+        Some("public_chat") => Some(MatrixRoomCreatePreset::Public),
+        Some("trusted_private_chat") => Some(MatrixRoomCreatePreset::TrustedPrivate),
+        Some(_) => return Err(invalid()),
+    };
+    Ok(crate::app::room_ops::MatrixRoomCreateRequest {
+        name: request.name,
+        topic: request.topic,
+        room_version: request.room_version,
+        room_alias_name: request.room_alias_name,
+        is_direct: request.is_direct,
+        invite: request.invite,
+        visibility,
+        preset,
+        creation_content: None,
+        encryption: request.encryption,
+        encrypt_state_events: false,
+        join_rule: request.join_rule,
+        knock: request.knock,
+        parent_room_id: request.parent_room_id,
+        power_level_content_override: None,
+    })
 }
 
 pub(super) fn closed_created_room_id(value: &str) -> Option<String> {
@@ -864,64 +893,8 @@ pub(super) fn closed_created_room_id(value: &str) -> Option<String> {
     }
 }
 
-pub(super) fn room_create_request_payload(
-    request: RoomCreateRequestDto,
-) -> Result<serde_json::Value, RoomCreateCommandError> {
-    let visibility = request
-        .visibility
-        .as_deref()
-        .map(|value| {
-            closed_room_create_visibility(value).ok_or_else(|| {
-                room_create_failed(ROOM_CREATE_FAILED_CODE, ROOM_CREATE_FAILED_DESCRIPTION)
-            })
-        })
-        .transpose()?;
-    let preset = request
-        .preset
-        .as_deref()
-        .map(|value| {
-            closed_room_create_preset(value).ok_or_else(|| {
-                room_create_failed(ROOM_CREATE_FAILED_CODE, ROOM_CREATE_FAILED_DESCRIPTION)
-            })
-        })
-        .transpose()?;
-    Ok(serde_json::json!({
-        "name": request.name,
-        "topic": request.topic,
-        "roomAliasName": request.room_alias_name,
-        "visibility": visibility,
-        "preset": preset,
-        "isDirect": request.is_direct,
-        "encryption": request.encryption,
-        "invite": request.invite,
-        "roomVersion": request.room_version,
-        "joinRule": request.join_rule,
-        "knock": request.knock,
-        "parentRoomId": request.parent_room_id,
-    }))
-}
-
-pub(super) fn room_create_envelope_payload(
-    payload: serde_json::Value,
-) -> Result<serde_json::Value, RoomCreateCommandError> {
-    let size = serde_json::to_vec(&payload)
-        .map(|bytes| bytes.len())
-        .unwrap_or(usize::MAX);
-    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
-        return Err(room_create_failed(
-            ROOM_CREATE_FAILED_CODE,
-            ROOM_CREATE_FAILED_DESCRIPTION,
-        ));
-    }
-    Ok(payload)
-}
-
-pub(super) fn room_create_dto(
-    payload: serde_json::Value,
-) -> Result<RoomCreateDto, RoomCreateCommandError> {
-    payload
-        .as_str()
-        .and_then(closed_created_room_id)
+pub(super) fn room_create_dto(room_id: String) -> Result<RoomCreateDto, RoomCreateCommandError> {
+    closed_created_room_id(&room_id)
         .map(|room_id| RoomCreateDto { room_id })
         .ok_or_else(|| room_create_failed(ROOM_CREATE_FAILED_CODE, ROOM_CREATE_FAILED_DESCRIPTION))
 }
@@ -1058,337 +1031,100 @@ pub(super) fn closed_power_level_tags_event_type(value: &str) -> Option<&'static
     }
 }
 
-pub(super) fn room_members_snapshot_envelope_payload(
-    payload: serde_json::Value,
-) -> Result<serde_json::Value, RoomMembersSnapshotError> {
-    let size = serde_json::to_vec(&payload)
-        .map(|bytes| bytes.len())
-        .unwrap_or(usize::MAX);
-    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
-        return Err(room_members_snapshot_failed(
-            ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-            ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-        ));
+fn members_failed() -> RoomMembersSnapshotError {
+    room_members_snapshot_failed(
+        ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+        ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+    )
+}
+
+fn non_empty(value: String) -> Result<String, RoomMembersSnapshotError> {
+    if value.is_empty() {
+        return Err(members_failed());
     }
-    Ok(payload)
+    Ok(value)
 }
 
 pub(super) fn room_member_dto(
-    value: &serde_json::Value,
+    member: crate::dto::RoomMember,
 ) -> Result<RoomMemberDto, RoomMembersSnapshotError> {
-    let membership = value
-        .get("membership")
-        .and_then(|item| item.as_str())
-        .and_then(closed_room_member_membership)
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
-    let power_level = value
-        .get("powerLevel")
-        .and_then(|item| item.as_i64())
-        .and_then(|item| i32::try_from(item).ok())
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
-    let room_id = value
-        .get("roomId")
-        .and_then(|item| item.as_str())
-        .filter(|item| !item.is_empty())
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
-    let user_id = value
-        .get("userId")
-        .and_then(|item| item.as_str())
-        .filter(|item| !item.is_empty())
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
+    let membership = closed_room_member_membership(&wire_label(&member.membership))
+        .ok_or_else(members_failed)?;
     Ok(RoomMemberDto {
-        room_id: room_id.to_owned(),
-        user_id: user_id.to_owned(),
-        display_name: value
-            .get("displayName")
-            .and_then(|item| item.as_str())
-            .map(ToOwned::to_owned),
-        avatar_url: value
-            .get("avatarUrl")
-            .and_then(|item| item.as_str())
-            .map(ToOwned::to_owned),
+        room_id: non_empty(member.room_id)?,
+        user_id: non_empty(member.user_id)?,
+        display_name: member.display_name,
+        avatar_url: member.avatar_url,
         membership: membership.to_owned(),
-        power_level,
-        is_direct_target: value.get("isDirectTarget").and_then(|item| item.as_bool()),
+        power_level: member.power_level,
+        is_direct_target: member.is_direct_target,
     })
 }
 
 pub(super) fn room_members_snapshot_dto(
-    payload: serde_json::Value,
+    payload: NativeRoomMembersSnapshot,
 ) -> Result<RoomMembersSnapshotDto, RoomMembersSnapshotError> {
-    let session_generation = payload
-        .get("sessionGeneration")
-        .and_then(|value| value.as_u64())
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
-    let room_id = payload
-        .get("roomId")
-        .and_then(|value| value.as_str())
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
     let members = payload
-        .get("members")
-        .and_then(|value| value.as_array())
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?
-        .iter()
+        .members
+        .into_iter()
         .map(room_member_dto)
         .collect::<Result<Vec<_>, _>>()?;
     Ok(RoomMembersSnapshotDto {
-        session_generation,
-        room_id: room_id.to_owned(),
+        session_generation: payload.session_generation,
+        room_id: non_empty(payload.room_id)?,
         members,
     })
 }
 
 pub(super) fn room_power_levels_snapshot_dto(
-    payload: serde_json::Value,
+    payload: NativeRoomPowerLevelsSnapshot,
 ) -> Result<RoomPowerLevelsSnapshotDto, RoomMembersSnapshotError> {
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
-        .and_then(closed_members_snapshot_status)
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
-    let session_generation = payload
-        .get("sessionGeneration")
-        .and_then(|value| value.as_u64())
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
-    let room_id = payload
-        .get("roomId")
-        .and_then(|value| value.as_str())
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
-    let event_type = payload
-        .get("eventType")
-        .and_then(|value| value.as_str())
-        .and_then(closed_power_levels_event_type)
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
-    let state_key = payload
-        .get("stateKey")
-        .and_then(|value| value.as_str())
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
-    let content = payload.get("content").ok_or_else(|| {
-        room_members_snapshot_failed(
-            ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-            ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-        )
-    })?;
+    let status = closed_members_snapshot_status(payload.status).ok_or_else(members_failed)?;
+    let event_type =
+        closed_power_levels_event_type(payload.event_type).ok_or_else(members_failed)?;
     Ok(RoomPowerLevelsSnapshotDto {
         status: status.to_owned(),
-        session_generation,
-        room_id: room_id.to_owned(),
+        session_generation: payload.session_generation,
+        room_id: non_empty(payload.room_id)?,
         event_type: event_type.to_owned(),
-        state_key: state_key.to_owned(),
-        content_json: snapshot_content_json(content)?,
+        state_key: payload.state_key.to_owned(),
+        content_json: snapshot_content_json(&payload.content)?,
     })
 }
 
 pub(super) fn room_creators_snapshot_dto(
-    payload: serde_json::Value,
+    payload: NativeRoomCreatorsSnapshot,
 ) -> Result<RoomCreatorsSnapshotDto, RoomMembersSnapshotError> {
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
-        .and_then(closed_members_snapshot_status)
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
-    let session_generation = payload
-        .get("sessionGeneration")
-        .and_then(|value| value.as_u64())
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
-    let room_id = payload
-        .get("roomId")
-        .and_then(|value| value.as_str())
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
-    let event_type = payload
-        .get("eventType")
-        .and_then(|value| value.as_str())
-        .and_then(closed_creators_event_type)
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
-    let state_key = payload
-        .get("stateKey")
-        .and_then(|value| value.as_str())
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
+    let status = closed_members_snapshot_status(payload.status).ok_or_else(members_failed)?;
+    let event_type = closed_creators_event_type(payload.event_type).ok_or_else(members_failed)?;
     let creators = payload
-        .get("creators")
-        .and_then(|value| value.as_array())
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?
-        .iter()
-        .map(|value| {
-            value
-                .as_str()
-                .filter(|item| !item.is_empty())
-                .map(ToOwned::to_owned)
-                .ok_or_else(|| {
-                    room_members_snapshot_failed(
-                        ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                        ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-                    )
-                })
-        })
+        .creators
+        .into_iter()
+        .map(non_empty)
         .collect::<Result<Vec<_>, _>>()?;
     Ok(RoomCreatorsSnapshotDto {
         status: status.to_owned(),
-        session_generation,
-        room_id: room_id.to_owned(),
+        session_generation: payload.session_generation,
+        room_id: non_empty(payload.room_id)?,
         event_type: event_type.to_owned(),
-        state_key: state_key.to_owned(),
+        state_key: payload.state_key.to_owned(),
         creators,
     })
 }
 
 pub(super) fn room_power_level_tags_snapshot_dto(
-    payload: serde_json::Value,
+    payload: NativeRoomPowerLevelTagsSnapshot,
 ) -> Result<RoomPowerLevelTagsSnapshotDto, RoomMembersSnapshotError> {
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
-        .and_then(closed_members_snapshot_status)
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
-    let session_generation = payload
-        .get("sessionGeneration")
-        .and_then(|value| value.as_u64())
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
-    let room_id = payload
-        .get("roomId")
-        .and_then(|value| value.as_str())
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
-    let event_type = payload
-        .get("eventType")
-        .and_then(|value| value.as_str())
-        .and_then(closed_power_level_tags_event_type)
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
-    let state_key = payload
-        .get("stateKey")
-        .and_then(|value| value.as_str())
-        .ok_or_else(|| {
-            room_members_snapshot_failed(
-                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-            )
-        })?;
-    let content = payload.get("content").ok_or_else(|| {
-        room_members_snapshot_failed(
-            ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
-            ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
-        )
-    })?;
+    let status = closed_members_snapshot_status(payload.status).ok_or_else(members_failed)?;
+    let event_type =
+        closed_power_level_tags_event_type(payload.event_type).ok_or_else(members_failed)?;
     Ok(RoomPowerLevelTagsSnapshotDto {
         status: status.to_owned(),
-        session_generation,
-        room_id: room_id.to_owned(),
+        session_generation: payload.session_generation,
+        room_id: non_empty(payload.room_id)?,
         event_type: event_type.to_owned(),
-        state_key: state_key.to_owned(),
-        content_json: snapshot_content_json(content)?,
+        state_key: payload.state_key.to_owned(),
+        content_json: snapshot_content_json(&payload.content)?,
     })
 }
 
@@ -1434,27 +1170,9 @@ pub(super) fn map_invite_action_core_error(
     }
 }
 
-pub(super) fn invite_action_envelope_payload(
-    payload: serde_json::Value,
-) -> Result<serde_json::Value, InviteActionError> {
-    let size = serde_json::to_vec(&payload)
-        .map(|bytes| bytes.len())
-        .unwrap_or(usize::MAX);
-    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
-        return Err(invite_action_failed(
-            INVITE_ACTION_FAILED_CODE,
-            INVITE_ACTION_FAILED_DESCRIPTION,
-        ));
-    }
-    Ok(payload)
-}
-
 pub(super) fn invite_action_snapshot_dto(
-    payload: serde_json::Value,
+    snapshot: NativeInviteSnapshot,
 ) -> Result<InviteSnapshotDto, InviteActionError> {
-    let snapshot: NativeInviteSnapshot = serde_json::from_value(payload).map_err(|_| {
-        invite_action_failed(INVITE_ACTION_FAILED_CODE, INVITE_ACTION_FAILED_DESCRIPTION)
-    })?;
     Ok(InviteSnapshotDto {
         session_generation: snapshot.session_generation,
         invites: snapshot.invites.into_iter().map(invite_dto).collect(),
@@ -1508,122 +1226,70 @@ impl SharedCore {
 
     pub(super) async fn invite_action_command(
         &self,
-        command: &'static str,
         no_session: &'static str,
-        room_id: String,
+        request: impl std::future::Future<Output = Result<NativeInviteSnapshot, MatrixIpcError>>,
     ) -> Result<InviteSnapshotDto, InviteActionError> {
-        let payload = invite_action_envelope_payload(serde_json::json!({
-            "roomId": room_id,
-        }))?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: INVITE_ACTION_GENERATION,
-                request_id: None,
-                payload,
-            })
+        let response = request
             .await
             .map_err(|error| map_invite_action_core_error(no_session, error))?;
-        invite_action_snapshot_dto(response.payload)
+        invite_action_snapshot_dto(response)
     }
 
-    pub(super) async fn room_members_snapshot_command(
+    pub(super) async fn room_members_snapshot_command<T>(
         &self,
-        command: &'static str,
         no_session: &'static str,
-        room_id: String,
-    ) -> Result<serde_json::Value, RoomMembersSnapshotError> {
-        let payload = room_members_snapshot_envelope_payload(serde_json::json!({
-            "roomId": room_id,
-        }))?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: ROOM_MEMBERS_SNAPSHOT_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
+        request: impl std::future::Future<Output = Result<T, MatrixIpcError>>,
+    ) -> Result<T, RoomMembersSnapshotError> {
+        let response = request
             .await
             .map_err(|error| map_room_members_snapshot_core_error(no_session, error))?;
-        Ok(response.payload)
+        Ok(response)
     }
 
     pub(super) async fn room_profile_command(
         &self,
-        command: &'static str,
         no_session: &'static str,
-        payload: serde_json::Value,
+        request: impl std::future::Future<
+            Output = Result<crate::app::user_profile::MatrixProfileWriteResult, MatrixIpcError>,
+        >,
     ) -> Result<RoomProfileWriteDto, RoomProfileCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: ROOM_PROFILE_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
+        let response = request
             .await
             .map_err(|error| map_room_profile_core_error(no_session, error))?;
-        room_profile_write_dto(response.payload)
+        room_profile_write_dto(response)
     }
 
-    pub(super) async fn room_membership_command(
+    pub(super) async fn room_membership_command<T: WriteAck>(
         &self,
-        command: &'static str,
         no_session: &'static str,
-        payload: serde_json::Value,
+        request: impl std::future::Future<Output = Result<T, MatrixIpcError>>,
     ) -> Result<RoomMembershipWriteDto, RoomMembershipCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: ROOM_MEMBERSHIP_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
+        let response = request
             .await
             .map_err(|error| map_room_membership_core_error(no_session, error))?;
-        room_membership_write_dto(response.payload)
+        room_membership_write_dto(response.ack_status())
     }
 
-    pub(super) async fn room_moderation_command(
+    pub(super) async fn room_moderation_command<T: WriteAck>(
         &self,
-        command: &'static str,
         no_session: &'static str,
-        payload: serde_json::Value,
+        request: impl std::future::Future<Output = Result<T, MatrixIpcError>>,
     ) -> Result<RoomModerationWriteDto, RoomModerationCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: ROOM_MODERATION_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
+        let response = request
             .await
             .map_err(|error| map_room_moderation_core_error(no_session, error))?;
-        room_moderation_write_dto(response.payload)
+        room_moderation_write_dto(response.ack_status())
     }
 
-    pub(super) async fn room_power_level_command(
+    pub(super) async fn room_power_level_command<T: WriteAck>(
         &self,
-        command: &'static str,
         no_session: &'static str,
-        payload: serde_json::Value,
+        request: impl std::future::Future<Output = Result<T, MatrixIpcError>>,
     ) -> Result<RoomPowerLevelWriteDto, RoomPowerLevelCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: ROOM_POWER_LEVEL_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
+        let response = request
             .await
             .map_err(|error| map_room_power_level_core_error(no_session, error))?;
-        room_power_level_write_dto(response.payload)
+        room_power_level_write_dto(response.ack_status())
     }
 }
 
@@ -1654,16 +1320,10 @@ impl SharedCore {
     pub async fn room_list_snapshot(&self) -> Result<RoomListSnapshotDto, RoomListSnapshotError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: ROOM_LIST_COMMAND.to_owned(),
-                session_generation: ROOM_LIST_READ_ONLY_GENERATION,
-                request_id: None,
-                payload: serde_json::Value::Null,
-            })
+            .room_list_snapshot()
             .await
             .map_err(map_room_list_core_error)?;
-        let snapshot: NativeRoomListSnapshot = serde_json::from_value(response.payload)
-            .map_err(|_| room_list_failed(ROOM_LIST_FAILED_CODE, ROOM_LIST_FAILED_DESCRIPTION))?;
+        let snapshot: NativeRoomListSnapshot = response;
         Ok(RoomListSnapshotDto {
             session_generation: snapshot.session_generation,
             ordered_room_ids: snapshot.ordered_room_ids,
@@ -1700,16 +1360,10 @@ impl SharedCore {
     pub async fn invites_snapshot(&self) -> Result<InviteSnapshotDto, InviteSnapshotError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: INVITES_COMMAND.to_owned(),
-                session_generation: INVITES_READ_ONLY_GENERATION,
-                request_id: None,
-                payload: serde_json::Value::Null,
-            })
+            .invites_snapshot()
             .await
             .map_err(map_invites_core_error)?;
-        let snapshot: NativeInviteSnapshot = serde_json::from_value(response.payload)
-            .map_err(|_| invites_failed(INVITES_FAILED_CODE, INVITES_FAILED_DESCRIPTION))?;
+        let snapshot: NativeInviteSnapshot = response;
         Ok(InviteSnapshotDto {
             session_generation: snapshot.session_generation,
             invites: snapshot.invites.into_iter().map(invite_dto).collect(),
@@ -1723,19 +1377,13 @@ impl SharedCore {
     ) -> Result<RoomJoinRuleSnapshotDto, JoinRuleCommandError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: JOIN_RULE_SNAPSHOT_COMMAND.to_owned(),
+            .room_join_rule_snapshot(crate::core_api::MatrixRoomJoinRuleSnapshotRequest {
+                room_id,
                 session_generation,
-                request_id: None,
-                payload: serde_json::json!({
-                    "roomId": room_id,
-                    "sessionGeneration": session_generation,
-                }),
             })
             .await
             .map_err(map_join_rule_core_error)?;
-        let snapshot: MatrixRoomJoinRuleSnapshot = serde_json::from_value(response.payload)
-            .map_err(|_| join_rule_failed(JOIN_RULE_FAILED_CODE, JOIN_RULE_FAILED_DESCRIPTION))?;
+        let snapshot: MatrixRoomJoinRuleSnapshot = response;
         Ok(RoomJoinRuleSnapshotDto {
             status: snapshot.status,
             room_id: snapshot.room_id,
@@ -1750,28 +1398,22 @@ impl SharedCore {
         join_rule: String,
         allow_room_ids: Option<Vec<String>>,
     ) -> Result<RoomJoinRuleWriteDto, JoinRuleCommandError> {
-        let payload = join_rule_envelope_payload(serde_json::json!({
+        join_rule_envelope_payload(serde_json::json!({
             "roomId": room_id,
             "joinRule": join_rule,
-            "allowRoomIds": allow_room_ids,
-        }))?;
+            "allowRoomIds": allow_room_ids}))?;
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: JOIN_RULE_SET_COMMAND.to_owned(),
-                session_generation: 0,
-                request_id: None,
-                payload,
+            .room_set_join_rule(crate::core_api::MatrixRoomSetJoinRuleRequest {
+                room_id,
+                join_rule,
+                allow_room_ids,
             })
             .await
             .map_err(|error| {
                 map_join_rule_core_error_with_no_session(JOIN_RULE_SET_NO_SESSION_CODE, error)
             })?;
-        let status = response
-            .payload
-            .get("status")
-            .and_then(|value| value.as_str())
-            .ok_or_else(|| join_rule_failed(JOIN_RULE_FAILED_CODE, JOIN_RULE_FAILED_DESCRIPTION))?;
+        let status = response.status;
         Ok(RoomJoinRuleWriteDto {
             status: status.to_owned(),
         })
@@ -1782,14 +1424,13 @@ impl SharedCore {
         room_id: String,
         name: String,
     ) -> Result<RoomProfileWriteDto, RoomProfileCommandError> {
-        let payload = room_profile_envelope_payload(serde_json::json!({
+        room_profile_envelope_payload(serde_json::json!({
             "roomId": room_id,
-            "name": name,
-        }))?;
+            "name": name}))?;
         self.room_profile_command(
-            SET_ROOM_NAME_COMMAND,
             SET_ROOM_NAME_NO_SESSION_CODE,
-            payload,
+            self.core
+                .set_room_name(crate::core_api::MatrixSetRoomNameRequest { room_id, name }),
         )
         .await
     }
@@ -1799,14 +1440,13 @@ impl SharedCore {
         room_id: String,
         topic: String,
     ) -> Result<RoomProfileWriteDto, RoomProfileCommandError> {
-        let payload = room_profile_envelope_payload(serde_json::json!({
+        room_profile_envelope_payload(serde_json::json!({
             "roomId": room_id,
-            "topic": topic,
-        }))?;
+            "topic": topic}))?;
         self.room_profile_command(
-            SET_ROOM_TOPIC_COMMAND,
             SET_ROOM_TOPIC_NO_SESSION_CODE,
-            payload,
+            self.core
+                .set_room_topic(crate::core_api::MatrixSetRoomTopicRequest { room_id, topic }),
         )
         .await
     }
@@ -1816,14 +1456,13 @@ impl SharedCore {
         room_id: String,
         mxc: String,
     ) -> Result<RoomProfileWriteDto, RoomProfileCommandError> {
-        let payload = room_profile_envelope_payload(serde_json::json!({
+        room_profile_envelope_payload(serde_json::json!({
             "roomId": room_id,
-            "mxc": mxc,
-        }))?;
+            "mxc": mxc}))?;
         self.room_profile_command(
-            SET_ROOM_AVATAR_COMMAND,
             SET_ROOM_AVATAR_NO_SESSION_CODE,
-            payload,
+            self.core
+                .set_room_avatar(crate::core_api::MatrixSetRoomAvatarRequest { room_id, mxc }),
         )
         .await
     }
@@ -1832,11 +1471,14 @@ impl SharedCore {
         &self,
         room_id: String,
     ) -> Result<RoomMembershipWriteDto, RoomMembershipCommandError> {
-        let payload = room_membership_envelope_payload(serde_json::json!({
-            "roomId": room_id,
-        }))?;
-        self.room_membership_command(ROOM_LEAVE_COMMAND, ROOM_LEAVE_NO_SESSION_CODE, payload)
-            .await
+        room_membership_envelope_payload(serde_json::json!({
+            "roomId": room_id}))?;
+        self.room_membership_command(
+            ROOM_LEAVE_NO_SESSION_CODE,
+            self.core
+                .room_leave(crate::core_api::MatrixRoomLeaveRequest { room_id }),
+        )
+        .await
     }
 
     pub async fn room_join(
@@ -1844,12 +1486,17 @@ impl SharedCore {
         room_id_or_alias: String,
         via_servers: Option<Vec<String>>,
     ) -> Result<RoomMembershipWriteDto, RoomMembershipCommandError> {
-        let payload = room_membership_envelope_payload(serde_json::json!({
+        room_membership_envelope_payload(serde_json::json!({
             "roomIdOrAlias": room_id_or_alias,
-            "viaServers": via_servers,
-        }))?;
-        self.room_membership_command(ROOM_JOIN_COMMAND, ROOM_JOIN_NO_SESSION_CODE, payload)
-            .await
+            "viaServers": via_servers}))?;
+        self.room_membership_command(
+            ROOM_JOIN_NO_SESSION_CODE,
+            self.core.room_join(crate::core_api::MatrixRoomJoinRequest {
+                room_id_or_alias,
+                via_servers,
+            }),
+        )
+        .await
     }
 
     pub async fn room_set_favorite(
@@ -1857,14 +1504,16 @@ impl SharedCore {
         room_id: String,
         favorite: bool,
     ) -> Result<RoomMembershipWriteDto, RoomMembershipCommandError> {
-        let payload = room_membership_envelope_payload(serde_json::json!({
+        room_membership_envelope_payload(serde_json::json!({
             "roomId": room_id,
-            "favorite": favorite,
-        }))?;
+            "favorite": favorite}))?;
         self.room_membership_command(
-            ROOM_SET_FAVORITE_COMMAND,
             ROOM_SET_FAVORITE_NO_SESSION_CODE,
-            payload,
+            self.core
+                .room_set_favorite(crate::core_api::MatrixRoomSetFavoriteRequest {
+                    room_id,
+                    favorite,
+                }),
         )
         .await
     }
@@ -1875,13 +1524,20 @@ impl SharedCore {
         user_id: String,
         reason: Option<String>,
     ) -> Result<RoomModerationWriteDto, RoomModerationCommandError> {
-        let payload = room_moderation_envelope_payload(serde_json::json!({
+        room_moderation_envelope_payload(serde_json::json!({
             "roomId": room_id,
             "userId": user_id,
-            "reason": reason,
-        }))?;
-        self.room_moderation_command(ROOM_INVITE_COMMAND, ROOM_INVITE_NO_SESSION_CODE, payload)
-            .await
+            "reason": reason}))?;
+        self.room_moderation_command(
+            ROOM_INVITE_NO_SESSION_CODE,
+            self.core
+                .room_invite(crate::core_api::MatrixRoomModerationRequest {
+                    room_id,
+                    user_id,
+                    reason,
+                }),
+        )
+        .await
     }
 
     pub async fn room_kick(
@@ -1890,13 +1546,20 @@ impl SharedCore {
         user_id: String,
         reason: Option<String>,
     ) -> Result<RoomModerationWriteDto, RoomModerationCommandError> {
-        let payload = room_moderation_envelope_payload(serde_json::json!({
+        room_moderation_envelope_payload(serde_json::json!({
             "roomId": room_id,
             "userId": user_id,
-            "reason": reason,
-        }))?;
-        self.room_moderation_command(ROOM_KICK_COMMAND, ROOM_KICK_NO_SESSION_CODE, payload)
-            .await
+            "reason": reason}))?;
+        self.room_moderation_command(
+            ROOM_KICK_NO_SESSION_CODE,
+            self.core
+                .room_kick(crate::core_api::MatrixRoomModerationRequest {
+                    room_id,
+                    user_id,
+                    reason,
+                }),
+        )
+        .await
     }
 
     pub async fn room_ban(
@@ -1905,13 +1568,20 @@ impl SharedCore {
         user_id: String,
         reason: Option<String>,
     ) -> Result<RoomModerationWriteDto, RoomModerationCommandError> {
-        let payload = room_moderation_envelope_payload(serde_json::json!({
+        room_moderation_envelope_payload(serde_json::json!({
             "roomId": room_id,
             "userId": user_id,
-            "reason": reason,
-        }))?;
-        self.room_moderation_command(ROOM_BAN_COMMAND, ROOM_BAN_NO_SESSION_CODE, payload)
-            .await
+            "reason": reason}))?;
+        self.room_moderation_command(
+            ROOM_BAN_NO_SESSION_CODE,
+            self.core
+                .room_ban(crate::core_api::MatrixRoomModerationRequest {
+                    room_id,
+                    user_id,
+                    reason,
+                }),
+        )
+        .await
     }
 
     pub async fn room_unban(
@@ -1919,12 +1589,15 @@ impl SharedCore {
         room_id: String,
         user_id: String,
     ) -> Result<RoomModerationWriteDto, RoomModerationCommandError> {
-        let payload = room_moderation_envelope_payload(serde_json::json!({
+        room_moderation_envelope_payload(serde_json::json!({
             "roomId": room_id,
-            "userId": user_id,
-        }))?;
-        self.room_moderation_command(ROOM_UNBAN_COMMAND, ROOM_UNBAN_NO_SESSION_CODE, payload)
-            .await
+            "userId": user_id}))?;
+        self.room_moderation_command(
+            ROOM_UNBAN_NO_SESSION_CODE,
+            self.core
+                .room_unban(crate::core_api::MatrixRoomUnbanRequest { room_id, user_id }),
+        )
+        .await
     }
 
     pub async fn room_set_power_level(
@@ -1933,15 +1606,18 @@ impl SharedCore {
         user_id: String,
         power_level: i64,
     ) -> Result<RoomPowerLevelWriteDto, RoomPowerLevelCommandError> {
-        let payload = room_power_level_envelope_payload(serde_json::json!({
+        room_power_level_envelope_payload(serde_json::json!({
             "roomId": room_id,
             "userId": user_id,
-            "powerLevel": power_level,
-        }))?;
+            "powerLevel": power_level}))?;
         self.room_power_level_command(
-            ROOM_SET_POWER_LEVEL_COMMAND,
             ROOM_SET_POWER_LEVEL_NO_SESSION_CODE,
-            payload,
+            self.core
+                .room_set_power_level(crate::core_api::MatrixRoomSetPowerLevelRequest {
+                    room_id,
+                    user_id,
+                    power_level,
+                }),
         )
         .await
     }
@@ -1952,14 +1628,16 @@ impl SharedCore {
         content_json: String,
     ) -> Result<RoomPowerLevelWriteDto, RoomPowerLevelCommandError> {
         let content = parse_power_level_content_json(&content_json)?;
-        let payload = room_power_level_envelope_payload(serde_json::json!({
+        room_power_level_envelope_payload(serde_json::json!({
             "roomId": room_id,
-            "content": content,
-        }))?;
+            "content": content}))?;
         self.room_power_level_command(
-            ROOM_SET_POWER_LEVELS_COMMAND,
             ROOM_SET_POWER_LEVELS_NO_SESSION_CODE,
-            payload,
+            self.core
+                .room_set_power_levels(crate::core_api::MatrixRoomSetPowerLevelStateRequest {
+                    room_id,
+                    content,
+                }),
         )
         .await
     }
@@ -1970,14 +1648,14 @@ impl SharedCore {
         content_json: String,
     ) -> Result<RoomPowerLevelWriteDto, RoomPowerLevelCommandError> {
         let content = parse_power_level_content_json(&content_json)?;
-        let payload = room_power_level_envelope_payload(serde_json::json!({
+        room_power_level_envelope_payload(serde_json::json!({
             "roomId": room_id,
-            "content": content,
-        }))?;
+            "content": content}))?;
         self.room_power_level_command(
-            ROOM_SET_POWER_LEVEL_TAGS_COMMAND,
             ROOM_SET_POWER_LEVEL_TAGS_NO_SESSION_CODE,
-            payload,
+            self.core.room_set_power_level_tags(
+                crate::core_api::MatrixRoomSetPowerLevelStateRequest { room_id, content },
+            ),
         )
         .await
     }
@@ -1986,29 +1664,36 @@ impl SharedCore {
         &self,
         request: RoomCreateRequestDto,
     ) -> Result<RoomCreateDto, RoomCreateCommandError> {
-        let payload = room_create_envelope_payload(room_create_request_payload(request)?)?;
+        let request = room_create_request(request)?;
+        if !within_envelope_cap(&request) {
+            return Err(room_create_failed(
+                ROOM_CREATE_FAILED_CODE,
+                ROOM_CREATE_FAILED_DESCRIPTION,
+            ));
+        }
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: ROOM_CREATE_COMMAND.to_owned(),
-                session_generation: ROOM_CREATE_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
+            .room_create(request)
             .await
             .map_err(|error| map_room_create_core_error(ROOM_CREATE_NO_SESSION_CODE, error))?;
-        room_create_dto(response.payload)
+        room_create_dto(response)
     }
 
     pub async fn room_members_snapshot(
         &self,
         room_id: String,
     ) -> Result<RoomMembersSnapshotDto, RoomMembersSnapshotError> {
+        let request = crate::core_api::MatrixRoomMembersSnapshotRequest { room_id };
+        if !within_envelope_cap(&request) {
+            return Err(room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            ));
+        }
         let payload = self
             .room_members_snapshot_command(
-                ROOM_MEMBERS_SNAPSHOT_COMMAND,
                 ROOM_MEMBERS_SNAPSHOT_NO_SESSION_CODE,
-                room_id,
+                self.core.room_members_snapshot(request),
             )
             .await?;
         room_members_snapshot_dto(payload)
@@ -2018,11 +1703,17 @@ impl SharedCore {
         &self,
         room_id: String,
     ) -> Result<RoomPowerLevelsSnapshotDto, RoomMembersSnapshotError> {
+        let request = crate::core_api::MatrixRoomMembersSnapshotRequest { room_id };
+        if !within_envelope_cap(&request) {
+            return Err(room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            ));
+        }
         let payload = self
             .room_members_snapshot_command(
-                ROOM_POWER_LEVELS_SNAPSHOT_COMMAND,
                 ROOM_POWER_LEVELS_SNAPSHOT_NO_SESSION_CODE,
-                room_id,
+                self.core.room_power_levels_snapshot(request),
             )
             .await?;
         room_power_levels_snapshot_dto(payload)
@@ -2032,11 +1723,17 @@ impl SharedCore {
         &self,
         room_id: String,
     ) -> Result<RoomCreatorsSnapshotDto, RoomMembersSnapshotError> {
+        let request = crate::core_api::MatrixRoomMembersSnapshotRequest { room_id };
+        if !within_envelope_cap(&request) {
+            return Err(room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            ));
+        }
         let payload = self
             .room_members_snapshot_command(
-                ROOM_CREATORS_SNAPSHOT_COMMAND,
                 ROOM_CREATORS_SNAPSHOT_NO_SESSION_CODE,
-                room_id,
+                self.core.room_creators_snapshot(request),
             )
             .await?;
         room_creators_snapshot_dto(payload)
@@ -2046,11 +1743,17 @@ impl SharedCore {
         &self,
         room_id: String,
     ) -> Result<RoomPowerLevelTagsSnapshotDto, RoomMembersSnapshotError> {
+        let request = crate::core_api::MatrixRoomMembersSnapshotRequest { room_id };
+        if !within_envelope_cap(&request) {
+            return Err(room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            ));
+        }
         let payload = self
             .room_members_snapshot_command(
-                ROOM_POWER_LEVEL_TAGS_SNAPSHOT_COMMAND,
                 ROOM_POWER_LEVEL_TAGS_SNAPSHOT_NO_SESSION_CODE,
-                room_id,
+                self.core.room_power_level_tags_snapshot(request),
             )
             .await?;
         room_power_level_tags_snapshot_dto(payload)
@@ -2060,10 +1763,16 @@ impl SharedCore {
         &self,
         room_id: String,
     ) -> Result<InviteSnapshotDto, InviteActionError> {
+        let request = crate::core_api::MatrixInviteActionRequest { room_id };
+        if !within_envelope_cap(&request) {
+            return Err(invite_action_failed(
+                INVITE_ACTION_FAILED_CODE,
+                INVITE_ACTION_FAILED_DESCRIPTION,
+            ));
+        }
         self.invite_action_command(
-            INVITES_ACCEPT_COMMAND,
             INVITES_ACCEPT_NO_SESSION_CODE,
-            room_id,
+            self.core.invites_accept(request),
         )
         .await
     }
@@ -2072,10 +1781,16 @@ impl SharedCore {
         &self,
         room_id: String,
     ) -> Result<InviteSnapshotDto, InviteActionError> {
+        let request = crate::core_api::MatrixInviteActionRequest { room_id };
+        if !within_envelope_cap(&request) {
+            return Err(invite_action_failed(
+                INVITE_ACTION_FAILED_CODE,
+                INVITE_ACTION_FAILED_DESCRIPTION,
+            ));
+        }
         self.invite_action_command(
-            INVITES_DECLINE_COMMAND,
             INVITES_DECLINE_NO_SESSION_CODE,
-            room_id,
+            self.core.invites_decline(request),
         )
         .await
     }
@@ -2084,10 +1799,16 @@ impl SharedCore {
         &self,
         room_id: String,
     ) -> Result<InviteSnapshotDto, InviteActionError> {
+        let request = crate::core_api::MatrixInviteActionRequest { room_id };
+        if !within_envelope_cap(&request) {
+            return Err(invite_action_failed(
+                INVITE_ACTION_FAILED_CODE,
+                INVITE_ACTION_FAILED_DESCRIPTION,
+            ));
+        }
         self.invite_action_command(
-            INVITES_REPORT_SPAM_COMMAND,
             INVITES_REPORT_SPAM_NO_SESSION_CODE,
-            room_id,
+            self.core.invites_report_spam(request),
         )
         .await
     }
@@ -2096,10 +1817,16 @@ impl SharedCore {
         &self,
         room_id: String,
     ) -> Result<InviteSnapshotDto, InviteActionError> {
+        let request = crate::core_api::MatrixInviteActionRequest { room_id };
+        if !within_envelope_cap(&request) {
+            return Err(invite_action_failed(
+                INVITE_ACTION_FAILED_CODE,
+                INVITE_ACTION_FAILED_DESCRIPTION,
+            ));
+        }
         self.invite_action_command(
-            INVITES_BLOCK_SENDER_COMMAND,
             INVITES_BLOCK_SENDER_NO_SESSION_CODE,
-            room_id,
+            self.core.invites_block_sender(request),
         )
         .await
     }

@@ -1,6 +1,10 @@
 //! Typed SharedCore operations and projections for push preferences.
 
 use super::*;
+use crate::app::notifications::MatrixPushRulesSnapshot;
+use crate::app::notifications::MatrixPushRulesWriteResult;
+use crate::app::notifications::MatrixRoomNotificationSnapshot;
+use crate::app::notifications::MatrixRoomNotificationsSnapshot;
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PushRuleMentionsDto {
@@ -79,12 +83,9 @@ pub(super) fn push_rules_envelope_payload(
 }
 
 pub(super) fn push_rules_snapshot_dto(
-    payload: serde_json::Value,
+    payload: MatrixPushRulesSnapshot,
 ) -> Result<PushRulesSnapshotDto, PushRulesCommandError> {
-    let snapshot: crate::app::notifications::MatrixPushRulesSnapshot =
-        serde_json::from_value(payload).map_err(|_| {
-            push_rules_failed(PUSH_RULES_FAILED_CODE, PUSH_RULES_FAILED_DESCRIPTION)
-        })?;
+    let snapshot: crate::app::notifications::MatrixPushRulesSnapshot = payload;
     Ok(PushRulesSnapshotDto {
         dm: snapshot.dm,
         dm_encrypted: snapshot.dm_encrypted,
@@ -102,11 +103,9 @@ pub(super) fn push_rules_snapshot_dto(
 }
 
 pub(super) fn push_rules_write_dto(
-    payload: serde_json::Value,
+    payload: MatrixPushRulesWriteResult,
 ) -> Result<PushRulesWriteDto, PushRulesCommandError> {
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
+    let status = Some(payload.status)
         .ok_or_else(|| push_rules_failed(PUSH_RULES_FAILED_CODE, PUSH_RULES_FAILED_DESCRIPTION))?;
     Ok(PushRulesWriteDto {
         status: status.to_owned(),
@@ -188,15 +187,9 @@ pub(super) fn room_notification_envelope_payload(
 }
 
 pub(super) fn room_notification_snapshot_dto(
-    payload: serde_json::Value,
+    payload: MatrixRoomNotificationSnapshot,
 ) -> Result<RoomNotificationSnapshotDto, RoomNotificationCommandError> {
-    let snapshot: crate::app::notifications::MatrixRoomNotificationSnapshot =
-        serde_json::from_value(payload).map_err(|_| {
-            room_notification_failed(
-                ROOM_NOTIFICATION_FAILED_CODE,
-                ROOM_NOTIFICATION_FAILED_DESCRIPTION,
-            )
-        })?;
+    let snapshot: crate::app::notifications::MatrixRoomNotificationSnapshot = payload;
     Ok(RoomNotificationSnapshotDto {
         room_id: snapshot.room_id,
         mode: snapshot.mode,
@@ -204,15 +197,9 @@ pub(super) fn room_notification_snapshot_dto(
 }
 
 pub(super) fn room_notifications_snapshot_dto(
-    payload: serde_json::Value,
+    payload: MatrixRoomNotificationsSnapshot,
 ) -> Result<RoomNotificationsSnapshotDto, RoomNotificationCommandError> {
-    let snapshot: crate::app::notifications::MatrixRoomNotificationsSnapshot =
-        serde_json::from_value(payload).map_err(|_| {
-            room_notification_failed(
-                ROOM_NOTIFICATION_FAILED_CODE,
-                ROOM_NOTIFICATION_FAILED_DESCRIPTION,
-            )
-        })?;
+    let snapshot: crate::app::notifications::MatrixRoomNotificationsSnapshot = payload;
     Ok(RoomNotificationsSnapshotDto {
         rooms: snapshot
             .rooms
@@ -226,17 +213,14 @@ pub(super) fn room_notifications_snapshot_dto(
 }
 
 pub(super) fn room_notification_write_dto(
-    payload: serde_json::Value,
+    payload: MatrixPushRulesWriteResult,
 ) -> Result<RoomNotificationWriteDto, RoomNotificationCommandError> {
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
-        .ok_or_else(|| {
-            room_notification_failed(
-                ROOM_NOTIFICATION_FAILED_CODE,
-                ROOM_NOTIFICATION_FAILED_DESCRIPTION,
-            )
-        })?;
+    let status = Some(payload.status).ok_or_else(|| {
+        room_notification_failed(
+            ROOM_NOTIFICATION_FAILED_CODE,
+            ROOM_NOTIFICATION_FAILED_DESCRIPTION,
+        )
+    })?;
     Ok(RoomNotificationWriteDto {
         status: status.to_owned(),
     })
@@ -428,42 +412,26 @@ impl SharedCore {
         })
     }
 
-    pub(super) async fn push_rules_command(
+    pub(super) async fn push_rules_command<T>(
         &self,
-        command: &'static str,
         no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<serde_json::Value, PushRulesCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: PUSH_RULES_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
+        request: impl std::future::Future<Output = Result<T, MatrixIpcError>>,
+    ) -> Result<T, PushRulesCommandError> {
+        let response = request
             .await
             .map_err(|error| map_push_rules_core_error(no_session, error))?;
-        Ok(response.payload)
+        Ok(response)
     }
 
-    pub(super) async fn room_notification_command(
+    pub(super) async fn room_notification_command<T>(
         &self,
-        command: &'static str,
         no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<serde_json::Value, RoomNotificationCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: ROOM_NOTIFICATION_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
+        request: impl std::future::Future<Output = Result<T, MatrixIpcError>>,
+    ) -> Result<T, RoomNotificationCommandError> {
+        let response = request
             .await
             .map_err(|error| map_room_notification_core_error(no_session, error))?;
-        Ok(response.payload)
+        Ok(response)
     }
 }
 
@@ -540,9 +508,8 @@ impl SharedCore {
 
     pub async fn push_rules_snapshot(&self) -> Result<PushRulesSnapshotDto, PushRulesCommandError> {
         self.push_rules_command(
-            PUSH_RULES_SNAPSHOT_COMMAND,
             PUSH_RULES_SNAPSHOT_NO_SESSION_CODE,
-            serde_json::Value::Null,
+            self.core.push_rules_snapshot(),
         )
         .await
         .and_then(push_rules_snapshot_dto)
@@ -554,15 +521,19 @@ impl SharedCore {
         one_to_one: bool,
         mode: String,
     ) -> Result<PushRulesWriteDto, PushRulesCommandError> {
-        let payload = push_rules_envelope_payload(serde_json::json!({
+        push_rules_envelope_payload(serde_json::json!({
             "encrypted": encrypted,
             "oneToOne": one_to_one,
             "mode": mode,
         }))?;
         self.push_rules_command(
-            PUSH_RULES_SET_DEFAULT_COMMAND,
             PUSH_RULES_SET_DEFAULT_NO_SESSION_CODE,
-            payload,
+            self.core
+                .push_rules_set_default(crate::core_api::MatrixPushRulesSetDefaultRequest {
+                    encrypted,
+                    one_to_one,
+                    mode,
+                }),
         )
         .await
         .and_then(push_rules_write_dto)
@@ -573,14 +544,17 @@ impl SharedCore {
         rule_id: String,
         enabled: bool,
     ) -> Result<PushRulesWriteDto, PushRulesCommandError> {
-        let payload = push_rules_envelope_payload(serde_json::json!({
+        push_rules_envelope_payload(serde_json::json!({
             "ruleId": rule_id,
             "enabled": enabled,
         }))?;
         self.push_rules_command(
-            PUSH_RULES_SET_MENTION_COMMAND,
             PUSH_RULES_SET_MENTION_NO_SESSION_CODE,
-            payload,
+            self.core
+                .push_rules_set_mention(crate::core_api::MatrixPushRulesSetMentionRequest {
+                    rule_id,
+                    enabled,
+                }),
         )
         .await
         .and_then(push_rules_write_dto)
@@ -590,11 +564,11 @@ impl SharedCore {
         &self,
         keyword: String,
     ) -> Result<PushRulesWriteDto, PushRulesCommandError> {
-        let payload = push_rules_envelope_payload(serde_json::json!({ "keyword": keyword }))?;
+        push_rules_envelope_payload(serde_json::json!({ "keyword": keyword }))?;
         self.push_rules_command(
-            PUSH_RULES_ADD_KEYWORD_COMMAND,
             PUSH_RULES_ADD_KEYWORD_NO_SESSION_CODE,
-            payload,
+            self.core
+                .push_rules_add_keyword(crate::core_api::MatrixPushRulesKeywordRequest { keyword }),
         )
         .await
         .and_then(push_rules_write_dto)
@@ -604,11 +578,13 @@ impl SharedCore {
         &self,
         keyword: String,
     ) -> Result<PushRulesWriteDto, PushRulesCommandError> {
-        let payload = push_rules_envelope_payload(serde_json::json!({ "keyword": keyword }))?;
+        push_rules_envelope_payload(serde_json::json!({ "keyword": keyword }))?;
         self.push_rules_command(
-            PUSH_RULES_REMOVE_KEYWORD_COMMAND,
             PUSH_RULES_REMOVE_KEYWORD_NO_SESSION_CODE,
-            payload,
+            self.core
+                .push_rules_remove_keyword(crate::core_api::MatrixPushRulesKeywordRequest {
+                    keyword,
+                }),
         )
         .await
         .and_then(push_rules_write_dto)
@@ -618,11 +594,12 @@ impl SharedCore {
         &self,
         room_id: String,
     ) -> Result<RoomNotificationSnapshotDto, RoomNotificationCommandError> {
-        let payload = room_notification_envelope_payload(serde_json::json!({ "roomId": room_id }))?;
+        room_notification_envelope_payload(serde_json::json!({ "roomId": room_id }))?;
         self.room_notification_command(
-            ROOM_NOTIFICATION_SNAPSHOT_COMMAND,
             ROOM_NOTIFICATION_SNAPSHOT_NO_SESSION_CODE,
-            payload,
+            self.core.room_notification_snapshot(
+                crate::core_api::MatrixRoomNotificationRoomRequest { room_id },
+            ),
         )
         .await
         .and_then(room_notification_snapshot_dto)
@@ -633,14 +610,17 @@ impl SharedCore {
         room_id: String,
         mode: String,
     ) -> Result<RoomNotificationWriteDto, RoomNotificationCommandError> {
-        let payload = room_notification_envelope_payload(serde_json::json!({
+        room_notification_envelope_payload(serde_json::json!({
             "roomId": room_id,
             "mode": mode,
         }))?;
         self.room_notification_command(
-            ROOM_NOTIFICATION_SET_COMMAND,
             ROOM_NOTIFICATION_SET_NO_SESSION_CODE,
-            payload,
+            self.core
+                .room_notification_set(crate::core_api::MatrixRoomNotificationSetRequest {
+                    room_id,
+                    mode,
+                }),
         )
         .await
         .and_then(room_notification_write_dto)
@@ -650,9 +630,8 @@ impl SharedCore {
         &self,
     ) -> Result<RoomNotificationsSnapshotDto, RoomNotificationCommandError> {
         self.room_notification_command(
-            ROOM_NOTIFICATIONS_SNAPSHOT_COMMAND,
             ROOM_NOTIFICATIONS_SNAPSHOT_NO_SESSION_CODE,
-            serde_json::Value::Null,
+            self.core.room_notifications_snapshot(),
         )
         .await
         .and_then(room_notifications_snapshot_dto)

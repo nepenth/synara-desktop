@@ -5,7 +5,7 @@ use crate::app::timeline::{
     NativeAgentApprovalInboxCoverage, NativeAgentApprovalInboxSnapshot,
     NativeAgentApprovalInboxStatus,
 };
-use crate::transport::{CommandEnvelope, MatrixIpcErrorCategory};
+use crate::transport::MatrixIpcErrorCategory;
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct AgentApprovalInboxItemDto {
@@ -61,6 +61,40 @@ fn unavailable(no_session: bool) -> AgentApprovalInboxError {
     }
 }
 
+fn snapshot_dto(snapshot: NativeAgentApprovalInboxSnapshot) -> AgentApprovalInboxDto {
+    AgentApprovalInboxDto {
+        session_generation: snapshot.session_generation,
+        loading: snapshot.loading,
+        incomplete: snapshot.incomplete,
+        coverage_window_ms: snapshot.coverage_window_ms,
+        coverage: match snapshot.coverage {
+            NativeAgentApprovalInboxCoverage::LatestEvent => "latest_event",
+            NativeAgentApprovalInboxCoverage::Discovery => "discovery",
+        }
+        .to_owned(),
+        items: snapshot
+            .items
+            .into_iter()
+            .map(|item| AgentApprovalInboxItemDto {
+                room_id: item.room_id,
+                event_id: item.event_id,
+                sender: item.sender,
+                body: item.body,
+                origin_server_ts: item.origin_server_ts,
+                expires_at: item.expires_at,
+                status: match item.status {
+                    NativeAgentApprovalInboxStatus::Pending => "pending",
+                    NativeAgentApprovalInboxStatus::Decided => "decided",
+                    NativeAgentApprovalInboxStatus::Expired => "expired",
+                }
+                .to_owned(),
+                can_send_reaction: item.can_send_reaction,
+                body_truncated: item.body_truncated,
+            })
+            .collect(),
+    }
+}
+
 #[uniffi::export(async_runtime = "tokio")]
 impl SharedCore {
     /// Pass true only while the approvals page is visible; Core automatically
@@ -71,72 +105,24 @@ impl SharedCore {
     ) -> Result<AgentApprovalInboxDto, AgentApprovalInboxError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: "matrix_agent_approvals_list".to_owned(),
-                session_generation: 0,
-                request_id: None,
-                payload: serde_json::json!({ "discoveryActive": discovery_active }),
+            .agent_approvals_list(crate::core_api::MatrixAgentApprovalsListRequest {
+                discovery_active,
             })
             .await
             .map_err(|error| unavailable(error.category == MatrixIpcErrorCategory::Forbidden))?;
-        let snapshot: NativeAgentApprovalInboxSnapshot =
-            serde_json::from_value(response.payload).map_err(|_| unavailable(false))?;
-        Ok(AgentApprovalInboxDto {
-            session_generation: snapshot.session_generation,
-            loading: snapshot.loading,
-            incomplete: snapshot.incomplete,
-            coverage_window_ms: snapshot.coverage_window_ms,
-            coverage: match snapshot.coverage {
-                NativeAgentApprovalInboxCoverage::LatestEvent => "latest_event",
-                NativeAgentApprovalInboxCoverage::Discovery => "discovery",
-            }
-            .to_owned(),
-            items: snapshot
-                .items
-                .into_iter()
-                .map(|item| AgentApprovalInboxItemDto {
-                    room_id: item.room_id,
-                    event_id: item.event_id,
-                    sender: item.sender,
-                    body: item.body,
-                    origin_server_ts: item.origin_server_ts,
-                    expires_at: item.expires_at,
-                    status: match item.status {
-                        NativeAgentApprovalInboxStatus::Pending => "pending",
-                        NativeAgentApprovalInboxStatus::Decided => "decided",
-                        NativeAgentApprovalInboxStatus::Expired => "expired",
-                    }
-                    .to_owned(),
-                    can_send_reaction: item.can_send_reaction,
-                    body_truncated: item.body_truncated,
-                })
-                .collect(),
-        })
+        Ok(snapshot_dto(response))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[tokio::test]
-    async fn ffi_approval_inbox_uses_core_lease_and_preserves_authority() {
-        use crate::core::CoreState;
-        use crate::transport::{CommandFuture, CommandRegistry};
-        use std::sync::Arc;
-        let mut registry = CommandRegistry::new();
-        registry.register("matrix_agent_approvals_list", |_state: Arc<CoreState>, request: CommandEnvelope| -> CommandFuture {
-            Box::pin(async move {
-                assert_eq!(request.payload, serde_json::json!({ "discoveryActive": true }));
-                Ok(serde_json::json!({"sessionGeneration": 12, "loading": false, "incomplete": true, "coverageWindowMs": 300000, "coverage": "discovery",
-                    "items": [{"roomId":"!room:example.org","eventId":"$prompt","sender":"@hermes:example.org","body":"preview","originServerTs": 1000,"expiresAt":301000,"status":"pending","canSendReaction":false,"bodyTruncated":true}]}))
-            })
-        }).unwrap();
-        let mut shared = SharedCore::new();
-        shared.core = crate::Core::with_registry(
-            Arc::new(super::super::IosFailClosedPlatform::new()),
-            registry,
-        );
-        let snapshot = shared.agent_approvals_list(true).await.unwrap();
+    #[test]
+    fn ffi_approval_inbox_maps_core_snapshot() {
+        let snapshot: NativeAgentApprovalInboxSnapshot = serde_json::from_value(serde_json::json!({"sessionGeneration": 12, "loading": false, "incomplete": true, "coverageWindowMs": 300000, "coverage": "discovery",
+            "items": [{"roomId":"!room:example.org","eventId":"$prompt","sender":"@hermes:example.org","body":"preview","originServerTs": 1000,"expiresAt":301000,"status":"pending","canSendReaction":false,"bodyTruncated":true}]}))
+        .unwrap();
+        let snapshot = snapshot_dto(snapshot);
         assert_eq!(snapshot.session_generation, 12);
         assert_eq!(snapshot.coverage_window_ms, 300000);
         assert_eq!(snapshot.coverage, "discovery");

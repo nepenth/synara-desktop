@@ -366,15 +366,21 @@ impl SharedCore {
         target_room_id: String,
         confirmed_encryption_downgrade: bool,
     ) -> Result<TimelineForwardDto, TimelineForwardError> {
+        let request = crate::core_api::MatrixTimelineForwardMediaRequest {
+            source_room_id,
+            event_id,
+            target_room_id,
+            confirmed_encryption_downgrade,
+        };
+        if !within_envelope_cap(&request) {
+            return Err(timeline_forward_failed(
+                TIMELINE_FORWARD_FAILED_CODE,
+                TIMELINE_FORWARD_FAILED_DESCRIPTION,
+            ));
+        }
         self.timeline_forward_command(
-            TIMELINE_FORWARD_MEDIA_COMMAND,
             TIMELINE_FORWARD_MEDIA_NO_SESSION_CODE,
-            serde_json::json!({
-                "sourceRoomId": source_room_id,
-                "eventId": event_id,
-                "targetRoomId": target_room_id,
-                "confirmedEncryptionDowngrade": confirmed_encryption_downgrade,
-            }),
+            self.core.timeline_forward_media(request),
         )
         .await
     }

@@ -30,7 +30,7 @@ pub struct MatrixRoomSetJoinRuleRequest {
     pub allow_room_ids: Option<Vec<String>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixInviteActionRequest {
     pub room_id: String,
@@ -97,7 +97,7 @@ pub struct MatrixRoomSetPowerLevelStateRequest {
     pub content: serde_json::Value,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixRoomMembersSnapshotRequest {
     pub room_id: String,

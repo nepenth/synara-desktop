@@ -1,6 +1,6 @@
 use super::SharedCore;
 use crate::app::notifications::AgentNotificationPreferences;
-use crate::transport::CommandEnvelope;
+use crate::transport::MatrixIpcError;
 pub type AgentNotificationPreferencesDto = AgentNotificationPreferences;
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum AgentNotificationPreferencesError {
@@ -17,17 +17,9 @@ impl std::error::Error for AgentNotificationPreferencesError {}
 impl SharedCore {
     async fn agent_preferences_command(
         &self,
-        name: &str,
-        payload: serde_json::Value,
+        request: impl std::future::Future<Output = Result<AgentNotificationPreferences, MatrixIpcError>>,
     ) -> Result<AgentNotificationPreferencesDto, AgentNotificationPreferencesError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: name.into(),
-                session_generation: 0,
-                request_id: None,
-                payload,
-            })
+        let response = request
             .await
             .map_err(|e| AgentNotificationPreferencesError::Failed {
                 code: e
@@ -35,12 +27,7 @@ impl SharedCore {
                     .unwrap_or_else(|| "agent-notification-preferences-load-failed".into()),
                 description: "Agent notification settings are unavailable.".into(),
             })?;
-        serde_json::from_value(response.payload).map_err(|_| {
-            AgentNotificationPreferencesError::Failed {
-                code: "agent-notification-preferences-invalid".into(),
-                description: "Agent notification settings are invalid.".into(),
-            }
-        })
+        Ok(response)
     }
 }
 
@@ -64,20 +51,16 @@ impl SharedCore {
     pub async fn agent_notification_preferences_snapshot(
         &self,
     ) -> Result<AgentNotificationPreferencesDto, AgentNotificationPreferencesError> {
-        self.agent_preferences_command(
-            "matrix_agent_notification_preferences_snapshot",
-            serde_json::Value::Null,
-        )
-        .await
+        self.agent_preferences_command(self.core.agent_notification_preferences_snapshot())
+            .await
     }
     pub async fn agent_notification_preferences_set(
         &self,
         preferences: AgentNotificationPreferencesDto,
     ) -> Result<AgentNotificationPreferencesDto, AgentNotificationPreferencesError> {
-        self.agent_preferences_command(
-            "matrix_agent_notification_preferences_set",
-            serde_json::json!({"preferences":preferences}),
-        )
+        self.agent_preferences_command(self.core.agent_notification_preferences_set(
+            crate::core_api::AgentPreferencesSetRequest { preferences },
+        ))
         .await
     }
 }
