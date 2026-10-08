@@ -201,6 +201,8 @@ extension ThreepidEmailDto: Sendable
 extension ThreepidEmailTokenDto: Sendable
 extension ThreepidSnapshotDto: Sendable
 extension ThreepidWriteDto: Sendable
+extension TimelineActionKindDto: Sendable
+extension TimelineActionStatusDto: Sendable
 extension TimelineError: Sendable
 extension TimelineEventItemDto: Sendable
 extension TimelineEventReadbackDto: Sendable
@@ -736,6 +738,27 @@ public enum SyncStopError: Swift.Error, Equatable, Hashable, Foundation.Localize
 public enum ThreepidCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum TimelineActionKindDto: Equatable, Hashable
+  case editText
+  case redact
+  case forwardText
+  case forwardMedia
+  case report
+  case pin
+  case unpin
+  case pollVote
+  case callDecline
+public enum TimelineActionStatusDto: Equatable, Hashable
+  case sent
+  case queued
+  case redacted
+  case reported
+  case pinned
+  case unpinned
+  case alreadyPinned
+  case alreadyUnpinned
+  case voted
+  case declined
 public enum TimelineError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -1737,18 +1760,18 @@ public struct TimelineEventReadbackDto: Equatable, Hashable
   public init(sessionGeneration: UInt64, roomId: String, eventId: String, item: TimelineEventItemDto)
 public struct TimelineForwardDto: Equatable, Hashable
   public var schemaVersion: UInt32
-  public var action: String
+  public var action: TimelineActionKindDto
   public var roomId: String
   public var eventId: String
-  public var status: String
-  public init(schemaVersion: UInt32, action: String, roomId: String, eventId: String, status: String)
+  public var status: TimelineActionStatusDto
+  public init(schemaVersion: UInt32, action: TimelineActionKindDto, roomId: String, eventId: String, status: TimelineActionStatusDto)
 public struct TimelineMutateDto: Equatable, Hashable
   public var schemaVersion: UInt32
-  public var action: String
+  public var action: TimelineActionKindDto
   public var roomId: String
   public var eventId: String
-  public var status: String
-  public init(schemaVersion: UInt32, action: String, roomId: String, eventId: String, status: String)
+  public var status: TimelineActionStatusDto
+  public init(schemaVersion: UInt32, action: TimelineActionKindDto, roomId: String, eventId: String, status: TimelineActionStatusDto)
 public struct TimelineOpenDto: Equatable, Hashable
   public var schemaVersion: UInt32
   public var streamId: String
@@ -1765,11 +1788,11 @@ public struct TimelineOpenPositionDto: Equatable, Hashable
   public init(kind: String, atBottom: Bool, restoredAnchorEventId: String?, liveTailEventId: String?, updatedAtMs: UInt64?, eventId: String?)
 public struct TimelinePinDto: Equatable, Hashable
   public var schemaVersion: UInt32
-  public var action: String
+  public var action: TimelineActionKindDto
   public var roomId: String
   public var eventId: String
-  public var status: String
-  public init(schemaVersion: UInt32, action: String, roomId: String, eventId: String, status: String)
+  public var status: TimelineActionStatusDto
+  public init(schemaVersion: UInt32, action: TimelineActionKindDto, roomId: String, eventId: String, status: TimelineActionStatusDto)
 public struct TimelineReactionDto: Equatable, Hashable
   public var key: String
   public var count: UInt32
@@ -1906,11 +1929,11 @@ public struct TimelineViewUpdateDto: Equatable, Hashable
   public init(schemaVersion: UInt32, sessionGeneration: UInt64, streamId: String, roomId: String, revision: UInt64, opCount: UInt32)
 public struct TimelineVoteDeclineDto: Equatable, Hashable
   public var schemaVersion: UInt32
-  public var action: String
+  public var action: TimelineActionKindDto
   public var roomId: String
   public var eventId: String
-  public var status: String
-  public init(schemaVersion: UInt32, action: String, roomId: String, eventId: String, status: String)
+  public var status: TimelineActionStatusDto
+  public init(schemaVersion: UInt32, action: TimelineActionKindDto, roomId: String, eventId: String, status: TimelineActionStatusDto)
 public struct TypingRoomDto: Equatable, Hashable
   public var roomId: String
   public var userIds: [String]

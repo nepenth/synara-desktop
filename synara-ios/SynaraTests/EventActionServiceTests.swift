@@ -1,5 +1,6 @@
 import XCTest
 @testable import Synara
+import SynaraCore
 
 final class EventActionServiceTests: XCTestCase {
     func testAvailabilityAllowsAuthorToEditAndRedact() {
@@ -315,25 +316,25 @@ final class EventActionServiceTests: XCTestCase {
         XCTAssertTrue(
             TimelineActionReadbackPolicy.accepts(
                 schemaVersion: 1,
-                action: "forward_text",
+                action: .forwardText,
                 roomID: "!room:matrix.org",
                 eventID: "",
-                status: "queued",
-                expectedAction: "forward_text",
+                status: .queued,
+                expectedAction: .forwardText,
                 expectedRoomID: "!room:matrix.org",
-                expectedStatus: "sent"
+                expectedStatus: .sent
             )
         )
         XCTAssertTrue(
             TimelineActionReadbackPolicy.accepts(
                 schemaVersion: 1,
-                action: "poll_vote",
+                action: .pollVote,
                 roomID: "!room:matrix.org",
                 eventID: "$poll:matrix.org",
-                status: "queued",
-                expectedAction: "poll_vote",
+                status: .queued,
+                expectedAction: .pollVote,
                 expectedRoomID: "!room:matrix.org",
-                expectedStatus: "voted",
+                expectedStatus: .voted,
                 expectedEventID: "$poll:matrix.org"
             )
         )
@@ -341,13 +342,13 @@ final class EventActionServiceTests: XCTestCase {
         XCTAssertFalse(
             TimelineActionReadbackPolicy.accepts(
                 schemaVersion: 1,
-                action: "poll_vote",
+                action: .pollVote,
                 roomID: "!room:matrix.org",
                 eventID: "",
-                status: "queued",
-                expectedAction: "poll_vote",
+                status: .queued,
+                expectedAction: .pollVote,
                 expectedRoomID: "!room:matrix.org",
-                expectedStatus: "voted",
+                expectedStatus: .voted,
                 expectedEventID: "$poll:matrix.org"
             )
         )
@@ -355,13 +356,13 @@ final class EventActionServiceTests: XCTestCase {
         XCTAssertFalse(
             TimelineActionReadbackPolicy.accepts(
                 schemaVersion: 1,
-                action: "report",
+                action: .report,
                 roomID: "!room:matrix.org",
                 eventID: "$event:matrix.org",
-                status: "queued",
-                expectedAction: "report",
+                status: .queued,
+                expectedAction: .report,
                 expectedRoomID: "!room:matrix.org",
-                expectedStatus: "reported",
+                expectedStatus: .reported,
                 expectedEventID: "$event:matrix.org"
             )
         )
@@ -371,65 +372,65 @@ final class EventActionServiceTests: XCTestCase {
         XCTAssertTrue(
             TimelineActionReadbackPolicy.accepts(
                 schemaVersion: 1,
-                action: "report",
+                action: .report,
                 roomID: "!room:matrix.org",
                 eventID: "$event:matrix.org",
-                status: "reported",
-                expectedAction: "report",
+                status: .reported,
+                expectedAction: .report,
                 expectedRoomID: "!room:matrix.org",
-                expectedStatus: "reported",
+                expectedStatus: .reported,
                 expectedEventID: "$event:matrix.org"
             )
         )
         XCTAssertFalse(
             TimelineActionReadbackPolicy.accepts(
                 schemaVersion: 1,
-                action: "report",
+                action: .report,
                 roomID: "!other:matrix.org",
                 eventID: "$event:matrix.org",
-                status: "reported",
-                expectedAction: "report",
+                status: .reported,
+                expectedAction: .report,
                 expectedRoomID: "!room:matrix.org",
-                expectedStatus: "reported",
+                expectedStatus: .reported,
                 expectedEventID: "$event:matrix.org"
             )
         )
         XCTAssertFalse(
             TimelineActionReadbackPolicy.accepts(
                 schemaVersion: 2,
-                action: "report",
+                action: .report,
                 roomID: "!room:matrix.org",
                 eventID: "$event:matrix.org",
-                status: "reported",
-                expectedAction: "report",
+                status: .reported,
+                expectedAction: .report,
                 expectedRoomID: "!room:matrix.org",
-                expectedStatus: "reported",
+                expectedStatus: .reported,
                 expectedEventID: "$event:matrix.org"
             )
         )
         XCTAssertFalse(
             TimelineActionReadbackPolicy.accepts(
                 schemaVersion: 1,
-                action: "poll_vote",
+                action: .pollVote,
                 roomID: "!room:matrix.org",
                 eventID: "$other:matrix.org",
-                status: "voted",
-                expectedAction: "poll_vote",
+                status: .voted,
+                expectedAction: .pollVote,
                 expectedRoomID: "!room:matrix.org",
-                expectedStatus: "voted",
+                expectedStatus: .voted,
                 expectedEventID: "$poll:matrix.org"
             )
         )
         XCTAssertFalse(
             TimelineActionReadbackPolicy.accepts(
                 schemaVersion: 1,
-                action: "call_decline",
+                action: .callDecline,
                 roomID: "!room:matrix.org",
                 eventID: "$other:matrix.org",
-                status: "declined",
-                expectedAction: "call_decline",
+                status: .declined,
+                expectedAction: .callDecline,
                 expectedRoomID: "!room:matrix.org",
-                expectedStatus: "declined",
+                expectedStatus: .declined,
                 expectedEventID: "$call:matrix.org"
             )
         )

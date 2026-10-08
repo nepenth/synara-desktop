@@ -1755,9 +1755,9 @@ final class SharedCoreEventActionService: EventActionServicing {
                     roomID: readback.roomId,
                     eventID: readback.eventId,
                     status: readback.status,
-                    expectedAction: "redact",
+                    expectedAction: .redact,
                     expectedRoomID: roomID,
-                    expectedStatus: "redacted",
+                    expectedStatus: .redacted,
                     expectedEventID: item.eventID
                 ) else {
                     throw EventActionError.failed
@@ -1811,9 +1811,9 @@ final class SharedCoreEventActionService: EventActionServicing {
                     roomID: readback.roomId,
                     eventID: readback.eventId,
                     status: readback.status,
-                    expectedAction: "report",
+                    expectedAction: .report,
                     expectedRoomID: roomID,
-                    expectedStatus: "reported",
+                    expectedStatus: .reported,
                     expectedEventID: item.eventID
                 ) else {
                     throw EventActionError.failed
@@ -1840,9 +1840,9 @@ final class SharedCoreEventActionService: EventActionServicing {
                         roomID: readback.roomId,
                         eventID: readback.eventId,
                         status: readback.status,
-                        expectedAction: "forward_text",
+                        expectedAction: .forwardText,
                         expectedRoomID: targetRoomID,
-                        expectedStatus: "sent"
+                        expectedStatus: .sent
                     ) else {
                         throw EventActionError.failed
                     }
@@ -1860,9 +1860,9 @@ final class SharedCoreEventActionService: EventActionServicing {
                         roomID: readback.roomId,
                         eventID: readback.eventId,
                         status: readback.status,
-                        expectedAction: "forward_media",
+                        expectedAction: .forwardMedia,
                         expectedRoomID: targetRoomID,
-                        expectedStatus: "sent"
+                        expectedStatus: .sent
                     ) else {
                         throw EventActionError.failed
                     }
@@ -1894,9 +1894,9 @@ final class SharedCoreEventActionService: EventActionServicing {
                     roomID: readback.roomId,
                     eventID: readback.eventId,
                     status: readback.status,
-                    expectedAction: "poll_vote",
+                    expectedAction: .pollVote,
                     expectedRoomID: roomID,
-                    expectedStatus: "voted",
+                    expectedStatus: .voted,
                     expectedEventID: item.eventID
                 ) else {
                     throw EventActionError.failed
@@ -1918,9 +1918,9 @@ final class SharedCoreEventActionService: EventActionServicing {
                     roomID: readback.roomId,
                     eventID: readback.eventId,
                     status: readback.status,
-                    expectedAction: "call_decline",
+                    expectedAction: .callDecline,
                     expectedRoomID: roomID,
-                    expectedStatus: "declined",
+                    expectedStatus: .declined,
                     expectedEventID: item.eventID
                 ) else {
                     throw EventActionError.failed

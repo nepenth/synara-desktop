@@ -220,14 +220,46 @@ impl std::fmt::Display for PollRespondError {
 
 impl std::error::Error for PollRespondError {}
 
+super::wire_enum::wire_enum! {
+    /// Timeline write that a readback reports.
+    pub enum TimelineActionKindDto {
+        EditText => "edit_text",
+        Redact => "redact",
+        ForwardText => "forward_text",
+        ForwardMedia => "forward_media",
+        Report => "report",
+        Pin => "pin",
+        Unpin => "unpin",
+        PollVote => "poll_vote",
+        CallDecline => "call_decline",
+    }
+}
+
+super::wire_enum::wire_enum! {
+    /// Outcome of a timeline write. `queued` means Core's send queue still
+    /// holds the write and will retry it in order.
+    pub enum TimelineActionStatusDto {
+        Sent => "sent",
+        Queued => "queued",
+        Redacted => "redacted",
+        Reported => "reported",
+        Pinned => "pinned",
+        Unpinned => "unpinned",
+        AlreadyPinned => "already_pinned",
+        AlreadyUnpinned => "already_unpinned",
+        Voted => "voted",
+        Declined => "declined",
+    }
+}
+
 /// Privacy-safe timeline edit/redact/report write ack from the registered Core commands.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineMutateDto {
     pub schema_version: u32,
-    pub action: String,
+    pub action: TimelineActionKindDto,
     pub room_id: String,
     pub event_id: String,
-    pub status: String,
+    pub status: TimelineActionStatusDto,
 }
 
 /// Static fail-closed timeline edit/redact/report error. Fields are source constants only.
@@ -250,10 +282,10 @@ impl std::error::Error for TimelineMutateError {}
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelinePinDto {
     pub schema_version: u32,
-    pub action: String,
+    pub action: TimelineActionKindDto,
     pub room_id: String,
     pub event_id: String,
-    pub status: String,
+    pub status: TimelineActionStatusDto,
 }
 
 /// Static fail-closed timeline pin/unpin error. Fields are source constants only.
@@ -277,10 +309,10 @@ impl std::error::Error for TimelinePinError {}
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineVoteDeclineDto {
     pub schema_version: u32,
-    pub action: String,
+    pub action: TimelineActionKindDto,
     pub room_id: String,
     pub event_id: String,
-    pub status: String,
+    pub status: TimelineActionStatusDto,
 }
 
 /// Static fail-closed timeline poll-vote / call-decline error. Fields are
@@ -304,10 +336,10 @@ impl std::error::Error for TimelineVoteDeclineError {}
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineForwardDto {
     pub schema_version: u32,
-    pub action: String,
+    pub action: TimelineActionKindDto,
     pub room_id: String,
     pub event_id: String,
-    pub status: String,
+    pub status: TimelineActionStatusDto,
 }
 
 /// Static fail-closed timeline forward error. Fields are source constants only.
@@ -746,22 +778,22 @@ pub(super) struct TimelineMutateResultWire {
     pub(super) status: String,
 }
 
-pub(super) fn closed_timeline_mutate_action(value: &str) -> Option<&'static str> {
+pub(super) fn closed_timeline_mutate_action(value: &str) -> Option<TimelineActionKindDto> {
     match value {
-        "edit_text" => Some("edit_text"),
-        "redact" => Some("redact"),
-        "report" => Some("report"),
+        "edit_text" => Some(TimelineActionKindDto::EditText),
+        "redact" => Some(TimelineActionKindDto::Redact),
+        "report" => Some(TimelineActionKindDto::Report),
         _ => None,
     }
 }
 
-pub(super) fn closed_timeline_mutate_status(value: &str) -> Option<&'static str> {
+pub(super) fn closed_timeline_mutate_status(value: &str) -> Option<TimelineActionStatusDto> {
     match value {
-        "sent" => Some("sent"),
+        "sent" => Some(TimelineActionStatusDto::Sent),
         // An edit the SDK still holds; it keeps retrying in order.
-        "queued" => Some("queued"),
-        "redacted" => Some("redacted"),
-        "reported" => Some("reported"),
+        "queued" => Some(TimelineActionStatusDto::Queued),
+        "redacted" => Some(TimelineActionStatusDto::Redacted),
+        "reported" => Some(TimelineActionStatusDto::Reported),
         _ => None,
     }
 }
@@ -783,10 +815,10 @@ pub(super) fn timeline_mutate_dto(
     })?;
     Ok(TimelineMutateDto {
         schema_version: result.schema_version,
-        action: action.to_owned(),
+        action,
         room_id: result.room_id,
         event_id: result.event_id,
-        status: status.to_owned(),
+        status,
     })
 }
 
@@ -828,20 +860,20 @@ pub(super) struct TimelinePinResultWire {
     pub(super) status: String,
 }
 
-pub(super) fn closed_timeline_pin_action(value: &str) -> Option<&'static str> {
+pub(super) fn closed_timeline_pin_action(value: &str) -> Option<TimelineActionKindDto> {
     match value {
-        "pin" => Some("pin"),
-        "unpin" => Some("unpin"),
+        "pin" => Some(TimelineActionKindDto::Pin),
+        "unpin" => Some(TimelineActionKindDto::Unpin),
         _ => None,
     }
 }
 
-pub(super) fn closed_timeline_pin_status(value: &str) -> Option<&'static str> {
+pub(super) fn closed_timeline_pin_status(value: &str) -> Option<TimelineActionStatusDto> {
     match value {
-        "pinned" => Some("pinned"),
-        "unpinned" => Some("unpinned"),
-        "already_pinned" => Some("already_pinned"),
-        "already_unpinned" => Some("already_unpinned"),
+        "pinned" => Some(TimelineActionStatusDto::Pinned),
+        "unpinned" => Some(TimelineActionStatusDto::Unpinned),
+        "already_pinned" => Some(TimelineActionStatusDto::AlreadyPinned),
+        "already_unpinned" => Some(TimelineActionStatusDto::AlreadyUnpinned),
         _ => None,
     }
 }
@@ -857,10 +889,10 @@ pub(super) fn timeline_pin_dto(
     })?;
     Ok(TimelinePinDto {
         schema_version: result.schema_version,
-        action: action.to_owned(),
+        action,
         room_id: result.room_id,
         event_id: result.event_id,
-        status: status.to_owned(),
+        status,
     })
 }
 
@@ -908,19 +940,19 @@ pub(super) struct TimelineVoteDeclineResultWire {
     pub(super) status: String,
 }
 
-pub(super) fn closed_timeline_vote_decline_action(value: &str) -> Option<&'static str> {
+pub(super) fn closed_timeline_vote_decline_action(value: &str) -> Option<TimelineActionKindDto> {
     match value {
-        "poll_vote" => Some("poll_vote"),
-        "call_decline" => Some("call_decline"),
+        "poll_vote" => Some(TimelineActionKindDto::PollVote),
+        "call_decline" => Some(TimelineActionKindDto::CallDecline),
         _ => None,
     }
 }
 
-pub(super) fn closed_timeline_vote_decline_status(value: &str) -> Option<&'static str> {
+pub(super) fn closed_timeline_vote_decline_status(value: &str) -> Option<TimelineActionStatusDto> {
     match value {
-        "voted" => Some("voted"),
-        "queued" => Some("queued"),
-        "declined" => Some("declined"),
+        "voted" => Some(TimelineActionStatusDto::Voted),
+        "queued" => Some(TimelineActionStatusDto::Queued),
+        "declined" => Some(TimelineActionStatusDto::Declined),
         _ => None,
     }
 }
@@ -942,10 +974,10 @@ pub(super) fn timeline_vote_decline_dto(
     })?;
     Ok(TimelineVoteDeclineDto {
         schema_version: result.schema_version,
-        action: action.to_owned(),
+        action,
         room_id: result.room_id,
         event_id: result.event_id,
-        status: status.to_owned(),
+        status,
     })
 }
 
@@ -992,18 +1024,18 @@ pub(super) struct TimelineForwardResultWire {
     pub(super) status: String,
 }
 
-pub(super) fn closed_timeline_forward_action(value: &str) -> Option<&'static str> {
+pub(super) fn closed_timeline_forward_action(value: &str) -> Option<TimelineActionKindDto> {
     match value {
-        "forward_text" => Some("forward_text"),
-        "forward_media" => Some("forward_media"),
+        "forward_text" => Some(TimelineActionKindDto::ForwardText),
+        "forward_media" => Some(TimelineActionKindDto::ForwardMedia),
         _ => None,
     }
 }
 
-pub(super) fn closed_timeline_forward_status(value: &str) -> Option<&'static str> {
+pub(super) fn closed_timeline_forward_status(value: &str) -> Option<TimelineActionStatusDto> {
     match value {
-        "sent" => Some("sent"),
-        "queued" => Some("queued"),
+        "sent" => Some(TimelineActionStatusDto::Sent),
+        "queued" => Some(TimelineActionStatusDto::Queued),
         _ => None,
     }
 }
@@ -1025,10 +1057,10 @@ pub(super) fn timeline_forward_dto(
     })?;
     Ok(TimelineForwardDto {
         schema_version: result.schema_version,
-        action: action.to_owned(),
+        action,
         room_id: result.room_id,
         event_id: result.event_id,
-        status: status.to_owned(),
+        status,
     })
 }
 
