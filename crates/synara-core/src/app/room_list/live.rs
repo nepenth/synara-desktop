@@ -987,6 +987,22 @@ mod live_owner_tests {
             settled,
             "an idle room list must not wake consumers"
         );
+        // A consumer that starts reading after those signals were emitted
+        // (iOS returning to the list from a notification-opened room) gets
+        // the current rooms and revision without waiting for another change.
+        let late = snapshot_from_sync_owner(&owner)
+            .await
+            .expect("late snapshot");
+        assert!(!late.rooms.is_empty(), "a late reader sees the joined room");
+        assert_eq!(
+            live.revision(),
+            signals.lock().unwrap().last().unwrap().revision
+        );
+        assert_eq!(
+            signals.lock().unwrap().len(),
+            settled,
+            "a late read needs no new signal"
+        );
 
         mount_room_list_response(&server, "2", "Room A renamed").await;
         assert!(wait_for(settled + 1).await, "a room change wakes the owner");

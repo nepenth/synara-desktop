@@ -913,6 +913,43 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertTrue(service.contains("synara.roomListSort"))
     }
 
+    @MainActor
+    func testLiveUpdatesStartOverWhenStoppedBeforeTheFirstSnapshot() async {
+        // Opening a room from a notification can hide the list before its
+        // first snapshot. Going back must start the stream again and show
+        // the rooms instead of the loading skeleton.
+        let service = FirstSubscriptionStallsRoomListService(state: .loaded(RoomListFixtures.small()))
+        let updates = RoomListLiveUpdates()
+        var delivered: [RoomListState] = []
+
+        updates.start(service: service) { delivered.append($0) }
+        await Task.yield()
+        updates.stop()
+        XCTAssertTrue(delivered.isEmpty)
+        XCTAssertFalse(updates.isRunning)
+
+        let received = expectation(description: "rooms after reappearing")
+        updates.start(service: service) { state in
+            delivered.append(state)
+            received.fulfill()
+        }
+        await fulfillment(of: [received], timeout: 2)
+        XCTAssertEqual(delivered, [.loaded(RoomListFixtures.small())])
+        XCTAssertEqual(service.subscriptionCount, 2)
+        updates.stop()
+    }
+
+    func testRoomListRestartsUpdatesOnEveryAppearanceWhateverItsState() throws {
+        let view = try String(
+            contentsOfFile: "\(Self.repositoryRoot())/synara-ios/Synara/Features/RoomListView.swift",
+            encoding: .utf8
+        )
+        XCTAssertFalse(view.contains("hasStartedInitialLoad"))
+        XCTAssertFalse(view.contains("startRoomUpdatesIfReady(for: state)"))
+        XCTAssertTrue(view.contains("liveUpdates.stop()"))
+        XCTAssertTrue(view.contains("final class RoomListLiveUpdates"))
+    }
+
     private func makeActivityRoom(id: String, name: String, activity: Date) -> RoomSummary {
         RoomSummary(
             id: id,
@@ -963,4 +1000,44 @@ private extension RoomSummary {
             activeCallParticipantCount: activeCallParticipantCount
         )
     }
+}
+
+/// The first subscription never yields, like a stream cancelled before its
+/// first load finished; later subscriptions yield the current state.
+private final class FirstSubscriptionStallsRoomListService: RoomListServicing {
+    private let state: RoomListState
+    private(set) var subscriptionCount = 0
+
+    init(state: RoomListState) {
+        self.state = state
+    }
+
+    func loadRooms() async -> RoomListState {
+        state
+    }
+
+    func roomDisplayName(roomID: String) -> String? {
+        nil
+    }
+
+    func isAgentRoom(roomID: String) -> Bool {
+        false
+    }
+
+    func hasUnreadMessages(roomID: String) -> Bool {
+        false
+    }
+
+    func roomUpdates() -> AsyncStream<RoomListState> {
+        subscriptionCount += 1
+        let stalls = subscriptionCount == 1
+        let state = state
+        return AsyncStream { continuation in
+            if stalls == false {
+                continuation.yield(state)
+            }
+        }
+    }
+
+    func clearCache() {}
 }

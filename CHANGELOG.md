@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- iOS: going back to the room list after opening a room from a notification shows the rooms again instead of loading placeholders forever; the list restarts its updates every time it appears.
 - Linux: the title strip and its Minimize, Maximize and Close controls render and drag again (the page never reported the strip to the native drag hook), and the three controls share one size.
 - Threads: Settings → Appearance → Thread Display opens threads in full view (as before), in a resizable side panel beside the live room with its own composer, or inline beneath their first message with Show earlier replies and Reply in thread.
 - Settings: the app and room/space settings navigation use one compact rhythm, setting controls stay beside their descriptions instead of dropping below long text, every pair of settings keeps the same spacing, theme pickers share one dropdown style, color controls align on one edge, and segmented choices no longer shift when the selection changes.
