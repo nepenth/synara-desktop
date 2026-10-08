@@ -440,13 +440,13 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertNil(
             SharedCoreTimelineRows.authoritativeOutcome(
                 from: [],
-                paginationBackward: "available"
+                paginationBackward: .available
             )
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.authoritativeOutcome(
                 from: [],
-                paginationBackward: "exhausted"
+                paginationBackward: .exhausted
             ),
             .empty
         )
@@ -530,7 +530,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
     func testSharedCoreTimelineRowsMapsNonMessageBodiesWithoutEcho() {
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
-                rowKind: "poll",
+                rowKind: .poll,
                 body: "Lunch?",
                 formattedBody: nil
             ),
@@ -538,7 +538,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
-                rowKind: "membership",
+                rowKind: .membership,
                 body: "@alex joined",
                 formattedBody: nil
             ),
@@ -546,7 +546,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
-                rowKind: "state",
+                rowKind: .state,
                 body: "Topic changed",
                 formattedBody: nil
             ),
@@ -554,7 +554,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
-                rowKind: "call",
+                rowKind: .call,
                 body: "voice",
                 formattedBody: nil
             ),
@@ -562,7 +562,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
-                rowKind: "call",
+                rowKind: .call,
                 body: "notification",
                 formattedBody: nil
             ),
@@ -570,14 +570,14 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
-                rowKind: "sticker",
+                rowKind: .sticker,
                 body: "",
                 formattedBody: nil
             ),
             .unknown(type: "sticker")
         )
         if case let .mediaPlaceholder(resource) = SharedCoreTimelineRows.displayKind(
-            rowKind: "sticker",
+            rowKind: .sticker,
             body: "",
             formattedBody: nil,
             messageType: "m.sticker",
@@ -596,14 +596,14 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
         XCTAssertNil(
             SharedCoreTimelineRows.displayKind(
-                rowKind: "date_separator",
+                rowKind: .dateSeparator,
                 body: "",
                 formattedBody: nil
             )
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
-                rowKind: "encrypted",
+                rowKind: .encrypted,
                 body: "unable_to_decrypt",
                 formattedBody: nil
             ),
@@ -611,7 +611,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         let projectedAgentJSON = #"{"title":"Approval required","status":"pending","summary":"Review","actions":[]}"#
         if case let .agentCard(card) = SharedCoreTimelineRows.displayKind(
-            rowKind: "message",
+            rowKind: .message,
             body: "fallback",
             formattedBody: nil,
             agentCardJSON: projectedAgentJSON
@@ -626,7 +626,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
             ["👍": 2, "🎉": 1]
         )
         if case let .mediaPlaceholder(resource) = SharedCoreTimelineRows.displayKind(
-            rowKind: "message",
+            rowKind: .message,
             body: "A sunset",
             formattedBody: "<strong>A sunset</strong>",
             messageType: "image",
@@ -669,7 +669,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(stickers.first?.mxc, "mxc://example.org/abc")
         XCTAssertEqual(stickers.first?.packName, "Mine")
         let publicError = String(describing: SharedCoreTimelineRows.displayKind(
-            rowKind: "poll",
+            rowKind: .poll,
             body: "Lunch?",
             formattedBody: nil
         ))
@@ -681,7 +681,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
     func testSharedCoreTimelineRowsPreservesRelationsPollsCapabilitiesAndReactionOwnership() {
         let mappedRow = SharedCoreTimelineRows.item(
             from: TimelineViewRowDto(
-                kind: "message",
+                kind: .message,
                 itemId: "item-1",
                 eventId: "$message:example.org",
                 sender: "@alice:example.org",
@@ -840,15 +840,15 @@ final class SynaraCoreBindingsTests: XCTestCase {
             vote: false,
             declineCall: false
         )
-        let row = { (kind: String) in
+        let row = { (kind: TimelineRowKindDto) in
             TimelineViewRowDto(
                 kind: kind,
-                itemId: "\(kind)-item",
-                eventId: "$\(kind):example.org",
+                itemId: "\(kind.wireLabel)-item",
+                eventId: "$\(kind.wireLabel):example.org",
                 sender: "@alice:example.org",
                 senderName: "Alice Example",
                 senderAvatarUrl: "mxc://example.org/alice",
-                body: "\(kind) event",
+                body: "\(kind.wireLabel) event",
                 originServerTs: 1_700_000_000_123,
                 edited: false,
                 replyToEventId: nil,
@@ -875,9 +875,9 @@ final class SynaraCoreBindingsTests: XCTestCase {
             )
         }
 
-        for kind in ["membership", "state", "call"] {
+        for kind in [TimelineRowKindDto.membership, .state, .call] {
             let item = try XCTUnwrap(SharedCoreTimelineRows.item(from: row(kind)))
-            XCTAssertEqual(item.eventID, "$\(kind):example.org")
+            XCTAssertEqual(item.eventID, "$\(kind.wireLabel):example.org")
             XCTAssertEqual(item.senderID, "@alice:example.org")
             XCTAssertEqual(item.senderProfileDisplayName, "Alice Example")
             XCTAssertEqual(item.senderAvatarURL?.absoluteString, "mxc://example.org/alice")
@@ -1052,7 +1052,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
     func testSharedCoreTimelineWithoutSessionFailsClosed() async {
         let core = SharedCore()
         let position = TimelineOpenPositionDto(
-            kind: "live_bottom",
+            kind: .liveBottom,
             atBottom: false,
             restoredAnchorEventId: nil,
             liveTailEventId: nil,
@@ -1101,7 +1101,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
             _ = try await SharedCoreTimeline.timelinePaginate(
                 core: core,
                 streamId: "view-1",
-                direction: "backwards"
+                direction: .backwards
             )
             XCTFail("Fail-closed SharedCore must not paginate a timeline without a session")
         } catch {
@@ -3095,8 +3095,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
             _ = try await SharedCoreTimelineReadState.timelineSetReadState(
                 core: core,
                 streamId: streamId,
-                action: "mark_read",
-                intent: "explicit_user"
+                action: .markRead,
+                intent: .explicitUser
             )
             XCTFail("Fail-closed SharedCore must not set timeline read-state without a session")
         } catch {

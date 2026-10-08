@@ -26,7 +26,7 @@ enum SharedCoreTimelineRows {
     /// pagination route; it must never be presented as an empty room.
     static func authoritativeOutcome(
         from rows: [TimelineViewRowDto],
-        paginationBackward: String,
+        paginationBackward: TimelinePageStateDto,
         visibleTailEventID: String? = nil,
         receiptTailEventID: String? = nil
     ) -> TimelineLoadOutcome? {
@@ -35,7 +35,7 @@ enum SharedCoreTimelineRows {
         if items.isEmpty == false {
             return .loaded(items)
         }
-        return paginationBackward == "exhausted" ? .empty : nil
+        return paginationBackward == .exhausted ? .empty : nil
     }
 
     static func item(from row: TimelineViewRowDto) -> TimelineItem? {
@@ -73,7 +73,7 @@ enum SharedCoreTimelineRows {
             isAgentApproval: row.isAgentApproval,
             reactions: reactions(from: row.reactions),
             reactionOwnership: reactionOwnership(from: row.reactions),
-            isEncrypted: row.kind == "encrypted"
+            isEncrypted: row.kind == .encrypted
         )
         item.encryptionShield = encryptionShield(from: row.encryptionShield)
         return item
@@ -102,7 +102,7 @@ enum SharedCoreTimelineRows {
     }
 
     static func displayKind(
-        rowKind: String,
+        rowKind: TimelineRowKindDto,
         body: String,
         formattedBody: String?,
         agentCardJSON: String? = nil,
@@ -127,18 +127,18 @@ enum SharedCoreTimelineRows {
             return .mediaPlaceholder(media)
         }
         switch rowKind {
-        case "date_separator", "read_marker", "unread_marker", "timeline_start", "pagination":
+        case .dateSeparator, .readMarker, .unreadMarker, .timelineStart, .pagination:
             return nil
-        case "redacted":
+        case .redacted:
             return .redacted
-        case "encrypted":
+        case .encrypted:
             return .encryptedPlaceholder
-        case "message":
+        case .message:
             if let html = formattedBody, html.isEmpty == false {
                 return .formattedText(body: body, html: html)
             }
             return .text(body)
-        case "call":
+        case .call:
             if body == "notification" {
                 return .text("Incoming call")
             }
@@ -146,15 +146,13 @@ enum SharedCoreTimelineRows {
             if trimmed.isEmpty == false {
                 return .text(trimmed)
             }
-            return .unknown(type: rowKind)
-        case "poll", "membership", "state", "other", "sticker":
+            return .unknown(type: rowKind.wireLabel)
+        case .poll, .membership, .state, .other, .sticker:
             let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty == false {
                 return .text(trimmed)
             }
-            return .unknown(type: rowKind)
-        default:
-            return .unknown(type: rowKind)
+            return .unknown(type: rowKind.wireLabel)
         }
     }
 
@@ -239,7 +237,7 @@ enum SharedCoreTimelineRows {
     }
 
     static func mediaPlaceholder(
-        rowKind: String,
+        rowKind: TimelineRowKindDto,
         messageType: String?,
         mediaHandleId: String?,
         mediaMimeType: String?,
@@ -256,7 +254,7 @@ enum SharedCoreTimelineRows {
         let caption = mediaCaption?.trimmingCharacters(in: .whitespacesAndNewlines)
         return MediaResource(
             id: handle,
-            filename: filename.isEmpty ? (messageType ?? rowKind) : filename,
+            filename: filename.isEmpty ? (messageType ?? rowKind.wireLabel) : filename,
             caption: caption?.isEmpty == false ? caption : nil,
             formattedCaption: formattedCaption,
             authenticatedURL: url,
@@ -264,5 +262,27 @@ enum SharedCoreTimelineRows {
             isEncrypted: false,
             mimeType: mediaMimeType
         )
+    }
+}
+
+extension TimelineRowKindDto {
+    /// Core's stable wire label, for placeholder text and filename fallbacks.
+    var wireLabel: String {
+        switch self {
+        case .message: return "message"
+        case .sticker: return "sticker"
+        case .poll: return "poll"
+        case .membership: return "membership"
+        case .state: return "state"
+        case .call: return "call"
+        case .redacted: return "redacted"
+        case .encrypted: return "encrypted"
+        case .other: return "other"
+        case .dateSeparator: return "date_separator"
+        case .readMarker: return "read_marker"
+        case .unreadMarker: return "unread_marker"
+        case .timelineStart: return "timeline_start"
+        case .pagination: return "pagination"
+        }
     }
 }

@@ -1145,7 +1145,7 @@ final class SharedCoreTimelineService: TimelineServicing {
                 _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: previous)
             }
             let position = TimelineOpenPositionDto(
-                kind: focusedEventID == nil ? "live" : "focused",
+                kind: focusedEventID == nil ? .liveBottom : .focused,
                 atBottom: focusedEventID == nil,
                 restoredAnchorEventId: nil,
                 liveTailEventId: nil,
@@ -1183,7 +1183,7 @@ final class SharedCoreTimelineService: TimelineServicing {
                 let snapshot = try await SharedCoreTimeline.timelinePaginate(
                     core: host.core,
                     streamId: initialState.streamID,
-                    direction: "backwards"
+                    direction: .backwards
                 )
                 paginationProgress.recordPage(rowIDs: Self.nativeRowIDs(snapshot.rows))
                 let items = SharedCoreTimelineRows.items(from: snapshot.rows, visibleTailEventID: snapshot.visibleTailEventId, receiptTailEventID: snapshot.receiptTailEventId)
@@ -1198,10 +1198,10 @@ final class SharedCoreTimelineService: TimelineServicing {
                 if containsNewItems {
                     return .loaded(items)
                 }
-                if snapshot.paginationBackward == "exhausted" {
+                if snapshot.paginationBackward == .exhausted {
                     return .empty
                 }
-                guard snapshot.paginationBackward == "available" else {
+                guard snapshot.paginationBackward == .available else {
                     return .failed(Self.temporarilyUnavailableFailure)
                 }
             } catch {
@@ -1352,7 +1352,7 @@ final class SharedCoreTimelineService: TimelineServicing {
             ) {
                 return outcome
             }
-            guard snapshot.paginationBackward == "available" else {
+            guard snapshot.paginationBackward == .available else {
                 return .failed(Self.temporarilyUnavailableFailure)
             }
             guard paginationProgress.canRequestPage else {
@@ -1362,7 +1362,7 @@ final class SharedCoreTimelineService: TimelineServicing {
                 snapshot = try await SharedCoreTimeline.timelinePaginate(
                     core: host.core,
                     streamId: streamID,
-                    direction: "backwards"
+                    direction: .backwards
                 )
                 paginationProgress.recordPage(rowIDs: Self.nativeRowIDs(snapshot.rows))
             } catch {
@@ -3038,8 +3038,8 @@ final class SharedCoreRoomReadMarkerService: RoomReadMarkerServicing {
             let readback = try? await SharedCoreTimelineReadState.timelineSetReadState(
                 core: self.host.core,
                 streamId: opened.streamId,
-                action: "mark_read",
-                intent: "automatic_visibility",
+                action: .markRead,
+                intent: .automaticVisibility,
                 observedLiveTailEventId: eventID
             )
             return readback?.receiptSent == true
@@ -3053,8 +3053,8 @@ final class SharedCoreRoomReadMarkerService: RoomReadMarkerServicing {
                 let readback = try await SharedCoreTimelineReadState.timelineSetReadState(
                     core: host.core,
                     streamId: opened.streamId,
-                    action: "mark_read",
-                    intent: "explicit_user"
+                    action: .markRead,
+                    intent: .explicitUser
                 )
                 return ExplicitRoomReadReceipt.acknowledgedEventID(
                     receiptSent: readback.receiptSent,
@@ -3071,7 +3071,7 @@ final class SharedCoreRoomReadMarkerService: RoomReadMarkerServicing {
         body: (TimelineOpenDto) async -> T?
     ) async -> T? {
         let position = TimelineOpenPositionDto(
-            kind: "live",
+            kind: .liveBottom,
             atBottom: true,
             restoredAnchorEventId: nil,
             liveTailEventId: nil,

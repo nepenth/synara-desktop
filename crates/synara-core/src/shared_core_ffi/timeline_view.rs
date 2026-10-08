@@ -50,10 +50,88 @@ pub(super) fn timeline_view_update_dto(batch: TimelineViewDeltaBatch) -> Timelin
     }
 }
 
-/// Requested open placement. Kind is a closed string; no tokens or password.
+super::wire_enum::wire_enum! {
+    /// What a timeline row shows.
+    pub enum TimelineRowKindDto {
+        Message => "message",
+        Sticker => "sticker",
+        Poll => "poll",
+        Membership => "membership",
+        State => "state",
+        Call => "call",
+        Redacted => "redacted",
+        Encrypted => "encrypted",
+        Other => "other",
+        DateSeparator => "date_separator",
+        ReadMarker => "read_marker",
+        UnreadMarker => "unread_marker",
+        TimelineStart => "timeline_start",
+        Pagination => "pagination",
+    }
+}
+
+super::wire_enum::wire_enum! {
+    /// Requested open placement.
+    pub enum TimelineOpenKindDto {
+        LiveBottom => "live_bottom",
+        Unread => "unread",
+        Focused => "focused",
+        Thread => "thread",
+        Normal => "normal",
+    }
+}
+
+super::wire_enum::wire_enum! {
+    /// Resolved view placement.
+    pub enum TimelinePositionKindDto {
+        LiveBottom => "live_bottom",
+        Unread => "unread",
+        Focused => "focused",
+        Thread => "thread",
+        Restored => "restored",
+    }
+}
+
+super::wire_enum::wire_enum! {
+    pub enum TimelinePageStateDto {
+        Available => "available",
+        Exhausted => "exhausted",
+        Loading => "loading",
+        Unavailable => "unavailable",
+    }
+}
+super::wire_enum::wire_enum_from!(TimelinePageState => TimelinePageStateDto {
+    Available, Exhausted, Loading, Unavailable
+});
+
+super::wire_enum::wire_enum! {
+    pub enum TimelineDirectionDto {
+        Backwards => "backwards",
+        Forwards => "forwards",
+    }
+}
+
+super::wire_enum::wire_enum! {
+    pub enum TimelineReadActionDto {
+        MarkRead => "mark_read",
+        MarkUnread => "mark_unread",
+    }
+}
+super::wire_enum::wire_enum_from!(NativeTimelineReadAction => TimelineReadActionDto {
+    MarkRead, MarkUnread
+});
+
+super::wire_enum::wire_enum! {
+    pub enum TimelineReadIntentDto {
+        AutomaticVisibility => "automatic_visibility",
+        ExplicitUser => "explicit_user",
+    }
+}
+
+/// Requested open placement. No tokens or password.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineOpenPositionDto {
-    pub kind: String,
+    pub kind: TimelineOpenKindDto,
     pub at_bottom: bool,
     pub restored_anchor_event_id: Option<String>,
     pub live_tail_event_id: Option<String>,
@@ -64,7 +142,7 @@ pub struct TimelineOpenPositionDto {
 /// Privacy-safe resolved view placement. No tokens or password.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineViewPositionDto {
-    pub kind: String,
+    pub kind: TimelinePositionKindDto,
     pub event_id: Option<String>,
 }
 
@@ -76,8 +154,8 @@ pub struct TimelineSnapshotDto {
     pub room_id: String,
     pub revision: u64,
     pub position: TimelineViewPositionDto,
-    pub pagination_backward: String,
-    pub pagination_forward: String,
+    pub pagination_backward: TimelinePageStateDto,
+    pub pagination_forward: TimelinePageStateDto,
     pub visible_tail_event_id: Option<String>,
     pub receipt_tail_event_id: Option<String>,
     pub own_read_event_id: Option<String>,
@@ -97,7 +175,7 @@ pub struct TimelineSnapshotDto {
 /// Privacy-safe timeline view row. Message text only; no media bytes or tokens.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineViewRowDto {
-    pub kind: String,
+    pub kind: TimelineRowKindDto,
     pub item_id: String,
     pub event_id: String,
     pub sender: String,
@@ -236,7 +314,7 @@ pub struct TimelineEventReadbackDto {
 /// Privacy-safe read-state write ack. Reuses the S6 snapshot.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineReadStateDto {
-    pub action: String,
+    pub action: TimelineReadActionDto,
     pub receipt_sent: Option<bool>,
     pub acknowledged_event_id: Option<String>,
     pub snapshot: TimelineSnapshotDto,
@@ -354,10 +432,10 @@ pub(super) fn map_timeline_snapshot_core_error(error: MatrixIpcError) -> Timelin
 pub(super) fn open_position_from_dto(
     position: TimelineOpenPositionDto,
 ) -> Result<NativeTimelineOpenPosition, TimelineError> {
-    match position.kind.as_str() {
-        "live" | "live_bottom" => Ok(NativeTimelineOpenPosition::LiveBottom),
-        "unread" => Ok(NativeTimelineOpenPosition::Unread),
-        "focused" => {
+    match position.kind {
+        TimelineOpenKindDto::LiveBottom => Ok(NativeTimelineOpenPosition::LiveBottom),
+        TimelineOpenKindDto::Unread => Ok(NativeTimelineOpenPosition::Unread),
+        TimelineOpenKindDto::Focused => {
             let event_id = position
                 .event_id
                 .filter(|value| !value.is_empty())
@@ -366,7 +444,7 @@ pub(super) fn open_position_from_dto(
                 })?;
             Ok(NativeTimelineOpenPosition::Focused { event_id })
         }
-        "thread" => {
+        TimelineOpenKindDto::Thread => {
             let root_event_id = position
                 .event_id
                 .filter(|value| !value.is_empty())
@@ -375,7 +453,7 @@ pub(super) fn open_position_from_dto(
                 })?;
             Ok(NativeTimelineOpenPosition::Thread { root_event_id })
         }
-        "normal" => Ok(NativeTimelineOpenPosition::Normal {
+        TimelineOpenKindDto::Normal => Ok(NativeTimelineOpenPosition::Normal {
             viewport: NativeTimelineViewportHint {
                 at_bottom: position.at_bottom,
                 restored_anchor_event_id: position.restored_anchor_event_id,
@@ -383,56 +461,36 @@ pub(super) fn open_position_from_dto(
                 updated_at_ms: position.updated_at_ms,
             },
         }),
-        _ => Err(timeline_failed(
-            TIMELINE_OPEN_FAILED_CODE,
-            TIMELINE_OPEN_FAILED_DESCRIPTION,
-        )),
     }
 }
 
-pub(super) fn paginate_direction(
-    direction: &str,
-) -> Result<NativeTimelineDirection, TimelineError> {
+pub(super) fn paginate_direction(direction: TimelineDirectionDto) -> NativeTimelineDirection {
     match direction {
-        "backwards" => Ok(NativeTimelineDirection::Backwards),
-        "forwards" => Ok(NativeTimelineDirection::Forwards),
-        _ => Err(timeline_failed(
-            TIMELINE_PAGINATE_FAILED_CODE,
-            TIMELINE_PAGINATE_FAILED_DESCRIPTION,
-        )),
+        TimelineDirectionDto::Backwards => NativeTimelineDirection::Backwards,
+        TimelineDirectionDto::Forwards => NativeTimelineDirection::Forwards,
     }
-}
-
-pub(super) fn page_state_as_str(state: TimelinePageState) -> String {
-    match state {
-        TimelinePageState::Available => "available",
-        TimelinePageState::Exhausted => "exhausted",
-        TimelinePageState::Loading => "loading",
-        TimelinePageState::Unavailable => "unavailable",
-    }
-    .to_owned()
 }
 
 pub(super) fn view_position_dto(position: TimelineViewPosition) -> TimelineViewPositionDto {
     match position {
         TimelineViewPosition::LiveBottom => TimelineViewPositionDto {
-            kind: "live_bottom".to_owned(),
+            kind: TimelinePositionKindDto::LiveBottom,
             event_id: None,
         },
         TimelineViewPosition::Unread { anchor_event_id } => TimelineViewPositionDto {
-            kind: "unread".to_owned(),
+            kind: TimelinePositionKindDto::Unread,
             event_id: Some(anchor_event_id),
         },
         TimelineViewPosition::Focused { target_event_id } => TimelineViewPositionDto {
-            kind: "focused".to_owned(),
+            kind: TimelinePositionKindDto::Focused,
             event_id: Some(target_event_id),
         },
         TimelineViewPosition::Thread { root_event_id } => TimelineViewPositionDto {
-            kind: "thread".to_owned(),
+            kind: TimelinePositionKindDto::Thread,
             event_id: Some(root_event_id),
         },
         TimelineViewPosition::Restored { anchor_event_id } => TimelineViewPositionDto {
-            kind: "restored".to_owned(),
+            kind: TimelinePositionKindDto::Restored,
             event_id: anchor_event_id,
         },
     }
@@ -445,8 +503,8 @@ pub(super) fn timeline_snapshot_dto(snapshot: TimelineViewSnapshot) -> TimelineS
         room_id: snapshot.room_id,
         revision: snapshot.revision,
         position: view_position_dto(snapshot.position),
-        pagination_backward: page_state_as_str(snapshot.pagination.backward),
-        pagination_forward: page_state_as_str(snapshot.pagination.forward),
+        pagination_backward: snapshot.pagination.backward.into(),
+        pagination_forward: snapshot.pagination.forward.into(),
         visible_tail_event_id: snapshot.read_state.visible_tail_event_id,
         receipt_tail_event_id: snapshot.read_state.receipt_tail_event_id,
         own_read_event_id: snapshot.read_state.own_read_event_id,
@@ -538,7 +596,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             let thread_summary = message.thread.map(view_thread_summary_dto);
             let capabilities = Some(view_row_capabilities_dto(message.event.capabilities));
             TimelineViewRowDto {
-                kind: "message".to_owned(),
+                kind: TimelineRowKindDto::Message,
                 item_id: message.event.item_id,
                 event_id: message.event.event_id.unwrap_or_default(),
                 sender: message.event.sender_id,
@@ -592,7 +650,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 .as_ref()
                 .map(|preview| preview.event_id.clone());
             TimelineViewRowDto {
-                kind: "sticker".to_owned(),
+                kind: TimelineRowKindDto::Sticker,
                 item_id: event.item_id,
                 event_id: event.event_id.unwrap_or_default(),
                 sender: event.sender_id,
@@ -632,7 +690,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 .as_ref()
                 .map(|preview| preview.event_id.clone());
             TimelineViewRowDto {
-                kind: "poll".to_owned(),
+                kind: TimelineRowKindDto::Poll,
                 item_id: poll.event.item_id,
                 event_id: poll.event.event_id.unwrap_or_default(),
                 sender: poll.event.sender_id,
@@ -665,7 +723,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             }
         }
         TimelineViewRow::Membership(membership) => TimelineViewRowDto {
-            kind: "membership".to_owned(),
+            kind: TimelineRowKindDto::Membership,
             item_id: membership.event.item_id,
             event_id: membership.event.event_id.unwrap_or_default(),
             sender: membership.event.sender_id,
@@ -697,7 +755,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             encryption_shield: None,
         },
         TimelineViewRow::State(state) => TimelineViewRowDto {
-            kind: "state".to_owned(),
+            kind: TimelineRowKindDto::State,
             item_id: state.event.item_id,
             event_id: state.event.event_id.unwrap_or_default(),
             sender: state.event.sender_id,
@@ -729,7 +787,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             encryption_shield: None,
         },
         TimelineViewRow::Call(call) => TimelineViewRowDto {
-            kind: "call".to_owned(),
+            kind: TimelineRowKindDto::Call,
             item_id: call.event.item_id,
             event_id: call.event.event_id.unwrap_or_default(),
             sender: call.event.sender_id,
@@ -761,7 +819,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             encryption_shield: None,
         },
         TimelineViewRow::Redacted(redacted) => TimelineViewRowDto {
-            kind: "redacted".to_owned(),
+            kind: TimelineRowKindDto::Redacted,
             item_id: redacted.event.item_id,
             event_id: redacted.event.event_id.unwrap_or_default(),
             sender: redacted.event.sender_id,
@@ -793,7 +851,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             encryption_shield: None,
         },
         TimelineViewRow::EncryptedUnavailable(encrypted) => TimelineViewRowDto {
-            kind: "encrypted".to_owned(),
+            kind: TimelineRowKindDto::Encrypted,
             item_id: encrypted.event.item_id,
             event_id: encrypted.event.event_id.unwrap_or_default(),
             sender: encrypted.event.sender_id,
@@ -838,7 +896,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 })
                 .unwrap_or_else(|| (String::new(), String::new(), None, 0, None));
             TimelineViewRowDto {
-                kind: "other".to_owned(),
+                kind: TimelineRowKindDto::Other,
                 item_id: other.item_id,
                 event_id: other.event_id.unwrap_or_default(),
                 sender,
@@ -876,7 +934,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             item_id,
             timestamp_ms,
         } => TimelineViewRowDto {
-            kind: "date_separator".to_owned(),
+            kind: TimelineRowKindDto::DateSeparator,
             item_id,
             event_id: String::new(),
             sender: String::new(),
@@ -907,16 +965,24 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_duration_ms: None,
             encryption_shield: None,
         },
-        TimelineViewRow::ReadMarker { item_id } => virtual_row_dto("read_marker", item_id),
-        TimelineViewRow::UnreadMarker { item_id } => virtual_row_dto("unread_marker", item_id),
-        TimelineViewRow::TimelineStart { item_id } => virtual_row_dto("timeline_start", item_id),
-        TimelineViewRow::Pagination { item_id, .. } => virtual_row_dto("pagination", item_id),
+        TimelineViewRow::ReadMarker { item_id } => {
+            virtual_row_dto(TimelineRowKindDto::ReadMarker, item_id)
+        }
+        TimelineViewRow::UnreadMarker { item_id } => {
+            virtual_row_dto(TimelineRowKindDto::UnreadMarker, item_id)
+        }
+        TimelineViewRow::TimelineStart { item_id } => {
+            virtual_row_dto(TimelineRowKindDto::TimelineStart, item_id)
+        }
+        TimelineViewRow::Pagination { item_id, .. } => {
+            virtual_row_dto(TimelineRowKindDto::Pagination, item_id)
+        }
     }
 }
 
-pub(super) fn virtual_row_dto(kind: &str, item_id: String) -> TimelineViewRowDto {
+pub(super) fn virtual_row_dto(kind: TimelineRowKindDto, item_id: String) -> TimelineViewRowDto {
     TimelineViewRowDto {
-        kind: kind.to_owned(),
+        kind,
         item_id,
         event_id: String::new(),
         sender: String::new(),
@@ -999,16 +1065,21 @@ pub(super) fn timeline_read_state_envelope_payload(
     Ok(payload)
 }
 
-pub(super) fn read_action_from_str(
-    action: &str,
-) -> Result<NativeTimelineReadAction, TimelineReadStateError> {
-    match action {
-        "mark_read" => Ok(NativeTimelineReadAction::MarkRead),
-        "mark_unread" => Ok(NativeTimelineReadAction::MarkUnread),
-        _ => Err(timeline_read_state_failed(
-            TIMELINE_READ_STATE_FAILED_CODE,
-            TIMELINE_READ_STATE_FAILED_DESCRIPTION,
-        )),
+impl From<TimelineReadActionDto> for NativeTimelineReadAction {
+    fn from(action: TimelineReadActionDto) -> Self {
+        match action {
+            TimelineReadActionDto::MarkRead => Self::MarkRead,
+            TimelineReadActionDto::MarkUnread => Self::MarkUnread,
+        }
+    }
+}
+
+impl From<TimelineReadIntentDto> for NativeTimelineReadIntent {
+    fn from(intent: TimelineReadIntentDto) -> Self {
+        match intent {
+            TimelineReadIntentDto::AutomaticVisibility => Self::AutomaticVisibility,
+            TimelineReadIntentDto::ExplicitUser => Self::ExplicitUser,
+        }
     }
 }
 
@@ -1016,19 +1087,6 @@ pub(super) fn read_action_as_str(action: NativeTimelineReadAction) -> &'static s
     match action {
         NativeTimelineReadAction::MarkRead => "mark_read",
         NativeTimelineReadAction::MarkUnread => "mark_unread",
-    }
-}
-
-pub(super) fn read_intent_from_str(
-    intent: &str,
-) -> Result<NativeTimelineReadIntent, TimelineReadStateError> {
-    match intent {
-        "automatic_visibility" => Ok(NativeTimelineReadIntent::AutomaticVisibility),
-        "explicit_user" => Ok(NativeTimelineReadIntent::ExplicitUser),
-        _ => Err(timeline_read_state_failed(
-            TIMELINE_READ_STATE_FAILED_CODE,
-            TIMELINE_READ_STATE_FAILED_DESCRIPTION,
-        )),
     }
 }
 
@@ -1189,9 +1247,9 @@ impl SharedCore {
     pub async fn timeline_paginate(
         &self,
         stream_id: String,
-        direction: String,
+        direction: TimelineDirectionDto,
     ) -> Result<TimelineSnapshotDto, TimelineError> {
-        let direction = paginate_direction(&direction)?;
+        let direction = paginate_direction(direction);
         let response = self
             .core
             .timeline_paginate(crate::core_api::MatrixTimelinePaginateRequest {
@@ -1233,12 +1291,12 @@ impl SharedCore {
     pub async fn timeline_set_read_state(
         &self,
         stream_id: String,
-        action: String,
-        intent: String,
+        action: TimelineReadActionDto,
+        intent: TimelineReadIntentDto,
         observed_live_tail_event_id: Option<String>,
     ) -> Result<TimelineReadStateDto, TimelineReadStateError> {
-        let action = read_action_from_str(&action)?;
-        let intent = read_intent_from_str(&intent)?;
+        let action = NativeTimelineReadAction::from(action);
+        let intent = NativeTimelineReadIntent::from(intent);
         timeline_read_state_envelope_payload(serde_json::json!({
             "streamId": stream_id,
             "action": read_action_as_str(action),
@@ -1260,7 +1318,7 @@ impl SharedCore {
             .await?;
         let readback: NativeTimelineReadStateReadback = response;
         Ok(TimelineReadStateDto {
-            action: read_action_as_str(readback.action).to_owned(),
+            action: readback.action.into(),
             receipt_sent: readback.receipt_sent,
             acknowledged_event_id: readback.acknowledged_event_id,
             snapshot: timeline_snapshot_dto(readback.snapshot),

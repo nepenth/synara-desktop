@@ -8,7 +8,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use synara_core::app::store::AccountIdentity;
-use synara_core::{IosSecretVault, IosSecretVaultError, SharedCore, TimelineOpenPositionDto};
+use synara_core::{
+    IosSecretVault, IosSecretVaultError, SharedCore, TimelineDirectionDto, TimelineOpenKindDto,
+    TimelineOpenPositionDto,
+};
 
 struct MemoryCallbackVault(Arc<Mutex<HashMap<String, Vec<u8>>>>);
 
@@ -52,7 +55,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 fn live_bottom() -> TimelineOpenPositionDto {
     TimelineOpenPositionDto {
-        kind: "live_bottom".to_owned(),
+        kind: TimelineOpenKindDto::LiveBottom,
         at_bottom: false,
         restored_anchor_event_id: None,
         live_tail_event_id: None,
@@ -101,7 +104,7 @@ fn timeline_without_session_fails_closed_without_echo() {
         .block_on(shared.timeline_close("view-1".to_owned()))
         .expect_err("no attached timeline owner");
     let paginate = rt
-        .block_on(shared.timeline_paginate("view-1".to_owned(), "backwards".to_owned()))
+        .block_on(shared.timeline_paginate("view-1".to_owned(), TimelineDirectionDto::Backwards))
         .expect_err("no attached timeline owner");
     let snapshot = rt
         .block_on(shared.timeline_snapshot("view-1".to_owned()))
@@ -155,7 +158,9 @@ fn timeline_without_started_sync_returns_handler_result_without_echo() {
     assert!(!closed);
 
     let paginate = rt
-        .block_on(shared.timeline_paginate("view-missing".to_owned(), "backwards".to_owned()))
+        .block_on(
+            shared.timeline_paginate("view-missing".to_owned(), TimelineDirectionDto::Backwards),
+        )
         .expect_err("paginate of an unknown stream uses the registered handler");
     let paginate_text = format!("{paginate:?}{paginate}");
     assert!(paginate_text.contains("v-timeline-view-not-open"));

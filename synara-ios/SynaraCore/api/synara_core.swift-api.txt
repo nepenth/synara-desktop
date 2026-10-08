@@ -203,6 +203,7 @@ extension ThreepidSnapshotDto: Sendable
 extension ThreepidWriteDto: Sendable
 extension TimelineActionKindDto: Sendable
 extension TimelineActionStatusDto: Sendable
+extension TimelineDirectionDto: Sendable
 extension TimelineError: Sendable
 extension TimelineEventItemDto: Sendable
 extension TimelineEventReadbackDto: Sendable
@@ -212,15 +213,21 @@ extension TimelineMediaError: Sendable
 extension TimelineMutateDto: Sendable
 extension TimelineMutateError: Sendable
 extension TimelineOpenDto: Sendable
+extension TimelineOpenKindDto: Sendable
 extension TimelineOpenPositionDto: Sendable
+extension TimelinePageStateDto: Sendable
 extension TimelinePinDto: Sendable
 extension TimelinePinError: Sendable
+extension TimelinePositionKindDto: Sendable
 extension TimelineReactionDto: Sendable
 extension TimelineReactionError: Sendable
 extension TimelineReactionMutationDto: Sendable
 extension TimelineReactionSenderDto: Sendable
+extension TimelineReadActionDto: Sendable
+extension TimelineReadIntentDto: Sendable
 extension TimelineReadStateDto: Sendable
 extension TimelineReadStateError: Sendable
+extension TimelineRowKindDto: Sendable
 extension TimelineSnapshotDto: Sendable
 extension TimelineViewEncryptionShieldDto: Sendable
 extension TimelineViewPollAnswerDto: Sendable
@@ -422,14 +429,14 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func timelineJumpLatest(streamId: String) async throws -> TimelineOpenDto
   open func timelineMediaBytes(handleId: String) async throws -> LeftoverBytesDto
   open func timelineOpen(roomId: String, position: TimelineOpenPositionDto) async throws -> TimelineOpenDto
-  open func timelinePaginate(streamId: String, direction: String) async throws -> TimelineSnapshotDto
+  open func timelinePaginate(streamId: String, direction: TimelineDirectionDto) async throws -> TimelineSnapshotDto
   open func timelinePin(roomId: String, eventId: String) async throws -> TimelinePinDto
   open func timelinePollVote(roomId: String, eventId: String, answerIds: [String]) async throws -> TimelineVoteDeclineDto
   open func timelineReactionToggle(roomId: String, eventId: String, key: String) async throws -> TimelineReactionMutationDto
   open func timelineRedact(roomId: String, eventId: String, reason: String?) async throws -> TimelineMutateDto
   open func timelineReport(roomId: String, eventId: String, reason: String?) async throws -> TimelineMutateDto
   open func timelineRetryDecryption(streamId: String) async throws -> Bool
-  open func timelineSetReadState(streamId: String, action: String, intent: String, observedLiveTailEventId: String?) async throws -> TimelineReadStateDto
+  open func timelineSetReadState(streamId: String, action: TimelineReadActionDto, intent: TimelineReadIntentDto, observedLiveTailEventId: String?) async throws -> TimelineReadStateDto
   open func timelineSnapshot(streamId: String) async throws -> TimelineSnapshotDto
   open func timelineUnpin(roomId: String, eventId: String) async throws -> TimelinePinDto
   open func typingSet(roomId: String, typing: Bool) async throws
@@ -759,6 +766,9 @@ public enum TimelineActionStatusDto: Equatable, Hashable
   case alreadyUnpinned
   case voted
   case declined
+public enum TimelineDirectionDto: Equatable, Hashable
+  case backwards
+  case forwards
 public enum TimelineError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -771,15 +781,53 @@ public enum TimelineMediaError: Swift.Error, Equatable, Hashable, Foundation.Loc
 public enum TimelineMutateError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum TimelineOpenKindDto: Equatable, Hashable
+  case liveBottom
+  case unread
+  case focused
+  case thread
+  case normal
+public enum TimelinePageStateDto: Equatable, Hashable
+  case available
+  case exhausted
+  case loading
+  case unavailable
 public enum TimelinePinError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum TimelinePositionKindDto: Equatable, Hashable
+  case liveBottom
+  case unread
+  case focused
+  case thread
+  case restored
 public enum TimelineReactionError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum TimelineReadActionDto: Equatable, Hashable
+  case markRead
+  case markUnread
+public enum TimelineReadIntentDto: Equatable, Hashable
+  case automaticVisibility
+  case explicitUser
 public enum TimelineReadStateError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum TimelineRowKindDto: Equatable, Hashable
+  case message
+  case sticker
+  case poll
+  case membership
+  case state
+  case call
+  case redacted
+  case encrypted
+  case other
+  case dateSeparator
+  case readMarker
+  case unreadMarker
+  case timelineStart
+  case pagination
 public enum TimelineViewUpdateError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -994,14 +1042,14 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func timelineJumpLatest(streamId: String) async throws -> TimelineOpenDto
   func timelineMediaBytes(handleId: String) async throws -> LeftoverBytesDto
   func timelineOpen(roomId: String, position: TimelineOpenPositionDto) async throws -> TimelineOpenDto
-  func timelinePaginate(streamId: String, direction: String) async throws -> TimelineSnapshotDto
+  func timelinePaginate(streamId: String, direction: TimelineDirectionDto) async throws -> TimelineSnapshotDto
   func timelinePin(roomId: String, eventId: String) async throws -> TimelinePinDto
   func timelinePollVote(roomId: String, eventId: String, answerIds: [String]) async throws -> TimelineVoteDeclineDto
   func timelineReactionToggle(roomId: String, eventId: String, key: String) async throws -> TimelineReactionMutationDto
   func timelineRedact(roomId: String, eventId: String, reason: String?) async throws -> TimelineMutateDto
   func timelineReport(roomId: String, eventId: String, reason: String?) async throws -> TimelineMutateDto
   func timelineRetryDecryption(streamId: String) async throws -> Bool
-  func timelineSetReadState(streamId: String, action: String, intent: String, observedLiveTailEventId: String?) async throws -> TimelineReadStateDto
+  func timelineSetReadState(streamId: String, action: TimelineReadActionDto, intent: TimelineReadIntentDto, observedLiveTailEventId: String?) async throws -> TimelineReadStateDto
   func timelineSnapshot(streamId: String) async throws -> TimelineSnapshotDto
   func timelineUnpin(roomId: String, eventId: String) async throws -> TimelinePinDto
   func typingSet(roomId: String, typing: Bool) async throws
@@ -1779,13 +1827,13 @@ public struct TimelineOpenDto: Equatable, Hashable
   public var snapshot: TimelineSnapshotDto
   public init(schemaVersion: UInt32, streamId: String, position: TimelineViewPositionDto, snapshot: TimelineSnapshotDto)
 public struct TimelineOpenPositionDto: Equatable, Hashable
-  public var kind: String
+  public var kind: TimelineOpenKindDto
   public var atBottom: Bool
   public var restoredAnchorEventId: String?
   public var liveTailEventId: String?
   public var updatedAtMs: UInt64?
   public var eventId: String?
-  public init(kind: String, atBottom: Bool, restoredAnchorEventId: String?, liveTailEventId: String?, updatedAtMs: UInt64?, eventId: String?)
+  public init(kind: TimelineOpenKindDto, atBottom: Bool, restoredAnchorEventId: String?, liveTailEventId: String?, updatedAtMs: UInt64?, eventId: String?)
 public struct TimelinePinDto: Equatable, Hashable
   public var schemaVersion: UInt32
   public var action: TimelineActionKindDto
@@ -1811,19 +1859,19 @@ public struct TimelineReactionSenderDto: Equatable, Hashable
   public var reactionEventId: String?
   public init(userId: String, reactionEventId: String?)
 public struct TimelineReadStateDto: Equatable, Hashable
-  public var action: String
+  public var action: TimelineReadActionDto
   public var receiptSent: Bool?
   public var acknowledgedEventId: String?
   public var snapshot: TimelineSnapshotDto
-  public init(action: String, receiptSent: Bool?, acknowledgedEventId: String?, snapshot: TimelineSnapshotDto)
+  public init(action: TimelineReadActionDto, receiptSent: Bool?, acknowledgedEventId: String?, snapshot: TimelineSnapshotDto)
 public struct TimelineSnapshotDto: Equatable, Hashable
   public var schemaVersion: UInt32
   public var sessionGeneration: UInt64
   public var roomId: String
   public var revision: UInt64
   public var position: TimelineViewPositionDto
-  public var paginationBackward: String
-  public var paginationForward: String
+  public var paginationBackward: TimelinePageStateDto
+  public var paginationForward: TimelinePageStateDto
   public var visibleTailEventId: String?
   public var receiptTailEventId: String?
   public var ownReadEventId: String?
@@ -1838,7 +1886,7 @@ public struct TimelineSnapshotDto: Equatable, Hashable
   public var canRedactOwn: Bool
   public var canRedactOther: Bool
   public var rows: [TimelineViewRowDto]
-  public init(schemaVersion: UInt32, sessionGeneration: UInt64, roomId: String, revision: UInt64, position: TimelineViewPositionDto, paginationBackward: String, paginationForward: String, visibleTailEventId: String?, receiptTailEventId: String?, ownReadEventId: String?, unreadAnchorEventId: String?, isMarkedUnread: Bool, pinnedEventIds: [String], rowCount: UInt32, markRead: Bool, markUnread: Bool, paginateBackward: Bool, paginateForward: Bool, canRedactOwn: Bool, canRedactOther: Bool, rows: [TimelineViewRowDto])
+  public init(schemaVersion: UInt32, sessionGeneration: UInt64, roomId: String, revision: UInt64, position: TimelineViewPositionDto, paginationBackward: TimelinePageStateDto, paginationForward: TimelinePageStateDto, visibleTailEventId: String?, receiptTailEventId: String?, ownReadEventId: String?, unreadAnchorEventId: String?, isMarkedUnread: Bool, pinnedEventIds: [String], rowCount: UInt32, markRead: Bool, markUnread: Bool, paginateBackward: Bool, paginateForward: Bool, canRedactOwn: Bool, canRedactOther: Bool, rows: [TimelineViewRowDto])
 public struct TimelineViewEncryptionShieldDto: Equatable, Hashable
   public var tone: String
   public var code: String
@@ -1856,9 +1904,9 @@ public struct TimelineViewPollDto: Equatable, Hashable
   public var answers: [TimelineViewPollAnswerDto]
   public init(question: String, closed: Bool, maxSelections: UInt32, answers: [TimelineViewPollAnswerDto])
 public struct TimelineViewPositionDto: Equatable, Hashable
-  public var kind: String
+  public var kind: TimelinePositionKindDto
   public var eventId: String?
-  public init(kind: String, eventId: String?)
+  public init(kind: TimelinePositionKindDto, eventId: String?)
 public struct TimelineViewReactionDto: Equatable, Hashable
   public var key: String
   public var count: UInt32
@@ -1883,7 +1931,7 @@ public struct TimelineViewRowCapabilitiesDto: Equatable, Hashable
   public var declineCall: Bool
   public init(react: Bool, reply: Bool, edit: Bool, redact: Bool, report: Bool, pin: Bool, forward: Bool, vote: Bool, declineCall: Bool)
 public struct TimelineViewRowDto: Equatable, Hashable
-  public var kind: String
+  public var kind: TimelineRowKindDto
   public var itemId: String
   public var eventId: String
   public var sender: String
@@ -1913,7 +1961,7 @@ public struct TimelineViewRowDto: Equatable, Hashable
   public var mediaHeight: UInt32?
   public var mediaDurationMs: UInt64?
   public var encryptionShield: TimelineViewEncryptionShieldDto?
-  public init(kind: String, itemId: String, eventId: String, sender: String, senderName: String, senderAvatarUrl: String?, body: String, originServerTs: UInt64, edited: Bool, replyToEventId: String?, replyPreview: TimelineViewReplyPreviewDto?, threadRootEventId: String?, threadSummary: TimelineViewThreadSummaryDto?, poll: TimelineViewPollDto?, capabilities: TimelineViewRowCapabilitiesDto?, decryptionState: String?, messageType: String?, forwardTransport: String?, formattedBody: String?, agentCardJson: String?, isAgentApproval: Bool, mediaFilename: String?, mediaCaption: String?, reactions: [TimelineViewReactionDto], mediaHandleId: String?, mediaMimeType: String?, mediaWidth: UInt32?, mediaHeight: UInt32?, mediaDurationMs: UInt64?, encryptionShield: TimelineViewEncryptionShieldDto?)
+  public init(kind: TimelineRowKindDto, itemId: String, eventId: String, sender: String, senderName: String, senderAvatarUrl: String?, body: String, originServerTs: UInt64, edited: Bool, replyToEventId: String?, replyPreview: TimelineViewReplyPreviewDto?, threadRootEventId: String?, threadSummary: TimelineViewThreadSummaryDto?, poll: TimelineViewPollDto?, capabilities: TimelineViewRowCapabilitiesDto?, decryptionState: String?, messageType: String?, forwardTransport: String?, formattedBody: String?, agentCardJson: String?, isAgentApproval: Bool, mediaFilename: String?, mediaCaption: String?, reactions: [TimelineViewReactionDto], mediaHandleId: String?, mediaMimeType: String?, mediaWidth: UInt32?, mediaHeight: UInt32?, mediaDurationMs: UInt64?, encryptionShield: TimelineViewEncryptionShieldDto?)
 public struct TimelineViewThreadSummaryDto: Equatable, Hashable
   public var rootEventId: String
   public var replyCount: UInt32
