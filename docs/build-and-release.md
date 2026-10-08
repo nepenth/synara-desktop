@@ -64,7 +64,7 @@ and tested by `scripts/__tests__/ci-scopes.test.mjs`.
 | Job                    | Pull requests and `main`                                      | Nightly / dispatch |
 | ---------------------- | ------------------------------------------------------------- | ------------------ |
 | Rust format and lint   | Rust, Cargo or CI changes                                      | Always             |
-| Rust tests             | Same, in parallel with lint                                    | Always             |
+| Rust tests (4 shards)  | Same; shards and lint run in parallel                          | Always             |
 | Node desktop runtime   | Renderer, scripts, workflow or packaging changes               | Always             |
 | Rust dependency audit  | Lockfile or manifest changes                                   | Always             |
 | iOS compile gate       | iOS/FFI changes when the simulator lane is skipped             | —                  |
@@ -201,7 +201,7 @@ unless overridden. No S3 backend or automatic PR comments are enabled.
 
 | Family                                 | Writer (on `main`)                                           | Readers                                                    |
 | -------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------- |
-| `validate-rust-desktop`                | CI Rust tests                                                | Rust lint, PR Rust jobs and the Synapse live proofs        |
+| `validate-rust-desktop`                | CI `Write Rust compilation cache` (main only)                | Rust lint, Rust test shards and the Synapse live proofs    |
 | `ci-synara-core-apple-simulator-arm64` | CI iOS unit lane, simulator-only without device opt-in       | UI and compile lanes                                       |
 | `release-linux-deb`                    | Nightly Linux package build                                  | Tagged `.deb` release (the Arch package reuses its binary) |
 | `release-macos`                        | Nightly universal macOS app build                            | Tagged universal macOS release                             |

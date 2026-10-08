@@ -135,12 +135,20 @@ jobs:
       - name: Lint desktop-only Core features
         run: cargo clippy --locked -p synara-core --features search-index,x509-identity --all-targets -- -D warnings
 
+  # Four parallel shards, each one compile graph, so the PR critical path is the
+  # slowest shard rather than the sum. Every shard only restores the
+  # validate-rust-desktop snapshot; rust-cache-writer is its single saver, so
+  # sharding does not add cache entries.
   rust-tests:
-    name: Rust tests
+    name: Rust tests (${{ matrix.shard }})
     needs: [changes]
     if: needs.changes.outputs.validate_rust == 'true'
     runs-on: ubuntu-22.04
-    timeout-minutes: 40
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [desktop-shell, core-workspace, core-desktop-features, swift-api]
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -152,35 +160,41 @@ jobs:
         with:
           toolchain: 1.96
 
-      - name: Cache Rust compilation
+      - name: Restore Rust compilation cache
         uses: ./.github/actions/setup-rust-cache
         with:
           family: validate-rust-desktop
-          save-cache: ${{ github.ref == 'refs/heads/main' }}
+          save-cache: "false"
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
 
       - name: Test Rust desktop shell
+        if: matrix.shard == 'desktop-shell'
         run: cargo test --locked
         working-directory: src-tauri
 
       - name: Test shared Rust workspace
+        if: matrix.shard == 'core-workspace'
         env:
           RUST_TEST_THREADS: 4
         run: cargo test --locked -p synara-core -p synara-nse-core -p synara-core-bindgen
 
       - name: Test desktop-only Core features
+        if: matrix.shard == 'core-desktop-features'
         env:
           RUST_TEST_THREADS: 4
         run: cargo test --locked -p synara-core --features search-index,x509-identity
 
       - name: Check generated Swift API surface
+        if: matrix.shard == 'swift-api'
         env:
           SYNARA_APPLE_BINDGEN_TARGET_DIR: ${{ github.workspace }}/target
         run: scripts/check-swift-api-snapshot.sh
 
+      # ts-export reuses the desktop-feature Core dependency graph built above.
       - name: Check generated TypeScript wire types
+        if: matrix.shard == 'core-desktop-features'
         run: |
           scripts/generate-ts-dto.sh
           generated=synara/src/app/features/matrix-dto/generated
@@ -190,6 +204,50 @@ jobs:
             echo "Generated TypeScript wire types are stale; run scripts/generate-ts-dto.sh." >&2
             exit 1
           fi
+
+  # The only validate-rust-desktop writer. It builds every graph the test
+  # shards, lint and Synapse proofs read, without running tests, and saves one
+  # weekly snapshot. It runs on main only, never on a pull request's critical
+  # path, and is not part of the Quality gate.
+  rust-cache-writer:
+    name: Write Rust compilation cache
+    needs: [changes]
+    if: needs.changes.outputs.validate_rust == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust 1.96
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
+        with:
+          toolchain: 1.96
+          components: clippy
+
+      - name: Cache Rust compilation
+        uses: ./.github/actions/setup-rust-cache
+        with:
+          family: validate-rust-desktop
+          save-cache: "true"
+
+      - name: Install Linux Tauri dependencies
+        run: scripts/install-linux-tauri-dependencies.sh
+
+      - name: Build every test and lint graph
+        env:
+          SYNARA_APPLE_BINDGEN_TARGET_DIR: ${{ github.workspace }}/target
+        run: |
+          (cd src-tauri && cargo test --locked --no-run)
+          cargo test --locked --no-run -p synara-core -p synara-nse-core -p synara-core-bindgen
+          cargo test --locked --no-run -p synara-core --features search-index,x509-identity
+          (cd src-tauri && cargo clippy --locked --all-targets)
+          cargo clippy --locked -p synara-core -p synara-nse-core -p synara-core-bindgen --all-targets
+          cargo clippy --locked -p synara-core --features search-index,x509-identity --all-targets
+          scripts/generate-ts-dto.sh
+          scripts/check-swift-api-snapshot.sh
 
   rust-dependency-audit:
     name: Rust dependency audit (cargo-audit)
@@ -769,7 +827,7 @@ jobs:
   # repository cache limit instead of being evicted by older CI snapshots.
   prune-caches:
     name: Prune superseded Actions caches
-    needs: [changes, rust-tests, ios-tests, package-linux, package-macos, seed-apple-device]
+    needs: [changes, rust-cache-writer, ios-tests, package-linux, package-macos, seed-apple-device]
     if: always() && !cancelled() && needs.changes.outputs.packages == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-22.04
     timeout-minutes: 10
