@@ -3,6 +3,7 @@
 //! Uses `Client::notification_settings()`. No tokens. Keyword strings may
 //! cross as method/command arguments; failed errors never echo them.
 
+use crate::dto::WriteAck;
 use matrix_sdk::notification_settings::{IsEncrypted, IsOneToOne, RoomNotificationMode};
 use matrix_sdk::ruma::push::RuleKind;
 use matrix_sdk::Client;
@@ -42,7 +43,7 @@ pub struct MatrixPushRuleMentions {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatrixPushRulesWriteResult {
-    pub status: &'static str,
+    pub status: WriteAck,
 }
 
 pub(crate) fn mode_to_wire(mode: RoomNotificationMode) -> &'static str {
@@ -148,7 +149,9 @@ pub async fn set_default_room_mode(
         .set_default_room_notification_mode(encrypted.into(), one_to_one.into(), mode)
         .await
         .map_err(|_| "v-push.sdk-failed")?;
-    Ok(MatrixPushRulesWriteResult { status: "ok" })
+    Ok(MatrixPushRulesWriteResult {
+        status: crate::dto::WriteAck::Ok,
+    })
 }
 
 pub async fn set_mention_enabled(
@@ -164,7 +167,9 @@ pub async fn set_mention_enabled(
         .set_push_rule_enabled(kind, matrix_rule_id, enabled)
         .await
         .map_err(|_| "v-push.sdk-failed")?;
-    Ok(MatrixPushRulesWriteResult { status: "ok" })
+    Ok(MatrixPushRulesWriteResult {
+        status: crate::dto::WriteAck::Ok,
+    })
 }
 
 pub async fn add_keyword(
@@ -181,7 +186,9 @@ pub async fn add_keyword(
         .add_keyword(keyword)
         .await
         .map_err(|_| "v-push.sdk-failed")?;
-    Ok(MatrixPushRulesWriteResult { status: "ok" })
+    Ok(MatrixPushRulesWriteResult {
+        status: crate::dto::WriteAck::Ok,
+    })
 }
 
 pub async fn remove_keyword(
@@ -196,7 +203,9 @@ pub async fn remove_keyword(
         .remove_keyword(&keyword)
         .await
         .map_err(|_| "v-push.sdk-failed")?;
-    Ok(MatrixPushRulesWriteResult { status: "ok" })
+    Ok(MatrixPushRulesWriteResult {
+        status: crate::dto::WriteAck::Ok,
+    })
 }
 
 #[cfg(test)]

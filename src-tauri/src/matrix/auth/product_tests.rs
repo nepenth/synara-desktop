@@ -1110,7 +1110,7 @@ fn send_result_serialization_is_privacy_safe() {
         room_id: "!room:example.org".into(),
         event_id: "$event:example.org".into(),
         local_txn_id: "local-txn-1".into(),
-        status: "sent",
+        status: synara_core::dto::SendStatus::Sent,
     };
     let json = serde_json::to_string(&result).unwrap();
     assert_eq!(
@@ -2065,7 +2065,7 @@ fn space_commands_route_through_core_without_desktop_client_io() {
 #[test]
 fn power_level_and_creator_snapshots_have_fixed_wire_shapes() {
     let power_levels = NativeRoomPowerLevelsSnapshot {
-        status: "ok",
+        status: synara_core::dto::WriteAck::Ok,
         session_generation: 7,
         room_id: "!room:example.org".to_owned(),
         event_type: "m.room.power_levels",
@@ -2095,7 +2095,7 @@ fn power_level_and_creator_snapshots_have_fixed_wire_shapes() {
     );
 
     let creators = NativeRoomCreatorsSnapshot {
-        status: "ok",
+        status: synara_core::dto::WriteAck::Ok,
         session_generation: 7,
         room_id: "!room:example.org".to_owned(),
         event_type: "m.room.create",
@@ -2115,7 +2115,7 @@ fn power_level_and_creator_snapshots_have_fixed_wire_shapes() {
     );
 
     let tags = NativeRoomPowerLevelTagsSnapshot {
-        status: "ok",
+        status: synara_core::dto::WriteAck::Ok,
         session_generation: 7,
         room_id: "!room:example.org".to_owned(),
         event_type: "in.synara.room.power_level_tags",
@@ -2402,7 +2402,7 @@ fn room_directory_visibility_parsers_and_wire_shapes_are_strict() {
     );
 
     let read = serde_json::to_value(MatrixRoomDirectoryVisibilityResult {
-        status: "ok",
+        status: synara_core::dto::WriteAck::Ok,
         room_id: "!room:example.org".into(),
         session_generation: 7,
         visibility: "public",
@@ -2419,7 +2419,7 @@ fn room_directory_visibility_parsers_and_wire_shapes_are_strict() {
     );
 
     let write = serde_json::to_value(MatrixRoomDirectoryVisibilityWriteResult {
-        status: "ok",
+        status: synara_core::dto::WriteAck::Ok,
         room_id: "!room:example.org".into(),
         session_generation: 7,
         requested_visibility: "private",
@@ -2503,7 +2503,7 @@ fn room_moderation_commands_use_live_sdk_methods_without_js_fallbacks() {
 #[test]
 fn power_level_write_result_serializes_exact_wire_shape() {
     let result = NativePowerLevelWriteResult {
-        status: "ok",
+        status: synara_core::dto::WriteAck::Ok,
         room_id: "!room:example.org".to_owned(),
         event_type: crate::matrix::members::ROOM_POWER_LEVELS_EVENT_TYPE,
         state_key: "",

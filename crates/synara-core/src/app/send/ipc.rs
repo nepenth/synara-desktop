@@ -2,6 +2,7 @@
 //!
 //! Live Client send I/O stays in the desktop shell.
 
+use crate::dto::SendStatus;
 use serde::Serialize;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -10,7 +11,7 @@ pub struct MatrixSendTextResult {
     pub room_id: String,
     pub event_id: String,
     pub local_txn_id: String,
-    pub status: &'static str,
+    pub status: SendStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -19,7 +20,7 @@ pub struct MatrixSendAttachmentResult {
     pub room_id: String,
     pub event_id: String,
     pub local_txn_id: String,
-    pub status: &'static str,
+    pub status: SendStatus,
 }
 
 /// Dedicated Core attachment send ack. Event id and status only — no bytes.
@@ -27,7 +28,7 @@ pub struct MatrixSendAttachmentResult {
 #[serde(rename_all = "camelCase")]
 pub struct MatrixSendRoomAttachmentResult {
     pub event_id: String,
-    pub status: &'static str,
+    pub status: SendStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -35,7 +36,7 @@ pub struct MatrixSendRoomAttachmentResult {
 pub struct MatrixSendPollResult {
     pub room_id: String,
     pub event_id: String,
-    pub status: &'static str,
+    pub status: SendStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -44,7 +45,7 @@ pub struct MatrixPollRespondResult {
     pub room_id: String,
     pub poll_event_id: String,
     pub event_id: String,
-    pub status: &'static str,
+    pub status: SendStatus,
 }
 
 #[cfg(test)]
@@ -57,7 +58,7 @@ mod tests {
             room_id: "!room:example.org".into(),
             event_id: "$event:example.org".into(),
             local_txn_id: "local-txn-1".into(),
-            status: "sent",
+            status: crate::dto::SendStatus::Sent,
         };
         let json = serde_json::to_string(&result).unwrap();
         assert_eq!(

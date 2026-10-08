@@ -2,6 +2,7 @@
 //!
 //! Live Client hierarchy/child I/O lives in `live.rs`.
 
+use crate::dto::MutationStatus;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use serde::{Deserialize, Serialize};
@@ -75,7 +76,7 @@ pub struct NativeSpaceChildMutationResult {
     pub parent_id: String,
     pub child_id: String,
     #[cfg_attr(feature = "ts-export", ts(type = "\"updated\" | \"removed\""))]
-    pub status: &'static str,
+    pub status: MutationStatus,
 }
 
 #[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
@@ -84,7 +85,7 @@ pub struct NativeSpaceChildMutationResult {
 pub struct NativeRestrictedJoinReparentResult {
     pub room_id: String,
     #[cfg_attr(feature = "ts-export", ts(type = "\"updated\" | \"skipped\""))]
-    pub status: &'static str,
+    pub status: MutationStatus,
 }
 
 /// Reject edges that would make `child` an ancestor of `parent` (JS cycle guard).
@@ -200,7 +201,7 @@ mod tests {
         let result = NativeSpaceChildMutationResult {
             parent_id: "!space:example.org".into(),
             child_id: "!room:example.org".into(),
-            status: "updated",
+            status: crate::dto::MutationStatus::Updated,
         };
         let value = serde_json::to_value(&result).expect("serialize");
         assert_eq!(value["status"], "updated");

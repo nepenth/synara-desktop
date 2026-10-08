@@ -1444,7 +1444,7 @@ impl NativeTimelineOwner {
                 room_id,
                 event_id: String::new(),
                 local_txn_id,
-                status: "queued",
+                status: crate::dto::SendStatus::Queued,
             });
         }
         let ack = send_result.map_err(|error| error.diagnostic_id)?;
@@ -1452,7 +1452,7 @@ impl NativeTimelineOwner {
             room_id,
             event_id: ack.event_id,
             local_txn_id,
-            status: "sent",
+            status: crate::dto::SendStatus::Sent,
         })
     }
 
@@ -1568,7 +1568,7 @@ impl NativeTimelineOwner {
         Ok(MatrixSendPollResult {
             room_id: parsed_room.to_string(),
             event_id: outcome.event_id(),
-            status: outcome.status("sent"),
+            status: outcome.send_status(),
         })
     }
 
@@ -1591,7 +1591,7 @@ impl NativeTimelineOwner {
             room_id: parsed_room.to_string(),
             poll_event_id,
             event_id: outcome.event_id(),
-            status: outcome.status("sent"),
+            status: outcome.send_status(),
         })
     }
 
@@ -2068,7 +2068,11 @@ impl NativeTimelineOwner {
         let draft = load_reply_draft_preview(&room, &event_id, start_thread).await?;
         let room_id_string = room_id.to_string();
         let draft = self.drafts.lock().await.set(room_id_string.clone(), draft);
-        Ok(reply_draft_readback(room_id_string, "set", Some(draft)))
+        Ok(reply_draft_readback(
+            room_id_string,
+            crate::dto::ComposerDraftStatus::Set,
+            Some(draft),
+        ))
     }
 
     pub async fn clear_reply_draft(
@@ -2086,8 +2090,16 @@ impl NativeTimelineOwner {
             expected_draft_revision,
         );
         Ok(match superseding_draft {
-            Some(draft) => reply_draft_readback(room_id_string, "set", Some(draft)),
-            None => reply_draft_readback(room_id_string, "cleared", None),
+            Some(draft) => reply_draft_readback(
+                room_id_string,
+                crate::dto::ComposerDraftStatus::Set,
+                Some(draft),
+            ),
+            None => reply_draft_readback(
+                room_id_string,
+                crate::dto::ComposerDraftStatus::Cleared,
+                None,
+            ),
         })
     }
 
@@ -2107,7 +2119,11 @@ impl NativeTimelineOwner {
             .cloned();
         Ok(reply_draft_readback(
             room_id_string,
-            if draft.is_some() { "set" } else { "empty" },
+            if draft.is_some() {
+                crate::dto::ComposerDraftStatus::Set
+            } else {
+                crate::dto::ComposerDraftStatus::Empty
+            },
             draft,
         ))
     }

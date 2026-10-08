@@ -1,6 +1,7 @@
 //! Core command adapters for notifications.
 
 use super::*;
+use crate::dto::WriteAck;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -357,7 +358,7 @@ pub(super) fn notification_decision_owner_error(diagnostic_id: &'static str) -> 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MatrixNotificationFocusSetResult {
     /// Always `ok`.
-    pub status: String,
+    pub status: WriteAck,
 }
 
 /// Readback of `matrix_notification_dismiss`.
@@ -387,7 +388,7 @@ pub(super) async fn notification_focus_set(
             MatrixIpcError::new(error.category()).with_diagnostic(error.diagnostic_id())
         })?;
     Ok(MatrixNotificationFocusSetResult {
-        status: "ok".to_owned(),
+        status: crate::dto::WriteAck::Ok,
     })
 }
 

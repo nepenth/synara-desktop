@@ -25,6 +25,7 @@ mod thread;
 mod timeline;
 mod typing;
 mod upload;
+mod write_status;
 
 pub use ids::*;
 pub use media::*;
@@ -41,6 +42,7 @@ pub use thread::*;
 pub use timeline::*;
 pub use typing::*;
 pub use upload::*;
+pub use write_status::*;
 
 /// Policy: media bytes must never ride JSON IPC (mirrors IPC constant).
 pub const FORBID_MEDIA_BYTES_OVER_JSON_IPC: bool = true;

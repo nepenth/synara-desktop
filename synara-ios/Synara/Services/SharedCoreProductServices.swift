@@ -871,11 +871,11 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         }
     }
 
-    func addThreepidEmail() async -> String? {
+    func addThreepidEmail() async -> ThreepidAddStatusDto? {
         try? await SharedCoreAccountSettings.threepidAddEmail(core: host.core).status
     }
 
-    func addThreepidEmailPassword(_ password: String) async -> String? {
+    func addThreepidEmailPassword(_ password: String) async -> ThreepidAddStatusDto? {
         try? await SharedCoreAccountSettings.threepidAddEmailPassword(core: host.core, password: password).status
     }
 }

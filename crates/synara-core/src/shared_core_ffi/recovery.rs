@@ -212,7 +212,7 @@ pub struct RoomKeyTransferStatusDto {
 /// Privacy-safe backup restore ack. Status only; never recovery key or passphrase.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RestoreBackupDto {
-    pub status: String,
+    pub status: WriteAckDto,
 }
 
 /// Static fail-closed backup restore error. Fields are source constants only.
@@ -353,7 +353,7 @@ impl SharedCore {
                 map_restore_backup_core_error(RESTORE_BACKUP_NO_SESSION_CODE, error)
             })?;
         Ok(RestoreBackupDto {
-            status: result.status.to_owned(),
+            status: result.status.into(),
         })
     }
 

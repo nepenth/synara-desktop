@@ -911,7 +911,12 @@ mod composer_pure {
             .is_none());
         assert!(registry.get("!room:example.org", None).is_none());
         assert_eq!(
-            reply_draft_readback("!room:example.org".into(), "cleared", None).status,
+            reply_draft_readback(
+                "!room:example.org".into(),
+                synara_core::dto::ComposerDraftStatus::Cleared,
+                None
+            )
+            .status,
             "cleared"
         );
     }

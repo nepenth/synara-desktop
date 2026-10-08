@@ -235,7 +235,7 @@ pub async fn matrix_send_attachment(
         room_id: room_id.to_string(),
         event_id: outcome.event_id(),
         local_txn_id,
-        status: outcome.status("sent"),
+        status: outcome.send_status(),
     })
 }
 

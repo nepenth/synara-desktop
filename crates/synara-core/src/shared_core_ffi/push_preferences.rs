@@ -27,7 +27,7 @@ pub struct PushRulesSnapshotDto {
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PushRulesWriteDto {
-    pub status: String,
+    pub status: WriteAckDto,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
@@ -108,7 +108,7 @@ pub(super) fn push_rules_write_dto(
     let status = Some(payload.status)
         .ok_or_else(|| push_rules_failed(PUSH_RULES_FAILED_CODE, PUSH_RULES_FAILED_DESCRIPTION))?;
     Ok(PushRulesWriteDto {
-        status: status.to_owned(),
+        status: status.into(),
     })
 }
 
@@ -125,7 +125,7 @@ pub struct RoomNotificationsSnapshotDto {
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomNotificationWriteDto {
-    pub status: String,
+    pub status: WriteAckDto,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
@@ -222,14 +222,14 @@ pub(super) fn room_notification_write_dto(
         )
     })?;
     Ok(RoomNotificationWriteDto {
-        status: status.to_owned(),
+        status: status.into(),
     })
 }
 
 /// Privacy-safe HTTP pusher write ack. Status only; never push key or URL.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PusherWriteDto {
-    pub status: String,
+    pub status: WriteAckDto,
 }
 
 /// Account-bound HTTP pusher capability. It retains the exact Core owner—and
@@ -271,7 +271,7 @@ impl HttpPusherOwner {
             )
         })?;
         Ok(PusherWriteDto {
-            status: result.status.to_owned(),
+            status: result.status.into(),
         })
     }
 
@@ -295,7 +295,7 @@ impl HttpPusherOwner {
             )
         })?;
         Ok(PusherWriteDto {
-            status: result.status.to_owned(),
+            status: result.status.into(),
         })
     }
 
@@ -322,7 +322,7 @@ impl HttpPusherOwner {
             )
         })?;
         Ok(PusherWriteDto {
-            status: result.status.to_owned(),
+            status: result.status.into(),
         })
     }
 }
@@ -458,7 +458,7 @@ impl SharedCore {
                 map_http_pusher_core_error(REGISTER_HTTP_PUSHER_NO_SESSION_CODE, error)
             })?;
         Ok(PusherWriteDto {
-            status: result.status.to_owned(),
+            status: result.status.into(),
         })
     }
 
@@ -502,7 +502,7 @@ impl SharedCore {
                 map_http_pusher_core_error(DELETE_HTTP_PUSHER_NO_SESSION_CODE, error)
             })?;
         Ok(PusherWriteDto {
-            status: result.status.to_owned(),
+            status: result.status.into(),
         })
     }
 

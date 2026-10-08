@@ -83,7 +83,7 @@ impl NativeUserStatusOwner {
                     return Err("v-user-status-unsupported");
                 }
                 Ok(NativeUserStatusWriteResult {
-                    status: "ok".to_owned(),
+                    status: crate::dto::WriteAck::Ok,
                 })
             }
             UserStatusSource::Client(client) => {
@@ -101,7 +101,7 @@ impl NativeUserStatusOwner {
                         .map_err(|_| "v-user-status-set-sdk-failed")?,
                 }
                 Ok(NativeUserStatusWriteResult {
-                    status: "ok".to_owned(),
+                    status: crate::dto::WriteAck::Ok,
                 })
             }
         }

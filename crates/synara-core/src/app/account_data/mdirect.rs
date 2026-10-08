@@ -3,6 +3,7 @@
 //! Live Client load/store is in `mdirect_live` and is owned by the image-pack
 //! session owner.
 
+use crate::dto::MutationStatus;
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
@@ -25,7 +26,7 @@ pub struct NativeMDirectSnapshot {
 pub struct NativeMDirectMutationResult {
     pub room_id: String,
     #[cfg_attr(feature = "ts-export", ts(type = "\"updated\""))]
-    pub status: &'static str,
+    pub status: MutationStatus,
 }
 
 pub fn snapshot_from_mdirect_rooms(

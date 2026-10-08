@@ -179,7 +179,7 @@ pub async fn set_space_child(
     Ok(NativeSpaceChildMutationResult {
         parent_id: parent.to_string(),
         child_id: child.to_string(),
-        status: "updated",
+        status: crate::dto::MutationStatus::Updated,
     })
 }
 
@@ -200,7 +200,7 @@ pub async fn remove_space_child(
     Ok(NativeSpaceChildMutationResult {
         parent_id: parent.to_string(),
         child_id: child.to_string(),
-        status: "removed",
+        status: crate::dto::MutationStatus::Removed,
     })
 }
 
@@ -227,7 +227,7 @@ pub async fn reparent_restricted_join_allow(
     let Some(raw) = raw else {
         return Ok(NativeRestrictedJoinReparentResult {
             room_id: room_id.to_string(),
-            status: "skipped",
+            status: crate::dto::MutationStatus::Skipped,
         });
     };
     let event = match raw {
@@ -237,14 +237,14 @@ pub async fn reparent_restricted_join_allow(
         RawSyncOrStrippedState::Stripped(_) => {
             return Ok(NativeRestrictedJoinReparentResult {
                 room_id: room_id.to_string(),
-                status: "skipped",
+                status: crate::dto::MutationStatus::Skipped,
             });
         }
     };
     let Some(original) = event.as_original() else {
         return Ok(NativeRestrictedJoinReparentResult {
             room_id: room_id.to_string(),
-            status: "skipped",
+            status: crate::dto::MutationStatus::Skipped,
         });
     };
 
@@ -258,7 +258,7 @@ pub async fn reparent_restricted_join_allow(
         _ => {
             return Ok(NativeRestrictedJoinReparentResult {
                 room_id: room_id.to_string(),
-                status: "skipped",
+                status: crate::dto::MutationStatus::Skipped,
             });
         }
     };
@@ -269,7 +269,7 @@ pub async fn reparent_restricted_join_allow(
 
     Ok(NativeRestrictedJoinReparentResult {
         room_id: room_id.to_string(),
-        status: "updated",
+        status: crate::dto::MutationStatus::Updated,
     })
 }
 

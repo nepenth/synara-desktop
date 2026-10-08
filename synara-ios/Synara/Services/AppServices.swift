@@ -114,8 +114,8 @@ protocol MatrixClientServicing: AnyObject {
     func threepidEmails() async -> [String]
     func deleteThreepidEmail(_ address: String) async -> Bool
     func requestThreepidEmailToken(_ email: String) async -> Bool
-    func addThreepidEmail() async -> String?
-    func addThreepidEmailPassword(_ password: String) async -> String?
+    func addThreepidEmail() async -> ThreepidAddStatusDto?
+    func addThreepidEmailPassword(_ password: String) async -> ThreepidAddStatusDto?
 }
 
 struct SynaraPushRuleMentions {
@@ -243,8 +243,8 @@ extension MatrixClientServicing {
         _ = email
         return false
     }
-    func addThreepidEmail() async -> String? { nil }
-    func addThreepidEmailPassword(_ password: String) async -> String? {
+    func addThreepidEmail() async -> ThreepidAddStatusDto? { nil }
+    func addThreepidEmailPassword(_ password: String) async -> ThreepidAddStatusDto? {
         _ = password
         return nil
     }

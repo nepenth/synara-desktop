@@ -3,6 +3,7 @@
 //! Write acks never echo emoji or text. Parsers are byte-capped and do not
 //! share the `m.presence` online/unavailable/offline vocabulary.
 
+use crate::dto::WriteAck;
 use serde::{Deserialize, Serialize};
 
 pub const USER_STATUS_MARKER: &str = "matrix-user-status-msc4426";
@@ -46,7 +47,7 @@ pub struct NativeUserStatusSnapshot {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeUserStatusWriteResult {
-    pub status: String,
+    pub status: WriteAck,
 }
 
 /// Parsed own-status write. Empty emoji and text become a clear.
@@ -121,7 +122,7 @@ mod tests {
     #[test]
     fn write_ack_never_echoes_emoji_or_text() {
         let ack = NativeUserStatusWriteResult {
-            status: "ok".to_owned(),
+            status: crate::dto::WriteAck::Ok,
         };
         let wire = serde_json::to_value(&ack).expect("serialize");
         assert_eq!(wire, serde_json::json!({"status": "ok"}));

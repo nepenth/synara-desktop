@@ -3,6 +3,7 @@
 //! Recovery secrets are method arguments only. This module never stores or
 //! serializes them.
 
+use crate::dto::WriteAck;
 use matrix_sdk::{
     encryption::{
         backups::BackupState,
@@ -21,7 +22,7 @@ use super::{
 /// Privacy-safe restore ack. Status is always `"ok"` on success.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatrixRestoreBackupResult {
-    pub status: &'static str,
+    pub status: WriteAck,
 }
 
 fn backup_engine_phase(state: BackupState) -> NativeBackupEnginePhase {
@@ -91,7 +92,9 @@ pub async fn restore(
         return Err("v-crypto.3-recovery-secret-empty");
     }
     restore_operation(client, session_generation, recovery_secret).await?;
-    Ok(MatrixRestoreBackupResult { status: "ok" })
+    Ok(MatrixRestoreBackupResult {
+        status: crate::dto::WriteAck::Ok,
+    })
 }
 
 pub async fn setup(

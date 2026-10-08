@@ -1,6 +1,7 @@
 //! Core command adapters for messaging.
 
 use super::*;
+use crate::dto::LocalEchoRetryStatus;
 
 /// Exact React/Tauri envelope payload for `matrix_timeline_close`.
 #[derive(Deserialize)]
@@ -922,7 +923,7 @@ pub struct MatrixLocalEchoRetryResult {
     pub room_id: String,
     pub transaction_id: String,
     /// Always `retrying`.
-    pub status: String,
+    pub status: LocalEchoRetryStatus,
 }
 
 pub(super) async fn local_echo_discard(
@@ -976,7 +977,7 @@ pub(super) async fn local_echo_retry(
     Ok(MatrixLocalEchoRetryResult {
         room_id: payload.room_id,
         transaction_id,
-        status: "retrying".to_owned(),
+        status: crate::dto::LocalEchoRetryStatus::Retrying,
     })
 }
 

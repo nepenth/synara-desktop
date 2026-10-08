@@ -47,7 +47,7 @@ pub async fn add_room_to_mdirect(
         .map_err(|_| "v-rooms.5-mdirect-set-failed")?;
     Ok(NativeMDirectMutationResult {
         room_id: room_id.to_string(),
-        status: "updated",
+        status: crate::dto::MutationStatus::Updated,
     })
 }
 
@@ -65,7 +65,7 @@ pub async fn remove_room_from_mdirect(
         .map_err(|_| "v-rooms.5-mdirect-set-failed")?;
     Ok(NativeMDirectMutationResult {
         room_id: room_id.to_string(),
-        status: "updated",
+        status: crate::dto::MutationStatus::Updated,
     })
 }
 

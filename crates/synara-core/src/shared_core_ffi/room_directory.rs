@@ -154,15 +154,6 @@ pub(super) fn directory_search_envelope_payload(
     Ok(payload)
 }
 
-pub(super) fn closed_directory_search_status(value: &str) -> Option<&'static str> {
-    match value {
-        "ready" => Some("ready"),
-        "stale" => Some("stale"),
-        "cancelled" => Some("cancelled"),
-        _ => None,
-    }
-}
-
 pub(super) fn closed_directory_room_type(value: &str) -> Option<&'static str> {
     match value {
         "room" => Some("room"),

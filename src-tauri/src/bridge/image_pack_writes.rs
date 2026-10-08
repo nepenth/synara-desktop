@@ -12,7 +12,9 @@ pub(crate) async fn set_user_image_pack(
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
     core.set_user_image_pack(synara_core::core_api::MatrixSetImagePackContentRequest { content })
         .await
-        .map(|_| MatrixProfileWriteResult { status: "ok" })
+        .map(|_| MatrixProfileWriteResult {
+            status: synara_core::dto::WriteAck::Ok,
+        })
         .map_err(map_image_pack_write_core_error)
 }
 
@@ -22,7 +24,9 @@ pub(crate) async fn set_global_image_packs(
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
     core.set_global_image_packs(synara_core::core_api::MatrixSetImagePackContentRequest { content })
         .await
-        .map(|_| MatrixProfileWriteResult { status: "ok" })
+        .map(|_| MatrixProfileWriteResult {
+            status: synara_core::dto::WriteAck::Ok,
+        })
         .map_err(map_image_pack_write_core_error)
 }
 
@@ -38,7 +42,9 @@ pub(crate) async fn set_room_image_pack(
         content,
     })
     .await
-    .map(|_| MatrixProfileWriteResult { status: "ok" })
+    .map(|_| MatrixProfileWriteResult {
+        status: synara_core::dto::WriteAck::Ok,
+    })
     .map_err(map_image_pack_write_core_error)
 }
 

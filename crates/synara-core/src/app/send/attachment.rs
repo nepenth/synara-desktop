@@ -175,7 +175,7 @@ pub async fn send_room_attachment(
     // made the user attach it again and post a duplicate.
     Ok(MatrixSendRoomAttachmentResult {
         event_id: outcome.event_id(),
-        status: outcome.status("sent"),
+        status: outcome.send_status(),
     })
 }
 

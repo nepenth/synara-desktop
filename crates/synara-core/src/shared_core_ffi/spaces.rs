@@ -67,14 +67,14 @@ pub struct SpaceChildrenSnapshotDto {
 pub struct SpaceChildMutationDto {
     pub parent_id: String,
     pub child_id: String,
-    pub status: String,
+    pub status: MutationStatusDto,
 }
 
 /// Privacy-safe restricted-join reparent ack. Room id and status only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RestrictedJoinReparentDto {
     pub room_id: String,
-    pub status: String,
+    pub status: MutationStatusDto,
 }
 
 /// Static fail-closed space error. Fields are source constants only.
@@ -140,15 +140,6 @@ pub(super) fn closed_space_join_rule(value: &str) -> Option<&'static str> {
         "private" => Some("private"),
         "restricted" => Some("restricted"),
         "knock_restricted" => Some("knock_restricted"),
-        _ => None,
-    }
-}
-
-pub(super) fn closed_space_child_status(value: &str) -> Option<&'static str> {
-    match value {
-        "updated" => Some("updated"),
-        "removed" => Some("removed"),
-        "skipped" => Some("skipped"),
         _ => None,
     }
 }
@@ -266,23 +257,21 @@ pub(super) fn space_children_snapshot_dto(
 pub(super) fn space_child_mutation_dto(
     payload: NativeSpaceChildMutationResult,
 ) -> Result<SpaceChildMutationDto, SpaceCommandError> {
-    let status = closed_space_child_status(payload.status)
-        .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?;
     Ok(SpaceChildMutationDto {
         parent_id: required_space_id(payload.parent_id)?,
         child_id: required_space_id(payload.child_id)?,
-        status: status.to_owned(),
+        status: payload.status.into(),
     })
 }
 
 pub(super) fn restricted_join_reparent_dto(
     payload: NativeRestrictedJoinReparentResult,
 ) -> Result<RestrictedJoinReparentDto, SpaceCommandError> {
-    let status = closed_restricted_join_reparent_status(payload.status)
+    closed_restricted_join_reparent_status(payload.status.as_str())
         .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?;
     Ok(RestrictedJoinReparentDto {
         room_id: required_space_id(payload.room_id)?,
-        status: status.to_owned(),
+        status: payload.status.into(),
     })
 }
 
