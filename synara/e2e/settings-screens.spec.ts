@@ -32,24 +32,29 @@ const captureAll = async (page: Page, prefix: string, theme: string) => {
 };
 
 for (const theme of ['light', 'dark'] as const) {
-  test(`app settings pages (${theme})`, async ({ page }) => {
-    await page.goto(`${HARNESS}?theme=${theme}#/settings/`);
-    await captureAll(page, 'app', theme);
-  });
+  test.describe(`${theme} theme`, () => {
+    // The app follows the system scheme, so set it as well as the harness theme.
+    test.use({ colorScheme: theme });
 
-  test(`room settings pages (${theme})`, async ({ page }) => {
-    await page.goto(`${HARNESS}?theme=${theme}#/home/${ROOM}/`);
-    await page.getByRole('button', { name: 'More Options' }).click();
-    await page.getByRole('button', { name: 'Room Settings' }).click();
-    await captureAll(page, 'room', theme);
-  });
+    test(`app settings pages (${theme})`, async ({ page }) => {
+      await page.goto(`${HARNESS}?theme=${theme}#/settings/`);
+      await captureAll(page, 'app', theme);
+    });
 
-  test(`space settings pages (${theme})`, async ({ page }) => {
-    await page.goto(
-      `${HARNESS}?theme=${theme}&space=1#/${encodeURIComponent('!studio:example.test')}/lobby/`
-    );
-    await page.getByRole('button', { name: 'More Options' }).click();
-    await page.getByRole('button', { name: 'Space Settings' }).click();
-    await captureAll(page, 'space', theme);
+    test(`room settings pages (${theme})`, async ({ page }) => {
+      await page.goto(`${HARNESS}?theme=${theme}#/home/${ROOM}/`);
+      await page.getByRole('button', { name: 'More Options' }).click();
+      await page.getByRole('button', { name: 'Room Settings' }).click();
+      await captureAll(page, 'room', theme);
+    });
+
+    test(`space settings pages (${theme})`, async ({ page }) => {
+      await page.goto(
+        `${HARNESS}?theme=${theme}&space=1#/${encodeURIComponent('!studio:example.test')}/lobby/`
+      );
+      await page.getByRole('button', { name: 'More Options' }).click();
+      await page.getByRole('button', { name: 'Space Settings' }).click();
+      await captureAll(page, 'space', theme);
+    });
   });
 }

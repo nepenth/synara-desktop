@@ -58,16 +58,14 @@ const requestedRoom = (args?: Record<string, unknown>): string => {
   const roomId = request?.roomId ?? request?.room_id;
   return typeof roomId === 'string' ? roomId : ROOM_ID;
 };
-const roomState =
-  (eventType: string, content: unknown) =>
-  (args?: Record<string, unknown>) => ({
-    status: 'ok',
-    roomId: requestedRoom(args),
-    eventType,
-    stateKey: '',
-    sessionGeneration: 1,
-    content,
-  });
+const roomState = (eventType: string, content: unknown) => (args?: Record<string, unknown>) => ({
+  status: 'ok',
+  roomId: requestedRoom(args),
+  eventType,
+  stateKey: '',
+  sessionGeneration: 1,
+  content,
+});
 const fixtures: Record<string, Fixture> = {
   matrix_room_power_levels_snapshot: roomState('m.room.power_levels', {
     users_default: 0,
