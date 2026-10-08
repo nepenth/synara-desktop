@@ -21,7 +21,6 @@ import {
   Scroll,
   Avatar,
 } from 'folds';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { getMxIdServer } from '../../utils/matrix';
 import { useCloseUserRoomProfile } from '../../state/hooks/userRoomProfile';
 import { stopPropagation } from '../../utils/keyboard';
@@ -32,7 +31,6 @@ import { factoryRoomIdByAtoZ } from '../../utils/sort';
 import { useMutualRooms, useMutualRoomsSupport } from '../../hooks/useMutualRooms';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { useDirectRooms } from '../../pages/client/direct/useDirectRooms';
-import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useAllJoinedRoomsSet, useGetRoom } from '../../hooks/useGetRoom';
 import { openExternalUrl } from '../../utils/appLinks';
 import { RoomAvatar, RoomIcon } from '../room-avatar';
@@ -40,20 +38,18 @@ import { getDirectRoomAvatarUrl, getRoomAvatarUrl } from '../../utils/room';
 import { nameInitials } from '../../utils/common';
 import { getMatrixToUser } from '../../plugins/matrix-to';
 import { useTimeoutToggle } from '../../hooks/useTimeoutToggle';
-import { useIgnoredUsers } from '../../hooks/useIgnoredUsers';
 import { CutoutCard } from '../cutout-card';
 import { SettingTile } from '../setting-tile';
 import { normalizeRoomJoinRulePresentation } from '../../features/matrix-dto/roomJoinRule';
-import { isNativeMatrixSession } from '../../features/verification/nativeVerification';
 import {
   nativeIgnoredUsersIgnore,
   nativeIgnoredUsersSnapshot,
   nativeIgnoredUsersUnignore,
 } from '../../features/settings/account/nativeIgnoredUsers';
+import { getSafeMyUserId } from '../../state/nativeIdentity';
 
 export function ServerChip({ server }: { server: string }) {
-  const mx = useMatrixClient();
-  const myServer = getMxIdServer(mx.getSafeUserId());
+  const myServer = getMxIdServer(getSafeMyUserId());
   const navigate = useNavigate();
   const closeProfile = useCloseUserRoomProfile();
   const [copied, setCopied] = useTimeoutToggle();
@@ -240,13 +236,11 @@ type MutualRoomsData = {
 };
 
 export function MutualRoomsChip({ userId }: { userId: string }) {
-  const mx = useMatrixClient();
   const mutualRoomSupported = useMutualRoomsSupport();
   const mutualRoomsState = useMutualRooms(userId);
   const { navigateRoom, navigateSpace } = useRoomNavigate();
   const closeUserRoomProfile = useCloseUserRoomProfile();
   const directs = useDirectRooms();
-  const useAuthentication = useMediaAuthentication();
 
   const allJoinedRooms = useAllJoinedRoomsSet();
   const getRoom = useGetRoom(allJoinedRooms);
@@ -268,7 +262,7 @@ export function MutualRoomsChip({ userId }: { userId: string }) {
 
     if (mutualRoomsState.status === AsyncStatus.Success) {
       const mutualRooms = mutualRoomsState.data
-        .sort(factoryRoomIdByAtoZ(mx))
+        .sort(factoryRoomIdByAtoZ())
         .map(getRoom)
         .filter((room) => !!room);
       mutualRooms.forEach((room) => {
@@ -284,10 +278,10 @@ export function MutualRoomsChip({ userId }: { userId: string }) {
       });
     }
     return data;
-  }, [mutualRoomsState, getRoom, directs, mx]);
+  }, [mutualRoomsState, getRoom, directs]);
 
   if (
-    userId === mx.getSafeUserId() ||
+    userId === getSafeMyUserId() ||
     !mutualRoomSupported ||
     mutualRoomsState.status === AsyncStatus.Error
   ) {
@@ -319,11 +313,7 @@ export function MutualRoomsChip({ userId }: { userId: string }) {
             {dm || room.isSpaceRoom() ? (
               <RoomAvatar
                 roomId={room.roomId}
-                src={
-                  dm
-                    ? getDirectRoomAvatarUrl(mx, room, 96, useAuthentication)
-                    : getRoomAvatarUrl(mx, room, 96, useAuthentication)
-                }
+                src={dm ? getDirectRoomAvatarUrl(room, 96) : getRoomAvatarUrl(room, 96)}
                 alt={room.name}
                 renderFallback={() => (
                   <Text as="span" size="H6">
@@ -450,8 +440,6 @@ export function IgnoredUserAlert() {
 }
 
 export function OptionsChip({ userId }: { userId: string }) {
-  const mx = useMatrixClient();
-  const nativeSession = isNativeMatrixSession();
   const [cords, setCords] = useState<RectCords>();
   const [nativeIgnoredIds, setNativeIgnoredIds] = useState<string[] | null>(null);
 
@@ -461,9 +449,7 @@ export function OptionsChip({ userId }: { userId: string }) {
 
   const close = () => setCords(undefined);
 
-  const ignoredUsers = useIgnoredUsers();
   useEffect(() => {
-    if (!nativeSession) return undefined;
     let disposed = false;
     void nativeIgnoredUsersSnapshot()
       .then((ids) => {
@@ -475,23 +461,15 @@ export function OptionsChip({ userId }: { userId: string }) {
     return () => {
       disposed = true;
     };
-  }, [nativeSession, userId]);
-  const ignored = nativeSession
-    ? (nativeIgnoredIds ?? []).includes(userId)
-    : ignoredUsers.includes(userId);
+  }, [userId]);
+  const ignored = (nativeIgnoredIds ?? []).includes(userId);
 
   const [ignoreState, toggleIgnore] = useAsyncCallback(
     useCallback(async () => {
-      if (nativeSession) {
-        if (ignored) await nativeIgnoredUsersUnignore(userId);
-        else await nativeIgnoredUsersIgnore(userId);
-        setNativeIgnoredIds(await nativeIgnoredUsersSnapshot());
-        return;
-      }
-      const users = ignoredUsers.filter((u) => u !== userId);
-      if (!ignored) users.push(userId);
-      await mx.setIgnoredUsers(users);
-    }, [mx, ignoredUsers, userId, ignored, nativeSession])
+      if (ignored) await nativeIgnoredUsersUnignore(userId);
+      else await nativeIgnoredUsersIgnore(userId);
+      setNativeIgnoredIds(await nativeIgnoredUsersSnapshot());
+    }, [userId, ignored])
   );
   const ignoring = ignoreState.status === AsyncStatus.Loading;
 

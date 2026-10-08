@@ -1,5 +1,6 @@
 import XCTest
 @testable import Synara
+import SynaraCore
 
 final class EventActionServiceTests: XCTestCase {
     func testAvailabilityAllowsAuthorToEditAndRedact() {
@@ -310,69 +311,126 @@ final class EventActionServiceTests: XCTestCase {
         )
     }
 
+    func testTimelineActionReadbackAcceptsQueuedWritesOnlyForQueueableActions() {
+        // A still-queued forward has no new event id yet.
+        XCTAssertTrue(
+            TimelineActionReadbackPolicy.accepts(
+                schemaVersion: 1,
+                action: .forwardText,
+                roomID: "!room:matrix.org",
+                eventID: "",
+                status: .queued,
+                expectedAction: .forwardText,
+                expectedRoomID: "!room:matrix.org",
+                expectedStatus: .sent
+            )
+        )
+        XCTAssertTrue(
+            TimelineActionReadbackPolicy.accepts(
+                schemaVersion: 1,
+                action: .pollVote,
+                roomID: "!room:matrix.org",
+                eventID: "$poll:matrix.org",
+                status: .queued,
+                expectedAction: .pollVote,
+                expectedRoomID: "!room:matrix.org",
+                expectedStatus: .voted,
+                expectedEventID: "$poll:matrix.org"
+            )
+        )
+        // A queued vote still has to name the poll it targeted.
+        XCTAssertFalse(
+            TimelineActionReadbackPolicy.accepts(
+                schemaVersion: 1,
+                action: .pollVote,
+                roomID: "!room:matrix.org",
+                eventID: "",
+                status: .queued,
+                expectedAction: .pollVote,
+                expectedRoomID: "!room:matrix.org",
+                expectedStatus: .voted,
+                expectedEventID: "$poll:matrix.org"
+            )
+        )
+        // Redaction and report never go through the send queue.
+        XCTAssertFalse(
+            TimelineActionReadbackPolicy.accepts(
+                schemaVersion: 1,
+                action: .report,
+                roomID: "!room:matrix.org",
+                eventID: "$event:matrix.org",
+                status: .queued,
+                expectedAction: .report,
+                expectedRoomID: "!room:matrix.org",
+                expectedStatus: .reported,
+                expectedEventID: "$event:matrix.org"
+            )
+        )
+    }
+
     func testTimelineActionReadbackMustMatchExactOwnerContract() {
         XCTAssertTrue(
             TimelineActionReadbackPolicy.accepts(
                 schemaVersion: 1,
-                action: "report",
+                action: .report,
                 roomID: "!room:matrix.org",
                 eventID: "$event:matrix.org",
-                status: "reported",
-                expectedAction: "report",
+                status: .reported,
+                expectedAction: .report,
                 expectedRoomID: "!room:matrix.org",
-                expectedStatus: "reported",
+                expectedStatus: .reported,
                 expectedEventID: "$event:matrix.org"
             )
         )
         XCTAssertFalse(
             TimelineActionReadbackPolicy.accepts(
                 schemaVersion: 1,
-                action: "report",
+                action: .report,
                 roomID: "!other:matrix.org",
                 eventID: "$event:matrix.org",
-                status: "reported",
-                expectedAction: "report",
+                status: .reported,
+                expectedAction: .report,
                 expectedRoomID: "!room:matrix.org",
-                expectedStatus: "reported",
+                expectedStatus: .reported,
                 expectedEventID: "$event:matrix.org"
             )
         )
         XCTAssertFalse(
             TimelineActionReadbackPolicy.accepts(
                 schemaVersion: 2,
-                action: "report",
+                action: .report,
                 roomID: "!room:matrix.org",
                 eventID: "$event:matrix.org",
-                status: "reported",
-                expectedAction: "report",
+                status: .reported,
+                expectedAction: .report,
                 expectedRoomID: "!room:matrix.org",
-                expectedStatus: "reported",
+                expectedStatus: .reported,
                 expectedEventID: "$event:matrix.org"
             )
         )
         XCTAssertFalse(
             TimelineActionReadbackPolicy.accepts(
                 schemaVersion: 1,
-                action: "poll_vote",
+                action: .pollVote,
                 roomID: "!room:matrix.org",
                 eventID: "$other:matrix.org",
-                status: "voted",
-                expectedAction: "poll_vote",
+                status: .voted,
+                expectedAction: .pollVote,
                 expectedRoomID: "!room:matrix.org",
-                expectedStatus: "voted",
+                expectedStatus: .voted,
                 expectedEventID: "$poll:matrix.org"
             )
         )
         XCTAssertFalse(
             TimelineActionReadbackPolicy.accepts(
                 schemaVersion: 1,
-                action: "call_decline",
+                action: .callDecline,
                 roomID: "!room:matrix.org",
                 eventID: "$other:matrix.org",
-                status: "declined",
-                expectedAction: "call_decline",
+                status: .declined,
+                expectedAction: .callDecline,
                 expectedRoomID: "!room:matrix.org",
-                expectedStatus: "declined",
+                expectedStatus: .declined,
                 expectedEventID: "$call:matrix.org"
             )
         )

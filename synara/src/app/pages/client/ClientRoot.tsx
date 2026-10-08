@@ -13,7 +13,7 @@ import {
   Spinner,
   Text,
 } from 'folds';
-/** The live client's type, derived like useMatrixClient (js-sdk-free here). */
+/** The installed native session, as `initClient` returns it. */
 type ClientMatrix = Awaited<ReturnType<typeof initClient>>;
 import FocusTrap from 'focus-trap-react';
 import { listen } from '@tauri-apps/api/event';
@@ -40,7 +40,6 @@ import { SplashScreen } from '../../components/splash-screen';
 import { ServerConfigsLoader } from '../../components/ServerConfigsLoader';
 import { CapabilitiesProvider } from '../../hooks/useCapabilities';
 import { MediaConfigProvider } from '../../hooks/useMediaConfig';
-import { MatrixClientProvider } from '../../hooks/useMatrixClient';
 import { SpecVersions } from './SpecVersions';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { useSyncState } from '../../hooks/useSyncState';
@@ -65,6 +64,7 @@ import { recordClientDiagnostic } from '../../utils/clientDiagnostics';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { getSettings } from '../../state/settings';
 
+import { nativeSession } from '../../native/nativeSession';
 function ClientRootLoading({ status }: { status: string }) {
   return (
     <SplashScreen>
@@ -82,12 +82,12 @@ function ClientRootLoading({ status }: { status: string }) {
 }
 
 function ClientRootOptions({
-  mx,
+  loadedSession,
   logout,
   logoutError,
   loggingOut,
 }: {
-  mx?: ClientMatrix;
+  loadedSession?: ClientMatrix;
   logout: () => Promise<void>;
   logoutError?: string;
   loggingOut: boolean;
@@ -133,8 +133,8 @@ function ClientRootOptions({
           >
             <Menu>
               <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
-                {mx && (
-                  <MenuItem onClick={() => reloadApplication(mx)} size="300" radii="300">
+                {loadedSession && (
+                  <MenuItem onClick={() => reloadApplication()} size="300" radii="300">
                     <Text as="span" size="T300" truncate>
                       Reload Application
                     </Text>
@@ -166,25 +166,19 @@ function ClientRootOptions({
   );
 }
 
-const useLogoutListener = (mx: ClientMatrix | undefined, logout: () => Promise<void>) => {
-  useEffect(() => {
-    const handleLogout = async () => {
-      await logout();
-    };
-
-    mx?.on('Session.logged_out' as unknown as Parameters<ClientMatrix['on']>[0], handleLogout);
-    return () => {
-      mx?.removeListener(
-        'Session.logged_out' as unknown as Parameters<ClientMatrix['on']>[0],
-        handleLogout
-      );
-    };
-  }, [mx, logout]);
+const useLogoutListener = (session: ClientMatrix | undefined, logout: () => Promise<void>) => {
+  useEffect(
+    () =>
+      session?.subscribe('loggedOut', () => {
+        void logout();
+      }),
+    [session, logout]
+  );
 };
 
-const useSyncResumeRetry = (mx?: ClientMatrix) => {
+const useSyncResumeRetry = (loadedSession?: ClientMatrix) => {
   useEffect(() => {
-    if (!mx) return undefined;
+    if (!loadedSession) return undefined;
 
     let retryTimer: number | undefined;
     let hiddenAtMs: number | null = document.visibilityState === 'hidden' ? Date.now() : null;
@@ -197,7 +191,7 @@ const useSyncResumeRetry = (mx?: ClientMatrix) => {
       const consumed = consumeHiddenDurationMs(hiddenAtMs, now);
       hiddenAtMs = consumed.hiddenAtMs;
       if (now - lastRecoverAtMs < SYNC_WAKE_RECOVER_COOLDOWN_MS) return;
-      const state = mx.getSyncState();
+      const state = nativeSession().getSyncState();
       if (
         !shouldRecoverSyncOnWake({
           reason,
@@ -216,9 +210,11 @@ const useSyncResumeRetry = (mx?: ClientMatrix) => {
         documentVisible: document.visibilityState === 'visible',
         online: navigator.onLine,
       });
-      void mx.retryImmediately().catch(() => {
-        // The native status poll owns connection state after a failed wake.
-      });
+      void nativeSession()
+        .retrySyncNow()
+        .catch(() => {
+          // The native status poll owns connection state after a failed wake.
+        });
     };
 
     const scheduleRetry = (reason: SyncWakeReason, persisted?: boolean) => {
@@ -256,15 +252,7 @@ const useSyncResumeRetry = (mx?: ClientMatrix) => {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('pageshow', onPageShow);
     };
-  }, [mx]);
-};
-
-const useProactiveTokenRefresh = (_mx?: ClientMatrix) => {
-  // D1C: the renderer ceded token custody to native — native owns refresh via
-  // `session_updated` (readiness/generation only). No renderer timer/handle.
-  const clientArg = _mx !== undefined ? 1 : 0; // eslint-disable-line @typescript-eslint/no-unused-vars
-  useEffect(() => undefined, []);
-  void clientArg;
+  }, [loadedSession]);
 };
 
 type ClientRootProps = {
@@ -301,7 +289,7 @@ export function ClientRoot({ children }: ClientRootProps) {
       })();
     }, [])
   );
-  const mx = loadState.status === AsyncStatus.Success ? loadState.data : undefined;
+  const loadedSession = loadState.status === AsyncStatus.Success ? loadState.data : undefined;
   const [logoutError, setLogoutError] = useState<string>();
   const [loggingOut, setLoggingOut] = useState(false);
   const [sessionSaveFailed, setSessionSaveFailed] = useState(false);
@@ -310,13 +298,13 @@ export function ClientRoot({ children }: ClientRootProps) {
     setLoggingOut(true);
     setLogoutError(undefined);
     try {
-      await performLogout(mx);
+      await performLogout(loadedSession);
     } catch {
       setLogoutError('Local sign out did not complete. Retry to finish local cleanup.');
     } finally {
       setLoggingOut(false);
     }
-  }, [mx, loggingOut]);
+  }, [loadedSession, loggingOut]);
 
   const [startState, startMatrix] = useAsyncCallback<void, Error, [ClientMatrix]>(
     useCallback((m) => startClient(m), [])
@@ -327,7 +315,7 @@ export function ClientRoot({ children }: ClientRootProps) {
     let disposed = false;
     let unlisten: (() => void) | undefined;
     void listen<number>('matrix-session-expired', ({ payload }) => {
-      if (Number.isSafeInteger(payload) && payload === mx?.getSessionGeneration()) {
+      if (Number.isSafeInteger(payload) && payload === nativeSession().getSessionGeneration()) {
         recordSessionExpiry();
       }
     })
@@ -340,7 +328,7 @@ export function ClientRoot({ children }: ClientRootProps) {
       disposed = true;
       unlisten?.();
     };
-  }, [mx]);
+  }, [loadedSession]);
 
   useEffect(() => {
     if (!isSynaraDesktop()) return undefined;
@@ -350,7 +338,7 @@ export function ClientRoot({ children }: ClientRootProps) {
       'matrix-session-persistence',
       ({ payload }) => {
         if (
-          payload?.sessionGeneration === mx?.getSessionGeneration() &&
+          payload?.sessionGeneration === nativeSession().getSessionGeneration() &&
           typeof payload?.saved === 'boolean'
         ) {
           setSessionSaveFailed(!payload.saved);
@@ -366,18 +354,17 @@ export function ClientRoot({ children }: ClientRootProps) {
       disposed = true;
       unlisten?.();
     };
-  }, [mx]);
+  }, [loadedSession]);
 
-  useLogoutListener(mx, logout);
-  useSyncResumeRetry(mx);
-  useProactiveTokenRefresh(mx);
+  useLogoutListener(loadedSession, logout);
+  useSyncResumeRetry(loadedSession);
 
   // One ClientRoot owns the facade's readiness poll. Other consumers only
   // subscribe to sync events, avoiding duplicate timers per mounted widget.
   useEffect(() => {
-    if (!mx) return undefined;
-    return mx.watchSync();
-  }, [mx]);
+    if (!loadedSession) return undefined;
+    return nativeSession().watchSync();
+  }, [loadedSession]);
 
   useEffect(() => {
     if (loadState.status === AsyncStatus.Idle) {
@@ -394,15 +381,15 @@ export function ClientRoot({ children }: ClientRootProps) {
   }, [loadMatrix]);
 
   useEffect(() => {
-    if (mx && !mx.clientRunning()) {
-      void startMatrix(mx).catch(() => {
+    if (loadedSession && !nativeSession().isSyncRunning()) {
+      void startMatrix(loadedSession).catch(() => {
         // useAsyncCallback exposes the startup error in the splash screen.
       });
     }
-  }, [mx, startMatrix]);
+  }, [loadedSession, startMatrix]);
 
   useSyncState(
-    mx,
+    loadedSession,
     useCallback((state, previous) => {
       setSyncState(state);
       logSyncStateTransition(state, previous);
@@ -418,11 +405,11 @@ export function ClientRoot({ children }: ClientRootProps) {
   );
 
   useEffect(() => {
-    if (!mx) setSyncState(null);
-  }, [mx]);
+    if (!loadedSession) setSyncState(null);
+  }, [loadedSession]);
 
   useEffect(() => {
-    if (!loading || !mx) {
+    if (!loading || !loadedSession) {
       setSyncTimedOut(false);
       return undefined;
     }
@@ -440,10 +427,10 @@ export function ClientRoot({ children }: ClientRootProps) {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [loading, mx]);
+  }, [loading, loadedSession]);
 
   const handleSyncRecoveryRetry = useCallback(async () => {
-    if (!mx || syncRetryInFlightRef.current) return;
+    if (!loadedSession || syncRetryInFlightRef.current) return;
     syncRetryInFlightRef.current = true;
     setSyncRetryPending(true);
     setSyncRecoveryError(undefined);
@@ -455,8 +442,8 @@ export function ClientRoot({ children }: ClientRootProps) {
     try {
       // startClient only hydrates renderer reads. Every explicit sync Retry
       // must reach the native owner, including offline/failed/stopped states.
-      await mx.retryImmediately();
-      if (startState.status === AsyncStatus.Error) await startMatrix(mx);
+      await nativeSession().retrySyncNow();
+      if (startState.status === AsyncStatus.Error) await startMatrix(loadedSession);
       // Only observed PREPARED readiness completes recovery. A successful
       // command can still leave the SDK starting or offline.
     } catch {
@@ -465,15 +452,15 @@ export function ClientRoot({ children }: ClientRootProps) {
       syncRetryInFlightRef.current = false;
       setSyncRetryPending(false);
     }
-  }, [mx, startMatrix, startState.status, syncState]);
+  }, [loadedSession, startMatrix, startState.status, syncState]);
 
   const splashStatus = formatSyncSplashStatus(
     syncState as Parameters<typeof formatSyncSplashStatus>[0],
-    Boolean(mx)
+    Boolean(loadedSession)
   );
   const splashView = selectSyncSplashView({
     hasError: loadState.status === AsyncStatus.Error || startState.status === AsyncStatus.Error,
-    hasClient: Boolean(mx),
+    hasClient: Boolean(loadedSession),
     loading,
     syncTimedOut,
   });
@@ -489,7 +476,7 @@ export function ClientRoot({ children }: ClientRootProps) {
   return (
     <AutoDiscovery userId={userId!} baseUrl={baseUrl!}>
       <SpecVersions baseUrl={baseUrl!}>
-        {mx && <SyncStatus mx={mx} />}
+        {loadedSession && <SyncStatus session={loadedSession} />}
         {sessionSaveFailed && (
           <Text role="alert">
             Your refreshed session could not be saved. Check free disk space and unlock your system
@@ -498,7 +485,7 @@ export function ClientRoot({ children }: ClientRootProps) {
         )}
         {loading && (
           <ClientRootOptions
-            mx={mx}
+            loadedSession={loadedSession}
             logout={logout}
             logoutError={logoutError}
             loggingOut={loggingOut}
@@ -556,7 +543,9 @@ export function ClientRoot({ children }: ClientRootProps) {
                       <Button
                         variant="Critical"
                         disabled={syncRetryPending}
-                        onClick={mx ? () => void handleSyncRecoveryRetry() : retryLoadMatrix}
+                        onClick={
+                          loadedSession ? () => void handleSyncRecoveryRetry() : retryLoadMatrix
+                        }
                       >
                         <Text as="span" size="B400">
                           Retry
@@ -598,8 +587,8 @@ export function ClientRoot({ children }: ClientRootProps) {
                       Retry
                     </Text>
                   </Button>
-                  {mx && (
-                    <Button variant="Secondary" onClick={() => void reloadApplication(mx)}>
+                  {loadedSession && (
+                    <Button variant="Secondary" onClick={() => void reloadApplication()}>
                       <Text as="span" size="B400">
                         Reload Application
                       </Text>
@@ -616,20 +605,18 @@ export function ClientRoot({ children }: ClientRootProps) {
           </SplashScreen>
         )}
         {splashView === 'loading' && <ClientRootLoading status={splashStatus} />}
-        {splashView === 'client' && mx && (
-          <MatrixClientProvider value={mx}>
-            <ServerConfigsLoader>
-              {(serverConfigs) => (
-                <CapabilitiesProvider value={serverConfigs.capabilities ?? {}}>
-                  <MediaConfigProvider value={serverConfigs.mediaConfig ?? {}}>
-                    <AuthMetadataProvider value={serverConfigs.authMetadata}>
-                      {children}
-                    </AuthMetadataProvider>
-                  </MediaConfigProvider>
-                </CapabilitiesProvider>
-              )}
-            </ServerConfigsLoader>
-          </MatrixClientProvider>
+        {splashView === 'client' && loadedSession && (
+          <ServerConfigsLoader>
+            {(serverConfigs) => (
+              <CapabilitiesProvider value={serverConfigs.capabilities ?? {}}>
+                <MediaConfigProvider value={serverConfigs.mediaConfig ?? {}}>
+                  <AuthMetadataProvider value={serverConfigs.authMetadata}>
+                    {children}
+                  </AuthMetadataProvider>
+                </MediaConfigProvider>
+              </CapabilitiesProvider>
+            )}
+          </ServerConfigsLoader>
         )}
       </SpecVersions>
     </AutoDiscovery>

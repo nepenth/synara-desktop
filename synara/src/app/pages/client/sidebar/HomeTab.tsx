@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Icon, Icons, Menu, MenuItem, PopOut, RectCords, Text, config, toRem } from 'folds';
 import { useAtomValue } from 'jotai';
 import FocusTrap from 'focus-trap-react';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useNativeNavigationScope } from '../../../state/hooks/navigationUnread';
 import { getHomePath, joinPathComponent } from '../../pathUtils';
 import {
@@ -24,11 +23,10 @@ type HomeMenuProps = {
 };
 const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, ref) => {
   const { roomIds, unread } = useNativeNavigationScope('home');
-  const mx = useMatrixClient();
 
   const handleMarkAsRead = () => {
     if (!unread) return;
-    roomIds.forEach((rId) => markAsReadFromExplicitUserActionInBackground(mx, rId));
+    roomIds.forEach((rId) => markAsReadFromExplicitUserActionInBackground(rId));
     requestClose();
   };
 

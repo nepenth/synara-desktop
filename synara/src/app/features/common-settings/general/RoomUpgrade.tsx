@@ -23,7 +23,6 @@ import { SettingTile } from '../../../components/setting-tile';
 import { useRoom } from '../../../hooks/useRoom';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { IRoomCreateContent, StateEvent } from '../../../../types/matrix/room';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useStateEvent } from '../../../hooks/useStateEvent';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { useCapabilities } from '../../../hooks/useCapabilities';
@@ -35,6 +34,7 @@ import {
   useAdditionalCreators,
 } from '../../../components/create-room';
 import { useAlive } from '../../../hooks/useAlive';
+import { upgradeRoom } from '../../../native/nativeRoomExtras';
 import { creatorsSupported } from '../../../utils/matrix';
 import { useRoomCreators } from '../../../hooks/useRoomCreators';
 import { BreakWord } from '../../../styles/Text.css';
@@ -44,13 +44,7 @@ type RoomTombstoneEventContent = {
   replacement_room: string;
 };
 
-const Method = {
-  Post: 'POST',
-  Get: 'GET',
-} as const;
-
 function RoomUpgradeDialog({ requestClose }: { requestClose: () => void }) {
-  const mx = useMatrixClient();
   const room = useRoom();
   const alive = useAlive();
   const creators = useRoomCreators(room);
@@ -67,24 +61,11 @@ function RoomUpgradeDialog({ requestClose }: { requestClose: () => void }) {
   const { additionalCreators, addAdditionalCreator, removeAdditionalCreator } =
     useAdditionalCreators(Array.from(creators));
 
+  const { navigateRoom, navigateSpace } = useRoomNavigate();
   const [upgradeState, upgrade] = useAsyncCallback(
-    useCallback(
-      async (version: string, newAdditionalCreators?: string[]) => {
-        await (
-          mx.http as unknown as {
-            authedRequest(
-              method: string,
-              path: string,
-              queryParams?: unknown,
-              body?: unknown
-            ): Promise<unknown>;
-          }
-        ).authedRequest(Method.Post, `/rooms/${room.roomId}/upgrade`, undefined, {
-          new_version: version,
-          additional_creators: newAdditionalCreators,
-        });
-      },
-      [mx, room]
+    useCallback<(version: string, additionalCreators?: string[]) => Promise<string>>(
+      (version, extraCreators) => upgradeRoom(room.roomId, version, extraCreators),
+      [room.roomId]
     )
   );
 
@@ -93,11 +74,14 @@ function RoomUpgradeDialog({ requestClose }: { requestClose: () => void }) {
   const handleUpgradeRoom = () => {
     const version = selectedRoomVersion;
 
-    upgrade(version, allowAdditionalCreators ? additionalCreators : undefined).then(() => {
-      if (alive()) {
+    upgrade(version, allowAdditionalCreators ? additionalCreators : undefined).then(
+      (replacementRoomId) => {
+        if (!alive()) return;
         requestClose();
+        if (room.isSpaceRoom()) navigateSpace(replacementRoomId);
+        else navigateRoom(replacementRoomId);
       }
-    });
+    );
   };
 
   return (
@@ -181,7 +165,6 @@ type RoomUpgradeProps = {
   requestClose: () => void;
 };
 export function RoomUpgrade({ permissions, requestClose }: RoomUpgradeProps) {
-  const mx = useMatrixClient();
   const room = useRoom();
   const { navigateRoom, navigateSpace } = useRoomNavigate();
   const createContent = useStateEvent(
@@ -197,7 +180,7 @@ export function RoomUpgrade({ permissions, requestClose }: RoomUpgradeProps) {
   )?.getContent<RoomTombstoneEventContent>();
   const replacementRoom = tombstoneContent?.replacement_room;
 
-  const canUpgrade = permissions.stateEvent(StateEvent.RoomTombstone, mx.getSafeUserId());
+  const canUpgrade = permissions.stateEvent(StateEvent.RoomTombstone);
 
   const handleOpenRoom = () => {
     if (replacementRoom) {

@@ -5,9 +5,9 @@ use tauri_plugin_opener::OpenerExt;
 use crate::build_info;
 use crate::desktop_notification_sound;
 use crate::desktop_sanitize::sanitize_route;
+use crate::desktop_secret_store::DesktopSecretStoreStatus;
 #[cfg(any(target_os = "windows", test))]
 use crate::desktop_secret_store::DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED;
-use crate::desktop_secret_store::{bridge_supports_secure_secret_store, DesktopSecretStoreStatus};
 #[cfg(test)]
 use crate::desktop_secret_store::{
     unavailable_secret_store_status, DESKTOP_SECRET_STORE_BACKEND_NONE,
@@ -69,12 +69,6 @@ fn main_window<R: Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<R>> {
 
 pub fn show_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     if let Some(window) = main_window(app) {
-        // Hidden-to-tray on Linux iconifies rather than unmapping. Keep the
-        // window in the dash/taskbar so a launcher click activates this copy.
-        #[cfg(target_os = "linux")]
-        {
-            let _ = window.set_skip_taskbar(false);
-        }
         window.show()?;
         window.unminimize()?;
         window.set_focus()?;
@@ -84,14 +78,10 @@ pub fn show_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 
 pub fn hide_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     if let Some(window) = main_window(app) {
-        #[cfg(target_os = "linux")]
-        {
-            // GTK hide() unmaps the toplevel. GNOME then treats Synara as not
-            // running (no dash dot) and a launcher click starts a second copy.
-            let _ = window.set_skip_taskbar(false);
-            window.minimize()?;
-        }
-        #[cfg(not(target_os = "linux"))]
+        // Close hides to the tray on every platform, like macOS. On Linux the
+        // dash may drop its running dot while hidden; a launcher click still
+        // reaches this copy through the single-instance plugin, which calls
+        // `show_main_window`. Quit stays on the tray menu.
         window.hide()?;
     }
     Ok(())
@@ -158,6 +148,32 @@ pub fn desktop_window_toggle_maximize(app: AppHandle) -> Result<bool, String> {
     }
 }
 
+/// Largest markdown source Core will render (bytes); matches the renderer's
+/// formatted-body and markdown-preview bound.
+const MAX_COMPOSER_MARKDOWN_BYTES: usize = 256 * 1024;
+/// Most inline fragments (mentions, emoji, links) in one message.
+const MAX_COMPOSER_FRAGMENTS: usize = 512;
+/// Largest single inline fragment (bytes).
+const MAX_COMPOSER_FRAGMENT_BYTES: usize = 8 * 1024;
+
+/// Render composer markdown with Core, the same renderer iOS uses. Returns
+/// `None` for plain text. Inputs are bounded before Core parses them.
+#[tauri::command]
+pub fn desktop_render_markdown(
+    source: String,
+    fragments: Vec<String>,
+) -> Result<Option<String>, String> {
+    if source.len() > MAX_COMPOSER_MARKDOWN_BYTES
+        || fragments.len() > MAX_COMPOSER_FRAGMENTS
+        || fragments
+            .iter()
+            .any(|fragment| fragment.len() > MAX_COMPOSER_FRAGMENT_BYTES)
+    {
+        return Err("The message is too large to format.".to_owned());
+    }
+    Ok(synara_core::render_composer_markdown(&source, &fragments))
+}
+
 /// Linux in-app Close must match native chrome: hide to tray.
 /// `Window::close()` can skip `CloseRequested` on some backends and quit.
 #[tauri::command]
@@ -189,13 +205,30 @@ pub fn desktop_set_shortcuts(
     apply_desktop_shortcuts_command(&app, shortcuts)
 }
 
-pub fn desktop_bridge_supports_secure_secret_store() -> bool {
-    bridge_supports_secure_secret_store(&crate::desktop_secret_store::platform_secret_store_status())
+/// Run the platform secure-store probe on a background thread so its
+/// result is cached before the renderer asks for it. The probe can block for
+/// seconds on a slow or locked keyring.
+pub fn warm_secret_store_status() {
+    let spawned = std::thread::Builder::new()
+        .name("synara-secret-store-probe".to_owned())
+        .spawn(|| {
+            let _ = crate::desktop_secret_store::platform_secret_store_status();
+        });
+    if spawned.is_err() {
+        eprintln!("[synara] Unable to start the secure-store probe thread.");
+    }
 }
 
+/// Async so a cold probe runs on a blocking worker, never the main thread.
 #[tauri::command]
-pub fn desktop_secret_store_status() -> DesktopSecretStoreStatus {
-    crate::desktop_secret_store::platform_secret_store_status()
+pub async fn desktop_secret_store_status() -> DesktopSecretStoreStatus {
+    tauri::async_runtime::spawn_blocking(crate::desktop_secret_store::platform_secret_store_status)
+        .await
+        .unwrap_or_else(|_| {
+            crate::desktop_secret_store::unavailable_secret_store_status(
+                crate::desktop_secret_store::DESKTOP_SECRET_STORE_NOT_CONFIGURED,
+            )
+        })
 }
 
 #[tauri::command]
@@ -211,6 +244,7 @@ pub fn desktop_get_performance_capabilities() -> DesktopPerformanceCapabilities 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::desktop_secret_store::bridge_supports_secure_secret_store;
 
     #[test]
     fn performance_capabilities_reflect_platform_support() {
@@ -278,7 +312,7 @@ mod tests {
     }
 
     #[test]
-    fn linux_close_to_tray_iconifies_instead_of_unmapping() {
+    fn close_hides_to_tray_instead_of_minimizing() {
         let source = include_str!("desktop.rs");
         let hide_fn = source
             .split("pub fn hide_main_window")
@@ -287,9 +321,12 @@ mod tests {
             .split("pub fn navigate_main_window")
             .next()
             .unwrap_or("");
-        assert!(hide_fn.contains("target_os = \"linux\""));
-        assert!(hide_fn.contains("window.minimize()?"));
-        assert!(hide_fn.contains("set_skip_taskbar(false)"));
         assert!(hide_fn.contains("window.hide()?"));
+        assert!(!hide_fn.contains(concat!("window.", "minimize()")));
+        assert!(!hide_fn.contains(concat!("target_os = ", "\"linux\"")));
+        // A second launch must reach the hidden copy instead of starting another.
+        let lib = include_str!("lib.rs");
+        assert!(lib.contains("tauri_plugin_single_instance::init"));
+        assert!(lib.contains("desktop::show_main_window(app)"));
     }
 }

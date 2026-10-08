@@ -18,6 +18,73 @@ final class LocalWipeServiceTests: XCTestCase {
         XCTAssertFalse(message.contains(unknown.errorDescription ?? ""))
     }
 
+    func testTimedOutSignOutHasRetryCopy() {
+        XCTAssertEqual(
+            LocalWipeError.displayMessage(for: LocalWipeError.timedOut),
+            "Signing out is taking too long. Try signing out again."
+        )
+    }
+
+    /// FR-4: the bound holds even when the logout never checks cancellation.
+    func testBoundedSignOutTimesOutOnANonCooperativeLogout() async {
+        let release = DispatchSemaphore(value: 0)
+        let work = Task<Void, Error> {
+            // Blocks a thread and ignores cancellation, like a stuck FFI call.
+            await withCheckedContinuation { continuation in
+                DispatchQueue.global().async {
+                    release.wait()
+                    continuation.resume()
+                }
+            }
+        }
+        let started = Date()
+
+        do {
+            try await BoundedSignOut.wait(for: work, timeoutNanoseconds: 50_000_000)
+            XCTFail("A logout that never returns must not report success")
+        } catch {
+            XCTAssertEqual(error as? LocalWipeError, .timedOut)
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(started), 5)
+        release.signal()
+        _ = try? await work.value
+    }
+
+    func testBoundedSignOutPassesThroughCompletionAndFailure() async throws {
+        try await BoundedSignOut.wait(for: Task {}, timeoutNanoseconds: 5_000_000_000)
+
+        do {
+            try await BoundedSignOut.wait(
+                for: Task { throw LocalWipeError.pusherCleanupFailed },
+                timeoutNanoseconds: 5_000_000_000
+            )
+            XCTFail("A failed logout must surface its failure")
+        } catch {
+            XCTAssertEqual(error as? LocalWipeError, .pusherCleanupFailed)
+        }
+    }
+
+    /// A retry after a timeout waits on the same logout instead of starting another.
+    func testBoundedSignOutCanWaitAgainOnTheSameLogout() async throws {
+        let release = DispatchSemaphore(value: 0)
+        let work = Task<Void, Error> {
+            await withCheckedContinuation { continuation in
+                DispatchQueue.global().async {
+                    release.wait()
+                    continuation.resume()
+                }
+            }
+        }
+        do {
+            try await BoundedSignOut.wait(for: work, timeoutNanoseconds: 20_000_000)
+            XCTFail("expected a timeout")
+        } catch {
+            XCTAssertEqual(error as? LocalWipeError, .timedOut)
+        }
+        release.signal()
+        try await BoundedSignOut.wait(for: work, timeoutNanoseconds: 5_000_000_000)
+    }
+
     func testLogoutWipeCallsAllRegisteredStores() async throws {
         let secureStore = InMemorySecureSessionStore(session: try makeSession())
         let session = AppSessionStore(secureStore: secureStore, restorePersistedSession: true)

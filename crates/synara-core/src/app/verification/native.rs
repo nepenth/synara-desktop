@@ -6,6 +6,7 @@ use std::cmp::Ordering;
 
 use serde::{Deserialize, Serialize};
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeVerificationDirection {
@@ -13,6 +14,7 @@ pub enum NativeVerificationDirection {
     Outgoing,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeVerificationPhase {
@@ -21,6 +23,9 @@ pub enum NativeVerificationPhase {
     Started,
     KeysExchanging,
     SasReady,
+    /// The other device scanned the QR code this device shows. The user must
+    /// confirm the other device reported success before Core confirms.
+    QrScanned,
     Confirmed,
     Done,
     Mismatched,
@@ -28,6 +33,7 @@ pub enum NativeVerificationPhase {
     Failed,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeVerificationEmoji {
@@ -35,6 +41,7 @@ pub struct NativeVerificationEmoji {
     pub description: String,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeVerificationSas {
@@ -46,6 +53,7 @@ pub struct NativeVerificationSas {
 /// raw QR payload bytes. Oversized images are dropped rather than truncated.
 pub const MAX_QR_IMAGE_DATA_URL_CHARS: usize = 12_288;
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeVerificationQr {
@@ -53,6 +61,7 @@ pub struct NativeVerificationQr {
     pub scanned: bool,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeVerificationRequest {
@@ -64,9 +73,11 @@ pub struct NativeVerificationRequest {
     pub started_ts: Option<u64>,
     pub sas: Option<NativeVerificationSas>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub qr: Option<NativeVerificationQr>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeVerificationInbox {
@@ -80,7 +91,7 @@ pub fn phase_rank(phase: NativeVerificationPhase) -> u8 {
         NativeVerificationPhase::Ready => 1,
         NativeVerificationPhase::Started => 2,
         NativeVerificationPhase::KeysExchanging => 3,
-        NativeVerificationPhase::SasReady => 4,
+        NativeVerificationPhase::SasReady | NativeVerificationPhase::QrScanned => 4,
         NativeVerificationPhase::Confirmed => 5,
         NativeVerificationPhase::Done => 6,
         NativeVerificationPhase::Mismatched => 7,

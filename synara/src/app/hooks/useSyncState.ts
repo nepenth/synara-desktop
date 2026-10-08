@@ -1,38 +1,35 @@
 import { useEffect } from 'react';
-import type { MatrixClientReading } from '../utils/room';
-import { ClientEvent } from '../utils/roomEvents';
+import type { NativeSession } from '../native/nativeSession';
+import type { NativeSyncState, NativeSyncStateData } from '../native/nativeWire';
+
+/** Receives each connection-state transition and the state before it. */
+export type SyncStateHandler = (
+  syncState: NativeSyncState,
+  prevState: NativeSyncState | null,
+  data?: NativeSyncStateData
+) => void;
 
 /**
- * Structural listener for the js-sdk 'sync' client event.
- * Params stay permissive (`any`) on purpose: callers keep threading the
- * js-sdk SyncState values into their own state (typed from the js-sdk enum),
- * while the runtime values are plain strings ('SYNCING', 'PREPARED', ...).
+ * Report the session's connection state now and on every transition. A
+ * missing session (still loading) reports nothing.
  */
-export type SyncStateHandler = (syncState: any, prevState: any, data?: any) => void;
-
-export type ClientEventedReading = MatrixClientReading & {
-  getSyncState(): unknown;
-  getSyncStateData(): unknown;
-  on(event: string, listener: (...args: any[]) => unknown): unknown;
-  removeListener(event: string, listener: (...args: any[]) => unknown): unknown;
-};
-
 export const useSyncState = (
-  mx: ClientEventedReading | undefined,
+  session: NativeSession | undefined,
   onChange: SyncStateHandler
 ): void => {
   useEffect(() => {
-    if (!mx) return undefined;
+    if (!session) return undefined;
 
-    mx.on(ClientEvent.Sync, onChange);
+    let previous = session.getSyncState();
+    const unsubscribe = session.subscribe('sync', (next) => {
+      onChange(next, previous, session.getSyncStateData() ?? undefined);
+      previous = next;
+    });
 
-    const currentState = mx.getSyncState();
-    if (currentState !== null) {
-      onChange(currentState, null, mx.getSyncStateData() ?? undefined);
+    if (previous !== null) {
+      onChange(previous, null, session.getSyncStateData() ?? undefined);
     }
 
-    return () => {
-      mx.removeListener(ClientEvent.Sync, onChange);
-    };
-  }, [mx, onChange]);
+    return unsubscribe;
+  }, [session, onChange]);
 };

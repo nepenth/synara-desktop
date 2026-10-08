@@ -1,9 +1,14 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@playwright/test';
 export default defineConfig({
+  globalSetup: fileURLToPath(new URL('../warm-harness.ts', import.meta.url)),
+  metadata: { warmPages: ['/e2e/runtime-maturity-harness/index.html'] },
   testDir: '..',
   testMatch: 'runtime-maturity.spec.ts',
   retries: 0,
+  // One dev server serves every page; bound concurrency so a loaded machine
+  // cannot push first renders past the 5 s expect timeout.
+  workers: 4,
   outputDir: '../../test-results/runtime-maturity',
   reporter: 'line',
   use: { baseURL: 'http://127.0.0.1:4191', headless: true },

@@ -3,13 +3,9 @@ import {
   listen,
   type DesktopInvokeResult,
 } from '../../utils/desktop';
-import type { SynaraAgentApprovalHistoryItem } from '../../../types/matrix/accountData';
+import type { NativeAgentApprovalHistorySnapshot } from '../matrix-dto/generated';
 
 export const AGENT_APPROVAL_HISTORY_UPDATED_EVENT = 'matrix-agent-approval-history-updated';
-
-export type NativeAgentApprovalHistorySnapshot = {
-  items: SynaraAgentApprovalHistoryItem[];
-};
 
 export type NativeAgentApprovalHistoryInvoke = (
   command: string,
@@ -123,3 +119,5 @@ export async function subscribeAgentApprovalHistory(onUpdate: () => void): Promi
     void unlisten?.();
   };
 }
+
+export type { NativeAgentApprovalHistorySnapshot };

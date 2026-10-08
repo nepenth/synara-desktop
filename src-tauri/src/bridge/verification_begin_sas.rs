@@ -5,29 +5,23 @@
 //! existing Tauri error shape. React still invokes `matrix_verification_begin_sas`.
 
 use synara_core::app::verification::NativeVerificationRequest;
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
 use crate::matrix::verification::live::map_verification_error;
-
-const VERIFICATION_BEGIN_SAS_COMMAND: &str = "matrix_verification_begin_sas";
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn verification_begin_sas(
     core: &Core,
     flow_id: String,
 ) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: VERIFICATION_BEGIN_SAS_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({ "flowId": flow_id }),
+        .verification_begin_sas(synara_core::core_api::MatrixVerificationBeginSasRequest {
+            flow_id,
         })
         .await
         .map_err(map_verification_begin_sas_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| verification_begin_sas_response_error())
+    Ok(response)
 }
 
 fn map_verification_begin_sas_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -61,8 +55,4 @@ fn map_verification_begin_sas_core_error(error: MatrixIpcError) -> MatrixAuthCom
             _ => map_verification_error("v-crypto.1-sas-start-failed"),
         },
     }
-}
-
-fn verification_begin_sas_response_error() -> MatrixAuthCommandError {
-    map_verification_error("v-crypto.1-sas-start-failed")
 }

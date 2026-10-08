@@ -8,6 +8,11 @@ import {
   filterNativeForwardTargets,
   isNativeTimelineEventPinned,
   isNativeTimelineReadbackStale,
+  isUnchangedNativeTimelineSnapshot,
+  NATIVE_TIMELINE_FIRST_SAFETY_NET_POLL_MS,
+  NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS,
+  NATIVE_TIMELINE_SAFETY_NET_POLL_MS,
+  nativeTimelinePollDelay,
   canAcceptNativeTimelineFollowReadback,
   nativeThreadFocusEventId,
   nativeTimelineCommandError,
@@ -539,4 +544,33 @@ test('setReadState keeps the current snapshot when a successful mark_read readba
     setReadState,
     /if \(!result\.available \|\| !result\.value \|\| !acceptSnapshot\(result\.value\.snapshot\)\)/
   );
+});
+
+test('identical snapshots are recognised so polling does not re-render rows', () => {
+  const current = baseSnapshot();
+  assert.equal(isUnchangedNativeTimelineSnapshot(current, baseSnapshot()), true);
+  // Same revision, but read state moved without an SDK diff: not unchanged.
+  assert.equal(
+    isUnchangedNativeTimelineSnapshot(current, {
+      ...baseSnapshot(),
+      readState: { isMarkedUnread: false },
+    }),
+    false
+  );
+  assert.equal(
+    isUnchangedNativeTimelineSnapshot(current, { ...baseSnapshot(), revision: 4 }),
+    false
+  );
+});
+
+test('the snapshot poll checks once early, then is a slow safety net while deltas are live', () => {
+  assert.ok(NATIVE_TIMELINE_SAFETY_NET_POLL_MS >= 10_000);
+  assert.ok(NATIVE_TIMELINE_FIRST_SAFETY_NET_POLL_MS <= 2_000);
+  assert.equal(nativeTimelinePollDelay(true, true), NATIVE_TIMELINE_FIRST_SAFETY_NET_POLL_MS);
+  assert.equal(nativeTimelinePollDelay(true, false), NATIVE_TIMELINE_SAFETY_NET_POLL_MS);
+  assert.equal(nativeTimelinePollDelay(false, true), NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS);
+  assert.equal(nativeTimelinePollDelay(false, false), NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS);
+  const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
+  assert.match(source, /nativeTimelinePollDelay\(Boolean\(unlisten\), firstPoll\)/);
+  assert.match(source, /if \(isUnchangedNativeTimelineSnapshot\(current, next\)\)/);
 });

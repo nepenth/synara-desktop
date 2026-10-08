@@ -53,7 +53,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn typing_presence_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("typing_snapshot"));
     assert!(udl.contains("typing_set"));
     assert!(udl.contains("presence_snapshot"));
@@ -79,7 +79,10 @@ fn typing_presence_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("presence_unsubscribe"));
     assert!(shared_core.contains("presence_set"));
     assert!(shared_core.contains("timeline_open"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_crypto_status"));
 }
 

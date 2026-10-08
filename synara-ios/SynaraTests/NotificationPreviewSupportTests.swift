@@ -243,6 +243,64 @@ final class NotificationPreviewSupportTests: XCTestCase {
         XCTAssertFalse(SynaraTimeSensitiveAgentApprovalPreference.isEnabled(defaults: defaults))
     }
 
+    /// Core owns these rules but the NSE mirrors them in Swift; the Rust tests
+    /// in agent_approvals.rs and nse_error.rs read the same vector file.
+    private func sharedNotificationPolicyVectors() throws -> [String: Any] {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("crates/synara-core/tests/support/notification-policy-vectors.json")
+        let data = try Data(contentsOf: url)
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    func testAgentApprovalFreshnessMatchesCoreVectors() throws {
+        let vectors = try sharedNotificationPolicyVectors()
+        let freshness = try XCTUnwrap(vectors["agentApprovalFreshness"] as? [String: Any])
+        XCTAssertEqual(
+            (freshness["ttlMs"] as? NSNumber)?.uint64Value,
+            SynaraAgentApprovalFreshness.ttlMilliseconds
+        )
+        XCTAssertEqual(
+            (freshness["futureToleranceMs"] as? NSNumber)?.uint64Value,
+            SynaraAgentApprovalFreshness.futureToleranceMilliseconds
+        )
+        let nowMS = try XCTUnwrap((freshness["nowMs"] as? NSNumber)?.uint64Value)
+        let now = Date(timeIntervalSince1970: Double(nowMS) / 1_000)
+        let cases = try XCTUnwrap(freshness["cases"] as? [[String: Any]])
+        XCTAssertFalse(cases.isEmpty)
+        for vector in cases {
+            let name = try XCTUnwrap(vector["name"] as? String)
+            let origin = try XCTUnwrap((vector["originServerTs"] as? NSNumber)?.uint64Value)
+            let fresh = try XCTUnwrap(vector["fresh"] as? Bool)
+            XCTAssertEqual(
+                SynaraAgentApprovalFreshness.isFresh(originServerTimestampMS: origin, now: now),
+                fresh,
+                name
+            )
+        }
+    }
+
+    func testPreviewFailureStagesMatchCoreVectors() throws {
+        let vectors = try sharedNotificationPolicyVectors()
+        let stages = try XCTUnwrap(vectors["nsePreviewFailureStages"] as? [String: Any])
+        let fallback = try XCTUnwrap(stages["fallbackStage"] as? String)
+        let codes = try XCTUnwrap(stages["codes"] as? [String: String])
+        XCTAssertFalse(codes.isEmpty)
+        for (code, stage) in codes {
+            XCTAssertEqual(
+                SynaraNotificationDiagnostics.previewFailureStage(coreCode: code).rawValue,
+                stage,
+                code
+            )
+        }
+        XCTAssertEqual(
+            SynaraNotificationDiagnostics.previewFailureStage(coreCode: "p4-s11-nse-not-a-real-code").rawValue,
+            fallback
+        )
+    }
+
     func testAgentApprovalFreshnessFailsClosedAtFiveMinuteBoundary() {
         let now = Date(timeIntervalSince1970: 2_000_000)
         let nowMS = UInt64(now.timeIntervalSince1970 * 1_000)

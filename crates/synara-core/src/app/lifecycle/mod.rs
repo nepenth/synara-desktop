@@ -4,6 +4,8 @@
 //! retired; they do not define the product logout completion contract.
 
 mod error;
+#[cfg(feature = "full-app")]
+pub mod session;
 mod session_material;
 mod session_persist;
 mod session_restore;

@@ -23,8 +23,15 @@ pub use synara_core::app::timeline::{
 };
 
 /// Map a Tauri AppHandle onto the Core timeline view-delta sink.
+///
+/// Deltas go to the main window only. A broadcast would also serialize every
+/// batch into widget webviews, which never render the timeline.
 pub fn timeline_view_emit(app: AppHandle) -> TimelineViewUpdateEmit {
     Arc::new(move |batch| {
-        let _ = app.emit(NATIVE_TIMELINE_VIEW_UPDATED_EVENT, batch);
+        let _ = app.emit_to(
+            crate::desktop::MAIN_WINDOW_LABEL,
+            NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
+            batch,
+        );
     })
 }

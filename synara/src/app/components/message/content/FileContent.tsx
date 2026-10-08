@@ -17,7 +17,6 @@ import {
 import { EncryptedAttachmentInfo, IFileInfo } from '../../../../types/matrix/common';
 import FocusTrap from 'focus-trap-react';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { bytesToSize } from '../../../utils/common';
 import {
   READABLE_EXT_TO_MIME_TYPE,
@@ -163,19 +162,18 @@ export type ReadPdfFileProps = {
   renderViewer: (props: RenderPdfViewerProps) => ReactNode;
 };
 export function ReadPdfFile({ body, mimeType, url, encInfo, renderViewer }: ReadPdfFileProps) {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const [pdfViewer, setPdfViewer] = useState(false);
 
   const [pdfState, loadPdf] = useAsyncCallback(
     useCallback(async () => {
       setPdfViewer(true);
-      return createMatrixMediaObjectUrl(mx, url, {
+      return createMatrixMediaObjectUrl(url, {
         useAuthentication,
         mimeType,
         encryptedInfo: encInfo,
       });
-    }, [mx, url, useAuthentication, mimeType, encInfo])
+    }, [url, useAuthentication, mimeType, encInfo])
   );
 
   return (

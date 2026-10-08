@@ -3,7 +3,7 @@
 use super::*;
 
 /// Static fail-closed directory-visibility-family error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum DirectoryVisibilityCommandError {
     Failed { code: String, description: String },
 }
@@ -70,7 +70,7 @@ pub(super) fn closed_directory_visibility(value: &str) -> Option<&'static str> {
 }
 
 /// Static fail-closed directory-search-family error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum DirectorySearchCommandError {
     Failed { code: String, description: String },
 }
@@ -152,15 +152,6 @@ pub(super) fn directory_search_envelope_payload(
         ));
     }
     Ok(payload)
-}
-
-pub(super) fn closed_directory_search_status(value: &str) -> Option<&'static str> {
-    match value {
-        "ready" => Some("ready"),
-        "stale" => Some("stale"),
-        "cancelled" => Some("cancelled"),
-        _ => None,
-    }
 }
 
 pub(super) fn closed_directory_room_type(value: &str) -> Option<&'static str> {

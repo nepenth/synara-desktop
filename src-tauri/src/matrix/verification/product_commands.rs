@@ -1,5 +1,32 @@
 use super::*;
 
+/// Members of a room whose identity changed and need acknowledgement.
+#[tauri::command]
+pub async fn matrix_room_identity_warnings(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+) -> Result<synara_core::app::verification::NativeRoomIdentityWarnings, MatrixAuthCommandError> {
+    crate::bridge::room_identity_warnings::room_identity_warnings(core.inner().as_ref(), room_id)
+        .await
+}
+
+/// Pin a changed identity (`dismiss`) or withdraw an old verification.
+#[tauri::command]
+pub async fn matrix_room_identity_warning_resolve(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    user_id: String,
+    action: synara_core::app::verification::NativeIdentityWarningAction,
+) -> Result<synara_core::app::verification::NativeRoomIdentityWarnings, MatrixAuthCommandError> {
+    crate::bridge::room_identity_warnings::room_identity_warning_resolve(
+        core.inner().as_ref(),
+        room_id,
+        user_id,
+        action,
+    )
+    .await
+}
+
 #[tauri::command]
 pub async fn matrix_verification_list(
     core: State<'_, Arc<synara_core::Core>>,

@@ -12,7 +12,7 @@ struct SharedCoreRtcTransport: Equatable {
 }
 
 struct SharedCoreRtcTransportsSnapshot: Equatable {
-    let status: String
+    let status: RtcTransportsStatusDto
     let transports: [SharedCoreRtcTransport]
 }
 
@@ -35,7 +35,7 @@ enum SharedCoreRtcTransports {
     }
 
     static func diagnosticCopy(_ snapshot: SharedCoreRtcTransportsSnapshot) -> String {
-        if snapshot.status == "unsupported" || snapshot.status == "unavailable" {
+        if snapshot.status == .unsupported || snapshot.status == .unavailable {
             return "This homeserver does not advertise a call transport"
         }
         if let livekit = snapshot.transports.first(where: { $0.kind == "livekit" }) {

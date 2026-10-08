@@ -10,7 +10,7 @@ import { ClientRoot } from '../../src/app/pages/client/ClientRoot';
 import { SpecVersionsLoader } from '../../src/app/components/SpecVersionsLoader';
 import { useSpecVersions } from '../../src/app/hooks/useSpecVersions';
 import { setSessionBootstrapResult } from '../../src/app/state/sessionBootstrap';
-import type { NativeReadiness } from '../../src/app/features/native-client/nativeClientFacade';
+import type { NativeReadiness } from '../../src/app/native/nativeWire';
 
 export function mountSyncRecovery() {
   const query = new URLSearchParams(location.search);

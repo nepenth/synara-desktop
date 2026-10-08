@@ -15,6 +15,11 @@ pub const MAX_AGENT_USER_IDS: usize = 128;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "full-uniffi", derive(uniffi::Record))]
+#[cfg_attr(
+    feature = "full-uniffi",
+    uniffi(name = "AgentNotificationPreferencesDto")
+)]
 pub struct AgentNotificationPreferences {
     pub schema_version: u32,
     pub agent_user_ids: Vec<String>,

@@ -3,29 +3,26 @@
 use synara_core::app::account_data::{
     NativeRoomNotesSnapshot, RoomNoteMoveDirection, SynaraRoomNoteItem,
 };
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
 
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
-
 pub(crate) async fn room_notes_snapshot(
     core: &Core,
 ) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
-    dispatch(core, "matrix_room_notes_snapshot", serde_json::Value::Null).await
+    core.room_notes_snapshot()
+        .await
+        .map_err(map_room_notes_core_error)
 }
 
 pub(crate) async fn room_notes_upsert(
     core: &Core,
     item: SynaraRoomNoteItem,
 ) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
-    dispatch(
-        core,
-        "matrix_room_notes_upsert",
-        serde_json::json!({ "item": item }),
-    )
-    .await
+    core.room_notes_upsert(synara_core::core_api::MatrixRoomNotesUpsertRequest { item })
+        .await
+        .map_err(map_room_notes_core_error)
 }
 
 pub(crate) async fn room_notes_delete(
@@ -33,12 +30,9 @@ pub(crate) async fn room_notes_delete(
     room_id: String,
     item_id: String,
 ) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
-    dispatch(
-        core,
-        "matrix_room_notes_delete",
-        serde_json::json!({ "roomId": room_id, "itemId": item_id }),
-    )
-    .await
+    core.room_notes_delete(synara_core::core_api::MatrixRoomNotesItemRequest { room_id, item_id })
+        .await
+        .map_err(map_room_notes_core_error)
 }
 
 pub(crate) async fn room_notes_complete_todo(
@@ -47,16 +41,13 @@ pub(crate) async fn room_notes_complete_todo(
     item_id: String,
     completed: bool,
 ) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
-    dispatch(
-        core,
-        "matrix_room_notes_complete_todo",
-        serde_json::json!({
-            "roomId": room_id,
-            "itemId": item_id,
-            "completed": completed,
-        }),
-    )
+    core.room_notes_complete_todo(synara_core::core_api::MatrixRoomNotesCompleteTodoRequest {
+        room_id,
+        item_id,
+        completed,
+    })
     .await
+    .map_err(map_room_notes_core_error)
 }
 
 pub(crate) async fn room_notes_move_todo(
@@ -65,33 +56,13 @@ pub(crate) async fn room_notes_move_todo(
     item_id: String,
     direction: RoomNoteMoveDirection,
 ) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
-    dispatch(
-        core,
-        "matrix_room_notes_move_todo",
-        serde_json::json!({
-            "roomId": room_id,
-            "itemId": item_id,
-            "direction": direction,
-        }),
-    )
+    core.room_notes_move_todo(synara_core::core_api::MatrixRoomNotesMoveTodoRequest {
+        room_id,
+        item_id,
+        direction,
+    })
     .await
-}
-
-async fn dispatch(
-    core: &Core,
-    command: &str,
-    payload: serde_json::Value,
-) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
-    let response = core
-        .command(CommandEnvelope {
-            command: command.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload,
-        })
-        .await
-        .map_err(map_room_notes_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| room_notes_response_error())
+    .map_err(map_room_notes_core_error)
 }
 
 fn map_room_notes_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -118,12 +89,4 @@ fn map_room_notes_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
                 .unwrap_or("v-timeline-room-notes-fetch-failed"),
         ),
     }
-}
-
-fn room_notes_response_error() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "The native Matrix later/notes account data is unavailable.",
-        "v-timeline-room-notes-fetch-failed",
-    )
 }

@@ -55,7 +55,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn account_settings_surface_exposes_the_registered_families() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("ignored_users_snapshot"));
     assert!(udl.contains("ignored_users_ignore"));
     assert!(udl.contains("ignored_users_unignore"));
@@ -85,7 +85,10 @@ fn account_settings_surface_exposes_the_registered_families() {
     assert!(shared_core.contains("room_notification_snapshot"));
     assert!(shared_core.contains("threepid_snapshot"));
     assert!(shared_core.contains("upload_avatar"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

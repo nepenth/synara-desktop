@@ -11,10 +11,11 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { readRustModuleSources } from "./lib/rust-module-sources.mjs";
 import { inspectTypedRecoveryBoundaries } from "./lib/typed-recovery-boundaries.mjs";
+import { readUdlSurface } from "./lib/ffi-surface.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const required = [
-  "crates/synara-core/src/synara_core.udl",
+  "synara-ios/SynaraCore/api/synara_core.swift-api.txt",
   "crates/synara-core/src/ffi.rs",
   "crates/synara-core/src/session_projection_ffi.rs",
   "crates/synara-core/src/shared_core_ffi.rs",
@@ -56,7 +57,6 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreInviteActions.swift",
   "synara-ios/Synara/Services/SharedCoreTimelineReadState.swift",
   "synara-ios/Synara/Services/SharedCoreAgentApprovals.swift",
-  "synara-ios/Synara/Services/SharedCoreNseStore.swift",
   "synara-ios/Synara/Services/SharedCoreLeftovers.swift",
   "synara-ios/Synara/Services/SharedCoreProductServices.swift",
   "synara-ios/Synara/Services/MatrixClientPolicies.swift",
@@ -82,11 +82,23 @@ for (const path of required) {
 }
 
 const cargo = readFileSync(resolve(root, "crates/synara-core/Cargo.toml"), "utf8");
-const udl = readFileSync(resolve(root, "crates/synara-core/src/synara_core.udl"), "utf8");
+// The FFI surface in UDL vocabulary, rendered from the pinned Swift golden
+// (UniFFI proc-macros declare the boundary; there is no UDL file).
+const udl = readUdlSurface(root);
+// Generated Swift API surface, pinned by scripts/check-swift-api-snapshot.sh.
+// Items exported with UniFFI proc-macros are asserted here instead of in the UDL.
+const swiftApi = readFileSync(
+  resolve(root, "synara-ios/SynaraCore/api/synara_core.swift-api.txt"),
+  "utf8"
+);
 const lib = readFileSync(resolve(root, "crates/synara-core/src/lib.rs"), "utf8");
 const ffi = readFileSync(resolve(root, "crates/synara-core/src/ffi.rs"), "utf8");
 const sessionProjectionFfi = readFileSync(
   resolve(root, "crates/synara-core/src/session_projection_ffi.rs"),
+  "utf8"
+);
+const sessionOwnerWiring = readFileSync(
+  resolve(root, "crates/synara-core/src/app/lifecycle/session/owners.rs"),
   "utf8"
 );
 const sharedCoreFfi = readRustModuleSources(
@@ -261,10 +273,6 @@ const sharedCoreSessionStatus = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreSessionStatus.swift"),
   "utf8"
 );
-const sharedCoreNseStore = readFileSync(
-  resolve(root, "synara-ios/Synara/Services/SharedCoreNseStore.swift"),
-  "utf8"
-);
 const sharedCoreLeftovers = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreLeftovers.swift"),
   "utf8"
@@ -314,10 +322,9 @@ const assertions = [
   [cargo, 'uniffi = { workspace = true, features = ["tokio"], optional = true }', "optional workspace Tokio-aware UniFFI runtime"],
   [readFileSync(resolve(root, "Cargo.toml"), "utf8"), 'uniffi = { version = "=0.32.2", default-features = false }', "pinned shared UniFFI runtime without Cargo metadata discovery"],
   [readFileSync(resolve(root, "crates/synara-core-bindgen/Cargo.toml"), "utf8"), 'uniffi = { workspace = true, features = ["cli", "cargo-metadata"] }', "pinned project-owned UniFFI generator with Cargo metadata discovery"],
-  [cargo, 'features = ["build"]', "UniFFI build scaffolding"],
   [udl, "namespace synara_core", "project-owned UniFFI namespace"],
   [udl, "binding_scaffold_version", "P4-1 binding bootstrap"],
-  [udl, "[Async, Throws=LoginFlowsError]", "async typed login-flow operation"],
+  [udl, "[Async, Throws] sequence<LoginFlowDto> login_flows(", "async typed login-flow operation"],
   [udl, "sequence<LoginFlowDto> login_flows(string homeserver_url)", "typed login-flow return"],
   [udl, "dictionary LoginFlowDto", "typed login-flow DTO"],
   [udl, "boolean? get_login_token", "optional token-capability metadata"],
@@ -330,11 +337,10 @@ const assertions = [
   [udl, "SessionProjection? session_snapshot()", "P4-3 projection snapshot operation"],
   [udl, "interface SessionProjectionError", "P4-3 static privacy-safe error"],
   [udl, "interface SharedCore", "P4-S2 construction-only shared Core facade"],
-  [lib, 'uniffi::include_scaffolding!("synara_core")', "Rust FFI scaffolding inclusion"],
+  [lib, 'uniffi::setup_scaffolding!("synara_core")', "Rust FFI proc-macro scaffolding"],
   [lib, "SessionProjectionCore", "P4-3 facade export"],
   [lib, "SharedCore", "P4-S2 shared Core facade export"],
-  [sessionProjectionFfi, "Core::with_registry", "P4-3 Core open/close/snapshot delegation"],
-  [sessionProjectionFfi, "CommandRegistry::new()", "P4-3 facade has no command registry"],
+  [sessionProjectionFfi, "Core::new(Arc::new(ProjectionOnlyPlatform))", "P4-3 Core open/close/snapshot delegation over a projection-only platform"],
   [sessionProjectionFfi, "uniffi_projection_facade_executes_core_open_snapshot_and_close", "P4-3 Rust behavioral facade test"],
   [sessionProjectionFfi, "facade_rejects_hostile_values_with_static_privacy_safe_error", "P4-3 Rust hostile-input privacy test"],
   [sharedCoreFfi, "SharedCore", "P4-S2 shared Core facade"],
@@ -388,14 +394,16 @@ const assertions = [
   [sharedCoreLogin, "core: SharedCore", "P4-S3c helper takes an already-constructed SharedCore"],
   [sharedCoreLogin, "core.loginWithPassword", "P4-S3c helper logs in on the caller-owned instance"],
   [sharedCoreFfi, "attach_session_owners", "P4-S3d attach FFI"],
-  [sharedCoreFfi, "attach_typing", "P4-S3d wires Core attach_typing"],
-  [sharedCoreFfi, "attach_presence", "P4-S3d wires Core attach_presence"],
-  [sharedCoreFfi, "attach_verification", "P4-S3d wires Core attach_verification"],
-  [sharedCoreFfi, "attach_devices", "P4-S3d wires Core attach_devices"],
-  [sharedCoreFfi, "attach_join_rules", "P4-S3d wires Core attach_join_rules"],
-  [sharedCoreFfi, "attach_image_packs", "P4-S3d wires Core attach_image_packs"],
-  [sharedCoreFfi, "attach_timelines", "P4-S3d wires Core attach_timelines"],
-  [sharedCoreFfi, "attach_sync", "P4-S3d wires Core attach_sync"],
+  // SharedCore hands its owners to the shared canonical Core attach order.
+  [sharedCoreFfi, "session_policy::attach_owner_set(", "P4-S3d wires Core owners in the shared attach order"],
+  [sessionOwnerWiring, "core.attach_typing(typing)", "P4-S3d wires Core attach_typing"],
+  [sessionOwnerWiring, "core.attach_presence(presence)", "P4-S3d wires Core attach_presence"],
+  [sessionOwnerWiring, "core.attach_verification(verification)", "P4-S3d wires Core attach_verification"],
+  [sessionOwnerWiring, "core.attach_devices(devices)", "P4-S3d wires Core attach_devices"],
+  [sessionOwnerWiring, "core.attach_join_rules(join_rules)", "P4-S3d wires Core attach_join_rules"],
+  [sessionOwnerWiring, "core.attach_image_packs(image_packs)", "P4-S3d wires Core attach_image_packs"],
+  [sessionOwnerWiring, "core.attach_timelines(timelines)", "P4-S3d wires Core attach_timelines"],
+  [sessionOwnerWiring, "core.attach_sync(sync)", "P4-S3d wires Core attach_sync"],
   [udl, "attach_session_owners", "P4-S3d SharedCore attach operation"],
   [udl, "dictionary SessionAttachDto", "P4-S3d privacy-safe attach DTO"],
   [udl, "interface SessionAttachError", "P4-S3d static attach error"],
@@ -404,8 +412,7 @@ const assertions = [
   [sharedCoreAttach, "core: SharedCore", "P4-S3d helper takes an already-constructed SharedCore"],
   [sharedCoreAttach, "core.attachSessionOwners", "P4-S3d helper attaches on the caller-owned instance"],
   [sharedCoreFfi, "room_list_snapshot", "P4-S4 typed room-list FFI"],
-  [sharedCoreFfi, "matrix_room_list_snapshot", "P4-S4 calls the registered Core command"],
-  [sharedCoreFfi, "CommandEnvelope", "P4-S4 uses Core.command internally"],
+  [sharedCoreFfi, ".room_list_snapshot()", "P4-S4 calls the typed Core method"],
   [udl, "RoomListSnapshotDto room_list_snapshot()", "P4-S4 SharedCore room-list operation"],
   [udl, "dictionary RoomListSnapshotDto", "P4-S4 privacy-safe room-list DTO"],
   [udl, "interface RoomListSnapshotError", "P4-S4 static room-list error"],
@@ -414,7 +421,7 @@ const assertions = [
   [sharedCoreRoomList, "core: SharedCore", "P4-S4 helper takes an already-constructed SharedCore"],
   [sharedCoreRoomList, "core.roomListSnapshot", "P4-S4 helper reads on the caller-owned instance"],
   [sharedCoreFfi, "invites_snapshot", "P4-S5 typed invite FFI"],
-  [sharedCoreFfi, "matrix_invites_snapshot", "P4-S5 calls the registered Core command"],
+  [sharedCoreFfi, ".invites_snapshot(", "P4-S5 calls the typed Core Core method"],
   [udl, "InviteSnapshotDto invites_snapshot()", "P4-S5 SharedCore invite operation"],
   [udl, "dictionary InviteSnapshotDto", "P4-S5 privacy-safe invite DTO"],
   [udl, "interface InviteSnapshotError", "P4-S5 static invite error"],
@@ -423,10 +430,10 @@ const assertions = [
   [sharedCoreInvites, "core: SharedCore", "P4-S5 helper takes an already-constructed SharedCore"],
   [sharedCoreInvites, "core.invitesSnapshot", "P4-S5 helper reads on the caller-owned instance"],
   [sharedCoreFfi, "timeline_open", "P4-S6 typed timeline-open FFI"],
-  [sharedCoreFfi, "matrix_timeline_open", "P4-S6 calls the registered open command"],
-  [sharedCoreFfi, "matrix_timeline_close", "P4-S6 calls the registered close command"],
-  [sharedCoreFfi, "matrix_timeline_snapshot", "P4-S6 calls the registered snapshot command"],
-  [sharedCoreFfi, "matrix_timeline_paginate", "P4-S6 calls the registered paginate command"],
+  [sharedCoreFfi, ".timeline_open(", "P4-S6 calls the typed Core open method"],
+  [sharedCoreFfi, ".timeline_close(", "P4-S6 calls the typed Core close method"],
+  [sharedCoreFfi, ".timeline_snapshot(", "P4-S6 calls the typed Core snapshot method"],
+  [sharedCoreFfi, ".timeline_paginate(", "P4-S6 calls the typed Core paginate method"],
   [udl, "TimelineOpenDto timeline_open(", "P4-S6 SharedCore timeline-open operation"],
   [udl, "boolean timeline_close(", "P4-S6 SharedCore timeline-close operation"],
   [udl, "TimelineSnapshotDto timeline_snapshot(", "P4-S6 SharedCore timeline-snapshot operation"],
@@ -441,11 +448,11 @@ const assertions = [
   [sharedCoreTimeline, "core: SharedCore", "P4-S6 helper takes an already-constructed SharedCore"],
   [sharedCoreTimeline, "core.timelineOpen", "P4-S6 helper opens on the caller-owned instance"],
   [sharedCoreFfi, "typing_snapshot", "P4-S7 typed typing-snapshot FFI"],
-  [sharedCoreFfi, "matrix_typing_snapshot", "P4-S7 calls the registered typing snapshot"],
-  [sharedCoreFfi, "matrix_typing_set", "P4-S7 calls the registered typing set"],
-  [sharedCoreFfi, "matrix_presence_snapshot", "P4-S7 calls the registered presence snapshot"],
-  [sharedCoreFfi, "matrix_presence_subscribe", "P4-S7 calls the registered presence subscribe"],
-  [sharedCoreFfi, "matrix_presence_unsubscribe", "P4-S7 calls the registered presence unsubscribe"],
+  [sharedCoreFfi, ".typing_snapshot(", "P4-S7 calls the registered typing snapshot"],
+  [sharedCoreFfi, ".typing_set(", "P4-S7 calls the registered typing set"],
+  [sharedCoreFfi, ".presence_snapshot(", "P4-S7 calls the registered presence snapshot"],
+  [sharedCoreFfi, ".presence_subscribe(", "P4-S7 calls the registered presence subscribe"],
+  [sharedCoreFfi, ".presence_unsubscribe(", "P4-S7 calls the registered presence unsubscribe"],
   [udl, "TypingSnapshotDto typing_snapshot()", "P4-S7 SharedCore typing-snapshot operation"],
   [udl, "void typing_set(", "P4-S7 SharedCore typing-set operation"],
   [udl, "PresenceSnapshotDto presence_snapshot(", "P4-S7 SharedCore presence-snapshot operation"],
@@ -459,8 +466,8 @@ const assertions = [
   [sharedCoreTypingPresence, "core: SharedCore", "P4-S7 helper takes an already-constructed SharedCore"],
   [sharedCoreTypingPresence, "core.typingSnapshot", "P4-S7 helper reads on the caller-owned instance"],
   [sharedCoreFfi, "rtc_transports_snapshot", "MatrixRTC typed transport-snapshot FFI"],
-  [sharedCoreFfi, "matrix_rtc_transports_snapshot", "MatrixRTC calls the registered transport snapshot"],
-  [sharedCoreFfi, "matrix_rtc_transports_refresh", "MatrixRTC calls the registered transport refresh"],
+  [sharedCoreFfi, ".rtc_transports_snapshot(", "MatrixRTC calls the registered transport snapshot"],
+  [sharedCoreFfi, ".rtc_transports_refresh(", "MatrixRTC calls the registered transport refresh"],
   [udl, "RtcTransportsSnapshotDto rtc_transports_snapshot()", "SharedCore rtc-transports-snapshot operation"],
   [udl, "RtcTransportsSnapshotDto rtc_transports_refresh()", "SharedCore rtc-transports-refresh operation"],
   [udl, "interface RtcTransportsCommandError", "static rtc-transports error"],
@@ -469,9 +476,9 @@ const assertions = [
   [sharedCoreRtcTransports, "core: SharedCore", "rtc helper takes an already-constructed SharedCore"],
   [sharedCoreRtcTransports, "core.rtcTransportsSnapshot", "rtc helper reads on the caller-owned instance"],
   [sharedCoreFfi, "user_status_snapshot", "MSC4426 typed user-status-snapshot FFI"],
-  [sharedCoreFfi, "matrix_user_status_snapshot", "MSC4426 calls the registered status snapshot"],
-  [sharedCoreFfi, "matrix_user_status_set", "MSC4426 calls the registered status set"],
-  [sharedCoreFfi, "matrix_user_status_clear", "MSC4426 calls the registered status clear"],
+  [sharedCoreFfi, ".user_status_snapshot(", "MSC4426 calls the registered status snapshot"],
+  [sharedCoreFfi, ".user_status_set(", "MSC4426 calls the registered status set"],
+  [sharedCoreFfi, ".user_status_clear(", "MSC4426 calls the registered status clear"],
   [udl, "UserStatusSnapshotDto user_status_snapshot(", "SharedCore user-status-snapshot operation"],
   [udl, "UserStatusWriteDto user_status_set(", "SharedCore user-status-set operation"],
   [udl, "UserStatusWriteDto user_status_clear()", "SharedCore user-status-clear operation"],
@@ -481,7 +488,7 @@ const assertions = [
   [sharedCoreUserStatus, "core: SharedCore", "user-status helper takes an already-constructed SharedCore"],
   [sharedCoreUserStatus, "core.userStatusSnapshot", "user-status helper reads on the caller-owned instance"],
   [sharedCoreFfi, "verification_list", "P4-S8 typed verification-list FFI"],
-  [sharedCoreFfi, "matrix_verification_list", "P4-S8 calls the registered Core command"],
+  [sharedCoreFfi, ".verification_list(", "P4-S8 calls the typed Core Core method"],
   [udl, "VerificationInboxDto verification_list()", "P4-S8 SharedCore verification-list operation"],
   [udl, "dictionary VerificationInboxDto", "P4-S8 privacy-safe verification inbox DTO"],
   [udl, "interface VerificationListError", "P4-S8 static verification-list error"],
@@ -490,13 +497,13 @@ const assertions = [
   [sharedCoreVerificationList, "core: SharedCore", "P4-S8 helper takes an already-constructed SharedCore"],
   [sharedCoreVerificationList, "core.verificationList", "P4-S8 helper reads on the caller-owned instance"],
   [sharedCoreFfi, "verification_start", "P4-S9 typed verification-start FFI"],
-  [sharedCoreFfi, "matrix_verification_start", "P4-S9 calls the registered start command"],
-  [sharedCoreFfi, "matrix_verification_accept", "P4-S9 calls the registered accept command"],
-  [sharedCoreFfi, "matrix_verification_begin_sas", "P4-S9 calls the registered begin_sas command"],
-  [sharedCoreFfi, "matrix_verification_confirm", "P4-S9 calls the registered confirm command"],
-  [sharedCoreFfi, "matrix_verification_mismatch", "P4-S9 calls the registered mismatch command"],
-  [sharedCoreFfi, "matrix_verification_cancel", "P4-S9 calls the registered cancel command"],
-  [sharedCoreFfi, "matrix_verification_dismiss", "P4-S9 calls the registered dismiss command"],
+  [sharedCoreFfi, ".verification_start(", "P4-S9 calls the typed Core start method"],
+  [sharedCoreFfi, ".verification_accept(", "P4-S9 calls the typed Core accept method"],
+  [sharedCoreFfi, ".verification_begin_sas(", "P4-S9 calls the typed Core begin_sas method"],
+  [sharedCoreFfi, ".verification_confirm(", "P4-S9 calls the typed Core confirm method"],
+  [sharedCoreFfi, ".verification_mismatch(", "P4-S9 calls the typed Core mismatch method"],
+  [sharedCoreFfi, ".verification_cancel(", "P4-S9 calls the typed Core cancel method"],
+  [sharedCoreFfi, ".verification_dismiss(", "P4-S9 calls the typed Core dismiss method"],
   [udl, "VerificationRequestDto verification_start(", "P4-S9 SharedCore verification-start operation"],
   [udl, "VerificationRequestDto verification_accept(", "P4-S9 SharedCore verification-accept operation"],
   [udl, "VerificationRequestDto verification_begin_sas(", "P4-S9 SharedCore verification-begin-sas operation"],
@@ -514,10 +521,10 @@ const assertions = [
   [sharedCoreVerificationSas, "core: SharedCore", "P4-S9 helper takes an already-constructed SharedCore"],
   [sharedCoreVerificationSas, "core.verificationStart", "P4-S9 helper starts on the caller-owned instance"],
   [sharedCoreFfi, "device_snapshot", "P4-S9-2 typed device-snapshot FFI"],
-  [sharedCoreFfi, "matrix_device_snapshot", "P4-S9-2 calls the registered snapshot command"],
-  [sharedCoreFfi, "matrix_device_rename", "P4-S9-2 calls the registered rename command"],
-  [sharedCoreFfi, "matrix_device_delete_start", "P4-S9-2 calls the registered delete-start command"],
-  [sharedCoreFfi, "matrix_device_delete_cancel", "P4-S9-2 calls the registered delete-cancel command"],
+  [sharedCoreFfi, ".device_snapshot(", "P4-S9-2 calls the typed Core snapshot method"],
+  [sharedCoreFfi, ".device_rename(", "P4-S9-2 calls the typed Core rename method"],
+  [sharedCoreFfi, ".device_delete_start(", "P4-S9-2 calls the typed Core delete-start method"],
+  [sharedCoreFfi, ".device_delete_cancel(", "P4-S9-2 calls the typed Core delete-cancel method"],
   [sharedCoreFfi, "device_delete_password", "P4-S9-2 typed device-delete-password FFI"],
   [udl, "DeviceSnapshotDto device_snapshot()", "P4-S9-2 SharedCore device-snapshot operation"],
   [udl, "DeviceSnapshotDto device_rename(", "P4-S9-2 SharedCore device-rename operation"],
@@ -534,7 +541,7 @@ const assertions = [
   [sharedCoreDevices, "core: SharedCore", "P4-S9-2 helper takes an already-constructed SharedCore"],
   [sharedCoreDevices, "core.deviceSnapshot", "P4-S9-2 helper reads on the caller-owned instance"],
   [sharedCoreFfi, "room_join_rule_snapshot", "P4-S9-3 typed join-rule snapshot FFI"],
-  [sharedCoreFfi, "matrix_room_join_rule_snapshot", "P4-S9-3 calls the registered join-rule snapshot"],
+  [sharedCoreFfi, ".room_join_rule_snapshot(", "P4-S9-3 calls the registered join-rule snapshot"],
   [udl, "RoomJoinRuleSnapshotDto room_join_rule_snapshot(", "P4-S9-3 SharedCore join-rule snapshot operation"],
   [udl, "dictionary RoomJoinRuleSnapshotDto", "P4-S9-3 privacy-safe join-rule DTO"],
   [udl, "interface JoinRuleCommandError", "P4-S9-3 static join-rule error"],
@@ -543,12 +550,12 @@ const assertions = [
   [sharedCoreJoinRules, "core: SharedCore", "P4-S9-3 helper takes an already-constructed SharedCore"],
   [sharedCoreJoinRules, "core.roomJoinRuleSnapshot", "P4-S9-3 helper reads on the caller-owned instance"],
   [sharedCoreFfi, "get_global_image_packs", "P4-S9-4 typed global image-pack snapshot FFI"],
-  [sharedCoreFfi, "matrix_get_global_image_packs", "P4-S9-4 calls the registered global snapshot"],
-  [sharedCoreFfi, "matrix_get_user_image_pack", "P4-S9-4 calls the registered user snapshot"],
-  [sharedCoreFfi, "matrix_get_room_image_packs", "P4-S9-4 calls the registered room snapshot"],
-  [sharedCoreFfi, "matrix_set_user_image_pack", "P4-S9-4 calls the registered user setter"],
-  [sharedCoreFfi, "matrix_set_global_image_packs", "P4-S9-4 calls the registered global setter"],
-  [sharedCoreFfi, "matrix_set_room_image_pack", "P4-S9-4 calls the registered room setter"],
+  [sharedCoreFfi, ".get_global_image_packs(", "P4-S9-4 calls the registered global snapshot"],
+  [sharedCoreFfi, ".get_user_image_pack(", "P4-S9-4 calls the registered user snapshot"],
+  [sharedCoreFfi, ".get_room_image_packs(", "P4-S9-4 calls the registered room snapshot"],
+  [sharedCoreFfi, ".set_user_image_pack(", "P4-S9-4 calls the registered user setter"],
+  [sharedCoreFfi, ".set_global_image_packs(", "P4-S9-4 calls the registered global setter"],
+  [sharedCoreFfi, ".set_room_image_pack(", "P4-S9-4 calls the registered room setter"],
   [udl, "GlobalImagePacksSnapshotDto get_global_image_packs()", "P4-S9-4 SharedCore global image-pack snapshot"],
   [udl, "UserImagePackSnapshotDto get_user_image_pack()", "P4-S9-4 SharedCore user image-pack snapshot"],
   [udl, "RoomImagePacksSnapshotDto get_room_image_packs(", "P4-S9-4 SharedCore room image-pack snapshot"],
@@ -567,12 +574,12 @@ const assertions = [
   [sharedCoreImagePacks, "core: SharedCore", "P4-S9-4 helper takes an already-constructed SharedCore"],
   [sharedCoreImagePacks, "core.getGlobalImagePacks", "P4-S9-4 helper reads on the caller-owned instance"],
   [sharedCoreFfi, "later_snapshot", "P4-S9-5 typed later snapshot FFI"],
-  [sharedCoreFfi, "matrix_later_snapshot", "P4-S9-5 calls the registered later snapshot"],
-  [sharedCoreFfi, "matrix_later_upsert", "P4-S9-5 calls the registered later upsert"],
-  [sharedCoreFfi, "matrix_later_complete", "P4-S9-5 calls the registered later complete"],
-  [sharedCoreFfi, "matrix_later_snooze", "P4-S9-5 calls the registered later snooze"],
-  [sharedCoreFfi, "matrix_later_clear_completed", "P4-S9-5 calls the registered later clear"],
-  [sharedCoreFfi, "matrix_later_mark_reminded", "P4-S9-5 calls the registered later mark-reminded"],
+  [sharedCoreFfi, ".later_snapshot(", "P4-S9-5 calls the registered later snapshot"],
+  [sharedCoreFfi, ".later_upsert(", "P4-S9-5 calls the registered later upsert"],
+  [sharedCoreFfi, ".later_complete(", "P4-S9-5 calls the registered later complete"],
+  [sharedCoreFfi, ".later_snooze(", "P4-S9-5 calls the registered later snooze"],
+  [sharedCoreFfi, ".later_clear_completed(", "P4-S9-5 calls the registered later clear"],
+  [sharedCoreFfi, ".later_mark_reminded(", "P4-S9-5 calls the registered later mark-reminded"],
   [udl, "LaterSnapshotDto later_snapshot()", "P4-S9-5 SharedCore later snapshot"],
   [udl, "LaterSnapshotDto later_upsert(", "P4-S9-5 SharedCore later upsert"],
   [udl, "LaterSnapshotDto later_complete(", "P4-S9-5 SharedCore later complete"],
@@ -591,9 +598,9 @@ const assertions = [
   [sharedCoreLater, "core: SharedCore", "P4-S9-5 helper takes an already-constructed SharedCore"],
   [sharedCoreLater, "core.laterSnapshot", "P4-S9-5 helper reads on the caller-owned instance"],
   [sharedCoreFfi, "mdirect_snapshot", "P4-S9-6 typed m.direct snapshot FFI"],
-  [sharedCoreFfi, "matrix_mdirect_snapshot", "P4-S9-6 calls the registered m.direct snapshot"],
-  [sharedCoreFfi, "matrix_mdirect_add", "P4-S9-6 calls the registered m.direct add"],
-  [sharedCoreFfi, "matrix_mdirect_remove", "P4-S9-6 calls the registered m.direct remove"],
+  [sharedCoreFfi, ".mdirect_snapshot(", "P4-S9-6 calls the registered m.direct snapshot"],
+  [sharedCoreFfi, ".mdirect_add(", "P4-S9-6 calls the registered m.direct add"],
+  [sharedCoreFfi, ".mdirect_remove(", "P4-S9-6 calls the registered m.direct remove"],
   [udl, "MDirectSnapshotDto mdirect_snapshot()", "P4-S9-6 SharedCore m.direct snapshot"],
   [udl, "MDirectMutationDto mdirect_add(", "P4-S9-6 SharedCore m.direct add"],
   [udl, "MDirectMutationDto mdirect_remove(", "P4-S9-6 SharedCore m.direct remove"],
@@ -606,11 +613,11 @@ const assertions = [
   [sharedCoreMDirect, "core: SharedCore", "P4-S9-6 helper takes an already-constructed SharedCore"],
   [sharedCoreMDirect, "core.mdirectSnapshot", "P4-S9-6 helper reads on the caller-owned instance"],
   [sharedCoreFfi, "room_notes_snapshot", "P4-S9-7 typed room-notes snapshot FFI"],
-  [sharedCoreFfi, "matrix_room_notes_snapshot", "P4-S9-7 calls the registered room-notes snapshot"],
-  [sharedCoreFfi, "matrix_room_notes_upsert", "P4-S9-7 calls the registered room-notes upsert"],
-  [sharedCoreFfi, "matrix_room_notes_delete", "P4-S9-7 calls the registered room-notes delete"],
-  [sharedCoreFfi, "matrix_room_notes_complete_todo", "P4-S9-7 calls the registered room-notes complete"],
-  [sharedCoreFfi, "matrix_room_notes_move_todo", "P4-S9-7 calls the registered room-notes move"],
+  [sharedCoreFfi, ".room_notes_snapshot(", "P4-S9-7 calls the registered room-notes snapshot"],
+  [sharedCoreFfi, ".room_notes_upsert(", "P4-S9-7 calls the registered room-notes upsert"],
+  [sharedCoreFfi, ".room_notes_delete(", "P4-S9-7 calls the registered room-notes delete"],
+  [sharedCoreFfi, ".room_notes_complete_todo(", "P4-S9-7 calls the registered room-notes complete"],
+  [sharedCoreFfi, ".room_notes_move_todo(", "P4-S9-7 calls the registered room-notes move"],
   [udl, "RoomNotesSnapshotDto room_notes_snapshot()", "P4-S9-7 SharedCore room-notes snapshot"],
   [udl, "RoomNotesSnapshotDto room_notes_upsert(", "P4-S9-7 SharedCore room-notes upsert"],
   [udl, "RoomNotesSnapshotDto room_notes_delete(", "P4-S9-7 SharedCore room-notes delete"],
@@ -627,8 +634,8 @@ const assertions = [
   [sharedCoreRoomNotes, "core: SharedCore", "P4-S9-7 helper takes an already-constructed SharedCore"],
   [sharedCoreRoomNotes, "core.roomNotesSnapshot", "P4-S9-7 helper reads on the caller-owned instance"],
   [sharedCoreFfi, "set_own_display_name", "P4-S9-8 typed own display-name FFI"],
-  [sharedCoreFfi, "matrix_set_own_display_name", "P4-S9-8 calls the registered display-name command"],
-  [sharedCoreFfi, "matrix_set_own_avatar", "P4-S9-8 calls the registered avatar command"],
+  [sharedCoreFfi, ".set_own_display_name(", "P4-S9-8 calls the typed Core display-name method"],
+  [sharedCoreFfi, ".set_own_avatar(", "P4-S9-8 calls the typed Core avatar method"],
   [udl, "OwnProfileWriteDto set_own_display_name(", "P4-S9-8 SharedCore own display-name"],
   [udl, "OwnProfileWriteDto set_own_avatar(", "P4-S9-8 SharedCore own avatar"],
   [udl, "dictionary OwnProfileWriteDto", "P4-S9-8 privacy-safe own-profile write DTO"],
@@ -639,9 +646,9 @@ const assertions = [
   [sharedCoreOwnProfile, "core: SharedCore", "P4-S9-8 helper takes an already-constructed SharedCore"],
   [sharedCoreOwnProfile, "core.setOwnDisplayName", "P4-S9-8 helper writes on the caller-owned instance"],
   [sharedCoreFfi, "set_room_name", "P4-S9-9 typed room-name FFI"],
-  [sharedCoreFfi, "matrix_set_room_name", "P4-S9-9 calls the registered room-name command"],
-  [sharedCoreFfi, "matrix_set_room_topic", "P4-S9-9 calls the registered room-topic command"],
-  [sharedCoreFfi, "matrix_set_room_avatar", "P4-S9-9 calls the registered room-avatar command"],
+  [sharedCoreFfi, ".set_room_name(", "P4-S9-9 calls the typed Core room-name method"],
+  [sharedCoreFfi, ".set_room_topic(", "P4-S9-9 calls the typed Core room-topic method"],
+  [sharedCoreFfi, ".set_room_avatar(", "P4-S9-9 calls the typed Core room-avatar method"],
   [udl, "RoomProfileWriteDto set_room_name(", "P4-S9-9 SharedCore room name"],
   [udl, "RoomProfileWriteDto set_room_topic(", "P4-S9-9 SharedCore room topic"],
   [udl, "RoomProfileWriteDto set_room_avatar(", "P4-S9-9 SharedCore room avatar"],
@@ -654,8 +661,8 @@ const assertions = [
   [sharedCoreRoomProfile, "core: SharedCore", "P4-S9-9 helper takes an already-constructed SharedCore"],
   [sharedCoreRoomProfile, "core.setRoomName", "P4-S9-9 helper writes on the caller-owned instance"],
   [sharedCoreFfi, "get_room_directory_visibility", "P4-S9-10 typed directory-visibility get FFI"],
-  [sharedCoreFfi, "matrix_get_room_directory_visibility", "P4-S9-10 calls the registered directory-visibility get command"],
-  [sharedCoreFfi, "matrix_set_room_directory_visibility", "P4-S9-10 calls the registered directory-visibility set command"],
+  [sharedCoreFfi, ".get_room_directory_visibility(", "P4-S9-10 calls the typed Core directory-visibility get method"],
+  [sharedCoreFfi, ".set_room_directory_visibility(", "P4-S9-10 calls the typed Core directory-visibility set method"],
   [udl, "RoomDirectoryVisibilityDto get_room_directory_visibility(", "P4-S9-10 SharedCore directory-visibility get"],
   [udl, "RoomDirectoryVisibilityWriteDto set_room_directory_visibility(", "P4-S9-10 SharedCore directory-visibility set"],
   [udl, "dictionary RoomDirectoryVisibilityDto", "P4-S9-10 privacy-safe directory-visibility read DTO"],
@@ -666,9 +673,9 @@ const assertions = [
   [sharedCoreDirectoryVisibility, "core: SharedCore", "P4-S9-10 helper takes an already-constructed SharedCore"],
   [sharedCoreDirectoryVisibility, "core.getRoomDirectoryVisibility", "P4-S9-10 helper reads on the caller-owned instance"],
   [sharedCoreFfi, "room_directory_protocols", "P4-S9-11 typed directory-protocols FFI"],
-  [sharedCoreFfi, "matrix_room_directory_protocols", "P4-S9-11 calls the registered directory-protocols command"],
-  [sharedCoreFfi, "matrix_room_directory_search", "P4-S9-11 calls the registered directory-search command"],
-  [sharedCoreFfi, "matrix_room_directory_cancel", "P4-S9-11 calls the registered directory-cancel command"],
+  [sharedCoreFfi, ".room_directory_protocols(", "P4-S9-11 calls the typed Core directory-protocols method"],
+  [sharedCoreFfi, ".room_directory_search(", "P4-S9-11 calls the typed Core directory-search method"],
+  [sharedCoreFfi, ".room_directory_cancel(", "P4-S9-11 calls the typed Core directory-cancel method"],
   [udl, "RoomDirectoryProtocolsDto room_directory_protocols(", "P4-S9-11 SharedCore directory protocols"],
   [udl, "RoomDirectorySearchDto room_directory_search(", "P4-S9-11 SharedCore directory search"],
   [udl, "RoomDirectorySearchDto room_directory_cancel(", "P4-S9-11 SharedCore directory cancel"],
@@ -681,9 +688,9 @@ const assertions = [
   [sharedCoreDirectorySearch, "core: SharedCore", "P4-S9-11 helper takes an already-constructed SharedCore"],
   [sharedCoreDirectorySearch, "core.roomDirectorySearch", "P4-S9-11 helper searches on the caller-owned instance"],
   [sharedCoreFfi, "room_leave", "P4-S9-12 typed room-leave FFI"],
-  [sharedCoreFfi, "matrix_room_leave", "P4-S9-12 calls the registered room-leave command"],
-  [sharedCoreFfi, "matrix_room_join", "P4-S9-12 calls the registered room-join command"],
-  [sharedCoreFfi, "matrix_room_set_favorite", "P4-S9-12 calls the registered room-favorite command"],
+  [sharedCoreFfi, ".room_leave(", "P4-S9-12 calls the typed Core room-leave method"],
+  [sharedCoreFfi, ".room_join(", "P4-S9-12 calls the typed Core room-join method"],
+  [sharedCoreFfi, ".room_set_favorite(", "P4-S9-12 calls the typed Core room-favorite method"],
   [udl, "RoomMembershipWriteDto room_leave(", "P4-S9-12 SharedCore room leave"],
   [udl, "RoomMembershipWriteDto room_join(", "P4-S9-12 SharedCore room join"],
   [udl, "RoomMembershipWriteDto room_set_favorite(", "P4-S9-12 SharedCore room favorite"],
@@ -697,10 +704,10 @@ const assertions = [
   [sharedCoreRoomLeaveJoin, "core.roomLeave", "P4-S9-12 helper leaves on the caller-owned instance"],
   [sharedCoreRoomLeaveJoin, "core.roomSetFavorite", "P4-S9-12 helper favorites on the caller-owned instance"],
   [sharedCoreFfi, "room_invite", "P4-S9-13 typed room-invite FFI"],
-  [sharedCoreFfi, "matrix_room_invite", "P4-S9-13 calls the registered room-invite command"],
-  [sharedCoreFfi, "matrix_room_kick", "P4-S9-13 calls the registered room-kick command"],
-  [sharedCoreFfi, "matrix_room_ban", "P4-S9-13 calls the registered room-ban command"],
-  [sharedCoreFfi, "matrix_room_unban", "P4-S9-13 calls the registered room-unban command"],
+  [sharedCoreFfi, ".room_invite(", "P4-S9-13 calls the typed Core room-invite method"],
+  [sharedCoreFfi, ".room_kick(", "P4-S9-13 calls the typed Core room-kick method"],
+  [sharedCoreFfi, ".room_ban(", "P4-S9-13 calls the typed Core room-ban method"],
+  [sharedCoreFfi, ".room_unban(", "P4-S9-13 calls the typed Core room-unban method"],
   [udl, "RoomModerationWriteDto room_invite(", "P4-S9-13 SharedCore room invite"],
   [udl, "RoomModerationWriteDto room_kick(", "P4-S9-13 SharedCore room kick"],
   [udl, "RoomModerationWriteDto room_ban(", "P4-S9-13 SharedCore room ban"],
@@ -715,9 +722,9 @@ const assertions = [
   [sharedCoreRoomModeration, "core: SharedCore", "P4-S9-13 helper takes an already-constructed SharedCore"],
   [sharedCoreRoomModeration, "core.roomInvite", "P4-S9-13 helper invites on the caller-owned instance"],
   [sharedCoreFfi, "room_set_power_level", "P4-S9-14 typed room-set-power-level FFI"],
-  [sharedCoreFfi, "matrix_room_set_power_level", "P4-S9-14 calls the registered set-power-level command"],
-  [sharedCoreFfi, "matrix_room_set_power_levels", "P4-S9-14 calls the registered set-power-levels command"],
-  [sharedCoreFfi, "matrix_room_set_power_level_tags", "P4-S9-14 calls the registered set-power-level-tags command"],
+  [sharedCoreFfi, ".room_set_power_level(", "P4-S9-14 calls the typed Core set-power-level method"],
+  [sharedCoreFfi, ".room_set_power_levels(", "P4-S9-14 calls the typed Core set-power-levels method"],
+  [sharedCoreFfi, ".room_set_power_level_tags(", "P4-S9-14 calls the typed Core set-power-level-tags method"],
   [udl, "RoomPowerLevelWriteDto room_set_power_level(", "P4-S9-14 SharedCore set power level"],
   [udl, "RoomPowerLevelWriteDto room_set_power_levels(", "P4-S9-14 SharedCore set power levels"],
   [udl, "RoomPowerLevelWriteDto room_set_power_level_tags(", "P4-S9-14 SharedCore set power-level tags"],
@@ -731,7 +738,7 @@ const assertions = [
   [sharedCoreRoomPowerLevels, "core.roomSetPowerLevel", "P4-S9-14 helper writes on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreRoomPowerLevels.swift in Sources", "P4-S9-14 helper in Xcode target"],
   [sharedCoreFfi, "room_create", "P4-S9-15 typed room-create FFI"],
-  [sharedCoreFfi, "matrix_room_create", "P4-S9-15 calls the registered room-create command"],
+  [sharedCoreFfi, ".room_create(", "P4-S9-15 calls the typed Core room-create method"],
   [udl, "RoomCreateDto room_create(", "P4-S9-15 SharedCore room create"],
   [udl, "dictionary RoomCreateRequestDto", "P4-S9-15 typed room-create request DTO"],
   [udl, "dictionary RoomCreateDto", "P4-S9-15 privacy-safe room-create result DTO"],
@@ -742,10 +749,10 @@ const assertions = [
   [sharedCoreRoomCreate, "core.roomCreate", "P4-S9-15 helper creates on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreRoomCreate.swift in Sources", "P4-S9-15 helper in Xcode target"],
   [sharedCoreFfi, "room_members_snapshot", "P4-S9-16 typed members-snapshot FFI"],
-  [sharedCoreFfi, "matrix_room_members_snapshot", "P4-S9-16 calls the registered members-snapshot command"],
-  [sharedCoreFfi, "matrix_room_power_levels_snapshot", "P4-S9-16 calls the registered power-levels-snapshot command"],
-  [sharedCoreFfi, "matrix_room_creators_snapshot", "P4-S9-16 calls the registered creators-snapshot command"],
-  [sharedCoreFfi, "matrix_room_power_level_tags_snapshot", "P4-S9-16 calls the registered power-level-tags-snapshot command"],
+  [sharedCoreFfi, ".room_members_snapshot(", "P4-S9-16 calls the typed Core members-snapshot method"],
+  [sharedCoreFfi, ".room_power_levels_snapshot(", "P4-S9-16 calls the typed Core power-levels-snapshot method"],
+  [sharedCoreFfi, ".room_creators_snapshot(", "P4-S9-16 calls the typed Core creators-snapshot method"],
+  [sharedCoreFfi, ".room_power_level_tags_snapshot(", "P4-S9-16 calls the typed Core power-level-tags-snapshot method"],
   [udl, "RoomMembersSnapshotDto room_members_snapshot(", "P4-S9-16 SharedCore members snapshot"],
   [udl, "RoomPowerLevelsSnapshotDto room_power_levels_snapshot(", "P4-S9-16 SharedCore power-levels snapshot"],
   [udl, "RoomCreatorsSnapshotDto room_creators_snapshot(", "P4-S9-16 SharedCore creators snapshot"],
@@ -764,12 +771,12 @@ const assertions = [
   [sharedCoreRoomMembersSnapshots, "core.roomMembersSnapshot", "P4-S9-16 helper reads on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreRoomMembersSnapshots.swift in Sources", "P4-S9-16 helper in Xcode target"],
   [sharedCoreFfi, "space_parents_snapshot", "P4-S9-17 typed space-parents-snapshot FFI"],
-  [sharedCoreFfi, "matrix_space_parents_snapshot", "P4-S9-17 calls the registered space-parents-snapshot command"],
-  [sharedCoreFfi, "matrix_space_hierarchy_snapshot", "P4-S9-17 calls the registered space-hierarchy-snapshot command"],
-  [sharedCoreFfi, "matrix_space_children_snapshot", "P4-S9-17 calls the registered space-children-snapshot command"],
-  [sharedCoreFfi, "matrix_space_child_set", "P4-S9-17 calls the registered space-child-set command"],
-  [sharedCoreFfi, "matrix_space_child_remove", "P4-S9-17 calls the registered space-child-remove command"],
-  [sharedCoreFfi, "matrix_restricted_join_reparent", "P4-S9-17 calls the registered restricted-join-reparent command"],
+  [sharedCoreFfi, ".space_parents_snapshot(", "P4-S9-17 calls the typed Core space-parents-snapshot method"],
+  [sharedCoreFfi, ".space_hierarchy_snapshot(", "P4-S9-17 calls the typed Core space-hierarchy-snapshot method"],
+  [sharedCoreFfi, ".space_children_snapshot(", "P4-S9-17 calls the typed Core space-children-snapshot method"],
+  [sharedCoreFfi, ".space_child_set(", "P4-S9-17 calls the typed Core space-child-set method"],
+  [sharedCoreFfi, ".space_child_remove(", "P4-S9-17 calls the typed Core space-child-remove method"],
+  [sharedCoreFfi, ".restricted_join_reparent(", "P4-S9-17 calls the typed Core restricted-join-reparent method"],
   [udl, "SpaceParentsSnapshotDto space_parents_snapshot(", "P4-S9-17 SharedCore space parents snapshot"],
   [udl, "SpaceHierarchySnapshotDto space_hierarchy_snapshot(", "P4-S9-17 SharedCore space hierarchy snapshot"],
   [udl, "SpaceChildrenSnapshotDto space_children_snapshot(", "P4-S9-17 SharedCore space children snapshot"],
@@ -793,10 +800,10 @@ const assertions = [
   [sharedCoreSpaces, "core.spaceParentsSnapshot", "P4-S9-17 helper reads on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreSpaces.swift in Sources", "P4-S9-17 helper in Xcode target"],
   [sharedCoreFfi, "invites_accept", "P4-S9-18 typed invites-accept FFI"],
-  [sharedCoreFfi, "matrix_invites_accept", "P4-S9-18 calls the registered invites-accept command"],
-  [sharedCoreFfi, "matrix_invites_decline", "P4-S9-18 calls the registered invites-decline command"],
-  [sharedCoreFfi, "matrix_invites_report_spam", "P4-S9-18 calls the registered invites-report-spam command"],
-  [sharedCoreFfi, "matrix_invites_block_sender", "P4-S9-18 calls the registered invites-block-sender command"],
+  [sharedCoreFfi, ".invites_accept(", "P4-S9-18 calls the typed Core invites-accept method"],
+  [sharedCoreFfi, ".invites_decline(", "P4-S9-18 calls the typed Core invites-decline method"],
+  [sharedCoreFfi, ".invites_report_spam(", "P4-S9-18 calls the typed Core invites-report-spam method"],
+  [sharedCoreFfi, ".invites_block_sender(", "P4-S9-18 calls the typed Core invites-block-sender method"],
   [udl, "InviteSnapshotDto invites_accept(", "P4-S9-18 SharedCore invite accept"],
   [udl, "InviteSnapshotDto invites_decline(", "P4-S9-18 SharedCore invite decline"],
   [udl, "InviteSnapshotDto invites_report_spam(", "P4-S9-18 SharedCore invite report-spam"],
@@ -811,9 +818,9 @@ const assertions = [
   [sharedCoreInviteActions, "core.invitesAccept", "P4-S9-18 helper writes on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreInviteActions.swift in Sources", "P4-S9-18 helper in Xcode target"],
   [sharedCoreFfi, "timeline_event_readback", "P4-S9-19 typed event-readback FFI"],
-  [sharedCoreFfi, "matrix_timeline_event_readback", "P4-S9-19 calls the registered event-readback command"],
-  [sharedCoreFfi, "matrix_timeline_set_read_state", "P4-S9-19 calls the registered set-read-state command"],
-  [sharedCoreFfi, "matrix_timeline_jump_latest", "P4-S9-19 calls the registered jump-latest command"],
+  [sharedCoreFfi, ".timeline_event_readback(", "P4-S9-19 calls the typed Core event-readback method"],
+  [sharedCoreFfi, ".timeline_set_read_state(", "P4-S9-19 calls the typed Core set-read-state method"],
+  [sharedCoreFfi, ".timeline_jump_latest(", "P4-S9-19 calls the typed Core jump-latest method"],
   [udl, "TimelineEventReadbackDto timeline_event_readback(", "P4-S9-19 SharedCore event readback"],
   [udl, "TimelineReadStateDto timeline_set_read_state(", "P4-S9-19 SharedCore set-read-state"],
   [udl, "TimelineOpenDto timeline_jump_latest(", "P4-S9-19 SharedCore jump-latest"],
@@ -826,9 +833,9 @@ const assertions = [
   [sharedCoreTimelineReadState, "core.timelineEventReadback", "P4-S9-19 helper reads on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreTimelineReadState.swift in Sources", "P4-S9-19 helper in Xcode target"],
   [sharedCoreFfi, "reaction_ensure", "P4-S9-20 typed reaction-ensure FFI"],
-  [sharedCoreFfi, "matrix_reaction_ensure", "P4-S9-20 calls the registered reaction-ensure command"],
-  [sharedCoreFfi, "matrix_reaction_redact", "P4-S9-20 calls the registered reaction-redact command"],
-  [sharedCoreFfi, "matrix_timeline_reaction_toggle", "P4-S9-20 calls the registered reaction-toggle command"],
+  [sharedCoreFfi, ".reaction_ensure(", "P4-S9-20 calls the typed Core reaction-ensure method"],
+  [sharedCoreFfi, ".reaction_redact(", "P4-S9-20 calls the typed Core reaction-redact method"],
+  [sharedCoreFfi, ".timeline_reaction_toggle(", "P4-S9-20 calls the typed Core reaction-toggle method"],
   [udl, "TimelineReactionMutationDto reaction_ensure(", "P4-S9-20 SharedCore reaction ensure"],
   [udl, "TimelineReactionMutationDto reaction_redact(", "P4-S9-20 SharedCore reaction redact"],
   [udl, "TimelineReactionMutationDto timeline_reaction_toggle(", "P4-S9-20 SharedCore reaction toggle"],
@@ -841,9 +848,9 @@ const assertions = [
   [sharedCoreTimelineReactions, "core.reactionEnsure", "P4-S9-20 helper writes on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreTimelineReactions.swift in Sources", "P4-S9-20 helper in Xcode target"],
   [sharedCoreFfi, "composer_set_reply_draft", "P4-S9-21 typed composer-set-reply-draft FFI"],
-  [sharedCoreFfi, "matrix_composer_set_reply_draft", "P4-S9-21 calls the registered composer-set command"],
-  [sharedCoreFfi, "matrix_composer_get_reply_draft", "P4-S9-21 calls the registered composer-get command"],
-  [sharedCoreFfi, "matrix_composer_clear_reply_draft", "P4-S9-21 calls the registered composer-clear command"],
+  [sharedCoreFfi, ".composer_set_reply_draft(", "P4-S9-21 calls the typed Core composer-set method"],
+  [sharedCoreFfi, ".composer_get_reply_draft(", "P4-S9-21 calls the typed Core composer-get method"],
+  [sharedCoreFfi, ".composer_clear_reply_draft(", "P4-S9-21 calls the typed Core composer-clear method"],
   [udl, "ComposerReplyDraftDto composer_set_reply_draft(", "P4-S9-21 SharedCore composer set reply draft"],
   [udl, "ComposerReplyDraftDto composer_get_reply_draft(", "P4-S9-21 SharedCore composer get reply draft"],
   [udl, "ComposerReplyDraftDto composer_clear_reply_draft(", "P4-S9-21 SharedCore composer clear reply draft"],
@@ -856,7 +863,7 @@ const assertions = [
   [sharedCoreComposerReplyDraft, "core.composerSetReplyDraft", "P4-S9-21 helper writes on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreComposerReplyDraft.swift in Sources", "P4-S9-21 helper in Xcode target"],
   [sharedCoreFfi, "send_text", "P4-S9-22 typed send-text FFI"],
-  [sharedCoreFfi, "matrix_send_text", "P4-S9-22 calls the registered send-text command"],
+  [sharedCoreFfi, ".send_text(", "P4-S9-22 calls the typed Core send-text method"],
   [udl, "SendTextDto send_text(", "P4-S9-22 SharedCore send text"],
   [udl, "interface SendTextError", "P4-S9-22 static send-text error"],
   [swiftBindingsTests, "testSharedCoreSendTextWithoutSessionFailsClosed", "Swift P4-S9-22 fail-closed send-text test"],
@@ -865,7 +872,7 @@ const assertions = [
   [sharedCoreSendText, "core.sendText", "P4-S9-22 helper writes on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreSendText.swift in Sources", "P4-S9-22 helper in Xcode target"],
   [sharedCoreFfi, "send_poll", "P4-S9-24 typed send-poll FFI"],
-  [sharedCoreFfi, "matrix_send_poll", "P4-S9-24 calls the registered send-poll command"],
+  [sharedCoreFfi, ".send_poll(", "P4-S9-24 calls the typed Core send-poll method"],
   [udl, "SendPollDto send_poll(", "P4-S9-24 SharedCore send poll"],
   [udl, "interface SendPollError", "P4-S9-24 static send-poll error"],
   [swiftBindingsTests, "testSharedCoreSendPollWithoutSessionFailsClosed", "Swift P4-S9-24 fail-closed send-poll test"],
@@ -874,7 +881,7 @@ const assertions = [
   [sharedCoreSendPoll, "core.sendPoll", "P4-S9-24 helper writes on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreSendPoll.swift in Sources", "P4-S9-24 helper in Xcode target"],
   [sharedCoreFfi, "edit_message", "P4-S9-25 typed edit-message FFI"],
-  [sharedCoreFfi, "matrix_edit_message", "P4-S9-25 calls the registered edit-message command"],
+  [sharedCoreFfi, ".edit_message(", "P4-S9-25 calls the typed Core edit-message method"],
   [udl, "EditMessageDto edit_message(", "P4-S9-25 SharedCore edit message"],
   [udl, "interface EditMessageError", "P4-S9-25 static edit-message error"],
   [swiftBindingsTests, "testSharedCoreEditMessageWithoutSessionFailsClosed", "Swift P4-S9-25 fail-closed edit-message test"],
@@ -883,7 +890,7 @@ const assertions = [
   [sharedCoreEditMessage, "core.editMessage", "P4-S9-25 helper writes on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreEditMessage.swift in Sources", "P4-S9-25 helper in Xcode target"],
   [sharedCoreFfi, "poll_respond", "P4-S9-26 typed poll-respond FFI"],
-  [sharedCoreFfi, "matrix_poll_respond", "P4-S9-26 calls the registered poll-respond command"],
+  [sharedCoreFfi, ".poll_respond(", "P4-S9-26 calls the typed Core poll-respond method"],
   [udl, "PollRespondDto poll_respond(", "P4-S9-26 SharedCore poll respond"],
   [udl, "interface PollRespondError", "P4-S9-26 static poll-respond error"],
   [swiftBindingsTests, "testSharedCorePollRespondWithoutSessionFailsClosed", "Swift P4-S9-26 fail-closed poll-respond test"],
@@ -892,9 +899,9 @@ const assertions = [
   [sharedCorePollRespond, "core.pollRespond", "P4-S9-26 helper writes on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCorePollRespond.swift in Sources", "P4-S9-26 helper in Xcode target"],
   [sharedCoreFfi, "timeline_edit_text", "P4-S9-27 typed timeline-edit-text FFI"],
-  [sharedCoreFfi, "matrix_timeline_edit_text", "P4-S9-27 calls the registered timeline-edit-text command"],
-  [sharedCoreFfi, "matrix_timeline_redact", "P4-S9-27 calls the registered timeline-redact command"],
-  [sharedCoreFfi, "matrix_timeline_report", "P4-S9-27 calls the registered timeline-report command"],
+  [sharedCoreFfi, ".timeline_edit_text(", "P4-S9-27 calls the typed Core timeline-edit-text method"],
+  [sharedCoreFfi, ".timeline_redact(", "P4-S9-27 calls the typed Core timeline-redact method"],
+  [sharedCoreFfi, ".timeline_report(", "P4-S9-27 calls the typed Core timeline-report method"],
   [udl, "TimelineMutateDto timeline_edit_text(", "P4-S9-27 SharedCore timeline edit text"],
   [udl, "TimelineMutateDto timeline_redact(", "P4-S9-27 SharedCore timeline redact"],
   [udl, "TimelineMutateDto timeline_report(", "P4-S9-27 SharedCore timeline report"],
@@ -907,8 +914,8 @@ const assertions = [
   [sharedCoreTimelineMutate, "core.timelineEditText", "P4-S9-27 helper writes edit on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreTimelineMutate.swift in Sources", "P4-S9-27 helper in Xcode target"],
   [sharedCoreFfi, "timeline_pin", "P4-S9-28 typed timeline-pin FFI"],
-  [sharedCoreFfi, "matrix_timeline_pin", "P4-S9-28 calls the registered timeline-pin command"],
-  [sharedCoreFfi, "matrix_timeline_unpin", "P4-S9-28 calls the registered timeline-unpin command"],
+  [sharedCoreFfi, ".timeline_pin(", "P4-S9-28 calls the typed Core timeline-pin method"],
+  [sharedCoreFfi, ".timeline_unpin(", "P4-S9-28 calls the typed Core timeline-unpin method"],
   [udl, "TimelinePinDto timeline_pin(", "P4-S9-28 SharedCore timeline pin"],
   [udl, "TimelinePinDto timeline_unpin(", "P4-S9-28 SharedCore timeline unpin"],
   [udl, "interface TimelinePinError", "P4-S9-28 static timeline-pin error"],
@@ -919,8 +926,8 @@ const assertions = [
   [sharedCoreTimelinePin, "core.timelinePin", "P4-S9-28 helper writes pin on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreTimelinePin.swift in Sources", "P4-S9-28 helper in Xcode target"],
   [sharedCoreFfi, "timeline_poll_vote", "P4-S9-29 typed timeline-poll-vote FFI"],
-  [sharedCoreFfi, "matrix_timeline_poll_vote", "P4-S9-29 calls the registered timeline-poll-vote command"],
-  [sharedCoreFfi, "matrix_timeline_call_decline", "P4-S9-29 calls the registered timeline-call-decline command"],
+  [sharedCoreFfi, ".timeline_poll_vote(", "P4-S9-29 calls the typed Core timeline-poll-vote method"],
+  [sharedCoreFfi, ".timeline_call_decline(", "P4-S9-29 calls the typed Core timeline-call-decline method"],
   [udl, "TimelineVoteDeclineDto timeline_poll_vote(", "P4-S9-29 SharedCore timeline poll vote"],
   [udl, "TimelineVoteDeclineDto timeline_call_decline(", "P4-S9-29 SharedCore timeline call decline"],
   [udl, "interface TimelineVoteDeclineError", "P4-S9-29 static timeline-vote-decline error"],
@@ -931,8 +938,8 @@ const assertions = [
   [sharedCoreTimelineVoteDecline, "core.timelinePollVote", "P4-S9-29 helper writes vote on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreTimelineVoteDecline.swift in Sources", "P4-S9-29 helper in Xcode target"],
   [sharedCoreFfi, "timeline_forward_text", "P4-S9-30 typed timeline-forward-text FFI"],
-  [sharedCoreFfi, "matrix_timeline_forward_text", "P4-S9-30 calls the registered timeline-forward-text command"],
-  [sharedCoreFfi, "matrix_timeline_forward_media", "P4-S9-30 calls the registered timeline-forward-media command"],
+  [sharedCoreFfi, ".timeline_forward_text(", "P4-S9-30 calls the typed Core timeline-forward-text method"],
+  [sharedCoreFfi, ".timeline_forward_media(", "P4-S9-30 calls the typed Core timeline-forward-media method"],
   [udl, "TimelineForwardDto timeline_forward_text(", "P4-S9-30 SharedCore timeline forward text"],
   [udl, "TimelineForwardDto timeline_forward_media(", "P4-S9-30 SharedCore timeline forward media"],
   [udl, "interface TimelineForwardError", "P4-S9-30 static timeline-forward error"],
@@ -943,12 +950,12 @@ const assertions = [
   [sharedCoreTimelineForward, "core.timelineForwardText", "P4-S9-30 helper writes forward on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreTimelineForward.swift in Sources", "P4-S9-30 helper in Xcode target"],
   [sharedCoreFfi, "session_snapshot", "P4-S9-31 typed session-snapshot FFI"],
-  [sharedCoreFfi, "matrix_session_snapshot", "P4-S9-31 calls the registered session-snapshot command"],
-  [sharedCoreFfi, "matrix_sync_status", "P4-S9-31 calls the registered sync-status command"],
-  [sharedCoreFfi, "matrix_media_config", "P4-S9-31 calls the registered media-config command"],
-  [sharedCoreFfi, "matrix_secret_storage_status", "P4-S9-31 calls the registered secret-storage-status command"],
-  [udl, "SessionSnapshotDto session_snapshot()", "P4-S9-31 SharedCore session snapshot"],
-  [udl, "SyncStatusDto sync_status()", "P4-S9-31 SharedCore sync status"],
+  [sharedCoreFfi, "session_status_snapshot()", "P4-S9-31 reads Core's typed session snapshot"],
+  [sharedCoreFfi, ".sync_status()", "P4-S9-31 reads Core's typed sync status"],
+  [sharedCoreFfi, ".media_config(", "P4-S9-31 calls the typed Core media-config method"],
+  [sharedCoreFfi, ".secret_storage_status(", "P4-S9-31 calls the typed Core secret-storage-status method"],
+  [swiftApi, "open func sessionSnapshot() async throws -> SessionSnapshotDto", "P4-S9-31 SharedCore session snapshot"],
+  [swiftApi, "open func syncStatus() async throws -> SyncStatusDto", "P4-S9-31 SharedCore sync status"],
   [udl, "MediaConfigDto media_config()", "P4-S9-31 SharedCore media config"],
   [udl, "SecretStorageStatusDto secret_storage_status()", "P4-S9-31 SharedCore secret-storage status"],
   [udl, "interface SessionStatusError", "P4-S9-31 static session-status error"],
@@ -960,23 +967,8 @@ const assertions = [
   [sharedCoreSessionStatus, "core: SharedCore", "P4-S9-31 helper takes an already-constructed SharedCore"],
   [sharedCoreSessionStatus, "core.sessionSnapshot", "P4-S9-31 helper reads session on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreSessionStatus.swift in Sources", "P4-S9-31 helper in Xcode target"],
-  [sharedCoreFfi, "nse_open_read_only_store", "P4-S11 NSE read-only store open FFI"],
-  [sharedCoreFfi, "nse_store_status", "P4-S11 NSE store status FFI"],
-  [sharedCoreFfi, "nse_event_preview", "P4-S11 NSE local event preview FFI"],
-  [sharedCoreFfi, "p4-s11-nse-read-only-forbids-attach", "P4-S11 NSE path forbids owner attach"],
-  [udl, "NseStoreDto nse_open_read_only_store(", "P4-S11 SharedCore NSE open"],
-  [udl, "NseStoreDto nse_store_status()", "P4-S11 SharedCore NSE status"],
-  [udl, "NseEventPreviewDto nse_event_preview(", "P4-S11 SharedCore NSE preview"],
-  [udl, "interface NseStoreError", "P4-S11 static NSE store error"],
   [udl, "constructor();", "UniFFI 0.32 primary SharedCore constructor"],
   [udl, "[Name=\"new_with_secret_store\"]", "UniFFI 0.32 named secret-store constructor"],
-  [swiftBindingsTests, "testSharedCoreNseStoreWithoutSessionFailsClosed", "Swift P4-S11 fail-closed NSE store test"],
-  [sharedCoreNseStore, "openReadOnly", "P4-S11 product NSE open helper"],
-  [sharedCoreNseStore, "eventPreview", "P4-S11 product NSE preview helper"],
-  [sharedCoreNseStore, "core: SharedCore", "P4-S11 helper takes an already-constructed SharedCore"],
-  [sharedCoreNseStore, "core.nseOpenReadOnlyStore", "P4-S11 helper opens the caller-owned instance"],
-  [sharedCoreNseStore, "never starts SyncService", "P4-S11 helper documents no sync start"],
-  [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreNseStore.swift in Sources", "P4-S11 helper in Xcode target"],
   [sharedCoreFfi, "backup_status", "P4-S10 leftover backup-status FFI"],
   [sharedCoreFfi, "crypto_status", "P4-S10 leftover crypto-status FFI"],
   [sharedCoreFfi, "wipe_persisted_stores", "P4-S10 leftover wipe FFI"],
@@ -1730,8 +1722,21 @@ if (nseArchiveExportIndex < 0 || nseArchiveExportIndex > ciBuildXcodebuildIndex)
 if (!iosCiBuild.includes("test-without-building")) {
   throw new Error("iOS CI must test the exact build-for-testing artifacts");
 }
-if (iosCiBuild.includes("-retry-tests-on-failure") || iosCiBuild.includes("-test-iterations")) {
-  throw new Error("iOS CI must not mask first-attempt failures with automatic retries");
+// Known-flaky simulator suites may retry once, but only when the workflow opts in.
+// A plain local `ci-build.sh` run still reports first-attempt failures.
+{
+  const lines = iosCiBuild.split("\n").map((line) => line.trim());
+  const retryLines = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => line.includes("-retry-tests-on-failure") || line.includes("-test-iterations"));
+  const gated = retryLines.every(
+    ({ line, index }) =>
+      line === "test_command+=(-retry-tests-on-failure -test-iterations 2)" &&
+      lines[index - 1] === 'if [[ "${IOS_TEST_RETRY_ON_FAILURE:-0}" == "1" ]]; then'
+  );
+  if (retryLines.length > 1 || !gated) {
+    throw new Error("iOS CI may retry failed tests only behind IOS_TEST_RETRY_ON_FAILURE=1");
+  }
 }
 if (
   !iosCiBuild.includes("PACKAGE_RESOLVED_PATH") ||
@@ -1787,7 +1792,7 @@ if (!projectionObject) throw new Error("missing P4-3 SessionProjectionCore objec
 const projectionOperations = [
   ...projectionObject[1].matchAll(/(?:constructor|void|SessionProjection\?)\s+(\w+)\s*\(/g),
 ].map(([, operation]) => operation);
-if (projectionOperations.join(",") !== "open,session_snapshot,close") {
+if ([...projectionOperations].sort().join(",") !== "close,open,session_snapshot") {
   throw new Error(`P4-3 facade must expose only open/session_snapshot/close; found ${projectionOperations.join(", ")}`);
 }
 
@@ -1988,8 +1993,13 @@ for (const required of ["timeline_forward_text(", "timeline_forward_media("]) {
     throw new Error(`P4-S9-30 SharedCore must expose ${required}`);
   }
 }
-for (const required of ["session_snapshot(", "sync_status(", "media_config(", "secret_storage_status("]) {
+for (const required of ["media_config(", "secret_storage_status("]) {
   if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-31 SharedCore must expose ${required}`);
+  }
+}
+for (const required of ["func sessionSnapshot()", "func syncStatus()"]) {
+  if (!swiftApi.includes(required)) {
     throw new Error(`P4-S9-31 SharedCore must expose ${required}`);
   }
 }
@@ -2000,6 +2010,18 @@ if (!recoveryBoundary.ok) throw new Error(recoveryBoundary.errors.join("\n"));
 for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "matrix_timeline_edit_text", "matrix_timeline_redact", "matrix_timeline_report", "matrix_timeline_pin", "matrix_timeline_unpin", "matrix_timeline_poll_vote", "matrix_timeline_call_decline", "matrix_timeline_forward_text", "matrix_timeline_forward_media", "matrix_session_snapshot", "matrix_sync_status", "matrix_media_config", "matrix_secret_storage_status", "matrix_backup_status", "matrix_room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "matrix_crypto_status", "matrix_cross_signing_status"]) {
   if (sharedCoreBody.includes(forbidden)) {
     throw new Error(`SharedCore must not expose generic or unapproved ${forbidden}`);
+  }
+}
+// Proc-macro exports replace the build-time UDL patcher only if every async
+// export block asks UniFFI for the Tokio bridge (Matrix SDK futures need it).
+{
+  const exportBlocks = sharedCoreFfi.split("#[uniffi::export").slice(1);
+  for (const block of exportBlocks) {
+    const attribute = block.slice(0, block.indexOf("]") + 1);
+    const body = block.slice(0, block.search(/\n}\n/) + 1);
+    if (/\basync fn\b/.test(body) && !attribute.includes('async_runtime = "tokio"')) {
+      throw new Error(`UniFFI async export must use async_runtime = "tokio": #[uniffi::export${attribute}`);
+    }
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {

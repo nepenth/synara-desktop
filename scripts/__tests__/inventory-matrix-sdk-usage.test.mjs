@@ -502,17 +502,15 @@ test("repository inventory records the deletion delta to zero production js-sdk 
   assert.equal(baseline.buckets["media-boundary"] ?? 0, 0);
   assert.equal(baseline.buckets["shared-type"] ?? 0, 0);
 
-  // Repository-wide tooling = guardrail fixtures only (js-sdk fully removed:
-  // no dynamic matrix-js-sdk import remains anywhere in the tree).
-  assert.ok(rw.toolingImportFiles >= 1);
-  assert.ok(rw.totalImportFiles >= baseline.totalImportFiles + 1);
-
-  const fixtures = inventory.files.filter((f) => f.role === "tooling");
-  assert.ok(fixtures.length >= 1, "guardrail fixtures must be inventoried");
-  const anyDynamic = fixtures.some((f) =>
-    f.imports.some((imp) => imp.form === "dynamic"),
+  // The guardrail fixtures that imported matrix-js-sdk were retired with the
+  // migration guardrails; nothing in the tree imports it any more.
+  assert.equal(rw.toolingImportFiles, 0);
+  assert.ok(
+    inventory.files
+      .filter((f) => f.role === "tooling")
+      .every((f) => f.imports.length === 0),
+    "no tooling file may import matrix-js-sdk",
   );
-  assert.equal(anyDynamic, false, "no dynamic js-sdk import may remain in tooling");
 
   // Aggregates must be role-scoped
   assert.equal(

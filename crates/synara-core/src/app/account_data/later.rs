@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 pub const LATER_EVENT_TYPE: &str = "in.synara.later";
 pub const LATER_ACCOUNT_DATA_VERSION: u32 = 1;
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SynaraLaterContent {
@@ -25,6 +26,7 @@ impl Default for SynaraLaterContent {
     }
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SynaraLaterItem {
@@ -34,13 +36,17 @@ pub struct SynaraLaterItem {
     pub event_id: String,
     pub created_at: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub due_ts: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub reminded_at: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub completed_at: Option<f64>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SynaraLaterItemKind {
@@ -48,6 +54,7 @@ pub enum SynaraLaterItemKind {
     Reminder,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeLaterSnapshot {

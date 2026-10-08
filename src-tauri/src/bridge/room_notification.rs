@@ -4,24 +4,22 @@ use synara_core::app::notifications::{
     MatrixRoomNotificationSnapshot, MatrixRoomNotificationWriteResult,
     MatrixRoomNotificationsSnapshot,
 };
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
-
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn room_notification_snapshot(
     core: &Core,
     room_id: String,
 ) -> Result<MatrixRoomNotificationSnapshot, MatrixAuthCommandError> {
-    let payload = dispatch(
-        core,
-        "matrix_room_notification_snapshot",
-        serde_json::json!({ "roomId": room_id }),
-    )
-    .await?;
-    serde_json::from_value(payload).map_err(|_| room_notification_response_error())
+    let payload = core
+        .room_notification_snapshot(synara_core::core_api::MatrixRoomNotificationRoomRequest {
+            room_id,
+        })
+        .await
+        .map_err(map_room_notification_core_error)?;
+    Ok(payload)
 }
 
 pub(crate) async fn room_notification_set(
@@ -29,59 +27,24 @@ pub(crate) async fn room_notification_set(
     room_id: String,
     mode: String,
 ) -> Result<MatrixRoomNotificationWriteResult, MatrixAuthCommandError> {
-    let payload = dispatch(
-        core,
-        "matrix_room_notification_set",
-        serde_json::json!({
-            "roomId": room_id,
-            "mode": mode,
-        }),
-    )
-    .await?;
-    parse_write(payload)
+    let payload = core
+        .room_notification_set(synara_core::core_api::MatrixRoomNotificationSetRequest {
+            room_id,
+            mode,
+        })
+        .await
+        .map_err(map_room_notification_core_error)?;
+    Ok(payload)
 }
 
 pub(crate) async fn room_notifications_snapshot(
     core: &Core,
 ) -> Result<MatrixRoomNotificationsSnapshot, MatrixAuthCommandError> {
-    let payload = dispatch(
-        core,
-        "matrix_room_notifications_snapshot",
-        serde_json::Value::Null,
-    )
-    .await?;
-    serde_json::from_value(payload).map_err(|_| room_notification_response_error())
-}
-
-async fn dispatch(
-    core: &Core,
-    command: &str,
-    payload: serde_json::Value,
-) -> Result<serde_json::Value, MatrixAuthCommandError> {
-    core.command(CommandEnvelope {
-        command: command.to_owned(),
-        session_generation: READ_ONLY_SESSION_GENERATION,
-        request_id: None,
-        payload,
-    })
-    .await
-    .map(|response| response.payload)
-    .map_err(map_room_notification_core_error)
-}
-
-fn parse_write(
-    payload: serde_json::Value,
-) -> Result<MatrixRoomNotificationWriteResult, MatrixAuthCommandError> {
-    #[derive(serde::Deserialize)]
-    struct Wire {
-        status: String,
-    }
-    let wire: Wire =
-        serde_json::from_value(payload).map_err(|_| room_notification_response_error())?;
-    if wire.status != "ok" {
-        return Err(room_notification_response_error());
-    }
-    Ok(MatrixRoomNotificationWriteResult { status: "ok" })
+    let payload = core
+        .room_notifications_snapshot()
+        .await
+        .map_err(map_room_notification_core_error)?;
+    Ok(payload)
 }
 
 fn map_room_notification_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -106,12 +69,4 @@ fn map_room_notification_core_error(error: MatrixIpcError) -> MatrixAuthCommandE
             diagnostic,
         ),
     }
-}
-
-fn room_notification_response_error() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "The native room-notification editor is unavailable.",
-        "v-push.sdk-failed",
-    )
 }

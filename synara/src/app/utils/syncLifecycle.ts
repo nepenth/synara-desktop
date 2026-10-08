@@ -1,7 +1,14 @@
 export const shouldRetrySyncOnResume = (state: string | null): boolean =>
   state === 'RECONNECTING' || state === 'ERROR';
 
-export const SYNC_WAKE_HIDDEN_MS = 15_000;
+/**
+ * A live sync is restarted on show/focus only after a long hide. Linux close
+ * now hides to the tray, so every reopen is a visibility change; restarting a
+ * healthy SyncService each time flashes "connecting" for nothing. OS sleep is
+ * caught by the native suspend watchdog, and RECONNECTING/ERROR still recover
+ * immediately.
+ */
+export const SYNC_WAKE_HIDDEN_MS = 5 * 60_000;
 export const SYNC_WAKE_RECOVER_COOLDOWN_MS = 8_000;
 
 export type SyncWakeReason = 'visibilitychange' | 'focus' | 'online' | 'pageshow';

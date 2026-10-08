@@ -238,7 +238,7 @@ impl NativePresenceOwner {
             .await
             .map_err(|_| "v-presence-set-sdk-failed")?;
         Ok(NativePresenceWriteResult {
-            status: "ok".to_owned(),
+            status: crate::dto::WriteAck::Ok,
         })
     }
 }

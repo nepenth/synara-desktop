@@ -23,7 +23,7 @@ import {
 import { Editor, Transforms } from 'slate';
 import { ReactEditor } from 'slate-react';
 import type { EventTimelineSetReading, MatrixEventReading, RoomReading } from '../../../utils/room';
-import { IContent, IMentions, RelationType } from '../../../utils/messageContent';
+import { IContent, IMentions } from '../../../utils/messageContent';
 import { isKeyHotkey } from 'is-hotkey';
 import {
   AUTOCOMPLETE_PREFIXES,
@@ -55,11 +55,11 @@ import { UseStateProvider } from '../../../components/UseStateProvider';
 import { EmojiBoard } from '../../../components/emoji-board';
 import * as depthCss from '../../../styles/Depth.css';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { editMessageWithNativeDesktopOwner } from '../nativeEditMessage';
 import { getEditedEvent, getMentionContent, trimReplyFromFormattedBody } from '../../../utils/room';
 import { mobileOrTablet } from '../../../utils/user-agent';
 import { useComposingCheck } from '../../../hooks/useComposingCheck';
+import { renderComposerHtml } from '../../../components/editor/composerMarkdown';
 
 const EMPTY_IMAGE_PACK_ROOMS: string[] = [];
 
@@ -74,7 +74,6 @@ type MessageEditorProps = {
 };
 export const MessageEditor = as<'div', MessageEditorProps>(
   ({ room, roomId, mEvent, imagePackRooms, onCancel, ...props }, ref) => {
-    const mx = useMatrixClient();
     const editor = useEditor();
     const [enterForNewline] = useSetting(settingsAtom, 'enterForNewline');
     const [globalToolbar] = useSetting(settingsAtom, 'editorToolbar');
@@ -111,11 +110,9 @@ export const MessageEditor = as<'div', MessageEditorProps>(
       useCallback(async () => {
         const plainText = toPlainText(editor.children, isMarkdown).trim();
         const customHtml = trimCustomHtml(
-          toMatrixCustomHTML(editor.children, {
-            allowTextFormatting: true,
-            allowBlockMarkdown: isMarkdown,
-            allowInlineMarkdown: isMarkdown,
-          })
+          isMarkdown
+            ? await renderComposerHtml(editor.children)
+            : toMatrixCustomHTML(editor.children, { allowTextFormatting: true })
         );
 
         const [prevBody, prevCustomHtml, prevMentions] = getPrevBodyAndFormattedBody();
@@ -139,7 +136,7 @@ export const MessageEditor = as<'div', MessageEditorProps>(
           body: plainText,
         };
 
-        const mentionData = getMentions(mx, roomId, editor);
+        const mentionData = getMentions(roomId, editor);
 
         prevMentions?.user_ids?.forEach((prevMentionId) => {
           mentionData.users.add(prevMentionId);
@@ -154,10 +151,9 @@ export const MessageEditor = as<'div', MessageEditorProps>(
           newContent.formatted_body = customHtml;
         }
 
-        // V-SEND.R-EDIT: a live native Matrix session is the sole edit owner.
-        // The legacy `mx.sendMessage` replace path is only used when no native
-        // session is live (web / logged-out). A native command failure throws
-        // (fail-closed) rather than silently falling through to mx.sendMessage.
+        // V-SEND.R-EDIT: a live native Matrix session is the sole edit owner. A
+        // native command failure or a missing native session throws
+        // (fail-closed); there is no renderer edit path.
         const eventId = mEvent.getId();
         if (!eventId) {
           throw new Error('Cannot edit a message without an event id.');
@@ -174,23 +170,8 @@ export const MessageEditor = as<'div', MessageEditorProps>(
         if (owner === 'native') {
           return undefined;
         }
-
-        const content: IContent = {
-          ...newContent,
-          body: `* ${plainText}`,
-          'm.new_content': newContent,
-          'm.relates_to': {
-            event_id: eventId,
-            rel_type: RelationType.Replace,
-          },
-        };
-
-        return (
-          mx as unknown as {
-            sendMessage(roomId: string, content: IContent): Promise<unknown>;
-          }
-        ).sendMessage(roomId, content as any);
-      }, [mx, editor, roomId, mEvent, isMarkdown, getPrevBodyAndFormattedBody])
+        throw new Error('Editing requires a native Matrix session.');
+      }, [editor, roomId, mEvent, isMarkdown, getPrevBodyAndFormattedBody])
     );
 
     const handleSave = useCallback(() => {

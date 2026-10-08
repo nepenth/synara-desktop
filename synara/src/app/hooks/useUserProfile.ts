@@ -4,56 +4,26 @@ import {
   OWN_PROFILE_CHANGED_EVENT,
   subscribeOwnProfileNativePush,
 } from '../features/settings/account/nativeProfile';
-import { UserEvent } from '../utils/roomEvents';
-import { useMatrixClient } from './useMatrixClient';
+import { getMyUserId } from '../state/nativeIdentity';
 
+import { getNativeProfileInfo } from '../native/nativeCommands';
 export type UserProfile = {
   avatarUrl?: string;
   displayName?: string;
 };
 
-type UserEventedReading = {
-  avatarUrl?: string;
-  displayName?: string;
-  on(event: string, listener: (...args: any[]) => void): void;
-  removeListener(event: string, listener: (...args: any[]) => void): void;
-};
-
-const isOwnUser = (mx: { getUserId(): string | null }, userId: string): boolean =>
-  mx.getUserId() === userId;
+const isOwnUser = (userId: string): boolean => getMyUserId() === userId;
 
 export const useUserProfile = (userId: string): UserProfile => {
-  const mx = useMatrixClient();
-
-  const [profile, setProfile] = useState<UserProfile>(() => {
-    const user = mx.getUser(userId);
-    return {
-      avatarUrl: user?.avatarUrl,
-      displayName: user?.displayName,
-    };
-  });
+  const [profile, setProfile] = useState<UserProfile>({});
   const [refreshGeneration, setRefreshGeneration] = useState(0);
   const refresh = useCallback(() => setRefreshGeneration((generation) => generation + 1), []);
 
   useEffect(() => {
-    const user = mx.getUser(userId) as unknown as UserEventedReading | null;
     let cancelled = false;
 
-    const onAvatarChange = (event: unknown, myUser: UserEventedReading) => {
-      setProfile((cp) => ({
-        ...cp,
-        avatarUrl: myUser.avatarUrl,
-      }));
-    };
-    const onDisplayNameChange = (event: unknown, myUser: UserEventedReading) => {
-      setProfile((cp) => ({
-        ...cp,
-        displayName: myUser.displayName,
-      }));
-    };
-
     const load = async () => {
-      if (isOwnUser(mx, userId)) {
+      if (isOwnUser(userId)) {
         try {
           const native = await getOwnProfileNative();
           if (cancelled) return;
@@ -69,7 +39,7 @@ export const useUserProfile = (userId: string): UserProfile => {
         }
       }
       try {
-        const info = await mx.getProfileInfo(userId);
+        const info = await getNativeProfileInfo(userId);
         if (cancelled) return;
         setProfile({
           avatarUrl: info.avatar_url,
@@ -82,17 +52,13 @@ export const useUserProfile = (userId: string): UserProfile => {
 
     void load();
 
-    user?.on(UserEvent.AvatarUrl, onAvatarChange);
-    user?.on(UserEvent.DisplayName, onDisplayNameChange);
     return () => {
       cancelled = true;
-      user?.removeListener(UserEvent.AvatarUrl, onAvatarChange);
-      user?.removeListener(UserEvent.DisplayName, onDisplayNameChange);
     };
-  }, [mx, userId, refreshGeneration]);
+  }, [userId, refreshGeneration]);
 
   useEffect(() => {
-    if (!isOwnUser(mx, userId)) return undefined;
+    if (!isOwnUser(userId)) return undefined;
     window.addEventListener(OWN_PROFILE_CHANGED_EVENT, refresh);
     const unsubscribe = subscribeOwnProfileNativePush((native) => {
       if (native.userId !== userId) return;
@@ -105,7 +71,7 @@ export const useUserProfile = (userId: string): UserProfile => {
       window.removeEventListener(OWN_PROFILE_CHANGED_EVENT, refresh);
       unsubscribe();
     };
-  }, [mx, refresh, userId]);
+  }, [refresh, userId]);
 
   return profile;
 };

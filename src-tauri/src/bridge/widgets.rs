@@ -4,17 +4,10 @@ use synara_core::app::widgets::{
     AgentWidgetEntry, ListedWidget, WidgetKind, WidgetListSnapshot, WidgetOpenResult,
     WidgetSessionRecord,
 };
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
-
-const WIDGETS_LIST_COMMAND: &str = "matrix_widgets_list";
-const WIDGET_OPEN_COMMAND: &str = "matrix_widget_open";
-const WIDGET_CLOSE_COMMAND: &str = "matrix_widget_close";
-const WIDGET_POST_COMMAND: &str = "matrix_widget_post";
-const WIDGET_SUBSCRIBE_COMMAND: &str = "matrix_widget_subscribe";
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn widgets_list(
     core: &Core,
@@ -23,19 +16,14 @@ pub(crate) async fn widgets_list(
     agent_widgets: Vec<AgentWidgetEntry>,
 ) -> Result<WidgetListSnapshot, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: WIDGETS_LIST_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({
-                "experimentalWidgetsEnabled": experimental_widgets_enabled,
-                "roomId": room_id,
-                "agentWidgets": agent_widgets,
-            }),
+        .widgets_list(synara_core::core_api::MatrixWidgetsListRequest {
+            experimental_widgets_enabled,
+            room_id,
+            agent_widgets,
         })
         .await
         .map_err(map_widget_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| widget_response_error())
+    Ok(response)
 }
 
 #[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
@@ -52,25 +40,20 @@ pub(crate) async fn widget_open(
     send_room_message: bool,
 ) -> Result<WidgetOpenResult, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: WIDGET_OPEN_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({
-                "experimentalWidgetsEnabled": experimental_widgets_enabled,
-                "roomId": room_id,
-                "widgetId": widget_id,
-                "name": name,
-                "url": url,
-                "kind": kind,
-                "initOnContentLoad": init_on_content_load,
-                "receiveRoom": receive_room,
-                "sendRoomMessage": send_room_message,
-            }),
+        .widget_open(synara_core::core_api::MatrixWidgetOpenRequest {
+            experimental_widgets_enabled,
+            room_id,
+            widget_id,
+            name,
+            url,
+            kind,
+            init_on_content_load,
+            receive_room,
+            send_room_message,
         })
         .await
         .map_err(map_widget_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| widget_response_error())
+    Ok(response)
 }
 
 pub(crate) async fn widget_close(
@@ -78,15 +61,10 @@ pub(crate) async fn widget_close(
     session_id: Option<String>,
 ) -> Result<Vec<String>, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: WIDGET_CLOSE_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({ "sessionId": session_id }),
-        })
+        .widget_close(synara_core::core_api::MatrixWidgetCloseRequest { session_id })
         .await
         .map_err(map_widget_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| widget_response_error())
+    Ok(response)
 }
 
 pub(crate) async fn widget_post(
@@ -95,15 +73,10 @@ pub(crate) async fn widget_post(
     session_id: String,
     message: String,
 ) -> Result<(), MatrixAuthCommandError> {
-    core.command(CommandEnvelope {
-        command: WIDGET_POST_COMMAND.to_owned(),
-        session_generation: READ_ONLY_SESSION_GENERATION,
-        request_id: None,
-        payload: serde_json::json!({
-            "experimentalWidgetsEnabled": experimental_widgets_enabled,
-            "sessionId": session_id,
-            "message": message,
-        }),
+    core.widget_post(synara_core::core_api::MatrixWidgetPostRequest {
+        experimental_widgets_enabled,
+        session_id,
+        message,
     })
     .await
     .map_err(map_widget_core_error)?;
@@ -115,17 +88,12 @@ pub(crate) async fn widget_subscribe(
     experimental_widgets_enabled: bool,
 ) -> Result<Vec<WidgetSessionRecord>, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: WIDGET_SUBSCRIBE_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({
-                "experimentalWidgetsEnabled": experimental_widgets_enabled,
-            }),
+        .widget_subscribe(synara_core::core_api::MatrixWidgetSubscribeRequest {
+            experimental_widgets_enabled,
         })
         .await
         .map_err(map_widget_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| widget_response_error())
+    Ok(response)
 }
 
 fn map_widget_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -174,14 +142,6 @@ fn map_widget_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
             )
         }
     }
-}
-
-fn widget_response_error() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "Native Matrix widgets are unavailable.",
-        "experimental-widgets-unavailable",
-    )
 }
 
 #[allow(dead_code)]

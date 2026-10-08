@@ -234,12 +234,17 @@ enum SynaraNotificationDiagnostics {
     }
 
     /// Never persist arbitrary Core/error text. Unknown future or malformed
-    /// codes collapse to the existing fixed generic stage.
+    /// codes collapse to the existing fixed generic stage. Every code the
+    /// shipping NSE path can emit is pinned, with its stage, in
+    /// crates/synara-core/tests/support/notification-policy-vectors.json.
     static func previewFailureStage(coreCode: String) -> Stage {
         switch coreCode {
         case "p4-s11-nse-agent-policy-filtered": return .agentPolicyFiltered
-        case "p4-s3b-material-missing": return .coreSessionUnavailable
+        case "p4-s3b-material-missing", "p4-s3b-identity-invalid": return .coreSessionUnavailable
         case "p4-s3b-restore-failed": return .coreRestoreFailed
+        case "p4-s3b-store-root-invalid": return .coreStoreUnavailable
+        case "p4-s11-nse-payload-oversize": return .payloadComplexityExceeded
+        case "nse-preview-request-cancelled": return .resolutionCancelled
         case "nse-secret-vault-unavailable", "p4-s3-secret-vault-unavailable": return .coreStoreUnavailable
         case "p4-s11-nse-event-fetch-failed": return .coreFetchFailed
         case "p4-s11-nse-client-init-failed": return .coreClientInitFailed
@@ -523,6 +528,9 @@ enum SynaraTimeSensitiveAgentApprovalPreference {
     }
 }
 
+/// Mirrors `classify_agent_approval` in crates/synara-core/src/app/agent_approvals.rs,
+/// which the NSE cannot call over the FFI. Both sides read the vectors in
+/// crates/synara-core/tests/support/notification-policy-vectors.json.
 enum SynaraAgentApprovalFreshness {
     static let ttlMilliseconds: UInt64 = 5 * 60 * 1_000
     static let futureToleranceMilliseconds: UInt64 = 60 * 1_000
@@ -537,8 +545,10 @@ enum SynaraAgentApprovalFreshness {
         guard futureLimit.overflow == false, originServerTimestampMS <= futureLimit.partialValue else {
             return false
         }
-        return nowMS >= originServerTimestampMS
-            && nowMS - originServerTimestampMS < ttlMilliseconds
+        // A prompt stamped slightly ahead of this device's clock (within the
+        // tolerance) has zero age, exactly as Core's saturating subtraction.
+        let age = nowMS >= originServerTimestampMS ? nowMS - originServerTimestampMS : 0
+        return age < ttlMilliseconds
     }
 }
 

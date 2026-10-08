@@ -33,8 +33,6 @@ test("PR and tag snapshots do not count as reusable main cache seeds", () => {
   assert.deepEqual(report.missingMainFamilies, [
     "validate-rust-desktop",
     "ci-synara-core-apple-simulator-arm64",
-    "release-linux-arch",
-    "release-macos-host",
     "release-macos",
     "release-synara-core-apple-device",
     "cargo-downloads",
@@ -57,7 +55,7 @@ test("an empty cache inventory needs all seed families", () => {
     storageLimit: { max_cache_size_gb: 20 },
     retentionLimit: { max_cache_retention_days: 14 },
   });
-  assert.equal(report.missingMainFamilies.length, 9);
+  assert.equal(report.missingMainFamilies.length, 7);
   assert.deepEqual(report.scopes, []);
   assert.equal(report.utilization, 0);
   assert.equal(report.limitBytes, 20 * 2 ** 30);
@@ -83,7 +81,7 @@ test("Swift compiler cache seeds must belong to main, independently of Rust seed
     caches: [{ ...cache, ref: "refs/heads/main" }],
   });
   assert.ok(!main.missingMainFamilies.includes("xcode-compilation"));
-  assert.equal(main.missingMainFamilies.length, 8);
+  assert.equal(main.missingMainFamilies.length, 6);
 });
 
 test("obsolete target snapshots neither satisfy Kache seeds nor disappear from storage accounting", () => {
@@ -152,35 +150,4 @@ test("GitHub's binary storage limit gives exact utilization and remaining capaci
   });
   assert.equal(overLimit.utilization, 1.1);
   assert.equal(overLimit.limitBytes - overLimit.activeBytes, -gib);
-});
-
-test("native macOS host cache cannot satisfy the universal macOS seed requirement", () => {
-  const host = {
-    key: "synara-kache-v1-release-macos-host-macOS-ARM64-toolchain-lock-head",
-    ref: "refs/heads/main",
-    size_in_bytes: 799_037_184,
-  };
-  const input = {
-    caches: [host],
-    usage: {
-      active_caches_size_in_bytes: host.size_in_bytes,
-      active_caches_count: 1,
-    },
-    storageLimit: { max_cache_size_gb: 10 },
-    retentionLimit: { max_cache_retention_days: 7 },
-  };
-  const hostOnly = summarizeCaches(input);
-  assert.ok(!hostOnly.missingMainFamilies.includes("release-macos-host"));
-  assert.ok(hostOnly.missingMainFamilies.includes("release-macos"));
-
-  const universal = {
-    ...host,
-    key: "synara-kache-v1-release-macos-macOS-ARM64-toolchain-lock-head",
-  };
-  const universalOnly = summarizeCaches({ ...input, caches: [universal] });
-  assert.ok(universalOnly.missingMainFamilies.includes("release-macos-host"));
-  assert.ok(!universalOnly.missingMainFamilies.includes("release-macos"));
-  const both = summarizeCaches({ ...input, caches: [host, universal] });
-  assert.ok(!both.missingMainFamilies.includes("release-macos-host"));
-  assert.ok(!both.missingMainFamilies.includes("release-macos"));
 });

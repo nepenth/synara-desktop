@@ -28,11 +28,13 @@ webview. Restore accepts a recovery key or passphrase and calls
 repairs inconsistent or missing backup material by recreating the backup when
 matrix-sdk determines that is necessary.
 
-Native clients use `BackupDownloadStrategy::OneShot`. Successful recovery and
-backup material received from a verified device therefore download backed-up
-room keys directly into the native crypto store. Matrix-sdk owns recovery after
-verification through the same one-shot policy; the WebView does not attach a
-crypto listener or issue a duplicate restore action.
+Native clients use `BackupDownloadStrategy::AfterDecryptionFailure`. Once
+recovery or a verified device provides backup access, matrix-sdk downloads the
+room key for each event that fails to decrypt, directly into the native crypto
+store. (2026-10-07: this replaced `OneShot`, which downloads the whole backup
+once and never retries; the SDK documents it as unworkable for sizeable
+accounts.) The WebView does not attach a crypto listener or issue a duplicate
+restore action.
 
 `BackupRestore` and `useNativeKeyBackup` call only the native IPC owner and do
 not import matrix-js-sdk `CryptoApi` or initialize JS crypto.

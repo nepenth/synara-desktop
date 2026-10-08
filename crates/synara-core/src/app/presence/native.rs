@@ -4,6 +4,7 @@
 //! and presence SET route through Core; shells only attach the owner and
 //! emit updates.
 
+use crate::dto::WriteAck;
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -63,7 +64,7 @@ pub struct NativePresenceSubscription {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativePresenceWriteResult {
-    pub status: String,
+    pub status: WriteAck,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -306,7 +307,7 @@ mod tests {
     #[test]
     fn native_write_ack_serializes_status_only() {
         let result = NativePresenceWriteResult {
-            status: "ok".into(),
+            status: crate::dto::WriteAck::Ok,
         };
         let raw = serde_json::to_value(&result).unwrap();
         assert_eq!(raw, serde_json::json!({"status": "ok"}));

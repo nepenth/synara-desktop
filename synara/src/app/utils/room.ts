@@ -8,11 +8,9 @@ import {
   IRoomCreateContent,
   MessageEvent,
   NativeEventContentEvent,
-  NotificationType,
   RoomToParents,
   RoomType,
   StateEvent,
-  UnreadInfo,
 } from '../../types/matrix/room';
 import { isNativeMatrixSession } from '../features/verification/nativeVerification';
 import {
@@ -20,6 +18,10 @@ import {
   getNativeSpecialUsers,
 } from '../features/matrix-dto/nativeRoomStateProjection';
 
+import { getNativeRoom } from '../native/nativeSession';
+import { getMyUserId } from '../state/nativeIdentity';
+import { mxcUrlToNative } from '../native/nativeCommands';
+import { getCachedAccountData, loadNativeAccountData } from '../native/nativeAccountData';
 /**
  * SDK-neutral structural projections used by this utility boundary.
  *
@@ -113,35 +115,9 @@ export type RoomReading = {
   hasMembershipState(userId: UserId, membership: string): boolean;
 };
 
-type PushRuleActionReading = string | { [key: string]: any };
-
-type PushRuleReading = {
-  actions: PushRuleActionReading[];
-  conditions?: { kind?: string }[];
-  rule_id: string;
-};
-
 type PowerLevelsReading = {
   users_default?: number;
   users?: Record<string, number>;
-};
-
-/** Narrow structural projection of a matrix client. */
-export type MatrixClientReading = {
-  getAccountData(eventType: string): MatrixEventReading | undefined;
-  getRoomPushRule(scope: string, roomId: string): PushRuleReading | undefined;
-  getUserId(): string | null;
-  getRooms(): RoomReading[];
-  getRoom(roomId: string): RoomReading | null;
-  mxcUrlToHttp(
-    mxcUrl: string,
-    width?: number,
-    height?: number,
-    resizeMethod?: string,
-    allowDirectLinks?: boolean,
-    allowRedirects?: boolean,
-    useAuthentication?: boolean
-  ): string | null;
 };
 
 type RelationsReading = {
@@ -177,10 +153,39 @@ export const getStateEvent = (
 export const getStateEvents = (room: RoomReading, eventType: StateEvent): MatrixEventReading[] =>
   getRoomCurrentState(room)?.getStateEvents(eventType) ?? [];
 
-export const getAccountData = (
-  mx: MatrixClientReading,
-  eventType: AccountDataEvent
-): MatrixEventReading | undefined => mx.getAccountData(eventType);
+/** Wrap raw account-data content in the event-reading shape legacy callers expect. */
+export const accountDataEventReading = (
+  eventType: string,
+  content: Record<string, unknown>,
+  roomId?: string
+): MatrixEventReading => ({
+  getContent: <T extends EventContentReading = EventContentReading>() => content as T,
+  getPrevContent: () => ({}),
+  getSender: () => undefined,
+  getType: () => eventType,
+  getStateKey: () => undefined,
+  getTs: () => 0,
+  getId: () => undefined,
+  getRoomId: () => roomId,
+  isRedacted: () => false,
+  isSending: () => false,
+  getRelation: () => null,
+  event: { type: eventType, content },
+});
+
+/**
+ * Global account data from Core's raw account-data cache. The first read of a
+ * type starts a load and returns `undefined`; later reads see the cached
+ * content, which refreshes when Core reports an account-data change.
+ */
+export const getAccountData = (eventType: AccountDataEvent): MatrixEventReading | undefined => {
+  const content = getCachedAccountData(eventType);
+  if (content === undefined) {
+    void loadNativeAccountData(eventType).catch(() => undefined);
+    return undefined;
+  }
+  return content ? accountDataEventReading(eventType, content) : undefined;
+};
 
 export const isSpace = (room: RoomReading | null): boolean => {
   if (!room) return false;
@@ -248,35 +253,6 @@ export const getOrphanParents = (roomToParents: RoomToParents, roomId: string): 
   return orphanParents;
 };
 
-const isMutedRule = (rule: PushRuleReading) =>
-  // Check for empty actions (new spec) or dont_notify (deprecated)
-  (rule.actions.length === 0 || rule.actions[0] === 'dont_notify') &&
-  rule.conditions?.[0]?.kind === 'event_match';
-
-const findMutedRule = (overrideRules: PushRuleReading[], roomId: string) =>
-  overrideRules.find((rule) => rule.rule_id === roomId && isMutedRule(rule));
-
-export const getNotificationType = (mx: MatrixClientReading, roomId: string): NotificationType => {
-  let roomPushRule: PushRuleReading | undefined;
-  try {
-    roomPushRule = mx.getRoomPushRule('global', roomId);
-  } catch {
-    roomPushRule = undefined;
-  }
-
-  if (!roomPushRule) {
-    const overrideRules = mx.getAccountData(AccountDataEvent.PushRules)?.getContent<{
-      global?: { override?: PushRuleReading[] };
-    }>()?.global?.override;
-    if (!overrideRules) return NotificationType.Default;
-
-    return findMutedRule(overrideRules, roomId) ? NotificationType.Mute : NotificationType.Default;
-  }
-
-  if (roomPushRule.actions[0] === 'notify') return NotificationType.AllMessages;
-  return NotificationType.MentionsAndKeywords;
-};
-
 const NOTIFICATION_EVENT_TYPES = [
   'm.room.create',
   'm.room.message',
@@ -310,16 +286,6 @@ export const getThreadRootEventId = (
     : undefined;
 };
 
-export const getUnreadInfo = (room: RoomReading): UnreadInfo => {
-  const total = room.getUnreadNotificationCount('total');
-  const highlight = room.getUnreadNotificationCount('highlight');
-  return {
-    roomId: room.roomId,
-    highlight,
-    total: highlight > total ? highlight : total,
-  };
-};
-
 export const getRoomIconSrc = (
   icons: Record<IconName, IconSrc>,
   roomType?: string,
@@ -348,34 +314,22 @@ export const getRoomIconSrc = (
   return icons.Hash;
 };
 
-export const getRoomAvatarUrl = (
-  mx: MatrixClientReading,
-  room: RoomReading,
-  size: 32 | 96 = 32,
-  useAuthentication = false
-): string | undefined => {
+export const getRoomAvatarUrl = (room: RoomReading, size: 32 | 96 = 32): string | undefined => {
   const mxcUrl = room.getMxcAvatarUrl();
-  return mxcUrl
-    ? (mx.mxcUrlToHttp(mxcUrl, size, size, 'crop', undefined, false, useAuthentication) ??
-        undefined)
-    : undefined;
+  return mxcUrl ? (mxcUrlToNative(mxcUrl, size, size, 'crop') ?? undefined) : undefined;
 };
 
 export const getDirectRoomAvatarUrl = (
-  mx: MatrixClientReading,
   room: RoomReading,
-  size: 32 | 96 = 32,
-  useAuthentication = false
+  size: 32 | 96 = 32
 ): string | undefined => {
   const mxcUrl = room.getAvatarFallbackMember()?.getMxcAvatarUrl();
 
   if (!mxcUrl) {
-    return getRoomAvatarUrl(mx, room, size, useAuthentication);
+    return getRoomAvatarUrl(room, size);
   }
 
-  return (
-    mx.mxcUrlToHttp(mxcUrl, size, size, 'crop', undefined, false, useAuthentication) ?? undefined
-  );
+  return mxcUrlToNative(mxcUrl, size, size, 'crop') ?? undefined;
 };
 
 export const trimReplyFromBody = (body: string): string => {
@@ -456,11 +410,11 @@ export const getEditedEvent = (
   return edits && getLatestEdit(mEvent, edits.getRelations());
 };
 
-export const canEditEvent = (mx: MatrixClientReading, mEvent: MatrixEventReading) => {
+export const canEditEvent = (mEvent: MatrixEventReading) => {
   const content = mEvent.getContent();
   const relationType = content['m.relates_to']?.rel_type;
   return (
-    mEvent.getSender() === mx.getUserId() &&
+    mEvent.getSender() === (getMyUserId() ?? null) &&
     (!relationType || relationType === 'm.thread') &&
     mEvent.getType() === MessageEvent.RoomMessage &&
     (content.msgtype === 'm.text' ||
@@ -506,17 +460,13 @@ export const getAllVersionsRoomCreator = (room: RoomReading): Set<string> => {
   return creators;
 };
 
-export const guessPerfectParent = (
-  mx: MatrixClientReading,
-  roomId: string,
-  parents: string[]
-): string | undefined => {
+export const guessPerfectParent = (roomId: string, parents: string[]): string | undefined => {
   if (parents.length === 1) {
     return parents[0];
   }
 
   const getSpecialUsers = (rId: string): string[] => {
-    const r = mx.getRoom(rId);
+    const r = getNativeRoom(rId);
     if (!r) return [];
 
     if (isNativeMatrixSession()) {

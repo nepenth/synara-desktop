@@ -8,6 +8,10 @@ import {
 } from '../../utils/desktop';
 import { parseHermesAgentPayload, type HermesAgentPayload } from '../../utils/hermes';
 import type { RoomEncryptionStatus } from '../matrix-dto/room';
+import { devicePixelScale, nativeThumbnailContentUri } from '../../matrix/nativeThumbnail';
+import type { NativeTimelineEncryptionShield } from './nativeTimelineShield';
+import type { NativeTimelineReactionSender } from '../matrix-dto/generated';
+export type { NativeTimelineReactionSender } from '../matrix-dto/generated';
 
 const NATIVE_TIMELINE_VIEW_UPDATED_EVENT = 'matrix-timeline-view-updated';
 const TIMELINE_VIEW_SCHEMA_VERSION = 1;
@@ -33,6 +37,8 @@ export type NativeTimelineRowCapabilities = {
   declineCall: boolean;
 };
 
+export type NativeTimelineLocalEchoState = 'sending' | 'sent' | 'failed' | 'cancelled' | 'wedged';
+
 type NativeTimelineEventRowBase = {
   itemId: string;
   eventId?: string;
@@ -40,8 +46,202 @@ type NativeTimelineEventRowBase = {
   senderName: string;
   senderAvatarUrl?: string;
   originServerTs: number;
+  /** Absent on remote rows and on older snapshots. A server event id stays sent. */
+  localEchoState?: NativeTimelineLocalEchoState;
+  /** SDK transaction id for discard and retry. Not a server event id. */
+  transactionId?: string;
+  /** SDK authenticity shield in an encrypted room. Absent when trusted. */
+  encryptionShield?: NativeTimelineEncryptionShield;
   capabilities: NativeTimelineRowCapabilities;
 };
+
+export type NativeTimelineUnsentDelivery = {
+  status: 'sending' | 'failed' | 'unsent';
+  /** Visible, hover-independent name. Sending and failed stay distinct. */
+  accessibleName: 'Sending' | 'Failed to send' | 'Not sent';
+  wedged: boolean;
+  transactionId?: string;
+};
+
+const isNativeTimelineLocalEchoState = (value: unknown): value is NativeTimelineLocalEchoState =>
+  value === 'sending' ||
+  value === 'sent' ||
+  value === 'failed' ||
+  value === 'cancelled' ||
+  value === 'wedged';
+
+/** Fields the unsent presentation reads. Sticker and other rows nest them on `event`. */
+export const nativeTimelineEchoFields = (
+  row: NativeTimelineViewRow
+): {
+  eventId?: string;
+  localEchoState?: NativeTimelineLocalEchoState;
+  transactionId?: string;
+  /** Virtual rows (dates, markers) are not local echoes just because they lack an event id. */
+  candidate: boolean;
+} => {
+  if (row.kind === 'sticker') return { ...row.event, candidate: true };
+  if (row.kind === 'other') {
+    return row.event
+      ? { ...row.event, candidate: true }
+      : { eventId: row.eventId, candidate: false };
+  }
+  if (
+    row.kind === 'message' ||
+    row.kind === 'poll' ||
+    row.kind === 'membership' ||
+    row.kind === 'state' ||
+    row.kind === 'call'
+  ) {
+    return { ...row, candidate: true };
+  }
+  return {
+    eventId: 'eventId' in row ? row.eventId : undefined,
+    candidate: false,
+  };
+};
+
+/** The SDK shield of a message-like row. Membership, state and call rows carry none. */
+export const nativeTimelineRowShield = (row: NativeTimelineViewRow): unknown => {
+  if (row.kind === 'message' || row.kind === 'poll') return row.encryptionShield;
+  if (row.kind === 'sticker') return row.event.encryptionShield;
+  return undefined;
+};
+
+/**
+ * Classify a timeline row for the unsent presentation.
+ * A missing status with a server event id stays sent. A missing status without
+ * one is unsent when the row can be a local echo. Explicit sending / failed /
+ * wedged wins over a stale id.
+ */
+export const nativeTimelineUnsentDelivery = (row: {
+  eventId?: string;
+  localEchoState?: string;
+  transactionId?: string;
+  candidate?: boolean;
+}): NativeTimelineUnsentDelivery | undefined => {
+  const state = isNativeTimelineLocalEchoState(row.localEchoState) ? row.localEchoState : undefined;
+  const transactionId = row.transactionId;
+  if (state === 'sending') {
+    return { status: 'sending', accessibleName: 'Sending', wedged: false, transactionId };
+  }
+  if (state === 'failed') {
+    return { status: 'failed', accessibleName: 'Failed to send', wedged: false, transactionId };
+  }
+  if (state === 'wedged') {
+    return { status: 'failed', accessibleName: 'Failed to send', wedged: true, transactionId };
+  }
+  if (state === 'sent' || row.eventId || !row.candidate) return undefined;
+  return { status: 'unsent', accessibleName: 'Not sent', wedged: false, transactionId };
+};
+
+/**
+ * `matrix_local_echo_discard` resolves `true` when the SDK dropped the unsent
+ * request and `false` when it no longer held it because it was already sent.
+ * Anything else is an invalid readback, not a discard.
+ */
+export type NativeLocalEchoDiscardOutcome = 'discarded' | 'already_sent';
+
+export const nativeLocalEchoDiscardOutcome = (value: unknown): NativeLocalEchoDiscardOutcome => {
+  if (value === true) return 'discarded';
+  if (value === false) return 'already_sent';
+  throw new Error('invalid discard readback');
+};
+
+export async function discardNativeLocalEcho(
+  roomId: string,
+  transactionId: string
+): Promise<NativeLocalEchoDiscardOutcome> {
+  const result = await invokeDesktopWithAvailability<boolean>('matrix_local_echo_discard', {
+    roomId,
+    transactionId,
+  });
+  if (!result.available) {
+    throw new Error('unavailable');
+  }
+  return nativeLocalEchoDiscardOutcome(result.value);
+}
+
+export async function retryNativeLocalEcho(roomId: string, transactionId: string): Promise<void> {
+  const result = await invokeDesktopWithAvailability('matrix_local_echo_retry', {
+    roomId,
+    transactionId,
+  });
+  if (!result.available) {
+    throw new Error('unavailable');
+  }
+}
+
+export const NATIVE_LOCAL_ECHO_DISCARD_FAILED = 'The unsent message could not be discarded.';
+export const NATIVE_LOCAL_ECHO_ALREADY_SENT =
+  'This message was already sent and could not be discarded.';
+export const NATIVE_LOCAL_ECHO_RETRY_FAILED = 'The unsent message could not be retried.';
+
+export type NativeLocalEchoActionResult =
+  { status: 'ignored' } | { status: 'done' } | { status: 'error'; message: string };
+
+const nativeLocalEchoActionKey = (roomId: string, transactionId: string): string =>
+  `${roomId}\u0000${transactionId}`;
+
+/**
+ * One discard or retry per unsent row at a time. A second press while the
+ * first is in flight is ignored, so a double click cannot report a false
+ * "could not be discarded" after the first press already removed the echo.
+ */
+export class NativeLocalEchoActionGuard {
+  private readonly pending = new Set<string>();
+
+  isPending(roomId: string, transactionId: string): boolean {
+    return this.pending.has(nativeLocalEchoActionKey(roomId, transactionId));
+  }
+
+  async run(
+    roomId: string,
+    transactionId: string,
+    action: () => Promise<NativeLocalEchoActionResult>
+  ): Promise<NativeLocalEchoActionResult> {
+    const key = nativeLocalEchoActionKey(roomId, transactionId);
+    if (this.pending.has(key)) return { status: 'ignored' };
+    this.pending.add(key);
+    try {
+      return await action();
+    } finally {
+      this.pending.delete(key);
+    }
+  }
+}
+
+export const runNativeLocalEchoDiscard = (
+  guard: NativeLocalEchoActionGuard,
+  roomId: string,
+  transactionId: string,
+  discard: typeof discardNativeLocalEcho = discardNativeLocalEcho
+): Promise<NativeLocalEchoActionResult> =>
+  guard.run(roomId, transactionId, async () => {
+    try {
+      const outcome = await discard(roomId, transactionId);
+      return outcome === 'discarded'
+        ? { status: 'done' }
+        : { status: 'error', message: NATIVE_LOCAL_ECHO_ALREADY_SENT };
+    } catch {
+      return { status: 'error', message: NATIVE_LOCAL_ECHO_DISCARD_FAILED };
+    }
+  });
+
+export const runNativeLocalEchoRetry = (
+  guard: NativeLocalEchoActionGuard,
+  roomId: string,
+  transactionId: string,
+  retry: typeof retryNativeLocalEcho = retryNativeLocalEcho
+): Promise<NativeLocalEchoActionResult> =>
+  guard.run(roomId, transactionId, async () => {
+    try {
+      await retry(roomId, transactionId);
+      return { status: 'done' };
+    } catch {
+      return { status: 'error', message: NATIVE_LOCAL_ECHO_RETRY_FAILED };
+    }
+  });
 
 export type NativeTimelineReplyPreview = {
   eventId: string;
@@ -54,11 +254,6 @@ export type NativeTimelineThreadSummary = {
   rootEventId: string;
   replyCount: number;
   latestEventId?: string;
-};
-
-export type NativeTimelineReactionSender = {
-  userId: string;
-  reactionEventId?: string;
 };
 
 export type NativeTimelineReaction = {
@@ -309,6 +504,37 @@ const isValidIndex = (index: number, length: number, allowEnd = false): boolean 
  * Pagination and read-state readbacks can lag a live delta. Callers first
  * confirm stream ownership; equal-or-older snapshots then keep the newer view.
  */
+/**
+ * With the delta listener live, the snapshot poll is only a safety net for a
+ * dropped batch. Without deltas it is the update path.
+ */
+export const NATIVE_TIMELINE_SAFETY_NET_POLL_MS = 10_000;
+export const NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS = 750;
+/**
+ * One early safety-net poll after open. A batch dropped around the open
+ * readback is the likeliest gap, so check it soon, then fall back to the slow
+ * cadence.
+ */
+export const NATIVE_TIMELINE_FIRST_SAFETY_NET_POLL_MS = 1_500;
+
+/** Delay before the next snapshot poll, given whether deltas are live. */
+export const nativeTimelinePollDelay = (deltasLive: boolean, firstPoll: boolean): number => {
+  if (!deltasLive) return NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS;
+  return firstPoll ? NATIVE_TIMELINE_FIRST_SAFETY_NET_POLL_MS : NATIVE_TIMELINE_SAFETY_NET_POLL_MS;
+};
+
+/**
+ * True when `next` carries nothing new. The revision counts SDK timeline
+ * diffs only; position, pagination, and read state can change without one, so
+ * an equal revision alone is not proof. Compare the payload too, but only
+ * when the revisions already match.
+ */
+export const isUnchangedNativeTimelineSnapshot = (
+  current: NativeTimelineViewSnapshot,
+  next: NativeTimelineViewSnapshot
+): boolean =>
+  next.revision === current.revision && JSON.stringify(next) === JSON.stringify(current);
+
 export const isNativeTimelineReadbackStale = (
   current: NativeTimelineViewSnapshot | undefined,
   next: NativeTimelineViewSnapshot
@@ -759,6 +985,11 @@ export const useNativeTimelineView = (
       next.revision < current.revision
     ) {
       return false;
+    }
+    if (isUnchangedNativeTimelineSnapshot(current, next)) {
+      // Accepted, but identical: keep row identities so memoized rows do not
+      // re-render on every safety-net poll.
+      return true;
     }
     snapshotRef.current = next;
     setState({
@@ -1218,12 +1449,17 @@ export const useNativeTimelineView = (
         selectedPositionRef.current = readback.position;
         setState({ status: 'ready', snapshot, selectedPosition: readback.position });
         if (!disposed) {
-          pollTimer = window.setInterval(
-            () => {
-              void pollSnapshot();
-            },
-            unlisten ? 1500 : 750
-          );
+          const schedulePoll = (firstPoll: boolean) => {
+            pollTimer = window.setTimeout(
+              () => {
+                if (disposed) return;
+                void pollSnapshot();
+                schedulePoll(false);
+              },
+              nativeTimelinePollDelay(Boolean(unlisten), firstPoll)
+            );
+          };
+          schedulePoll(true);
         }
       } catch (error) {
         if (!disposed) {
@@ -1251,7 +1487,7 @@ export const useNativeTimelineView = (
           request: { streamId },
         });
       }
-      if (pollTimer !== undefined) window.clearInterval(pollTimer);
+      if (pollTimer !== undefined) window.clearTimeout(pollTimer);
       unlisten?.();
     };
   }, [acceptSnapshot, beginOpen, finishOpen, nativeRequest]);
@@ -1261,3 +1497,30 @@ export const useNativeTimelineView = (
 
 export const nativeTimelineMediaSrc = (handle: NativeTimelineMediaHandle): string | undefined =>
   convertDesktopFileSrc(handle.handleId, 'synara-media');
+
+/**
+ * Inline image source sized to the timeline box. A server thumbnail replaces
+ * the original only when the original is (or may be) larger than the box at
+ * this device pixel ratio. GIFs keep the original so they still animate.
+ */
+export const nativeTimelineInlineImageContentUri = (
+  handle: NativeTimelineMediaHandle,
+  boxCssPx: number,
+  scale: number = devicePixelScale()
+): string => {
+  if (handle.mimeType?.toLowerCase() === 'image/gif') return handle.handleId;
+  const deviceBox = boxCssPx * scale;
+  const fitsBox =
+    typeof handle.width === 'number' &&
+    typeof handle.height === 'number' &&
+    handle.width <= deviceBox &&
+    handle.height <= deviceBox;
+  if (fitsBox) return handle.handleId;
+  return nativeThumbnailContentUri(handle.handleId, boxCssPx, boxCssPx, 'scale', scale);
+};
+
+export const nativeTimelineInlineImageSrc = (
+  handle: NativeTimelineMediaHandle,
+  boxCssPx: number
+): string | undefined =>
+  convertDesktopFileSrc(nativeTimelineInlineImageContentUri(handle, boxCssPx), 'synara-media');

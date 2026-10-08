@@ -26,6 +26,7 @@ mod desktop_tray;
 mod desktop_unread_badge;
 mod desktop_url;
 mod desktop_webview_performance;
+mod desktop_window_drag;
 // P1.2: compile-only Matrix Rust SDK linkage; no production client session.
 // P1.3: Matrix IPC schema foundation (types/helpers only; no production commands).
 mod matrix;
@@ -136,6 +137,188 @@ fn decode_synara_media_path(path: &str) -> Option<String> {
     Some(decoded)
 }
 
+/// Thumbnails are bounded well below original media.
+const THUMBNAIL_MEDIA_MAX_BYTES: usize = 8 * 1_048_576;
+
+/// Requested sizes snap to a small set so one thumbnail serves every avatar or
+/// preview of roughly that size (one cache entry, one server thumbnail).
+const THUMBNAIL_SIZE_BUCKETS: [u32; 12] = [32, 48, 64, 96, 128, 192, 256, 320, 480, 640, 800, 960];
+
+/// Renderer size hint carried in the protocol path:
+/// `thumbnail/<width>x<height>/<crop|scale>/<target>`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SynaraThumbnailHint {
+    width: u32,
+    height: u32,
+    crop: bool,
+}
+
+impl SynaraThumbnailHint {
+    fn media_format(self) -> matrix_sdk::media::MediaFormat {
+        let mut settings =
+            matrix_sdk::media::MediaThumbnailSettings::new(self.width.into(), self.height.into());
+        settings.method = if self.crop {
+            matrix_sdk::ruma::api::client::media::get_content_thumbnail::v3::Method::Crop
+        } else {
+            matrix_sdk::ruma::api::client::media::get_content_thumbnail::v3::Method::Scale
+        };
+        matrix_sdk::media::MediaFormat::Thumbnail(settings)
+    }
+}
+
+fn thumbnail_bucket(requested: u32) -> u32 {
+    THUMBNAIL_SIZE_BUCKETS
+        .iter()
+        .copied()
+        .find(|bucket| *bucket >= requested)
+        .unwrap_or(THUMBNAIL_SIZE_BUCKETS[THUMBNAIL_SIZE_BUCKETS.len() - 1])
+}
+
+/// Split an optional thumbnail hint off a decoded protocol path. `None` means
+/// a malformed hint, which is a 404 rather than a silent full download.
+fn split_thumbnail_hint(path: &str) -> Option<(Option<SynaraThumbnailHint>, &str)> {
+    let Some(rest) = path.strip_prefix("thumbnail/") else {
+        return Some((None, path));
+    };
+    let (size, rest) = rest.split_once('/')?;
+    let (method, target) = rest.split_once('/')?;
+    let (width, height) = size.split_once('x')?;
+    let parse = |value: &str| -> Option<u32> {
+        if value.is_empty() || value.len() > 5 || !value.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        value.parse::<u32>().ok().filter(|value| *value > 0)
+    };
+    let crop = match method {
+        "crop" => true,
+        "scale" => false,
+        _ => return None,
+    };
+    if target.is_empty() || target.starts_with("thumbnail/") {
+        return None;
+    }
+    Some((
+        Some(SynaraThumbnailHint {
+            width: thumbnail_bucket(parse(width)?),
+            height: thumbnail_bucket(parse(height)?),
+            crop,
+        }),
+        target,
+    ))
+}
+
+fn synara_media_status(status: tauri::http::StatusCode) -> tauri::http::Response<Vec<u8>> {
+    synara_media_response(status, Vec::new(), None)
+}
+
+/// Serve a server thumbnail of a plain source. `None` falls back to the
+/// original (no thumbnail, an encrypted source, or a non-image reply).
+async fn synara_thumbnail_response(
+    client: &matrix_sdk::Client,
+    source: &matrix_sdk::ruma::events::room::MediaSource,
+    hint: Option<SynaraThumbnailHint>,
+) -> Option<tauri::http::Response<Vec<u8>>> {
+    let hint = hint?;
+    // The homeserver cannot thumbnail an encrypted attachment.
+    let matrix_sdk::ruma::events::room::MediaSource::Plain(_) = source else {
+        return None;
+    };
+    let request = matrix_sdk::media::MediaRequestParameters {
+        source: source.clone(),
+        format: hint.media_format(),
+    };
+    let bytes =
+        synara_core::app::media::fetch_media_cached(client, &request, THUMBNAIL_MEDIA_MAX_BYTES)
+            .await
+            .ok()?;
+    let content_type = image_content_type(&bytes)?;
+    Some(synara_media_response(
+        tauri::http::StatusCode::OK,
+        bytes,
+        Some(content_type),
+    ))
+}
+
+async fn synara_original_response(
+    client: &matrix_sdk::Client,
+    source: matrix_sdk::ruma::events::room::MediaSource,
+    declared_mime_type: Option<&str>,
+) -> tauri::http::Response<Vec<u8>> {
+    let request = matrix_sdk::media::MediaRequestParameters {
+        source,
+        format: matrix_sdk::media::MediaFormat::File,
+    };
+    let Ok(bytes) =
+        synara_core::app::media::fetch_media_cached(client, &request, TIMELINE_MEDIA_MAX_BYTES)
+            .await
+    else {
+        return synara_media_status(tauri::http::StatusCode::NOT_FOUND);
+    };
+    let Some(content_type) = timeline_media_content_type(&bytes, declared_mime_type) else {
+        return synara_media_status(tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    };
+    synara_media_response(tauri::http::StatusCode::OK, bytes, Some(content_type))
+}
+
+async fn synara_media_for_path<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    path: &str,
+) -> tauri::http::Response<Vec<u8>> {
+    let Some((hint, handle)) = split_thumbnail_hint(path) else {
+        return synara_media_status(tauri::http::StatusCode::NOT_FOUND);
+    };
+    let state = app.state::<matrix::auth::MatrixAuthState>();
+    if matrix::timeline::is_timeline_media_handle(handle) {
+        let Some((client, source)) = state.resolve_timeline_media(handle).await else {
+            return synara_media_status(tauri::http::StatusCode::NOT_FOUND);
+        };
+        if let Some(response) = synara_thumbnail_response(&client, &source.source, hint).await {
+            return response;
+        }
+        return synara_original_response(
+            &client,
+            source.source,
+            source.declared_mime_type.as_deref(),
+        )
+        .await;
+    }
+    if let Ok(content_uri) = matrix::auth::product::parse_media_download_uri(handle) {
+        let Some(client) = state.media_client().await else {
+            return synara_media_status(tauri::http::StatusCode::NOT_FOUND);
+        };
+        let source = matrix_sdk::ruma::events::room::MediaSource::Plain(content_uri);
+        if let Some(response) = synara_thumbnail_response(&client, &source, hint).await {
+            return response;
+        }
+        return synara_original_response(&client, source, None).await;
+    }
+    if handle.len() != 64 || !handle.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return synara_media_status(tauri::http::StatusCode::NOT_FOUND);
+    }
+    let Some((client, source)) = state.resolve_invite_avatar(handle).await else {
+        return synara_media_status(tauri::http::StatusCode::NOT_FOUND);
+    };
+    let request = matrix_sdk::media::MediaRequestParameters {
+        source: matrix_sdk::ruma::events::room::MediaSource::Plain(source.mxc_uri),
+        format: matrix_sdk::media::MediaFormat::Thumbnail(
+            matrix_sdk::media::MediaThumbnailSettings::new(
+                matrix_sdk::ruma::UInt::from(96_u8),
+                matrix_sdk::ruma::UInt::from(96_u8),
+            ),
+        ),
+    };
+    let Ok(bytes) =
+        synara_core::app::media::fetch_media_cached(&client, &request, INVITE_AVATAR_MAX_BYTES)
+            .await
+    else {
+        return synara_media_status(tauri::http::StatusCode::NOT_FOUND);
+    };
+    let Some(content_type) = image_content_type(&bytes) else {
+        return synara_media_status(tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    };
+    synara_media_response(tauri::http::StatusCode::OK, bytes, Some(content_type))
+}
+
 fn register_synara_media_protocol<R: tauri::Runtime>(
     builder: tauri::Builder<R>,
 ) -> tauri::Builder<R> {
@@ -172,145 +355,8 @@ fn register_synara_media_protocol<R: tauri::Runtime>(
                     ));
                     return;
                 };
-                let state = app.state::<matrix::auth::MatrixAuthState>();
-                if matrix::timeline::is_timeline_media_handle(&handle) {
-                    let Some((client, source)) = state.resolve_timeline_media(&handle).await else {
-                        responder.respond(synara_media_response(
-                            tauri::http::StatusCode::NOT_FOUND,
-                            Vec::new(),
-                            None,
-                        ));
-                        return;
-                    };
-                    let request = matrix_sdk::media::MediaRequestParameters {
-                        source: source.source,
-                        format: matrix_sdk::media::MediaFormat::File,
-                    };
-                    let Ok(bytes) = synara_core::app::media::download_media_bounded(
-                        &client,
-                        &request,
-                        TIMELINE_MEDIA_MAX_BYTES,
-                    )
-                    .await
-                    else {
-                        responder.respond(synara_media_response(
-                            tauri::http::StatusCode::NOT_FOUND,
-                            Vec::new(),
-                            None,
-                        ));
-                        return;
-                    };
-                    let Some(content_type) =
-                        timeline_media_content_type(&bytes, source.declared_mime_type.as_deref())
-                    else {
-                        responder.respond(synara_media_response(
-                            tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
-                            Vec::new(),
-                            None,
-                        ));
-                        return;
-                    };
-                    responder.respond(synara_media_response(
-                        tauri::http::StatusCode::OK,
-                        bytes,
-                        Some(content_type),
-                    ));
-                    return;
-                }
-                if let Ok(content_uri) = matrix::auth::product::parse_media_download_uri(&handle) {
-                    let Some(client) = state.media_client().await else {
-                        responder.respond(synara_media_response(
-                            tauri::http::StatusCode::NOT_FOUND,
-                            Vec::new(),
-                            None,
-                        ));
-                        return;
-                    };
-                    let request = matrix_sdk::media::MediaRequestParameters {
-                        source: matrix_sdk::ruma::events::room::MediaSource::Plain(content_uri),
-                        format: matrix_sdk::media::MediaFormat::File,
-                    };
-                    let Ok(bytes) = synara_core::app::media::download_media_bounded(
-                        &client,
-                        &request,
-                        TIMELINE_MEDIA_MAX_BYTES,
-                    )
-                    .await
-                    else {
-                        responder.respond(synara_media_response(
-                            tauri::http::StatusCode::NOT_FOUND,
-                            Vec::new(),
-                            None,
-                        ));
-                        return;
-                    };
-                    let Some(content_type) = timeline_media_content_type(&bytes, None) else {
-                        responder.respond(synara_media_response(
-                            tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
-                            Vec::new(),
-                            None,
-                        ));
-                        return;
-                    };
-                    responder.respond(synara_media_response(
-                        tauri::http::StatusCode::OK,
-                        bytes,
-                        Some(content_type),
-                    ));
-                    return;
-                }
-                if handle.len() != 64 || !handle.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-                    responder.respond(synara_media_response(
-                        tauri::http::StatusCode::NOT_FOUND,
-                        Vec::new(),
-                        None,
-                    ));
-                    return;
-                }
-                let Some((client, source)) = state.resolve_invite_avatar(&handle).await else {
-                    responder.respond(synara_media_response(
-                        tauri::http::StatusCode::NOT_FOUND,
-                        Vec::new(),
-                        None,
-                    ));
-                    return;
-                };
-                let request = matrix_sdk::media::MediaRequestParameters {
-                    source: matrix_sdk::ruma::events::room::MediaSource::Plain(source.mxc_uri),
-                    format: matrix_sdk::media::MediaFormat::Thumbnail(
-                        matrix_sdk::media::MediaThumbnailSettings::new(
-                            matrix_sdk::ruma::UInt::from(96_u8),
-                            matrix_sdk::ruma::UInt::from(96_u8),
-                        ),
-                    ),
-                };
-                let Ok(bytes) = synara_core::app::media::download_media_bounded(
-                    &client,
-                    &request,
-                    INVITE_AVATAR_MAX_BYTES,
-                )
-                .await
-                else {
-                    responder.respond(synara_media_response(
-                        tauri::http::StatusCode::NOT_FOUND,
-                        Vec::new(),
-                        None,
-                    ));
-                    return;
-                };
-                let Some(content_type) = image_content_type(&bytes) else {
-                    responder.respond(synara_media_response(
-                        tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
-                        Vec::new(),
-                        None,
-                    ));
-                    return;
-                };
-                responder.respond(synara_media_response(
-                    tauri::http::StatusCode::OK,
-                    bytes,
-                    Some(content_type),
-                ));
+                let response = synara_media_for_path(&app, &handle).await;
+                responder.respond(response);
             });
         },
     )
@@ -374,7 +420,16 @@ pub fn run() {
     }
     builder = builder
         .manage(matrix::auth::MatrixAuthState::new())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin({
+            // macOS and Windows keep every default flag, including decorations.
+            // Linux must not restore DECORATIONS: the saved file still says
+            // decorated, and applying it puts the native chrome back.
+            let window_state = tauri_plugin_window_state::Builder::default();
+            #[cfg(target_os = "linux")]
+            let window_state =
+                window_state.with_state_flags(desktop_window_drag::linux_window_state_flags());
+            window_state.build()
+        })
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
@@ -384,6 +439,7 @@ pub fn run() {
             desktop::desktop_window_minimize,
             desktop::desktop_window_toggle_maximize,
             desktop::desktop_window_close,
+            desktop::desktop_render_markdown,
             desktop::desktop_navigate,
             desktop::desktop_set_badge_count,
             desktop::desktop_play_notification_sound,
@@ -442,6 +498,8 @@ pub fn run() {
             matrix::auth::product::matrix_room_key_export,
             matrix::auth::product::matrix_room_key_import_select,
             matrix::auth::product::matrix_room_key_import,
+            matrix::auth::product::matrix_room_identity_warnings,
+            matrix::auth::product::matrix_room_identity_warning_resolve,
             matrix::auth::product::matrix_verification_list,
             matrix::auth::product::matrix_verification_start,
             matrix::auth::product::matrix_verification_accept,
@@ -475,6 +533,16 @@ pub fn run() {
             matrix::auth::product::matrix_invites_decline,
             matrix::auth::product::matrix_room_create,
             matrix::auth::product::matrix_room_leave,
+            matrix::auth::product::matrix_account_data_types,
+            matrix::auth::product::matrix_account_data_get,
+            matrix::auth::product::matrix_account_data_set,
+            matrix::auth::product::matrix_room_local_aliases,
+            matrix::auth::product::matrix_room_alias_create,
+            matrix::auth::product::matrix_room_alias_delete,
+            matrix::auth::product::matrix_room_alias_check,
+            matrix::auth::product::matrix_user_mutual_rooms,
+            matrix::auth::product::matrix_room_upgrade,
+            matrix::auth::product::matrix_room_bulk_redact,
             matrix::auth::product::matrix_room_join,
             matrix::auth::product::matrix_room_set_favorite,
             matrix::auth::product::matrix_room_set_read_state,
@@ -562,6 +630,8 @@ pub fn run() {
             matrix::auth::product::matrix_timeline_poll_vote,
             matrix::auth::product::matrix_timeline_call_decline,
             matrix::auth::product::matrix_send_text,
+            matrix::auth::product::matrix_local_echo_discard,
+            matrix::auth::product::matrix_local_echo_retry,
             matrix::auth::product::matrix_edit_message,
             matrix::auth::product::matrix_send_attachment,
             matrix::auth::product::matrix_send_poll,
@@ -734,11 +804,15 @@ pub fn run() {
                 .map_err(|error| format!("Invalid packaged asset origin: {error}"))?;
 
             let app_handle = app.handle().clone();
+            // The secure-store probe can take seconds on a slow or locked
+            // keyring, so it must not delay the window. The bridge starts
+            // conservative; the renderer reads the real status through
+            // `desktop_secret_store_status`, which the warm-up below caches.
+            desktop::warm_secret_store_status();
             let bridge_script = format!(
-                "{}\nif (window.__SYNARA_DESKTOP__) {{ window.__SYNARA_DESKTOP__.supportsUpdater = {}; window.__SYNARA_DESKTOP__.supportsSecureSecretStore = {}; }}",
+                "{}\nif (window.__SYNARA_DESKTOP__) {{ window.__SYNARA_DESKTOP__.supportsUpdater = {}; window.__SYNARA_DESKTOP__.supportsSecureSecretStore = false; }}",
                 include_str!("desktop_bridge.js"),
                 updater_configured,
-                desktop::desktop_bridge_supports_secure_secret_store()
             );
             let window_builder = WebviewWindowBuilder::new(app, "main".to_string(), window_url)
                 .title("Synara")
@@ -764,6 +838,9 @@ pub fn run() {
                 .build()?;
 
             if let Err(error) = desktop_spellcheck::configure_webview_spellcheck(&window) {
+                eprintln!("[synara] {error}");
+            }
+            if let Err(error) = desktop_window_drag::install(&window) {
                 eprintln!("[synara] {error}");
             }
             if let Err(error) = desktop_webview_performance::inspect(&window) {
@@ -803,14 +880,89 @@ pub fn run() {
                 let _ = desktop::show_main_window(app);
             }
 
-            #[cfg(not(target_os = "macos"))]
-            let _ = (app, event);
+            if let tauri::RunEvent::ExitRequested { api, code, .. } = &event {
+                if begin_exit_sync_stop() {
+                    // Stop sync so the SDK is not mid-request at exit, then
+                    // exit for real. The stop is bounded: quit never hangs.
+                    api.prevent_exit();
+                    let app = app.clone();
+                    let code = code.unwrap_or(0);
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(state) = app.try_state::<matrix::auth::MatrixAuthState>() {
+                            let _ = state.stop_sync_for_exit(EXIT_SYNC_STOP_BOUND).await;
+                        }
+                        app.exit(code);
+                    });
+                }
+            }
         });
+}
+
+/// Upper bound on stopping sync during quit.
+const EXIT_SYNC_STOP_BOUND: std::time::Duration = std::time::Duration::from_secs(2);
+
+static EXIT_SYNC_STOP_STARTED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// True only for the first exit request. The exit that follows the bounded
+/// sync stop must pass straight through instead of being prevented again.
+fn begin_exit_sync_stop() -> bool {
+    !EXIT_SYNC_STOP_STARTED.swap(true, std::sync::atomic::Ordering::AcqRel)
+}
+
+#[cfg(test)]
+mod exit_tests {
+    use super::*;
+
+    #[test]
+    fn only_the_first_exit_request_is_held_for_the_sync_stop() {
+        assert!(begin_exit_sync_stop());
+        assert!(!begin_exit_sync_stop());
+        assert!(!begin_exit_sync_stop());
+    }
+
+    #[tokio::test]
+    async fn exit_sync_stop_without_a_session_returns_at_once() {
+        let state = matrix::auth::MatrixAuthState::new();
+        let started = std::time::Instant::now();
+        assert!(!state.stop_sync_for_exit(EXIT_SYNC_STOP_BOUND).await);
+        assert!(started.elapsed() < EXIT_SYNC_STOP_BOUND);
+    }
+
+    #[tokio::test]
+    async fn exit_sync_stop_gives_up_when_the_session_lock_is_held() {
+        let state = std::sync::Arc::new(matrix::auth::MatrixAuthState::new());
+        let _held = state.hold_session_lock_for_test().await;
+        let bound = std::time::Duration::from_millis(100);
+        let started = std::time::Instant::now();
+        assert!(!state.stop_sync_for_exit(bound).await);
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
+    }
+
+    #[test]
+    fn window_setup_does_not_wait_for_the_secure_store_probe() {
+        let source = include_str!("lib.rs");
+        let setup = source
+            .split("let bridge_script = format!(")
+            .nth(1)
+            .and_then(|rest| rest.split(");").next())
+            .expect("bridge script");
+        assert!(setup.contains("supportsSecureSecretStore = false"));
+        assert!(!setup.contains("secret_store"));
+        assert!(source.contains("desktop::warm_secret_store_status();"));
+        let desktop = include_str!("desktop.rs");
+        assert!(desktop.contains("pub async fn desktop_secret_store_status()"));
+        assert!(desktop
+            .contains("spawn_blocking(crate::desktop_secret_store::platform_secret_store_status)"));
+    }
 }
 
 #[cfg(test)]
 mod protocol_path_tests {
-    use super::{decode_synara_media_path, timeline_media_content_type};
+    use super::{
+        decode_synara_media_path, split_thumbnail_hint, thumbnail_bucket,
+        timeline_media_content_type, SynaraThumbnailHint,
+    };
 
     #[test]
     fn timeline_media_requires_allowlisted_bytes_and_matching_mime() {
@@ -828,6 +980,51 @@ mod protocol_path_tests {
             timeline_media_content_type(b"# heading\n", Some("text/markdown")),
             None
         );
+    }
+
+    #[test]
+    fn media_protocol_thumbnail_hints_bucket_and_fail_closed() {
+        assert_eq!(
+            split_thumbnail_hint("timeline-media-ab"),
+            Some((None, "timeline-media-ab"))
+        );
+        assert_eq!(
+            split_thumbnail_hint("thumbnail/96x96/crop/mxc://example.org/avatar"),
+            Some((
+                Some(SynaraThumbnailHint {
+                    width: 96,
+                    height: 96,
+                    crop: true,
+                }),
+                "mxc://example.org/avatar"
+            ))
+        );
+        assert_eq!(
+            split_thumbnail_hint("thumbnail/100x70/scale/timeline-media-ab"),
+            Some((
+                Some(SynaraThumbnailHint {
+                    width: 128,
+                    height: 96,
+                    crop: false,
+                }),
+                "timeline-media-ab"
+            ))
+        );
+        assert_eq!(thumbnail_bucket(1), 32);
+        assert_eq!(thumbnail_bucket(96), 96);
+        assert_eq!(thumbnail_bucket(5000), 960);
+        for invalid in [
+            "thumbnail/",
+            "thumbnail/96x96/crop/",
+            "thumbnail/0x96/crop/mxc://example.org/a",
+            "thumbnail/96/crop/mxc://example.org/a",
+            "thumbnail/96x96/stretch/mxc://example.org/a",
+            "thumbnail/-1x96/crop/mxc://example.org/a",
+            "thumbnail/999999x96/crop/mxc://example.org/a",
+            "thumbnail/96x96/crop/thumbnail/96x96/crop/mxc://example.org/a",
+        ] {
+            assert_eq!(split_thumbnail_hint(invalid), None, "{invalid}");
+        }
     }
 
     #[test]

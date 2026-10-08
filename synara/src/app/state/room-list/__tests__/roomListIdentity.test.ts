@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import type { RoomSummary } from '../../../features/matrix-dto/room';
 import { sameNativeRoomListSnapshot, sameStringList } from '../roomList';
+import { EMPTY_ROOM_LIST_PRESENTATION } from '../roomListPresentation';
 
 const room = (overrides: Partial<RoomSummary> & Pick<RoomSummary, 'roomId'>): RoomSummary =>
   ({
@@ -35,12 +36,14 @@ test('sameNativeRoomListSnapshot ignores a new object with the same unread-beari
     sessionGeneration: 3,
     orderedRoomIds: ['!a'],
     rooms: [room({ roomId: '!a', unreadCount: 2, name: 'Room' })],
+    presentation: EMPTY_ROOM_LIST_PRESENTATION,
   };
   assert.equal(
     sameNativeRoomListSnapshot(snapshot, {
       sessionGeneration: 3,
       orderedRoomIds: ['!a'],
       rooms: [room({ roomId: '!a', unreadCount: 2, name: 'Room' })],
+      presentation: { ...EMPTY_ROOM_LIST_PRESENTATION },
     }),
     true
   );
@@ -49,6 +52,14 @@ test('sameNativeRoomListSnapshot ignores a new object with the same unread-beari
       sessionGeneration: 3,
       orderedRoomIds: ['!a'],
       rooms: [room({ roomId: '!a', unreadCount: 3, name: 'Room' })],
+      presentation: EMPTY_ROOM_LIST_PRESENTATION,
+    }),
+    false
+  );
+  assert.equal(
+    sameNativeRoomListSnapshot(snapshot, {
+      ...snapshot,
+      presentation: { ...EMPTY_ROOM_LIST_PRESENTATION, unreadTotal: 2 },
     }),
     false
   );

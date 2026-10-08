@@ -31,6 +31,7 @@ pub struct NativeThreadListRequest {
 }
 
 /// Native thread-list snapshot for one joined room.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeThreadListSnapshot {

@@ -32,12 +32,17 @@ export function inspectTypedRecoveryBoundaries({ udl, ffi }) {
   ffi = rustDeclarationSurface(ffi);
   const errors = [];
   for (const [method, argument, result, error] of operations) {
-    const signature = `[Async, Throws=${error}]\n  ${result} ${method}(string ${argument});`;
+    // `udl` is the FFI surface rendered from the pinned Swift golden; Swift
+    // has no typed throws, so the error type is checked on the Rust export.
+    const signature = `[Async, Throws] ${result} ${method}(string ${argument});`;
     if (!udl.includes(signature))
       errors.push(`${method} requires its dedicated typed UDL signature`);
     const start = ffi.indexOf(`    pub async fn ${method}(`);
     const end = ffi.indexOf("\n    }", start);
     const body = start >= 0 && end > start ? ffi.slice(start, end) : "";
+    if (!body.replace(/\s+/g, " ").includes(`-> Result<${result}, ${error}>`)) {
+      errors.push(`${method} requires its dedicated typed UDL signature`);
+    }
     if (!body.includes(`Zeroizing::new(${argument})`)) {
       errors.push(`${method} must retain recovery input in a zeroizing buffer`);
     }

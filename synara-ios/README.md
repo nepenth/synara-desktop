@@ -16,8 +16,9 @@ by old phase labels in planning files.
 - `../crates/synara-core/` owns Matrix lifecycle and domain behavior. Full iOS
   builds explicitly enable `full-uniffi` over shared `full-app` services.
 - `../crates/synara-nse-core/` exports the one-shot notification preview ABI.
-  Its Core dependency enables only `nse-preview`, keeping app command owners,
-  room-key forwarding and desktop capabilities out of the shipping extension.
+  Its Core dependency enables only `nse-preview`, keeping app command owners and
+  desktop capabilities out of the shipping extension. No graph compiles
+  automatic room-key forwarding; history comes from the encrypted key backup.
 - `../crates/synara-core-bindgen/` generates the Swift interface and
   XCFramework.
 - `SynaraCore` build products are generated locally and remain ignored.

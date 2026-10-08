@@ -8,7 +8,7 @@ import React, {
   useState,
 } from 'react';
 import { useMatch } from 'react-router-dom';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
+import { useNativeIdentity } from '../../state/nativeIdentity';
 import { APPROVALS_PATH } from '../../pages/paths';
 import {
   loadApprovalInbox,
@@ -48,10 +48,13 @@ export const ApprovalInboxContext = createContext<ApprovalInboxContextValue | un
 const ApprovalInboxSummaryContext = createContext<ApprovalInboxSummary | undefined>(undefined);
 
 export function ApprovalInboxProvider({ children }: { children: React.ReactNode }) {
-  const mx = useMatrixClient();
+  // An account change (login, logout, switch) starts a fresh projection so
+  // optimistic decisions never cross accounts.
+  const { userId, deviceId } = useNativeIdentity();
+  const account = useMemo(() => ({ userId, deviceId }), [userId, deviceId]);
   const onApprovalsPage = Boolean(useMatch({ path: APPROVALS_PATH, end: false }));
   const [visible, setVisible] = useState(() => document.visibilityState !== 'hidden');
-  const projection = useMemo(createApprovalInboxProjection, [mx]);
+  const projection = useMemo(createApprovalInboxProjection, [account]);
   const [, setRevision] = useState(0);
   const [error, setError] = useState<string>();
   const [now, setNow] = useState(Date.now);
@@ -101,7 +104,7 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
         const next = await loadApprovalInbox(undefined, discoveryActive.current);
         if (!cancelled) {
           const previousScope = projection.scope;
-          projection.receive(next, mx);
+          projection.receive(next, account);
           if (projection.scope !== previousScope) {
             releaseScope?.();
             releaseScope = activateApprovalDecisionScope(projection.scope);
@@ -173,7 +176,7 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
       document.removeEventListener('visibilitychange', visibility);
     };
     // Route changes adjust the discovery ref, not the account's projection.
-  }, [mx, projection]);
+  }, [account, projection]);
 
   const hasPending = snapshot?.items.some((item) => item.status === 'pending') ?? false;
   useEffect(() => {

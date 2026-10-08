@@ -60,212 +60,34 @@ jobs:
             exit 1
           fi
 
-  exact-tag-desktop-quality:
-    name: Exact-tag desktop and runtime validation
-    needs: [validate]
-    runs-on: ubuntu-22.04
-    timeout-minutes: 45
-    steps:
-      - name: Checkout tagged commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - name: Reuse proven Quality gate when this SHA already passed CI
-        id: reuse
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: node scripts/reuse-proven-quality-gate.mjs
-
-      - name: Setup Node.js and npm download cache
-        if: steps.reuse.outputs.reuse != 'true'
-        uses: ./.github/actions/setup-node
-
-      - name: Install Rust 1.96
-        if: steps.reuse.outputs.reuse != 'true'
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
-        with:
-          toolchain: 1.96
-
-      - name: Test Rust build input invalidation
-        if: steps.reuse.outputs.reuse != 'true'
-        run: |
-          rustc --edition=2021 --test src-tauri/build_support/build_inputs.rs -o "$RUNNER_TEMP/synara-build-input-tests"
-          "$RUNNER_TEMP/synara-build-input-tests"
-
-      - name: Install cargo-audit for exact-tag fallback
-        if: steps.reuse.outputs.reuse != 'true'
-        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2, pinned installer/checksums
-        with:
-          tool: cargo-audit@0.22.2
-          checksum: true
-          fallback: none
-
-      - name: Audit exact-tag Rust dependencies
-        if: steps.reuse.outputs.reuse != 'true'
-        run: cargo audit
-
-      - name: Cache Rust compilation
-        if: steps.reuse.outputs.reuse != 'true'
-        uses: ./.github/actions/setup-rust-cache
-        with:
-          family: validate-rust-desktop
-          save-cache: "false"
-
-      - name: Install Linux Tauri dependencies
-        if: steps.reuse.outputs.reuse != 'true'
-        run: scripts/install-linux-tauri-dependencies.sh
-
-      - name: Install desktop dependencies
-        if: steps.reuse.outputs.reuse != 'true'
-        run: npm ci
-
-      - name: Install runtime dependencies
-        if: steps.reuse.outputs.reuse != 'true'
-        run: npm ci
-        working-directory: synara
-
-      - name: Install Chromium and WebKit for release browser tests
-        if: steps.reuse.outputs.reuse != 'true'
-        run: npx playwright install --with-deps chromium webkit
-        working-directory: synara
-
-      - name: Check repository and release contracts
-        if: steps.reuse.outputs.reuse != 'true'
-        run: |
-          npm run check:repo-layout
-          npm run check:versions
-          npm run check:matrix-boundaries
-          npm run check:quality-gates
-          npm run check:synapse-harness
-          npm run check:production-smoke
-          npm run check:release-updater
-          node --test scripts/__tests__/*.test.mjs
-
-      - name: Check and test shared Rust workspace
-        if: steps.reuse.outputs.reuse != 'true'
-        env:
-          RUST_TEST_THREADS: 4
-        run: |
-          node scripts/check-synara-core-production-features.mjs
-          node scripts/check-synara-nse-core-production-features.mjs
-          cargo fmt --all -- --check
-          cargo clippy --locked -p synara-core -p synara-nse-core -p synara-core-bindgen --all-targets -- -D warnings
-          cargo check --locked -p synara-core -p synara-nse-core -p synara-core-bindgen
-          cargo test --locked -p synara-core -p synara-nse-core -p synara-core-bindgen
-
-      - name: Check and test Rust desktop shell
-        if: steps.reuse.outputs.reuse != 'true'
-        run: |
-          cargo fmt --check
-          cargo clippy --locked --all-targets -- -D warnings
-          cargo check --locked
-          cargo test --locked
-        working-directory: src-tauri
-
-      - name: Validate desktop runtime
-        if: steps.reuse.outputs.reuse != 'true'
-        run: |
-          npm run typecheck
-          npm run typecheck:modernization
-          npm run test:modernization
-          npm run test:browser:timeline
-          npm run test:browser:desktop-polish
-          npm run check:eslint
-          npm run check:prettier
-          npm run check:security
-        working-directory: synara
-
-  exact-tag-ios-quality:
-    name: Exact-tag iOS simulator tests
-    needs: [validate]
-    runs-on: macos-26
-    env:
-      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
-    # Exact-tag reruns the full simulator suite (unit + UI) on arm64.
-    timeout-minutes: 90
-    steps:
-      - name: Checkout tagged commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - name: Reuse proven Quality gate when this SHA already passed CI
-        id: reuse
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: node scripts/reuse-proven-quality-gate.mjs
-
-      - name: Install Rust 1.96 and Apple targets
-        if: steps.reuse.outputs.reuse != 'true'
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
-        with:
-          toolchain: 1.96
-          components: llvm-tools-preview
-          targets: aarch64-apple-ios-sim
-
-      - name: Cache Apple SynaraCore Rust compilation
-        if: steps.reuse.outputs.reuse != 'true'
-        uses: ./.github/actions/setup-rust-cache
-        with:
-          family: ci-synara-core-apple-simulator-arm64
-          save-cache: "false"
-
-      - name: Install XcodeGen
-        if: steps.reuse.outputs.reuse != 'true'
-        run: |
-          brew install xcodegen
-          test "$(xcodegen --version)" = "Version: 2.46.0"
-
-      - name: Restore native Xcode compilation cache
-        if: steps.reuse.outputs.reuse != 'true'
-        id: xcode_cache
-        uses: ./.github/actions/setup-xcode-cache
-
-      - name: Build and run unsigned simulator tests
-        if: steps.reuse.outputs.reuse != 'true'
-        run: scripts/ci-build.sh
-        working-directory: synara-ios
-        env:
-          RUN_IOS_TESTS: "1"
-          IOS_TEST_SUITE: all
-          SYNARA_CORE_APPLE_SLICES: simulator-arm64
-
-      - name: Upload exact-tag iOS result bundles
-        if: always() && steps.reuse.outputs.reuse != 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: exact-tag-ios-test-results
-          path: /private/tmp/synara-ios-results/*.xcresult
-          if-no-files-found: warn
-          retention-days: 30
-
+  # Tags are cut from main merges whose release PR already passed CI. The
+  # release reuses that proof instead of re-running the suite at the tag, and
+  # fails if the tagged commit (or the merged PR head) has no green gate.
   quality-gate:
-    name: Exact-tag quality gate
-    if: always()
-    needs: [validate, exact-tag-desktop-quality, exact-tag-ios-quality]
+    name: Require proven CI Quality gate
+    needs: [validate]
     runs-on: ubuntu-22.04
-    timeout-minutes: 5
+    timeout-minutes: 50
     steps:
-      - name: Require full validation at the tagged SHA
+      - name: Checkout tagged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require a green CI Quality gate for the tagged commit
         env:
-          TAG_RESULT: ${{ needs.validate.result }}
-          DESKTOP_RESULT: ${{ needs.exact-tag-desktop-quality.result }}
-          IOS_RESULT: ${{ needs.exact-tag-ios-quality.result }}
-        run: |
-          if [[ "$TAG_RESULT" != "success" || "$DESKTOP_RESULT" != "success" || "$IOS_RESULT" != "success" ]]; then
-            echo "Tag/version validation: $TAG_RESULT" >&2
-            echo "Desktop/runtime validation: $DESKTOP_RESULT" >&2
-            echo "iOS simulator tests: $IOS_RESULT" >&2
-            exit 1
-          fi
+          GH_TOKEN: ${{ github.token }}
+          SYNARA_QUALITY_GATE_WAIT_MINUTES: "45"
+        run: node scripts/reuse-proven-quality-gate.mjs --require
 
   linux-deb:
     name: Linux .deb release artifact
     if: startsWith(github.ref_name, 'v')
     runs-on: ubuntu-22.04
     timeout-minutes: 60
-    needs: [quality-gate]
+    # Builds produce artifacts only; publication waits for the quality gate.
+    needs: [validate]
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -312,6 +134,14 @@ jobs:
           path: target/release/bundle/deb/Synara_*.deb
           if-no-files-found: error
 
+      - name: Upload Linux release binary for the Arch package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: synara-linux-binary
+          path: target/release/synara
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Generate APT repository assets
         run: scripts/build-apt-repo.sh
 
@@ -322,73 +152,30 @@ jobs:
           path: dist/apt-repo/*
           if-no-files-found: error
 
+  # synara-desktop-bin repackages the binary the .deb job built, so Arch
+  # needs no second Rust compile or compiler cache.
   linux-arch:
     name: Linux pacman repo artifact
     if: startsWith(github.ref_name, 'v')
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 20
     container: archlinux:base-devel@sha256:8745817f349ed24373341ddb92776209eeec3f0364ea48f7f645ac5800d30a50
-    needs: [quality-gate]
+    needs: [linux-deb]
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install Arch build dependencies
-        run: |
-          pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm \
-            dbus \
-            enchant \
-            hunspell-en_us \
-            libsecret \
-            webkit2gtk-4.1 \
-            xdg-desktop-portal \
-            nodejs \
-            npm \
-            rustup \
-            base-devel \
-            pacman-contrib \
-            curl \
-            wget \
-            file \
-            openssl \
-            gst-plugins-good \
-            appmenu-gtk-module \
-            libayatana-appindicator \
-            librsvg \
-            xdotool
-          rustup toolchain install 1.96 --profile minimal --component rustfmt,clippy
-          rustup default 1.96
+      - name: Install Arch runtime dependencies
+        run: scripts/install-arch-package-dependencies.sh
 
-      - name: Setup pinned Node.js and npm download cache
-        uses: ./.github/actions/setup-node
-
-      - name: Restore Arch Rust compilation cache
-        uses: ./.github/actions/setup-rust-cache
+      - name: Download Linux release binary
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          family: release-linux-arch
-          save-cache: "false"
-
-      - name: Install desktop dependencies
-        run: npm ci
-
-      - name: Install runtime dependencies
-        run: npm ci
-        working-directory: synara
-
-      - name: Check version metadata
-        run: npm run check:versions
-
-      - name: Build Linux release binary
-        run: npm run tauri build -- --no-bundle
-        env:
-          NODE_OPTIONS: "--max_old_space_size=4096"
+          name: synara-linux-binary
+          path: target/release
 
       - name: Build Arch pacman package
-        run: |
-          useradd -m builder
-          chown -R builder:builder "$GITHUB_WORKSPACE"
-          su builder -c "cd '$GITHUB_WORKSPACE/packaging/arch' && makepkg -f --noconfirm"
+        run: scripts/build-arch-package.sh
 
       - name: Generate pacman repository assets
         run: scripts/build-pacman-repo.sh
@@ -404,8 +191,10 @@ jobs:
     name: macOS release artifacts
     if: startsWith(github.ref_name, 'v')
     runs-on: macos-15
-    timeout-minutes: 60
-    needs: [quality-gate]
+    # A cold universal build takes ~55 minutes; the nightly CI run keeps the
+    # release-macos cache warm so a normal release needs ~15.
+    timeout-minutes: 90
+    needs: [validate]
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -545,7 +334,17 @@ jobs:
           } } }));
           NODE
           )"
-          npm run tauri build -- --target universal-apple-darwin --bundles app,dmg --config "$config_json"
+          # Notarization is a network call to Apple that fails intermittently.
+          # A retry reuses the compiled target directory, so it repeats only
+          # bundling, signing and notarization (minutes, not a rebuild).
+          for attempt in 1 2 3; do
+            if npm run tauri build -- --target universal-apple-darwin --bundles app,dmg --config "$config_json"; then
+              exit 0
+            fi
+            echo "::warning::macOS bundle/sign/notarize attempt ${attempt} failed"
+            sleep $((attempt * 60))
+          done
+          exit 1
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -603,6 +402,7 @@ jobs:
             --team "$APPLE_TEAM_ID" --identity "$APPLE_SIGNING_IDENTITY" --app "$extract_dir/Synara.app"
 
       - name: Notarize and staple macOS DMG
+        shell: bash
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
@@ -614,17 +414,25 @@ jobs:
             exit 1
           fi
 
+          retry() {
+            local attempt
+            for attempt in 1 2 3; do
+              if "$@"; then
+                return 0
+              fi
+              echo "::warning::attempt ${attempt} of: $1 $2 failed"
+              sleep $((attempt * 30))
+            done
+            return 1
+          }
+
           echo "Submitting for notarization..."
-          xcrun notarytool submit "$dmg_path" \
+          retry xcrun notarytool submit "$dmg_path" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
-            --wait 2>&1 | tee /tmp/notary.log || {
-              echo "Notarization submit failed or timed; check log"
-              cat /tmp/notary.log || true
-              exit 1
-            }
-          xcrun stapler staple "$dmg_path"
+            --wait
+          retry xcrun stapler staple "$dmg_path"
 
       - name: Verify macOS notarization staple
         run: |
@@ -1041,6 +849,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     needs:
+      - quality-gate
       - linux-deb
       - linux-arch
       - macos

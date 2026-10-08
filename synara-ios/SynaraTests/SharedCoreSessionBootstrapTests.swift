@@ -1,12 +1,13 @@
 import XCTest
 @testable import Synara
+import SynaraCore
 
 final class SharedCoreSessionBootstrapTests: XCTestCase {
     func testLoginPathSkipsRestoreThenAttachAndStart() async throws {
         let engine = MockLiveSessionEngine(
             restoreResult: .failure(.failed(code: SharedCoreSessionBootstrap.alreadyRestoredCode)),
             attachResult: .success(()),
-            startResults: [.success(.init(started: true, readiness: "running"))]
+            startResults: [.success(.init(started: true, readiness: .running))]
         )
 
         let outcome = await prepare(engine: engine)
@@ -16,7 +17,7 @@ final class SharedCoreSessionBootstrapTests: XCTestCase {
         XCTAssertTrue(outcome.skippedRestore)
         XCTAssertTrue(outcome.attached)
         XCTAssertTrue(outcome.started)
-        XCTAssertEqual(outcome.readiness, "running")
+        XCTAssertEqual(outcome.readiness, .running)
         XCTAssertNil(outcome.failure)
         XCTAssertTrue(outcome.hasLiveClient)
         assertPrivacySafe(outcome)
@@ -26,7 +27,7 @@ final class SharedCoreSessionBootstrapTests: XCTestCase {
         let engine = MockLiveSessionEngine(
             restoreResult: .success(()),
             attachResult: .success(()),
-            startResults: [.success(.init(started: true, readiness: "running"))]
+            startResults: [.success(.init(started: true, readiness: .running))]
         )
 
         let outcome = await prepare(engine: engine)
@@ -36,7 +37,7 @@ final class SharedCoreSessionBootstrapTests: XCTestCase {
         XCTAssertFalse(outcome.skippedRestore)
         XCTAssertTrue(outcome.attached)
         XCTAssertTrue(outcome.started)
-        XCTAssertEqual(outcome.readiness, "running")
+        XCTAssertEqual(outcome.readiness, .running)
         XCTAssertNil(outcome.failure)
         assertPrivacySafe(outcome)
     }
@@ -46,12 +47,12 @@ final class SharedCoreSessionBootstrapTests: XCTestCase {
             restoreResult: .success(()),
             attachResult: .success(()),
             startResults: [
-                .success(.init(started: false, readiness: "idle")),
-                .success(.init(started: false, readiness: "idle"))
+                .success(.init(started: false, readiness: .idle)),
+                .success(.init(started: false, readiness: .idle))
             ],
             observeResults: [
-                .success(.init(started: false, readiness: "idle")),
-                .success(.init(started: false, readiness: "idle"))
+                .success(.init(started: false, readiness: .idle)),
+                .success(.init(started: false, readiness: .idle))
             ]
         )
 
@@ -61,7 +62,7 @@ final class SharedCoreSessionBootstrapTests: XCTestCase {
         XCTAssertTrue(outcome.restored)
         XCTAssertTrue(outcome.attached)
         XCTAssertFalse(outcome.started)
-        XCTAssertEqual(outcome.readiness, "idle")
+        XCTAssertEqual(outcome.readiness, .idle)
         XCTAssertEqual(outcome.failure, .startFailed)
         XCTAssertEqual(outcome.failure?.syncStatus, .disconnected)
         assertPrivacySafe(outcome)
@@ -71,15 +72,15 @@ final class SharedCoreSessionBootstrapTests: XCTestCase {
         let engine = MockLiveSessionEngine(
             restoreResult: .success(()),
             attachResult: .success(()),
-            startResults: [.success(.init(started: false, readiness: "idle"))],
-            observeResults: [.success(.init(started: false, readiness: "running"))]
+            startResults: [.success(.init(started: false, readiness: .idle))],
+            observeResults: [.success(.init(started: false, readiness: .running))]
         )
 
         let outcome = await prepare(engine: engine, observeAttempts: 2)
 
         XCTAssertEqual(engine.calls, [.restore, .attach, .start, .start, .observe])
         XCTAssertTrue(outcome.started)
-        XCTAssertEqual(outcome.readiness, "running")
+        XCTAssertEqual(outcome.readiness, .running)
         XCTAssertNil(outcome.failure)
         assertPrivacySafe(outcome)
     }
@@ -88,7 +89,7 @@ final class SharedCoreSessionBootstrapTests: XCTestCase {
         let engine = MockLiveSessionEngine(
             restoreResult: .failure(.failed(code: "p4-s3b-restore-failed")),
             attachResult: .success(()),
-            startResults: [.success(.init(started: true, readiness: "running"))]
+            startResults: [.success(.init(started: true, readiness: .running))]
         )
 
         let outcome = await prepare(engine: engine)
@@ -109,7 +110,7 @@ final class SharedCoreSessionBootstrapTests: XCTestCase {
         let engine = MockLiveSessionEngine(
             restoreResult: .failure(.failed(code: "p4-s3b-session-material-missing")),
             attachResult: .success(()),
-            startResults: [.success(.init(started: true, readiness: "running"))]
+            startResults: [.success(.init(started: true, readiness: .running))]
         )
 
         let outcome = await prepare(engine: engine)
@@ -124,7 +125,7 @@ final class SharedCoreSessionBootstrapTests: XCTestCase {
         let engine = MockLiveSessionEngine(
             restoreResult: .success(()),
             attachResult: .failure(.failed(code: "p4-s3d-attach-failed")),
-            startResults: [.success(.init(started: true, readiness: "running"))]
+            startResults: [.success(.init(started: true, readiness: .running))]
         )
 
         let outcome = await prepare(engine: engine)
@@ -144,7 +145,7 @@ final class SharedCoreSessionBootstrapTests: XCTestCase {
         let engine = MockLiveSessionEngine(
             restoreResult: .failure(.failed(code: SharedCoreSessionBootstrap.alreadyRestoredCode)),
             attachResult: .failure(.failed(code: SharedCoreSessionBootstrap.alreadyAttachedCode)),
-            startResults: [.success(.init(started: true, readiness: "running"))]
+            startResults: [.success(.init(started: true, readiness: .running))]
         )
 
         let outcome = await prepare(engine: engine)
@@ -183,8 +184,8 @@ final class SharedCoreSessionBootstrapTests: XCTestCase {
             restoreResult: .success(()),
             attachResult: .success(()),
             startResults: [
-                .success(.init(started: false, readiness: "failed")),
-                .success(.init(started: true, readiness: "running"))
+                .success(.init(started: false, readiness: .failed)),
+                .success(.init(started: true, readiness: .running))
             ]
         )
 
@@ -192,7 +193,7 @@ final class SharedCoreSessionBootstrapTests: XCTestCase {
 
         XCTAssertEqual(engine.calls, [.restore, .attach, .start, .start])
         XCTAssertTrue(outcome.started)
-        XCTAssertEqual(outcome.readiness, "running")
+        XCTAssertEqual(outcome.readiness, .running)
         XCTAssertNil(outcome.failure)
         assertPrivacySafe(outcome)
     }
@@ -201,7 +202,7 @@ final class SharedCoreSessionBootstrapTests: XCTestCase {
         let engine = MockLiveSessionEngine(
             restoreResult: .failure(.failed(code: "p4-s3b-restore-failed")),
             attachResult: .success(()),
-            startResults: [.success(.init(started: true, readiness: "running"))]
+            startResults: [.success(.init(started: true, readiness: .running))]
         )
 
         let outcome = await SharedCoreSessionBootstrap.prepareLiveSession(
@@ -297,7 +298,7 @@ private final class MockLiveSessionEngine: LiveSessionEngine, @unchecked Sendabl
     func observeSync() async throws -> SharedCoreSessionBootstrap.StartResult {
         calls.append(.observe)
         guard observeResults.isEmpty == false else {
-            return SharedCoreSessionBootstrap.StartResult(started: false, readiness: "idle")
+            return SharedCoreSessionBootstrap.StartResult(started: false, readiness: .idle)
         }
         return try observeResults.removeFirst().get()
     }

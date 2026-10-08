@@ -4,7 +4,7 @@ use super::*;
 
 /// Privacy-safe reaction count on a view row. Senders are user ids and
 /// optional annotation ids only; no tokens or ciphertext.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineViewReactionDto {
     pub key: String,
     pub count: u32,
@@ -13,14 +13,14 @@ pub struct TimelineViewReactionDto {
 }
 
 /// Privacy-safe reaction sender. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineReactionSenderDto {
     pub user_id: String,
     pub reaction_event_id: Option<String>,
 }
 
 /// Privacy-safe aggregated reaction. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineReactionDto {
     pub key: String,
     pub count: u32,
@@ -29,7 +29,7 @@ pub struct TimelineReactionDto {
 }
 
 /// Privacy-safe reaction mutation ack from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineReactionMutationDto {
     pub room_id: String,
     pub target_event_id: String,
@@ -38,17 +38,27 @@ pub struct TimelineReactionMutationDto {
     pub readback: Option<TimelineReactionDto>,
 }
 
+super::wire_enum::wire_enum! {
+    pub enum AgentApprovalDecisionStatusDto {
+        Applied => "applied",
+        AlreadyDecided => "already_decided",
+    }
+}
+super::wire_enum::wire_enum_from!(crate::app::agent_approvals::AgentApprovalDecisionStatus => AgentApprovalDecisionStatusDto {
+    Applied, AlreadyDecided
+});
+
 /// Privacy-safe result of the shared-core approval decision route.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct AgentApprovalDecisionDto {
     pub room_id: String,
     pub event_id: String,
-    pub status: String,
+    pub status: AgentApprovalDecisionStatusDto,
     pub reaction: Option<TimelineReactionMutationDto>,
 }
 
 /// Static fail-closed timeline reaction error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum TimelineReactionError {
     Failed { code: String, description: String },
 }
@@ -64,7 +74,7 @@ impl std::fmt::Display for TimelineReactionError {
 impl std::error::Error for TimelineReactionError {}
 
 /// Privacy-safe composer reply-draft preview. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ComposerReplyDraftPreviewDto {
     pub event_id: String,
     pub sender_id: String,
@@ -74,16 +84,16 @@ pub struct ComposerReplyDraftPreviewDto {
 }
 
 /// Privacy-safe composer reply-draft readback from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ComposerReplyDraftDto {
     pub schema_version: u32,
     pub room_id: String,
-    pub status: String,
+    pub status: ComposerDraftStatusDto,
     pub draft: Option<ComposerReplyDraftPreviewDto>,
 }
 
 /// Static fail-closed composer reply-draft error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum ComposerReplyDraftError {
     Failed { code: String, description: String },
 }
@@ -99,23 +109,23 @@ impl std::fmt::Display for ComposerReplyDraftError {
 impl std::error::Error for ComposerReplyDraftError {}
 
 /// Privacy-safe send-text write ack from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SendTextDto {
     pub room_id: String,
     pub event_id: String,
     pub local_txn_id: String,
-    pub status: String,
+    pub status: SendStatusDto,
 }
 
 /// Privacy-safe agent-approval write acknowledgement.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct AgentApprovalSendDto {
     pub event_id: String,
     pub status: String,
 }
 
 /// Static fail-closed agent-approval error. Input values are never echoed.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum AgentApprovalSendError {
     Failed { code: String, description: String },
 }
@@ -131,7 +141,7 @@ impl std::fmt::Display for AgentApprovalSendError {
 impl std::error::Error for AgentApprovalSendError {}
 
 /// Static fail-closed send-text error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SendTextError {
     Failed { code: String, description: String },
 }
@@ -147,15 +157,15 @@ impl std::fmt::Display for SendTextError {
 impl std::error::Error for SendTextError {}
 
 /// Privacy-safe send-poll write ack from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SendPollDto {
     pub room_id: String,
     pub event_id: String,
-    pub status: String,
+    pub status: SendStatusDto,
 }
 
 /// Static fail-closed send-poll error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SendPollError {
     Failed { code: String, description: String },
 }
@@ -171,16 +181,16 @@ impl std::fmt::Display for SendPollError {
 impl std::error::Error for SendPollError {}
 
 /// Privacy-safe edit-message write ack from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct EditMessageDto {
     pub room_id: String,
     pub event_id: String,
     pub local_txn_id: String,
-    pub status: String,
+    pub status: SendStatusDto,
 }
 
 /// Static fail-closed edit-message error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum EditMessageError {
     Failed { code: String, description: String },
 }
@@ -196,16 +206,16 @@ impl std::fmt::Display for EditMessageError {
 impl std::error::Error for EditMessageError {}
 
 /// Privacy-safe poll-respond write ack from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PollRespondDto {
     pub room_id: String,
     pub poll_event_id: String,
     pub event_id: String,
-    pub status: String,
+    pub status: SendStatusDto,
 }
 
 /// Static fail-closed poll-respond error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum PollRespondError {
     Failed { code: String, description: String },
 }
@@ -220,18 +230,50 @@ impl std::fmt::Display for PollRespondError {
 
 impl std::error::Error for PollRespondError {}
 
+super::wire_enum::wire_enum! {
+    /// Timeline write that a readback reports.
+    pub enum TimelineActionKindDto {
+        EditText => "edit_text",
+        Redact => "redact",
+        ForwardText => "forward_text",
+        ForwardMedia => "forward_media",
+        Report => "report",
+        Pin => "pin",
+        Unpin => "unpin",
+        PollVote => "poll_vote",
+        CallDecline => "call_decline",
+    }
+}
+
+super::wire_enum::wire_enum! {
+    /// Outcome of a timeline write. `queued` means Core's send queue still
+    /// holds the write and will retry it in order.
+    pub enum TimelineActionStatusDto {
+        Sent => "sent",
+        Queued => "queued",
+        Redacted => "redacted",
+        Reported => "reported",
+        Pinned => "pinned",
+        Unpinned => "unpinned",
+        AlreadyPinned => "already_pinned",
+        AlreadyUnpinned => "already_unpinned",
+        Voted => "voted",
+        Declined => "declined",
+    }
+}
+
 /// Privacy-safe timeline edit/redact/report write ack from the registered Core commands.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineMutateDto {
     pub schema_version: u32,
-    pub action: String,
+    pub action: TimelineActionKindDto,
     pub room_id: String,
     pub event_id: String,
-    pub status: String,
+    pub status: TimelineActionStatusDto,
 }
 
 /// Static fail-closed timeline edit/redact/report error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum TimelineMutateError {
     Failed { code: String, description: String },
 }
@@ -247,17 +289,17 @@ impl std::fmt::Display for TimelineMutateError {
 impl std::error::Error for TimelineMutateError {}
 
 /// Privacy-safe timeline pin/unpin write ack from the registered Core commands.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelinePinDto {
     pub schema_version: u32,
-    pub action: String,
+    pub action: TimelineActionKindDto,
     pub room_id: String,
     pub event_id: String,
-    pub status: String,
+    pub status: TimelineActionStatusDto,
 }
 
 /// Static fail-closed timeline pin/unpin error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum TimelinePinError {
     Failed { code: String, description: String },
 }
@@ -274,18 +316,18 @@ impl std::error::Error for TimelinePinError {}
 
 /// Privacy-safe timeline poll-vote / call-decline write ack from the
 /// registered Core commands.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineVoteDeclineDto {
     pub schema_version: u32,
-    pub action: String,
+    pub action: TimelineActionKindDto,
     pub room_id: String,
     pub event_id: String,
-    pub status: String,
+    pub status: TimelineActionStatusDto,
 }
 
 /// Static fail-closed timeline poll-vote / call-decline error. Fields are
 /// source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum TimelineVoteDeclineError {
     Failed { code: String, description: String },
 }
@@ -301,17 +343,17 @@ impl std::fmt::Display for TimelineVoteDeclineError {
 impl std::error::Error for TimelineVoteDeclineError {}
 
 /// Privacy-safe timeline forward write ack from the registered Core commands.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineForwardDto {
     pub schema_version: u32,
-    pub action: String,
+    pub action: TimelineActionKindDto,
     pub room_id: String,
     pub event_id: String,
-    pub status: String,
+    pub status: TimelineActionStatusDto,
 }
 
 /// Static fail-closed timeline forward error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum TimelineForwardError {
     Failed { code: String, description: String },
 }
@@ -481,27 +523,12 @@ pub(super) fn map_composer_reply_draft_core_error(
     }
 }
 
-pub(super) fn composer_reply_draft_envelope_payload(
-    payload: serde_json::Value,
-) -> Result<serde_json::Value, ComposerReplyDraftError> {
-    let size = serde_json::to_vec(&payload)
-        .map(|bytes| bytes.len())
-        .unwrap_or(usize::MAX);
-    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
-        return Err(composer_reply_draft_failed(
-            COMPOSER_REPLY_DRAFT_FAILED_CODE,
-            COMPOSER_REPLY_DRAFT_FAILED_DESCRIPTION,
-        ));
-    }
-    Ok(payload)
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct ComposerReplyDraftReadbackWire {
     pub(super) schema_version: u32,
     pub(super) room_id: String,
-    pub(super) status: String,
+    pub(super) status: crate::dto::ComposerDraftStatus,
     #[serde(default)]
     pub(super) draft: Option<NativeComposerReplyDraft>,
 }
@@ -524,7 +551,7 @@ pub(super) fn composer_reply_draft_dto(
     ComposerReplyDraftDto {
         schema_version: readback.schema_version,
         room_id: readback.room_id,
-        status: readback.status,
+        status: readback.status.into(),
         draft: readback.draft.map(composer_reply_draft_preview_dto),
     }
 }
@@ -567,28 +594,13 @@ pub(super) fn map_send_text_core_error(
     }
 }
 
-pub(super) fn send_text_envelope_payload(
-    payload: serde_json::Value,
-) -> Result<serde_json::Value, SendTextError> {
-    let size = serde_json::to_vec(&payload)
-        .map(|bytes| bytes.len())
-        .unwrap_or(usize::MAX);
-    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
-        return Err(send_text_failed(
-            SEND_TEXT_FAILED_CODE,
-            SEND_TEXT_FAILED_DESCRIPTION,
-        ));
-    }
-    Ok(payload)
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct SendTextResultWire {
     pub(super) room_id: String,
     pub(super) event_id: String,
     pub(super) local_txn_id: String,
-    pub(super) status: String,
+    pub(super) status: crate::dto::SendStatus,
 }
 
 pub(super) fn send_text_dto(result: SendTextResultWire) -> SendTextDto {
@@ -596,7 +608,7 @@ pub(super) fn send_text_dto(result: SendTextResultWire) -> SendTextDto {
         room_id: result.room_id,
         event_id: result.event_id,
         local_txn_id: result.local_txn_id,
-        status: result.status,
+        status: result.status.into(),
     }
 }
 
@@ -627,34 +639,19 @@ pub(super) fn map_send_poll_core_error(
     }
 }
 
-pub(super) fn send_poll_envelope_payload(
-    payload: serde_json::Value,
-) -> Result<serde_json::Value, SendPollError> {
-    let size = serde_json::to_vec(&payload)
-        .map(|bytes| bytes.len())
-        .unwrap_or(usize::MAX);
-    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
-        return Err(send_poll_failed(
-            SEND_POLL_FAILED_CODE,
-            SEND_POLL_FAILED_DESCRIPTION,
-        ));
-    }
-    Ok(payload)
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct SendPollResultWire {
     pub(super) room_id: String,
     pub(super) event_id: String,
-    pub(super) status: String,
+    pub(super) status: crate::dto::SendStatus,
 }
 
 pub(super) fn send_poll_dto(result: SendPollResultWire) -> SendPollDto {
     SendPollDto {
         room_id: result.room_id,
         event_id: result.event_id,
-        status: result.status,
+        status: result.status.into(),
     }
 }
 
@@ -686,28 +683,13 @@ pub(super) fn map_edit_message_core_error(
     }
 }
 
-pub(super) fn edit_message_envelope_payload(
-    payload: serde_json::Value,
-) -> Result<serde_json::Value, EditMessageError> {
-    let size = serde_json::to_vec(&payload)
-        .map(|bytes| bytes.len())
-        .unwrap_or(usize::MAX);
-    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
-        return Err(edit_message_failed(
-            EDIT_MESSAGE_FAILED_CODE,
-            EDIT_MESSAGE_FAILED_DESCRIPTION,
-        ));
-    }
-    Ok(payload)
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct EditMessageResultWire {
     pub(super) room_id: String,
     pub(super) event_id: String,
     pub(super) local_txn_id: String,
-    pub(super) status: String,
+    pub(super) status: crate::dto::SendStatus,
 }
 
 pub(super) fn edit_message_dto(result: EditMessageResultWire) -> EditMessageDto {
@@ -715,7 +697,7 @@ pub(super) fn edit_message_dto(result: EditMessageResultWire) -> EditMessageDto 
         room_id: result.room_id,
         event_id: result.event_id,
         local_txn_id: result.local_txn_id,
-        status: result.status,
+        status: result.status.into(),
     }
 }
 
@@ -745,28 +727,13 @@ pub(super) fn map_poll_respond_core_error(
     }
 }
 
-pub(super) fn poll_respond_envelope_payload(
-    payload: serde_json::Value,
-) -> Result<serde_json::Value, PollRespondError> {
-    let size = serde_json::to_vec(&payload)
-        .map(|bytes| bytes.len())
-        .unwrap_or(usize::MAX);
-    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
-        return Err(poll_respond_failed(
-            POLL_RESPOND_FAILED_CODE,
-            POLL_RESPOND_FAILED_DESCRIPTION,
-        ));
-    }
-    Ok(payload)
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct PollRespondResultWire {
     pub(super) room_id: String,
     pub(super) poll_event_id: String,
     pub(super) event_id: String,
-    pub(super) status: String,
+    pub(super) status: crate::dto::SendStatus,
 }
 
 pub(super) fn poll_respond_dto(result: PollRespondResultWire) -> PollRespondDto {
@@ -774,7 +741,7 @@ pub(super) fn poll_respond_dto(result: PollRespondResultWire) -> PollRespondDto 
         room_id: result.room_id,
         poll_event_id: result.poll_event_id,
         event_id: result.event_id,
-        status: result.status,
+        status: result.status.into(),
     }
 }
 
@@ -811,21 +778,6 @@ pub(super) fn map_timeline_mutate_core_error(
     }
 }
 
-pub(super) fn timeline_mutate_envelope_payload(
-    payload: serde_json::Value,
-) -> Result<serde_json::Value, TimelineMutateError> {
-    let size = serde_json::to_vec(&payload)
-        .map(|bytes| bytes.len())
-        .unwrap_or(usize::MAX);
-    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
-        return Err(timeline_mutate_failed(
-            TIMELINE_MUTATE_FAILED_CODE,
-            TIMELINE_MUTATE_FAILED_DESCRIPTION,
-        ));
-    }
-    Ok(payload)
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct TimelineMutateResultWire {
@@ -836,20 +788,22 @@ pub(super) struct TimelineMutateResultWire {
     pub(super) status: String,
 }
 
-pub(super) fn closed_timeline_mutate_action(value: &str) -> Option<&'static str> {
+pub(super) fn closed_timeline_mutate_action(value: &str) -> Option<TimelineActionKindDto> {
     match value {
-        "edit_text" => Some("edit_text"),
-        "redact" => Some("redact"),
-        "report" => Some("report"),
+        "edit_text" => Some(TimelineActionKindDto::EditText),
+        "redact" => Some(TimelineActionKindDto::Redact),
+        "report" => Some(TimelineActionKindDto::Report),
         _ => None,
     }
 }
 
-pub(super) fn closed_timeline_mutate_status(value: &str) -> Option<&'static str> {
+pub(super) fn closed_timeline_mutate_status(value: &str) -> Option<TimelineActionStatusDto> {
     match value {
-        "sent" => Some("sent"),
-        "redacted" => Some("redacted"),
-        "reported" => Some("reported"),
+        "sent" => Some(TimelineActionStatusDto::Sent),
+        // An edit the SDK still holds; it keeps retrying in order.
+        "queued" => Some(TimelineActionStatusDto::Queued),
+        "redacted" => Some(TimelineActionStatusDto::Redacted),
+        "reported" => Some(TimelineActionStatusDto::Reported),
         _ => None,
     }
 }
@@ -871,10 +825,10 @@ pub(super) fn timeline_mutate_dto(
     })?;
     Ok(TimelineMutateDto {
         schema_version: result.schema_version,
-        action: action.to_owned(),
+        action,
         room_id: result.room_id,
         event_id: result.event_id,
-        status: status.to_owned(),
+        status,
     })
 }
 
@@ -906,21 +860,6 @@ pub(super) fn map_timeline_pin_core_error(
     }
 }
 
-pub(super) fn timeline_pin_envelope_payload(
-    payload: serde_json::Value,
-) -> Result<serde_json::Value, TimelinePinError> {
-    let size = serde_json::to_vec(&payload)
-        .map(|bytes| bytes.len())
-        .unwrap_or(usize::MAX);
-    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
-        return Err(timeline_pin_failed(
-            TIMELINE_PIN_FAILED_CODE,
-            TIMELINE_PIN_FAILED_DESCRIPTION,
-        ));
-    }
-    Ok(payload)
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct TimelinePinResultWire {
@@ -931,20 +870,20 @@ pub(super) struct TimelinePinResultWire {
     pub(super) status: String,
 }
 
-pub(super) fn closed_timeline_pin_action(value: &str) -> Option<&'static str> {
+pub(super) fn closed_timeline_pin_action(value: &str) -> Option<TimelineActionKindDto> {
     match value {
-        "pin" => Some("pin"),
-        "unpin" => Some("unpin"),
+        "pin" => Some(TimelineActionKindDto::Pin),
+        "unpin" => Some(TimelineActionKindDto::Unpin),
         _ => None,
     }
 }
 
-pub(super) fn closed_timeline_pin_status(value: &str) -> Option<&'static str> {
+pub(super) fn closed_timeline_pin_status(value: &str) -> Option<TimelineActionStatusDto> {
     match value {
-        "pinned" => Some("pinned"),
-        "unpinned" => Some("unpinned"),
-        "already_pinned" => Some("already_pinned"),
-        "already_unpinned" => Some("already_unpinned"),
+        "pinned" => Some(TimelineActionStatusDto::Pinned),
+        "unpinned" => Some(TimelineActionStatusDto::Unpinned),
+        "already_pinned" => Some(TimelineActionStatusDto::AlreadyPinned),
+        "already_unpinned" => Some(TimelineActionStatusDto::AlreadyUnpinned),
         _ => None,
     }
 }
@@ -960,10 +899,10 @@ pub(super) fn timeline_pin_dto(
     })?;
     Ok(TimelinePinDto {
         schema_version: result.schema_version,
-        action: action.to_owned(),
+        action,
         room_id: result.room_id,
         event_id: result.event_id,
-        status: status.to_owned(),
+        status,
     })
 }
 
@@ -1001,21 +940,6 @@ pub(super) fn map_timeline_vote_decline_core_error(
     }
 }
 
-pub(super) fn timeline_vote_decline_envelope_payload(
-    payload: serde_json::Value,
-) -> Result<serde_json::Value, TimelineVoteDeclineError> {
-    let size = serde_json::to_vec(&payload)
-        .map(|bytes| bytes.len())
-        .unwrap_or(usize::MAX);
-    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
-        return Err(timeline_vote_decline_failed(
-            TIMELINE_VOTE_DECLINE_FAILED_CODE,
-            TIMELINE_VOTE_DECLINE_FAILED_DESCRIPTION,
-        ));
-    }
-    Ok(payload)
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct TimelineVoteDeclineResultWire {
@@ -1026,18 +950,19 @@ pub(super) struct TimelineVoteDeclineResultWire {
     pub(super) status: String,
 }
 
-pub(super) fn closed_timeline_vote_decline_action(value: &str) -> Option<&'static str> {
+pub(super) fn closed_timeline_vote_decline_action(value: &str) -> Option<TimelineActionKindDto> {
     match value {
-        "poll_vote" => Some("poll_vote"),
-        "call_decline" => Some("call_decline"),
+        "poll_vote" => Some(TimelineActionKindDto::PollVote),
+        "call_decline" => Some(TimelineActionKindDto::CallDecline),
         _ => None,
     }
 }
 
-pub(super) fn closed_timeline_vote_decline_status(value: &str) -> Option<&'static str> {
+pub(super) fn closed_timeline_vote_decline_status(value: &str) -> Option<TimelineActionStatusDto> {
     match value {
-        "voted" => Some("voted"),
-        "declined" => Some("declined"),
+        "voted" => Some(TimelineActionStatusDto::Voted),
+        "queued" => Some(TimelineActionStatusDto::Queued),
+        "declined" => Some(TimelineActionStatusDto::Declined),
         _ => None,
     }
 }
@@ -1059,10 +984,10 @@ pub(super) fn timeline_vote_decline_dto(
     })?;
     Ok(TimelineVoteDeclineDto {
         schema_version: result.schema_version,
-        action: action.to_owned(),
+        action,
         room_id: result.room_id,
         event_id: result.event_id,
-        status: status.to_owned(),
+        status,
     })
 }
 
@@ -1099,21 +1024,6 @@ pub(super) fn map_timeline_forward_core_error(
     }
 }
 
-pub(super) fn timeline_forward_envelope_payload(
-    payload: serde_json::Value,
-) -> Result<serde_json::Value, TimelineForwardError> {
-    let size = serde_json::to_vec(&payload)
-        .map(|bytes| bytes.len())
-        .unwrap_or(usize::MAX);
-    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
-        return Err(timeline_forward_failed(
-            TIMELINE_FORWARD_FAILED_CODE,
-            TIMELINE_FORWARD_FAILED_DESCRIPTION,
-        ));
-    }
-    Ok(payload)
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct TimelineForwardResultWire {
@@ -1124,17 +1034,18 @@ pub(super) struct TimelineForwardResultWire {
     pub(super) status: String,
 }
 
-pub(super) fn closed_timeline_forward_action(value: &str) -> Option<&'static str> {
+pub(super) fn closed_timeline_forward_action(value: &str) -> Option<TimelineActionKindDto> {
     match value {
-        "forward_text" => Some("forward_text"),
-        "forward_media" => Some("forward_media"),
+        "forward_text" => Some(TimelineActionKindDto::ForwardText),
+        "forward_media" => Some(TimelineActionKindDto::ForwardMedia),
         _ => None,
     }
 }
 
-pub(super) fn closed_timeline_forward_status(value: &str) -> Option<&'static str> {
+pub(super) fn closed_timeline_forward_status(value: &str) -> Option<TimelineActionStatusDto> {
     match value {
-        "sent" => Some("sent"),
+        "sent" => Some(TimelineActionStatusDto::Sent),
+        "queued" => Some(TimelineActionStatusDto::Queued),
         _ => None,
     }
 }
@@ -1156,13 +1067,266 @@ pub(super) fn timeline_forward_dto(
     })?;
     Ok(TimelineForwardDto {
         schema_version: result.schema_version,
-        action: action.to_owned(),
+        action,
         room_id: result.room_id,
         event_id: result.event_id,
-        status: status.to_owned(),
+        status,
     })
 }
 
+impl From<crate::app::timeline::NativeTimelineActionReadback> for TimelineMutateResultWire {
+    fn from(readback: crate::app::timeline::NativeTimelineActionReadback) -> Self {
+        Self {
+            schema_version: readback.schema_version,
+            action: readback.action.as_str().to_owned(),
+            room_id: readback.room_id,
+            event_id: readback.event_id,
+            status: readback.status,
+        }
+    }
+}
+
+impl From<crate::app::timeline::NativeTimelineActionReadback> for TimelinePinResultWire {
+    fn from(readback: crate::app::timeline::NativeTimelineActionReadback) -> Self {
+        Self {
+            schema_version: readback.schema_version,
+            action: readback.action.as_str().to_owned(),
+            room_id: readback.room_id,
+            event_id: readback.event_id,
+            status: readback.status,
+        }
+    }
+}
+
+impl From<crate::app::timeline::NativeTimelineActionReadback> for TimelineVoteDeclineResultWire {
+    fn from(readback: crate::app::timeline::NativeTimelineActionReadback) -> Self {
+        Self {
+            schema_version: readback.schema_version,
+            action: readback.action.as_str().to_owned(),
+            room_id: readback.room_id,
+            event_id: readback.event_id,
+            status: readback.status,
+        }
+    }
+}
+
+impl From<crate::app::timeline::NativeTimelineActionReadback> for TimelineForwardResultWire {
+    fn from(readback: crate::app::timeline::NativeTimelineActionReadback) -> Self {
+        Self {
+            schema_version: readback.schema_version,
+            action: readback.action.as_str().to_owned(),
+            room_id: readback.room_id,
+            event_id: readback.event_id,
+            status: readback.status,
+        }
+    }
+}
+
+impl From<crate::app::send::MatrixSendTextResult> for SendTextResultWire {
+    fn from(result: crate::app::send::MatrixSendTextResult) -> Self {
+        Self {
+            room_id: result.room_id,
+            event_id: result.event_id,
+            local_txn_id: result.local_txn_id,
+            status: result.status,
+        }
+    }
+}
+
+impl From<crate::app::send::MatrixSendTextResult> for EditMessageResultWire {
+    fn from(result: crate::app::send::MatrixSendTextResult) -> Self {
+        Self {
+            room_id: result.room_id,
+            event_id: result.event_id,
+            local_txn_id: result.local_txn_id,
+            status: result.status,
+        }
+    }
+}
+
+impl From<crate::app::send::MatrixSendPollResult> for SendPollResultWire {
+    fn from(result: crate::app::send::MatrixSendPollResult) -> Self {
+        Self {
+            room_id: result.room_id,
+            event_id: result.event_id,
+            status: result.status,
+        }
+    }
+}
+
+impl From<crate::app::send::MatrixPollRespondResult> for PollRespondResultWire {
+    fn from(result: crate::app::send::MatrixPollRespondResult) -> Self {
+        Self {
+            room_id: result.room_id,
+            poll_event_id: result.poll_event_id,
+            event_id: result.event_id,
+            status: result.status,
+        }
+    }
+}
+
+impl From<crate::app::timeline::NativeComposerReplyDraftReadback>
+    for ComposerReplyDraftReadbackWire
+{
+    fn from(readback: crate::app::timeline::NativeComposerReplyDraftReadback) -> Self {
+        Self {
+            schema_version: readback.schema_version,
+            room_id: readback.room_id,
+            status: readback.status,
+            draft: readback.draft,
+        }
+    }
+}
+
+impl SharedCore {
+    pub(super) async fn timeline_reaction_command(
+        &self,
+        no_session: &'static str,
+        request: impl std::future::Future<Output = Result<NativeReactionMutationResult, MatrixIpcError>>,
+    ) -> Result<TimelineReactionMutationDto, TimelineReactionError> {
+        let response = request
+            .await
+            .map_err(|error| map_timeline_reaction_core_error(no_session, error))?;
+        let result: NativeReactionMutationResult = response;
+        Ok(timeline_reaction_mutation_dto(result))
+    }
+
+    pub(super) async fn composer_reply_draft_command(
+        &self,
+        no_session: &'static str,
+        request: impl std::future::Future<
+            Output = Result<crate::app::timeline::NativeComposerReplyDraftReadback, MatrixIpcError>,
+        >,
+    ) -> Result<ComposerReplyDraftDto, ComposerReplyDraftError> {
+        let readback = self
+            .composer_reply_draft_command_wire(no_session, request)
+            .await?;
+        Ok(composer_reply_draft_dto(readback))
+    }
+
+    pub(super) async fn composer_reply_draft_command_wire(
+        &self,
+        no_session: &'static str,
+        request: impl std::future::Future<
+            Output = Result<crate::app::timeline::NativeComposerReplyDraftReadback, MatrixIpcError>,
+        >,
+    ) -> Result<ComposerReplyDraftReadbackWire, ComposerReplyDraftError> {
+        let response = request
+            .await
+            .map_err(|error| map_composer_reply_draft_core_error(no_session, error))?;
+        Ok(response.into())
+    }
+
+    pub(super) async fn send_text_command(
+        &self,
+        request: impl std::future::Future<
+            Output = Result<crate::app::send::MatrixSendTextResult, MatrixIpcError>,
+        >,
+    ) -> Result<SendTextDto, SendTextError> {
+        let response = request
+            .await
+            .map_err(|error| map_send_text_core_error(SEND_TEXT_NO_SESSION_CODE, error))?;
+        let result: SendTextResultWire = response.into();
+        Ok(send_text_dto(result))
+    }
+
+    pub(super) async fn send_poll_command(
+        &self,
+        request: impl std::future::Future<
+            Output = Result<crate::app::send::MatrixSendPollResult, MatrixIpcError>,
+        >,
+    ) -> Result<SendPollDto, SendPollError> {
+        let response = request
+            .await
+            .map_err(|error| map_send_poll_core_error(SEND_POLL_NO_SESSION_CODE, error))?;
+        let result: SendPollResultWire = response.into();
+        Ok(send_poll_dto(result))
+    }
+
+    pub(super) async fn edit_message_command(
+        &self,
+        request: impl std::future::Future<
+            Output = Result<crate::app::send::MatrixSendTextResult, MatrixIpcError>,
+        >,
+    ) -> Result<EditMessageDto, EditMessageError> {
+        let response = request
+            .await
+            .map_err(|error| map_edit_message_core_error(EDIT_MESSAGE_NO_SESSION_CODE, error))?;
+        let result: EditMessageResultWire = response.into();
+        Ok(edit_message_dto(result))
+    }
+
+    pub(super) async fn poll_respond_command(
+        &self,
+        request: impl std::future::Future<
+            Output = Result<crate::app::send::MatrixPollRespondResult, MatrixIpcError>,
+        >,
+    ) -> Result<PollRespondDto, PollRespondError> {
+        let response = request
+            .await
+            .map_err(|error| map_poll_respond_core_error(POLL_RESPOND_NO_SESSION_CODE, error))?;
+        let result: PollRespondResultWire = response.into();
+        Ok(poll_respond_dto(result))
+    }
+
+    pub(super) async fn timeline_mutate_command(
+        &self,
+        no_session: &'static str,
+        request: impl std::future::Future<
+            Output = Result<crate::app::timeline::NativeTimelineActionReadback, MatrixIpcError>,
+        >,
+    ) -> Result<TimelineMutateDto, TimelineMutateError> {
+        let response = request
+            .await
+            .map_err(|error| map_timeline_mutate_core_error(no_session, error))?;
+        let result: TimelineMutateResultWire = response.into();
+        timeline_mutate_dto(result)
+    }
+
+    pub(super) async fn timeline_pin_command(
+        &self,
+        no_session: &'static str,
+        request: impl std::future::Future<
+            Output = Result<crate::app::timeline::NativeTimelineActionReadback, MatrixIpcError>,
+        >,
+    ) -> Result<TimelinePinDto, TimelinePinError> {
+        let response = request
+            .await
+            .map_err(|error| map_timeline_pin_core_error(no_session, error))?;
+        let result: TimelinePinResultWire = response.into();
+        timeline_pin_dto(result)
+    }
+
+    pub(super) async fn timeline_vote_decline_command(
+        &self,
+        no_session: &'static str,
+        request: impl std::future::Future<
+            Output = Result<crate::app::timeline::NativeTimelineActionReadback, MatrixIpcError>,
+        >,
+    ) -> Result<TimelineVoteDeclineDto, TimelineVoteDeclineError> {
+        let response = request
+            .await
+            .map_err(|error| map_timeline_vote_decline_core_error(no_session, error))?;
+        let result: TimelineVoteDeclineResultWire = response.into();
+        timeline_vote_decline_dto(result)
+    }
+
+    pub(super) async fn timeline_forward_command(
+        &self,
+        no_session: &'static str,
+        request: impl std::future::Future<
+            Output = Result<crate::app::timeline::NativeTimelineActionReadback, MatrixIpcError>,
+        >,
+    ) -> Result<TimelineForwardDto, TimelineForwardError> {
+        let response = request
+            .await
+            .map_err(|error| map_timeline_forward_core_error(no_session, error))?;
+        let result: TimelineForwardResultWire = response.into();
+        timeline_forward_dto(result)
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 impl SharedCore {
     pub async fn reaction_ensure(
         &self,
@@ -1170,14 +1334,20 @@ impl SharedCore {
         event_id: String,
         key: String,
     ) -> Result<TimelineReactionMutationDto, TimelineReactionError> {
+        let request = crate::core_api::MatrixTimelineReactionKeyRequest {
+            room_id,
+            event_id,
+            key,
+        };
+        if !within_envelope_cap(&request) {
+            return Err(timeline_reaction_failed(
+                TIMELINE_REACTION_FAILED_CODE,
+                TIMELINE_REACTION_FAILED_DESCRIPTION,
+            ));
+        }
         self.timeline_reaction_command(
-            REACTION_ENSURE_COMMAND,
             REACTION_ENSURE_NO_SESSION_CODE,
-            serde_json::json!({
-                "roomId": room_id,
-                "eventId": event_id,
-                "key": key,
-            }),
+            self.core.reaction_ensure(request),
         )
         .await
     }
@@ -1188,40 +1358,26 @@ impl SharedCore {
         event_id: String,
         action_id: String,
     ) -> Result<AgentApprovalDecisionDto, TimelineReactionError> {
-        let payload = timeline_reaction_envelope_payload(serde_json::json!({
+        timeline_reaction_envelope_payload(serde_json::json!({
             "roomId": room_id,
             "eventId": event_id,
-            "actionId": action_id,
-        }))?;
+            "actionId": action_id}))?;
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: AGENT_APPROVAL_DECIDE_COMMAND.to_owned(),
-                session_generation: TIMELINE_REACTION_GENERATION,
-                request_id: None,
-                payload,
+            .agent_approval_decide(crate::core_api::MatrixAgentApprovalDecisionRequest {
+                room_id,
+                event_id,
+                action_id,
             })
             .await
             .map_err(|error| {
                 map_timeline_reaction_core_error("agent-approval-no-session", error)
             })?;
-        let result: NativeAgentApprovalDecisionResult = serde_json::from_value(response.payload)
-            .map_err(|_| {
-                timeline_reaction_failed(
-                    TIMELINE_REACTION_FAILED_CODE,
-                    TIMELINE_REACTION_FAILED_DESCRIPTION,
-                )
-            })?;
+        let result: NativeAgentApprovalDecisionResult = response;
         Ok(AgentApprovalDecisionDto {
             room_id: result.room_id,
             event_id: result.event_id,
-            status: match result.status {
-                crate::app::agent_approvals::AgentApprovalDecisionStatus::Applied => "applied",
-                crate::app::agent_approvals::AgentApprovalDecisionStatus::AlreadyDecided => {
-                    "already_decided"
-                }
-            }
-            .to_owned(),
+            status: result.status.into(),
             reaction: result.reaction.map(timeline_reaction_mutation_dto),
         })
     }
@@ -1233,15 +1389,21 @@ impl SharedCore {
         reaction_event_id: String,
         key: String,
     ) -> Result<TimelineReactionMutationDto, TimelineReactionError> {
+        let request = crate::core_api::MatrixReactionRedactRequest {
+            room_id,
+            target_event_id,
+            reaction_event_id,
+            key,
+        };
+        if !within_envelope_cap(&request) {
+            return Err(timeline_reaction_failed(
+                TIMELINE_REACTION_FAILED_CODE,
+                TIMELINE_REACTION_FAILED_DESCRIPTION,
+            ));
+        }
         self.timeline_reaction_command(
-            REACTION_REDACT_COMMAND,
             REACTION_REDACT_NO_SESSION_CODE,
-            serde_json::json!({
-                "roomId": room_id,
-                "targetEventId": target_event_id,
-                "reactionEventId": reaction_event_id,
-                "key": key,
-            }),
+            self.core.reaction_redact(request),
         )
         .await
     }
@@ -1252,14 +1414,20 @@ impl SharedCore {
         event_id: String,
         key: String,
     ) -> Result<TimelineReactionMutationDto, TimelineReactionError> {
+        let request = crate::core_api::MatrixTimelineReactionKeyRequest {
+            room_id,
+            event_id,
+            key,
+        };
+        if !within_envelope_cap(&request) {
+            return Err(timeline_reaction_failed(
+                TIMELINE_REACTION_FAILED_CODE,
+                TIMELINE_REACTION_FAILED_DESCRIPTION,
+            ));
+        }
         self.timeline_reaction_command(
-            TIMELINE_REACTION_TOGGLE_COMMAND,
             TIMELINE_REACTION_TOGGLE_NO_SESSION_CODE,
-            serde_json::json!({
-                "roomId": room_id,
-                "eventId": event_id,
-                "key": key,
-            }),
+            self.core.timeline_reaction_toggle(request),
         )
         .await
     }
@@ -1270,14 +1438,20 @@ impl SharedCore {
         event_id: String,
         start_thread: bool,
     ) -> Result<ComposerReplyDraftDto, ComposerReplyDraftError> {
+        let request = crate::core_api::MatrixComposerSetReplyDraftRequest {
+            room_id,
+            event_id,
+            start_thread,
+        };
+        if !within_envelope_cap(&request) {
+            return Err(composer_reply_draft_failed(
+                COMPOSER_REPLY_DRAFT_FAILED_CODE,
+                COMPOSER_REPLY_DRAFT_FAILED_DESCRIPTION,
+            ));
+        }
         self.composer_reply_draft_command(
-            COMPOSER_SET_REPLY_DRAFT_COMMAND,
             COMPOSER_SET_REPLY_DRAFT_NO_SESSION_CODE,
-            serde_json::json!({
-                "roomId": room_id,
-                "eventId": event_id,
-                "startThread": start_thread,
-            }),
+            self.core.composer_set_reply_draft(request),
         )
         .await
     }
@@ -1286,12 +1460,19 @@ impl SharedCore {
         &self,
         room_id: String,
     ) -> Result<ComposerReplyDraftDto, ComposerReplyDraftError> {
+        let request = crate::core_api::MatrixComposerReplyDraftRoomRequest {
+            thread_root_event_id: Default::default(),
+            room_id,
+        };
+        if !within_envelope_cap(&request) {
+            return Err(composer_reply_draft_failed(
+                COMPOSER_REPLY_DRAFT_FAILED_CODE,
+                COMPOSER_REPLY_DRAFT_FAILED_DESCRIPTION,
+            ));
+        }
         self.composer_reply_draft_command(
-            COMPOSER_GET_REPLY_DRAFT_COMMAND,
             COMPOSER_GET_REPLY_DRAFT_NO_SESSION_CODE,
-            serde_json::json!({
-                "roomId": room_id,
-            }),
+            self.core.composer_get_reply_draft(request),
         )
         .await
     }
@@ -1304,26 +1485,40 @@ impl SharedCore {
         // Snapshot the current revision, then let the Core owner perform the
         // atomic comparison. A selection made between these commands is
         // intentionally preserved rather than cleared by the older caller.
+        let snapshot_request = crate::core_api::MatrixComposerReplyDraftRoomRequest {
+            thread_root_event_id: Default::default(),
+            room_id: room_id.clone(),
+        };
+        if !within_envelope_cap(&snapshot_request) {
+            return Err(composer_reply_draft_failed(
+                COMPOSER_REPLY_DRAFT_FAILED_CODE,
+                COMPOSER_REPLY_DRAFT_FAILED_DESCRIPTION,
+            ));
+        }
         let current = self
             .composer_reply_draft_command_wire(
-                COMPOSER_GET_REPLY_DRAFT_COMMAND,
                 COMPOSER_CLEAR_REPLY_DRAFT_NO_SESSION_CODE,
-                serde_json::json!({
-                    "roomId": room_id,
-                }),
+                self.core.composer_get_reply_draft(snapshot_request),
             )
             .await?;
         let expected_draft_revision = current
             .draft
             .as_ref()
             .map_or(0, |draft| draft.draft_revision);
+        let request = crate::core_api::MatrixComposerClearReplyDraftRequest {
+            thread_root_event_id: Default::default(),
+            room_id,
+            expected_draft_revision,
+        };
+        if !within_envelope_cap(&request) {
+            return Err(composer_reply_draft_failed(
+                COMPOSER_REPLY_DRAFT_FAILED_CODE,
+                COMPOSER_REPLY_DRAFT_FAILED_DESCRIPTION,
+            ));
+        }
         self.composer_reply_draft_command(
-            COMPOSER_CLEAR_REPLY_DRAFT_COMMAND,
             COMPOSER_CLEAR_REPLY_DRAFT_NO_SESSION_CODE,
-            serde_json::json!({
-                "roomId": room_id,
-                "expectedDraftRevision": expected_draft_revision,
-            }),
+            self.core.composer_clear_reply_draft(request),
         )
         .await
     }
@@ -1341,18 +1536,24 @@ impl SharedCore {
         thread_root: Option<String>,
         txn_id: Option<String>,
     ) -> Result<SendTextDto, SendTextError> {
-        self.send_text_command(serde_json::json!({
-            "roomId": room_id,
-            "body": body,
-            "msgType": msg_type,
-            "formattedBody": formatted_body,
-            "mentionUserIds": mention_user_ids,
-            "mentionRoom": mention_room,
-            "replyTo": reply_to,
-            "threadRoot": thread_root,
-            "txnId": txn_id,
-        }))
-        .await
+        let request = crate::core_api::MatrixSendTextRequest {
+            room_id,
+            body,
+            msg_type,
+            formatted_body,
+            mention_user_ids,
+            mention_room,
+            reply_to,
+            thread_root,
+            txn_id,
+        };
+        if !within_envelope_cap(&request) {
+            return Err(send_text_failed(
+                SEND_TEXT_FAILED_CODE,
+                SEND_TEXT_FAILED_DESCRIPTION,
+            ));
+        }
+        self.send_text_command(self.core.send_text(request)).await
     }
 
     pub async fn send_poll(
@@ -1364,15 +1565,21 @@ impl SharedCore {
         thread_root: Option<String>,
         reply_to: Option<String>,
     ) -> Result<SendPollDto, SendPollError> {
-        self.send_poll_command(serde_json::json!({
-            "roomId": room_id,
-            "question": question,
-            "answers": answers,
-            "maxSelections": max_selections,
-            "threadRoot": thread_root,
-            "replyTo": reply_to,
-        }))
-        .await
+        let request = crate::core_api::MatrixSendPollRequest {
+            room_id,
+            question,
+            answers,
+            max_selections,
+            thread_root,
+            reply_to,
+        };
+        if !within_envelope_cap(&request) {
+            return Err(send_poll_failed(
+                SEND_POLL_FAILED_CODE,
+                SEND_POLL_FAILED_DESCRIPTION,
+            ));
+        }
+        self.send_poll_command(self.core.send_poll(request)).await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1387,17 +1594,24 @@ impl SharedCore {
         mention_room: Option<bool>,
         txn_id: Option<String>,
     ) -> Result<EditMessageDto, EditMessageError> {
-        self.edit_message_command(serde_json::json!({
-            "roomId": room_id,
-            "eventId": event_id,
-            "body": body,
-            "msgType": msg_type,
-            "formattedBody": formatted_body,
-            "mentionUserIds": mention_user_ids,
-            "mentionRoom": mention_room,
-            "txnId": txn_id,
-        }))
-        .await
+        let request = crate::core_api::MatrixEditMessageRequest {
+            room_id,
+            event_id,
+            body,
+            msg_type,
+            formatted_body,
+            mention_user_ids,
+            mention_room,
+            txn_id,
+        };
+        if !within_envelope_cap(&request) {
+            return Err(edit_message_failed(
+                EDIT_MESSAGE_FAILED_CODE,
+                EDIT_MESSAGE_FAILED_DESCRIPTION,
+            ));
+        }
+        self.edit_message_command(self.core.edit_message(request))
+            .await
     }
 
     pub async fn poll_respond(
@@ -1406,12 +1620,19 @@ impl SharedCore {
         poll_event_id: String,
         answer_ids: Vec<String>,
     ) -> Result<PollRespondDto, PollRespondError> {
-        self.poll_respond_command(serde_json::json!({
-            "roomId": room_id,
-            "pollEventId": poll_event_id,
-            "answerIds": answer_ids,
-        }))
-        .await
+        let request = crate::core_api::MatrixPollRespondRequest {
+            room_id,
+            poll_event_id,
+            answer_ids,
+        };
+        if !within_envelope_cap(&request) {
+            return Err(poll_respond_failed(
+                POLL_RESPOND_FAILED_CODE,
+                POLL_RESPOND_FAILED_DESCRIPTION,
+            ));
+        }
+        self.poll_respond_command(self.core.poll_respond(request))
+            .await
     }
 
     pub async fn timeline_edit_text(
@@ -1421,15 +1642,21 @@ impl SharedCore {
         body: String,
         formatted_body: Option<String>,
     ) -> Result<TimelineMutateDto, TimelineMutateError> {
+        let request = crate::core_api::MatrixTimelineEditTextRequest {
+            room_id,
+            event_id,
+            body,
+            formatted_body,
+        };
+        if !within_envelope_cap(&request) {
+            return Err(timeline_mutate_failed(
+                TIMELINE_MUTATE_FAILED_CODE,
+                TIMELINE_MUTATE_FAILED_DESCRIPTION,
+            ));
+        }
         self.timeline_mutate_command(
-            TIMELINE_EDIT_TEXT_COMMAND,
             TIMELINE_EDIT_TEXT_NO_SESSION_CODE,
-            serde_json::json!({
-                "roomId": room_id,
-                "eventId": event_id,
-                "body": body,
-                "formattedBody": formatted_body,
-            }),
+            self.core.timeline_edit_text(request),
         )
         .await
     }
@@ -1440,14 +1667,20 @@ impl SharedCore {
         event_id: String,
         reason: Option<String>,
     ) -> Result<TimelineMutateDto, TimelineMutateError> {
+        let request = crate::core_api::MatrixTimelineRedactRequest {
+            room_id,
+            event_id,
+            reason,
+        };
+        if !within_envelope_cap(&request) {
+            return Err(timeline_mutate_failed(
+                TIMELINE_MUTATE_FAILED_CODE,
+                TIMELINE_MUTATE_FAILED_DESCRIPTION,
+            ));
+        }
         self.timeline_mutate_command(
-            TIMELINE_REDACT_COMMAND,
             TIMELINE_REDACT_NO_SESSION_CODE,
-            serde_json::json!({
-                "roomId": room_id,
-                "eventId": event_id,
-                "reason": reason,
-            }),
+            self.core.timeline_redact(request),
         )
         .await
     }
@@ -1458,14 +1691,20 @@ impl SharedCore {
         event_id: String,
         reason: Option<String>,
     ) -> Result<TimelineMutateDto, TimelineMutateError> {
+        let request = crate::core_api::MatrixTimelineReportRequest {
+            room_id,
+            event_id,
+            reason,
+        };
+        if !within_envelope_cap(&request) {
+            return Err(timeline_mutate_failed(
+                TIMELINE_MUTATE_FAILED_CODE,
+                TIMELINE_MUTATE_FAILED_DESCRIPTION,
+            ));
+        }
         self.timeline_mutate_command(
-            TIMELINE_REPORT_COMMAND,
             TIMELINE_REPORT_NO_SESSION_CODE,
-            serde_json::json!({
-                "roomId": room_id,
-                "eventId": event_id,
-                "reason": reason,
-            }),
+            self.core.timeline_report(request),
         )
         .await
     }
@@ -1475,13 +1714,16 @@ impl SharedCore {
         room_id: String,
         event_id: String,
     ) -> Result<TimelinePinDto, TimelinePinError> {
+        let request = crate::core_api::MatrixTimelinePinRequest { room_id, event_id };
+        if !within_envelope_cap(&request) {
+            return Err(timeline_pin_failed(
+                TIMELINE_PIN_FAILED_CODE,
+                TIMELINE_PIN_FAILED_DESCRIPTION,
+            ));
+        }
         self.timeline_pin_command(
-            TIMELINE_PIN_COMMAND,
             TIMELINE_PIN_NO_SESSION_CODE,
-            serde_json::json!({
-                "roomId": room_id,
-                "eventId": event_id,
-            }),
+            self.core.timeline_pin(request),
         )
         .await
     }
@@ -1491,13 +1733,16 @@ impl SharedCore {
         room_id: String,
         event_id: String,
     ) -> Result<TimelinePinDto, TimelinePinError> {
+        let request = crate::core_api::MatrixTimelinePinRequest { room_id, event_id };
+        if !within_envelope_cap(&request) {
+            return Err(timeline_pin_failed(
+                TIMELINE_PIN_FAILED_CODE,
+                TIMELINE_PIN_FAILED_DESCRIPTION,
+            ));
+        }
         self.timeline_pin_command(
-            TIMELINE_UNPIN_COMMAND,
             TIMELINE_UNPIN_NO_SESSION_CODE,
-            serde_json::json!({
-                "roomId": room_id,
-                "eventId": event_id,
-            }),
+            self.core.timeline_unpin(request),
         )
         .await
     }
@@ -1508,14 +1753,20 @@ impl SharedCore {
         event_id: String,
         answer_ids: Vec<String>,
     ) -> Result<TimelineVoteDeclineDto, TimelineVoteDeclineError> {
+        let request = crate::core_api::MatrixTimelinePollVoteRequest {
+            room_id,
+            event_id,
+            answer_ids,
+        };
+        if !within_envelope_cap(&request) {
+            return Err(timeline_vote_decline_failed(
+                TIMELINE_VOTE_DECLINE_FAILED_CODE,
+                TIMELINE_VOTE_DECLINE_FAILED_DESCRIPTION,
+            ));
+        }
         self.timeline_vote_decline_command(
-            TIMELINE_POLL_VOTE_COMMAND,
             TIMELINE_POLL_VOTE_NO_SESSION_CODE,
-            serde_json::json!({
-                "roomId": room_id,
-                "eventId": event_id,
-                "answerIds": answer_ids,
-            }),
+            self.core.timeline_poll_vote(request),
         )
         .await
     }
@@ -1525,13 +1776,16 @@ impl SharedCore {
         room_id: String,
         event_id: String,
     ) -> Result<TimelineVoteDeclineDto, TimelineVoteDeclineError> {
+        let request = crate::core_api::MatrixTimelineCallDeclineRequest { room_id, event_id };
+        if !within_envelope_cap(&request) {
+            return Err(timeline_vote_decline_failed(
+                TIMELINE_VOTE_DECLINE_FAILED_CODE,
+                TIMELINE_VOTE_DECLINE_FAILED_DESCRIPTION,
+            ));
+        }
         self.timeline_vote_decline_command(
-            TIMELINE_CALL_DECLINE_COMMAND,
             TIMELINE_CALL_DECLINE_NO_SESSION_CODE,
-            serde_json::json!({
-                "roomId": room_id,
-                "eventId": event_id,
-            }),
+            self.core.timeline_call_decline(request),
         )
         .await
     }
@@ -1544,16 +1798,22 @@ impl SharedCore {
         as_quote: bool,
         confirmed_encryption_downgrade: bool,
     ) -> Result<TimelineForwardDto, TimelineForwardError> {
+        let request = crate::core_api::MatrixTimelineForwardTextRequest {
+            source_room_id,
+            event_id,
+            target_room_id,
+            as_quote,
+            confirmed_encryption_downgrade,
+        };
+        if !within_envelope_cap(&request) {
+            return Err(timeline_forward_failed(
+                TIMELINE_FORWARD_FAILED_CODE,
+                TIMELINE_FORWARD_FAILED_DESCRIPTION,
+            ));
+        }
         self.timeline_forward_command(
-            TIMELINE_FORWARD_TEXT_COMMAND,
             TIMELINE_FORWARD_TEXT_NO_SESSION_CODE,
-            serde_json::json!({
-                "sourceRoomId": source_room_id,
-                "eventId": event_id,
-                "targetRoomId": target_room_id,
-                "asQuote": as_quote,
-                "confirmedEncryptionDowngrade": confirmed_encryption_downgrade,
-            }),
+            self.core.timeline_forward_text(request),
         )
         .await
     }
@@ -1617,8 +1877,7 @@ impl SharedCore {
                 "action_title": action_title,
                 "decision": decision,
                 "source_event_id": source_event_id,
-                "created_at": created_at,
-            }
+                "created_at": created_at}
         });
         let response = room
             .send_raw("m.room.message", content)
@@ -1633,258 +1892,5 @@ impl SharedCore {
             event_id: response.response.event_id.to_string(),
             status: "sent".to_owned(),
         })
-    }
-
-    pub(super) async fn timeline_reaction_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<TimelineReactionMutationDto, TimelineReactionError> {
-        let payload = timeline_reaction_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: TIMELINE_REACTION_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_timeline_reaction_core_error(no_session, error))?;
-        let result: NativeReactionMutationResult = serde_json::from_value(response.payload)
-            .map_err(|_| {
-                timeline_reaction_failed(
-                    TIMELINE_REACTION_FAILED_CODE,
-                    TIMELINE_REACTION_FAILED_DESCRIPTION,
-                )
-            })?;
-        Ok(timeline_reaction_mutation_dto(result))
-    }
-
-    pub(super) async fn composer_reply_draft_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<ComposerReplyDraftDto, ComposerReplyDraftError> {
-        let readback = self
-            .composer_reply_draft_command_wire(command, no_session, payload)
-            .await?;
-        Ok(composer_reply_draft_dto(readback))
-    }
-
-    pub(super) async fn composer_reply_draft_command_wire(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<ComposerReplyDraftReadbackWire, ComposerReplyDraftError> {
-        let payload = composer_reply_draft_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: COMPOSER_REPLY_DRAFT_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_composer_reply_draft_core_error(no_session, error))?;
-        serde_json::from_value(response.payload).map_err(|_| {
-            composer_reply_draft_failed(
-                COMPOSER_REPLY_DRAFT_FAILED_CODE,
-                COMPOSER_REPLY_DRAFT_FAILED_DESCRIPTION,
-            )
-        })
-    }
-
-    pub(super) async fn send_text_command(
-        &self,
-        payload: serde_json::Value,
-    ) -> Result<SendTextDto, SendTextError> {
-        let payload = send_text_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: SEND_TEXT_COMMAND.to_owned(),
-                session_generation: SEND_TEXT_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_send_text_core_error(SEND_TEXT_NO_SESSION_CODE, error))?;
-        let result: SendTextResultWire = serde_json::from_value(response.payload)
-            .map_err(|_| send_text_failed(SEND_TEXT_FAILED_CODE, SEND_TEXT_FAILED_DESCRIPTION))?;
-        Ok(send_text_dto(result))
-    }
-
-    pub(super) async fn send_poll_command(
-        &self,
-        payload: serde_json::Value,
-    ) -> Result<SendPollDto, SendPollError> {
-        let payload = send_poll_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: SEND_POLL_COMMAND.to_owned(),
-                session_generation: SEND_POLL_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_send_poll_core_error(SEND_POLL_NO_SESSION_CODE, error))?;
-        let result: SendPollResultWire = serde_json::from_value(response.payload)
-            .map_err(|_| send_poll_failed(SEND_POLL_FAILED_CODE, SEND_POLL_FAILED_DESCRIPTION))?;
-        Ok(send_poll_dto(result))
-    }
-
-    pub(super) async fn edit_message_command(
-        &self,
-        payload: serde_json::Value,
-    ) -> Result<EditMessageDto, EditMessageError> {
-        let payload = edit_message_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: EDIT_MESSAGE_COMMAND.to_owned(),
-                session_generation: EDIT_MESSAGE_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_edit_message_core_error(EDIT_MESSAGE_NO_SESSION_CODE, error))?;
-        let result: EditMessageResultWire =
-            serde_json::from_value(response.payload).map_err(|_| {
-                edit_message_failed(EDIT_MESSAGE_FAILED_CODE, EDIT_MESSAGE_FAILED_DESCRIPTION)
-            })?;
-        Ok(edit_message_dto(result))
-    }
-
-    pub(super) async fn poll_respond_command(
-        &self,
-        payload: serde_json::Value,
-    ) -> Result<PollRespondDto, PollRespondError> {
-        let payload = poll_respond_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: POLL_RESPOND_COMMAND.to_owned(),
-                session_generation: POLL_RESPOND_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_poll_respond_core_error(POLL_RESPOND_NO_SESSION_CODE, error))?;
-        let result: PollRespondResultWire =
-            serde_json::from_value(response.payload).map_err(|_| {
-                poll_respond_failed(POLL_RESPOND_FAILED_CODE, POLL_RESPOND_FAILED_DESCRIPTION)
-            })?;
-        Ok(poll_respond_dto(result))
-    }
-
-    pub(super) async fn timeline_mutate_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<TimelineMutateDto, TimelineMutateError> {
-        let payload = timeline_mutate_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: TIMELINE_MUTATE_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_timeline_mutate_core_error(no_session, error))?;
-        let result: TimelineMutateResultWire =
-            serde_json::from_value(response.payload).map_err(|_| {
-                timeline_mutate_failed(
-                    TIMELINE_MUTATE_FAILED_CODE,
-                    TIMELINE_MUTATE_FAILED_DESCRIPTION,
-                )
-            })?;
-        timeline_mutate_dto(result)
-    }
-
-    pub(super) async fn timeline_pin_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<TimelinePinDto, TimelinePinError> {
-        let payload = timeline_pin_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: TIMELINE_PIN_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_timeline_pin_core_error(no_session, error))?;
-        let result: TimelinePinResultWire =
-            serde_json::from_value(response.payload).map_err(|_| {
-                timeline_pin_failed(TIMELINE_PIN_FAILED_CODE, TIMELINE_PIN_FAILED_DESCRIPTION)
-            })?;
-        timeline_pin_dto(result)
-    }
-
-    pub(super) async fn timeline_vote_decline_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<TimelineVoteDeclineDto, TimelineVoteDeclineError> {
-        let payload = timeline_vote_decline_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: TIMELINE_VOTE_DECLINE_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_timeline_vote_decline_core_error(no_session, error))?;
-        let result: TimelineVoteDeclineResultWire = serde_json::from_value(response.payload)
-            .map_err(|_| {
-                timeline_vote_decline_failed(
-                    TIMELINE_VOTE_DECLINE_FAILED_CODE,
-                    TIMELINE_VOTE_DECLINE_FAILED_DESCRIPTION,
-                )
-            })?;
-        timeline_vote_decline_dto(result)
-    }
-
-    pub(super) async fn timeline_forward_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<TimelineForwardDto, TimelineForwardError> {
-        let payload = timeline_forward_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: TIMELINE_FORWARD_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_timeline_forward_core_error(no_session, error))?;
-        let result: TimelineForwardResultWire =
-            serde_json::from_value(response.payload).map_err(|_| {
-                timeline_forward_failed(
-                    TIMELINE_FORWARD_FAILED_CODE,
-                    TIMELINE_FORWARD_FAILED_DESCRIPTION,
-                )
-            })?;
-        timeline_forward_dto(result)
     }
 }

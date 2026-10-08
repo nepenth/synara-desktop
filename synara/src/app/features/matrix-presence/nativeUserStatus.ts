@@ -12,25 +12,14 @@ import {
   type DesktopInvokeResult,
 } from '../../utils/desktop';
 import { getSessionBootstrapResult } from '../../state/sessionBootstrap';
+import type {
+  NativeInCall,
+  NativeUserStatus,
+  NativeUserStatusSnapshot,
+} from '../matrix-dto/generated';
 
 export const MAX_STATUS_EMOJI_BYTES = 32;
 export const MAX_STATUS_TEXT_BYTES = 256;
-
-export type NativeUserStatus = {
-  emoji: string;
-  text: string;
-};
-
-export type NativeInCall = {
-  callJoinedTs?: number;
-};
-
-export type NativeUserStatusSnapshot = {
-  sessionGeneration: number;
-  userId: string;
-  userStatus?: NativeUserStatus;
-  inCall?: NativeInCall;
-};
 
 export type NativeUserStatusInvoke = (
   command: string,
@@ -257,3 +246,5 @@ export function useNativeUserStatus(
 
   return snapshot;
 }
+
+export type { NativeInCall, NativeUserStatus, NativeUserStatusSnapshot };

@@ -23,7 +23,6 @@ default = ["full-uniffi"]
 # Shared desktop/iOS owners and their SDK capabilities. NSE retains only the
 # notification, client/store/lifecycle, and privacy-policy boundary below.
 full-app = [
-  "room-key-forwarding",
   "matrix-sdk/markdown",
   "matrix-sdk/qrcode",
   "matrix-sdk/unstable-msc4426",
@@ -33,18 +32,17 @@ full-app = [
   "dep:eyeball-im",
   "dep:futures-util",
   "dep:mime",
+  "dep:hmac",
 ]
 # Apple adds its binding surface explicitly; desktop opts out of the default
 # so it never compiles UniFFI runtime/scaffolding or exports Apple symbols.
 full-uniffi = ["full-app", "dep:uniffi"]
 nse-preview = []
-# matrix-sdk 0.19 GossipMachine defaults both serve and request switches on
-# once this cfg is compiled. Encryption has no public setter; product stays
-# always-on. Do not put this feature on nse-preview.
-room-key-forwarding = [
-  "matrix-sdk/automatic-room-key-forwarding",
-  "matrix-sdk-crypto/automatic-room-key-forwarding",
-]
+# Emit TypeScript wire types for the desktop renderer (scripts/generate-ts-dto.sh).
+ts-export = ["dep:ts-rs"]
+# matrix-sdk `automatic-room-key-forwarding` is deliberately not compiled on any
+# graph. Forwarded Megolm keys are unauthenticated (no sender proof), so every
+# client recovers history from the encrypted key backup instead, as Element X does.
 # Desktop-only local message index (matrix-sdk-search / Tantivy). NSE and iOS
 # SharedCore must not enable this; they keep Client-Server `/search`.
 search-index = ["full-app", "matrix-sdk/experimental-search"]
@@ -60,6 +58,7 @@ x509-identity = [
 [dependencies]
 # P1.4 domain DTOs (moved from src-tauri/matrix/dto, SNC-P1-2) derive serde.
 serde = { workspace = true, features = ["derive"] }
+ts-rs = { workspace = true, optional = true }
 # P1.3 transport protocol (moved from src-tauri/matrix/ipc, SNC-P1-3): stream_body
 # validates JSON bodies at the envelope boundary; tests share the fixtures too.
 serde_json = { workspace = true }
@@ -91,9 +90,8 @@ matrix-sdk-ui = { workspace = true, features = [
   "experimental-encrypted-state-events",
 ] }
 # Live NativeTimelineRegistry maps UTD causes from the crypto crate.
-# The workspace disables SDK crypto default features. The
-# automatic-room-key-forwarding cfg is enabled only via the Core
-# `room-key-forwarding` feature (not here), so NSE stays off.
+# The workspace disables SDK crypto default features, including
+# automatic-room-key-forwarding, which no Synara graph compiles.
 matrix-sdk-crypto = { workspace = true }
 # Password re-login peeks the leftover SQLite crypto account so the next login
 # reuses that device id. Pin and default-features match the SDK workspace.
@@ -117,6 +115,9 @@ getrandom = { workspace = true }
 uniffi = { workspace = true, features = ["tokio"], optional = true }
 # Store identity fingerprints directory names (moved from desktop store/identity.rs).
 sha2 = { workspace = true }
+# Timeline media handles: HMAC of (session generation, media source) under a
+# per-process secret, so revisits reuse URLs and handles stay unguessable.
+hmac = { workspace = true, optional = true }
 # Host-only register token buffers (moved with live register orchestration).
 zeroize = { workspace = true }
 # Avatar MIME parsing for upload_avatar (bytes stay off Core JSON).
@@ -129,9 +130,6 @@ rustls = { workspace = true, features = [
   "aws_lc_rs",
   "tls12",
 ], optional = true }
-
-[build-dependencies]
-uniffi = { workspace = true, features = ["build"], optional = true }
 
 [dev-dependencies]
 # dto/tests.rs fixture + serde round-trip tests.
@@ -157,7 +155,7 @@ path = "tests/indexed_message_search.rs"
 required-features = ["search-index"]
 
 # Root integration sources are included by the domain harnesses. The coverage
-# guard in uniffi_async_bridge rejects orphaned or multiply registered sources.
+# guard in integration_targets rejects orphaned or multiply registered sources.
 
 [[test]]
 name = "ffi_lifecycle"
@@ -185,5 +183,5 @@ path = "tests/live_device_eligibility.rs"
 required-features = ["full-uniffi"]
 
 [[test]]
-name = "uniffi_async_bridge"
-path = "tests/uniffi_async_bridge.rs"
+name = "integration_targets"
+path = "tests/integration_targets.rs"

@@ -1,4 +1,5 @@
 import Foundation
+import SynaraCore
 
 /// P4-S22 map of privacy-safe SharedCore room snapshots to product details.
 ///
@@ -18,7 +19,7 @@ enum SharedCoreRoomDetails {
     struct MemberRow {
         let userId: String
         let displayName: String?
-        let membership: String
+        let membership: RoomMembershipDto
         let powerLevel: Int
     }
 
@@ -28,6 +29,7 @@ enum SharedCoreRoomDetails {
         room: RoomRow?,
         members: [MemberRow],
         powerLevelsJSON: String?,
+        capabilities: RoomPermissionCapabilitiesDto? = nil,
         joinRule: String?,
         topic: String?,
         encryptionStatus: SynaraRoomEncryptionStatus,
@@ -36,7 +38,8 @@ enum SharedCoreRoomDetails {
         let power = powerSummary(
             ownUserID: ownUserID,
             members: members,
-            powerLevelsJSON: powerLevelsJSON
+            powerLevelsJSON: powerLevelsJSON,
+            capabilities: capabilities
         )
         let aliases = [room?.canonicalAlias]
             .compactMap { $0 }
@@ -48,16 +51,12 @@ enum SharedCoreRoomDetails {
             aliases: aliases,
             encryptionStatus: encryptionStatus,
             isPublic: joinRule.map { $0 == "public" },
-            memberCount: members.filter { $0.membership == "join" }.count,
+            memberCount: members.filter { $0.membership == .join }.count,
             canInvite: power?.canInvite ?? false,
             canEditName: power?.canEditName ?? false,
             canEditTopic: power?.canEditTopic ?? false,
             canEditAvatar: power?.canEditAvatar ?? false,
-            canEditAliases: canEditAliases(
-                ownUserID: ownUserID,
-                members: members,
-                powerLevelsJSON: powerLevelsJSON
-            ),
+            canEditAliases: capabilities?.canChangeCanonicalAlias ?? false,
             powerLevels: power,
             notificationMode: notificationMode,
             avatarURL: room?.avatarUrl,
@@ -98,23 +97,25 @@ enum SharedCoreRoomDetails {
         }
     }
 
+    /// Raw levels come from the power-levels JSON for display. What the
+    /// signed-in user may do comes only from Core's capabilities, which apply
+    /// the room version's rules (creators outrank every level from v12).
+    /// Without capabilities every permission is denied.
     static func powerSummary(
         ownUserID: String?,
         members: [MemberRow],
-        powerLevelsJSON: String?
+        powerLevelsJSON: String?,
+        capabilities: RoomPermissionCapabilitiesDto?
     ) -> RoomPowerLevelSummary? {
         guard let parsed = parsePowerLevels(powerLevelsJSON) else {
             return nil
         }
-        let ownUserLevel = ownPowerLevel(
+        let ownUserLevel = capabilities.map { $0.ownPowerLevel ?? Int64.max } ?? ownPowerLevel(
             ownUserID: ownUserID,
             members: members,
             users: parsed.users,
             usersDefault: parsed.usersDefault
         )
-        let roomName = parsed.event("m.room.name") ?? parsed.stateDefault
-        let roomTopic = parsed.event("m.room.topic") ?? parsed.stateDefault
-        let roomAvatar = parsed.event("m.room.avatar") ?? parsed.stateDefault
         return RoomPowerLevelSummary(
             ownUserLevel: ownUserLevel,
             usersDefault: parsed.usersDefault,
@@ -124,36 +125,19 @@ enum SharedCoreRoomDetails {
             kick: parsed.kick,
             ban: parsed.ban,
             redact: parsed.redact,
-            roomName: roomName,
-            roomTopic: roomTopic,
-            roomAvatar: roomAvatar,
-            canInvite: ownUserLevel >= parsed.invite,
-            canKick: ownUserLevel >= parsed.kick,
-            canBan: ownUserLevel >= parsed.ban,
-            canRedactOther: ownUserLevel >= parsed.redact,
-            canEditName: ownUserLevel >= roomName,
-            canEditTopic: ownUserLevel >= roomTopic,
-            canEditAvatar: ownUserLevel >= roomAvatar,
-            canEditPowerLevels: ownUserLevel >= (parsed.event("m.room.power_levels") ?? parsed.stateDefault)
+            roomName: parsed.event("m.room.name") ?? parsed.stateDefault,
+            roomTopic: parsed.event("m.room.topic") ?? parsed.stateDefault,
+            roomAvatar: parsed.event("m.room.avatar") ?? parsed.stateDefault,
+            canInvite: capabilities?.canInvite ?? false,
+            canKick: capabilities?.canKick ?? false,
+            canBan: capabilities?.canBan ?? false,
+            canRedactOther: capabilities?.canRedactOthers ?? false,
+            canEditName: capabilities?.canChangeName ?? false,
+            canEditTopic: capabilities?.canChangeTopic ?? false,
+            canEditAvatar: capabilities?.canChangeAvatar ?? false,
+            canEditPowerLevels: capabilities?.canChangePowerLevels ?? false,
+            isCreator: capabilities?.isCreator ?? false
         )
-    }
-
-    static func canEditAliases(
-        ownUserID: String?,
-        members: [MemberRow],
-        powerLevelsJSON: String?
-    ) -> Bool {
-        guard let parsed = parsePowerLevels(powerLevelsJSON) else {
-            return false
-        }
-        let ownUserLevel = ownPowerLevel(
-            ownUserID: ownUserID,
-            members: members,
-            users: parsed.users,
-            usersDefault: parsed.usersDefault
-        )
-        let threshold = parsed.event("m.room.canonical_alias") ?? parsed.stateDefault
-        return ownUserLevel >= threshold
     }
 
     private struct ParsedPowerLevels {

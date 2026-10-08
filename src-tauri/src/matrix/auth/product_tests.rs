@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fs;
 
 use super::*;
 use crate::matrix::presence::{
@@ -1109,7 +1110,7 @@ fn send_result_serialization_is_privacy_safe() {
         room_id: "!room:example.org".into(),
         event_id: "$event:example.org".into(),
         local_txn_id: "local-txn-1".into(),
-        status: "sent",
+        status: synara_core::dto::SendStatus::Sent,
     };
     let json = serde_json::to_string(&result).unwrap();
     assert_eq!(
@@ -2064,7 +2065,7 @@ fn space_commands_route_through_core_without_desktop_client_io() {
 #[test]
 fn power_level_and_creator_snapshots_have_fixed_wire_shapes() {
     let power_levels = NativeRoomPowerLevelsSnapshot {
-        status: "ok",
+        status: synara_core::dto::WriteAck::Ok,
         session_generation: 7,
         room_id: "!room:example.org".to_owned(),
         event_type: "m.room.power_levels",
@@ -2074,6 +2075,8 @@ fn power_level_and_creator_snapshots_have_fixed_wire_shapes() {
             "users": { "@alice:example.org": 100 },
             "retained": { "value": true },
         }),
+        // Absent capabilities stay off the wire, keeping the fixed shape below.
+        capabilities: None,
     };
     assert_eq!(
         serde_json::to_value(power_levels).unwrap(),
@@ -2092,7 +2095,7 @@ fn power_level_and_creator_snapshots_have_fixed_wire_shapes() {
     );
 
     let creators = NativeRoomCreatorsSnapshot {
-        status: "ok",
+        status: synara_core::dto::WriteAck::Ok,
         session_generation: 7,
         room_id: "!room:example.org".to_owned(),
         event_type: "m.room.create",
@@ -2112,7 +2115,7 @@ fn power_level_and_creator_snapshots_have_fixed_wire_shapes() {
     );
 
     let tags = NativeRoomPowerLevelTagsSnapshot {
-        status: "ok",
+        status: synara_core::dto::WriteAck::Ok,
         session_generation: 7,
         room_id: "!room:example.org".to_owned(),
         event_type: "in.synara.room.power_level_tags",
@@ -2399,7 +2402,7 @@ fn room_directory_visibility_parsers_and_wire_shapes_are_strict() {
     );
 
     let read = serde_json::to_value(MatrixRoomDirectoryVisibilityResult {
-        status: "ok",
+        status: synara_core::dto::WriteAck::Ok,
         room_id: "!room:example.org".into(),
         session_generation: 7,
         visibility: "public",
@@ -2416,7 +2419,7 @@ fn room_directory_visibility_parsers_and_wire_shapes_are_strict() {
     );
 
     let write = serde_json::to_value(MatrixRoomDirectoryVisibilityWriteResult {
-        status: "ok",
+        status: synara_core::dto::WriteAck::Ok,
         room_id: "!room:example.org".into(),
         session_generation: 7,
         requested_visibility: "private",
@@ -2500,7 +2503,7 @@ fn room_moderation_commands_use_live_sdk_methods_without_js_fallbacks() {
 #[test]
 fn power_level_write_result_serializes_exact_wire_shape() {
     let result = NativePowerLevelWriteResult {
-        status: "ok",
+        status: synara_core::dto::WriteAck::Ok,
         room_id: "!room:example.org".to_owned(),
         event_type: crate::matrix::members::ROOM_POWER_LEVELS_EVENT_TYPE,
         state_key: "",
@@ -2640,9 +2643,11 @@ fn v_auth_native_session_credentials_never_cross_renderer_ipc() {
     }
 
     // The identity-only bootstrap DTO must never carry tokens to the frontend.
-    let product_source = include_str!("product.rs");
-    let identity_fn = product_source
-        .split("pub struct MatrixLoginIdentity {")
+    let locator_source =
+        include_str!("../../../../crates/synara-core/src/app/lifecycle/session/locator.rs");
+    assert!(include_str!("product.rs").contains("SessionLocator as MatrixLoginIdentity"));
+    let identity_fn = locator_source
+        .split("pub struct SessionLocator {")
         .nth(1)
         .and_then(|rest| rest.split('}').next())
         .expect("MatrixLoginIdentity fields");
@@ -2686,12 +2691,14 @@ fn v_auth_logout_clears_orphaned_native_identity_when_restore_never_installed_a_
         .and_then(|source| source.split("pub async fn matrix_restore_session").next())
         .expect("matrix_logout body");
 
+    // The owner runs the orphan closure when no session is installed.
     let no_active_session = logout
-        .split("let Some(active) = session.as_ref() else {")
+        .split("// Even a path-resolution failure must not skip retirement of stale Core.")
         .nth(1)
-        .and_then(|source| source.split("// Resolve the root").next())
+        .and_then(|source| source.split("|active, plan|").next())
         .expect("matrix_logout missing-session branch");
     assert!(no_active_session.contains("clear_persisted_logout_material"));
+    assert!(no_active_session.contains("record_pending_cleanup"));
 }
 
 #[test]
@@ -2721,17 +2728,30 @@ fn product_client_persists_rotated_sdk_tokens_in_native_vault_and_logout_is_loca
         })
         .expect("session rotation callback body");
     for required in [
+        "synara_core::app::lifecycle::session::install_session_rotation_callbacks(",
+        "RotationDiagnostics::DESKTOP",
+        "ensure_logout_retry_locator",
+        "authenticated_login_identity",
+        "record_session_rotation_outcome",
+        "KeyringSessionMaterialVault::new()",
+    ] {
+        assert!(
+            callbacks.contains(required),
+            "desktop rotation hooks must retain {required}"
+        );
+    }
+    let core_rotation =
+        include_str!("../../../../crates/synara-core/src/app/lifecycle/session/rotation.rs");
+    for required in [
         "set_session_callbacks",
         "load_session_material",
         "matrix_session_from_host_secrets",
         "persist_session_after_login",
-        "save_credentials",
-        "ensure_logout_retry_locator",
-        "authenticated_login_identity",
+        "lease.save_credentials(",
     ] {
         assert!(
-            callbacks.contains(required),
-            "session rotation callback must retain {required}"
+            core_rotation.contains(required),
+            "Core session rotation callback must retain {required}"
         );
     }
     assert!(
@@ -2745,8 +2765,13 @@ fn product_client_persists_rotated_sdk_tokens_in_native_vault_and_logout_is_loca
         .and_then(|source| source.split("pub async fn matrix_restore_session").next())
         .expect("matrix_logout body");
     assert!(
-        logout.contains("matrix_auth().logout().await.is_ok()"),
-        "remote logout must remain best-effort"
+        logout.contains("state\n        .logout(") && logout.contains("finish_taken_session_logout("),
+        "logout runs through the owner, which takes the transition gate and the session out of the slot"
+    );
+    assert!(
+        logout.contains("client.matrix_auth().logout()")
+            && logout.contains("plan.remote_logout_allowed"),
+        "remote logout runs only when the plan allows it"
     );
     assert!(
         logout.contains("clear_native_logout_material")
@@ -2757,6 +2782,218 @@ fn product_client_persists_rotated_sdk_tokens_in_native_vault_and_logout_is_loca
         !logout.contains("clear_frontend_session_envelope"),
         "logout must not depend on a renderer-facing credential store"
     );
+    assert!(
+        !logout.contains("wipePersistedStores"),
+        "logout must not delete crypto stores"
+    );
+}
+
+#[test]
+fn installs_and_restore_wait_on_the_session_transition_gate() {
+    for command in [
+        "pub async fn matrix_login_password(",
+        "pub async fn matrix_register(",
+        "pub async fn matrix_store_recovery_confirm(",
+        "pub async fn matrix_restore_session(",
+    ] {
+        let body = AUTH_PRODUCT_COMMANDS_SOURCE
+            .split(command)
+            .nth(1)
+            .and_then(|source| source.split("#[tauri::command]").next())
+            .expect("command body");
+        // `begin_install` takes the transition gate, then the slot (Core
+        // owner tests pin that order); recovery confirm takes only the gate.
+        assert!(
+            body.contains("state.begin_install().await")
+                || body.contains("state.lock_transition().await"),
+            "{command} must take the transition gate"
+        );
+    }
+    let restore = AUTH_PRODUCT_COMMANDS_SOURCE
+        .split("pub async fn matrix_restore_session")
+        .nth(1)
+        .and_then(|source| source.split("#[tauri::command]").next())
+        .expect("restore body");
+    let retry = restore
+        .find("retry_pending_cleanup")
+        .expect("restore finishes a failed retirement cleanup first");
+    let read = restore
+        .find("read_active_identity(&app_data_root)")
+        .expect("restore reads the active identity");
+    assert!(retry < read);
+}
+
+#[test]
+fn the_watcher_retires_through_the_tick_helper_with_its_generation() {
+    let product = include_str!("product.rs");
+    let watch_body = product
+        .split("pub fn spawn_suspend_resume_watch")
+        .nth(1)
+        .and_then(|source| source.split("if rejected || !slept").next())
+        .expect("watcher loop");
+    // The shared Core tick owns save retry, cleanup retry and the rejection
+    // decision; the watcher only supplies the desktop adapters.
+    assert!(watch_body.contains(".maintenance_tick("));
+    assert!(watch_body.contains("retry_failed_session_save"));
+    assert!(watch_body.contains("clear_native_logout_material"));
+    assert!(watch_body.contains("matrix_logout(retire_app, retire_state, core, Some(generation))"));
+    assert!(!watch_body.contains("client.matrix_auth().logout()"));
+    assert!(!watch_body.contains("wipePersistedStores"));
+}
+
+/// Acceptance 7: drive the real take + teardown pair that `matrix_logout` runs.
+/// Production passes `VOLUNTARY_REMOTE_LOGOUT_TIMEOUT`; the test shortens it.
+#[tokio::test]
+async fn voluntary_logout_finishes_within_the_bound_without_holding_the_session_mutex() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    assert_eq!(
+        VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
+        std::time::Duration::from_secs(15)
+    );
+    let bound = std::time::Duration::from_millis(200);
+    let slot = Arc::new(Mutex::new(Some(7u64)));
+    let transition = Arc::new(Mutex::new(()));
+    let remote_started = Arc::new(AtomicBool::new(false));
+    let cleaned = Arc::new(AtomicBool::new(false));
+    let closed = Arc::new(AtomicBool::new(false));
+
+    let logout = {
+        let slot = Arc::clone(&slot);
+        let transition = Arc::clone(&transition);
+        let remote_started = Arc::clone(&remote_started);
+        let cleaned = Arc::clone(&cleaned);
+        let closed = Arc::clone(&closed);
+        tokio::spawn(async move {
+            let _transition = transition.lock().await;
+            let started = tokio::time::Instant::now();
+            let (session, ()) =
+                take_session_for_logout(&slot, |_| Ok::<(), MatrixAuthCommandError>(()))
+                    .await?
+                    .expect("installed session");
+            finish_taken_session_logout(
+                session,
+                bound,
+                || {},
+                Some(move || {
+                    remote_started.store(true, Ordering::SeqCst);
+                    // A remote /logout that never returns.
+                    std::future::pending::<Result<(), ()>>()
+                }),
+                || async { Ok::<(), MatrixAuthCommandError>(()) },
+                || {
+                    cleaned.store(true, Ordering::SeqCst);
+                    Ok(())
+                },
+                || async {
+                    closed.store(true, Ordering::SeqCst);
+                    Ok(())
+                },
+            )
+            .await
+            .map(|()| started.elapsed())
+        })
+    };
+
+    // While the remote call hangs, another task can take the real session
+    // mutex at once, and it already sees no installed session.
+    while !remote_started.load(Ordering::SeqCst) {
+        tokio::task::yield_now().await;
+    }
+    let observed = tokio::time::timeout(std::time::Duration::from_millis(50), slot.lock())
+        .await
+        .expect("session mutex must be free while remote logout waits");
+    assert_eq!(
+        *observed, None,
+        "the retiring session is not visible as live"
+    );
+    drop(observed);
+    // An install waits on the transition gate until teardown is done.
+    assert!(transition.try_lock().is_err());
+
+    let elapsed = logout
+        .await
+        .expect("logout task")
+        .expect("a hung remote logout still logs out locally");
+    assert!(elapsed >= bound);
+    assert!(elapsed < bound + std::time::Duration::from_secs(5));
+    assert!(cleaned.load(Ordering::SeqCst) && closed.load(Ordering::SeqCst));
+    assert!(transition.try_lock().is_ok());
+}
+
+#[tokio::test]
+async fn a_401_remote_logout_and_a_rejected_generation_both_finish_locally() {
+    use std::cell::Cell;
+
+    // 401: returns at once and still runs cleanup and close.
+    let slot = Mutex::new(Some(1u64));
+    let (session, ()) = take_session_for_logout(&slot, |_| Ok::<(), MatrixAuthCommandError>(()))
+        .await
+        .unwrap()
+        .unwrap();
+    let cleaned = Cell::new(false);
+    let started = tokio::time::Instant::now();
+    finish_taken_session_logout(
+        session,
+        VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
+        || {},
+        Some(|| async { Err::<(), &str>("M_UNKNOWN_TOKEN") }),
+        || async { Ok::<(), MatrixAuthCommandError>(()) },
+        || {
+            cleaned.set(true);
+            Ok(())
+        },
+        || async { Ok(()) },
+    )
+    .await
+    .unwrap();
+    assert!(cleaned.get());
+    assert!(started.elapsed() < std::time::Duration::from_secs(1));
+    assert!(slot.lock().await.is_none());
+
+    // Rejected generation: no remote closure at all.
+    let slot = Mutex::new(Some(2u64));
+    let (session, ()) = take_session_for_logout(&slot, |_| Ok::<(), MatrixAuthCommandError>(()))
+        .await
+        .unwrap()
+        .unwrap();
+    let revoked = Cell::new(false);
+    finish_taken_session_logout(
+        session,
+        VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
+        || revoked.set(true),
+        None::<fn() -> std::future::Ready<Result<(), ()>>>,
+        || async { Ok::<(), MatrixAuthCommandError>(()) },
+        || Ok(()),
+        || async { Ok(()) },
+    )
+    .await
+    .unwrap();
+    assert!(revoked.get());
+
+    // A second logout after the first sees an empty slot (orphan path).
+    assert!(
+        take_session_for_logout(&slot, |_: &u64| Ok::<(), MatrixAuthCommandError>(()))
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[tokio::test]
+async fn a_failed_logout_preflight_leaves_the_session_installed() {
+    let slot = Mutex::new(Some(3u64));
+    let error = take_session_for_logout(&slot, |_| -> Result<(), _> {
+        Err(MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "The rejected session has already changed.",
+            "d0.1-session-rejection-stale",
+        ))
+    })
+    .await
+    .expect_err("stale generation");
+    assert_eq!(error.diagnostic_id, "d0.1-session-rejection-stale");
+    assert_eq!(*slot.lock().await, Some(3));
 }
 
 #[test]
@@ -2774,13 +3011,16 @@ fn v_auth_sync_recover_restarts_live_owner_without_rebuild() {
     assert!(product.contains("SyncIntent::Resume"));
     assert!(product.contains("spawn_suspend_resume_watch"));
     assert!(product.contains("suspend_detected"));
-    assert!(product.contains("recover_gate"));
-    assert!(product.contains("recover_cooldown_active"));
-    assert!(product.contains("last_success_wall"));
+    assert!(product.contains("self.recover_live("));
     assert!(product.contains("recover_sync_after_detected_suspend"));
-    assert!(product.contains("RECOVER_COOLDOWN"));
+    // The recover gate and its wall-clock cooldown live in Core.
+    let core_recover =
+        include_str!("../../../../crates/synara-core/src/app/lifecycle/session/recover.rs");
+    assert!(core_recover.contains("recover_cooldown_active"));
+    assert!(core_recover.contains("last_success_wall"));
+    assert!(core_recover.contains("RECOVER_COOLDOWN"));
     assert!(
-        !product.contains("last.elapsed()"),
+        !core_recover.contains("last.elapsed()"),
         "recover cooldown must use wall time, not Instant::elapsed"
     );
 
@@ -2921,7 +3161,7 @@ async fn media_config_desktop_owner_keeps_the_live_client_and_closed_no_session_
         .nth(1)
         .and_then(|source| {
             source
-                .split("pub(super) async fn clear_store_recovery")
+                .split("/// Resolve an opaque V-ROOMS invite-avatar capability")
                 .next()
         })
         .expect("desktop media config projection");
@@ -3506,7 +3746,7 @@ async fn session_wiring_failures_retire_tentative_live_and_core_before_returning
         fs::remove_dir_all(root).unwrap();
     }
     let rolled_back = Cell::new(false);
-    finish_session_wiring(Ok(()), || async {
+    finish_session_wiring(Ok::<(), MatrixAuthCommandError>(()), || async {
         rolled_back.set(true);
         Ok(())
     })
@@ -3529,13 +3769,15 @@ async fn session_transition_gate_blocks_new_install_during_wiring_active_and_orp
             let close = async {
                 entered_send.send(()).unwrap();
                 release_receive.await.unwrap();
-                Ok(())
+                Ok::<(), MatrixAuthCommandError>(())
             };
             if route == "wiring" {
                 close.await.unwrap();
-                finish_session_wiring(Ok(()), || async { panic!("successful wiring rollback") })
-                    .await
-                    .unwrap();
+                finish_session_wiring(Ok::<(), MatrixAuthCommandError>(()), || async {
+                    panic!("successful wiring rollback")
+                })
+                .await
+                .unwrap();
             } else if route == "active-close" {
                 finish_active_logout(
                     || Ok(()),
@@ -3585,7 +3827,7 @@ async fn authenticated_identity_equivalence_preserves_layout_and_mismatch_revoke
         requested.account_dir_segment()
     );
     let revoked = Cell::new(false);
-    accept_authenticated_identity(Ok(equivalent), || async {
+    accept_authenticated_identity(Ok::<_, MatrixAuthCommandError>(equivalent), || async {
         revoked.set(true);
     })
     .await
@@ -3744,7 +3986,7 @@ fn persistence_lease_waits_for_inflight_callback_before_teardown_cleanup() {
         lease
             .save(|| {
                 ran.set(true);
-                Ok(())
+                Ok::<(), MatrixAuthCommandError>(())
             })
             .unwrap_err()
             .diagnostic_id,
@@ -3831,7 +4073,10 @@ fn failed_preinstall_persistence_revokes_callbacks_before_failed_cleanup() {
         || {
             cleaned.set(true);
             assert_eq!(
-                callback.save(|| Ok(())).unwrap_err().diagnostic_id,
+                callback
+                    .save(|| Ok::<(), MatrixAuthCommandError>(()))
+                    .unwrap_err()
+                    .diagnostic_id,
                 "d0.1-session-persistence-retired"
             );
             Err(MatrixAuthCommandError::unavailable("test-cleanup-failed"))
@@ -3840,7 +4085,10 @@ fn failed_preinstall_persistence_revokes_callbacks_before_failed_cleanup() {
     assert!(saved.get() && cleaned.get());
     assert_eq!(result.unwrap_err().diagnostic_id, "test-cleanup-failed");
     assert_eq!(
-        callback.save(|| Ok(())).unwrap_err().diagnostic_id,
+        callback
+            .save(|| Ok::<(), MatrixAuthCommandError>(()))
+            .unwrap_err()
+            .diagnostic_id,
         "d0.1-session-persistence-retired"
     );
 }
@@ -3915,7 +4163,10 @@ async fn install_rollback_preserves_restored_refresh_but_cleans_new_authenticati
                         || async {
                             stopped.set(true);
                             assert_eq!(
-                                lease.save(|| Ok(())).unwrap_err().diagnostic_id,
+                                lease
+                                    .save(|| Ok::<(), MatrixAuthCommandError>(()))
+                                    .unwrap_err()
+                                    .diagnostic_id,
                                 "d0.1-session-persistence-retired"
                             );
                             if stop_fails {
@@ -3957,7 +4208,10 @@ async fn install_rollback_preserves_restored_refresh_but_cleans_new_authenticati
             assert_eq!(remote_revoked.get(), !restored);
             assert_eq!(cleaned.get(), !restored);
             assert_eq!(
-                lease.save(|| Ok(())).unwrap_err().diagnostic_id,
+                lease
+                    .save(|| Ok::<(), MatrixAuthCommandError>(()))
+                    .unwrap_err()
+                    .diagnostic_id,
                 "d0.1-session-persistence-retired"
             );
             if restored {
@@ -4060,7 +4314,10 @@ async fn preparation_failure_after_callback_save_uses_origin_rollback_and_stops_
         assert!(!started_sync.get() && !widgets_open.get() && !observed.get() && core_closed.get());
         assert_eq!(remote_revoked.get(), !restored);
         assert_eq!(
-            lease.save(|| Ok(())).unwrap_err().diagnostic_id,
+            lease
+                .save(|| Ok::<(), MatrixAuthCommandError>(()))
+                .unwrap_err()
+                .diagnostic_id,
             "d0.1-session-persistence-retired"
         );
         if restored {
@@ -4172,7 +4429,10 @@ async fn new_auth_preparation_without_credential_write_preserves_previous_login(
                 == previous.as_bytes()
         );
         assert_eq!(
-            lease.save(|| Ok(())).unwrap_err().diagnostic_id,
+            lease
+                .save(|| Ok::<(), MatrixAuthCommandError>(()))
+                .unwrap_err()
+                .diagnostic_id,
             "d0.1-session-persistence-retired"
         );
         fs::remove_dir_all(root).unwrap();
@@ -4479,7 +4739,10 @@ async fn password_login_activation_failure_revokes_token_before_metadata_without
             "no writer attempt may clear a previous login"
         );
         assert_eq!(
-            lease.save(|| Ok(())).unwrap_err().diagnostic_id,
+            lease
+                .save(|| Ok::<(), MatrixAuthCommandError>(()))
+                .unwrap_err()
+                .diagnostic_id,
             "d0.1-session-persistence-retired"
         );
         assert_eq!(read_active_identity(&root).unwrap(), identity);
@@ -4499,195 +4762,6 @@ async fn password_login_activation_failure_revokes_token_before_metadata_without
         drop(client);
         fs::remove_dir_all(root).unwrap();
     }
-}
-
-#[tokio::test]
-async fn suspend_resume_holds_session_gate_until_completion_and_selects_replacement_owner() {
-    use std::cell::Cell;
-    use std::sync::{
-        atomic::{AtomicU64, Ordering},
-        Mutex as StdMutex,
-    };
-    let session = tokio::sync::Mutex::new(Some(1_u64));
-    let recovery = tokio::sync::Mutex::new(RecoverGate::default());
-    let current = AtomicU64::new(1);
-    let events = StdMutex::new(Vec::new());
-    let (started_send, started_receive) = tokio::sync::oneshot::channel();
-    let (release_send, release_receive) = tokio::sync::oneshot::channel();
-    let resume = recover_installed_session_owner(
-        &session,
-        &recovery,
-        true,
-        |generation| *generation,
-        |active| active.copied(),
-        |generation| {
-            let current = &current;
-            let events = &events;
-            async move {
-                assert_eq!(generation, 1);
-                events.lock().unwrap().push("old-resume-start");
-                started_send.send(()).unwrap();
-                release_receive.await.unwrap();
-                assert_eq!(
-                    current.load(Ordering::Acquire),
-                    generation,
-                    "logout/replacement cannot retire a currently resuming owner"
-                );
-                events.lock().unwrap().push("old-resume-complete");
-                Ok::<_, ()>(Some(generation))
-            }
-        },
-    );
-    let replace = async {
-        started_receive.await.unwrap();
-        assert!(
-            session.try_lock().is_err(),
-            "teardown is blocked until old resume finishes"
-        );
-        // SDK work releases recovery. An observer may then wait for session
-        // while holding recovery; completion must drop session first.
-        let gate = recovery.lock().await;
-        assert!(gate.in_flight);
-        release_send.send(()).unwrap();
-        let mut active = session.lock().await;
-        events.lock().unwrap().push("old-stop-new-install");
-        current.store(2, Ordering::Release);
-        *active = Some(2);
-        drop(active);
-        drop(gate);
-    };
-    let (result, ()) = tokio::time::timeout(Duration::from_secs(5), async {
-        tokio::join!(resume, replace)
-    })
-    .await
-    .expect("resume releases session before reacquiring recovery bookkeeping");
-    assert_eq!(result.unwrap(), Some(1));
-    assert_eq!(
-        *events.lock().unwrap(),
-        [
-            "old-resume-start",
-            "old-resume-complete",
-            "old-stop-new-install"
-        ]
-    );
-    let called = Cell::new(false);
-    let observed = recover_installed_session_owner(
-        &session,
-        &recovery,
-        false,
-        |generation| *generation,
-        |active| active.copied(),
-        |_| async {
-            called.set(true);
-            Ok::<_, ()>(None)
-        },
-    )
-    .await
-    .unwrap();
-    assert_eq!(observed, Some(2));
-    assert!(
-        !called.get(),
-        "successful recovery preserves renderer wall-clock cooldown"
-    );
-    let resumed = recover_installed_session_owner(
-        &session,
-        &recovery,
-        true,
-        |generation| *generation,
-        |active| active.copied(),
-        |generation| async move {
-            assert_eq!(
-                generation, 2,
-                "after replacement only the installed owner resumes"
-            );
-            assert_eq!(current.load(Ordering::Acquire), generation);
-            Ok::<_, ()>(Some(generation))
-        },
-    )
-    .await
-    .unwrap();
-    assert_eq!(resumed, Some(2));
-    assert!(!recovery.lock().await.in_flight);
-    assert!(recovery.lock().await.last_success_wall.is_some());
-    *session.lock().await = None;
-    let logged_out = recover_installed_session_owner(
-        &session,
-        &recovery,
-        true,
-        |generation| *generation,
-        |active| active.copied(),
-        |_| async {
-            called.set(true);
-            Ok::<_, ()>(None)
-        },
-    )
-    .await
-    .unwrap();
-    assert!(
-        logged_out.is_none() && !called.get(),
-        "no retained old owner resumes after logout"
-    );
-}
-
-#[tokio::test]
-async fn suspend_resume_inflight_and_error_preserve_recovery_gate_contract() {
-    use std::cell::Cell;
-    let session = tokio::sync::Mutex::new(Some(1_u64));
-    let recovery = tokio::sync::Mutex::new(RecoverGate {
-        in_flight: true,
-        last_success_wall: None,
-    });
-    let called = Cell::new(false);
-    assert_eq!(
-        recover_installed_session_owner(
-            &session,
-            &recovery,
-            true,
-            |generation| *generation,
-            |active| active.copied(),
-            |_| async {
-                called.set(true);
-                Ok::<_, &'static str>(None)
-            },
-        )
-        .await
-        .unwrap(),
-        Some(1)
-    );
-    assert!(
-        !called.get(),
-        "concurrent recovery observes instead of issuing a second resume"
-    );
-    recovery.lock().await.in_flight = false;
-    let error = recover_installed_session_owner(
-        &session,
-        &recovery,
-        false,
-        |generation| *generation,
-        |active| active.copied(),
-        |_| async { Err("fixture-resume-failed") },
-    )
-    .await
-    .unwrap_err();
-    assert_eq!(error, "fixture-resume-failed");
-    let gate = recovery.lock().await;
-    assert!(!gate.in_flight && gate.last_success_wall.is_none());
-    drop(gate);
-    let retried = recover_installed_session_owner(
-        &session,
-        &recovery,
-        false,
-        |generation| *generation,
-        |active| active.copied(),
-        |generation| async move { Ok::<_, &'static str>(Some(generation)) },
-    )
-    .await
-    .unwrap();
-    assert_eq!(
-        retried,
-        Some(1),
-        "ordinary retry remains allowed after resume error"
-    );
 }
 
 #[test]
@@ -4720,7 +4794,7 @@ fn rotation_save_failure_is_tracked_until_durable_write_and_cannot_outlive_owner
     lease
         .save(|| {
             wrote.set(true);
-            Ok(())
+            Ok::<(), MatrixAuthCommandError>(())
         })
         .unwrap();
     assert!(!lease.save_failed());
@@ -4730,7 +4804,7 @@ fn rotation_save_failure_is_tracked_until_durable_write_and_cannot_outlive_owner
     assert!(lease
         .save(|| {
             wrote.set(true);
-            Ok(())
+            Ok::<(), MatrixAuthCommandError>(())
         })
         .is_err());
     assert!(!wrote.get());

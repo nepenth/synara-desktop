@@ -72,10 +72,10 @@ second writer.
   no media bytes or filesystem paths.
 - Playbook §5 / goal-graph stop conditions: notes already landed as P4-S9-7
   (#955). This census must not invent S38, start P5, or register leftover
-  secret/byte commands on `Core::command`. The generic desktop
-  `setAccountData` facade remains a documented fail-closed GAP
-  ([`nativeClientFacade.ts`](../../../../synara/src/app/features/native-client/nativeClientFacade.ts)
-  F3) and is not a notes write path.
+  secret/byte commands on `Core::command`. Desktop has no generic
+  account-data write (the renderer client facade that stubbed one is retired,
+  see [`nativeCommands.ts`](../../../../synara/src/app/native/nativeCommands.ts)),
+  so it is not a notes write path.
 - `MockRoomNotesService` is preview / UI-test only
   (`AppEnvironment.mock`, `SYNARA_UI_TEST_ROOM_NOTES`). Shipped `live()`
   wires `SharedCoreRoomNotesService`.

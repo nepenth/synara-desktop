@@ -1,35 +1,33 @@
 //! Desktop bridges for image-pack writes through `Core::command`.
 
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
 use crate::matrix::auth::product::MatrixProfileWriteResult;
 
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
-
 pub(crate) async fn set_user_image_pack(
     core: &Core,
     content: serde_json::Value,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    dispatch_write(
-        core,
-        "matrix_set_user_image_pack",
-        serde_json::json!({ "content": content }),
-    )
-    .await
+    core.set_user_image_pack(synara_core::core_api::MatrixSetImagePackContentRequest { content })
+        .await
+        .map(|_| MatrixProfileWriteResult {
+            status: synara_core::dto::WriteAck::Ok,
+        })
+        .map_err(map_image_pack_write_core_error)
 }
 
 pub(crate) async fn set_global_image_packs(
     core: &Core,
     content: serde_json::Value,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    dispatch_write(
-        core,
-        "matrix_set_global_image_packs",
-        serde_json::json!({ "content": content }),
-    )
-    .await
+    core.set_global_image_packs(synara_core::core_api::MatrixSetImagePackContentRequest { content })
+        .await
+        .map(|_| MatrixProfileWriteResult {
+            status: synara_core::dto::WriteAck::Ok,
+        })
+        .map_err(map_image_pack_write_core_error)
 }
 
 pub(crate) async fn set_room_image_pack(
@@ -38,32 +36,16 @@ pub(crate) async fn set_room_image_pack(
     state_key: String,
     content: serde_json::Value,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    dispatch_write(
-        core,
-        "matrix_set_room_image_pack",
-        serde_json::json!({
-            "roomId": room_id,
-            "stateKey": state_key,
-            "content": content,
-        }),
-    )
-    .await
-}
-
-async fn dispatch_write(
-    core: &Core,
-    command: &str,
-    payload: serde_json::Value,
-) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    core.command(CommandEnvelope {
-        command: command.to_owned(),
-        session_generation: READ_ONLY_SESSION_GENERATION,
-        request_id: None,
-        payload,
+    core.set_room_image_pack(synara_core::core_api::MatrixSetRoomImagePackRequest {
+        room_id,
+        state_key,
+        content,
     })
     .await
-    .map_err(map_image_pack_write_core_error)?;
-    Ok(MatrixProfileWriteResult { status: "ok" })
+    .map(|_| MatrixProfileWriteResult {
+        status: synara_core::dto::WriteAck::Ok,
+    })
+    .map_err(map_image_pack_write_core_error)
 }
 
 fn map_image_pack_write_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {

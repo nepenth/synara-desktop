@@ -6,12 +6,17 @@ import SynaraCore
 /// Uses list/SAS commands only. No tokens, MACs, or recovery secrets.
 /// This is not iOS-on-engine and not P4 acceptance.
 enum SharedCoreVerificationLive {
-    static func isTerminal(phase: String) -> Bool {
-        phase == "done" || phase == "mismatched" || phase == "cancelled" || phase == "failed"
+    static func isTerminal(phase: VerificationPhaseDto) -> Bool {
+        switch phase {
+        case .done, .mismatched, .cancelled, .failed:
+            return true
+        case .requested, .ready, .started, .keysExchanging, .sasReady, .qrScanned, .confirmed:
+            return false
+        }
     }
 
     static func selectedFlowId(
-        requests: [(flowId: String, phase: String)],
+        requests: [(flowId: String, phase: VerificationPhaseDto)],
         preferring preferredFlowId: String?
     ) -> String? {
         if let preferredFlowId, requests.contains(where: { $0.flowId == preferredFlowId }) {
@@ -54,8 +59,8 @@ enum SharedCoreVerificationLive {
     }
 
     static func state(
-        phase: String,
-        direction: String,
+        phase: VerificationPhaseDto,
+        direction: VerificationDirectionDto,
         flowId: String,
         otherUserId: String,
         otherDeviceId: String?,
@@ -63,8 +68,8 @@ enum SharedCoreVerificationLive {
         decimals: [UInt16] = []
     ) -> CryptoVerificationState {
         switch phase {
-        case "requested":
-            if direction == "incoming" {
+        case .requested:
+            if direction == .incoming {
                 return .requestReceived(
                     CryptoVerificationRequest(
                         userID: otherUserId,
@@ -76,16 +81,16 @@ enum SharedCoreVerificationLive {
                 )
             }
             return .requestSent
-        case "ready":
+        case .ready:
             return needsSasStart(phase: phase, direction: direction) ? .accepted : .sasStarted
-        case "started":
+        case .started:
             // Incoming Started is observation-only: Rust owns SAS accept.
             // Outgoing Started without a renderable QR still needs Start Comparison
             // so iOS cannot deadlock if Core ever leaves Ready (show-QR).
             return needsSasStart(phase: phase, direction: direction) ? .accepted : .sasStarted
-        case "keys_exchanging":
+        case .keysExchanging:
             return .keysExchanging
-        case "sas_ready":
+        case .sasReady:
             if emoji.isEmpty == false {
                 return .emojis(emoji.map { CryptoVerificationEmoji(symbol: $0.symbol, description: $0.description) })
             }
@@ -96,25 +101,32 @@ enum SharedCoreVerificationLive {
             // contract. Surface the failure instead of leaving the user in an
             // endless waiting state with no possible confirmation action.
             return .failed
-        case "confirmed":
-            return .confirmed
-        case "done":
-            return .finished
-        case "cancelled":
-            return .cancelled
-        case "mismatched":
-            return .mismatched
-        case "failed":
+        case .qrScanned:
+            // iOS advertises SAS only and never shows a QR code, so Core cannot
+            // reach this phase here. Fail closed rather than confirm a scan the
+            // user was never asked about.
             return .failed
-        default:
+        case .confirmed:
+            return .confirmed
+        case .done:
+            return .finished
+        case .cancelled:
+            return .cancelled
+        case .mismatched:
+            return .mismatched
+        case .failed:
             return .failed
         }
     }
 
     /// iOS is SAS-only. Unlike desktop `verificationRequestNeedsSasStart`, a QR
     /// payload never suppresses Start Comparison — this host cannot render it.
-    static func needsSasStart(phase: String, direction: String, hasShownQr: Bool = false) -> Bool {
+    static func needsSasStart(
+        phase: VerificationPhaseDto,
+        direction: VerificationDirectionDto,
+        hasShownQr: Bool = false
+    ) -> Bool {
         let _ = hasShownQr
-        return direction == "outgoing" && (phase == "ready" || phase == "started")
+        return direction == .outgoing && (phase == .ready || phase == .started)
     }
 }

@@ -4,7 +4,6 @@ import test from 'node:test';
 import { StateEvent } from '../../../types/matrix/room';
 import type { MatrixEventReading } from '../../utils/room';
 import { collectRoomStateEvents } from '../useRoomState';
-import { collectRoomAccountData } from '../useRoomAccountData';
 
 const makeEvent = (type: string, stateKey: string): MatrixEventReading =>
   ({
@@ -41,17 +40,4 @@ test('collectRoomStateEvents copies indexed state and skips room members', () =>
   assert.equal(state.size, 1);
   assert.equal(state.get(StateEvent.RoomTopic)?.get('')?.getType(), StateEvent.RoomTopic);
   assert.equal(state.has(StateEvent.RoomMember), false);
-});
-
-test('collectRoomAccountData returns empty for native get-only stubs', () => {
-  assert.equal(collectRoomAccountData(undefined).size, 0);
-  assert.equal(collectRoomAccountData({ get: () => undefined }).size, 0);
-  assert.doesNotThrow(() => collectRoomAccountData({ get: () => undefined }));
-});
-
-test('collectRoomAccountData copies Map entries with event content', () => {
-  const source = new Map([['org.example.pref', { getContent: () => ({ color: 'blue' }) }]]);
-
-  const accountData = collectRoomAccountData(source);
-  assert.deepEqual(accountData.get('org.example.pref'), { color: 'blue' });
 });

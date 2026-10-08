@@ -58,10 +58,16 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn room_power_levels_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
-    assert!(udl.contains("room_set_power_level("));
-    assert!(udl.contains("room_set_power_levels("));
-    assert!(udl.contains("room_set_power_level_tags("));
+    let udl = crate::ffi_surface::udl();
+    assert!(crate::ffi_surface::declares_fn(udl, "room_set_power_level"));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "room_set_power_levels"
+    ));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "room_set_power_level_tags"
+    ));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
     assert!(!udl.contains("matrix_room_create"));
@@ -74,12 +80,24 @@ fn room_power_levels_surface_exposes_only_the_registered_family() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("room_set_power_level("));
-    assert!(shared_core.contains("room_set_power_levels("));
-    assert!(shared_core.contains("room_set_power_level_tags("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "room_set_power_level"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "room_set_power_levels"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "room_set_power_level_tags"
+    ));
     assert!(shared_core.contains("room_invite"));
     assert!(shared_core.contains("room_unban"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

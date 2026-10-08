@@ -2,6 +2,7 @@
 //!
 //! Live Client hierarchy/child I/O lives in `live.rs`.
 
+use crate::dto::MutationStatus;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use serde::{Deserialize, Serialize};
@@ -20,6 +21,7 @@ pub struct NativeSpaceParentsSnapshot {
     pub entries: Vec<NativeSpaceParentEntry>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeSpaceHierarchyRoom {
@@ -36,6 +38,7 @@ pub struct NativeSpaceHierarchyRoom {
     pub guest_can_join: bool,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeSpaceHierarchySnapshot {
@@ -44,18 +47,21 @@ pub struct NativeSpaceHierarchySnapshot {
 }
 
 /// One valid local `m.space.child` edge from a joined space room state.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeSpaceChildEdge {
     pub parent_id: String,
     pub child_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub order: Option<String>,
     pub suggested: bool,
     pub via: Vec<String>,
     pub origin_server_ts: u64,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeSpaceChildrenSnapshot {
@@ -63,19 +69,23 @@ pub struct NativeSpaceChildrenSnapshot {
     pub edges: Vec<NativeSpaceChildEdge>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeSpaceChildMutationResult {
     pub parent_id: String,
     pub child_id: String,
-    pub status: &'static str,
+    #[cfg_attr(feature = "ts-export", ts(type = "\"updated\" | \"removed\""))]
+    pub status: MutationStatus,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRestrictedJoinReparentResult {
     pub room_id: String,
-    pub status: &'static str,
+    #[cfg_attr(feature = "ts-export", ts(type = "\"updated\" | \"skipped\""))]
+    pub status: MutationStatus,
 }
 
 /// Reject edges that would make `child` an ancestor of `parent` (JS cycle guard).
@@ -191,7 +201,7 @@ mod tests {
         let result = NativeSpaceChildMutationResult {
             parent_id: "!space:example.org".into(),
             child_id: "!room:example.org".into(),
-            status: "updated",
+            status: crate::dto::MutationStatus::Updated,
         };
         let value = serde_json::to_value(&result).expect("serialize");
         assert_eq!(value["status"], "updated");

@@ -2,6 +2,7 @@
 //!
 //! Live protocol listing lives in `live.rs`. Search request mapping stays desktop.
 
+use crate::dto::DirectorySearchStatus;
 use matrix_sdk::ruma::OwnedServerName;
 use serde::{Deserialize, Serialize};
 
@@ -36,6 +37,7 @@ pub struct NormalizedDirectorySearch {
     pub since: Option<String>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DirectoryProtocolInstance {
@@ -44,6 +46,7 @@ pub struct DirectoryProtocolInstance {
     pub description: String,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomDirectoryProtocols {
@@ -51,6 +54,7 @@ pub struct NativeRoomDirectoryProtocols {
     pub instances: Vec<DirectoryProtocolInstance>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomDirectoryPage {
@@ -58,36 +62,50 @@ pub struct NativeRoomDirectoryPage {
     pub request_id: u64,
     pub chunk: Vec<DirectoryRoomHitDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub prev_batch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub next_batch: Option<String>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DirectoryRoomHitDto {
     pub room_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub topic: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub canonical_alias: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub avatar_url: Option<String>,
     pub member_count: u32,
     pub world_readable: bool,
     pub guest_can_join: bool,
+    #[cfg_attr(feature = "ts-export", ts(type = "\"room\" | \"space\""))]
     pub room_type: &'static str,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomDirectorySearchResponse {
     pub session_generation: u64,
     pub request_id: u64,
-    pub status: &'static str,
+    #[cfg_attr(
+        feature = "ts-export",
+        ts(type = "\"ready\" | \"stale\" | \"cancelled\"")
+    )]
+    pub status: DirectorySearchStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub page: Option<NativeRoomDirectoryPage>,
 }
 

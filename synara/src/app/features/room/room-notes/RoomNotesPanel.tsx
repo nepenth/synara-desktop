@@ -33,7 +33,6 @@ import {
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { getMxIdLocalPart } from '../../../utils/matrix';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useRoomMembers, type RoomMemberListItem } from '../../../hooks/useRoomMembers';
 import { floatingShadow } from '../../../styles/Depth.css';
 import * as css from './RoomNotesPanel.css';
@@ -245,9 +244,8 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
   const [body, setBody] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
-  const mx = useMatrixClient();
   const nativeSession = isNativeMatrixSession();
-  const memberSnapshot = useRoomMembers(mx, room.roomId, nativeSession);
+  const memberSnapshot = useRoomMembers(room.roomId, nativeSession);
   const memberDisplayNames = useMemo(() => {
     const names = new Map<string, string>();
     for (const member of memberSnapshot ?? []) {

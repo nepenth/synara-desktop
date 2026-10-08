@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import SynaraCore
 
 /// Privacy-safe connection/sync presentation. Mirrors desktop SyncStatus
 /// meaning (connected / syncing / disconnected / restore failed) without
@@ -88,24 +89,32 @@ enum ConnectionStatusCopy {
     }
 
     static func fromReadiness(
-        _ readiness: String?,
-        previous: MatrixSyncStatus = .stopped
+        _ readiness: SyncReadinessDto?,
+        previous: MatrixSyncStatus = .stopped,
+        commandGate: CommandGateDto? = nil
     ) -> MatrixSyncStatus {
+        if commandGate == .closed {
+            return .disconnected
+        }
+        // Mirrors desktop `readinessToSyncState`; the shared case table lives in
+        // ConnectionStatusCopyTests and synara syncStatusCopy.test.ts.
         switch readiness {
-        case "running":
+        case .running:
             return .connected
-        case "idle":
+        case .idle, .unconfigured:
+            // A stopped or not-yet-configured owner is a loss only after this
+            // session had connected; before that it is still starting.
             switch previous {
             case .connected, .syncing, .reconnecting, .disconnected:
                 return .disconnected
             case .starting, .stopped, .restoreFailed, .failed:
                 return .starting
             }
-        case "offline":
+        case .offline:
             return .reconnecting
-        case "failed", "terminated", "unconfigured":
+        case .failed, .terminated:
             return .disconnected
-        default:
+        case nil:
             return .starting
         }
     }
@@ -115,11 +124,23 @@ enum ConnectionStatusCopy {
     /// Connected is a recovery flash, not steady-state chrome.
     static let connectedFlash: TimeInterval = 12
 
+    /// Statuses that paint Connection Lost immediately and should arm the
+    /// recovery flash. Reconnecting is excluded here because it waits out
+    /// `holdsBeforeBanner` before it is presented.
+    static func showsTerminalLoss(_ status: MatrixSyncStatus) -> Bool {
+        switch status {
+        case .disconnected, .failed, .restoreFailed:
+            return true
+        case .connected, .syncing, .starting, .stopped, .reconnecting:
+            return false
+        }
+    }
+
     static func holdsBeforeBanner(_ status: MatrixSyncStatus) -> Bool {
         switch status {
-        case .reconnecting, .disconnected, .failed:
+        case .reconnecting:
             return true
-        case .connected, .syncing, .starting, .stopped, .restoreFailed:
+        case .connected, .syncing, .starting, .stopped, .restoreFailed, .disconnected, .failed:
             return false
         }
     }
@@ -227,7 +248,10 @@ final class ConnectionStatusStore: ObservableObject {
         connectedFlashWork?.cancel()
         connectedFlashWork = nil
 
-        if ConnectionStatusCopy.holdsBeforeBanner(status) || status == .restoreFailed {
+        // Immediate terminal loss used to share the reconnecting hold, which
+        // armed the Connected flash. Those states now present at once, and
+        // still count as a Lost banner the user saw.
+        if ConnectionStatusCopy.holdsBeforeBanner(status) || ConnectionStatusCopy.showsTerminalLoss(status) {
             recoveredFromVisibleDisconnect = true
         }
 

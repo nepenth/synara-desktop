@@ -11,7 +11,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use synara_core::app::store::AccountIdentity;
 use synara_core::transport::MAX_ENVELOPE_PAYLOAD_JSON_BYTES;
-use synara_core::{IosSecretVault, IosSecretVaultError, LaterItemDto, SharedCore};
+use synara_core::{
+    IosSecretVault, IosSecretVaultError, LaterItemDto, LaterItemKindDto, SharedCore,
+};
 
 struct MemoryCallbackVault(Arc<Mutex<HashMap<String, Vec<u8>>>>);
 
@@ -56,7 +58,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 fn sample_item() -> LaterItemDto {
     LaterItemDto {
         id: "later-s95".to_owned(),
-        kind: "saved".to_owned(),
+        kind: LaterItemKindDto::Saved,
         room_id: "!s95later:example.org".to_owned(),
         event_id: "$s95event".to_owned(),
         created_at: 1_700_000_000_000.0,
@@ -68,7 +70,7 @@ fn sample_item() -> LaterItemDto {
 
 #[test]
 fn later_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("later_snapshot"));
     assert!(udl.contains("later_upsert"));
     assert!(udl.contains("later_complete"));
@@ -89,7 +91,10 @@ fn later_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("later_clear_completed"));
     assert!(shared_core.contains("later_mark_reminded"));
     assert!(shared_core.contains("get_global_image_packs"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 
@@ -148,7 +153,7 @@ fn later_upsert_oversize_payload_fails_closed_without_truncate_or_echo() {
     let room_id = "x".repeat(MAX_ENVELOPE_PAYLOAD_JSON_BYTES + 8);
     let item = LaterItemDto {
         id: "later-s95-oversize".to_owned(),
-        kind: "saved".to_owned(),
+        kind: LaterItemKindDto::Saved,
         room_id: room_id.clone(),
         event_id: "$s95oversize".to_owned(),
         created_at: 1_700_000_000_000.0,

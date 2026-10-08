@@ -15,6 +15,7 @@ import {
   Text,
   toRem,
 } from 'folds';
+import { getSafeMyUserId } from '../../state/nativeIdentity';
 import React, {
   ChangeEventHandler,
   KeyboardEventHandler,
@@ -31,7 +32,6 @@ import type { RoomReading } from '../../utils/room';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useDirects, useOrphanSpaces, useRooms, useSpaces } from '../../state/hooks/roomList';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { mDirectAtom } from '../../state/mDirectList';
 import { allRoomsAtom } from '../../state/room-list/roomList';
 import {
@@ -58,7 +58,6 @@ import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
 import { searchModalAtom } from '../../state/searchModal';
 import { useKeyDown } from '../../hooks/useKeyDown';
-import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { KeySymbol } from '../../utils/key-symbol';
 import { isMacOS } from '../../utils/user-agent';
 import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
@@ -105,20 +104,18 @@ const useTopActiveRooms = (
   directs: string[],
   spaces: string[]
 ) => {
-  const mx = useMatrixClient();
-
   return useMemo(() => {
     if (searchRoomType === SearchRoomType.Spaces) {
       return spaces;
     }
     if (searchRoomType === SearchRoomType.Directs) {
-      return [...directs].sort(factoryRoomIdByActivity(mx)).slice(0, 20);
+      return [...directs].sort(factoryRoomIdByActivity()).slice(0, 20);
     }
     if (searchRoomType === SearchRoomType.Rooms) {
-      return [...rooms].sort(factoryRoomIdByActivity(mx)).slice(0, 20);
+      return [...rooms].sort(factoryRoomIdByActivity()).slice(0, 20);
     }
-    return [...rooms, ...directs].sort(factoryRoomIdByActivity(mx)).slice(0, 20);
-  }, [mx, rooms, directs, spaces, searchRoomType]);
+    return [...rooms, ...directs].sort(factoryRoomIdByActivity()).slice(0, 20);
+  }, [rooms, directs, spaces, searchRoomType]);
 };
 
 const getDmUserId = (
@@ -161,10 +158,8 @@ type SearchProps = {
   requestClose: () => void;
 };
 export function Search({ requestClose }: SearchProps) {
-  const mx = useMatrixClient();
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const useAuthentication = useMediaAuthentication();
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { navigateRoom, navigateSpace } = useRoomNavigate();
@@ -178,11 +173,11 @@ export function Search({ requestClose }: SearchProps) {
   const getRoom = useGetRoom(allRoomsSet);
 
   const roomToParents = useAtomValue(roomToParentsAtom);
-  const orphanSpaces = useOrphanSpaces(mx, allRoomsAtom, roomToParents);
+  const orphanSpaces = useOrphanSpaces(allRoomsAtom, roomToParents);
   const mDirects = useAtomValue(mDirectAtom);
-  const rooms = useRooms(mx, allRoomsAtom, mDirects);
-  const spaces = useSpaces(mx, allRoomsAtom);
-  const directs = useDirects(mx, allRoomsAtom, mDirects);
+  const rooms = useRooms(allRoomsAtom, mDirects);
+  const spaces = useSpaces(allRoomsAtom);
+  const directs = useDirects(allRoomsAtom, mDirects);
 
   const topActiveRooms = useTopActiveRooms(searchRoomType, rooms, directs, spaces);
   const targetRooms = useSearchTargetRooms(searchRoomType, rooms, directs, spaces);
@@ -264,17 +259,13 @@ export function Search({ requestClose }: SearchProps) {
     (roomId: string) => {
       const roomName = getRoom(roomId)?.name ?? roomId;
       if (mDirects.has(roomId)) {
-        const targetUserId = getDmUserId(
-          roomId,
-          getRoom,
-          (mx as unknown as { getSafeUserId(): string }).getSafeUserId()
-        );
+        const targetUserId = getDmUserId(roomId, getRoom, getSafeMyUserId());
         const targetUsername = targetUserId && getMxIdLocalPart(targetUserId);
         if (targetUsername) return [roomName, targetUsername];
       }
       return roomName;
     },
-    [getRoom, mDirects, mx]
+    [getRoom, mDirects]
   );
 
   const [result, search, resetSearch] = useAsyncSearch(targetRooms, getTargetStr, SEARCH_OPTIONS);
@@ -470,13 +461,7 @@ export function Search({ requestClose }: SearchProps) {
                         if (!room) return null;
 
                         const dm = mDirects.has(roomId);
-                        const dmUserId =
-                          dm &&
-                          getDmUserId(
-                            roomId,
-                            getRoom,
-                            (mx as unknown as { getSafeUserId(): string }).getSafeUserId()
-                          );
+                        const dmUserId = dm && getDmUserId(roomId, getRoom, getSafeMyUserId());
                         const dmUsername = dmUserId && getMxIdLocalPart(dmUserId);
                         const dmUserServer = dmUserId && getMxIdServer(dmUserId);
 
@@ -484,11 +469,11 @@ export function Search({ requestClose }: SearchProps) {
                         const orphanParents =
                           allParents && orphanSpaces.filter((o) => allParents.has(o));
                         const perfectOrphanParent =
-                          orphanParents && guessPerfectParent(mx, roomId, orphanParents);
+                          orphanParents && guessPerfectParent(roomId, orphanParents);
 
                         const exactParents = roomToParents.get(roomId);
                         const perfectParent =
-                          exactParents && guessPerfectParent(mx, roomId, Array.from(exactParents));
+                          exactParents && guessPerfectParent(roomId, Array.from(exactParents));
 
                         const unread = roomToUnread.get(roomId);
 
@@ -534,8 +519,8 @@ export function Search({ requestClose }: SearchProps) {
                                     roomId={room.roomId}
                                     src={
                                       dm
-                                        ? getDirectRoomAvatarUrl(mx, room, 32, useAuthentication)
-                                        : getRoomAvatarUrl(mx, room, 32, useAuthentication)
+                                        ? getDirectRoomAvatarUrl(room, 32)
+                                        : getRoomAvatarUrl(room, 32)
                                     }
                                     alt={room.name}
                                     renderFallback={() => (

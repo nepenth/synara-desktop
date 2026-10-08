@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import test from 'node:test';
 import {
   isNativeVerificationTerminal,
@@ -6,8 +8,10 @@ import {
   nativeVerificationErrorMessage,
   NativeVerificationRequest,
   parseNativeVerificationQr,
+  QR_SCANNED_CONFIRMATION_PROMPT,
   sanitizeNativeVerificationRequest,
   selectNativeVerificationRequest,
+  verificationRequestAwaitsQrConfirmation,
   verificationRequestCanFallbackToSas,
   verificationRequestHasQr,
   verificationRequestHasSasCodes,
@@ -160,4 +164,33 @@ test('QR parser accepts a bounded SVG data URL and rejects huge payloads', () =>
     }),
     false
   );
+});
+
+test('a scanned QR asks the user to confirm instead of finishing on its own', () => {
+  assert.equal(verificationRequestAwaitsQrConfirmation(request('outgoing', 'qr_scanned')), true);
+  assert.equal(verificationRequestAwaitsQrConfirmation(request('outgoing', 'confirmed')), false);
+  assert.equal(verificationRequestAwaitsQrConfirmation(request('outgoing', 'started')), false);
+  assert.equal(isNativeVerificationTerminal('qr_scanned'), false);
+  assert.equal(
+    QR_SCANNED_CONFIRMATION_PROMPT,
+    'The other device scanned your code. Did it show a confirmation?'
+  );
+  // The scanned flow stays the current dialog rather than yielding to another request.
+  const scanned = { ...request('outgoing', 'qr_scanned'), flowId: 'scanned-flow' };
+  const other = { ...request('incoming', 'requested'), flowId: 'other-flow' };
+  assert.equal(selectNativeVerificationRequest([other, scanned], 'scanned-flow'), scanned);
+});
+
+test('the verification dialog renders explicit QR confirm and reject actions', () => {
+  const source = readFileSync(
+    join(process.cwd(), 'src/app/features/verification/NativeDeviceVerification.tsx'),
+    'utf8'
+  );
+  const scanned = source.split('function NativeQrScanned')[1]?.split('function NativeSas')[0] ?? '';
+  assert.match(scanned, /QR_SCANNED_CONFIRMATION_PROMPT/);
+  assert.match(scanned, /confirmNativeVerification/);
+  assert.match(scanned, /mismatchNativeVerification/);
+  assert.match(scanned, /It doesn&apos;t match/);
+  assert.match(source, /verificationRequestAwaitsQrConfirmation\(request\)/);
+  assert.doesNotMatch(source, /Finishing verification/);
 });

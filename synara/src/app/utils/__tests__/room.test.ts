@@ -13,24 +13,28 @@ import {
   getMemberDisplayName,
   getMemberSearchStr,
   getMentionContent,
-  getNotificationType,
   getRoomAvatarUrl,
   getStateEvent,
   getStateEvents,
   getThreadRootEventId,
-  getUnreadInfo,
   guessPerfectParent,
   isNotificationEvent,
   isRoom,
   isSpace,
   isUnsupportedRoom,
-  type MatrixClientReading,
   type MatrixEventReading,
   type RoomReading,
   type EventTimelineSetReading,
   type MemberReading,
 } from '../room';
-import { MessageEvent, NotificationType, StateEvent } from '../../../types/matrix/room';
+import { nativeThumbnailContentUri } from '../../matrix/nativeThumbnail';
+import {
+  nativeSession,
+  setNativeSessionForTests,
+  type NativeSession,
+} from '../../native/nativeSession';
+import { setNativeIdentity } from '../../state/nativeIdentity';
+import { MessageEvent, StateEvent } from '../../../types/matrix/room';
 import {
   clearNativeRoomStateProjections,
   publishNativeRoomCreatorsProjection,
@@ -120,17 +124,6 @@ const makeRoom = (
   } as unknown as RoomReading;
 };
 
-const makeClient = (overrides: Partial<MatrixClientReading> = {}): MatrixClientReading =>
-  ({
-    getAccountData: () => undefined,
-    getRoomPushRule: () => undefined,
-    getUserId: () => '@alice:example.org',
-    getRooms: () => [],
-    getRoom: () => null,
-    mxcUrlToHttp: () => null,
-    ...overrides,
-  }) as MatrixClientReading;
-
 test('getStateEvent reads the indexed state projection and falls back to undefined', () => {
   const topic = makeEvent('m.room.topic', { topic: 'Hello' }, { stateKey: '' });
   const room = makeRoom({ 'm.room.topic': topic });
@@ -170,11 +163,6 @@ test('isSpace/isRoom/isUnsupportedRoom classify by room create type', () => {
   assert.equal(isSpace(null), false);
   assert.equal(isRoom(null), false);
   assert.equal(isUnsupportedRoom(null), false);
-});
-
-test('getUnreadInfo reports the max of highlight and total', () => {
-  const room = makeRoom({}, { unreadTotal: 3, unreadHighlight: 5, roomId: '!r:example.org' });
-  assert.deepEqual(getUnreadInfo(room), { roomId: '!r:example.org', highlight: 5, total: 5 });
 });
 
 test('member display/avatar helpers resolve from the room member projection', () => {
@@ -219,7 +207,7 @@ test('getMemberSearchStr supports SDK and native member shapes', () => {
 });
 
 test('canEditEvent requires own text/emote/notice messages without non-thread relations', () => {
-  const client = makeClient();
+  setNativeIdentity({ userId: '@alice:example.org' });
   const own = makeEvent(
     MessageEvent.RoomMessage,
     { msgtype: 'm.text' },
@@ -241,10 +229,14 @@ test('canEditEvent requires own text/emote/notice messages without non-thread re
     { sender: '@bob:example.org' }
   );
 
-  assert.equal(canEditEvent(client, own), true);
-  assert.equal(canEditEvent(client, reply), false);
-  assert.equal(canEditEvent(client, thread), true);
-  assert.equal(canEditEvent(client, other), false);
+  try {
+    assert.equal(canEditEvent(own), true);
+    assert.equal(canEditEvent(reply), false);
+    assert.equal(canEditEvent(thread), true);
+    assert.equal(canEditEvent(other), false);
+  } finally {
+    setNativeIdentity({});
+  }
 });
 
 test('edit helpers resolve the latest replacement from a timeline set relations container', () => {
@@ -336,66 +328,24 @@ test('isNotificationEvent ignores redactions, replacement relations, and member 
   assert.equal(isNotificationEvent(makeEvent('m.room.create', {})), true);
 });
 
-test('getNotificationType maps explicit, muted, and default rules', () => {
-  assert.equal(
-    getNotificationType(
-      makeClient({ getRoomPushRule: () => ({ actions: ['notify'], rule_id: 'r' }) }),
-      '!r:example.org'
-    ),
-    NotificationType.AllMessages
-  );
-  assert.equal(
-    getNotificationType(
-      makeClient({ getRoomPushRule: () => ({ actions: ['dont_notify'], rule_id: 'r' }) }),
-      '!r:example.org'
-    ),
-    NotificationType.MentionsAndKeywords
-  );
-  const mutedOverride = () =>
-    ({
-      getContent: () => ({
-        global: {
-          override: [
-            {
-              actions: [],
-              conditions: [{ kind: 'event_match' }],
-              rule_id: '!r:example.org',
-            },
-          ],
-        },
-      }),
-    }) as MatrixEventReading;
-  assert.equal(
-    getNotificationType(
-      makeClient({ getRoomPushRule: () => undefined, getAccountData: mutedOverride }),
-      '!r:example.org'
-    ),
-    NotificationType.Mute
-  );
-  assert.equal(
-    getNotificationType(makeClient({ getRoomPushRule: () => undefined }), '!r:example.org'),
-    NotificationType.Default
-  );
-});
-
-test('avatar helpers delegate mxc conversion to the client projection', () => {
+test('avatar helpers request native cropped thumbnails', () => {
   const room = makeRoom({}, { avatarUrl: 'mxc://room/avatar' });
-  const client = makeClient({
-    mxcUrlToHttp: (mxc, w, h, mode) => `http://img/${w}x${h}/${mode}/${mxc}`,
-  });
-  assert.equal(getRoomAvatarUrl(client, room, 32), 'http://img/32x32/crop/mxc://room/avatar');
-  assert.equal(getDirectRoomAvatarUrl(client, room, 96), 'http://img/96x96/crop/mxc://room/avatar');
+  assert.equal(
+    getRoomAvatarUrl(room, 32),
+    nativeThumbnailContentUri('mxc://room/avatar', 32, 32, 'crop')
+  );
+  assert.equal(
+    getDirectRoomAvatarUrl(room, 96),
+    nativeThumbnailContentUri('mxc://room/avatar', 96, 96, 'crop')
+  );
 });
 
 test('getDirectRoomAvatarUrl uses native summary peer mxc when fallback member is stubbed', () => {
   const room = makeRoom({}, { avatarUrl: 'mxc://example.org/peer' });
-  const client = makeClient({
-    mxcUrlToHttp: (mxc, w, h, mode) => `http://img/${w}x${h}/${mode}/${mxc}`,
-  });
   assert.equal(room.getAvatarFallbackMember(), undefined);
   assert.equal(
-    getDirectRoomAvatarUrl(client, room, 96),
-    'http://img/96x96/crop/mxc://example.org/peer'
+    getDirectRoomAvatarUrl(room, 96),
+    nativeThumbnailContentUri('mxc://example.org/peer', 96, 96, 'crop')
   );
 });
 
@@ -449,8 +399,11 @@ test('guessPerfectParent favours the parent sharing the most special users', () 
     );
     return room;
   };
-  const makeClientWithRooms = (rooms: Record<string, RoomReading>) =>
-    makeClient({ getRoom: (id) => rooms[id] ?? null });
+  const sessionWithRooms = (rooms: Record<string, RoomReading>) =>
+    ({
+      getRoom: (id: string) => rooms[id] ?? null,
+      getRooms: () => Object.values(rooms),
+    }) as unknown as NativeSession;
 
   const roomA = create('@a:example.org')('!a:example.org');
   const roomB = create('@b:example.org')('!b:example.org');
@@ -464,22 +417,23 @@ test('guessPerfectParent favours the parent sharing the most special users', () 
     },
     { roomId: '!target:example.org' }
   );
-  const client = makeClientWithRooms({
-    '!target:example.org': target,
-    '!a:example.org': roomA,
-    '!b:example.org': roomB,
-  });
+  const originalSession = nativeSession();
+  setNativeSessionForTests(
+    sessionWithRooms({
+      '!target:example.org': target,
+      '!a:example.org': roomA,
+      '!b:example.org': roomB,
+    })
+  );
   const originalWindow = globalThis.window;
   (globalThis as any).window = {};
   try {
     // room A shares one creator, room B shares one creator too -> ties diff by score; first max wins
-    const perfect = guessPerfectParent(client, '!target:example.org', [
-      '!a:example.org',
-      '!b:example.org',
-    ]);
+    const perfect = guessPerfectParent('!target:example.org', ['!a:example.org', '!b:example.org']);
     assert.equal(perfect, '!a:example.org');
   } finally {
     (globalThis as any).window = originalWindow;
+    setNativeSessionForTests(originalSession);
   }
 });
 

@@ -24,6 +24,7 @@ use super::{dm_avatar_source, InviteAvatarHandles};
 const BAD_WORDS_JSON: &str = include_str!("invite_bad_words.json");
 const SYNARA_BAD_WORD_ADDITIONS: &[&str] = &["torture", "t0rture"];
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeInviteTriage {
@@ -38,23 +39,29 @@ impl NativeInviteTriage {
 
 /// Bounded, SDK-neutral invite data. The later live projection must populate
 /// each field without giving the webview an SDK `Room` or raw member event.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeInvite {
     pub room_id: String,
     pub room_name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub avatar_handle_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub room_topic: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub room_alias: Option<String>,
     pub sender_id: String,
     pub sender_name: String,
     pub sender_ignored: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub invite_ts: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub reason: Option<String>,
     pub is_space: bool,
     pub is_direct: bool,
@@ -62,6 +69,7 @@ pub struct NativeInvite {
     pub triage: NativeInviteTriage,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeInviteSnapshot {

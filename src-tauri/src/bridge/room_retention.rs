@@ -1,12 +1,10 @@
 //! Desktop bridge for `matrix_room_retention` through `Core::command`.
 
 use synara_core::app::room_profile::MatrixRoomRetentionSnapshot;
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
-
-const COMMAND: &str = "matrix_room_retention";
 
 pub(crate) async fn room_retention(
     core: &Core,
@@ -14,18 +12,13 @@ pub(crate) async fn room_retention(
     session_generation: u64,
 ) -> Result<MatrixRoomRetentionSnapshot, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: COMMAND.to_owned(),
+        .room_retention(synara_core::core_api::MatrixRoomRetentionRequest {
+            room_id,
             session_generation,
-            request_id: None,
-            payload: serde_json::json!({
-                "roomId": room_id,
-                "sessionGeneration": session_generation,
-            }),
         })
         .await
         .map_err(map_room_retention_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| retention_response_error())
+    Ok(response)
 }
 
 fn map_room_retention_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -62,12 +55,4 @@ fn map_room_retention_core_error(error: MatrixIpcError) -> MatrixAuthCommandErro
             diagnostic,
         ),
     }
-}
-
-fn retention_response_error() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "The native Matrix room retention policy could not be read.",
-        "v-send.r-room-profile-retention-sdk-failed",
-    )
 }

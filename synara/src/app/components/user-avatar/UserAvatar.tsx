@@ -4,6 +4,7 @@ import classNames from 'classnames';
 import * as css from './UserAvatar.css';
 import colorMXID from '../../../util/colorMXID';
 import { useNativeMatrixMediaSrc } from '../../hooks/useNativeMatrixMediaSrc';
+import { NATIVE_AVATAR_THUMBNAIL_PX } from '../../matrix/media';
 
 type UserAvatarProps = {
   className?: string;
@@ -13,7 +14,7 @@ type UserAvatarProps = {
   renderFallback: () => ReactNode;
 };
 export function UserAvatar({ className, userId, src, alt, renderFallback }: UserAvatarProps) {
-  const resolvedSrc = useNativeMatrixMediaSrc(src);
+  const resolvedSrc = useNativeMatrixMediaSrc(src, { size: NATIVE_AVATAR_THUMBNAIL_PX });
   const [error, setError] = useState(false);
 
   useEffect(() => {

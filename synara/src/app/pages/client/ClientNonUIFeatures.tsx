@@ -11,8 +11,8 @@ import { notificationPermission, setFavicon } from '../../utils/dom';
 import { useSetting } from '../../state/hooks/settings';
 import { desktopPlatformSettingsAtom, settingsAtom } from '../../state/settings';
 import { allInvitesAtom, useNativeInviteSyncing } from '../../state/room-list/inviteList';
+import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
 import { usePreviousValue } from '../../hooks/usePreviousValue';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { getInboxInvitesPath } from '../pathUtils';
 import { getMemberDisplayName, getThreadRootEventId } from '../../utils/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
@@ -71,7 +71,9 @@ import {
   subscribeNativeNotificationObservations,
   type NativeNotificationObservation,
 } from '../../features/room/nativeNotificationObservation';
+import { getMyUserId } from '../../state/nativeIdentity';
 
+import { getNativeRoom, nativeSession } from '../../native/nativeSession';
 // Local submit-memory bound. Core `(room, event)` dedup is authoritative;
 // this set only guards against a duplicated observation of the same event.
 const NOTIFICATION_SUBMITTED_CACHE_MAX = 500;
@@ -148,7 +150,7 @@ function TrayDoNotDisturbSync() {
 }
 
 function PlatformBadgeAndTrayUpdater() {
-  const roomToUnread = useAtomValue(roomToUnreadAtom);
+  const { presentation } = useNativeRoomListSnapshot();
   const { pendingCount: agentApprovalCount } = useApprovalInboxSummary();
   const invites = useAtomValue(allInvitesAtom);
   const laterContent = useAtomValue(laterContentAtom);
@@ -159,7 +161,8 @@ function PlatformBadgeAndTrayUpdater() {
       (item) => !item.completedAt
     ).length;
     const summary = getPlatformNotificationSummary({
-      unreadCounts: roomToUnread.values(),
+      highlightTotal: presentation.highlightTotal,
+      unreadTotal: presentation.unreadTotal,
       laterActiveCount: activeLaterCount,
       inviteCount: invites.length,
       agentApprovalCount,
@@ -175,7 +178,7 @@ function PlatformBadgeAndTrayUpdater() {
         doNotDisturb: !showNotifications,
       }).catch(() => undefined);
     }
-  }, [invites.length, laterContent, roomToUnread, showNotifications, agentApprovalCount]);
+  }, [invites.length, laterContent, presentation, showNotifications, agentApprovalCount]);
 
   return null;
 }
@@ -263,9 +266,8 @@ function MessageNotifications() {
   // Transient suppressions are deliberately not remembered.
   const submittedRef = useRef<Set<string>>(new Set());
 
-  const mx = useMatrixClient();
   const browserNotifications = useMemo(createObservedBrowserNotificationRegistry, []);
-  useEffect(() => () => browserNotifications.clear(), [mx, browserNotifications]);
+  useEffect(() => () => browserNotifications.clear(), [browserNotifications]);
   const useAuthentication = useMediaAuthentication();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
   const [notificationSound] = useSetting(settingsAtom, 'isNotificationSounds');
@@ -381,7 +383,7 @@ function MessageNotifications() {
       if (observation.agentApproval !== undefined) {
         return;
       }
-      const room = mx.getRoom(roomId);
+      const room = getNativeRoom(roomId);
 
       const cacheKey = `${roomId}:${eventId}`;
       if (submittedRef.current.has(cacheKey)) return;
@@ -425,7 +427,7 @@ function MessageNotifications() {
         candidate: shownCandidate,
         observedGeneration: observation.sessionGeneration,
         presentOrdinaryMessages: !notificationSelected && !!room && !room.isSpaceRoom(),
-        currentGeneration: () => mx.getSyncStateData()?.sessionGeneration,
+        currentGeneration: () => nativeSession().getSyncStateData()?.sessionGeneration,
         acknowledge: dismissNotificationWithNativeOwner,
         cancelDelivery: async () => {
           browserNotifications.cancel(shownCandidate.candidateId);
@@ -442,7 +444,7 @@ function MessageNotifications() {
             outcome = await notify({
               candidate,
               roomAvatar: avatarMxc
-                ? resolveMatrixThumbnailUrl(mx, avatarMxc, 96, { useAuthentication })
+                ? resolveMatrixThumbnailUrl(avatarMxc, 96, { useAuthentication })
                 : undefined,
               roomId,
               eventId,
@@ -462,7 +464,6 @@ function MessageNotifications() {
       });
     },
     [
-      mx,
       browserNotifications,
       notificationSound,
       notificationSelected,
@@ -480,13 +481,13 @@ function MessageNotifications() {
   // on a sync state; every observation still goes through Core decide.
   useEffect(() => {
     const dispose = subscribeNativeNotificationObservations(
-      () => mx.getSyncStateData()?.sessionGeneration,
+      () => nativeSession().getSyncStateData()?.sessionGeneration,
       (observation) => {
         void decideAndNotify(observation);
       }
     );
     return dispose;
-  }, [mx, decideAndNotify]);
+  }, [decideAndNotify]);
 
   return (
     // eslint-disable-next-line jsx-a11y/media-has-caption
@@ -498,10 +499,9 @@ function MessageNotifications() {
 
 function AgentApprovalNotifications() {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const mx = useMatrixClient();
   const browserNotifications = useMemo(createObservedBrowserNotificationRegistry, []);
-  useEffect(() => () => browserNotifications.clear(), [mx, browserNotifications]);
-  const accountScope = mx.getUserId();
+  useEffect(() => () => browserNotifications.clear(), [browserNotifications]);
+  const accountScope = getMyUserId();
   const nativeActionState = useMemo(
     () => ({
       inFlight: new Set<string>(),
@@ -565,7 +565,7 @@ function AgentApprovalNotifications() {
         sessionGeneration === undefined ||
         !isNativeNotificationActionForSession(
           sessionGeneration,
-          mx.getSyncStateData()?.sessionGeneration
+          nativeSession().getSyncStateData()?.sessionGeneration
         )
       )
         return;
@@ -628,7 +628,7 @@ function AgentApprovalNotifications() {
         if (
           isNativeNotificationActionForSession(
             sessionGeneration,
-            mx.getSyncStateData()?.sessionGeneration
+            nativeSession().getSyncStateData()?.sessionGeneration
           )
         )
           navigateRoom(roomId, eventId);
@@ -638,7 +638,7 @@ function AgentApprovalNotifications() {
         }
       }
     },
-    [mx, nativeActionDedupe, nativeActionsInFlight, navigateRoom]
+    [nativeActionDedupe, nativeActionsInFlight, navigateRoom]
   );
 
   useEffect(() => {
@@ -679,7 +679,7 @@ function AgentApprovalNotifications() {
     async (observation: NativeNotificationObservation) => {
       const { eventId, agentApproval } = observation;
       if (!agentApproval || agentApproval.expired) return;
-      const room = mx.getRoom(observation.roomId);
+      const room = getNativeRoom(observation.roomId);
 
       if (notifiedEventIdsCache.has(eventId)) return;
 
@@ -702,7 +702,7 @@ function AgentApprovalNotifications() {
       await deliverNativeObservedNotificationCandidate({
         candidate: shownCandidate,
         observedGeneration: observation.sessionGeneration,
-        currentGeneration: () => mx.getSyncStateData()?.sessionGeneration,
+        currentGeneration: () => nativeSession().getSyncStateData()?.sessionGeneration,
         acknowledge: dismissNotificationWithNativeOwner,
         cancelDelivery: async () => {
           browserNotifications.cancel(shownCandidate.candidateId);
@@ -730,18 +730,18 @@ function AgentApprovalNotifications() {
         },
       });
     },
-    [mx, browserNotifications, notify, playSound, showNotifications]
+    [browserNotifications, notify, playSound, showNotifications]
   );
 
   // Approval prompts ride the same Core observation stream as messages; the
   // renderer consumes Core classification and Core revalidates before delivery.
   useEffect(() => {
     const dispose = subscribeNativeNotificationObservations(
-      () => mx.getSyncStateData()?.sessionGeneration,
+      () => nativeSession().getSyncStateData()?.sessionGeneration,
       notifyApprovalEvent
     );
     return dispose;
-  }, [mx, notifyApprovalEvent]);
+  }, [notifyApprovalEvent]);
 
   return (
     // eslint-disable-next-line jsx-a11y/media-has-caption
@@ -752,7 +752,6 @@ function AgentApprovalNotifications() {
 }
 
 function LaterReminderNotifications() {
-  const mx = useMatrixClient();
   const { navigateRoom } = useRoomNavigate();
   const laterContent = useAtomValue(laterContentAtom);
   const reminders = useMemo(
@@ -806,7 +805,7 @@ function LaterReminderNotifications() {
           showNotifications &&
           (supportsPlatformSystemNotifications() || notificationPermission('granted'))
         ) {
-          const room = mx.getRoom(dueReminder.roomId);
+          const room = getNativeRoom(dueReminder.roomId);
           const event = room?.findEventById(dueReminder.eventId);
           const openEventId = getThreadRootEventId(event) ?? dueReminder.eventId;
           notify('A saved reminder is due.', dueReminder.roomId, openEventId);
@@ -820,7 +819,7 @@ function LaterReminderNotifications() {
     checkDueReminders();
     const interval = window.setInterval(checkDueReminders, 60_000);
     return () => window.clearInterval(interval);
-  }, [mx, laterContent, reminders, showNotifications, notify]);
+  }, [laterContent, reminders, showNotifications, notify]);
 
   return null;
 }

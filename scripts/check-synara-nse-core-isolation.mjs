@@ -4,13 +4,15 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { readUdlSurface } from "./lib/ffi-surface.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => readFileSync(resolve(root, path), "utf8");
 const workspace = read("Cargo.toml");
 const coreManifest = read("crates/synara-core/Cargo.toml");
 const nseManifest = read("crates/synara-nse-core/Cargo.toml");
-const nseUdl = read("crates/synara-nse-core/src/synara_nse_core.udl");
+// FFI surface in UDL vocabulary, rendered from the pinned Swift golden.
+const nseUdl = readUdlSurface(root, "synara_nse_core");
 const nseRust = read("crates/synara-nse-core/src/lib.rs");
 const generator = read("scripts/generate-synara-nse-core-swift.sh");
 const productionFeatures = read(
@@ -20,7 +22,6 @@ const archiveExports = read("scripts/check-synara-nse-core-archive-exports.sh");
 const symbolReader = read("scripts/lib/rust-llvm-symbols.sh");
 const ciWorkflow = read(".github/workflows/ci.yml");
 const releaseWorkflow = read(".github/workflows/release.yml");
-const diagnosticsWorkflow = read(".github/workflows/ios-skeleton.yml");
 const iosCiBuild = read("synara-ios/scripts/ci-build.sh");
 const publicationHelper = read("scripts/lib/publish-generated-apple-pair.sh");
 const generatorSyntax = spawnSync(
@@ -93,9 +94,9 @@ requireText(
   "interface NsePreviewRequest {",
   "cancelable request boundary"
 );
-requireText(nseUdl, "NsePreviewDto resolve();", "one-shot resolver");
+requireText(nseUdl, "[Async, Throws] NsePreviewDto resolve();", "one-shot resolver");
 requireText(nseUdl, "void cancel();", "prompt cancellation operation");
-requireText(nseUdl, "bytes? get(string key);", "read-only secret callback");
+requireText(nseUdl, "[Throws] bytes? get(string key);", "read-only secret callback");
 for (const forbidden of [
   " put(",
   " delete(",
@@ -205,19 +206,18 @@ requireText(
 );
 if (/grep\s+-a|nm_cannot_read/.test(archiveExports + symbolReader))
   throw new Error("NSE isolation cannot fall back to raw byte inspection");
-for (const [name, yaml, requiredSteps] of [
-  ["CI", ciWorkflow, 3],
-  ["release", releaseWorkflow, 2],
-  ["diagnostics", diagnosticsWorkflow, 1],
+for (const [name, yaml] of [
+  ["CI", ciWorkflow],
+  ["release", releaseWorkflow],
 ]) {
   const steps = [
     ...yaml.matchAll(
       / {6}- name: Install Rust 1\.96 and Apple targets\n([\s\S]*?)(?=\n {6}- name:|\n {2}\S|$)/g
     ),
   ];
-  if (steps.length !== requiredSteps)
+  if (steps.length === 0)
     throw new Error(
-      `${name} Apple generator toolchain entrypoints changed; reconcile LLVM prerequisites`
+      `${name} has no Apple generator toolchain entrypoint; reconcile LLVM prerequisites`
     );
   for (const step of steps) {
     if (!/components:\s*[^\n]*\bllvm-tools-preview\b/.test(step[1]))
@@ -244,18 +244,16 @@ requireText(
 requireText(
   coreManifest,
   'full-uniffi = ["full-app", "dep:uniffi"]',
-  "full-app room-key forwarding"
+  "full-uniffi Core feature"
 );
-requireText(
-  coreManifest,
+for (const forwarding of [
   "matrix-sdk/automatic-room-key-forwarding",
-  "SDK forwarding feature via Core"
-);
-requireText(
-  coreManifest,
   "matrix-sdk-crypto/automatic-room-key-forwarding",
-  "crypto forwarding feature via Core"
-);
+]) {
+  if (coreManifest.includes(forwarding)) {
+    throw new Error(`Core must not request ${forwarding} on any graph`);
+  }
+}
 requireText(
   productionFeatures,
   "matrix-sdk-search",

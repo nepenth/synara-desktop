@@ -1,7 +1,7 @@
 //! Core transport and owner regression tests.
 
 use super::*;
-use crate::app::sync::SyncReadiness;
+use crate::app::sync::{CommandGate, SyncReadiness};
 use crate::dto::{SessionLifecycle, SessionSnapshot};
 use crate::platform::{PlatformStatus, SecretVault, UnavailableSecretVault};
 use crate::transport::{CommandFuture, CommandRegistry};
@@ -294,11 +294,11 @@ fn session() -> SessionSnapshot {
 #[test]
 fn matrix_session_snapshot_response_uses_exact_desktop_wire_keys() {
     assert_eq!(
-        serde_json::to_value(MatrixSessionSnapshotResponse::from(None)).unwrap(),
+        serde_json::to_value(MatrixSessionSnapshot::from(None)).unwrap(),
         serde_json::json!({"status":"logged_out"})
     );
 
-    let response = MatrixSessionSnapshotResponse::from(Some(SessionSnapshot {
+    let response = MatrixSessionSnapshot::from(Some(SessionSnapshot {
         session_generation: 7,
         user_id: "@alice:example.org".into(),
         device_id: "DEVICE".into(),
@@ -326,6 +326,9 @@ async fn default_registry_dispatches_matrix_session_snapshot() {
     assert_eq!(
         core.registered_commands(),
         vec![
+            "matrix_account_data_get",
+            "matrix_account_data_set",
+            "matrix_account_data_types",
             "matrix_agent_approval_decide",
             "matrix_agent_approval_history_snapshot",
             "matrix_agent_approvals_list",
@@ -364,6 +367,8 @@ async fn default_registry_dispatches_matrix_session_snapshot() {
             "matrix_later_snapshot",
             "matrix_later_snooze",
             "matrix_later_upsert",
+            "matrix_local_echo_discard",
+            "matrix_local_echo_retry",
             "matrix_login_flows",
             "matrix_mdirect_add",
             "matrix_mdirect_remove",
@@ -390,12 +395,18 @@ async fn default_registry_dispatches_matrix_session_snapshot() {
             "matrix_reaction_redact",
             "matrix_register_flows",
             "matrix_restricted_join_reparent",
+            "matrix_room_alias_check",
+            "matrix_room_alias_create",
+            "matrix_room_alias_delete",
             "matrix_room_ban",
+            "matrix_room_bulk_redact",
             "matrix_room_create",
             "matrix_room_creators_snapshot",
             "matrix_room_directory_cancel",
             "matrix_room_directory_protocols",
             "matrix_room_directory_search",
+            "matrix_room_identity_warning_resolve",
+            "matrix_room_identity_warnings",
             "matrix_room_invite",
             "matrix_room_join",
             "matrix_room_join_rule_snapshot",
@@ -403,6 +414,7 @@ async fn default_registry_dispatches_matrix_session_snapshot() {
             "matrix_room_kick",
             "matrix_room_leave",
             "matrix_room_list_snapshot",
+            "matrix_room_local_aliases",
             "matrix_room_members_snapshot",
             "matrix_room_notes_complete_todo",
             "matrix_room_notes_delete",
@@ -422,6 +434,7 @@ async fn default_registry_dispatches_matrix_session_snapshot() {
             "matrix_room_set_power_levels",
             "matrix_room_set_read_state",
             "matrix_room_unban",
+            "matrix_room_upgrade",
             "matrix_rtc_transports_refresh",
             "matrix_rtc_transports_snapshot",
             "matrix_secret_storage_status",
@@ -473,6 +486,7 @@ async fn default_registry_dispatches_matrix_session_snapshot() {
             "matrix_typing_set",
             "matrix_typing_snapshot",
             "matrix_user_directory_search",
+            "matrix_user_mutual_rooms",
             "matrix_user_status_clear",
             "matrix_user_status_set",
             "matrix_user_status_snapshot",
@@ -541,6 +555,7 @@ async fn core_sync_status_uses_exact_desktop_wire_shape() {
             "offlineModeEnabled": false,
             "failureDiagnosticId": null,
             "slidingSyncCapable": null,
+            "commandGate": "closed",
         })
     );
 }
@@ -1100,10 +1115,10 @@ async fn crypto_status_projection_is_closed_and_core_errors_are_static() {
     // Validate the Core-owned response contract independently of the
     // Platform constructor so an accidental future mapping cannot emit an
     // impossible encryption/state pairing.
-    let invalid_response = MatrixCryptoStatusResponse {
+    let invalid_response = MatrixCryptoStatus {
         session_generation: 7,
         encryption_enabled: false,
-        cross_signing_state: MatrixCryptoCrossSigningStateResponse::Ready,
+        cross_signing_state: MatrixCrossSigningState::Ready,
     };
     assert!(!invalid_response.is_valid());
 }
@@ -1138,9 +1153,52 @@ async fn core_sync_status_constructs_only_the_closed_public_failure_diagnostics(
                 "offlineModeEnabled": true,
                 "failureDiagnosticId": diagnostic,
                 "slidingSyncCapable": true,
+                "commandGate": "closed",
             })
         );
     }
+}
+
+#[tokio::test]
+async fn running_sync_without_a_timeline_owner_closes_the_command_gate() {
+    let status = PlatformSyncStatus::new(SyncReadiness::Running, 9, true, None, None)
+        .expect("running without a failure is a valid projection");
+    let core = Core::new(Arc::new(StatusPlatform { status: Ok(status) }));
+    let response = core
+        .command(CommandEnvelope {
+            command: "matrix_sync_status".into(),
+            session_generation: 9,
+            request_id: None,
+            payload: serde_json::Value::Null,
+        })
+        .await
+        .expect("sync status is available");
+    assert_eq!(response.payload["readiness"], "running");
+    assert_eq!(response.payload["commandGate"], "closed");
+    assert_eq!(
+        CommandGate::for_installed_session(true, None),
+        CommandGate::Open,
+        "an attached session owner keeps the gate open when no room view is open"
+    );
+    assert_eq!(
+        CommandGate::for_installed_session(true, Some("p4.1-session-authentication-rejected")),
+        CommandGate::Closed
+    );
+
+    let snapshot_error = core
+        .command(CommandEnvelope {
+            command: "matrix_timeline_snapshot".into(),
+            session_generation: 9,
+            request_id: None,
+            payload: serde_json::json!({ "streamId": "stream-1" }),
+        })
+        .await
+        .expect_err("a missing session owner cannot snapshot a timeline");
+    assert_eq!(snapshot_error.category, MatrixIpcErrorCategory::Forbidden);
+    assert_eq!(
+        snapshot_error.diagnostic_id.as_deref(),
+        Some("p2-timeline-snapshot-no-session")
+    );
 }
 
 #[tokio::test]
@@ -1156,6 +1214,7 @@ async fn hostile_desktop_diagnostic_is_rejected_before_platform_core_or_public_t
         offline_mode_enabled: true,
         failure_diagnostic_id: Some(private_text),
         sliding_sync_capable: Some(false),
+        command_gate: CommandGate::Open,
     };
 
     // This is the desktop-side normalization step. Its typed result has no
@@ -4615,6 +4674,105 @@ async fn matrix_send_text_without_owner_fails_closed() {
     assert_eq!(
         error.diagnostic_id.as_deref(),
         Some("p2-send-text-no-session")
+    );
+}
+
+#[tokio::test]
+async fn matrix_local_echo_discard_without_owner_fails_closed() {
+    let core = Core::new(Arc::new(TestPlatform));
+    let secret = "secret body must not leak";
+    let error = core
+        .command(CommandEnvelope {
+            command: "matrix_local_echo_discard".into(),
+            session_generation: 0,
+            request_id: None,
+            payload: serde_json::json!({
+                "roomId": "!room:example.org",
+                "transactionId": "txn-1",
+                "body": secret,
+            }),
+        })
+        .await
+        .expect_err("a body is not part of discard");
+    let rendered = format!("{error:?}");
+    assert!(!rendered.contains(secret));
+    assert!(!rendered.contains("access_token"));
+    assert_eq!(
+        error.diagnostic_id.as_deref(),
+        Some("p2-local-echo-discard-invalid-payload")
+    );
+
+    let error = core
+        .command(CommandEnvelope {
+            command: "matrix_local_echo_discard".into(),
+            session_generation: 0,
+            request_id: None,
+            payload: serde_json::json!({
+                "roomId": "!room:example.org",
+                "transactionId": "txn-1",
+            }),
+        })
+        .await
+        .expect_err("discard without an attached owner must fail closed");
+    assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+    assert_eq!(
+        error.diagnostic_id.as_deref(),
+        Some("p2-local-echo-discard-no-session")
+    );
+    let rendered = format!("{error:?}");
+    assert!(!rendered.contains("txn-1"));
+}
+
+#[tokio::test]
+async fn matrix_local_echo_retry_calls_the_queue_owner_not_a_new_send() {
+    let source = include_str!("messaging.rs");
+    let start = source
+        .find("pub(super) async fn local_echo_retry")
+        .expect("retry command");
+    let end = source[start..]
+        .find("fn require_local_echo_transaction_id")
+        .map(|offset| start + offset)
+        .expect("retry command ends");
+    let body = &source[start..end];
+    assert!(body.contains("retry_send"));
+    assert!(!body.contains("send_text"));
+    assert!(!body.contains("matrix_send_text"));
+    let discard = &source[source
+        .find("pub(super) async fn local_echo_discard")
+        .expect("discard command")..start];
+    assert!(discard.contains("abort_send"));
+    assert!(!discard.contains("redact"));
+    assert!(!discard.contains("send_text"));
+
+    let owner = include_str!("../app/timeline/live.rs");
+    let retry = owner.find("pub async fn retry_send").expect("retry_send");
+    let next = owner[retry + 1..]
+        .find("\n    pub async fn ")
+        .map(|offset| retry + 1 + offset)
+        .expect("retry_send ends before the next method");
+    let retry_body = &owner[retry..next];
+    assert!(retry_body.contains("unwedge_queued_send"));
+    assert!(retry_body.contains("reenable_queued_send"));
+    assert!(!retry_body.contains("send_text"));
+    assert!(!retry_body.contains("enqueue_event_via_room_queue"));
+
+    let core = Core::new(Arc::new(TestPlatform));
+    let error = core
+        .command(CommandEnvelope {
+            command: "matrix_local_echo_retry".into(),
+            session_generation: 0,
+            request_id: None,
+            payload: serde_json::json!({
+                "roomId": "!room:example.org",
+                "transactionId": "txn-1",
+            }),
+        })
+        .await
+        .expect_err("retry without an attached owner must fail closed");
+    assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+    assert_eq!(
+        error.diagnostic_id.as_deref(),
+        Some("p2-local-echo-retry-no-session")
     );
 }
 

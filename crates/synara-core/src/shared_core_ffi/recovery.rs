@@ -1,70 +1,222 @@
 //! Typed SharedCore operations and projections for recovery.
 
 use super::*;
+use crate::app::backup::NativeBackupStatus;
+use crate::app::room_keys::NativeRoomKeyTransferStatus;
+use crate::core_api::MatrixCrossSigningStatusResponse;
+use crate::core_api::MatrixSecretStorageStatusResponse;
+use crate::MatrixCryptoStatus;
+
+use super::wire_enum::{wire_enum, wire_enum_from};
+use crate::app::backup::{
+    NativeBackupAction, NativeBackupAvailability, NativeBackupDeviceState,
+    NativeBackupRecoveryState,
+};
+use crate::app::room_keys::NativeRoomKeyTransferPhase;
+use crate::core_api::{
+    MatrixCrossSigningReadinessResponse, MatrixMissingSecretResponse,
+    MatrixSecretStorageActionResponse, MatrixSecretStorageStateResponse,
+};
+use crate::MatrixCrossSigningState;
+
+wire_enum! {
+    pub enum SecretStorageStateDto {
+        Unavailable => "unavailable",
+        NotSetUp => "not_set_up",
+        Locked => "locked",
+        Ready => "ready",
+    }
+}
+wire_enum_from!(MatrixSecretStorageStateResponse => SecretStorageStateDto {
+    Unavailable, NotSetUp, Locked, Ready
+});
+
+wire_enum! {
+    pub enum SecretStorageActionDto {
+        BootstrapRequired => "bootstrap_required",
+        UnlockRequired => "unlock_required",
+        NoAction => "none",
+    }
+}
+
+impl From<MatrixSecretStorageActionResponse> for SecretStorageActionDto {
+    fn from(action: MatrixSecretStorageActionResponse) -> Self {
+        match action {
+            MatrixSecretStorageActionResponse::BootstrapRequired => Self::BootstrapRequired,
+            MatrixSecretStorageActionResponse::UnlockRequired => Self::UnlockRequired,
+            MatrixSecretStorageActionResponse::None => Self::NoAction,
+        }
+    }
+}
+
+wire_enum! {
+    pub enum MissingSecretDto {
+        CrossSigningMaster => "cross_signing_master",
+        CrossSigningSelfSigning => "cross_signing_self_signing",
+        CrossSigningUserSigning => "cross_signing_user_signing",
+        EncryptionBackup => "encryption_backup",
+    }
+}
+wire_enum_from!(MatrixMissingSecretResponse => MissingSecretDto {
+    CrossSigningMaster, CrossSigningSelfSigning, CrossSigningUserSigning, EncryptionBackup
+});
+
+wire_enum! {
+    pub enum BackupAvailabilityDto {
+        Missing => "missing",
+        Available => "available",
+    }
+}
+wire_enum_from!(NativeBackupAvailability => BackupAvailabilityDto { Missing, Available });
+
+wire_enum! {
+    pub enum BackupDeviceStateDto {
+        Unavailable => "unavailable",
+        Disconnected => "disconnected",
+        Connecting => "connecting",
+        Downloading => "downloading",
+        Uploading => "uploading",
+        Ready => "ready",
+    }
+}
+wire_enum_from!(NativeBackupDeviceState => BackupDeviceStateDto {
+    Unavailable, Disconnected, Connecting, Downloading, Uploading, Ready
+});
+
+wire_enum! {
+    pub enum BackupRecoveryStateDto {
+        Unknown => "unknown",
+        NotSetUp => "not_set_up",
+        Incomplete => "incomplete",
+        Ready => "ready",
+    }
+}
+wire_enum_from!(NativeBackupRecoveryState => BackupRecoveryStateDto {
+    Unknown, NotSetUp, Incomplete, Ready
+});
+
+wire_enum! {
+    pub enum BackupActionDto {
+        SetupRequired => "setup_required",
+        RestoreRequired => "restore_required",
+        RepairRequired => "repair_required",
+        NoAction => "none",
+    }
+}
+
+impl From<NativeBackupAction> for BackupActionDto {
+    fn from(action: NativeBackupAction) -> Self {
+        match action {
+            NativeBackupAction::SetupRequired => Self::SetupRequired,
+            NativeBackupAction::RestoreRequired => Self::RestoreRequired,
+            NativeBackupAction::RepairRequired => Self::RepairRequired,
+            NativeBackupAction::None => Self::NoAction,
+        }
+    }
+}
+
+wire_enum! {
+    pub enum CrossSigningStateDto {
+        Unavailable => "unavailable",
+        NotSetUp => "not_set_up",
+        Partial => "partial",
+        Ready => "ready",
+    }
+}
+wire_enum_from!(MatrixCrossSigningState => CrossSigningStateDto {
+    Unavailable, NotSetUp, Partial, Ready
+});
+
+wire_enum! {
+    pub enum CrossSigningReadinessDto {
+        Unavailable => "unavailable",
+        SetupRequired => "setup_required",
+        RecoveryRequired => "recovery_required",
+        VerificationRequired => "verification_required",
+        Ready => "ready",
+    }
+}
+wire_enum_from!(MatrixCrossSigningReadinessResponse => CrossSigningReadinessDto {
+    Unavailable, SetupRequired, RecoveryRequired, VerificationRequired, Ready
+});
+
+wire_enum! {
+    pub enum RoomKeyTransferPhaseDto {
+        Idle => "idle",
+        Preparing => "preparing",
+        InFlight => "in_flight",
+        Succeeded => "succeeded",
+        Failed => "failed",
+        Cancelled => "cancelled",
+    }
+}
+wire_enum_from!(NativeRoomKeyTransferPhase => RoomKeyTransferPhaseDto {
+    Idle, Preparing, InFlight, Succeeded, Failed, Cancelled
+});
 
 /// Explicit one-time key display only; not a status DTO or generic envelope.
-#[derive(Clone)]
+#[derive(Clone, uniffi::Record)]
 pub struct SecretStorageSetupDto {
     pub status: SecretStorageStatusDto,
     pub recovery_key: Option<String>,
 }
 
 /// Privacy-safe secret-storage status from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SecretStorageStatusDto {
     pub session_generation: u64,
-    pub state: String,
+    pub state: SecretStorageStateDto,
     pub exists: bool,
     pub unlocked: bool,
     pub default_key_set: bool,
     pub passphrase_configured: bool,
     pub bootstrap_ready: bool,
-    pub missing_secrets: Vec<String>,
-    pub action: String,
+    pub missing_secrets: Vec<MissingSecretDto>,
+    pub action: SecretStorageActionDto,
 }
 
 /// Privacy-safe leftover backup status. No passphrase or recovery secret.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct BackupStatusDto {
     pub session_generation: u64,
-    pub availability: String,
+    pub availability: BackupAvailabilityDto,
     pub enabled: bool,
-    pub device_state: String,
-    pub recovery_state: String,
-    pub action: String,
+    pub device_state: BackupDeviceStateDto,
+    pub recovery_state: BackupRecoveryStateDto,
+    pub action: BackupActionDto,
 }
 
 /// Privacy-safe leftover crypto status. No key material.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct CryptoStatusDto {
     pub session_generation: u64,
     pub encryption_enabled: bool,
-    pub cross_signing_state: String,
+    pub cross_signing_state: CrossSigningStateDto,
 }
 
 /// Privacy-safe leftover cross-signing status. No private keys.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct CrossSigningStatusDto {
     pub session_generation: u64,
-    pub readiness: String,
+    pub readiness: CrossSigningReadinessDto,
 }
 
 /// Privacy-safe leftover room-key transfer status. No passphrase or path.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomKeyTransferStatusDto {
     pub session_generation: u64,
-    pub phase: String,
+    pub phase: RoomKeyTransferPhaseDto,
     pub keys_processed: u32,
 }
 
 /// Privacy-safe backup restore ack. Status only; never recovery key or passphrase.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RestoreBackupDto {
-    pub status: String,
+    pub status: WriteAckDto,
 }
 
 /// Static fail-closed backup restore error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum RestoreBackupError {
     Failed { code: String, description: String },
 }
@@ -114,84 +266,23 @@ pub(super) fn map_restore_backup_core_error(
     }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct SecretStorageStatusResultWire {
-    pub(super) session_generation: u64,
-    pub(super) state: String,
-    pub(super) exists: bool,
-    pub(super) unlocked: bool,
-    pub(super) default_key_set: bool,
-    pub(super) passphrase_configured: bool,
-    pub(super) bootstrap_ready: bool,
-    pub(super) missing_secrets: Vec<String>,
-    pub(super) action: String,
-}
-
-pub(super) fn closed_secret_storage_state(value: &str) -> Option<&'static str> {
-    match value {
-        "unavailable" => Some("unavailable"),
-        "not_set_up" => Some("not_set_up"),
-        "locked" => Some("locked"),
-        "ready" => Some("ready"),
-        _ => None,
-    }
-}
-
-pub(super) fn closed_secret_storage_action(value: &str) -> Option<&'static str> {
-    match value {
-        "bootstrap_required" => Some("bootstrap_required"),
-        "unlock_required" => Some("unlock_required"),
-        "none" => Some("none"),
-        _ => None,
-    }
-}
-
 pub(super) fn secret_storage_status_dto(
-    payload: serde_json::Value,
+    payload: MatrixSecretStorageStatusResponse,
 ) -> Result<SecretStorageStatusDto, SessionStatusError> {
-    let result: SecretStorageStatusResultWire = serde_json::from_value(payload).map_err(|_| {
-        session_status_failed(
-            SESSION_STATUS_FAILED_CODE,
-            SESSION_STATUS_FAILED_DESCRIPTION,
-        )
-    })?;
-    let state = closed_secret_storage_state(&result.state).ok_or_else(|| {
-        session_status_failed(
-            SESSION_STATUS_FAILED_CODE,
-            SESSION_STATUS_FAILED_DESCRIPTION,
-        )
-    })?;
-    let action = closed_secret_storage_action(&result.action).ok_or_else(|| {
-        session_status_failed(
-            SESSION_STATUS_FAILED_CODE,
-            SESSION_STATUS_FAILED_DESCRIPTION,
-        )
-    })?;
-    let missing_secrets = result
-        .missing_secrets
-        .iter()
-        .map(|value| {
-            closed_missing_secret(value)
-                .map(str::to_owned)
-                .ok_or_else(|| {
-                    session_status_failed(
-                        SESSION_STATUS_FAILED_CODE,
-                        SESSION_STATUS_FAILED_DESCRIPTION,
-                    )
-                })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
     Ok(SecretStorageStatusDto {
-        session_generation: result.session_generation,
-        state: state.to_owned(),
-        exists: result.exists,
-        unlocked: result.unlocked,
-        default_key_set: result.default_key_set,
-        passphrase_configured: result.passphrase_configured,
-        bootstrap_ready: result.bootstrap_ready,
-        missing_secrets,
-        action: action.to_owned(),
+        session_generation: payload.session_generation,
+        state: payload.state.into(),
+        exists: payload.exists,
+        unlocked: payload.unlocked,
+        default_key_set: payload.default_key_set,
+        passphrase_configured: payload.passphrase_configured,
+        bootstrap_ready: payload.bootstrap_ready,
+        missing_secrets: payload
+            .missing_secrets
+            .into_iter()
+            .map(Into::into)
+            .collect(),
+        action: payload.action.into(),
     })
 }
 
@@ -203,96 +294,48 @@ pub(super) fn map_recovery_backup_core_error(_error: MatrixIpcError) -> Leftover
 }
 
 pub(super) fn leftover_backup_status_dto(
-    payload: serde_json::Value,
+    payload: NativeBackupStatus,
 ) -> Result<BackupStatusDto, LeftoverCommandError> {
     Ok(BackupStatusDto {
-        session_generation: payload
-            .get("sessionGeneration")
-            .and_then(|value| value.as_u64())
-            .unwrap_or(0),
-        availability: payload
-            .get("availability")
-            .and_then(|value| value.as_str())
-            .unwrap_or("missing")
-            .to_owned(),
-        enabled: payload
-            .get("enabled")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false),
-        device_state: payload
-            .get("deviceState")
-            .and_then(|value| value.as_str())
-            .unwrap_or("unavailable")
-            .to_owned(),
-        recovery_state: payload
-            .get("recoveryState")
-            .and_then(|value| value.as_str())
-            .unwrap_or("unknown")
-            .to_owned(),
-        action: payload
-            .get("action")
-            .and_then(|value| value.as_str())
-            .unwrap_or("none")
-            .to_owned(),
+        session_generation: payload.session_generation,
+        availability: payload.availability.into(),
+        enabled: payload.enabled,
+        device_state: payload.device_state.into(),
+        recovery_state: payload.recovery_state.into(),
+        action: payload.action.into(),
     })
 }
 
 pub(super) fn leftover_crypto_status_dto(
-    payload: serde_json::Value,
+    payload: MatrixCryptoStatus,
 ) -> Result<CryptoStatusDto, LeftoverCommandError> {
     Ok(CryptoStatusDto {
-        session_generation: payload
-            .get("sessionGeneration")
-            .and_then(|value| value.as_u64())
-            .unwrap_or(0),
-        encryption_enabled: payload
-            .get("encryptionEnabled")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false),
-        cross_signing_state: payload
-            .get("crossSigningState")
-            .and_then(|value| value.as_str())
-            .unwrap_or("unavailable")
-            .to_owned(),
+        session_generation: payload.session_generation,
+        encryption_enabled: payload.encryption_enabled,
+        cross_signing_state: payload.cross_signing_state.into(),
     })
 }
 
 pub(super) fn leftover_cross_signing_status_dto(
-    payload: serde_json::Value,
+    payload: MatrixCrossSigningStatusResponse,
 ) -> Result<CrossSigningStatusDto, LeftoverCommandError> {
     Ok(CrossSigningStatusDto {
-        session_generation: payload
-            .get("sessionGeneration")
-            .and_then(|value| value.as_u64())
-            .unwrap_or(0),
-        readiness: payload
-            .get("readiness")
-            .and_then(|value| value.as_str())
-            .unwrap_or("unavailable")
-            .to_owned(),
+        session_generation: payload.session_generation,
+        readiness: payload.readiness.into(),
     })
 }
 
 pub(super) fn leftover_room_key_transfer_status_dto(
-    payload: serde_json::Value,
+    payload: NativeRoomKeyTransferStatus,
 ) -> Result<RoomKeyTransferStatusDto, LeftoverCommandError> {
     Ok(RoomKeyTransferStatusDto {
-        session_generation: payload
-            .get("sessionGeneration")
-            .and_then(|value| value.as_u64())
-            .unwrap_or(0),
-        phase: payload
-            .get("phase")
-            .and_then(|value| value.as_str())
-            .unwrap_or("idle")
-            .to_owned(),
-        keys_processed: payload
-            .get("keysProcessed")
-            .and_then(|value| value.as_u64())
-            .unwrap_or(0) as u32,
+        session_generation: payload.session_generation,
+        phase: payload.phase.into(),
+        keys_processed: payload.keys_processed,
     })
 }
 
+#[uniffi::export(async_runtime = "tokio")]
 impl SharedCore {
     /// Restore encryption backup. Recovery secret is a dedicated FFI argument,
     /// never a Core JSON field. Leftover `recover` remains fail-closed.
@@ -310,7 +353,7 @@ impl SharedCore {
                 map_restore_backup_core_error(RESTORE_BACKUP_NO_SESSION_CODE, error)
             })?;
         Ok(RestoreBackupDto {
-            status: result.status.to_owned(),
+            status: result.status.into(),
         })
     }
 
@@ -318,7 +361,7 @@ impl SharedCore {
         &self,
     ) -> Result<SecretStorageStatusDto, SessionStatusError> {
         let payload = self
-            .session_status_command(SECRET_STORAGE_STATUS_COMMAND)
+            .session_status_command(self.core.secret_storage_status())
             .await?;
         secret_storage_status_dto(payload)
     }
@@ -335,14 +378,9 @@ impl SharedCore {
             .secret_storage_bootstrap(secret.as_str())
             .await
             .map_err(map_session_status_core_error)?;
-        let status = secret_storage_status_dto(
-            serde_json::to_value(result.result.status).map_err(|_| {
-                session_status_failed(
-                    "recovery-projection-failed",
-                    "Recovery status is unavailable.",
-                )
-            })?,
-        )?;
+        let status = secret_storage_status_dto(MatrixSecretStorageStatusResponse::from(
+            result.result.status,
+        ))?;
         Ok(SecretStorageSetupDto {
             status,
             recovery_key: result.recovery_key.map(|key| key.to_string()),
@@ -359,12 +397,7 @@ impl SharedCore {
             .secret_storage_unlock(secret.as_str())
             .await
             .map_err(map_session_status_core_error)?;
-        secret_storage_status_dto(serde_json::to_value(result.status).map_err(|_| {
-            session_status_failed(
-                "recovery-projection-failed",
-                "Recovery status is unavailable.",
-            )
-        })?)
+        secret_storage_status_dto(MatrixSecretStorageStatusResponse::from(result.status))
     }
 
     pub async fn secret_storage_reset(
@@ -377,14 +410,9 @@ impl SharedCore {
             .secret_storage_reset(secret.as_str())
             .await
             .map_err(map_session_status_core_error)?;
-        let status = secret_storage_status_dto(
-            serde_json::to_value(result.result.status).map_err(|_| {
-                session_status_failed(
-                    "recovery-projection-failed",
-                    "Recovery status is unavailable.",
-                )
-            })?,
-        )?;
+        let status = secret_storage_status_dto(MatrixSecretStorageStatusResponse::from(
+            result.result.status,
+        ))?;
         Ok(SecretStorageSetupDto {
             status,
             recovery_key: result.recovery_key.map(|key| key.to_string()),
@@ -401,11 +429,7 @@ impl SharedCore {
             .backup_setup(secret.as_str())
             .await
             .map_err(map_recovery_backup_core_error)?;
-        leftover_backup_status_dto(serde_json::to_value(result.status).map_err(|_| {
-            map_recovery_backup_core_error(MatrixIpcError::new(
-                MatrixIpcErrorCategory::SdkInvariant,
-            ))
-        })?)
+        leftover_backup_status_dto(result.status)
     }
 
     pub async fn backup_repair(
@@ -418,20 +442,20 @@ impl SharedCore {
             .backup_repair(secret.as_str())
             .await
             .map_err(map_recovery_backup_core_error)?;
-        leftover_backup_status_dto(serde_json::to_value(result.status).map_err(|_| {
-            map_recovery_backup_core_error(MatrixIpcError::new(
-                MatrixIpcErrorCategory::SdkInvariant,
-            ))
-        })?)
+        leftover_backup_status_dto(result.status)
     }
 
     pub async fn backup_status(&self) -> Result<BackupStatusDto, LeftoverCommandError> {
-        let payload = self.leftover_status_command(BACKUP_STATUS_COMMAND).await?;
+        let payload = self
+            .leftover_status_command(self.core.backup_status())
+            .await?;
         leftover_backup_status_dto(payload)
     }
 
     pub async fn crypto_status(&self) -> Result<CryptoStatusDto, LeftoverCommandError> {
-        let payload = self.leftover_status_command(CRYPTO_STATUS_COMMAND).await?;
+        let payload = self
+            .leftover_status_command(self.core.crypto_status())
+            .await?;
         leftover_crypto_status_dto(payload)
     }
 
@@ -439,7 +463,7 @@ impl SharedCore {
         &self,
     ) -> Result<CrossSigningStatusDto, LeftoverCommandError> {
         let payload = self
-            .leftover_status_command(CROSS_SIGNING_STATUS_COMMAND)
+            .leftover_status_command(self.core.cross_signing_status())
             .await?;
         leftover_cross_signing_status_dto(payload)
     }
@@ -448,7 +472,7 @@ impl SharedCore {
         &self,
     ) -> Result<RoomKeyTransferStatusDto, LeftoverCommandError> {
         let payload = self
-            .leftover_status_command(ROOM_KEY_TRANSFER_STATUS_COMMAND)
+            .leftover_status_command(self.core.room_key_transfer_status())
             .await?;
         leftover_room_key_transfer_status_dto(payload)
     }

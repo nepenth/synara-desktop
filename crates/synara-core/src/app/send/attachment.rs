@@ -160,20 +160,22 @@ pub async fn send_room_attachment(
         request.mention_user_ids,
         request.mention_room,
     )?;
-    let event_id =
+    let outcome = super::queued_send_outcome(
         super::send_attachment_via_room_queue(&room, filename, mime_type, request.payload, config)
-            .await
-            .map_err(|error| {
-                if error.wedged {
-                    "d0.4-send-queue-wedged"
-                } else {
-                    "v-send.1-attachment-sdk-failed"
-                }
-            })?
-            .event_id;
+            .await,
+    )
+    .map_err(|error| {
+        if error.wedged {
+            "d0.4-send-queue-wedged"
+        } else {
+            "v-send.1-attachment-sdk-failed"
+        }
+    })?;
+    // A still-queued upload keeps going in the SDK; reporting it as failed
+    // made the user attach it again and post a duplicate.
     Ok(MatrixSendRoomAttachmentResult {
-        event_id,
-        status: "sent",
+        event_id: outcome.event_id(),
+        status: outcome.send_status(),
     })
 }
 

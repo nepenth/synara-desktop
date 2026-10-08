@@ -25,8 +25,7 @@ export function RoomPublish({ permissions, roomId, isSpace }: RoomPublishProps) 
     visibilityState.status === AsyncStatus.Loading ||
     toggleState.status === AsyncStatus.Loading;
   const canEditCanonical =
-    joinRuleState.status === 'ready' &&
-    permissions.stateEvent(StateEvent.RoomCanonicalAlias, joinRuleState.userId);
+    joinRuleState.status === 'ready' && permissions.stateEvent(StateEvent.RoomCanonicalAlias);
   const validRule =
     joinRuleState.status === 'ready' &&
     (joinRuleState.snapshot.joinRule === 'public' ||

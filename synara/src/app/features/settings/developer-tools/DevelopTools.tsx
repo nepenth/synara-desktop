@@ -6,7 +6,6 @@ import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import { isSynaraDesktop } from '../../../utils/desktop';
 import { pushEncryptedStateEventsSetting } from '../encryptedStateEvents';
@@ -23,6 +22,7 @@ import {
   platformSessionStore,
   type PlatformSecretStoreStatus,
 } from '../../../platform';
+import { setNativeAccountData, useNativeAccountData } from '../../../native/nativeAccountData';
 
 function NativeSessionStoreStatus() {
   const [status, setStatus] = useState<PlatformSecretStoreStatus>();
@@ -71,7 +71,6 @@ type DeveloperToolsProps = {
   requestClose: () => void;
 };
 export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
-  const mx = useMatrixClient();
   const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
   const [encryptedStateEvents, setEncryptedStateEventsSetting] = useSetting(
     settingsAtom,
@@ -88,20 +87,21 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
     setEncryptedStateEventsSetting(value);
   };
 
+  const editingContent = useNativeAccountData(
+    accountDataType ?? '',
+    undefined,
+    typeof accountDataType === 'string'
+  );
   const submitAccountData: AccountDataSubmitCallback = useCallback(
-    async (type, content) => {
-      await mx.setAccountData(type as any, content as any);
-    },
-    [mx]
+    (type, content) => setNativeAccountData(type, content as Record<string, unknown>),
+    []
   );
 
   if (accountDataType !== undefined) {
     return (
       <AccountDataEditor
         type={accountDataType ?? undefined}
-        content={
-          accountDataType ? mx.getAccountData(accountDataType as any)?.getContent() : undefined
-        }
+        content={accountDataType ? (editingContent ?? undefined) : undefined}
         submitChange={submitAccountData}
         requestClose={() => setAccountDataType(undefined)}
       />

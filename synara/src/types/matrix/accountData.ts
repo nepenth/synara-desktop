@@ -1,3 +1,16 @@
+import type {
+  SynaraAgentApprovalHistoryItem,
+  SynaraLaterItem,
+  SynaraRoomNoteItem,
+} from '../../app/features/matrix-dto/generated';
+export type {
+  SynaraAgentApprovalHistoryDecision,
+  SynaraAgentApprovalHistoryItem,
+  SynaraLaterItem,
+  SynaraLaterItemKind,
+  SynaraRoomNoteItem,
+  SynaraRoomNoteItemKind,
+} from '../../app/features/matrix-dto/generated';
 export enum AccountDataEvent {
   PushRules = 'm.push_rules',
   Direct = 'm.direct',
@@ -24,38 +37,9 @@ export type MarkedUnreadContent = {
   unread?: boolean;
 };
 
-export type SynaraLaterItemKind = 'saved' | 'reminder';
-
-export type SynaraLaterItem = {
-  id: string;
-  kind: SynaraLaterItemKind;
-  roomId: string;
-  eventId: string;
-  createdAt: number;
-  dueTs?: number;
-  remindedAt?: number;
-  completedAt?: number;
-};
-
 export type SynaraLaterContent = {
   version?: number;
   items?: Record<string, SynaraLaterItem>;
-};
-
-export type SynaraRoomNoteItemKind = 'note' | 'todo' | 'message';
-
-export type SynaraRoomNoteItem = {
-  id: string;
-  kind: SynaraRoomNoteItemKind;
-  roomId: string;
-  createdAt: number;
-  updatedAt: number;
-  order?: number;
-  body?: string;
-  completedAt?: number;
-  eventId?: string;
-  eventTs?: number;
-  sender?: string;
 };
 
 export type SynaraRoomNotesContent = {
@@ -66,19 +50,6 @@ export type SynaraRoomNotesContent = {
       items?: Record<string, SynaraRoomNoteItem>;
     }
   >;
-};
-
-export type SynaraAgentApprovalHistoryDecision = 'approve_once' | 'approve_always' | 'deny';
-
-export type SynaraAgentApprovalHistoryItem = {
-  roomId: string;
-  eventId: string;
-  sender: string;
-  decision: SynaraAgentApprovalHistoryDecision;
-  decidedAt: number;
-  originServerTs: number;
-  expiresAt: number;
-  summary: string;
 };
 
 export type SynaraAgentApprovalHistoryContent = {

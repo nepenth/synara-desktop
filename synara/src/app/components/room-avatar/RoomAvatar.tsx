@@ -12,6 +12,7 @@ import { getRoomIconSrc } from '../../utils/room';
 import colorMXID from '../../../util/colorMXID';
 import type { RoomJoinRulePresentation } from '../../features/matrix-dto/roomJoinRule';
 import { useNativeMatrixMediaSrc } from '../../hooks/useNativeMatrixMediaSrc';
+import { NATIVE_AVATAR_THUMBNAIL_PX } from '../../matrix/media';
 
 type RoomAvatarProps = {
   roomId: string;
@@ -29,7 +30,7 @@ export function RoomAvatar({
   fallbackColor,
   renderFallback,
 }: RoomAvatarProps) {
-  const resolvedSrc = useNativeMatrixMediaSrc(src);
+  const resolvedSrc = useNativeMatrixMediaSrc(src, { size: NATIVE_AVATAR_THUMBNAIL_PX });
   const [error, setError] = useState(false);
 
   useEffect(() => {

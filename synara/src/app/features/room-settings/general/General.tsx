@@ -14,7 +14,6 @@ import {
   RoomRetention,
   RoomUpgrade,
 } from '../../common-settings/general';
-import { useRoomCreators } from '../../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../../hooks/useRoomPermissions';
 
 type GeneralProps = {
@@ -23,8 +22,7 @@ type GeneralProps = {
 export function General({ requestClose }: GeneralProps) {
   const room = useRoom();
   const powerLevels = usePowerLevels(room);
-  const creators = useRoomCreators(room);
-  const permissions = useRoomPermissions(creators, powerLevels);
+  const permissions = useRoomPermissions(powerLevels);
 
   return (
     <Page>

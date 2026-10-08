@@ -24,7 +24,6 @@ import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { nameInitials } from '../../utils/common';
 import { millify } from '../../plugins/millify';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { joinRoomWithNativeOwner } from '../nativeRoomJoinOwner';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
@@ -33,9 +32,9 @@ import { RoomType, StateEvent } from '../../../types/matrix/room';
 import { useJoinedRoomId } from '../../hooks/useJoinedRoomId';
 import { useElementSizeObserver } from '../../hooks/useElementSizeObserver';
 import { getRoomAvatarUrl, getStateEvent } from '../../utils/room';
-import { useStateEventCallback } from '../../hooks/useStateEventCallback';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 
+import { getNativeRoom } from '../../native/nativeSession';
 type GridColumnCount = '1' | '2' | '3';
 const getGridColumnCount = (gridWidth: number): GridColumnCount => {
   if (gridWidth <= 498) return '1';
@@ -163,11 +162,10 @@ export const RoomCard = as<'div', RoomCardProps>(
     },
     ref
   ) => {
-    const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
     const joinedRoomId = useJoinedRoomId(allRooms, roomIdOrAlias);
-    const joinedRoom = mx.getRoom(joinedRoomId);
-    const [topicEvent, setTopicEvent] = useState(() =>
+    const joinedRoom = getNativeRoom(joinedRoomId);
+    const [topicEvent] = useState(() =>
       joinedRoom ? getStateEvent(joinedRoom, StateEvent.RoomTopic) : undefined
     );
 
@@ -175,29 +173,13 @@ export const RoomCard = as<'div', RoomCardProps>(
     const fallbackTopic = roomIdOrAlias;
 
     const avatar = joinedRoom
-      ? getRoomAvatarUrl(mx, joinedRoom, 96, useAuthentication)
-      : avatarUrl && resolveMatrixThumbnailUrl(mx, avatarUrl, 96, { useAuthentication });
+      ? getRoomAvatarUrl(joinedRoom, 96)
+      : avatarUrl && resolveMatrixThumbnailUrl(avatarUrl, 96, { useAuthentication });
 
     const roomName = joinedRoom?.name || name || fallbackName;
     const roomTopic =
       (topicEvent?.getContent().topic as string) || undefined || topic || fallbackTopic;
     const joinedMemberCount = joinedRoom?.getJoinedMemberCount() ?? memberCount;
-
-    useStateEventCallback(
-      mx,
-      useCallback(
-        (event) => {
-          if (
-            joinedRoom &&
-            event.getRoomId() === joinedRoom.roomId &&
-            event.getType() === StateEvent.RoomTopic
-          ) {
-            setTopicEvent(getStateEvent(joinedRoom, StateEvent.RoomTopic));
-          }
-        },
-        [joinedRoom]
-      )
-    );
 
     const [joinState, join] = useAsyncCallback<void, Error, []>(
       useCallback(

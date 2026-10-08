@@ -1,12 +1,10 @@
 //! Desktop bridges for poll start/respond through `Core::command`.
 
 use synara_core::app::send::{MatrixPollRespondResult, MatrixSendPollResult};
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
-
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn send_poll(
     core: &Core,
@@ -18,22 +16,17 @@ pub(crate) async fn send_poll(
     reply_to: Option<String>,
 ) -> Result<MatrixSendPollResult, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: "matrix_send_poll".to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({
-                "roomId": room_id,
-                "question": question,
-                "answers": answers,
-                "maxSelections": max_selections,
-                "threadRoot": thread_root,
-                "replyTo": reply_to,
-            }),
+        .send_poll(synara_core::core_api::MatrixSendPollRequest {
+            room_id,
+            question,
+            answers,
+            max_selections,
+            thread_root,
+            reply_to,
         })
         .await
         .map_err(map_send_poll_core_error)?;
-    parse_send_poll_result(response.payload)
+    Ok(response)
 }
 
 pub(crate) async fn poll_respond(
@@ -43,63 +36,14 @@ pub(crate) async fn poll_respond(
     answer_ids: Vec<String>,
 ) -> Result<MatrixPollRespondResult, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: "matrix_poll_respond".to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({
-                "roomId": room_id,
-                "pollEventId": poll_event_id,
-                "answerIds": answer_ids,
-            }),
+        .poll_respond(synara_core::core_api::MatrixPollRespondRequest {
+            room_id,
+            poll_event_id,
+            answer_ids,
         })
         .await
         .map_err(map_poll_respond_core_error)?;
-    parse_poll_respond_result(response.payload)
-}
-
-fn parse_send_poll_result(
-    payload: serde_json::Value,
-) -> Result<MatrixSendPollResult, MatrixAuthCommandError> {
-    #[derive(serde::Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct Wire {
-        room_id: String,
-        event_id: String,
-        status: String,
-    }
-    let wire: Wire = serde_json::from_value(payload).map_err(|_| send_poll_response_error())?;
-    if wire.status != "sent" {
-        return Err(send_poll_response_error());
-    }
-    Ok(MatrixSendPollResult {
-        room_id: wire.room_id,
-        event_id: wire.event_id,
-        status: "sent",
-    })
-}
-
-fn parse_poll_respond_result(
-    payload: serde_json::Value,
-) -> Result<MatrixPollRespondResult, MatrixAuthCommandError> {
-    #[derive(serde::Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct Wire {
-        room_id: String,
-        poll_event_id: String,
-        event_id: String,
-        status: String,
-    }
-    let wire: Wire = serde_json::from_value(payload).map_err(|_| poll_respond_response_error())?;
-    if wire.status != "sent" {
-        return Err(poll_respond_response_error());
-    }
-    Ok(MatrixPollRespondResult {
-        room_id: wire.room_id,
-        poll_event_id: wire.poll_event_id,
-        event_id: wire.event_id,
-        status: "sent",
-    })
+    Ok(response)
 }
 
 fn map_send_poll_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -144,20 +88,4 @@ fn map_poll_core_error(
         }
         _ => MatrixAuthCommandError::new("Unknown", unknown_message, diagnostic),
     }
-}
-
-fn send_poll_response_error() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "The native Matrix poll could not be sent.",
-        "v-send.3-poll-sdk-failed",
-    )
-}
-
-fn poll_respond_response_error() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "The native Matrix poll response could not be sent.",
-        "v-send.3-poll-response-sdk-failed",
-    )
 }

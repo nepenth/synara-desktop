@@ -65,11 +65,18 @@ export function DesktopTitleBar() {
       className={classNames(ContainerColor({ variant: 'Background' }), css.TitleBar)}
       aria-label="Window title bar"
       data-tauri-drag-region
+      data-synara-window-drag
       alignItems="Center"
       gap="100"
     >
-      <Box grow="Yes" alignItems="Center" data-tauri-drag-region className={css.DragRegion} />
-      <Box shrink="No" alignItems="Center" gap="100">
+      <Box
+        grow="Yes"
+        alignItems="Center"
+        data-tauri-drag-region
+        data-synara-window-drag
+        className={css.DragRegion}
+      />
+      <Box shrink="No" alignItems="Center" gap="100" data-synara-window-controls>
         <IconButton
           size="300"
           radii="300"

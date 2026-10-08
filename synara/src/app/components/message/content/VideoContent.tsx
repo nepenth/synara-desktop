@@ -21,7 +21,6 @@ import {
   MATRIX_BLUR_HASH_PROPERTY_NAME,
 } from '../../../../types/matrix/common';
 import * as css from './style.css';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { bytesToSize, millisecondsToMinutesAndSeconds } from '../../../utils/common';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
@@ -66,7 +65,6 @@ export const VideoContent = as<'div', VideoContentProps>(
     },
     ref
   ) => {
-    const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
     const blurHash = validBlurHash(info.thumbnail_info?.[MATRIX_BLUR_HASH_PROPERTY_NAME]);
 
@@ -76,12 +74,12 @@ export const VideoContent = as<'div', VideoContentProps>(
 
     const [srcState, loadSrc] = useAsyncCallback(
       useCallback(async () => {
-        return createMatrixMediaObjectUrl(mx, url, {
+        return createMatrixMediaObjectUrl(url, {
           useAuthentication,
           mimeType,
           encryptedInfo: encInfo,
         });
-      }, [mx, url, useAuthentication, mimeType, encInfo])
+      }, [url, useAuthentication, mimeType, encInfo])
     );
 
     const handleLoad = () => {

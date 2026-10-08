@@ -168,6 +168,81 @@ struct SharedCoreAuthService: AuthServicing {
     }
 }
 
+enum RejectedAuthenticationRetirement {
+    static let diagnosticID = "p4.1-session-authentication-rejected"
+
+    static func shouldRetire(failureDiagnosticID: String?) -> Bool {
+        failureDiagnosticID == diagnosticID
+    }
+}
+
+/// Local retirement for a rejected refresh (spec FR-3).
+///
+/// The only effects are the injected ones: retire the generation in Core
+/// (`retireRejectedSession`, which forgets the vault credentials locally),
+/// note the expiry, and sign the app shell out. There is no remote `/logout`,
+/// no refresh, and no store wipe. Signing the shell out deletes the app session
+/// record that drives launch restore, so the retired generation cannot come
+/// back on the next launch even if the vault forget keeps failing.
+struct RejectedAuthenticationRetirer {
+    enum Outcome: Equatable {
+        /// Vault credentials forgotten and the shell signed out.
+        case retired
+        /// Shell signed out; the vault forget failed every attempt. The next
+        /// login replaces those credentials.
+        case signedOutCredentialsKept
+        /// The shell could not be signed out. The caller retries on a later poll.
+        case signOutFailed
+    }
+
+    var forgetCredentials: () async throws -> Void
+    var noteSessionExpired: @MainActor () -> Void
+    var signOut: @MainActor () throws -> Void
+    var maxAttempts = 3
+    var retryDelayNanoseconds: UInt64 = 1_000_000_000
+
+    func run() async -> Outcome {
+        let forgot = await attempt { try await forgetCredentials() }
+        await noteSessionExpired()
+        let signedOut = await attempt { try await signOut() }
+        guard signedOut else {
+            return .signOutFailed
+        }
+        return forgot ? .retired : .signedOutCredentialsKept
+    }
+
+    private func attempt(_ body: () async throws -> Void) async -> Bool {
+        for index in 0..<max(maxAttempts, 1) {
+            do {
+                try await body()
+                return true
+            } catch {
+                if index + 1 < maxAttempts {
+                    try? await Task.sleep(nanoseconds: retryDelayNanoseconds)
+                }
+            }
+        }
+        return false
+    }
+}
+
+enum ExplicitRoomReadReceipt {
+    static let failureCopy = "Couldn't mark this channel as read."
+
+    /// Fixed copy for the channel menu when explicit mark-read did not publish
+    /// a fully-read marker. Nil means the mark-read landed.
+    static func failureMessage(acknowledgedEventID: String?) -> String? {
+        acknowledgedEventID == nil ? failureCopy : nil
+    }
+
+    static func acknowledgedEventID(receiptSent: Bool?, acknowledgedEventID: String?) -> String? {
+        guard receiptSent == true else {
+            return nil
+        }
+        return acknowledgedEventID
+    }
+}
+
 final class SharedCoreMatrixClientService: MatrixClientServicing {
     private let host: SharedCoreProductHost
     private let connectionStatus: ConnectionStatusStore
@@ -181,6 +256,10 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     private var pathMonitor: NWPathMonitor?
     private let pathQueue = DispatchQueue(label: "com.whylandcreative.synara.connection-path")
     private var statusWatchTask: Task<Void, Never>?
+    /// Set under `applyLock` while a retirement for that generation is running
+    /// or has finished. Cleared only after a failed sign-out so a later poll
+    /// may retry.
+    private var retiringAuthenticationGeneration: UInt64?
     private(set) var syncStatus: MatrixSyncStatus = .stopped
     private static let syncNotAttachedCode = "p4-s12-sync-not-attached"
 
@@ -354,16 +433,78 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     }
 
     private func refreshLiveSyncStatus() async {
+        guard let dto = try? await SharedCoreSessionStatus.syncStatus(core: host.core) else {
+            return
+        }
+        if RejectedAuthenticationRetirement.shouldRetire(failureDiagnosticID: dto.failureDiagnosticId) {
+            beginRejectedAuthenticationRetirement(generation: dto.sessionGeneration)
+            return
+        }
         switch syncStatus {
         case .restoreFailed, .stopped:
             return
         default:
             break
         }
-        guard let dto = try? await SharedCoreSessionStatus.syncStatus(core: host.core) else {
+        await publish(
+            ConnectionStatusCopy.fromReadiness(
+                dto.readiness,
+                previous: syncStatus,
+                commandGate: dto.commandGate
+            )
+        )
+    }
+
+    /// Local retirement for a rejected refresh. Does not POST /logout, refresh
+    /// the rejected token, or delete the crypto store. One retirement runs per
+    /// generation; a later poll may start another only after a failed sign-out.
+    private func beginRejectedAuthenticationRetirement(generation: UInt64) {
+        let start: Bool = applyLock.withLock {
+            if retiringAuthenticationGeneration == generation {
+                return false
+            }
+            retiringAuthenticationGeneration = generation
+            return true
+        }
+        guard start else {
             return
         }
-        await publish(ConnectionStatusCopy.fromReadiness(dto.readiness, previous: syncStatus))
+        let host = host
+        let retirer = RejectedAuthenticationRetirer(
+            forgetCredentials: { [weak self] in
+                // Stop the shell's sync bookkeeping (and this watch), then let
+                // Core retire exactly this generation: local teardown and a
+                // vault forget, never a remote /logout, never a store wipe.
+                // Core latched the rejection when the poll saw it, so the
+                // order of stop and retire does not matter.
+                await self?.stop()
+                _ = try await host.core.retireRejectedSession(sessionGeneration: generation)
+            },
+            noteSessionExpired: { host.sessionStore.noteSessionExpired() },
+            signOut: { try host.sessionStore.signOut() }
+        )
+        // Unstructured on purpose, not a child of `statusWatchTask`: retiring
+        // stops that watch, and a retirement it owned would cancel its own
+        // credential forget part way through.
+        Task { [weak self] in
+            let outcome = await retirer.run()
+            guard let self else {
+                return
+            }
+            self.lastSession = nil
+            switch outcome {
+            case .retired, .signedOutCredentialsKept:
+                self.stopStatusWatch()
+                self.stopPathMonitor()
+            case .signOutFailed:
+                // Forgetting stopped the watch. Restart it so a later poll that
+                // still reports the rejection retries this generation.
+                self.applyLock.withLock {
+                    self.retiringAuthenticationGeneration = nil
+                }
+                self.startStatusWatch()
+            }
+        }
     }
 
     private func publish(_ status: MatrixSyncStatus) async {
@@ -429,7 +570,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
 
     func coreSessionIdentity() async -> CoreSessionIdentity? {
         guard let snapshot = try? await SharedCoreSessionStatus.sessionSnapshot(core: host.core),
-              snapshot.status == "logged_in",
+              snapshot.status == .loggedIn,
               let userID = snapshot.userId,
               let deviceID = snapshot.deviceId,
               let homeserver = snapshot.homeserverUrl
@@ -627,7 +768,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         guard readyOwner(),
               await MainActor.run(body: { host.sessionStore.currentState == .signedIn(session) }),
               let before = try? await SharedCoreSessionStatus.sessionSnapshot(core: host.core),
-              before.status == "logged_in", before.userId == session.userID,
+              before.status == .loggedIn, before.userId == session.userID,
               before.deviceId == session.deviceID,
               URL(string: before.homeserverUrl ?? "") == session.homeserverURL,
               let generation = before.sessionGeneration,
@@ -638,7 +779,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
                   host.sessionStore.sessionEpoch == accountEpoch && host.sessionStore.currentState == .signedIn(session)
               }),
               let after = try? await SharedCoreSessionStatus.sessionSnapshot(core: host.core),
-              after.status == "logged_in", after.sessionGeneration == generation,
+              after.status == .loggedIn, after.sessionGeneration == generation,
               after.userId == before.userId, after.deviceId == before.deviceId,
               after.homeserverUrl == before.homeserverUrl
         else { return true }
@@ -730,11 +871,11 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         }
     }
 
-    func addThreepidEmail() async -> String? {
+    func addThreepidEmail() async -> ThreepidAddStatusDto? {
         try? await SharedCoreAccountSettings.threepidAddEmail(core: host.core).status
     }
 
-    func addThreepidEmailPassword(_ password: String) async -> String? {
+    func addThreepidEmailPassword(_ password: String) async -> ThreepidAddStatusDto? {
         try? await SharedCoreAccountSettings.threepidAddEmailPassword(core: host.core, password: password).status
     }
 }
@@ -1004,7 +1145,7 @@ final class SharedCoreTimelineService: TimelineServicing {
                 _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: previous)
             }
             let position = TimelineOpenPositionDto(
-                kind: focusedEventID == nil ? "live" : "focused",
+                kind: focusedEventID == nil ? .liveBottom : .focused,
                 atBottom: focusedEventID == nil,
                 restoredAnchorEventId: nil,
                 liveTailEventId: nil,
@@ -1042,7 +1183,7 @@ final class SharedCoreTimelineService: TimelineServicing {
                 let snapshot = try await SharedCoreTimeline.timelinePaginate(
                     core: host.core,
                     streamId: initialState.streamID,
-                    direction: "backwards"
+                    direction: .backwards
                 )
                 paginationProgress.recordPage(rowIDs: Self.nativeRowIDs(snapshot.rows))
                 let items = SharedCoreTimelineRows.items(from: snapshot.rows, visibleTailEventID: snapshot.visibleTailEventId, receiptTailEventID: snapshot.receiptTailEventId)
@@ -1057,10 +1198,10 @@ final class SharedCoreTimelineService: TimelineServicing {
                 if containsNewItems {
                     return .loaded(items)
                 }
-                if snapshot.paginationBackward == "exhausted" {
+                if snapshot.paginationBackward == .exhausted {
                     return .empty
                 }
-                guard snapshot.paginationBackward == "available" else {
+                guard snapshot.paginationBackward == .available else {
                     return .failed(Self.temporarilyUnavailableFailure)
                 }
             } catch {
@@ -1211,7 +1352,7 @@ final class SharedCoreTimelineService: TimelineServicing {
             ) {
                 return outcome
             }
-            guard snapshot.paginationBackward == "available" else {
+            guard snapshot.paginationBackward == .available else {
                 return .failed(Self.temporarilyUnavailableFailure)
             }
             guard paginationProgress.canRequestPage else {
@@ -1221,7 +1362,7 @@ final class SharedCoreTimelineService: TimelineServicing {
                 snapshot = try await SharedCoreTimeline.timelinePaginate(
                     core: host.core,
                     streamId: streamID,
-                    direction: "backwards"
+                    direction: .backwards
                 )
                 paginationProgress.recordPage(rowIDs: Self.nativeRowIDs(snapshot.rows))
             } catch {
@@ -1373,7 +1514,7 @@ final class SharedCoreLaterService: LaterServicing {
                     id: item.id,
                     roomID: item.roomId,
                     eventID: item.eventId,
-                    kind: item.kind == "reminder" ? .reminder : .saved,
+                    kind: item.kind == .reminder ? .reminder : .saved,
                     dueTs: item.dueTs.map { Int($0) },
                     completedAt: item.completedAt.map { Int($0) },
                     createdAt: Int(item.createdAt),
@@ -1614,9 +1755,9 @@ final class SharedCoreEventActionService: EventActionServicing {
                     roomID: readback.roomId,
                     eventID: readback.eventId,
                     status: readback.status,
-                    expectedAction: "redact",
+                    expectedAction: .redact,
                     expectedRoomID: roomID,
-                    expectedStatus: "redacted",
+                    expectedStatus: .redacted,
                     expectedEventID: item.eventID
                 ) else {
                     throw EventActionError.failed
@@ -1670,9 +1811,9 @@ final class SharedCoreEventActionService: EventActionServicing {
                     roomID: readback.roomId,
                     eventID: readback.eventId,
                     status: readback.status,
-                    expectedAction: "report",
+                    expectedAction: .report,
                     expectedRoomID: roomID,
-                    expectedStatus: "reported",
+                    expectedStatus: .reported,
                     expectedEventID: item.eventID
                 ) else {
                     throw EventActionError.failed
@@ -1699,9 +1840,9 @@ final class SharedCoreEventActionService: EventActionServicing {
                         roomID: readback.roomId,
                         eventID: readback.eventId,
                         status: readback.status,
-                        expectedAction: "forward_text",
+                        expectedAction: .forwardText,
                         expectedRoomID: targetRoomID,
-                        expectedStatus: "sent"
+                        expectedStatus: .sent
                     ) else {
                         throw EventActionError.failed
                     }
@@ -1719,9 +1860,9 @@ final class SharedCoreEventActionService: EventActionServicing {
                         roomID: readback.roomId,
                         eventID: readback.eventId,
                         status: readback.status,
-                        expectedAction: "forward_media",
+                        expectedAction: .forwardMedia,
                         expectedRoomID: targetRoomID,
-                        expectedStatus: "sent"
+                        expectedStatus: .sent
                     ) else {
                         throw EventActionError.failed
                     }
@@ -1753,9 +1894,9 @@ final class SharedCoreEventActionService: EventActionServicing {
                     roomID: readback.roomId,
                     eventID: readback.eventId,
                     status: readback.status,
-                    expectedAction: "poll_vote",
+                    expectedAction: .pollVote,
                     expectedRoomID: roomID,
-                    expectedStatus: "voted",
+                    expectedStatus: .voted,
                     expectedEventID: item.eventID
                 ) else {
                     throw EventActionError.failed
@@ -1777,9 +1918,9 @@ final class SharedCoreEventActionService: EventActionServicing {
                     roomID: readback.roomId,
                     eventID: readback.eventId,
                     status: readback.status,
-                    expectedAction: "call_decline",
+                    expectedAction: .callDecline,
                     expectedRoomID: roomID,
-                    expectedStatus: "declined",
+                    expectedStatus: .declined,
                     expectedEventID: item.eventID
                 ) else {
                     throw EventActionError.failed
@@ -1844,12 +1985,10 @@ final class SharedCoreAgentApprovalDecisionService: AgentApprovalDecisionServici
                 actionId: request.actionIdentifier
             )
             switch result.status {
-            case "applied":
+            case .applied:
                 return .applied
-            case "already_decided":
+            case .alreadyDecided:
                 return .alreadyDecided
-            default:
-                throw SynaraAgentApprovalError.failed
             }
         } catch {
             throw SynaraAgentApprovalError.failed
@@ -1860,7 +1999,7 @@ final class SharedCoreAgentApprovalDecisionService: AgentApprovalDecisionServici
 final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     struct JoinedRoomEncryptionRow: Equatable {
         let roomID: String
-        let membership: String
+        let membership: RoomMembershipDto
         let encryption: SynaraRoomEncryptionStatus
     }
 
@@ -1872,6 +2011,39 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     init(host: SharedCoreProductHost, timeline: SharedCoreTimelineService? = nil) {
         self.timeline = timeline
         self.host = host
+    }
+
+    func roomIdentityWarnings(roomID: String) async -> [RoomIdentityWarning] {
+        guard let dto = try? await host.core.roomIdentityWarnings(roomId: roomID) else {
+            return []
+        }
+        return Self.identityWarnings(from: dto, roomID: roomID)
+    }
+
+    func resolveRoomIdentityWarning(
+        roomID: String,
+        warning: RoomIdentityWarning
+    ) async -> [RoomIdentityWarning]? {
+        do {
+            let dto = try await host.core.resolveRoomIdentityWarning(
+                roomId: roomID,
+                userId: warning.userID,
+                action: warning.resolveAction
+            )
+            return Self.identityWarnings(from: dto, roomID: roomID)
+        } catch {
+            return nil
+        }
+    }
+
+    static func identityWarnings(
+        from dto: RoomIdentityWarningsDto,
+        roomID: String
+    ) -> [RoomIdentityWarning] {
+        guard dto.roomId == roomID else { return [] }
+        return dto.warnings.compactMap {
+            RoomIdentityWarning(userID: $0.userId, displayName: $0.displayName, kind: $0.kind)
+        }
     }
 
     func roomStatus(roomID: String) async -> RoomCryptoStatus {
@@ -1906,14 +2078,18 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
             recoveryState: backup?.recoveryState,
             secretStorageState: secretStorage?.state
         )
-        let hasOtherDevices = devices.contains { $0.isCurrent == false }
+        // A dehydrated device cannot sign back in, so it is not another
+        // signed-in device (same rule as the SDK's `is_last_device`).
+        let hasOtherDevices = devices.contains {
+            SignOutCopy.isOtherSignedInDevice(isCurrent: $0.isCurrent, trust: $0.trust)
+        }
         let verification: SynaraCryptoVerificationStatus
         switch deviceSnapshot?.ownVerification {
-        case "verified":
+        case .verified:
             verification = .verified
-        case "unverified":
+        case .unverified:
             verification = .unverified
-        default:
+        case .unknown, nil:
             verification = .unknown
         }
         return SessionCryptoStatus(
@@ -2121,10 +2297,10 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 core: host.core,
                 deviceIds: [deviceId]
             )
-            if started.outcome == "complete" {
+            if started.outcome == .complete {
                 return .completed("Session signed out.")
             }
-            guard started.outcome == "authentication_required",
+            guard started.outcome == .authenticationRequired,
                   let challenge = started.challenge
             else {
                 return .failed("Could not sign out that session.")
@@ -2135,7 +2311,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 sessionGeneration: challenge.sessionGeneration,
                 password: trimmedPassword
             )
-            if finished.outcome == "complete" {
+            if finished.outcome == .complete {
                 return .completed("Session signed out.")
             }
             if finished.challenge?.authenticationFailed == true {
@@ -2152,7 +2328,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         rows: [JoinedRoomEncryptionRow]?
     ) -> SynaraRoomEncryptionStatus {
         guard let row = rows?.first(where: {
-            $0.roomID == roomID && $0.membership == "join"
+            $0.roomID == roomID && $0.membership == .join
         }) else {
             return .unknown
         }
@@ -2443,7 +2619,7 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
             roomListReadFailed = true
         }
         let room = list?.rooms.first(where: {
-            $0.roomId == roomID && $0.membership == "join"
+            $0.roomId == roomID && $0.membership == .join
         })
         let members = try? await SharedCoreRoomMembersSnapshots.roomMembersSnapshot(
             core: host.core,
@@ -2496,6 +2672,7 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
                 )
             } ?? [],
             powerLevelsJSON: power?.contentJson,
+            capabilities: power?.capabilities,
             joinRule: join?.joinRule,
             topic: invite?.roomTopic,
             encryptionStatus: encryptionStatus,
@@ -2859,8 +3036,8 @@ final class SharedCoreRoomReadMarkerService: RoomReadMarkerServicing {
             let readback = try? await SharedCoreTimelineReadState.timelineSetReadState(
                 core: self.host.core,
                 streamId: opened.streamId,
-                action: "mark_read",
-                intent: "automatic_visibility",
+                action: .markRead,
+                intent: .automaticVisibility,
                 observedLiveTailEventId: eventID
             )
             return readback?.receiptSent == true
@@ -2870,13 +3047,20 @@ final class SharedCoreRoomReadMarkerService: RoomReadMarkerServicing {
 
     func markRoomAsRead(roomID: String) async -> String? {
         return await withOpenLive(roomID: roomID) { opened in
-            let readback = try? await SharedCoreTimelineReadState.timelineSetReadState(
-                core: host.core,
-                streamId: opened.streamId,
-                action: "mark_read",
-                intent: "explicit_user"
-            )
-            return readback?.acknowledgedEventId
+            do {
+                let readback = try await SharedCoreTimelineReadState.timelineSetReadState(
+                    core: host.core,
+                    streamId: opened.streamId,
+                    action: .markRead,
+                    intent: .explicitUser
+                )
+                return ExplicitRoomReadReceipt.acknowledgedEventID(
+                    receiptSent: readback.receiptSent,
+                    acknowledgedEventID: readback.acknowledgedEventId
+                )
+            } catch {
+                return nil
+            }
         }
     }
 
@@ -2885,7 +3069,7 @@ final class SharedCoreRoomReadMarkerService: RoomReadMarkerServicing {
         body: (TimelineOpenDto) async -> T?
     ) async -> T? {
         let position = TimelineOpenPositionDto(
-            kind: "live",
+            kind: .liveBottom,
             atBottom: true,
             restoredAnchorEventId: nil,
             liveTailEventId: nil,

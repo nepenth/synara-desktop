@@ -1,26 +1,12 @@
 import { invokeDesktopWithAvailability } from '../../utils/desktop';
-
-export type NativeBackupAvailability = 'missing' | 'available';
-export type NativeBackupDeviceState =
-  'unavailable' | 'disconnected' | 'connecting' | 'downloading' | 'uploading' | 'ready';
-export type NativeBackupRecoveryState = 'unknown' | 'not_set_up' | 'incomplete' | 'ready';
-export type NativeBackupAction = 'setup_required' | 'restore_required' | 'repair_required' | 'none';
-
-export type NativeBackupStatus = {
-  sessionGeneration: number;
-  availability: NativeBackupAvailability;
-  enabled: boolean;
-  version?: string;
-  keyCount?: number;
-  deviceState: NativeBackupDeviceState;
-  recoveryState: NativeBackupRecoveryState;
-  action: NativeBackupAction;
-};
-
-export type NativeBackupOperationResult = {
-  outcome: 'complete' | 'already_configured';
-  status: NativeBackupStatus;
-};
+import type {
+  NativeBackupAction,
+  NativeBackupAvailability,
+  NativeBackupDeviceState,
+  NativeBackupOperationResult,
+  NativeBackupRecoveryState,
+  NativeBackupStatus,
+} from '../matrix-dto/generated';
 
 export const NATIVE_BACKUP_CHANGED = 'synara-native-backup-changed';
 
@@ -52,18 +38,6 @@ const announceStatusChange = (): void => {
 export const getNativeBackupStatus = (): Promise<NativeBackupStatus> =>
   invokeNativeBackup('matrix_backup_status');
 
-export const setupNativeBackup = async (
-  passphrase: string
-): Promise<NativeBackupOperationResult> => {
-  const result = await invokeNativeBackup<NativeBackupOperationResult>(
-    'matrix_backup_setup',
-    { passphrase },
-    'Encryption backup setup failed. Check your recovery passphrase and try again.'
-  );
-  announceStatusChange();
-  return result;
-};
-
 export const restoreNativeBackup = async (
   recoverySecret: string
 ): Promise<NativeBackupOperationResult> => {
@@ -86,4 +60,13 @@ export const repairNativeBackup = async (
   );
   announceStatusChange();
   return result;
+};
+
+export type {
+  NativeBackupAction,
+  NativeBackupAvailability,
+  NativeBackupDeviceState,
+  NativeBackupOperationResult,
+  NativeBackupRecoveryState,
+  NativeBackupStatus,
 };

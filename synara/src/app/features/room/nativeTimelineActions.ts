@@ -8,6 +8,12 @@
  */
 
 import type { DesktopInvokeResult } from '../../utils/desktop';
+import type {
+  NativeTimelineActionKind,
+  NativeTimelineActionReadback,
+} from '../matrix-dto/generated';
+export type { NativeTimelineActionReadback } from '../matrix-dto/generated';
+export type { NativeTimelineActionKind } from '../matrix-dto/generated';
 
 /**
  * Choose the native forward owner for a product timeline row.
@@ -33,17 +39,6 @@ export function selectNativeTimelinePinAction(pinned: boolean): 'pin' | 'unpin' 
 
 export const NATIVE_TIMELINE_ACTION_SCHEMA_VERSION = 1;
 
-export type NativeTimelineActionKind =
-  | 'edit_text'
-  | 'redact'
-  | 'forward_text'
-  | 'forward_media'
-  | 'report'
-  | 'pin'
-  | 'unpin'
-  | 'poll_vote'
-  | 'call_decline';
-
 export type NativeTimelineActionStatus =
   | 'sent'
   | 'redacted'
@@ -53,15 +48,13 @@ export type NativeTimelineActionStatus =
   | 'already_pinned'
   | 'already_unpinned'
   | 'voted'
-  | 'declined';
-
-export type NativeTimelineActionReadback = {
-  schemaVersion: number;
-  action: NativeTimelineActionKind;
-  roomId: string;
-  eventId: string;
-  status: NativeTimelineActionStatus;
-};
+  | 'declined'
+  /**
+   * The SDK send queue still holds the write (edit, forward, vote) and keeps
+   * retrying it in order. Accepted like the sent status so the user is not
+   * invited to repeat it. A queued forward carries no new event id yet.
+   */
+  | 'queued';
 
 export type NativeTimelineEditTextInput = {
   roomId: string;
@@ -289,6 +282,7 @@ const ACTION_STATUSES = new Set<NativeTimelineActionStatus>([
   'already_unpinned',
   'voted',
   'declined',
+  'queued',
 ]);
 
 const acceptActionReadback = (
@@ -307,7 +301,9 @@ const acceptActionReadback = (
     readback.action !== expected.action ||
     readback.roomId !== expected.roomId ||
     typeof readback.eventId !== 'string' ||
-    readback.eventId.length === 0 ||
+    // Only a still-queued forward lacks the new event id.
+    (readback.eventId.length === 0 &&
+      !(readback.status === 'queued' && expected.eventId === undefined)) ||
     !ACTION_STATUSES.has(readback.status) ||
     !expected.statuses.has(readback.status) ||
     (expected.eventId !== undefined && readback.eventId !== expected.eventId)
@@ -329,7 +325,7 @@ export async function editTextWithNativeTimelineOwner(
     acceptActionReadback(result.value, {
       action: 'edit_text',
       roomId: input.roomId,
-      statuses: new Set(['sent']),
+      statuses: new Set(['sent', 'queued']),
       eventId: input.eventId,
     }) ?? 'unavailable'
   );
@@ -365,7 +361,7 @@ export async function forwardTextWithNativeTimelineOwner(
     acceptActionReadback(result.value, {
       action: 'forward_text',
       roomId: input.targetRoomId,
-      statuses: new Set(['sent']),
+      statuses: new Set(['sent', 'queued']),
     }) ?? 'unavailable'
   );
 }
@@ -382,7 +378,7 @@ export async function forwardMediaWithNativeTimelineOwner(
     acceptActionReadback(result.value, {
       action: 'forward_media',
       roomId: input.targetRoomId,
-      statuses: new Set(['sent']),
+      statuses: new Set(['sent', 'queued']),
     }) ?? 'unavailable'
   );
 }
@@ -453,7 +449,7 @@ export async function pollVoteWithNativeTimelineOwner(
     acceptActionReadback(result.value, {
       action: 'poll_vote',
       roomId: input.roomId,
-      statuses: new Set(['voted']),
+      statuses: new Set(['voted', 'queued']),
       eventId: input.eventId,
     }) ?? 'unavailable'
   );

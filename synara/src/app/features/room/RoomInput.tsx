@@ -46,7 +46,6 @@ import {
 import FocusTrap from 'focus-trap-react';
 
 import { requestRoomLatestAfterSend } from './nativeTimelineNavigation';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import * as depthCss from '../../styles/Depth.css';
 import {
   EditorChangeHandler,
@@ -96,12 +95,7 @@ import {
   UploadBoardImperativeHandlers,
   UploadSendOptions,
 } from '../../components/upload-board';
-import {
-  Upload,
-  UploadStatus,
-  UploadSuccess,
-  createUploadFamilyObserverAtom,
-} from '../../state/upload';
+import { Upload, UploadSuccess, createUploadFamilyObserverAtom } from '../../state/upload';
 import {
   editableActiveElement,
   getDataTransferFiles,
@@ -173,7 +167,10 @@ import {
   hasTrailingAttachmentText,
   makeOrReuseAttachmentSendPlan,
 } from './attachmentSendPlan';
+import { renderComposerHtml } from '../../components/editor/composerMarkdown';
+import { getMyUserId, getSafeMyUserId } from '../../state/nativeIdentity';
 
+import { sendNativeMessage } from '../../native/nativeCommands';
 interface RoomInputProps {
   editor: Editor;
   roomId: string;
@@ -181,7 +178,6 @@ interface RoomInputProps {
 }
 export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
   ({ editor, roomId, room }, ref) => {
-    const mx = useMatrixClient();
     const clientConfig = useClientConfig();
     const [enterForNewline] = useSetting(settingsAtom, 'enterForNewline');
     const [isMarkdown] = useSetting(settingsAtom, 'isMarkdown');
@@ -207,13 +203,13 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       const mentionEl = createMentionElement(
         mentionInsert.userId,
         mentionInsert.name.startsWith('@') ? mentionInsert.name : `@${mentionInsert.name}`,
-        mx.getUserId() === mentionInsert.userId
+        getMyUserId() === mentionInsert.userId
       );
       Transforms.insertNodes(editor, mentionEl);
       moveCursor(editor, true);
       ReactEditor.focus(editor);
       setMentionInsert(undefined);
-    }, [mentionInsert, roomId, editor, mx, setMentionInsert]);
+    }, [mentionInsert, roomId, editor, setMentionInsert]);
     const threadRootEventId = useNativeThreadRoot(roomId);
     const replyDraft = useNativeComposerReplyDraft(roomId, threadRootEventId);
     const clearReplyDraft = useCallback(
@@ -359,8 +355,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       [clearReplyDraftAfterSend, replyDraft, roomId, t, threadRootEventId]
     );
     const commands = useCommands(
-      mx,
-      room as unknown as Parameters<typeof useCommands>[1],
+      room as unknown as Parameters<typeof useCommands>[0],
       sendSlashPoll
     );
 
@@ -476,43 +471,43 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     }, [replyDraft, threadRootEventId]);
 
     useEffect(() => {
-      const storedDraft = loadRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
+      const storedDraft = loadRoomDraft(window.localStorage, getSafeMyUserId(), roomId);
       const draft = msgDraft.length > 0 ? msgDraft : storedDraft;
       if (draft && draft.length > 0) {
         Transforms.insertFragment(editor, draft);
       }
-    }, [mx, roomId, editor, msgDraft]);
+    }, [roomId, editor, msgDraft]);
 
     useEffect(
       () => () => {
         if (!isEmptyEditor(editor)) {
           const parsedDraft = JSON.parse(JSON.stringify(editor.children));
           setMsgDraft(parsedDraft);
-          saveRoomDraft(window.localStorage, mx.getSafeUserId(), roomId, parsedDraft);
+          saveRoomDraft(window.localStorage, getSafeMyUserId(), roomId, parsedDraft);
         } else {
           setMsgDraft([]);
-          clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
+          clearRoomDraft(window.localStorage, getSafeMyUserId(), roomId);
         }
         resetEditor(editor);
         resetEditorHistory(editor);
       },
-      [mx, roomId, editor, setMsgDraft]
+      [roomId, editor, setMsgDraft]
     );
 
     const handleEditorChange = useCallback(
       (value: Parameters<EditorChangeHandler>[0]) => {
         if (isEmptyEditor(editor)) {
-          clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
+          clearRoomDraft(window.localStorage, getSafeMyUserId(), roomId);
           setComposerPreviewUrl(undefined);
           setComposerPreview(null);
           return;
         }
-        saveRoomDraft(window.localStorage, mx.getSafeUserId(), roomId, value);
+        saveRoomDraft(window.localStorage, getSafeMyUserId(), roomId, value);
         const nextUrl = trailingComposerPreviewUrl(toPlainText(editor.children, isMarkdown));
         setComposerPreviewUrl(nextUrl);
         if (!nextUrl) setComposerPreview(null);
       },
-      [mx, roomId, editor, isMarkdown]
+      [roomId, editor, isMarkdown]
     );
 
     useEffect(() => {
@@ -571,12 +566,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       [setSelectedFiles, selectedFiles]
     );
 
+    // Native uploads run to completion in Core; cancelling only drops them here.
     const handleCancelUpload = (uploads: Upload[]) => {
-      uploads.forEach((upload) => {
-        if (upload.status === UploadStatus.Loading) {
-          mx.cancelUpload(upload.promise);
-        }
-      });
       handleRemoveUpload(uploads.map((upload) => upload.file));
     };
 
@@ -638,11 +629,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       const commandName = getBeginCommand(editor);
       let plainText = toPlainText(editor.children, isMarkdown).trim();
       let customHtml = trimCustomHtml(
-        toMatrixCustomHTML(editor.children, {
-          allowTextFormatting: true,
-          allowBlockMarkdown: isMarkdown,
-          allowInlineMarkdown: isMarkdown,
-        })
+        isMarkdown
+          ? await renderComposerHtml(editor.children)
+          : toMatrixCustomHTML(editor.children, { allowTextFormatting: true })
       );
       let msgType: 'm.text' | 'm.emote' | 'm.notice' = MsgType.Text;
 
@@ -701,14 +690,14 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
       const body = plainText;
       const formattedBody = customHtml;
-      const mentionData = getMentions(mx, roomId, editor);
+      const mentionData = getMentions(roomId, editor);
 
       const content: IContent = {
         msgtype: msgType,
         body,
       };
 
-      if (replyDraft && replyDraft.senderId !== mx.getUserId()) {
+      if (replyDraft && replyDraft.senderId !== getMyUserId()) {
         mentionData.users.add(replyDraft.senderId);
       }
 
@@ -757,7 +746,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             attachmentSendPlan.current = undefined;
             resetEditor(editor);
             resetEditorHistory(editor);
-            clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
+            clearRoomDraft(window.localStorage, getSafeMyUserId(), roomId);
             await clearReplyDraftAfterSend(sendRelation.draftRevision, () => {
               setSendError(
                 t(
@@ -782,12 +771,12 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           threadRoot: sendRelation.threadRoot,
         });
         if (nativeOwner === 'legacy') {
-          await mx.sendMessage(roomId, content as any);
+          await sendNativeMessage(roomId, content as any);
         }
         requestRoomLatestAfterSend(roomId);
         resetEditor(editor);
         resetEditorHistory(editor);
-        clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
+        clearRoomDraft(window.localStorage, getSafeMyUserId(), roomId);
         await clearReplyDraftAfterSend(sendRelation.draftRevision, () => {
           setSendError(
             t(
@@ -812,7 +801,6 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         setSendingMessage(false);
       }
     }, [
-      mx,
       roomId,
       editor,
       replyDraft,

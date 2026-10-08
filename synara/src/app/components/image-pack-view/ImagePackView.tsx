@@ -2,17 +2,16 @@ import React from 'react';
 import { Box, IconButton, Text, Icon, Icons, Scroll, Chip } from 'folds';
 import { PackAddress } from '../../plugins/custom-emoji';
 import { Page, PageHeader, PageContent } from '../page';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { RoomImagePack } from './RoomImagePack';
 import { UserImagePack } from './UserImagePack';
 
+import { getNativeRoom } from '../../native/nativeSession';
 type ImagePackViewProps = {
   address: PackAddress | undefined;
   requestClose: () => void;
 };
 export function ImagePackView({ address, requestClose }: ImagePackViewProps) {
-  const mx = useMatrixClient();
-  const room = address && mx.getRoom(address.roomId);
+  const room = address && getNativeRoom(address.roomId);
 
   return (
     <Page>

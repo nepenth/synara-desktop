@@ -59,7 +59,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn own_profile_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("set_own_display_name"));
     assert!(udl.contains("set_own_avatar"));
     assert!(udl.contains("get_own_profile"));
@@ -76,7 +76,10 @@ fn own_profile_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("set_own_avatar"));
     assert!(shared_core.contains("get_own_profile"));
     assert!(shared_core.contains("room_notes_snapshot"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

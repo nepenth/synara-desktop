@@ -26,7 +26,6 @@ import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/page';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { RoomTopicViewer } from '../../components/room-topic-viewer';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRoom } from '../../hooks/useRoom';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
@@ -37,10 +36,7 @@ import { _SearchPathSearchParams } from '../../pages/paths';
 import * as css from './RoomViewHeader.css';
 import { useRoomUnread } from '../../state/hooks/unread';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
-import {
-  markAsReadFromExplicitUserActionInBackground,
-  markAsUnread,
-} from '../../utils/notifications';
+import { markAsReadFromExplicitUserAction, markAsUnread } from '../../utils/notifications';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { copyToClipboard } from '../../utils/dom';
 import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
@@ -62,7 +58,6 @@ import {
 } from '../../hooks/useRoomsNotificationPreferences';
 import { JumpToTime } from './jump-to-time';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
-import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { isSynaraDesktop } from '../../utils/desktop';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
@@ -91,26 +86,35 @@ type RoomMenuProps = {
   requestClose: () => void;
 };
 const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose }, ref) => {
-  const mx = useMatrixClient();
   const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
   const powerLevels = usePowerLevelsContext();
-  const creators = useRoomCreators(room);
 
-  const permissions = useRoomPermissions(creators, powerLevels);
-  const canInvite = permissions.action('invite', mx.getSafeUserId());
+  const permissions = useRoomPermissions(powerLevels);
+  const canInvite = permissions.action('invite');
   const notificationPreferences = useRoomsNotificationPreferencesContext();
   const notificationMode = getRoomNotificationMode(notificationPreferences, room.roomId);
   const { navigateRoom } = useRoomNavigate();
 
   const [invitePrompt, setInvitePrompt] = useState(false);
+  const [readError, setReadError] = useState<string>();
+  const [readBusy, setReadBusy] = useState(false);
 
-  const handleMarkAsRead = () => {
-    markAsReadFromExplicitUserActionInBackground(mx, room.roomId);
-    requestClose();
+  const handleMarkAsRead = async () => {
+    if (readBusy) return;
+    setReadError(undefined);
+    setReadBusy(true);
+    try {
+      await markAsReadFromExplicitUserAction(room.roomId);
+      requestClose();
+    } catch {
+      setReadError("Couldn't mark this channel as read.");
+    } finally {
+      setReadBusy(false);
+    }
   };
 
   const handleMarkAsUnread = () => {
-    markAsUnread(mx, room.roomId);
+    markAsUnread(room.roomId);
     requestClose();
   };
 
@@ -119,7 +123,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
   };
 
   const handleCopyLink = async () => {
-    const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, room.roomId);
+    const roomIdOrAlias = getCanonicalAliasOrRoomId(room.roomId);
     const viaServers = isRoomAlias(roomIdOrAlias) ? undefined : await getViaServers(room);
     copyToClipboard(getMatrixToRoom(roomIdOrAlias, viaServers));
     requestClose();
@@ -149,7 +153,11 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
       )}
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
         <MenuItem
-          onClick={unread ? handleMarkAsRead : handleMarkAsUnread}
+          onClick={() => {
+            if (unread) void handleMarkAsRead();
+            else handleMarkAsUnread();
+          }}
+          disabled={unread && readBusy}
           size="300"
           after={<Icon size="100" src={unread ? Icons.CheckTwice : Icons.MessageUnread} />}
           radii="300"
@@ -159,6 +167,11 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
             {unread ? 'Mark as Read' : 'Mark as Unread'}
           </Text>
         </MenuItem>
+        {readError && (
+          <Text as="p" size="T200" style={{ paddingInline: config.space.S200 }}>
+            {readError}
+          </Text>
+        )}
         <RoomNotificationModeSwitcher roomId={room.roomId} value={notificationMode}>
           {(handleOpen, opened, changing) => (
             <MenuItem
@@ -363,7 +376,6 @@ export function RoomViewHeader({
   onToggleMembers,
 }: RoomViewHeaderProps) {
   const navigate = useNavigate();
-  const mx = useMatrixClient();
   const screenSize = useScreenSizeContext();
   const room = useRoom();
   const space = useSpaceOptionally();
@@ -396,7 +408,7 @@ export function RoomViewHeader({
       rooms: room.roomId,
     };
     const path = space
-      ? getSpaceSearchPath(getCanonicalAliasOrRoomId(mx, space.roomId))
+      ? getSpaceSearchPath(getCanonicalAliasOrRoomId(space.roomId))
       : getHomeSearchPath();
     navigate(withSearchParam(path, searchParams));
   };

@@ -1,17 +1,10 @@
 //! Desktop bridges for timeline reaction mutations through `Core::command`.
 
 use synara_core::app::timeline::{NativeAgentApprovalDecisionResult, NativeReactionMutationResult};
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
-
-const REACTION_TOGGLE_COMMAND: &str = "matrix_timeline_reaction_toggle";
-const REACTION_ENSURE_COMMAND: &str = "matrix_reaction_ensure";
-const REACTION_REDACT_COMMAND: &str = "matrix_reaction_redact";
-const AGENT_APPROVAL_DECIDE_COMMAND: &str = "matrix_agent_approval_decide";
-const AGENT_APPROVALS_LIST_COMMAND: &str = "matrix_agent_approvals_list";
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn reaction_toggle(
     core: &Core,
@@ -19,7 +12,13 @@ pub(crate) async fn reaction_toggle(
     event_id: String,
     key: String,
 ) -> Result<NativeReactionMutationResult, MatrixAuthCommandError> {
-    dispatch_reaction_key(core, REACTION_TOGGLE_COMMAND, room_id, event_id, key).await
+    core.timeline_reaction_toggle(synara_core::core_api::MatrixTimelineReactionKeyRequest {
+        room_id,
+        event_id,
+        key,
+    })
+    .await
+    .map_err(map_reaction_core_error)
 }
 
 pub(crate) async fn reaction_ensure(
@@ -28,7 +27,13 @@ pub(crate) async fn reaction_ensure(
     event_id: String,
     key: String,
 ) -> Result<NativeReactionMutationResult, MatrixAuthCommandError> {
-    dispatch_reaction_key(core, REACTION_ENSURE_COMMAND, room_id, event_id, key).await
+    core.reaction_ensure(synara_core::core_api::MatrixTimelineReactionKeyRequest {
+        room_id,
+        event_id,
+        key,
+    })
+    .await
+    .map_err(map_reaction_core_error)
 }
 
 pub(crate) async fn agent_approvals_list(
@@ -36,15 +41,12 @@ pub(crate) async fn agent_approvals_list(
     discovery_active: bool,
 ) -> Result<synara_core::app::timeline::NativeAgentApprovalInboxSnapshot, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: AGENT_APPROVALS_LIST_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({ "discoveryActive": discovery_active }),
+        .agent_approvals_list(synara_core::core_api::MatrixAgentApprovalsListRequest {
+            discovery_active,
         })
         .await
         .map_err(map_approval_list_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| approval_list_response_error())
+    Ok(response)
 }
 
 fn map_approval_list_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -74,19 +76,14 @@ pub(crate) async fn agent_approval_decide(
     action_id: String,
 ) -> Result<NativeAgentApprovalDecisionResult, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: AGENT_APPROVAL_DECIDE_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({
-                "roomId": room_id,
-                "eventId": event_id,
-                "actionId": action_id,
-            }),
+        .agent_approval_decide(synara_core::core_api::MatrixAgentApprovalDecisionRequest {
+            room_id,
+            event_id,
+            action_id,
         })
         .await
         .map_err(map_reaction_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| reaction_response_error())
+    Ok(response)
 }
 
 pub(crate) async fn reaction_redact(
@@ -97,43 +94,15 @@ pub(crate) async fn reaction_redact(
     key: String,
 ) -> Result<NativeReactionMutationResult, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: REACTION_REDACT_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({
-                "roomId": room_id,
-                "targetEventId": target_event_id,
-                "reactionEventId": reaction_event_id,
-                "key": key,
-            }),
+        .reaction_redact(synara_core::core_api::MatrixReactionRedactRequest {
+            room_id,
+            target_event_id,
+            reaction_event_id,
+            key,
         })
         .await
         .map_err(map_reaction_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| reaction_response_error())
-}
-
-async fn dispatch_reaction_key(
-    core: &Core,
-    command: &str,
-    room_id: String,
-    event_id: String,
-    key: String,
-) -> Result<NativeReactionMutationResult, MatrixAuthCommandError> {
-    let response = core
-        .command(CommandEnvelope {
-            command: command.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({
-                "roomId": room_id,
-                "eventId": event_id,
-                "key": key,
-            }),
-        })
-        .await
-        .map_err(map_reaction_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| reaction_response_error())
+    Ok(response)
 }
 
 fn map_reaction_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -154,12 +123,4 @@ fn map_reaction_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
             "v-send.2-reaction-toggle-failed",
         ),
     }
-}
-
-fn reaction_response_error() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "The native Matrix reaction operation could not be completed.",
-        "v-send.2-reaction-toggle-failed",
-    )
 }

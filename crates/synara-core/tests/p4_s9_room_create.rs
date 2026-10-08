@@ -82,8 +82,8 @@ fn create_request(
 
 #[test]
 fn room_create_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
-    assert!(udl.contains("room_create("));
+    let udl = crate::ffi_surface::udl();
+    assert!(crate::ffi_surface::declares_fn(udl, "room_create"));
     assert!(udl.contains("dictionary RoomCreateRequestDto"));
     assert!(udl.contains("dictionary RoomCreateDto"));
     assert!(!udl.contains("matrix_login_password"));
@@ -108,10 +108,22 @@ fn room_create_surface_exposes_only_the_registered_family() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("room_create("));
-    assert!(shared_core.contains("room_set_power_level("));
-    assert!(shared_core.contains("room_set_power_level_tags("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "room_create"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "room_set_power_level"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "room_set_power_level_tags"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

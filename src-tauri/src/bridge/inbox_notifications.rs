@@ -1,7 +1,7 @@
 //! Desktop notification history through the authenticated SharedCore owner.
 use crate::matrix::auth::product::MatrixAuthCommandError;
 use synara_core::app::notifications::MatrixInboxNotificationsPage;
-use synara_core::transport::{CommandEnvelope, MatrixIpcErrorCategory};
+use synara_core::transport::MatrixIpcErrorCategory;
 use synara_core::Core;
 
 pub(crate) async fn inbox_notifications(
@@ -11,12 +11,9 @@ pub(crate) async fn inbox_notifications(
     only: Option<String>,
 ) -> Result<MatrixInboxNotificationsPage, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: "matrix_inbox_notifications".to_owned(),
-            session_generation: 0,
-            request_id: None,
-            payload: serde_json::json!({ "from": from, "limit": limit, "only": only }),
-        })
+        .inbox_notifications(
+            synara_core::app::notifications::MatrixInboxNotificationsRequest { from, limit, only },
+        )
         .await
         .map_err(|error| {
             let (code, message) = match error.category {
@@ -40,11 +37,5 @@ pub(crate) async fn inbox_notifications(
                     .unwrap_or("inbox-notifications.request-failed"),
             )
         })?;
-    serde_json::from_value(response.payload).map_err(|_| {
-        MatrixAuthCommandError::new(
-            "NotificationsUnavailable",
-            "Notifications could not be loaded. Please try again.",
-            "inbox-notifications.invalid-response",
-        )
-    })
+    Ok(response)
 }

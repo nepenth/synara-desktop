@@ -1,25 +1,17 @@
-import { useState, useCallback } from 'react';
-import { useMatrixClient } from './useMatrixClient';
-import { useAccountDataCallback } from './useAccountDataCallback';
+import { useMemo } from 'react';
+import type { MatrixEventReading } from '../utils/room';
+import { accountDataEventReading } from '../utils/room';
+import type { AccountDataEvent } from '../../types/matrix/accountData';
+import { useNativeAccountData } from '../native/nativeAccountData';
 
-export function useAccountData(eventType: string, enabled = true) {
-  const mx = useMatrixClient();
-  const [event, setEvent] = useState(() =>
-    enabled ? mx.getAccountData(eventType as any) : undefined
+/** Global account data of one type, live from Core's raw account-data cache. */
+export function useAccountData(
+  eventType: AccountDataEvent,
+  enabled = true
+): MatrixEventReading | undefined {
+  const content = useNativeAccountData(eventType, undefined, enabled);
+  return useMemo(
+    () => (content ? accountDataEventReading(eventType, content) : undefined),
+    [eventType, content]
   );
-
-  useAccountDataCallback(
-    mx,
-    useCallback(
-      (evt) => {
-        if (evt.getType() === eventType) {
-          setEvent(evt);
-        }
-      },
-      [eventType, setEvent]
-    ),
-    enabled
-  );
-
-  return enabled ? event : undefined;
 }

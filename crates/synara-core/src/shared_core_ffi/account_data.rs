@@ -1,6 +1,12 @@
 //! Typed SharedCore operations and projections for account data.
 
 use super::*;
+use crate::app::account_data::NativeMDirectMutationResult;
+use crate::app::room_directory::NativeRoomDirectoryProtocols;
+use crate::app::room_directory::NativeRoomDirectorySearchResponse;
+use crate::app::room_profile::MatrixRoomDirectoryVisibilityResult;
+use crate::app::room_profile::MatrixRoomDirectoryVisibilityWriteResult;
+use crate::core_api::MatrixStatusOk;
 
 pub(super) fn account_data_owner_update_family(
     kind: NativeAccountDataWakeupKind,
@@ -17,7 +23,7 @@ pub(super) fn account_data_owner_update_family(
 }
 
 /// Privacy-safe image-pack row. Metadata/IDs/mxc URLs/JSON only; never image bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ImagePackDto {
     pub id: String,
     pub room_id: Option<String>,
@@ -26,14 +32,14 @@ pub struct ImagePackDto {
 }
 
 /// Privacy-safe user pack snapshot. No tokens or image bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct UserImagePackSnapshotDto {
     pub session_generation: u64,
     pub pack: Option<ImagePackDto>,
 }
 
 /// Privacy-safe room pack snapshot. No tokens or image bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomImagePacksSnapshotDto {
     pub session_generation: u64,
     pub room_id: String,
@@ -41,20 +47,20 @@ pub struct RoomImagePacksSnapshotDto {
 }
 
 /// Privacy-safe global pack snapshot. No tokens or image bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct GlobalImagePacksSnapshotDto {
     pub session_generation: u64,
     pub packs: Vec<ImagePackDto>,
 }
 
 /// Privacy-safe pack write ack. Status only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ImagePackWriteDto {
-    pub status: String,
+    pub status: WriteAckDto,
 }
 
 /// Static fail-closed image-pack-family error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum ImagePackCommandError {
     Failed { code: String, description: String },
 }
@@ -120,22 +126,28 @@ pub(super) fn image_pack_dto(pack: NativeImagePack) -> Result<ImagePackDto, Imag
 }
 
 pub(super) fn image_pack_write_dto(
-    payload: serde_json::Value,
+    payload: MatrixStatusOk,
 ) -> Result<ImagePackWriteDto, ImagePackCommandError> {
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
+    let status = Some(payload.status)
         .ok_or_else(|| image_pack_failed(IMAGE_PACK_FAILED_CODE, IMAGE_PACK_FAILED_DESCRIPTION))?;
     Ok(ImagePackWriteDto {
-        status: status.to_owned(),
+        status: status.into(),
     })
 }
 
+super::wire_enum::wire_enum! {
+    pub enum LaterItemKindDto {
+        Saved => "saved",
+        Reminder => "reminder",
+    }
+}
+super::wire_enum::wire_enum_from!(SynaraLaterItemKind => LaterItemKindDto { Saved, Reminder });
+
 /// Privacy-safe later item. Room/event ids and timestamps only; no tokens.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct LaterItemDto {
     pub id: String,
-    pub kind: String,
+    pub kind: LaterItemKindDto,
     pub room_id: String,
     pub event_id: String,
     pub created_at: f64,
@@ -145,7 +157,7 @@ pub struct LaterItemDto {
 }
 
 /// Privacy-safe later snapshot. No tokens or secret material.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct LaterSnapshotDto {
     pub session_generation: u64,
     pub version: u32,
@@ -153,7 +165,7 @@ pub struct LaterSnapshotDto {
 }
 
 /// Static fail-closed later-family error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum LaterCommandError {
     Failed { code: String, description: String },
 }
@@ -203,15 +215,9 @@ pub(super) fn later_envelope_payload(
 pub(super) fn later_item_from_dto(
     item: LaterItemDto,
 ) -> Result<SynaraLaterItem, LaterCommandError> {
-    let kind = match item.kind.as_str() {
-        "saved" => SynaraLaterItemKind::Saved,
-        "reminder" => SynaraLaterItemKind::Reminder,
-        _ => {
-            return Err(later_failed(
-                LATER_INVALID_ITEM_CODE,
-                LATER_INVALID_ITEM_DESCRIPTION,
-            ))
-        }
+    let kind = match item.kind {
+        LaterItemKindDto::Saved => SynaraLaterItemKind::Saved,
+        LaterItemKindDto::Reminder => SynaraLaterItemKind::Reminder,
     };
     if item.id.is_empty()
         || item.room_id.is_empty()
@@ -238,10 +244,7 @@ pub(super) fn later_item_from_dto(
 pub(super) fn later_item_dto(item: SynaraLaterItem) -> LaterItemDto {
     LaterItemDto {
         id: item.id,
-        kind: match item.kind {
-            SynaraLaterItemKind::Saved => "saved".to_owned(),
-            SynaraLaterItemKind::Reminder => "reminder".to_owned(),
-        },
+        kind: item.kind.into(),
         room_id: item.room_id,
         event_id: item.event_id,
         created_at: item.created_at,
@@ -252,10 +255,9 @@ pub(super) fn later_item_dto(item: SynaraLaterItem) -> LaterItemDto {
 }
 
 pub(super) fn later_snapshot_dto(
-    payload: serde_json::Value,
+    payload: NativeLaterSnapshot,
 ) -> Result<LaterSnapshotDto, LaterCommandError> {
-    let snapshot: NativeLaterSnapshot = serde_json::from_value(payload)
-        .map_err(|_| later_failed(LATER_FAILED_CODE, LATER_FAILED_DESCRIPTION))?;
+    let snapshot: NativeLaterSnapshot = payload;
     Ok(LaterSnapshotDto {
         session_generation: snapshot.session_generation,
         version: snapshot.content.version,
@@ -269,7 +271,7 @@ pub(super) fn later_snapshot_dto(
 }
 
 /// Privacy-safe m.direct snapshot. User/room ids are the product map; no tokens.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct MDirectSnapshotDto {
     pub session_generation: u64,
     pub room_ids: Vec<String>,
@@ -277,14 +279,14 @@ pub struct MDirectSnapshotDto {
 }
 
 /// Privacy-safe m.direct write ack. Status and the mutated room id only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct MDirectMutationDto {
     pub room_id: String,
-    pub status: String,
+    pub status: MutationStatusDto,
 }
 
 /// Static fail-closed m.direct-family error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum MDirectCommandError {
     Failed { code: String, description: String },
 }
@@ -335,10 +337,9 @@ pub(super) fn mdirect_envelope_payload(
 }
 
 pub(super) fn mdirect_snapshot_dto(
-    payload: serde_json::Value,
+    payload: NativeMDirectSnapshot,
 ) -> Result<MDirectSnapshotDto, MDirectCommandError> {
-    let snapshot: NativeMDirectSnapshot = serde_json::from_value(payload)
-        .map_err(|_| mdirect_failed(MDIRECT_FAILED_CODE, MDIRECT_FAILED_DESCRIPTION))?;
+    let snapshot: NativeMDirectSnapshot = payload;
     Ok(MDirectSnapshotDto {
         session_generation: snapshot.session_generation,
         room_ids: snapshot.room_ids,
@@ -347,15 +348,11 @@ pub(super) fn mdirect_snapshot_dto(
 }
 
 pub(super) fn mdirect_mutation_dto(
-    payload: serde_json::Value,
+    payload: NativeMDirectMutationResult,
 ) -> Result<MDirectMutationDto, MDirectCommandError> {
-    let room_id = payload
-        .get("roomId")
-        .and_then(|value| value.as_str())
+    let room_id = Some(payload.room_id)
         .ok_or_else(|| mdirect_failed(MDIRECT_FAILED_CODE, MDIRECT_FAILED_DESCRIPTION))?;
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
+    let status = Some(payload.status)
         .ok_or_else(|| mdirect_failed(MDIRECT_FAILED_CODE, MDIRECT_FAILED_DESCRIPTION))?;
     if status != "updated" {
         return Err(mdirect_failed(
@@ -365,12 +362,12 @@ pub(super) fn mdirect_mutation_dto(
     }
     Ok(MDirectMutationDto {
         room_id: room_id.to_owned(),
-        status: status.to_owned(),
+        status: status.into(),
     })
 }
 
 /// Privacy-safe room-notes snapshot. Flattened items; no tokens.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct RoomNotesSnapshotDto {
     pub session_generation: u64,
     pub version: u32,
@@ -378,7 +375,7 @@ pub struct RoomNotesSnapshotDto {
 }
 
 /// Static fail-closed room-notes-family error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum RoomNotesCommandError {
     Failed { code: String, description: String },
 }
@@ -431,10 +428,9 @@ pub(super) fn room_notes_envelope_payload(
 }
 
 pub(super) fn room_notes_snapshot_dto(
-    payload: serde_json::Value,
+    payload: NativeRoomNotesSnapshot,
 ) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
-    let snapshot: NativeRoomNotesSnapshot = serde_json::from_value(payload)
-        .map_err(|_| room_notes_failed(ROOM_NOTES_FAILED_CODE, ROOM_NOTES_FAILED_DESCRIPTION))?;
+    let snapshot: NativeRoomNotesSnapshot = payload;
     Ok(RoomNotesSnapshotDto {
         session_generation: snapshot.session_generation,
         version: snapshot.content.version,
@@ -449,56 +445,45 @@ pub(super) fn room_notes_snapshot_dto(
 }
 
 /// Privacy-safe directory-visibility read. Visibility is public/private only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomDirectoryVisibilityDto {
-    pub status: String,
+    pub status: WriteAckDto,
     pub room_id: String,
     pub session_generation: u64,
     pub visibility: String,
 }
 
 /// Privacy-safe directory-visibility write ack. Visibility is public/private only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomDirectoryVisibilityWriteDto {
-    pub status: String,
+    pub status: WriteAckDto,
     pub room_id: String,
     pub session_generation: u64,
     pub requested_visibility: String,
 }
 
 pub(super) fn room_directory_visibility_dto(
-    payload: serde_json::Value,
+    payload: MatrixRoomDirectoryVisibilityResult,
 ) -> Result<RoomDirectoryVisibilityDto, DirectoryVisibilityCommandError> {
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
-        .ok_or_else(|| {
-            directory_visibility_failed(
-                DIRECTORY_VISIBILITY_FAILED_CODE,
-                DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
-            )
-        })?;
-    let room_id = payload
-        .get("roomId")
-        .and_then(|value| value.as_str())
-        .ok_or_else(|| {
-            directory_visibility_failed(
-                DIRECTORY_VISIBILITY_FAILED_CODE,
-                DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
-            )
-        })?;
-    let session_generation = payload
-        .get("sessionGeneration")
-        .and_then(|value| value.as_u64())
-        .ok_or_else(|| {
-            directory_visibility_failed(
-                DIRECTORY_VISIBILITY_FAILED_CODE,
-                DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
-            )
-        })?;
-    let visibility = payload
-        .get("visibility")
-        .and_then(|value| value.as_str())
+    let status = Some(payload.status).ok_or_else(|| {
+        directory_visibility_failed(
+            DIRECTORY_VISIBILITY_FAILED_CODE,
+            DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
+        )
+    })?;
+    let room_id = Some(payload.room_id).ok_or_else(|| {
+        directory_visibility_failed(
+            DIRECTORY_VISIBILITY_FAILED_CODE,
+            DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
+        )
+    })?;
+    let session_generation = Some(payload.session_generation).ok_or_else(|| {
+        directory_visibility_failed(
+            DIRECTORY_VISIBILITY_FAILED_CODE,
+            DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
+        )
+    })?;
+    let visibility = Some(payload.visibility)
         .and_then(closed_directory_visibility)
         .ok_or_else(|| {
             directory_visibility_failed(
@@ -507,7 +492,7 @@ pub(super) fn room_directory_visibility_dto(
             )
         })?;
     Ok(RoomDirectoryVisibilityDto {
-        status: status.to_owned(),
+        status: status.into(),
         room_id: room_id.to_owned(),
         session_generation,
         visibility: visibility.to_owned(),
@@ -515,38 +500,27 @@ pub(super) fn room_directory_visibility_dto(
 }
 
 pub(super) fn room_directory_visibility_write_dto(
-    payload: serde_json::Value,
+    payload: MatrixRoomDirectoryVisibilityWriteResult,
 ) -> Result<RoomDirectoryVisibilityWriteDto, DirectoryVisibilityCommandError> {
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
-        .ok_or_else(|| {
-            directory_visibility_failed(
-                DIRECTORY_VISIBILITY_FAILED_CODE,
-                DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
-            )
-        })?;
-    let room_id = payload
-        .get("roomId")
-        .and_then(|value| value.as_str())
-        .ok_or_else(|| {
-            directory_visibility_failed(
-                DIRECTORY_VISIBILITY_FAILED_CODE,
-                DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
-            )
-        })?;
-    let session_generation = payload
-        .get("sessionGeneration")
-        .and_then(|value| value.as_u64())
-        .ok_or_else(|| {
-            directory_visibility_failed(
-                DIRECTORY_VISIBILITY_FAILED_CODE,
-                DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
-            )
-        })?;
-    let requested_visibility = payload
-        .get("requestedVisibility")
-        .and_then(|value| value.as_str())
+    let status = Some(payload.status).ok_or_else(|| {
+        directory_visibility_failed(
+            DIRECTORY_VISIBILITY_FAILED_CODE,
+            DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
+        )
+    })?;
+    let room_id = Some(payload.room_id).ok_or_else(|| {
+        directory_visibility_failed(
+            DIRECTORY_VISIBILITY_FAILED_CODE,
+            DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
+        )
+    })?;
+    let session_generation = Some(payload.session_generation).ok_or_else(|| {
+        directory_visibility_failed(
+            DIRECTORY_VISIBILITY_FAILED_CODE,
+            DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
+        )
+    })?;
+    let requested_visibility = Some(payload.requested_visibility)
         .and_then(closed_directory_visibility)
         .ok_or_else(|| {
             directory_visibility_failed(
@@ -555,7 +529,7 @@ pub(super) fn room_directory_visibility_write_dto(
             )
         })?;
     Ok(RoomDirectoryVisibilityWriteDto {
-        status: status.to_owned(),
+        status: status.into(),
         room_id: room_id.to_owned(),
         session_generation,
         requested_visibility: requested_visibility.to_owned(),
@@ -563,7 +537,7 @@ pub(super) fn room_directory_visibility_write_dto(
 }
 
 /// Privacy-safe third-party directory protocol instance. Ids and description only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomDirectoryProtocolInstanceDto {
     pub protocol_id: String,
     pub instance_id: String,
@@ -571,14 +545,14 @@ pub struct RoomDirectoryProtocolInstanceDto {
 }
 
 /// Privacy-safe protocol list. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomDirectoryProtocolsDto {
     pub session_generation: u64,
     pub instances: Vec<RoomDirectoryProtocolInstanceDto>,
 }
 
 /// Privacy-safe public-directory room hit. Metadata only; avatar_url is mxc, never bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomDirectoryHitDto {
     pub room_id: String,
     pub name: Option<String>,
@@ -592,7 +566,7 @@ pub struct RoomDirectoryHitDto {
 }
 
 /// Privacy-safe search page. Room metadata only; no avatar bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomDirectoryPageDto {
     pub session_generation: u64,
     pub request_id: u64,
@@ -602,239 +576,140 @@ pub struct RoomDirectoryPageDto {
 }
 
 /// Privacy-safe search/cancel result. Status is ready/stale/cancelled.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomDirectorySearchDto {
     pub session_generation: u64,
     pub request_id: u64,
-    pub status: String,
+    pub status: DirectorySearchStatusDto,
     pub page: Option<RoomDirectoryPageDto>,
 }
 
+fn directory_failed() -> DirectorySearchCommandError {
+    directory_search_failed(
+        DIRECTORY_SEARCH_FAILED_CODE,
+        DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+    )
+}
+
 pub(super) fn room_directory_protocols_dto(
-    payload: serde_json::Value,
+    payload: NativeRoomDirectoryProtocols,
 ) -> Result<RoomDirectoryProtocolsDto, DirectorySearchCommandError> {
-    let session_generation = payload
-        .get("sessionGeneration")
-        .and_then(|value| value.as_u64())
-        .ok_or_else(|| {
-            directory_search_failed(
-                DIRECTORY_SEARCH_FAILED_CODE,
-                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
-            )
-        })?;
-    let instances = payload
-        .get("instances")
-        .and_then(|value| value.as_array())
-        .ok_or_else(|| {
-            directory_search_failed(
-                DIRECTORY_SEARCH_FAILED_CODE,
-                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
-            )
-        })?;
-    let mut mapped = Vec::with_capacity(instances.len());
-    for instance in instances {
-        let protocol_id = instance
-            .get("protocolId")
-            .and_then(|value| value.as_str())
-            .ok_or_else(|| {
-                directory_search_failed(
-                    DIRECTORY_SEARCH_FAILED_CODE,
-                    DIRECTORY_SEARCH_FAILED_DESCRIPTION,
-                )
-            })?;
-        let instance_id = instance
-            .get("instanceId")
-            .and_then(|value| value.as_str())
-            .ok_or_else(|| {
-                directory_search_failed(
-                    DIRECTORY_SEARCH_FAILED_CODE,
-                    DIRECTORY_SEARCH_FAILED_DESCRIPTION,
-                )
-            })?;
-        let description = instance
-            .get("description")
-            .and_then(|value| value.as_str())
-            .ok_or_else(|| {
-                directory_search_failed(
-                    DIRECTORY_SEARCH_FAILED_CODE,
-                    DIRECTORY_SEARCH_FAILED_DESCRIPTION,
-                )
-            })?;
-        mapped.push(RoomDirectoryProtocolInstanceDto {
-            protocol_id: protocol_id.to_owned(),
-            instance_id: instance_id.to_owned(),
-            description: description.to_owned(),
-        });
-    }
     Ok(RoomDirectoryProtocolsDto {
-        session_generation,
-        instances: mapped,
+        session_generation: payload.session_generation,
+        instances: payload
+            .instances
+            .into_iter()
+            .map(|instance| RoomDirectoryProtocolInstanceDto {
+                protocol_id: instance.protocol_id,
+                instance_id: instance.instance_id,
+                description: instance.description,
+            })
+            .collect(),
     })
 }
 
 pub(super) fn room_directory_hit_dto(
-    payload: &serde_json::Value,
+    hit: crate::app::room_directory::DirectoryRoomHitDto,
 ) -> Result<RoomDirectoryHitDto, DirectorySearchCommandError> {
-    let room_id = payload
-        .get("roomId")
-        .and_then(|value| value.as_str())
-        .ok_or_else(|| {
-            directory_search_failed(
-                DIRECTORY_SEARCH_FAILED_CODE,
-                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
-            )
-        })?;
-    let member_count = payload
-        .get("memberCount")
-        .and_then(|value| value.as_u64())
-        .and_then(|value| u32::try_from(value).ok())
-        .ok_or_else(|| {
-            directory_search_failed(
-                DIRECTORY_SEARCH_FAILED_CODE,
-                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
-            )
-        })?;
-    let world_readable = payload
-        .get("worldReadable")
-        .and_then(|value| value.as_bool())
-        .ok_or_else(|| {
-            directory_search_failed(
-                DIRECTORY_SEARCH_FAILED_CODE,
-                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
-            )
-        })?;
-    let guest_can_join = payload
-        .get("guestCanJoin")
-        .and_then(|value| value.as_bool())
-        .ok_or_else(|| {
-            directory_search_failed(
-                DIRECTORY_SEARCH_FAILED_CODE,
-                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
-            )
-        })?;
-    let room_type = payload
-        .get("roomType")
-        .and_then(|value| value.as_str())
-        .and_then(closed_directory_room_type)
-        .ok_or_else(|| {
-            directory_search_failed(
-                DIRECTORY_SEARCH_FAILED_CODE,
-                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
-            )
-        })?;
+    let room_type = closed_directory_room_type(hit.room_type).ok_or_else(directory_failed)?;
     Ok(RoomDirectoryHitDto {
-        room_id: room_id.to_owned(),
-        name: json_optional_string(payload.get("name")),
-        topic: json_optional_string(payload.get("topic")),
-        canonical_alias: json_optional_string(payload.get("canonicalAlias")),
-        avatar_url: json_optional_string(payload.get("avatarUrl")),
-        member_count,
-        world_readable,
-        guest_can_join,
+        room_id: hit.room_id,
+        name: hit.name,
+        topic: hit.topic,
+        canonical_alias: hit.canonical_alias,
+        avatar_url: hit.avatar_url,
+        member_count: hit.member_count,
+        world_readable: hit.world_readable,
+        guest_can_join: hit.guest_can_join,
         room_type: room_type.to_owned(),
     })
 }
 
 pub(super) fn room_directory_page_dto(
-    payload: &serde_json::Value,
+    page: crate::app::room_directory::NativeRoomDirectoryPage,
 ) -> Result<RoomDirectoryPageDto, DirectorySearchCommandError> {
-    let session_generation = payload
-        .get("sessionGeneration")
-        .and_then(|value| value.as_u64())
-        .ok_or_else(|| {
-            directory_search_failed(
-                DIRECTORY_SEARCH_FAILED_CODE,
-                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
-            )
-        })?;
-    let request_id = payload
-        .get("requestId")
-        .and_then(|value| value.as_u64())
-        .ok_or_else(|| {
-            directory_search_failed(
-                DIRECTORY_SEARCH_FAILED_CODE,
-                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
-            )
-        })?;
-    let chunk = payload
-        .get("chunk")
-        .and_then(|value| value.as_array())
-        .ok_or_else(|| {
-            directory_search_failed(
-                DIRECTORY_SEARCH_FAILED_CODE,
-                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
-            )
-        })?;
-    let mut mapped = Vec::with_capacity(chunk.len());
-    for hit in chunk {
-        mapped.push(room_directory_hit_dto(hit)?);
-    }
     Ok(RoomDirectoryPageDto {
-        session_generation,
-        request_id,
-        chunk: mapped,
-        prev_batch: json_optional_string(payload.get("prevBatch")),
-        next_batch: json_optional_string(payload.get("nextBatch")),
+        session_generation: page.session_generation,
+        request_id: page.request_id,
+        chunk: page
+            .chunk
+            .into_iter()
+            .map(room_directory_hit_dto)
+            .collect::<Result<Vec<_>, _>>()?,
+        prev_batch: page.prev_batch,
+        next_batch: page.next_batch,
     })
 }
 
 pub(super) fn room_directory_search_dto(
-    payload: serde_json::Value,
+    payload: NativeRoomDirectorySearchResponse,
 ) -> Result<RoomDirectorySearchDto, DirectorySearchCommandError> {
-    let session_generation = payload
-        .get("sessionGeneration")
-        .and_then(|value| value.as_u64())
-        .ok_or_else(|| {
-            directory_search_failed(
-                DIRECTORY_SEARCH_FAILED_CODE,
-                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
-            )
-        })?;
-    let request_id = payload
-        .get("requestId")
-        .and_then(|value| value.as_u64())
-        .ok_or_else(|| {
-            directory_search_failed(
-                DIRECTORY_SEARCH_FAILED_CODE,
-                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
-            )
-        })?;
-    let status = payload
-        .get("status")
-        .and_then(|value| value.as_str())
-        .and_then(closed_directory_search_status)
-        .ok_or_else(|| {
-            directory_search_failed(
-                DIRECTORY_SEARCH_FAILED_CODE,
-                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
-            )
-        })?;
-    let page = match payload.get("page") {
-        None | Some(serde_json::Value::Null) => None,
-        Some(page) => Some(room_directory_page_dto(page)?),
-    };
     Ok(RoomDirectorySearchDto {
-        session_generation,
-        request_id,
-        status: status.to_owned(),
-        page,
+        session_generation: payload.session_generation,
+        request_id: payload.request_id,
+        status: payload.status.into(),
+        page: payload.page.map(room_directory_page_dto).transpose()?,
     })
 }
 
+impl SharedCore {
+    pub(super) async fn later_command(
+        &self,
+        no_session: &'static str,
+        request: impl std::future::Future<Output = Result<NativeLaterSnapshot, MatrixIpcError>>,
+    ) -> Result<LaterSnapshotDto, LaterCommandError> {
+        let response = request
+            .await
+            .map_err(|error| map_later_core_error(no_session, error))?;
+        later_snapshot_dto(response)
+    }
+
+    pub(super) async fn room_notes_command(
+        &self,
+        no_session: &'static str,
+        request: impl std::future::Future<Output = Result<NativeRoomNotesSnapshot, MatrixIpcError>>,
+    ) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
+        let response = request
+            .await
+            .map_err(|error| map_room_notes_core_error(no_session, error))?;
+        room_notes_snapshot_dto(response)
+    }
+
+    pub(super) async fn image_pack_null_command<T>(
+        &self,
+        no_session: &'static str,
+        request: impl std::future::Future<Output = Result<T, MatrixIpcError>>,
+    ) -> Result<T, ImagePackCommandError> {
+        let response = request
+            .await
+            .map_err(|error| map_image_pack_core_error(no_session, error))?;
+        Ok(response)
+    }
+
+    pub(super) async fn image_pack_set_content(
+        &self,
+        no_session: &'static str,
+        request: impl std::future::Future<Output = Result<MatrixStatusOk, MatrixIpcError>>,
+    ) -> Result<ImagePackWriteDto, ImagePackCommandError> {
+        let response = request
+            .await
+            .map_err(|error| map_image_pack_core_error(no_session, error))?;
+        image_pack_write_dto(response)
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 impl SharedCore {
     pub async fn get_global_image_packs(
         &self,
     ) -> Result<GlobalImagePacksSnapshotDto, ImagePackCommandError> {
         let payload = self
             .image_pack_null_command(
-                GET_GLOBAL_IMAGE_PACKS_COMMAND,
                 GET_GLOBAL_IMAGE_PACKS_NO_SESSION_CODE,
+                self.core.get_global_image_packs(),
             )
             .await?;
-        let snapshot: NativeGlobalImagePacksSnapshot =
-            serde_json::from_value(payload).map_err(|_| {
-                image_pack_failed(IMAGE_PACK_FAILED_CODE, IMAGE_PACK_FAILED_DESCRIPTION)
-            })?;
+        let snapshot: NativeGlobalImagePacksSnapshot = payload;
         Ok(GlobalImagePacksSnapshotDto {
             session_generation: snapshot.session_generation,
             packs: snapshot
@@ -850,14 +725,11 @@ impl SharedCore {
     ) -> Result<UserImagePackSnapshotDto, ImagePackCommandError> {
         let payload = self
             .image_pack_null_command(
-                GET_USER_IMAGE_PACK_COMMAND,
                 GET_USER_IMAGE_PACK_NO_SESSION_CODE,
+                self.core.get_user_image_pack(),
             )
             .await?;
-        let snapshot: NativeUserImagePackSnapshot =
-            serde_json::from_value(payload).map_err(|_| {
-                image_pack_failed(IMAGE_PACK_FAILED_CODE, IMAGE_PACK_FAILED_DESCRIPTION)
-            })?;
+        let snapshot: NativeUserImagePackSnapshot = payload;
         Ok(UserImagePackSnapshotDto {
             session_generation: snapshot.session_generation,
             pack: snapshot.pack.map(image_pack_dto).transpose()?,
@@ -870,20 +742,12 @@ impl SharedCore {
     ) -> Result<RoomImagePacksSnapshotDto, ImagePackCommandError> {
         let payload = self
             .core
-            .command(CommandEnvelope {
-                command: GET_ROOM_IMAGE_PACKS_COMMAND.to_owned(),
-                session_generation: IMAGE_PACK_COMMAND_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "roomId": room_id }),
-            })
+            .get_room_image_packs(crate::core_api::MatrixGetRoomImagePacksRequest { room_id })
             .await
             .map_err(|error| {
                 map_image_pack_core_error(GET_ROOM_IMAGE_PACKS_NO_SESSION_CODE, error)
             })?;
-        let snapshot: NativeRoomImagePacksSnapshot = serde_json::from_value(payload.payload)
-            .map_err(|_| {
-                image_pack_failed(IMAGE_PACK_FAILED_CODE, IMAGE_PACK_FAILED_DESCRIPTION)
-            })?;
+        let snapshot: NativeRoomImagePacksSnapshot = payload;
         Ok(RoomImagePacksSnapshotDto {
             session_generation: snapshot.session_generation,
             room_id: snapshot.room_id,
@@ -899,10 +763,11 @@ impl SharedCore {
         &self,
         content_json: String,
     ) -> Result<ImagePackWriteDto, ImagePackCommandError> {
+        let content = parse_image_pack_content_json(&content_json)?;
         self.image_pack_set_content(
-            SET_USER_IMAGE_PACK_COMMAND,
             SET_USER_IMAGE_PACK_NO_SESSION_CODE,
-            content_json,
+            self.core
+                .set_user_image_pack(crate::core_api::MatrixSetImagePackContentRequest { content }),
         )
         .await
     }
@@ -911,10 +776,13 @@ impl SharedCore {
         &self,
         content_json: String,
     ) -> Result<ImagePackWriteDto, ImagePackCommandError> {
+        let content = parse_image_pack_content_json(&content_json)?;
         self.image_pack_set_content(
-            SET_GLOBAL_IMAGE_PACKS_COMMAND,
             SET_GLOBAL_IMAGE_PACKS_NO_SESSION_CODE,
-            content_json,
+            self.core
+                .set_global_image_packs(crate::core_api::MatrixSetImagePackContentRequest {
+                    content,
+                }),
         )
         .await
     }
@@ -928,25 +796,20 @@ impl SharedCore {
         let content = parse_image_pack_content_json(&content_json)?;
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: SET_ROOM_IMAGE_PACK_COMMAND.to_owned(),
-                session_generation: IMAGE_PACK_COMMAND_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({
-                    "roomId": room_id,
-                    "stateKey": state_key,
-                    "content": content,
-                }),
+            .set_room_image_pack(crate::core_api::MatrixSetRoomImagePackRequest {
+                room_id,
+                state_key,
+                content,
             })
             .await
             .map_err(|error| {
                 map_image_pack_core_error(SET_ROOM_IMAGE_PACK_NO_SESSION_CODE, error)
             })?;
-        image_pack_write_dto(response.payload)
+        image_pack_write_dto(response)
     }
 
     pub async fn later_snapshot(&self) -> Result<LaterSnapshotDto, LaterCommandError> {
-        self.later_null_command(LATER_SNAPSHOT_COMMAND, LATER_SNAPSHOT_NO_SESSION_CODE)
+        self.later_command(LATER_SNAPSHOT_NO_SESSION_CODE, self.core.later_snapshot())
             .await
     }
 
@@ -955,9 +818,13 @@ impl SharedCore {
         item: LaterItemDto,
     ) -> Result<LaterSnapshotDto, LaterCommandError> {
         let item = later_item_from_dto(item)?;
-        let payload = later_envelope_payload(serde_json::json!({ "item": item }))?;
-        self.later_command(LATER_UPSERT_COMMAND, LATER_UPSERT_NO_SESSION_CODE, payload)
-            .await
+        later_envelope_payload(serde_json::json!({ "item": item }))?;
+        self.later_command(
+            LATER_UPSERT_NO_SESSION_CODE,
+            self.core
+                .later_upsert(crate::core_api::MatrixLaterUpsertRequest { item }),
+        )
+        .await
     }
 
     pub async fn later_complete(
@@ -965,14 +832,17 @@ impl SharedCore {
         item_id: String,
         completed_at: Option<f64>,
     ) -> Result<LaterSnapshotDto, LaterCommandError> {
-        let payload = later_envelope_payload(serde_json::json!({
+        later_envelope_payload(serde_json::json!({
             "itemId": item_id,
             "completedAt": completed_at,
         }))?;
         self.later_command(
-            LATER_COMPLETE_COMMAND,
             LATER_COMPLETE_NO_SESSION_CODE,
-            payload,
+            self.core
+                .later_complete(crate::core_api::MatrixLaterCompleteRequest {
+                    item_id,
+                    completed_at,
+                }),
         )
         .await
     }
@@ -982,18 +852,22 @@ impl SharedCore {
         item_id: String,
         due_ts: f64,
     ) -> Result<LaterSnapshotDto, LaterCommandError> {
-        let payload = later_envelope_payload(serde_json::json!({
+        later_envelope_payload(serde_json::json!({
             "itemId": item_id,
             "dueTs": due_ts,
         }))?;
-        self.later_command(LATER_SNOOZE_COMMAND, LATER_SNOOZE_NO_SESSION_CODE, payload)
-            .await
+        self.later_command(
+            LATER_SNOOZE_NO_SESSION_CODE,
+            self.core
+                .later_snooze(crate::core_api::MatrixLaterSnoozeRequest { item_id, due_ts }),
+        )
+        .await
     }
 
     pub async fn later_clear_completed(&self) -> Result<LaterSnapshotDto, LaterCommandError> {
-        self.later_null_command(
-            LATER_CLEAR_COMPLETED_COMMAND,
+        self.later_command(
             LATER_CLEAR_COMPLETED_NO_SESSION_CODE,
+            self.core.later_clear_completed(),
         )
         .await
     }
@@ -1003,14 +877,17 @@ impl SharedCore {
         item_id: String,
         reminded_at: Option<f64>,
     ) -> Result<LaterSnapshotDto, LaterCommandError> {
-        let payload = later_envelope_payload(serde_json::json!({
+        later_envelope_payload(serde_json::json!({
             "itemId": item_id,
             "remindedAt": reminded_at,
         }))?;
         self.later_command(
-            LATER_MARK_REMINDED_COMMAND,
             LATER_MARK_REMINDED_NO_SESSION_CODE,
-            payload,
+            self.core
+                .later_mark_reminded(crate::core_api::MatrixLaterMarkRemindedRequest {
+                    item_id,
+                    reminded_at,
+                }),
         )
         .await
     }
@@ -1018,15 +895,10 @@ impl SharedCore {
     pub async fn mdirect_snapshot(&self) -> Result<MDirectSnapshotDto, MDirectCommandError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: MDIRECT_SNAPSHOT_COMMAND.to_owned(),
-                session_generation: MDIRECT_COMMAND_GENERATION,
-                request_id: None,
-                payload: serde_json::Value::Null,
-            })
+            .mdirect_snapshot()
             .await
             .map_err(|error| map_mdirect_core_error(MDIRECT_SNAPSHOT_NO_SESSION_CODE, error))?;
-        mdirect_snapshot_dto(response.payload)
+        mdirect_snapshot_dto(response)
     }
 
     pub async fn mdirect_add(
@@ -1034,45 +906,35 @@ impl SharedCore {
         room_id: String,
         user_id: String,
     ) -> Result<MDirectMutationDto, MDirectCommandError> {
-        let payload = mdirect_envelope_payload(serde_json::json!({
+        mdirect_envelope_payload(serde_json::json!({
             "roomId": room_id,
             "userId": user_id,
         }))?;
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: MDIRECT_ADD_COMMAND.to_owned(),
-                session_generation: MDIRECT_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
+            .mdirect_add(crate::core_api::MatrixMDirectAddRequest { room_id, user_id })
             .await
             .map_err(|error| map_mdirect_core_error(MDIRECT_ADD_NO_SESSION_CODE, error))?;
-        mdirect_mutation_dto(response.payload)
+        mdirect_mutation_dto(response)
     }
 
     pub async fn mdirect_remove(
         &self,
         room_id: String,
     ) -> Result<MDirectMutationDto, MDirectCommandError> {
-        let payload = mdirect_envelope_payload(serde_json::json!({ "roomId": room_id }))?;
+        mdirect_envelope_payload(serde_json::json!({ "roomId": room_id }))?;
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: MDIRECT_REMOVE_COMMAND.to_owned(),
-                session_generation: MDIRECT_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
+            .mdirect_remove(crate::core_api::MatrixMDirectRemoveRequest { room_id })
             .await
             .map_err(|error| map_mdirect_core_error(MDIRECT_REMOVE_NO_SESSION_CODE, error))?;
-        mdirect_mutation_dto(response.payload)
+        mdirect_mutation_dto(response)
     }
 
     pub async fn room_notes_snapshot(&self) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
-        self.room_notes_null_command(
-            ROOM_NOTES_SNAPSHOT_COMMAND,
+        self.room_notes_command(
             ROOM_NOTES_SNAPSHOT_NO_SESSION_CODE,
+            self.core.room_notes_snapshot(),
         )
         .await
     }
@@ -1082,11 +944,11 @@ impl SharedCore {
         item: RoomNoteItemDto,
     ) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
         let item = room_note_item_from_dto(item)?;
-        let payload = room_notes_envelope_payload(serde_json::json!({ "item": item }))?;
+        room_notes_envelope_payload(serde_json::json!({ "item": item }))?;
         self.room_notes_command(
-            ROOM_NOTES_UPSERT_COMMAND,
             ROOM_NOTES_UPSERT_NO_SESSION_CODE,
-            payload,
+            self.core
+                .room_notes_upsert(crate::core_api::MatrixRoomNotesUpsertRequest { item }),
         )
         .await
     }
@@ -1096,14 +958,17 @@ impl SharedCore {
         room_id: String,
         item_id: String,
     ) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
-        let payload = room_notes_envelope_payload(serde_json::json!({
+        room_notes_envelope_payload(serde_json::json!({
             "roomId": room_id,
             "itemId": item_id,
         }))?;
         self.room_notes_command(
-            ROOM_NOTES_DELETE_COMMAND,
             ROOM_NOTES_DELETE_NO_SESSION_CODE,
-            payload,
+            self.core
+                .room_notes_delete(crate::core_api::MatrixRoomNotesItemRequest {
+                    room_id,
+                    item_id,
+                }),
         )
         .await
     }
@@ -1114,15 +979,20 @@ impl SharedCore {
         item_id: String,
         completed: bool,
     ) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
-        let payload = room_notes_envelope_payload(serde_json::json!({
+        room_notes_envelope_payload(serde_json::json!({
             "roomId": room_id,
             "itemId": item_id,
             "completed": completed,
         }))?;
         self.room_notes_command(
-            ROOM_NOTES_COMPLETE_TODO_COMMAND,
             ROOM_NOTES_COMPLETE_TODO_NO_SESSION_CODE,
-            payload,
+            self.core.room_notes_complete_todo(
+                crate::core_api::MatrixRoomNotesCompleteTodoRequest {
+                    room_id,
+                    item_id,
+                    completed,
+                },
+            ),
         )
         .await
     }
@@ -1134,15 +1004,19 @@ impl SharedCore {
         direction: String,
     ) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
         let direction = room_note_move_direction_from_dto(&direction)?;
-        let payload = room_notes_envelope_payload(serde_json::json!({
+        room_notes_envelope_payload(serde_json::json!({
             "roomId": room_id,
             "itemId": item_id,
             "direction": direction,
         }))?;
         self.room_notes_command(
-            ROOM_NOTES_MOVE_TODO_COMMAND,
             ROOM_NOTES_MOVE_TODO_NO_SESSION_CODE,
-            payload,
+            self.core
+                .room_notes_move_todo(crate::core_api::MatrixRoomNotesMoveTodoRequest {
+                    room_id,
+                    item_id,
+                    direction,
+                }),
         )
         .await
     }
@@ -1152,18 +1026,18 @@ impl SharedCore {
         room_id: String,
         session_generation: u64,
     ) -> Result<RoomDirectoryVisibilityDto, DirectoryVisibilityCommandError> {
-        let payload = directory_visibility_envelope_payload(serde_json::json!({
+        directory_visibility_envelope_payload(serde_json::json!({
             "roomId": room_id,
             "sessionGeneration": session_generation,
         }))?;
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: GET_ROOM_DIRECTORY_VISIBILITY_COMMAND.to_owned(),
-                session_generation,
-                request_id: None,
-                payload,
-            })
+            .get_room_directory_visibility(
+                crate::core_api::MatrixGetRoomDirectoryVisibilityRequest {
+                    room_id,
+                    session_generation,
+                },
+            )
             .await
             .map_err(|error| {
                 map_directory_visibility_core_error(
@@ -1171,7 +1045,7 @@ impl SharedCore {
                     error,
                 )
             })?;
-        room_directory_visibility_dto(response.payload)
+        room_directory_visibility_dto(response)
     }
 
     pub async fn set_room_directory_visibility(
@@ -1180,19 +1054,20 @@ impl SharedCore {
         session_generation: u64,
         visibility: String,
     ) -> Result<RoomDirectoryVisibilityWriteDto, DirectoryVisibilityCommandError> {
-        let payload = directory_visibility_envelope_payload(serde_json::json!({
+        directory_visibility_envelope_payload(serde_json::json!({
             "roomId": room_id,
             "sessionGeneration": session_generation,
             "visibility": visibility,
         }))?;
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: SET_ROOM_DIRECTORY_VISIBILITY_COMMAND.to_owned(),
-                session_generation,
-                request_id: None,
-                payload,
-            })
+            .set_room_directory_visibility(
+                crate::core_api::MatrixSetRoomDirectoryVisibilityRequest {
+                    room_id,
+                    session_generation,
+                    visibility,
+                },
+            )
             .await
             .map_err(|error| {
                 map_directory_visibility_core_error(
@@ -1200,7 +1075,7 @@ impl SharedCore {
                     error,
                 )
             })?;
-        room_directory_visibility_write_dto(response.payload)
+        room_directory_visibility_write_dto(response)
     }
 
     pub async fn room_directory_protocols(
@@ -1208,17 +1083,12 @@ impl SharedCore {
     ) -> Result<RoomDirectoryProtocolsDto, DirectorySearchCommandError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: ROOM_DIRECTORY_PROTOCOLS_COMMAND.to_owned(),
-                session_generation: DIRECTORY_SEARCH_ENVELOPE_GENERATION,
-                request_id: None,
-                payload: serde_json::Value::Null,
-            })
+            .room_directory_protocols()
             .await
             .map_err(|error| {
                 map_directory_search_core_error(ROOM_DIRECTORY_PROTOCOLS_NO_SESSION_CODE, error)
             })?;
-        room_directory_protocols_dto(response.payload)
+        room_directory_protocols_dto(response)
     }
 
     #[allow(clippy::too_many_arguments)] // UniFFI preserves the typed Matrix directory query fields.
@@ -1233,29 +1103,40 @@ impl SharedCore {
         limit: u64,
         since: Option<String>,
     ) -> Result<RoomDirectorySearchDto, DirectorySearchCommandError> {
-        let payload = directory_search_envelope_payload(serde_json::json!({
+        directory_search_envelope_payload(serde_json::json!({
             "sessionGeneration": session_generation,
             "requestId": request_id,
-            "serverName": server_name,
-            "term": term,
-            "roomType": room_type,
-            "thirdPartyInstanceId": third_party_instance_id,
+            "serverName": &server_name,
+            "term": &term,
+            "roomType": &room_type,
+            "thirdPartyInstanceId": &third_party_instance_id,
             "limit": limit,
-            "since": since,
+            "since": &since,
         }))?;
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: ROOM_DIRECTORY_SEARCH_COMMAND.to_owned(),
-                session_generation: DIRECTORY_SEARCH_ENVELOPE_GENERATION,
-                request_id: None,
-                payload,
+            .room_directory_search(crate::core_api::MatrixRoomDirectorySearchRequest {
+                session_generation,
+                request_id,
+                server_name,
+                term,
+                room_type: match room_type.as_deref() {
+                    None => None,
+                    Some("room") => Some(crate::app::room_directory::DirectoryRoomTypeFilter::Room),
+                    Some("space") => {
+                        Some(crate::app::room_directory::DirectoryRoomTypeFilter::Space)
+                    }
+                    Some(_) => return Err(directory_failed()),
+                },
+                third_party_instance_id,
+                limit,
+                since,
             })
             .await
             .map_err(|error| {
                 map_directory_search_core_error(ROOM_DIRECTORY_SEARCH_NO_SESSION_CODE, error)
             })?;
-        room_directory_search_dto(response.payload)
+        room_directory_search_dto(response)
     }
 
     pub async fn room_directory_cancel(
@@ -1263,116 +1144,20 @@ impl SharedCore {
         session_generation: u64,
         request_id: u64,
     ) -> Result<RoomDirectorySearchDto, DirectorySearchCommandError> {
-        let payload = directory_search_envelope_payload(serde_json::json!({
+        directory_search_envelope_payload(serde_json::json!({
             "sessionGeneration": session_generation,
             "requestId": request_id,
         }))?;
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: ROOM_DIRECTORY_CANCEL_COMMAND.to_owned(),
-                session_generation: DIRECTORY_SEARCH_ENVELOPE_GENERATION,
-                request_id: None,
-                payload,
+            .room_directory_cancel(crate::core_api::MatrixRoomDirectoryCancelRequest {
+                session_generation,
+                request_id,
             })
             .await
             .map_err(|error| {
                 map_directory_search_core_error(ROOM_DIRECTORY_CANCEL_NO_SESSION_CODE, error)
             })?;
-        room_directory_search_dto(response.payload)
-    }
-
-    pub(super) async fn later_null_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-    ) -> Result<LaterSnapshotDto, LaterCommandError> {
-        self.later_command(command, no_session, serde_json::Value::Null)
-            .await
-    }
-
-    pub(super) async fn later_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<LaterSnapshotDto, LaterCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: LATER_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_later_core_error(no_session, error))?;
-        later_snapshot_dto(response.payload)
-    }
-
-    pub(super) async fn room_notes_null_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-    ) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
-        self.room_notes_command(command, no_session, serde_json::Value::Null)
-            .await
-    }
-
-    pub(super) async fn room_notes_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: ROOM_NOTES_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_room_notes_core_error(no_session, error))?;
-        room_notes_snapshot_dto(response.payload)
-    }
-
-    pub(super) async fn image_pack_null_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-    ) -> Result<serde_json::Value, ImagePackCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: IMAGE_PACK_COMMAND_GENERATION,
-                request_id: None,
-                payload: serde_json::Value::Null,
-            })
-            .await
-            .map_err(|error| map_image_pack_core_error(no_session, error))?;
-        Ok(response.payload)
-    }
-
-    pub(super) async fn image_pack_set_content(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        content_json: String,
-    ) -> Result<ImagePackWriteDto, ImagePackCommandError> {
-        let content = parse_image_pack_content_json(&content_json)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: IMAGE_PACK_COMMAND_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "content": content }),
-            })
-            .await
-            .map_err(|error| map_image_pack_core_error(no_session, error))?;
-        image_pack_write_dto(response.payload)
+        room_directory_search_dto(response)
     }
 }

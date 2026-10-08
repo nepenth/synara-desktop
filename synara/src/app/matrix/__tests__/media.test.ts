@@ -11,10 +11,7 @@ import {
   resolveMatrixThumbnailUrl,
   saveMatrixMediaFile,
 } from '../media';
-
-type MockMatrixClient = {
-  mxcUrlToHttp: (...args: unknown[]) => string | null;
-};
+import { nativeThumbnailContentUri } from '../nativeThumbnail';
 
 test('isNativeMediaContentUri matches leftover mxc and timeline handles', () => {
   assert.equal(isNativeMediaContentUri('mxc://example/avatar'), true);
@@ -25,56 +22,34 @@ test('isNativeMediaContentUri matches leftover mxc and timeline handles', () => 
   assert.equal(isNativeMediaContentUri(undefined), false);
 });
 
-test('resolveMatrixMediaUrl delegates authenticated MXC conversion to matrix-js-sdk', () => {
-  const calls: unknown[][] = [];
-  const mx: MockMatrixClient = {
-    mxcUrlToHttp: (...args: unknown[]) => {
-      calls.push(args);
-      return 'https://matrix.example.org/_matrix/media/v3/download/example/media';
-    },
-  };
+test('resolveMatrixMediaUrl keeps an unsized mxc URI for the native media protocol', () => {
+  assert.equal(resolveMatrixMediaUrl('mxc://example/media'), 'mxc://example/media');
+});
 
+test('resolveMatrixMediaUrl turns a requested size into a native thumbnail', () => {
   assert.equal(
-    resolveMatrixMediaUrl(mx as never, 'mxc://example/media', {
+    resolveMatrixMediaUrl('mxc://example/media', {
       useAuthentication: true,
       width: 96,
       height: 64,
       resizeMethod: 'crop',
-      allowDirectLinks: false,
-      allowRedirects: true,
     }),
-    'https://matrix.example.org/_matrix/media/v3/download/example/media'
+    nativeThumbnailContentUri('mxc://example/media', 96, 64, 'crop')
   );
-  assert.deepEqual(calls, [['mxc://example/media', 96, 64, 'crop', false, true, true]]);
 });
 
-test('resolveMatrixMediaUrl rejects unresolved Matrix media URLs', () => {
-  const mx: MockMatrixClient = {
-    mxcUrlToHttp: () => null,
-  };
-
+test('resolveMatrixMediaUrl rejects URLs that are not Matrix media', () => {
   assert.throws(
-    () => resolveMatrixMediaUrl(mx as never, 'mxc://example/missing'),
+    () => resolveMatrixMediaUrl('https://example.org/missing'),
     /Invalid Matrix media URL/
   );
 });
 
-test('resolveMatrixThumbnailUrl requests cropped authenticated thumbnails', () => {
-  const calls: unknown[][] = [];
-  const mx: MockMatrixClient = {
-    mxcUrlToHttp: (...args: unknown[]) => {
-      calls.push(args);
-      return 'https://matrix.example.org/_matrix/media/v3/thumbnail/example/avatar';
-    },
-  };
-
+test('resolveMatrixThumbnailUrl requests cropped square thumbnails', () => {
   assert.equal(
-    resolveMatrixThumbnailUrl(mx as never, 'mxc://example/avatar', 100, {
-      useAuthentication: true,
-    }),
-    'https://matrix.example.org/_matrix/media/v3/thumbnail/example/avatar'
+    resolveMatrixThumbnailUrl('mxc://example/avatar', 100, { useAuthentication: true }),
+    nativeThumbnailContentUri('mxc://example/avatar', 100, 100, 'crop')
   );
-  assert.deepEqual(calls, [['mxc://example/avatar', 100, 100, 'crop', undefined, undefined, true]]);
 });
 
 test('display URLs stay on synara-media and do not fetch file bytes', async () => {
@@ -98,8 +73,7 @@ test('display URLs stay on synara-media and do not fetch file bytes', async () =
   };
 
   try {
-    const mx = { mxcUrlToHttp: () => 'https://example.invalid/should-not-run' };
-    const mxcUrl = await createMatrixMediaObjectUrl(mx as never, 'mxc://example/media', {
+    const mxcUrl = await createMatrixMediaObjectUrl('mxc://example/media', {
       mimeType: 'image/png',
     });
     assert.equal(mxcUrl, 'synara-media://localhost/mxc%3A%2F%2Fexample%2Fmedia');
@@ -160,9 +134,8 @@ test('text preview maps the native size ceiling without returning bytes', async 
 });
 
 test('encrypted leftover mxc fails closed before a display URL is built', async () => {
-  const mx = { mxcUrlToHttp: () => 'https://example.invalid/should-not-run' };
   await assert.rejects(
-    createMatrixMediaObjectUrl(mx as never, 'mxc://example/enc', {
+    createMatrixMediaObjectUrl('mxc://example/enc', {
       mimeType: 'image/png',
       encryptedInfo: {
         v: 'v2',

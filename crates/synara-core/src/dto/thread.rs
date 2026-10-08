@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::ids::{EventId, RoomId};
 
 /// Thread root summary for timeline / list UI.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadSummary {

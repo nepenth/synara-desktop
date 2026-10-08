@@ -27,7 +27,12 @@ export type NativeSendAttachmentResult = {
   roomId: string;
   eventId: string;
   localTxnId: string;
-  status: 'sent';
+  /**
+   * `queued`: the native send queue still holds the upload and keeps
+   * retrying it; the timeline row shows Sending with Discard. Treated as
+   * accepted so the user is not invited to attach the file a second time.
+   */
+  status: 'sent' | 'queued';
 };
 
 export type NativeInvoke = (
@@ -76,7 +81,7 @@ export async function sendAttachmentWithNativeOwner(
     throw new Error('Native Matrix attachment send is unavailable.');
   }
   const result = send.value as NativeSendAttachmentResult | undefined;
-  if (result?.status !== 'sent') {
+  if (result?.status !== 'sent' && result?.status !== 'queued') {
     throw new Error('Native Matrix attachment send is unavailable.');
   }
   return 'native';

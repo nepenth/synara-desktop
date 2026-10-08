@@ -55,7 +55,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn device_surface_exposes_only_the_registered_device_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("device_snapshot"));
     assert!(udl.contains("device_rename"));
     assert!(udl.contains("device_delete_start"));
@@ -81,7 +81,10 @@ fn device_surface_exposes_only_the_registered_device_family() {
     assert!(shared_core.contains("device_delete_cancel"));
     assert!(shared_core.contains("device_delete_password"));
     assert!(shared_core.contains("verification_start"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
     assert!(!shared_core.contains("matrix_crypto_status"));
 }

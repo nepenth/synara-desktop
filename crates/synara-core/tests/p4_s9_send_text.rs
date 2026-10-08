@@ -68,11 +68,14 @@ fn error_text(error: &SendTextError) -> String {
 
 #[test]
 fn send_text_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
-    assert!(udl.contains("send_text("));
+    let udl = crate::ffi_surface::udl();
+    assert!(crate::ffi_surface::declares_fn(udl, "send_text"));
     assert!(udl.contains("dictionary SendTextDto"));
     assert!(udl.contains("interface SendTextError"));
-    assert!(udl.contains("composer_set_reply_draft("));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "composer_set_reply_draft"
+    ));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
     assert!(!udl.contains("matrix_send_sticker"));
@@ -84,10 +87,22 @@ fn send_text_surface_exposes_only_the_registered_family() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("send_text("));
-    assert!(shared_core.contains("composer_set_reply_draft("));
-    assert!(shared_core.contains("reaction_ensure("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "send_text"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "composer_set_reply_draft"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "reaction_ensure"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

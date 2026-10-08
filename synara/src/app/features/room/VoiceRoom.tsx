@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Icons, Icon, Text, config } from 'folds';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRoom } from '../../hooks/useRoom';
 import { useRoomMembers } from '../../hooks/useRoomMembers';
 import { isNativeMatrixSession } from '../verification/nativeVerification';
@@ -20,8 +19,7 @@ import { voiceRoomLandingCopy } from '../matrix-rtc/liveCallChrome';
  */
 export function VoiceRoom() {
   const room = useRoom();
-  const mx = useMatrixClient();
-  const members = useRoomMembers(mx, room.roomId, isNativeMatrixSession());
+  const members = useRoomMembers(room.roomId, isNativeMatrixSession());
   const nativeRooms = useNativeRoomListSnapshot();
   const nativeRoom = nativeRooms.rooms.find((summary) => summary.roomId === room.roomId);
   const [rtcStatus, setRtcStatus] = useState<'ready' | 'unsupported' | 'unavailable' | null>(null);

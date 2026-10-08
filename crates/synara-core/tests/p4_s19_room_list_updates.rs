@@ -1,48 +1,9 @@
 //! P4-S19: poll privacy-safe room-list wake-ups on SharedCore.
 //!
 //! After start_sync. This is not Platform::emit, not Core.command, and
-//! not P4 acceptance. NSE still cannot poll. Room ids never appear.
+//! not P4 acceptance. Room ids never appear.
 
-use std::collections::HashMap;
-use std::fs;
-use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
-
-use synara_core::app::store::AccountIdentity;
-use synara_core::{IosSecretVault, IosSecretVaultError, SharedCore};
-
-struct MemoryCallbackVault(Arc<Mutex<HashMap<String, Vec<u8>>>>);
-
-impl IosSecretVault for MemoryCallbackVault {
-    fn get(&self, key: String) -> Result<Option<Vec<u8>>, IosSecretVaultError> {
-        Ok(self.0.lock().expect("vault").get(&key).cloned())
-    }
-
-    fn put(&self, key: String, value: Vec<u8>) -> Result<(), IosSecretVaultError> {
-        self.0.lock().expect("vault").insert(key, value);
-        Ok(())
-    }
-
-    fn delete(&self, key: String) -> Result<(), IosSecretVaultError> {
-        self.0.lock().expect("vault").remove(&key);
-        Ok(())
-    }
-}
-
-fn alice() -> AccountIdentity {
-    AccountIdentity::new("@alice:example.org", "https://matrix.example.org").unwrap()
-}
-
-fn temp_root(tag: &str) -> std::path::PathBuf {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let root = std::env::temp_dir().join(format!("synara-p4-s19-it-{tag}-{nanos}"));
-    let _ = fs::remove_dir_all(&root);
-    fs::create_dir_all(&root).unwrap();
-    root
-}
+use synara_core::SharedCore;
 
 fn test_runtime() -> tokio::runtime::Runtime {
     tokio::runtime::Builder::new_current_thread()
@@ -53,7 +14,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn room_list_update_surface_is_poll_only_and_not_a_leftover() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("dictionary RoomListUpdateDto"));
     assert!(udl.contains("interface RoomListUpdateError"));
     assert!(udl.contains("sequence<RoomListUpdateDto> poll_room_list_updates()"));
@@ -65,7 +26,10 @@ fn room_list_update_surface_is_poll_only_and_not_a_leftover() {
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
     assert!(shared_core.contains("poll_room_list_updates()"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
 }
 
 #[test]
@@ -101,44 +65,4 @@ fn enqueue_then_poll_room_list_updates_is_privacy_safe() {
         .block_on(shared.poll_room_list_updates())
         .expect("second poll is empty");
     assert!(drained.is_empty());
-}
-
-#[test]
-fn poll_room_list_updates_on_nse_store_fails_closed_without_echo() {
-    let access = "syt_s19_nse_poll_access";
-    let refresh = "syr_s19_nse_poll_refresh";
-    let identity = alice();
-    let map = Arc::new(Mutex::new(HashMap::new()));
-    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(Arc::clone(&map))));
-    let root = temp_root("nse-forbids-room-list-poll");
-    let rt = test_runtime();
-    let _enter = rt.enter();
-    rt.block_on(shared.persist_planted_session_for_test(
-        identity.user_id().to_owned(),
-        identity.homeserver_url().to_owned(),
-        root.to_string_lossy().into_owned(),
-        "DEVICEABC".to_owned(),
-        access.to_owned(),
-        Some(refresh.to_owned()),
-    ))
-    .expect("planted persist");
-    rt.block_on(shared.nse_open_read_only_store(
-        identity.user_id().to_owned(),
-        identity.homeserver_url().to_owned(),
-        root.to_string_lossy().into_owned(),
-    ))
-    .expect("planted NSE open");
-    shared.enqueue_room_list_update_for_test(1);
-    let error = rt
-        .block_on(shared.poll_room_list_updates())
-        .expect_err("NSE cannot poll room list updates");
-    let text = format!("{error:?}{error}");
-    assert!(text.contains("p4-s19-nse-forbids-poll"));
-    assert!(!text.contains(access));
-    assert!(!text.contains(refresh));
-    assert!(!text.contains("@alice"));
-    drop(shared);
-    drop(_enter);
-    drop(rt);
-    let _ = fs::remove_dir_all(&root);
 }

@@ -1,29 +1,17 @@
 import { useCallback } from 'react';
-import { useMatrixClient } from './useMatrixClient';
 import { AsyncState, useAsyncCallbackValue } from './useAsyncCallback';
-import { useSpecVersions } from './useSpecVersions';
+import { fetchMutualRooms } from '../native/nativeRoomExtras';
 
-export const useMutualRoomsSupport = (): boolean => {
-  const { unstable_features: unstableFeatures } = useSpecVersions();
+/**
+ * Core answers mutual rooms from the local room store, so the query is always
+ * available on the native client (no MSC2666 server support needed).
+ */
+export const useMutualRoomsSupport = (): boolean => true;
 
-  const supported =
-    unstableFeatures?.['uk.half-shot.msc2666'] ||
-    unstableFeatures?.['uk.half-shot.msc2666.mutual_rooms'] ||
-    unstableFeatures?.['uk.half-shot.msc2666.query_mutual_rooms'];
-
-  return !!supported;
-};
-
+/** Joined rooms shared with `userId`. */
 export const useMutualRooms = (userId: string): AsyncState<string[], unknown> => {
-  const mx = useMatrixClient();
-
-  const supported = useMutualRoomsSupport();
-
   const [mutualRoomsState] = useAsyncCallbackValue(
-    useCallback(
-      () => (supported ? mx._unstable_getSharedRooms(userId) : Promise.resolve([])),
-      [mx, userId, supported]
-    )
+    useCallback(async (): Promise<string[]> => fetchMutualRooms(userId), [userId])
   );
 
   return mutualRoomsState;

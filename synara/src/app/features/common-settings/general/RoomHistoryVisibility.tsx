@@ -16,7 +16,6 @@ import FocusTrap from 'focus-trap-react';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../../room-settings/styles.css';
 import { SettingTile } from '../../../components/setting-tile';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useRoom } from '../../../hooks/useRoom';
 import { StateEvent } from '../../../../types/matrix/room';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
@@ -24,6 +23,7 @@ import { useStateEvent } from '../../../hooks/useStateEvent';
 import { stopPropagation } from '../../../utils/keyboard';
 import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
 
+import { sendNativeStateEvent } from '../../../native/nativeCommands';
 type HistoryVisibility = 'invited' | 'joined' | 'shared' | 'world_readable';
 type RoomHistoryVisibilityEventContent = {
   history_visibility?: HistoryVisibility;
@@ -62,10 +62,9 @@ type RoomHistoryVisibilityProps = {
   permissions: RoomPermissionsAPI;
 };
 export function RoomHistoryVisibility({ permissions }: RoomHistoryVisibilityProps) {
-  const mx = useMatrixClient();
   const room = useRoom();
 
-  const canEdit = permissions.stateEvent(StateEvent.RoomHistoryVisibility, mx.getSafeUserId());
+  const canEdit = permissions.stateEvent(StateEvent.RoomHistoryVisibility);
 
   const visibilityEvent = useStateEvent(room, StateEvent.RoomHistoryVisibility);
   const historyVisibility: HistoryVisibility =
@@ -86,9 +85,9 @@ export function RoomHistoryVisibility({ permissions }: RoomHistoryVisibilityProp
         const content: RoomHistoryVisibilityEventContent = {
           history_visibility: visibility,
         };
-        await mx.sendStateEvent(room.roomId, StateEvent.RoomHistoryVisibility as any, content);
+        await sendNativeStateEvent(room.roomId, StateEvent.RoomHistoryVisibility as any, content);
       },
-      [mx, room.roomId]
+      [room.roomId]
     )
   );
   const submitting = submitState.status === AsyncStatus.Loading;

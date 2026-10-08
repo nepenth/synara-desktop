@@ -9,13 +9,13 @@ import React, {
 import { Box, color, Icon, Icons, Input, Spinner, Text, toRem } from 'folds';
 import { isKeyHotkey } from 'is-hotkey';
 import { getMxIdServer } from '../../utils/matrix';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { replaceSpaceWithDash } from '../../utils/common';
 import { AsyncState, AsyncStatus, useAsync } from '../../hooks/useAsyncCallback';
 import { useDebounce } from '../../hooks/useDebounce';
+import { getSafeMyUserId } from '../../state/nativeIdentity';
+import { checkAliasAvailability } from '../../native/nativeRoomExtras';
 
 export function CreateRoomAliasInput({ disabled }: { disabled?: boolean }) {
-  const mx = useMatrixClient();
   const aliasInputRef = useRef<HTMLInputElement>(null);
   const [aliasAvail, setAliasAvail] = useState<AsyncState<boolean, Error>>({
     status: AsyncStatus.Idle,
@@ -28,21 +28,10 @@ export function CreateRoomAliasInput({ disabled }: { disabled?: boolean }) {
   }, [aliasAvail]);
 
   const checkAliasAvail = useAsync(
-    useCallback(
-      async (aliasLocalPart: string) => {
-        const roomAlias = `#${aliasLocalPart}:${getMxIdServer(mx.getSafeUserId())}`;
-        try {
-          const result = await mx.getRoomIdForAlias(roomAlias);
-          return typeof result?.room_id !== 'string';
-        } catch (e) {
-          if ((e as { httpStatus?: number } | null)?.httpStatus === 404) {
-            return true;
-          }
-          throw e;
-        }
-      },
-      [mx]
-    ),
+    useCallback<(aliasLocalPart: string) => Promise<boolean>>(async (aliasLocalPart) => {
+      const roomAlias = `#${aliasLocalPart}:${getMxIdServer(getSafeMyUserId())}`;
+      return (await checkAliasAvailability(roomAlias)) === 'available';
+    }, []),
     setAliasAvail
   );
   const aliasAvailable: boolean | undefined =
@@ -93,7 +82,7 @@ export function CreateRoomAliasInput({ disabled }: { disabled?: boolean }) {
         }
         after={
           <Text style={{ maxWidth: toRem(150) }} truncate>
-            :{getMxIdServer(mx.getSafeUserId())}
+            :{getMxIdServer(getSafeMyUserId())}
           </Text>
         }
         onKeyDown={handleAliasKeyDown}

@@ -57,7 +57,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn join_rule_surface_exposes_the_registered_snapshot_and_writer() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("room_join_rule_snapshot"));
     assert!(udl.contains("room_set_join_rule"));
     assert!(udl.contains("dictionary RoomJoinRuleWriteDto"));
@@ -71,7 +71,10 @@ fn join_rule_surface_exposes_the_registered_snapshot_and_writer() {
     assert!(shared_core.contains("room_join_rule_snapshot"));
     assert!(shared_core.contains("room_set_join_rule"));
     assert!(shared_core.contains("device_snapshot"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

@@ -49,11 +49,13 @@ loopback binding, runtime secret generation, and ignored state.
 
 ## Automated native client proofs
 
-The CI workflow starts this disposable harness for the native reaction,
-attachment, poll, rich-message, thread, and two-client receipt proofs in
-`src-tauri/src/matrix/`. Each job resets the generated state after its test.
-The two-client proof covers ordered delivery, exact-event read markers, and
-receipt convergence. See the `synapse-native-*` jobs in
+The CI `synapse-live` job starts this disposable harness for the native
+reaction, attachment, poll, rich-message, thread, and two-client receipt proofs
+in `src-tauri/src/matrix/`. It compiles the desktop tests once and gives each
+proof a fresh harness, resetting the generated state after each test. It runs
+nightly and on pull requests that touch shared Core, the desktop Matrix bridge,
+the harness or the lockfile. The two-client proof covers ordered delivery,
+exact-event read markers, and receipt convergence. See that job in
 `.github/workflows/ci.yml` for the exact test commands and opt-in variables.
 
 Synapse 1.162 room-version-12 behavior requires a separate disposable 1.162

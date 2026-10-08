@@ -16,7 +16,6 @@ import {
   toRem,
 } from 'folds';
 import { HierarchyItem } from '../../hooks/useSpaceHierarchy';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { MSpaceChildContent } from '../../../types/matrix/room';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { removeSpaceChild, setSpaceChild } from './nativeSpaceChild';
@@ -32,6 +31,7 @@ import { getRoomPermissionsAPI } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import * as depthCss from '../../styles/Depth.css';
 
+import { getNativeRoom } from '../../native/nativeSession';
 type HierarchyItemWithParent = HierarchyItem & {
   parentId: string;
 };
@@ -122,8 +122,7 @@ function InviteMenuItem({
   requestClose: () => void;
   disabled?: boolean;
 }) {
-  const mx = useMatrixClient();
-  const room = mx.getRoom(item.roomId);
+  const room = getNativeRoom(item.roomId);
   const [invitePrompt, setInvitePrompt] = useState(false);
 
   const handleInvite = () => {
@@ -196,7 +195,6 @@ type HierarchyItemMenuProps = {
   };
   joined: boolean;
   powerLevels?: IPowerLevels;
-  creators?: Set<string>;
   canEditChild: boolean;
   pinned?: boolean;
   onTogglePin?: (roomId: string) => void;
@@ -205,19 +203,17 @@ export function HierarchyItemMenu({
   item,
   joined,
   powerLevels,
-  creators,
   canEditChild,
   pinned,
   onTogglePin,
 }: HierarchyItemMenuProps) {
-  const mx = useMatrixClient();
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
 
   const canInvite = (): boolean => {
     if (!powerLevels) return false;
-    const permissions = getRoomPermissionsAPI(creators ?? new Set<string>(), powerLevels);
+    const permissions = getRoomPermissionsAPI(powerLevels);
 
-    return permissions.action('invite', mx.getSafeUserId());
+    return permissions.action('invite');
   };
 
   const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {

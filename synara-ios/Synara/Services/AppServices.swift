@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import SynaraCore
 import UserNotifications
 
 enum SessionState: Equatable {
@@ -113,8 +114,8 @@ protocol MatrixClientServicing: AnyObject {
     func threepidEmails() async -> [String]
     func deleteThreepidEmail(_ address: String) async -> Bool
     func requestThreepidEmailToken(_ email: String) async -> Bool
-    func addThreepidEmail() async -> String?
-    func addThreepidEmailPassword(_ password: String) async -> String?
+    func addThreepidEmail() async -> ThreepidAddStatusDto?
+    func addThreepidEmailPassword(_ password: String) async -> ThreepidAddStatusDto?
 }
 
 struct SynaraPushRuleMentions {
@@ -242,8 +243,8 @@ extension MatrixClientServicing {
         _ = email
         return false
     }
-    func addThreepidEmail() async -> String? { nil }
-    func addThreepidEmailPassword(_ password: String) async -> String? {
+    func addThreepidEmail() async -> ThreepidAddStatusDto? { nil }
+    func addThreepidEmailPassword(_ password: String) async -> ThreepidAddStatusDto? {
         _ = password
         return nil
     }
@@ -607,9 +608,86 @@ protocol CryptoStatusServicing {
     func sessionDeviceUpdates() -> AsyncStream<Void>
     func signOutSession(deviceId: String, password: String) async -> CryptoActionResult
     func dismissVerification(flowID: String) async -> CryptoActionResult
+    /// Members of `roomID` whose cryptographic identity changed. Empty when none or unavailable.
+    func roomIdentityWarnings(roomID: String) async -> [RoomIdentityWarning]
+    /// Acknowledge a changed identity; returns the room's remaining warnings, or nil on failure.
+    func resolveRoomIdentityWarning(
+        roomID: String,
+        warning: RoomIdentityWarning
+    ) async -> [RoomIdentityWarning]?
+}
+
+/// A room member whose cryptographic identity changed, as Core projects it.
+struct RoomIdentityWarning: Equatable, Identifiable {
+    enum Kind: String, Equatable {
+        /// A previously verified identity changed.
+        case verificationViolation = "verification_violation"
+        /// An unverified identity changed since it was first seen.
+        case pinViolation = "pin_violation"
+    }
+
+    let userID: String
+    let displayName: String?
+    let kind: Kind
+
+    var id: String { userID }
+
+    init(userID: String, displayName: String?, kind: Kind) {
+        self.userID = userID
+        self.displayName = displayName
+        self.kind = kind
+    }
+
+    init?(userID: String, displayName: String?, kind coreKind: IdentityWarningKindDto) {
+        guard userID.hasPrefix("@") else { return nil }
+        let kind: Kind
+        switch coreKind {
+        case .verificationViolation:
+            kind = .verificationViolation
+        case .pinViolation:
+            kind = .pinViolation
+        }
+        let trimmed = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.init(userID: userID, displayName: trimmed?.isEmpty == false ? trimmed : nil, kind: kind)
+    }
+
+    /// Core action for the banner's button.
+    var resolveAction: IdentityWarningActionDto {
+        kind == .verificationViolation ? .withdrawVerification : .dismiss
+    }
+
+    var actionTitle: String {
+        kind == .verificationViolation ? "Withdraw verification" : "Dismiss"
+    }
+
+    var message: String {
+        let name = displayName ?? userID
+        return kind == .verificationViolation
+            ? "\(name)'s verified identity changed."
+            : "\(name)'s identity changed."
+    }
+
+    /// The most serious warning first: verification violations outrank pin violations.
+    static func banner(for warnings: [RoomIdentityWarning]) -> RoomIdentityWarning? {
+        warnings.first { $0.kind == .verificationViolation } ?? warnings.first
+    }
 }
 
 extension CryptoStatusServicing {
+    func roomIdentityWarnings(roomID: String) async -> [RoomIdentityWarning] {
+        _ = roomID
+        return []
+    }
+
+    func resolveRoomIdentityWarning(
+        roomID: String,
+        warning: RoomIdentityWarning
+    ) async -> [RoomIdentityWarning]? {
+        _ = roomID
+        _ = warning
+        return nil
+    }
+
     func requestDeviceVerification() async -> CryptoActionResult {
         await requestDeviceVerification(deviceId: nil)
     }
@@ -736,6 +814,8 @@ struct RoomPowerLevelSummary: Equatable {
     let canEditTopic: Bool
     let canEditAvatar: Bool
     let canEditPowerLevels: Bool
+    /// Room creators (room v12+) outrank every integer level.
+    var isCreator: Bool = false
 
     static let fullPower = RoomPowerLevelSummary(
         ownUserLevel: 100,
@@ -763,7 +843,7 @@ struct RoomPowerLevelSummary: Equatable {
 struct RoomMemberSummary: Equatable, Identifiable {
     let userID: String
     let displayName: String?
-    let membership: String
+    let membership: RoomMembershipDto
     let powerLevel: Int
 
     var id: String { userID }
@@ -775,9 +855,9 @@ struct RoomMemberSummary: Equatable, Identifiable {
 
     static func previewMembers() -> [RoomMemberSummary] {
         [
-            RoomMemberSummary(userID: "@alice:matrix.org", displayName: "Alice", membership: "join", powerLevel: 100),
-            RoomMemberSummary(userID: "@bob:matrix.org", displayName: "Bob", membership: "join", powerLevel: 0),
-            RoomMemberSummary(userID: "@carol:matrix.org", displayName: "Carol", membership: "leave", powerLevel: 0),
+            RoomMemberSummary(userID: "@alice:matrix.org", displayName: "Alice", membership: .join, powerLevel: 100),
+            RoomMemberSummary(userID: "@bob:matrix.org", displayName: "Bob", membership: .join, powerLevel: 0),
+            RoomMemberSummary(userID: "@carol:matrix.org", displayName: "Carol", membership: .leave, powerLevel: 0),
         ]
     }
 }
@@ -875,6 +955,7 @@ protocol SettingsStoring {
 final class AppSessionStore: ObservableObject {
     @Published private(set) var currentState: SessionState
     @Published private(set) var sessionEpoch: Int = 0
+    @Published private(set) var sessionExpiredNotice = false
     let secureStore: SecureSessionStoring
     private(set) var restoreFailureLogDescription: String?
 
@@ -927,8 +1008,14 @@ final class AppSessionStore: ObservableObject {
     @MainActor
     func completeLogin(_ session: AuthenticatedSession) throws {
         try secureStore.save(session)
+        sessionExpiredNotice = false
         sessionEpoch += 1
         currentState = .signedIn(session)
+    }
+
+    @MainActor
+    func noteSessionExpired() {
+        sessionExpiredNotice = true
     }
 
     @MainActor
@@ -1172,7 +1259,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             throw RoomManagementError.invalidMatrixID
         }
         invitedUsers.append((roomID: roomID, userID: trimmedUserID))
-        updateMember(roomID: roomID, userID: trimmedUserID, membership: "invite")
+        updateMember(roomID: roomID, userID: trimmedUserID, membership: .invite)
     }
 
     func kickUser(roomID: String, userID: String, reason: String?) async throws {
@@ -1181,7 +1268,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             throw RoomManagementError.invalidMatrixID
         }
         kickedUsers.append((roomID: roomID, userID: trimmedUserID, reason: reason))
-        updateMember(roomID: roomID, userID: trimmedUserID, membership: "leave")
+        updateMember(roomID: roomID, userID: trimmedUserID, membership: .leave)
     }
 
     func banUser(roomID: String, userID: String, reason: String?) async throws {
@@ -1190,7 +1277,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             throw RoomManagementError.invalidMatrixID
         }
         bannedUsers.append((roomID: roomID, userID: trimmedUserID, reason: reason))
-        updateMember(roomID: roomID, userID: trimmedUserID, membership: "ban")
+        updateMember(roomID: roomID, userID: trimmedUserID, membership: .ban)
     }
 
     func unbanUser(roomID: String, userID: String) async throws {
@@ -1199,7 +1286,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             throw RoomManagementError.invalidMatrixID
         }
         unbannedUsers.append((roomID: roomID, userID: trimmedUserID))
-        updateMember(roomID: roomID, userID: trimmedUserID, membership: "leave")
+        updateMember(roomID: roomID, userID: trimmedUserID, membership: .leave)
     }
 
     func setMemberPowerLevel(roomID: String, userID: String, powerLevel: Int) async throws {
@@ -1342,7 +1429,7 @@ final class MockRoomManagementService: RoomManagementServicing {
     private func updateMember(
         roomID: String,
         userID: String,
-        membership: String? = nil,
+        membership: RoomMembershipDto? = nil,
         powerLevel: Int? = nil
     ) {
         let existing = storedDetails(roomID: roomID)
@@ -1362,7 +1449,7 @@ final class MockRoomManagementService: RoomManagementServicing {
                 RoomMemberSummary(
                     userID: userID,
                     displayName: nil,
-                    membership: membership ?? "join",
+                    membership: membership ?? .join,
                     powerLevel: powerLevel ?? 0
                 )
             )
@@ -1374,7 +1461,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             aliases: existing.aliases,
             encryptionStatus: existing.encryptionStatus,
             isPublic: existing.isPublic,
-            memberCount: members.filter { $0.membership == "join" }.count,
+            memberCount: members.filter { $0.membership == .join }.count,
             canInvite: existing.canInvite,
             canEditName: existing.canEditName,
             canEditTopic: existing.canEditTopic,

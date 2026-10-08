@@ -1,9 +1,6 @@
 import { clearSessionExpiryNotice } from '../app/utils/sessionExpiry';
-import {
-  createNativeMatrixClient,
-  type NativeMatrixClient,
-  type NativeSessionSnapshot,
-} from '../app/features/native-client/nativeClientFacade';
+import { nativeSession, type NativeSession } from '../app/native/nativeSession';
+import type { NativeSessionSnapshot } from '../app/native/nativeWire';
 import { clearNavToActivePathStore } from '../app/state/navToActivePath';
 import {
   clearPendingFreshLoginIdentity,
@@ -17,27 +14,17 @@ import {
 } from '../app/state/sessions';
 import { clearNotificationCaches } from '../app/notifications/notificationCaches';
 import { recordClientDiagnostic } from '../app/utils/clientDiagnostics';
-import { invokeDesktopWithAvailability, type DesktopInvokeResult } from '../app/utils/desktop';
+import { invokeDesktopWithAvailability } from '../app/utils/desktop';
 
+import { getSafeMyUserId } from '../app/state/nativeIdentity';
 /**
- * F6c — renderer client boot on the native facade (Option A + D1C).
- * The js-sdk `createClient`/IndexedDB stores/token refresh are gone: the
- * renderer cedes token custody entirely to native (D1C), which owns refresh,
- * sync, session, and crypto. `initClient` returns the facade; all renderer
- * reads flow through the injected command bridge.
- *
- * The operator dropped the web fallback (native macOS/Linux + iOS only), so
- * the facade is the sole client construction path.
+ * Renderer session boot. Native owns the Matrix client, token refresh, sync,
+ * session and crypto; the renderer hydrates `native/nativeSession` from native
+ * commands and reads through it.
  */
 
-export type MatrixClient = NativeMatrixClient;
+export type MatrixClient = NativeSession;
 export type MatrixClientSession = Session;
-
-/** Matches the facade's NativeInvoke (DesktopInvokeResult-shaped). */
-type NativeInvoke = (
-  command: string,
-  args?: Record<string, unknown>
-) => Promise<DesktopInvokeResult<unknown>>;
 
 /** Duck-typed MatrixError: an Error carrying a string `errcode`. */
 export const isMatrixErrorLike = (error: unknown): error is Error & { errcode?: string } =>
@@ -52,14 +39,9 @@ export type ProactiveTokenRefreshHandle = {
 
 const noOpRefreshHandle: ProactiveTokenRefreshHandle = { dispose: () => undefined };
 
-/** Native invoke for the facade (fail-closed to unavailable off-desktop). */
-const nativeInvoke: NativeInvoke = (command, args) => invokeDesktopWithAvailability(command, args);
-
-const createMatrixClient = (): MatrixClient => createNativeMatrixClient(nativeInvoke);
-
 const startMatrixClient = async (): Promise<MatrixClient> => {
   const startupStartedAtMs = performance.now();
-  const mx = createMatrixClient();
+  const mx = nativeSession();
   recordClientDiagnostic('session', 'matrix-client.initialization-started', {
     hasRefreshToken: false,
     fallbackSdkStores: false,
@@ -108,9 +90,9 @@ export const initClient = async (
     });
     if (
       freshLogin &&
-      client.getUserId() === session.userId &&
-      client.getDeviceId() === session.deviceId &&
-      client.getBaseUrl() === session.baseUrl &&
+      client.getIdentity().userId === session.userId &&
+      client.getIdentity().deviceId === session.deviceId &&
+      client.getIdentity().homeserverUrl === session.baseUrl &&
       client.getSessionGeneration() !== undefined &&
       String(client.getSessionGeneration()) === session.sessionGeneration
     ) {
@@ -127,9 +109,9 @@ export const initClient = async (
   }
 };
 
-/** Start sync on the facade (native sync is already live; this hydrates reads). */
-export const startClient = async (mx: MatrixClient): Promise<void> => {
-  await mx.startClient();
+/** Native sync is already live; this hydrates the renderer's cached reads. */
+export const startClient = async (session: MatrixClient): Promise<void> => {
+  await session.start();
 };
 
 /** Try every renderer cleanup step even if a listener or browser storage fails. */
@@ -143,11 +125,11 @@ const finishRendererCleanup = async (steps: Array<() => void | Promise<void>>) =
   }
 };
 
-export const reloadApplication = async (mx: MatrixClient) => {
-  const userId = mx.getSafeUserId();
-  // stopClient only clears renderer cache/listeners; no native stop or wipe is invoked.
+export const reloadApplication = async () => {
+  const userId = getSafeMyUserId();
+  // stop() only clears renderer caches; no native stop or wipe is invoked.
   await finishRendererCleanup([
-    () => mx.stopClient(),
+    () => nativeSession().stop(),
     () => clearNavToActivePathStore(userId),
     clearNotificationCaches,
   ]);
@@ -195,6 +177,28 @@ export const performLogout = async (
     clearNotificationCaches,
   ]);
   deps.reload();
+};
+
+/** Fixed dialog copy when native logout rejects or does not report `logged_out`. */
+export const LOGOUT_RETRY_COPY = 'Local sign out did not complete. Retry to finish local cleanup.';
+
+export type LogoutAttemptOutcome = 'logged_out' | 'retry';
+
+/**
+ * One user-initiated Sign Out. A rejected or incomplete native logout keeps
+ * the signed-in screen and resolves `retry`; it is never swallowed silently.
+ * Native error text is not surfaced, only the fixed retry outcome.
+ */
+export const attemptLogout = async (
+  mx?: MatrixClient,
+  options?: Parameters<typeof performLogout>[1]
+): Promise<LogoutAttemptOutcome> => {
+  try {
+    await performLogout(mx, options);
+    return 'logged_out';
+  } catch {
+    return 'retry';
+  }
 };
 
 export const logoutClient = async (mx: MatrixClient) => performLogout(mx);

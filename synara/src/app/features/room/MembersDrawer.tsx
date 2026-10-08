@@ -27,14 +27,12 @@ import {
   TooltipProvider,
   config,
 } from 'folds';
-import type { MatrixClientReading } from '../../utils/room';
 import type { EventedRoomReading } from '../../utils/roomEvents';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import classNames from 'classnames';
 
 import * as css from './MembersDrawer.css';
 import * as depthCss from '../../styles/Depth.css';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import {
   SearchItemStrGetter,
@@ -118,7 +116,6 @@ function MemberDrawerHeader({ joinedMemberCount }: MemberDrawerHeaderProps) {
 }
 
 type MemberItemProps = {
-  mx: MatrixClientReading;
   useAuthentication: boolean;
   room: EventedRoomReading;
   member: RoomMemberListItem;
@@ -127,7 +124,6 @@ type MemberItemProps = {
   typing?: boolean;
 };
 function MemberItem({
-  mx,
   useAuthentication,
   room,
   member,
@@ -143,7 +139,7 @@ function MemberItem({
     member.userId;
   const avatarMxcUrl = !('getMxcAvatarUrl' in member) ? member.avatarUrl : member.getMxcAvatarUrl();
   const avatarUrl = avatarMxcUrl
-    ? resolveMatrixThumbnailUrl(mx, avatarMxcUrl, 100, { useAuthentication })
+    ? resolveMatrixThumbnailUrl(avatarMxcUrl, 100, { useAuthentication })
     : undefined;
 
   return (
@@ -198,10 +194,9 @@ type MembersDrawerProps = {
   room: EventedRoomReading;
 };
 export function MembersDrawer({ room }: MembersDrawerProps) {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const nativeSession = isSynaraDesktop() && getSessionBootstrapResult().source === 'native';
-  const memberSnapshot = useRoomMembers(mx, room.roomId, nativeSession);
+  const memberSnapshot = useRoomMembers(room.roomId, nativeSession);
   const members = memberSnapshot ?? EMPTY_ROOM_MEMBERS;
   const joinedMemberCount = nativeSession
     ? memberSnapshot?.filter((member) => member.membership === Membership.Join).length
@@ -453,7 +448,6 @@ export function MembersDrawer({ room }: MembersDrawerProps) {
                       ref={virtualizer.measureElement}
                     >
                       <MemberItem
-                        mx={mx}
                         useAuthentication={useAuthentication}
                         room={room}
                         member={tagOrMember}

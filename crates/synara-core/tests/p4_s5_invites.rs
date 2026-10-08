@@ -52,7 +52,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn invites_surface_exposes_only_the_registered_snapshot_command() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("invites_snapshot"));
     assert!(!udl.contains("matrix_invites_decline"));
     assert!(!udl.contains("matrix_invites_report_spam"));
@@ -70,7 +70,10 @@ fn invites_surface_exposes_only_the_registered_snapshot_command() {
         .expect("SharedCore");
     assert!(shared_core.contains("invites_snapshot"));
     assert!(shared_core.contains("room_list_snapshot"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
 }
 
 #[test]

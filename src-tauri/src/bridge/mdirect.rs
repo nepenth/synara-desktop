@@ -1,26 +1,19 @@
 //! Desktop bridges for `m.direct` through `Core::command`.
 
 use synara_core::app::account_data::{NativeMDirectMutationResult, NativeMDirectSnapshot};
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
-
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn mdirect_snapshot(
     core: &Core,
 ) -> Result<NativeMDirectSnapshot, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: "matrix_mdirect_snapshot".to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::Value::Null,
-        })
+        .mdirect_snapshot()
         .await
         .map_err(map_mdirect_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| mdirect_response_error())
+    Ok(response)
 }
 
 pub(crate) async fn mdirect_add(
@@ -29,18 +22,10 @@ pub(crate) async fn mdirect_add(
     user_id: String,
 ) -> Result<NativeMDirectMutationResult, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: "matrix_mdirect_add".to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({
-                "roomId": room_id,
-                "userId": user_id,
-            }),
-        })
+        .mdirect_add(synara_core::core_api::MatrixMDirectAddRequest { room_id, user_id })
         .await
         .map_err(map_mdirect_core_error)?;
-    parse_mutation(response.payload)
+    Ok(response)
 }
 
 pub(crate) async fn mdirect_remove(
@@ -48,34 +33,10 @@ pub(crate) async fn mdirect_remove(
     room_id: String,
 ) -> Result<NativeMDirectMutationResult, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: "matrix_mdirect_remove".to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({ "roomId": room_id }),
-        })
+        .mdirect_remove(synara_core::core_api::MatrixMDirectRemoveRequest { room_id })
         .await
         .map_err(map_mdirect_core_error)?;
-    parse_mutation(response.payload)
-}
-
-fn parse_mutation(
-    payload: serde_json::Value,
-) -> Result<NativeMDirectMutationResult, MatrixAuthCommandError> {
-    #[derive(serde::Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct Wire {
-        room_id: String,
-        status: String,
-    }
-    let wire: Wire = serde_json::from_value(payload).map_err(|_| mdirect_response_error())?;
-    if wire.status != "updated" {
-        return Err(mdirect_response_error());
-    }
-    Ok(NativeMDirectMutationResult {
-        room_id: wire.room_id,
-        status: "updated",
-    })
+    Ok(response)
 }
 
 fn map_mdirect_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -108,12 +69,4 @@ fn map_mdirect_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
             )
         }
     }
-}
-
-fn mdirect_response_error() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "The native Matrix direct-room map is unavailable.",
-        "v-rooms.5-mdirect-fetch-failed",
-    )
 }

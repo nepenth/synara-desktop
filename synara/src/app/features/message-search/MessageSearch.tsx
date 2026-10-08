@@ -5,7 +5,6 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { PageHero, PageHeroEmpty, PageHeroSection } from '../../components/page';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { _SearchPathSearchParams } from '../../pages/paths';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
@@ -38,6 +37,7 @@ import {
   listRoomAttachments,
 } from './roomMediaListing';
 
+import { getNativeRoom } from '../../native/nativeSession';
 const useSearchPathSearchParams = (searchParams: URLSearchParams): _SearchPathSearchParams =>
   useMemo(
     () => ({
@@ -67,9 +67,8 @@ export function MessageSearch({
   senders,
   scrollRef,
 }: MessageSearchProps) {
-  const mx = useMatrixClient();
   const mDirects = useAtomValue(mDirectAtom);
-  const allRooms = useRooms(mx, allRoomsAtom, mDirects);
+  const allRooms = useRooms(allRoomsAtom, mDirects);
   const [mediaAutoLoad] = useSetting(settingsAtom, 'mediaAutoLoad');
   const [legacyUsernameColor] = useSetting(settingsAtom, 'legacyUsernameColor');
   const [indexedMessageSearch] = useSetting(settingsAtom, 'indexedMessageSearch');
@@ -433,7 +432,7 @@ export function MessageSearch({
             {vItems.map((vItem) => {
               const group = groups[vItem.index];
               if (!group) return null;
-              const groupRoom = mx.getRoom(group.roomId);
+              const groupRoom = getNativeRoom(group.roomId);
               if (!groupRoom) return null;
 
               return (

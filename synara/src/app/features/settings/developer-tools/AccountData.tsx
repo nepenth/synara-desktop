@@ -1,11 +1,10 @@
-import React, { useCallback, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Box, Text, Icon, Icons, Button, MenuItem } from 'folds';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { useAccountDataCallback } from '../../../hooks/useAccountDataCallback';
 import { CutoutCard } from '../../../components/cutout-card';
+import { listNativeAccountDataTypes } from '../../../native/nativeAccountData';
 
 type AccountDataProps = {
   expand: boolean;
@@ -13,17 +12,19 @@ type AccountDataProps = {
   onSelect: (type: string | null) => void;
 };
 export function AccountData({ expand, onExpandToggle, onSelect }: AccountDataProps) {
-  const mx = useMatrixClient();
-  const [accountDataTypes, setAccountDataKeys] = useState(() =>
-    Array.from(mx.store.accountData.keys())
-  );
-
-  useAccountDataCallback(
-    mx,
-    useCallback(() => {
-      setAccountDataKeys(Array.from(mx.store.accountData.keys()));
-    }, [mx])
-  );
+  const [accountDataTypes, setAccountDataTypes] = useState<string[]>([]);
+  useEffect(() => {
+    if (!expand) return undefined;
+    let cancelled = false;
+    void listNativeAccountDataTypes()
+      .then((types) => {
+        if (!cancelled) setAccountDataTypes(types);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [expand]);
 
   return (
     <Box direction="Column" gap="100">
@@ -76,7 +77,7 @@ export function AccountData({ expand, onExpandToggle, onSelect }: AccountDataPro
                   </Text>
                 </Box>
               </MenuItem>
-              {accountDataTypes.sort().map((type) => (
+              {accountDataTypes.map((type) => (
                 <MenuItem
                   key={type}
                   className={SettingsQuietControl}

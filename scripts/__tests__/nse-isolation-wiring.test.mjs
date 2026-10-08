@@ -29,7 +29,14 @@ function fixture(t) {
   const inputs = [...source.matchAll(/read\(\s*"([^"]+)"\s*,?\s*\)/g)].map(
     (match) => match[1]
   );
-  inputs.push(ciBuildPath, productionCheckerPath, checkerPath);
+  inputs.push(
+    ciBuildPath,
+    productionCheckerPath,
+    checkerPath,
+    // The checker renders the FFI surface from the pinned Swift golden.
+    "scripts/lib/ffi-surface.mjs",
+    "synara-ios/SynaraCore/api/synara_nse_core.swift-api.txt"
+  );
   for (const path of new Set(inputs)) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
     copyFileSync(join(repoRoot, path), join(root, path));
@@ -122,7 +129,6 @@ test("every Apple workflow entrypoint requires the matching LLVM component", (t)
   for (const file of [
     ".github/workflows/ci.yml",
     ".github/workflows/release.yml",
-    ".github/workflows/ios-skeleton.yml",
   ]) {
     const isolated = fixture(t);
     const original = readFileSync(join(isolated.root, file), "utf8");

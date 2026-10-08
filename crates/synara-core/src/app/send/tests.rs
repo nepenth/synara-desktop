@@ -325,6 +325,40 @@ fn attachment_forbids_data_and_tokens() {
 }
 
 #[test]
+fn in_memory_mark_failed_does_not_classify_a_relaunched_sdk_echo_as_sent() {
+    let mut q = SendQueue::new(1);
+    let id = q
+        .enqueue_text("!r:example.org", "ping")
+        .unwrap()
+        .local_txn_id
+        .clone();
+    q.mark_failed(&id, "d0.4-send-queue-timeout").unwrap();
+    assert_eq!(q.get(&id).unwrap().state, LocalEchoState::Failed);
+    drop(q);
+
+    let relaunch = SendQueue::new(2);
+    assert!(
+        relaunch.is_empty(),
+        "a new NativeTimelineOwner starts with an empty product queue"
+    );
+    let projected = crate::app::timeline::project_local_echo_status(
+        Some(&matrix_sdk_ui::timeline::EventSendState::SendingFailed {
+            error: std::sync::Arc::new(matrix_sdk::Error::Io(std::io::Error::other(
+                "untrusted-send-failure-detail",
+            ))),
+            is_recoverable: false,
+        }),
+        None,
+    );
+    assert_eq!(projected.state, Some(LocalEchoState::Wedged));
+    assert!(projected.event_id.is_none());
+    assert_ne!(projected.state, Some(LocalEchoState::Sent));
+    let rendered = format!("{projected:?}");
+    assert!(!rendered.contains("untrusted-send-failure-detail"));
+    assert!(!rendered.contains("ping"));
+}
+
+#[test]
 fn attachment_kinds() {
     for k in AttachmentKind::ALL {
         assert!(!k.as_str().is_empty());

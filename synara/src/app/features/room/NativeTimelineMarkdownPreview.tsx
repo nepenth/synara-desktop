@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import FocusTrap from 'focus-trap-react';
 import {
   Box,
@@ -26,7 +26,7 @@ import {
   saveNativeTimelineFileAttachment,
 } from './nativeTimelineFileSave';
 import {
-  projectNativeTimelineMarkdownPreview,
+  renderNativeTimelineMarkdownPreview,
   type NativeTimelineFilePreviewTarget,
 } from './nativeTimelineFilePreview';
 import * as htmlCss from './nativeTimelineHtml.css';
@@ -75,10 +75,19 @@ export function NativeTimelineMarkdownPreview({
     };
   }, [target.handleId, target.mimeType]);
 
-  const projection = useMemo(
-    () => (status.kind === 'ready' ? projectNativeTimelineMarkdownPreview(status.text) : undefined),
-    [status]
-  );
+  const [projection, setProjection] =
+    useState<Awaited<ReturnType<typeof renderNativeTimelineMarkdownPreview>>>();
+  useEffect(() => {
+    setProjection(undefined);
+    if (status.kind !== 'ready') return undefined;
+    let disposed = false;
+    void renderNativeTimelineMarkdownPreview(status.text).then((next) => {
+      if (!disposed) setProjection(next);
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [status]);
 
   const download = () => {
     if (busySave) return;

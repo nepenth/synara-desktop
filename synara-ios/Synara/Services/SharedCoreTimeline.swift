@@ -34,7 +34,7 @@ enum SharedCoreTimeline {
     static func timelinePaginate(
         core: SharedCore,
         streamId: String,
-        direction: String
+        direction: TimelineDirectionDto
     ) async throws -> TimelineSnapshotDto {
         try await core.timelinePaginate(streamId: streamId, direction: direction)
     }

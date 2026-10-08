@@ -4,8 +4,8 @@ import {
   approvalDecisionFromActionId,
 } from '../approvals/approvalDecisionEvents';
 import { invokeDesktopWithAvailability, type DesktopInvokeResult } from '../../utils/desktop';
-
-export type NativeReactionMutation = 'added' | 'removed' | 'already_present' | 'redacted';
+import type { NativeReactionMutation } from '../matrix-dto/generated';
+export type { NativeReactionMutation } from '../matrix-dto/generated';
 
 export type NativeReactionReadback = {
   key: string;

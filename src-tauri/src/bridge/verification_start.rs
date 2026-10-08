@@ -5,29 +5,21 @@
 //! existing Tauri error shape. React still invokes `matrix_verification_start`.
 
 use synara_core::app::verification::NativeVerificationRequest;
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
 use crate::matrix::verification::live::map_verification_error;
-
-const VERIFICATION_START_COMMAND: &str = "matrix_verification_start";
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn verification_start(
     core: &Core,
     device_id: Option<String>,
 ) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: VERIFICATION_START_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({ "deviceId": device_id }),
-        })
+        .verification_start(synara_core::core_api::MatrixVerificationStartRequest { device_id })
         .await
         .map_err(map_verification_start_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| verification_start_response_error())
+    Ok(response)
 }
 
 fn map_verification_start_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -64,8 +56,4 @@ fn map_verification_start_core_error(error: MatrixIpcError) -> MatrixAuthCommand
             _ => map_verification_error("v-crypto.1-own-request-failed"),
         },
     }
-}
-
-fn verification_start_response_error() -> MatrixAuthCommandError {
-    map_verification_error("v-crypto.1-own-request-failed")
 }

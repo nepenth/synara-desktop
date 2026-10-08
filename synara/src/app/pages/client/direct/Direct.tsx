@@ -25,7 +25,6 @@ import {
 import { useSharedScrollVirtualizer } from '../../../hooks/useSharedScrollVirtualizer';
 import FocusTrap from 'focus-trap-react';
 import { useNavigate } from 'react-router-dom';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { factoryRoomIdByActivity } from '../../../utils/sort';
 import {
   NavButton,
@@ -57,16 +56,16 @@ import {
 } from '../../../hooks/useRoomsNotificationPreferences';
 import { useDirectCreateSelected } from '../../../hooks/router/useDirectSelected';
 
+import { getNativeRoom } from '../../../native/nativeSession';
 type DirectMenuProps = {
   requestClose: () => void;
 };
 const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }, ref) => {
-  const mx = useMatrixClient();
   const { roomIds: orphanRooms, unread } = useNativeNavigationScope('direct');
 
   const handleMarkAsRead = () => {
     if (!unread) return;
-    orphanRooms.forEach((rId) => markAsReadFromExplicitUserActionInBackground(mx, rId));
+    orphanRooms.forEach((rId) => markAsReadFromExplicitUserActionInBackground(rId));
     requestClose();
   };
 
@@ -172,7 +171,6 @@ function DirectEmpty() {
 
 const DEFAULT_CATEGORY_ID = makeNavCategoryId('direct', 'direct');
 export function Direct() {
-  const mx = useMatrixClient();
   useNavToActivePathMapper('direct');
   const scrollRef = useRef<HTMLDivElement>(null);
   const directs = useDirectRooms();
@@ -187,12 +185,12 @@ export function Direct() {
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 
   const sortedDirects = useMemo(() => {
-    const items = Array.from(directs).sort(factoryRoomIdByActivity(mx));
+    const items = Array.from(directs).sort(factoryRoomIdByActivity());
     if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
     }
     return items;
-  }, [mx, directs, closedCategories, roomToUnread, selectedRoomId]);
+  }, [directs, closedCategories, roomToUnread, selectedRoomId]);
 
   const getRoomKey = useCallback((index: number) => sortedDirects[index], [sortedDirects]);
   const { virtualizer, listRef, scrollMargin } = useSharedScrollVirtualizer(
@@ -250,7 +248,7 @@ export function Direct() {
               >
                 {virtualizer.getVirtualItems().map((vItem) => {
                   const roomId = sortedDirects[vItem.index];
-                  const room = mx.getRoom(roomId);
+                  const room = getNativeRoom(roomId);
                   if (!room) return null;
                   const selected = selectedRoomId === roomId;
 
@@ -264,7 +262,7 @@ export function Direct() {
                       <RoomNavItem
                         room={room}
                         selected={selected}
-                        linkPath={getDirectRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
+                        linkPath={getDirectRoomPath(getCanonicalAliasOrRoomId(roomId))}
                         notificationMode={getRoomNotificationMode(
                           notificationPreferences,
                           room.roomId

@@ -1,5 +1,10 @@
 import type { DesktopInvokeResult } from '../../utils/desktop';
 import { hasForbiddenWireFields, isObject } from '../matrix-dto/parseUtil';
+import type { NativeSpaceHierarchyRoom as WireNativeSpaceHierarchyRoom } from '../matrix-dto/generated';
+import type { NullsToOptional } from '../matrix-dto/wireTypes';
+
+/** Parsed form of Core's `NativeSpaceHierarchyRoom`: absent instead of `null`. */
+export type NativeSpaceHierarchyRoom = NullsToOptional<WireNativeSpaceHierarchyRoom>;
 
 const unavailableMessage = 'Native Matrix space hierarchy is unavailable.';
 const MAX_ROOM_COUNT = 5_000;
@@ -203,20 +208,6 @@ const parseSnapshot = (value: unknown, sessionGeneration: number): NativeSpaceHi
     roomIds.add(room.roomId);
   }
   return { sessionGeneration, rooms };
-};
-
-export type NativeSpaceHierarchyRoom = {
-  roomId: string;
-  name?: string;
-  canonicalAlias?: string;
-  topic?: string;
-  avatarUrl?: string;
-  roomType?: string;
-  numJoinedMembers: number;
-  joinRule: string;
-  allowedRoomIds: string[];
-  worldReadable: boolean;
-  guestCanJoin: boolean;
 };
 
 export type NativeSpaceHierarchySnapshot = {

@@ -1,6 +1,7 @@
 import { atom, useAtomValue, useSetAtom } from 'jotai';
 import { useEffect } from 'react';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../utils/desktop';
+import { startRoomListUpdateDrivenPoll } from '../utils/nativeRoomListUpdates';
 
 export type MDirectAction = {
   type: 'INITIALIZE' | 'PUT';
@@ -91,10 +92,10 @@ export const useBindMDirectAtom = (mDirect: typeof mDirectAtom = mDirectAtom) =>
     }
 
     void refresh();
-    const pollId = window.setInterval(() => void refresh(), 1_000);
+    const stopPolling = startRoomListUpdateDrivenPoll(() => void refresh());
     return () => {
       disposed = true;
-      window.clearInterval(pollId);
+      stopPolling();
     };
   }, [setMDirect, setMDirectUsers]);
 };

@@ -22,8 +22,8 @@ enum SharedCoreTimelineReadState {
     static func timelineSetReadState(
         core: SharedCore,
         streamId: String,
-        action: String,
-        intent: String,
+        action: TimelineReadActionDto,
+        intent: TimelineReadIntentDto,
         observedLiveTailEventId: String? = nil
     ) async throws -> TimelineReadStateDto {
         try await core.timelineSetReadState(

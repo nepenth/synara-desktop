@@ -58,7 +58,6 @@ import {
   writeRoomListSort,
   type RoomListSort,
 } from './homeRoomList';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useNativeRoomListSnapshot } from '../../../state/room-list/roomList';
 import { VirtualTile } from '../../../components/virtualizer';
 import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
@@ -81,16 +80,16 @@ import * as depthCss from '../../../styles/Depth.css';
 import { getActiveSession } from '../../../state/sessionBootstrap';
 import { homeserverDisplayName } from './homeIdentity';
 
+import { getNativeRoom } from '../../../native/nativeSession';
 type HomeMenuProps = {
   requestClose: () => void;
 };
 const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, ref) => {
   const { roomIds: orphanRooms, unread } = useNativeNavigationScope('home');
-  const mx = useMatrixClient();
 
   const handleMarkAsRead = () => {
     if (!unread) return;
-    orphanRooms.forEach((rId) => markAsReadFromExplicitUserActionInBackground(mx, rId));
+    orphanRooms.forEach((rId) => markAsReadFromExplicitUserActionInBackground(rId));
     requestClose();
   };
 
@@ -297,7 +296,6 @@ function HomeEmpty() {
 const DEFAULT_CATEGORY_ID = makeNavCategoryId('home', 'room');
 
 export function Home() {
-  const mx = useMatrixClient();
   useNavToActivePathMapper('home');
   const scrollRef = useRef<HTMLDivElement>(null);
   const rooms = useHomeRooms();
@@ -321,8 +319,8 @@ export function Home() {
     readRoomListSort(sortStorage, 'rooms')
   );
   const favoriteIds = useMemo(
-    () => favoriteRoomIdSet(nativeRoomList.rooms),
-    [nativeRoomList.rooms]
+    () => favoriteRoomIdSet(nativeRoomList.presentation),
+    [nativeRoomList.presentation]
   );
   const { favoriteRoomIds, remainingRoomIds } = useMemo(
     () => partitionHomeRooms(rooms, favoriteIds),
@@ -330,19 +328,19 @@ export function Home() {
   );
 
   const sortedFavoriteRoomIds = useMemo(
-    () => sortHomeRoomIds(favoriteRoomIds, nativeRoomList.rooms, favoriteSort),
-    [favoriteRoomIds, nativeRoomList.rooms, favoriteSort]
+    () => sortHomeRoomIds(favoriteRoomIds, nativeRoomList.presentation, favoriteSort),
+    [favoriteRoomIds, nativeRoomList.presentation, favoriteSort]
   );
 
   const mainRoomIds = useMemo(() => {
-    const items = sortHomeRoomIds(remainingRoomIds, nativeRoomList.rooms, roomsSort);
+    const items = sortHomeRoomIds(remainingRoomIds, nativeRoomList.presentation, roomsSort);
     if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
     }
     return items;
   }, [
     remainingRoomIds,
-    nativeRoomList.rooms,
+    nativeRoomList.presentation,
     roomsSort,
     closedCategories,
     roomToUnread,
@@ -458,7 +456,7 @@ export function Home() {
                   </Box>
                 </NavCategoryHeader>
                 {sortedFavoriteRoomIds.map((roomId) => {
-                  const room = mx.getRoom(roomId);
+                  const room = getNativeRoom(roomId);
                   if (!room) return null;
                   const selected = selectedRoomId === roomId;
                   return (
@@ -466,7 +464,7 @@ export function Home() {
                       key={roomId}
                       room={room}
                       selected={selected}
-                      linkPath={getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
+                      linkPath={getHomeRoomPath(getCanonicalAliasOrRoomId(roomId))}
                       notificationMode={getRoomNotificationMode(
                         notificationPreferences,
                         room.roomId
@@ -504,7 +502,7 @@ export function Home() {
               >
                 {virtualizer.getVirtualItems().map((vItem) => {
                   const roomId = mainRoomIds[vItem.index];
-                  const room = mx.getRoom(roomId);
+                  const room = getNativeRoom(roomId);
                   if (!room) return null;
                   const selected = selectedRoomId === roomId;
 
@@ -518,7 +516,7 @@ export function Home() {
                       <RoomNavItem
                         room={room}
                         selected={selected}
-                        linkPath={getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
+                        linkPath={getHomeRoomPath(getCanonicalAliasOrRoomId(roomId))}
                         notificationMode={getRoomNotificationMode(
                           notificationPreferences,
                           room.roomId

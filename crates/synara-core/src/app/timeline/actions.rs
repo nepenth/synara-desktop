@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 /// Version of the bounded timeline-action readback contract.
 pub const NATIVE_TIMELINE_ACTION_SCHEMA_VERSION: u32 = 1;
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeTimelineActionKind {
@@ -22,6 +23,23 @@ pub enum NativeTimelineActionKind {
     Unpin,
     PollVote,
     CallDecline,
+}
+
+impl NativeTimelineActionKind {
+    /// The snake_case wire label of this action.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::EditText => "edit_text",
+            Self::Redact => "redact",
+            Self::ForwardText => "forward_text",
+            Self::ForwardMedia => "forward_media",
+            Self::Report => "report",
+            Self::Pin => "pin",
+            Self::Unpin => "unpin",
+            Self::PollVote => "poll_vote",
+            Self::CallDecline => "call_decline",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -100,16 +118,24 @@ pub struct NativeTimelineCallDeclineRequest {
     pub event_id: String,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineActionReadback {
     pub schema_version: u32,
     pub action: NativeTimelineActionKind,
     pub room_id: String,
-    /// For forward: the newly sent event in the target room. For every other
-    /// action: the event the write targeted.
+    /// For forward: the newly sent event in the target room (empty while the
+    /// forward is still `queued`). For every other action: the event the
+    /// write targeted.
     pub event_id: String,
     #[serde(deserialize_with = "deserialize_action_status")]
+    #[cfg_attr(
+        feature = "ts-export",
+        ts(
+            type = "\"sent\" | \"redacted\" | \"reported\" | \"pinned\" | \"unpinned\" | \"already_pinned\" | \"already_unpinned\" | \"voted\" | \"declined\" | \"queued\""
+        )
+    )]
     pub status: String,
 }
 
@@ -120,7 +146,7 @@ where
     let value = String::deserialize(deserializer)?;
     match value.as_str() {
         "sent" | "redacted" | "reported" | "pinned" | "unpinned" | "already_pinned"
-        | "already_unpinned" | "voted" | "declined" => Ok(value),
+        | "already_unpinned" | "voted" | "declined" | "queued" => Ok(value),
         other => Err(serde::de::Error::unknown_variant(
             other,
             &[
@@ -133,6 +159,7 @@ where
                 "already_unpinned",
                 "voted",
                 "declined",
+                "queued",
             ],
         )),
     }

@@ -1,29 +1,24 @@
 //! Desktop bridges for `in.synara.later` through `Core::command`.
 
 use synara_core::app::account_data::{NativeLaterSnapshot, SynaraLaterItem};
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
 
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
-
 pub(crate) async fn later_snapshot(
     core: &Core,
 ) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    dispatch_null(core, "matrix_later_snapshot").await
+    core.later_snapshot().await.map_err(map_later_core_error)
 }
 
 pub(crate) async fn later_upsert(
     core: &Core,
     item: SynaraLaterItem,
 ) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    dispatch(
-        core,
-        "matrix_later_upsert",
-        serde_json::json!({ "item": item }),
-    )
-    .await
+    core.later_upsert(synara_core::core_api::MatrixLaterUpsertRequest { item })
+        .await
+        .map_err(map_later_core_error)
 }
 
 pub(crate) async fn later_complete(
@@ -31,15 +26,12 @@ pub(crate) async fn later_complete(
     item_id: String,
     completed_at: Option<f64>,
 ) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    dispatch(
-        core,
-        "matrix_later_complete",
-        serde_json::json!({
-            "itemId": item_id,
-            "completedAt": completed_at,
-        }),
-    )
+    core.later_complete(synara_core::core_api::MatrixLaterCompleteRequest {
+        item_id,
+        completed_at,
+    })
     .await
+    .map_err(map_later_core_error)
 }
 
 pub(crate) async fn later_snooze(
@@ -47,21 +39,17 @@ pub(crate) async fn later_snooze(
     item_id: String,
     due_ts: f64,
 ) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    dispatch(
-        core,
-        "matrix_later_snooze",
-        serde_json::json!({
-            "itemId": item_id,
-            "dueTs": due_ts,
-        }),
-    )
-    .await
+    core.later_snooze(synara_core::core_api::MatrixLaterSnoozeRequest { item_id, due_ts })
+        .await
+        .map_err(map_later_core_error)
 }
 
 pub(crate) async fn later_clear_completed(
     core: &Core,
 ) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    dispatch_null(core, "matrix_later_clear_completed").await
+    core.later_clear_completed()
+        .await
+        .map_err(map_later_core_error)
 }
 
 pub(crate) async fn later_mark_reminded(
@@ -69,39 +57,12 @@ pub(crate) async fn later_mark_reminded(
     item_id: String,
     reminded_at: Option<f64>,
 ) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    dispatch(
-        core,
-        "matrix_later_mark_reminded",
-        serde_json::json!({
-            "itemId": item_id,
-            "remindedAt": reminded_at,
-        }),
-    )
+    core.later_mark_reminded(synara_core::core_api::MatrixLaterMarkRemindedRequest {
+        item_id,
+        reminded_at,
+    })
     .await
-}
-
-async fn dispatch_null(
-    core: &Core,
-    command: &str,
-) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    dispatch(core, command, serde_json::Value::Null).await
-}
-
-async fn dispatch(
-    core: &Core,
-    command: &str,
-    payload: serde_json::Value,
-) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    let response = core
-        .command(CommandEnvelope {
-            command: command.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload,
-        })
-        .await
-        .map_err(map_later_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| later_response_error())
+    .map_err(map_later_core_error)
 }
 
 fn map_later_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -128,12 +89,4 @@ fn map_later_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
                 .unwrap_or("v-timeline-later-fetch-failed"),
         ),
     }
-}
-
-fn later_response_error() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "The native Matrix later/notes account data is unavailable.",
-        "v-timeline-later-fetch-failed",
-    )
 }

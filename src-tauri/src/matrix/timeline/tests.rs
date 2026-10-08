@@ -911,7 +911,12 @@ mod composer_pure {
             .is_none());
         assert!(registry.get("!room:example.org", None).is_none());
         assert_eq!(
-            reply_draft_readback("!room:example.org".into(), "cleared", None).status,
+            reply_draft_readback(
+                "!room:example.org".into(),
+                synara_core::dto::ComposerDraftStatus::Cleared,
+                None
+            )
+            .status,
             "cleared"
         );
     }
@@ -973,7 +978,19 @@ mod media_pure {
                 None,
             )
             .unwrap();
-        let updated = registry
+        let reprojected = registry
+            .register(
+                "item-1",
+                MediaSource::Plain("mxc://example.org/one".into()),
+                Some("image/png".into()),
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        assert_eq!(first.handle_id, reprojected.handle_id);
+        // Edited media is a different source and gets its own handle.
+        let edited = registry
             .register(
                 "item-1",
                 MediaSource::Plain("mxc://example.org/two".into()),
@@ -983,11 +1000,12 @@ mod media_pure {
                 None,
             )
             .unwrap();
-        assert_eq!(first.handle_id, updated.handle_id);
+        assert_ne!(first.handle_id, edited.handle_id);
+        assert!(registry.resolve(&first.handle_id).is_none());
         assert_eq!(registry.session_generation(), 7);
         assert_eq!(registry.stream_id(), "focused:!room:example.org:$event");
         registry.retain_items(["another-item"]);
-        assert!(registry.resolve(&first.handle_id).is_none());
+        assert!(registry.resolve(&edited.handle_id).is_none());
     }
 }
 
@@ -1109,6 +1127,9 @@ mod view_pure {
                 sender_name: "@alice:example.org".into(),
                 sender_avatar_url: None,
                 origin_server_ts: 1,
+                local_echo_state: None,
+                transaction_id: None,
+                encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
                     react: true,
                     reply: false,
@@ -1160,6 +1181,9 @@ mod view_pure {
                 sender_name: "@bob:example.org".into(),
                 sender_avatar_url: None,
                 origin_server_ts: 1,
+                local_echo_state: None,
+                transaction_id: None,
+                encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
                     react: true,
                     reply: true,

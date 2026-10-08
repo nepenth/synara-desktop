@@ -8,6 +8,7 @@
 /// `Missing` includes the shell's absent and sentinel-distant-past states;
 /// `Known` means the shell observed actual prior activity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "full-uniffi", derive(uniffi::Enum))]
 pub enum RoomActivityPreviousState {
     Missing,
     Known,
@@ -17,6 +18,7 @@ pub enum RoomActivityPreviousState {
 ///
 /// A recovery runs only when the newest activity needs recovery and no prior
 /// activity is known. This total calculation has no state, I/O, or side effect.
+#[cfg_attr(feature = "full-uniffi", uniffi::export)]
 pub fn room_activity_recovery_required(
     latest_requires_recovery: bool,
     previous_state: RoomActivityPreviousState,

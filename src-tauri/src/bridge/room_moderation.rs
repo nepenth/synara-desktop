@@ -1,11 +1,9 @@
 //! Desktop bridges for room invite/kick/ban/unban through `Core::command`.
 
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
-
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn room_invite(
     core: &Core,
@@ -13,15 +11,10 @@ pub(crate) async fn room_invite(
     user_id: String,
     reason: Option<String>,
 ) -> Result<(), MatrixAuthCommandError> {
-    core.command(CommandEnvelope {
-        command: "matrix_room_invite".to_owned(),
-        session_generation: READ_ONLY_SESSION_GENERATION,
-        request_id: None,
-        payload: serde_json::json!({
-            "roomId": room_id,
-            "userId": user_id,
-            "reason": reason,
-        }),
+    core.room_invite(synara_core::core_api::MatrixRoomModerationRequest {
+        room_id,
+        user_id,
+        reason,
     })
     .await
     .map_err(map_room_moderation_core_error)?;
@@ -34,15 +27,10 @@ pub(crate) async fn room_kick(
     user_id: String,
     reason: Option<String>,
 ) -> Result<(), MatrixAuthCommandError> {
-    core.command(CommandEnvelope {
-        command: "matrix_room_kick".to_owned(),
-        session_generation: READ_ONLY_SESSION_GENERATION,
-        request_id: None,
-        payload: serde_json::json!({
-            "roomId": room_id,
-            "userId": user_id,
-            "reason": reason,
-        }),
+    core.room_kick(synara_core::core_api::MatrixRoomModerationRequest {
+        room_id,
+        user_id,
+        reason,
     })
     .await
     .map_err(map_room_moderation_core_error)?;
@@ -55,15 +43,10 @@ pub(crate) async fn room_ban(
     user_id: String,
     reason: Option<String>,
 ) -> Result<(), MatrixAuthCommandError> {
-    core.command(CommandEnvelope {
-        command: "matrix_room_ban".to_owned(),
-        session_generation: READ_ONLY_SESSION_GENERATION,
-        request_id: None,
-        payload: serde_json::json!({
-            "roomId": room_id,
-            "userId": user_id,
-            "reason": reason,
-        }),
+    core.room_ban(synara_core::core_api::MatrixRoomModerationRequest {
+        room_id,
+        user_id,
+        reason,
     })
     .await
     .map_err(map_room_moderation_core_error)?;
@@ -76,15 +59,10 @@ pub(crate) async fn room_set_power_level(
     user_id: String,
     power_level: i64,
 ) -> Result<(), MatrixAuthCommandError> {
-    core.command(CommandEnvelope {
-        command: "matrix_room_set_power_level".to_owned(),
-        session_generation: READ_ONLY_SESSION_GENERATION,
-        request_id: None,
-        payload: serde_json::json!({
-            "roomId": room_id,
-            "userId": user_id,
-            "powerLevel": power_level,
-        }),
+    core.room_set_power_level(synara_core::core_api::MatrixRoomSetPowerLevelRequest {
+        room_id,
+        user_id,
+        power_level,
     })
     .await
     .map_err(map_room_moderation_core_error)?;
@@ -96,17 +74,9 @@ pub(crate) async fn room_unban(
     room_id: String,
     user_id: String,
 ) -> Result<(), MatrixAuthCommandError> {
-    core.command(CommandEnvelope {
-        command: "matrix_room_unban".to_owned(),
-        session_generation: READ_ONLY_SESSION_GENERATION,
-        request_id: None,
-        payload: serde_json::json!({
-            "roomId": room_id,
-            "userId": user_id,
-        }),
-    })
-    .await
-    .map_err(map_room_moderation_core_error)?;
+    core.room_unban(synara_core::core_api::MatrixRoomUnbanRequest { room_id, user_id })
+        .await
+        .map_err(map_room_moderation_core_error)?;
     Ok(())
 }
 

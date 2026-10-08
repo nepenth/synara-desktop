@@ -1,24 +1,19 @@
 //! Desktop bridges for room name/topic/avatar writes through `Core::command`.
 
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
 use crate::matrix::auth::product::MatrixProfileWriteResult;
-
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn set_room_name(
     core: &Core,
     room_id: String,
     name: String,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    dispatch_write(
-        core,
-        "matrix_set_room_name",
-        serde_json::json!({ "roomId": room_id, "name": name }),
-    )
-    .await
+    core.set_room_name(synara_core::core_api::MatrixSetRoomNameRequest { room_id, name })
+        .await
+        .map_err(map_room_profile_write_core_error)
 }
 
 pub(crate) async fn set_room_topic(
@@ -26,12 +21,9 @@ pub(crate) async fn set_room_topic(
     room_id: String,
     topic: String,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    dispatch_write(
-        core,
-        "matrix_set_room_topic",
-        serde_json::json!({ "roomId": room_id, "topic": topic }),
-    )
-    .await
+    core.set_room_topic(synara_core::core_api::MatrixSetRoomTopicRequest { room_id, topic })
+        .await
+        .map_err(map_room_profile_write_core_error)
 }
 
 pub(crate) async fn set_room_avatar(
@@ -39,12 +31,9 @@ pub(crate) async fn set_room_avatar(
     room_id: String,
     mxc: String,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    dispatch_write(
-        core,
-        "matrix_set_room_avatar",
-        serde_json::json!({ "roomId": room_id, "mxc": mxc }),
-    )
-    .await
+    core.set_room_avatar(synara_core::core_api::MatrixSetRoomAvatarRequest { room_id, mxc })
+        .await
+        .map_err(map_room_profile_write_core_error)
 }
 
 pub(crate) async fn send_state_event(
@@ -54,17 +43,14 @@ pub(crate) async fn send_state_event(
     state_key: String,
     content: serde_json::Value,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    dispatch_write(
-        core,
-        "matrix_send_state_event",
-        serde_json::json!({
-            "roomId": room_id,
-            "eventType": event_type,
-            "stateKey": state_key,
-            "content": content,
-        }),
-    )
+    core.send_state_event(synara_core::core_api::MatrixSendStateEventRequest {
+        room_id,
+        event_type,
+        state_key,
+        content,
+    })
     .await
+    .map_err(map_room_profile_write_core_error)
 }
 
 pub(crate) async fn enable_room_encrypted_state(
@@ -72,46 +58,23 @@ pub(crate) async fn enable_room_encrypted_state(
     room_id: String,
     encrypt_state_events: bool,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    dispatch_write(
-        core,
-        "matrix_enable_room_encrypted_state",
-        serde_json::json!({
-            "roomId": room_id,
-            "encryptStateEvents": encrypt_state_events,
-        }),
+    core.enable_room_encrypted_state(
+        synara_core::core_api::MatrixEnableRoomEncryptedStateRequest {
+            room_id,
+            encrypt_state_events,
+        },
     )
     .await
-}
-
-pub(crate) async fn set_encrypted_state_events_setting(
-    core: &Core,
-    enabled: bool,
-) -> Result<serde_json::Value, MatrixAuthCommandError> {
-    core.command(CommandEnvelope {
-        command: "matrix_set_encrypted_state_events_setting".to_owned(),
-        session_generation: READ_ONLY_SESSION_GENERATION,
-        request_id: None,
-        payload: serde_json::json!({ "enabled": enabled }),
-    })
-    .await
-    .map(|response| response.payload)
     .map_err(map_room_profile_write_core_error)
 }
 
-async fn dispatch_write(
+pub(crate) fn set_encrypted_state_events_setting(
     core: &Core,
-    command: &str,
-    payload: serde_json::Value,
-) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    core.command(CommandEnvelope {
-        command: command.to_owned(),
-        session_generation: READ_ONLY_SESSION_GENERATION,
-        request_id: None,
-        payload,
-    })
-    .await
-    .map_err(map_room_profile_write_core_error)?;
-    Ok(MatrixProfileWriteResult { status: "ok" })
+    enabled: bool,
+) -> synara_core::core_api::MatrixEncryptedStateEventsSettingResult {
+    core.set_encrypted_state_events_setting(
+        synara_core::core_api::MatrixSetEncryptedStateEventsSettingRequest { enabled },
+    )
 }
 
 fn map_room_profile_write_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {

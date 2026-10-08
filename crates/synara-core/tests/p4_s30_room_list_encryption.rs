@@ -2,7 +2,7 @@
 
 #[test]
 fn room_list_surface_includes_encryption_and_not_leftovers() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     let room = udl
         .split("dictionary RoomListRoomDto {")
         .nth(1)

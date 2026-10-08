@@ -1,7 +1,70 @@
 import XCTest
 @testable import Synara
+import SynaraCore
 
 final class ConnectionStatusCopyTests: XCTestCase {
+    enum BannerClass { case connected, reconnecting, lost, cold }
+
+    /// Shared connection-status table. The identical rows live in
+    /// synara/src/app/features/native-client/__tests__/nativeClientFacade.test.ts
+    /// (`SHARED_CONNECTION_STATUS_CASES`), which also checks this copy.
+    /// Columns: readiness, command gate, connected earlier in this session, banner.
+    let sharedConnectionStatusCases: [(String, String, Bool, BannerClass)] = [
+        ("running", "open", false, .connected),
+        ("running", "open", true, .connected),
+        ("running", "closed", false, .lost),
+        ("running", "closed", true, .lost),
+        ("running", "unexpected", true, .lost),
+        ("offline", "open", true, .reconnecting),
+        ("failed", "open", false, .lost),
+        ("failed", "open", true, .lost),
+        ("terminated", "open", false, .lost),
+        ("terminated", "open", true, .lost),
+        ("idle", "open", false, .cold),
+        ("idle", "open", true, .lost),
+        ("unconfigured", "open", false, .cold),
+        ("unconfigured", "open", true, .lost),
+    ]
+
+    func testConnectionStatusFollowsTheSharedDesktopTable() {
+        for (readiness, gate, connectedEarlier, expected) in sharedConnectionStatusCases {
+            let status = ConnectionStatusCopy.fromReadiness(
+                Self.readiness(wire: readiness),
+                previous: connectedEarlier ? .connected : .starting,
+                commandGate: Self.commandGate(wire: gate)
+            )
+            let actual: BannerClass
+            switch status {
+            case .connected, .syncing:
+                actual = .connected
+            case .reconnecting:
+                actual = .reconnecting
+            case .disconnected, .failed, .restoreFailed:
+                actual = .lost
+            case .starting, .stopped:
+                actual = .cold
+            }
+            XCTAssertEqual(actual, expected, "\(readiness)/\(gate)/\(connectedEarlier)")
+        }
+    }
+    /// Wire label to enum, as Core's `from_wire` does. Unknown readiness is a
+    /// missing value; an unknown gate fails closed.
+    static func readiness(wire: String) -> SyncReadinessDto? {
+        switch wire {
+        case "unconfigured": return .unconfigured
+        case "idle": return .idle
+        case "running": return .running
+        case "offline": return .offline
+        case "terminated": return .terminated
+        case "failed": return .failed
+        default: return nil
+        }
+    }
+
+    static func commandGate(wire: String) -> CommandGateDto {
+        wire == "open" ? .open : .closed
+    }
+
     func testCopyMatchesDesktopMeaningWithoutSecrets() {
         XCTAssertEqual(ConnectionStatusCopy.banner(.connected), "Connected")
         XCTAssertEqual(ConnectionStatusCopy.banner(.syncing), "Syncing history…")
@@ -24,16 +87,28 @@ final class ConnectionStatusCopyTests: XCTestCase {
     }
 
     func testReadinessMappingDoesNotTreatIdleAsCatchup() {
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("running"), .connected)
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("idle"), .starting)
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("idle", previous: .starting), .starting)
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("idle", previous: .connected), .disconnected)
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("idle", previous: .syncing), .disconnected)
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("offline"), .reconnecting)
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("failed"), .disconnected)
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("terminated"), .disconnected)
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("unconfigured"), .disconnected)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness(.running), .connected)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness(.idle), .starting)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness(.idle, previous: .starting), .starting)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness(.idle, previous: .connected), .disconnected)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness(.idle, previous: .syncing), .disconnected)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness(.offline), .reconnecting)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness(.failed), .disconnected)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness(.terminated), .disconnected)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness(.unconfigured), .starting)
+        XCTAssertEqual(
+            ConnectionStatusCopy.fromReadiness(.unconfigured, previous: .connected),
+            .disconnected
+        )
         XCTAssertEqual(ConnectionStatusCopy.fromReadiness(nil), .starting)
+        XCTAssertEqual(
+            ConnectionStatusCopy.fromReadiness(.running, commandGate: .closed),
+            .disconnected
+        )
+        XCTAssertEqual(
+            ConnectionStatusCopy.fromReadiness(.running, commandGate: .open),
+            .connected
+        )
     }
 
     func testRestoreFailedOffersSignOutWithoutRetry() {
@@ -70,8 +145,8 @@ final class ConnectionStatusCopyTests: XCTestCase {
 
     func testHoldsLostEquivalentBeforeBanner() {
         XCTAssertTrue(ConnectionStatusCopy.holdsBeforeBanner(.reconnecting))
-        XCTAssertTrue(ConnectionStatusCopy.holdsBeforeBanner(.disconnected))
-        XCTAssertTrue(ConnectionStatusCopy.holdsBeforeBanner(.failed("raw sdk blip")))
+        XCTAssertFalse(ConnectionStatusCopy.holdsBeforeBanner(.disconnected))
+        XCTAssertFalse(ConnectionStatusCopy.holdsBeforeBanner(.failed("raw sdk blip")))
         XCTAssertFalse(ConnectionStatusCopy.holdsBeforeBanner(.restoreFailed))
         XCTAssertFalse(ConnectionStatusCopy.holdsBeforeBanner(.connected))
         XCTAssertFalse(ConnectionStatusCopy.holdsBeforeBanner(.starting))
@@ -104,29 +179,24 @@ final class ConnectionStatusCopyTests: XCTestCase {
         XCTAssertFalse(store.isBannerVisible)
     }
 
-    func testDisconnectedHoldDoesNotShowImmediateLost() {
+    func testDisconnectedPresentsImmediately() {
         let store = ConnectionStatusStore(reconnectingHold: 4)
         store.update(.connected)
         store.update(.disconnected)
-        XCTAssertEqual(store.status, .connected)
-        XCTAssertFalse(store.isBannerVisible)
-        store.update(.reconnecting)
-        XCTAssertEqual(store.status, .connected)
-        XCTAssertFalse(store.isBannerVisible)
-        store.update(.connected)
-        XCTAssertEqual(store.status, .connected)
-        XCTAssertFalse(store.isBannerVisible)
+        XCTAssertEqual(store.status, .disconnected)
+        XCTAssertTrue(store.isBannerVisible)
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.disconnected)
     }
 
-    func testFailedHoldDoesNotShowImmediateLost() {
+    func testFailedPresentsImmediatelyWithoutSdkText() {
         let store = ConnectionStatusStore(reconnectingHold: 4)
         store.update(.connected)
         store.update(.failed("raw sdk https://user:secret@hs/?password=hunter2"))
-        XCTAssertEqual(store.status, .connected)
-        XCTAssertFalse(store.isBannerVisible)
-        store.update(.connected)
-        XCTAssertEqual(store.status, .connected)
-        XCTAssertFalse(store.isBannerVisible)
+        XCTAssertEqual(store.status, .failed("raw sdk https://user:secret@hs/?password=hunter2"))
+        XCTAssertTrue(store.isBannerVisible)
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.disconnected)
+        XCTAssertFalse(store.emptyStateMessage.contains("https://"))
+        XCTAssertFalse(store.emptyStateMessage.contains("hunter2"))
     }
 
     func testStartingHoldFromConnectedDoesNotShowImmediateConnecting() {
@@ -143,8 +213,6 @@ final class ConnectionStatusCopyTests: XCTestCase {
     func testRestoreFailedShowsImmediatelyDuringHold() {
         let store = ConnectionStatusStore(reconnectingHold: 4)
         store.update(.connected)
-        store.update(.disconnected)
-        XCTAssertEqual(store.status, .connected)
         store.update(.restoreFailed)
         XCTAssertEqual(store.status, .restoreFailed)
         XCTAssertTrue(store.isBannerVisible)
@@ -158,16 +226,16 @@ final class ConnectionStatusCopyTests: XCTestCase {
         XCTAssertTrue(store.isBannerVisible)
     }
 
-    func testLostHoldExpiresToDisconnected() {
+    func testLostHoldExpiresToReconnecting() {
         let store = ConnectionStatusStore(reconnectingHold: 0.05)
         store.update(.connected)
-        store.update(.disconnected)
+        store.update(.reconnecting)
         XCTAssertEqual(store.status, .connected)
         XCTAssertFalse(store.isBannerVisible)
 
-        let shown = expectation(description: "lost after hold")
+        let shown = expectation(description: "reconnecting after hold")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            XCTAssertEqual(store.status, .disconnected)
+            XCTAssertEqual(store.status, .reconnecting)
             XCTAssertTrue(store.isBannerVisible)
             shown.fulfill()
         }
@@ -224,11 +292,11 @@ final class ConnectionStatusCopyTests: XCTestCase {
         XCTAssertNotEqual(store.emptyStateMessage, MatrixSyncStatus.reconnecting.description)
 
         store.update(.disconnected)
-        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.connected)
-        XCTAssertNotEqual(store.emptyStateMessage, ConnectionStatusCopy.disconnected)
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.disconnected)
+        XCTAssertFalse(store.emptyStateMessage.contains("https://"))
 
         store.update(.failed("raw sdk https://user:secret@hs/?password=hunter2"))
-        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.connected)
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.disconnected)
         XCTAssertFalse(store.emptyStateMessage.contains("https://"))
 
         store.update(.restoreFailed)

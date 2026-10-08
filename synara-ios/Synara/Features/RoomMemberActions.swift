@@ -1,4 +1,5 @@
 import SwiftUI
+import SynaraCore
 import UIKit
 
 struct RoomMemberActionPlan: Equatable {
@@ -14,34 +15,34 @@ struct RoomMemberActionPlan: Equatable {
     var canEditPowerLevel: Bool
     var assignablePowerLevels: [Int]
 
+    /// Core owns the member-menu rules (`app::members::plan_member_actions`).
     static func plan(
         member: RoomMemberSummary,
         ownUserID: String?,
         powerLevels: RoomPowerLevelSummary?
     ) -> RoomMemberActionPlan {
-        let isSelf = member.userID == ownUserID
-        let membership = member.membership
-        let ownLevel = powerLevels?.ownUserLevel ?? 0
-        let higherPower = ownLevel > Int64(member.powerLevel)
-        let canKick = (powerLevels?.canKick ?? false) && higherPower
-        let canBan = (powerLevels?.canBan ?? false) && higherPower
-        let canInvite = powerLevels?.canInvite ?? false
-        let canEditPower = (powerLevels?.canEditPowerLevels ?? false) && (isSelf || higherPower)
-        let maxAssignable = isSelf ? ownLevel : min(ownLevel, 100)
-        let levels = [0, 50, 100].filter { Int64($0) <= maxAssignable }
-
+        let core = planMemberActions(context: MemberActionContext(
+            isSelf: member.userID == ownUserID,
+            memberMembership: member.membership.wireLabel,
+            memberPowerLevel: Int64(member.powerLevel),
+            ownPowerLevel: powerLevels?.isCreator == true ? nil : (powerLevels?.ownUserLevel ?? 0),
+            canInvite: powerLevels?.canInvite ?? false,
+            canKick: powerLevels?.canKick ?? false,
+            canBan: powerLevels?.canBan ?? false,
+            canChangePowerLevels: powerLevels?.canEditPowerLevels ?? false
+        ))
         return RoomMemberActionPlan(
-            canMessage: isSelf == false,
-            canIgnore: isSelf == false,
-            canInvite: isSelf == false && membership == "leave" && canInvite,
-            canCancelInvite: isSelf == false && membership == "invite" && canKick,
-            canAcceptKnock: isSelf == false && membership == "knock" && canInvite,
-            canDenyKnock: isSelf == false && membership == "knock" && canKick,
-            canRemove: isSelf == false && canKick && membership == "join",
-            canBan: isSelf == false && canBan && membership != "ban",
-            canUnban: isSelf == false && membership == "ban" && canBan,
-            canEditPowerLevel: isSelf == false && canEditPower && membership != "ban",
-            assignablePowerLevels: canEditPower ? levels : []
+            canMessage: core.canMessage,
+            canIgnore: core.canIgnore,
+            canInvite: core.canInvite,
+            canCancelInvite: core.canCancelInvite,
+            canAcceptKnock: core.canAcceptKnock,
+            canDenyKnock: core.canDenyKnock,
+            canRemove: core.canRemove,
+            canBan: core.canBan,
+            canUnban: core.canUnban,
+            canEditPowerLevel: core.canEditPowerLevel,
+            assignablePowerLevels: core.assignablePowerLevels.map { Int($0) }
         )
     }
 }
@@ -224,20 +225,7 @@ struct RoomMemberActionsView: View {
     }
 
     private var membershipLabel: String {
-        switch member.membership {
-        case "join":
-            return "Joined"
-        case "invite":
-            return "Invited"
-        case "ban":
-            return "Banned"
-        case "leave":
-            return "Left"
-        case "knock":
-            return "Knocking"
-        default:
-            return member.membership
-        }
+        member.membership.displayName
     }
 
     private enum ConfirmAction {

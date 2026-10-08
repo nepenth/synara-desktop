@@ -1,4 +1,0 @@
-namespace callback {};
-callback interface Observer {
- [Async] string fetch();
-};

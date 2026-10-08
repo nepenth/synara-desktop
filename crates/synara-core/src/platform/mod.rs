@@ -701,6 +701,7 @@ impl SecretVault for UnavailableSecretVault {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::sync::CommandGate;
 
     #[test]
     fn desktop_snapshot_normalization_rejects_private_diagnostic_before_seam() {
@@ -715,6 +716,7 @@ mod tests {
             offline_mode_enabled: true,
             failure_diagnostic_id: Some(private_text),
             sliding_sync_capable: Some(false),
+            command_gate: CommandGate::Open,
         };
 
         let result = PlatformSyncStatus::from_desktop_snapshot(snapshot);
@@ -748,6 +750,7 @@ mod tests {
             offline_mode_enabled: true,
             failure_diagnostic_id: Some(SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID),
             sliding_sync_capable: Some(true),
+            command_gate: CommandGate::Open,
         })
         .unwrap();
         assert_eq!(

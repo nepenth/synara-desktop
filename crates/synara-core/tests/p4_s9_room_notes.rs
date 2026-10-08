@@ -72,7 +72,7 @@ fn sample_item() -> RoomNoteItemDto {
 
 #[test]
 fn room_notes_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("room_notes_snapshot"));
     assert!(udl.contains("room_notes_upsert"));
     assert!(udl.contains("room_notes_delete"));
@@ -91,7 +91,10 @@ fn room_notes_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("room_notes_complete_todo"));
     assert!(shared_core.contains("room_notes_move_todo"));
     assert!(shared_core.contains("mdirect_snapshot"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

@@ -7,6 +7,8 @@
 mod agent_approval_inbox;
 #[path = "../encrypted_state_events.rs"]
 mod encrypted_state_events;
+#[path = "../support/ffi_surface.rs"]
+mod ffi_surface;
 #[path = "../inbox_notifications.rs"]
 mod inbox_notifications;
 #[path = "../message_format_corpus.rs"]
@@ -17,6 +19,8 @@ mod messaging_core_pins;
 mod messaging_core_reactions;
 #[path = "../messaging_core_send_queue.rs"]
 mod messaging_core_send_queue;
+#[path = "../native_extras.rs"]
+mod native_extras;
 #[path = "../offline_timeline_cold_restart.rs"]
 mod offline_timeline_cold_restart;
 #[path = "../p4_s30_room_list_encryption.rs"]

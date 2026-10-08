@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::ids::{RoomId, UserId};
 
 /// Membership of the local user in a room (product enum).
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Membership {
@@ -76,6 +77,7 @@ pub struct RoomHero {
 /// failed SDK state read must never authorize a cleartext-sensitive action.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "full-uniffi", derive(uniffi::Enum))]
 pub enum RoomEncryptionStatus {
     Encrypted,
     NotEncrypted,

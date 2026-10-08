@@ -27,6 +27,6 @@ test('leftover encryptable state writes fail-closed to the native owner', () => 
   assert.match(commands, /StateEvent\.RoomMember/);
   const memberNick = commands.split('[Command.MyRoomNick]')[1]?.split('[Command.MyRoomAvatar]')[0];
   assert.ok(memberNick);
-  assert.match(memberNick, /c\.sendStateEvent/);
+  assert.match(memberNick, /sendNativeStateEvent\(/);
   assert.doesNotMatch(memberNick, /sendLeftoverStateEvent/);
 });

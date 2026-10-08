@@ -202,6 +202,8 @@ struct TimelineItem: Identifiable, Equatable {
     let serverEventID: String?
     /// Core's receipt frontier paired with this displayed remote tail.
     var readReceiptEventID: String? = nil
+    /// SDK authenticity shield for a message in an encrypted room; nil when trusted.
+    var encryptionShield: TimelineEncryptionShield? = nil
     let senderID: String
     /// Core-resolved profile display name. Mock/local items leave this nil and
     /// continue through the deterministic sender-ID fallback.
@@ -311,6 +313,7 @@ struct TimelineItem: Identifiable, Equatable {
             hasCurrentUserReadReceipt: hasCurrentUserReadReceipt
         )
         item.readReceiptEventID = readReceiptEventID
+        item.encryptionShield = encryptionShield
         return item
     }
 
@@ -340,6 +343,7 @@ struct TimelineItem: Identifiable, Equatable {
             hasCurrentUserReadReceipt: hasCurrentUserReadReceipt
         )
         item.readReceiptEventID = readReceiptEventID
+        item.encryptionShield = encryptionShield
         return item
     }
 
@@ -599,125 +603,7 @@ struct SynaraLaterListItem: Identifiable, Equatable {
     }
 }
 
-enum SynaraLaterAccountDataCodec {
-    static func decodeEnvelopeData(_ data: Data, jsonDecoder: JSONDecoder) -> SynaraLaterContent? {
-        guard let content = extractAccountDataContent(from: data) else {
-            return nil
-        }
-
-        return decode(content: content, jsonDecoder: jsonDecoder)
-    }
-
-    static func decodeContentString(_ content: String, jsonDecoder: JSONDecoder) -> SynaraLaterContent? {
-        guard let data = content.data(using: .utf8) else {
-            return nil
-        }
-
-        if let decoded = try? jsonDecoder.decode(SynaraLaterContent.self, from: data) {
-            return decoded
-        }
-
-        return decodeEnvelopeData(data, jsonDecoder: jsonDecoder)
-    }
-
-    private static func extractAccountDataContent(from data: Data) -> [String: Any]? {
-        let object: Any
-
-        do {
-            object = try JSONSerialization.jsonObject(with: data)
-        } catch {
-            return nil
-        }
-
-        guard let top = object as? [String: Any] else {
-            return nil
-        }
-
-        if let content = top["content"] as? [String: Any] {
-            return content
-        }
-
-        if top["items"] != nil || top["version"] != nil {
-            return top
-        }
-
-        return nil
-    }
-
-    private static func decode(content: [String: Any], jsonDecoder: JSONDecoder) -> SynaraLaterContent? {
-        do {
-            let data = try JSONSerialization.data(withJSONObject: content)
-            return try jsonDecoder.decode(SynaraLaterContent.self, from: data)
-        } catch {
-            return nil
-        }
-    }
-}
-
-extension SynaraLaterContent {
-    func completingItem(id: String, at completedAt: Int) throws -> SynaraLaterContent {
-        guard let item = items[id] else {
-            return self
-        }
-
-        let completedItem = try SynaraLaterItem(
-            id: item.id,
-            kind: item.kind,
-            roomId: item.roomId,
-            eventId: item.eventId,
-            createdAt: item.createdAt,
-            dueTs: item.dueTs,
-            remindedAt: item.remindedAt,
-            completedAt: completedAt
-        )
-
-        var updatedItems = items
-        updatedItems[id] = completedItem
-        return try SynaraLaterContent(version: version, items: updatedItems)
-    }
-}
-
 extension SynaraLaterListItem {
-    static func sorted(items: SynaraLaterContent, now: Int) -> [SynaraLaterListItem] {
-        return items.items.values
-            .map {
-                SynaraLaterListItem(
-                    id: $0.id,
-                    roomID: $0.roomId,
-                    eventID: $0.eventId,
-                    kind: $0.kind,
-                    dueTs: $0.dueTs,
-                    completedAt: $0.completedAt,
-                    createdAt: $0.createdAt,
-                    isCompleted: $0.completedAt != nil
-                )
-            }
-            .sorted { left, right in
-                if left.completedAt != nil, right.completedAt == nil {
-                    return false
-                }
-
-                if left.completedAt == nil, right.completedAt != nil {
-                    return true
-                }
-
-                let leftDue = left.dueTs ?? Int.max
-                let rightDue = right.dueTs ?? Int.max
-                let leftDueSoon = leftDue <= now
-                let rightDueSoon = rightDue <= now
-
-                if leftDueSoon != rightDueSoon {
-                    return leftDueSoon
-                }
-
-                if leftDue != rightDue {
-                    return leftDue < rightDue
-                }
-
-                return left.createdAt > right.createdAt
-            }
-    }
-
     static let empty = SynaraLaterListItem(
         id: "",
         roomID: "",
@@ -767,37 +653,10 @@ final class MockLaterService: LaterServicing {
     }
 }
 
+/// Decodes the agent card Core already extracted and bounded
+/// (`agent_card_json` on the timeline row). Core owns which content keys and
+/// body envelopes count as an agent card.
 enum SynaraAgentCardPayloadParser {
-    private static let contentKeys = ["org.hermes.agent", "io.hermes.agent", "in.synara.agent", "m.custom.agent"]
-
-    static func parse(raw: [String: Any] = [:], body: String? = nil) -> SynaraAgentCard? {
-        if let directPayload = contentKeys.compactMap({ key in
-            extractAgentCard(from: raw[key])
-        }).first {
-            return directPayload
-        }
-
-        guard let body,
-              body.count <= 200_000,
-              let bodyData = body.data(using: .utf8),
-              let parsedBody = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
-        else {
-            return nil
-        }
-
-        if let directPayload = contentKeys.compactMap({ key in
-            extractAgentCard(from: parsedBody[key])
-        }).first {
-            return directPayload
-        }
-
-        guard let hermes = parsedBody["hermes"] as? Bool, hermes else {
-            return nil
-        }
-
-        return extractAgentCard(from: parsedBody["payload"]) ?? extractAgentCard(from: parsedBody["agent"])
-    }
-
     static func parse(payloadJSON: String?) -> SynaraAgentCard? {
         guard let payloadJSON,
               payloadJSON.utf8.count <= 200_000,
@@ -806,17 +665,6 @@ enum SynaraAgentCardPayloadParser {
             return nil
         }
         return try? JSONDecoder().decode(SynaraAgentCard.self, from: data)
-    }
-
-    private static func extractAgentCard(from rawValue: Any?) -> SynaraAgentCard? {
-        guard let raw = rawValue as? [String: Any] else {
-            return nil
-        }
-        do {
-            return try JSONDecoder().decode(SynaraAgentCard.self, from: JSONSerialization.data(withJSONObject: raw))
-        } catch {
-            return nil
-        }
     }
 }
 
@@ -4180,5 +4028,65 @@ private extension String {
         }
 
         return ["https", "http", "ftp", "mailto", "magnet"].contains(scheme)
+    }
+}
+
+
+/// Closed authenticity shield copied from Core's timeline row.
+///
+/// Core takes the decision from matrix-rust-sdk. Unknown tones or codes are
+/// dropped at this boundary instead of being shown as free text.
+struct TimelineEncryptionShield: Equatable {
+    enum Tone: String, Equatable {
+        case red
+        case grey
+    }
+
+    enum Code: String, Equatable {
+        case authenticityNotGuaranteed = "authenticity_not_guaranteed"
+        case unknownDevice = "unknown_device"
+        case unsignedDevice = "unsigned_device"
+        case unverifiedIdentity = "unverified_identity"
+        case verificationViolation = "verification_violation"
+        case mismatchedSender = "mismatched_sender"
+        case sentInClear = "sent_in_clear"
+    }
+
+    let tone: Tone
+    let code: Code
+
+    init(tone: Tone, code: Code) {
+        self.tone = tone
+        self.code = code
+    }
+
+    init?(tone rawTone: String, code rawCode: String) {
+        guard let tone = Tone(rawValue: rawTone), let code = Code(rawValue: rawCode) else {
+            return nil
+        }
+        self.init(tone: tone, code: code)
+    }
+
+    /// SF Symbol for the badge; plaintext in an encrypted room uses an open lock.
+    var systemImageName: String {
+        switch code {
+        case .sentInClear: "lock.open"
+        case .verificationViolation, .mismatchedSender: "exclamationmark.shield"
+        default: "shield"
+        }
+    }
+
+    /// Fixed copy for the accessibility label and tooltip.
+    var label: String {
+        switch code {
+        case .authenticityNotGuaranteed:
+            "The authenticity of this encrypted message can't be guaranteed on this device."
+        case .unknownDevice: "Encrypted by an unknown or deleted device."
+        case .unsignedDevice: "Encrypted by a device not verified by its owner."
+        case .unverifiedIdentity: "Encrypted by an unverified user."
+        case .verificationViolation: "The sender's verified identity has changed."
+        case .mismatchedSender: "The sender of this message does not match the device that encrypted it."
+        case .sentInClear: "Not encrypted."
+        }
     }
 }

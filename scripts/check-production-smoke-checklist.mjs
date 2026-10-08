@@ -21,7 +21,7 @@ const REQUIRED_COMMANDS = [
   "npm run check:versions",
   "npm run check:repo-layout",
   "npm run check:matrix-boundaries",
-  "npm run check:quality-gates",
+  "npm run check:workflows",
   "npm run check:synapse-harness",
   "npm run check:release-updater",
   "npm run check:release-updater -- --require-enabled",

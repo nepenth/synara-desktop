@@ -136,6 +136,7 @@ test('custom titlebar renders only on Linux desktop', () => {
 
 test('linux titlebar owns drag and the three window controls', () => {
   const titlebar = source('src/app/features/desktop-titlebar/DesktopTitleBar.tsx');
+  const css = source('src/app/features/desktop-titlebar/DesktopTitleBar.css.ts');
 
   assert.match(titlebar, /desktop_window_minimize/);
   assert.match(titlebar, /desktop_window_toggle_maximize/);
@@ -143,6 +144,12 @@ test('linux titlebar owns drag and the three window controls', () => {
   assert.match(titlebar, /aria-label="Minimize"/);
   assert.match(titlebar, /aria-label="Close"/);
   assert.match(titlebar, /className=\{depthCss\.quietInteractiveSurface\}/);
+  assert.match(titlebar, /data-tauri-drag-region/);
+  assert.match(titlebar, /data-synara-window-drag/);
+  assert.match(titlebar, /data-synara-window-controls/);
+  assert.doesNotMatch(titlebar, /onDoubleClick/);
+  assert.doesNotMatch(titlebar, /startDragging/);
+  assert.match(css, /height: toRem\(40\)/);
 });
 
 test('native window chrome matches the in-app titlebar contract', () => {
@@ -156,6 +163,8 @@ test('native window chrome matches the in-app titlebar contract', () => {
   assert.doesNotMatch(lib, /\.hidden_title\(true\)/);
   assert.match(lib, /#\[cfg\(target_os = "linux"\)\]/);
   assert.match(lib, /\.decorations\(false\)/);
+  assert.match(lib, /desktop_window_drag::install/);
+  assert.match(lib, /with_state_flags\(desktop_window_drag::linux_window_state_flags\(\)\)/);
   // Window-control commands are registered and ACL-granted.
   assert.match(lib, /desktop::desktop_window_minimize/);
   assert.match(lib, /desktop::desktop_window_toggle_maximize/);
@@ -173,7 +182,11 @@ test('native window chrome matches the in-app titlebar contract', () => {
   const desktop = source('../src-tauri/src/desktop.rs');
   assert.match(desktop, /pub fn desktop_window_close/);
   assert.match(desktop, /hide_main_window/);
-  assert.match(desktop, /window\.minimize\(\)/);
+  // Close hides to the tray like macOS; Quit is the tray menu's job.
+  const hideMain =
+    desktop.split('pub fn hide_main_window')[1]?.split('pub fn navigate_main_window')[0] ?? '';
+  assert.match(hideMain, /window\.hide\(\)/);
+  assert.doesNotMatch(hideMain, /window\.minimize\(\)/);
   assert.doesNotMatch(
     desktop.split('pub fn desktop_window_close')[1]?.split('pub fn desktop_navigate')[0] ?? '',
     /window\.close\(\)/
@@ -201,6 +214,24 @@ test('native window chrome matches the in-app titlebar contract', () => {
   ]) {
     assert.match(linuxSchema, new RegExp(`allow-${command.replaceAll('_', '-')}`));
   }
+});
+
+test('linux strip drag is owned natively and fails closed', () => {
+  const drag = source('../src-tauri/src/desktop_window_drag.rs');
+  const native = drag.split('#[cfg(test)]\nmod tests')[0] ?? '';
+
+  // The move starts from a motion past the GTK threshold, never on the press.
+  assert.match(native, /"motion-notify-event"/);
+  assert.match(native, /"button-release-event"/);
+  assert.match(native, /gtk-dnd-drag-threshold/);
+  assert.match(native, /fn begin_move\(/);
+  assert.doesNotMatch(native, /start_dragging\(/);
+  // Geometry carries a top-frame token and an overlay flag; no stand-in strip.
+  assert.match(native, /token/);
+  assert.match(native, /elementFromPoint/);
+  assert.match(native, /overlay: payload\.overlay\.unwrap_or\(true\)/);
+  assert.doesNotMatch(native, /FALLBACK_CONTROLS_RESERVE_PX|TITLE_STRIP_HEIGHT_PX/);
+  assert.match(native, /LoadEvent::Committed/);
 });
 
 test('native macOS chrome needs no sidebar spacer and headers retain optional drag', () => {

@@ -18,9 +18,8 @@
 //! Authoritative design note: `docs/matrix-rust-sdk/p4.1-sync-readiness.md`
 
 pub use synara_core::app::sync::{
-    build_sync_service, recover_cooldown_active, suspend_detected, unconfigured_snapshot,
-    SyncError, SyncIntent, SyncReadinessSnapshot, SyncServiceConfig, SyncServiceOwner,
-    RECOVER_COOLDOWN, SUSPEND_WALL_SKEW,
+    build_sync_service, suspend_detected, unconfigured_snapshot, SyncError, SyncIntent,
+    SyncReadinessSnapshot, SyncServiceConfig, SyncServiceOwner, SUSPEND_WALL_SKEW,
 };
 #[cfg(test)]
 pub use synara_core::app::sync::{

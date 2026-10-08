@@ -227,3 +227,29 @@ test('slash poll sends one reply/thread snapshot and clears the visible owner on
   );
   assert.equal(clears, 1, 'legacy owner must preserve the visible reply draft');
 });
+
+test('a poll the native send queue still holds is accepted, not retried', async () => {
+  const invoke = async (command: string) =>
+    command === 'matrix_session_snapshot'
+      ? { available: true as const, value: { status: 'logged_in' } }
+      : {
+          available: true as const,
+          value: { roomId: '!room:example.org', eventId: '', status: 'queued' },
+        };
+  assert.equal(
+    await sendPollWithNativeOwner(
+      { roomId: '!room:example.org', question: 'Q?', answers: ['A', 'B'], maxSelections: 1 },
+      true,
+      invoke
+    ),
+    'native'
+  );
+  assert.equal(
+    await respondPollWithNativeOwner(
+      { roomId: '!room:example.org', pollEventId: '$poll:example.org', answerIds: ['a'] },
+      true,
+      invoke
+    ),
+    'native'
+  );
+});

@@ -14,7 +14,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn timeline_media_surface_is_handle_channel_not_leftover_envelope() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("timeline_media_bytes"));
     assert!(udl.contains("string? media_handle_id"));
     assert!(udl.contains("sequence<TimelineViewReactionDto> reactions"));
@@ -26,7 +26,10 @@ fn timeline_media_surface_is_handle_channel_not_leftover_envelope() {
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
     assert!(shared_core.contains("timeline_media_bytes"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
 }
 
 #[test]
@@ -37,9 +40,7 @@ fn shared_core_timeline_media_source_guard_keeps_the_32_mib_cap() {
         .nth(1)
         .and_then(|rest| rest.split("pub async fn event_readback").next())
         .expect("timeline media fetch method");
-    assert!(
-        media_fetch.contains("download_media_bounded(&self.client, &request, 32 * 1024 * 1024)")
-    );
+    assert!(media_fetch.contains("fetch_media_cached(&self.client, &request, 32 * 1024 * 1024)"));
     assert!(!media_fetch.contains("MediaCacheIndex"));
     assert!(!media_fetch.contains("retry("));
 }

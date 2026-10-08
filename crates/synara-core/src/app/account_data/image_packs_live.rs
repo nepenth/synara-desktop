@@ -12,7 +12,9 @@ use std::{
 };
 
 use matrix_sdk::event_handler::{EventHandlerDropGuard, RawEvent};
-use matrix_sdk::ruma::events::{AnyGlobalAccountDataEvent, AnySyncStateEvent};
+use matrix_sdk::ruma::events::{
+    AnyGlobalAccountDataEvent, AnyRoomAccountDataEvent, AnySyncStateEvent,
+};
 use matrix_sdk::{
     deserialized_responses::RawAnySyncOrStrippedState,
     ruma::{
@@ -30,13 +32,26 @@ use tokio::sync::Mutex as AsyncMutex;
 use super::{
     is_image_pack_account_data_type, is_image_pack_room_state_type, pack_from_account_data,
     set_global_image_packs_content_guard, set_room_image_pack_content_guard,
-    set_user_image_pack_content_guard, EmoteRoomsContent, NativeGlobalImagePacksSnapshot,
+    set_user_image_pack_content_guard, AccountDataTypeRegistry, EmoteRoomsContent,
+    NativeAccountDataContent, NativeAccountDataTypes, NativeGlobalImagePacksSnapshot,
     NativeImagePack, NativeLaterSnapshot, NativeMDirectMutationResult, NativeMDirectSnapshot,
     NativeRoomImagePacksSnapshot, NativeRoomNotesSnapshot, NativeUserImagePackSnapshot,
-    RoomNoteMoveDirection, SynaraLaterItem, SynaraRoomNoteItem, SynaraRoomNotesContent,
-    AGENT_APPROVAL_HISTORY_EVENT_TYPE, EMOTE_ROOMS_EVENT_TYPE, ROOM_EMOTES_EVENT_TYPE,
-    ROOM_NOTES_EVENT_TYPE, USER_EMOTES_EVENT_TYPE,
+    RawAccountDataError, RoomNoteMoveDirection, SynaraLaterItem, SynaraRoomNoteItem,
+    SynaraRoomNotesContent, AGENT_APPROVAL_HISTORY_EVENT_TYPE, EMOTE_ROOMS_EVENT_TYPE,
+    ROOM_EMOTES_EVENT_TYPE, ROOM_NOTES_EVENT_TYPE, USER_EMOTES_EVENT_TYPE,
 };
+
+fn lock_account_data_types(
+    registry: &Mutex<AccountDataTypeRegistry>,
+) -> MutexGuard<'_, AccountDataTypeRegistry> {
+    registry
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+fn parse_raw_room_id(room_id: &str) -> Result<OwnedRoomId, RawAccountDataError> {
+    RoomId::parse(room_id).map_err(|_| RawAccountDataError::InvalidRoom)
+}
 
 const ROOM_NOTES_PENDING_PROJECTION_TTL: Duration = Duration::from_secs(30);
 
@@ -421,7 +436,10 @@ pub struct NativeImagePackOwner {
     // Keep its result visible until a subsequent notes /sync event supersedes
     // it (or a short fail-safe expiry prevents an unbounded local overlay).
     room_notes_projection: Arc<Mutex<RoomNotesProjectionState>>,
+    /// Account-data types seen in sync or written here (Matrix cannot list them).
+    account_data_types: Arc<Mutex<AccountDataTypeRegistry>>,
     _account_data: EventHandlerDropGuard,
+    _room_account_data: EventHandlerDropGuard,
     _state: EventHandlerDropGuard,
 }
 
@@ -437,13 +455,17 @@ impl NativeImagePackOwner {
 
         let room_notes_projection = Arc::new(Mutex::new(RoomNotesProjectionState::default()));
         let account_projection = Arc::clone(&room_notes_projection);
+        let account_data_types = Arc::new(Mutex::new(AccountDataTypeRegistry::default()));
+        let global_types = Arc::clone(&account_data_types);
         let emit_account = emit.clone();
         let account_handle =
             client.add_event_handler(move |event: AnyGlobalAccountDataEvent, raw: RawEvent| {
                 let emit = emit_account.clone();
                 let projection = Arc::clone(&account_projection);
+                let global_types = Arc::clone(&global_types);
                 async move {
                     let event_type = event.event_type().to_string();
+                    lock_account_data_types(&global_types).record_global(&event_type);
                     if event_type == ROOM_NOTES_EVENT_TYPE {
                         let content = super::room_notes_live::parse_room_notes_sync_event(&raw);
                         lock_room_notes_projection(&projection)
@@ -457,6 +479,17 @@ impl NativeImagePackOwner {
                     }
                 }
             });
+
+        let room_types = Arc::clone(&account_data_types);
+        let room_account_handle = client.add_event_handler(
+            move |event: AnyRoomAccountDataEvent, room: matrix_sdk::Room| {
+                let room_types = Arc::clone(&room_types);
+                async move {
+                    lock_account_data_types(&room_types)
+                        .record_room(room.room_id().as_str(), &event.event_type().to_string());
+                }
+            },
+        );
 
         let emit_state = emit;
         let state_handle = client.add_event_handler(move |event: AnySyncStateEvent| {
@@ -479,7 +512,9 @@ impl NativeImagePackOwner {
             pending_threepid: Mutex::new(None),
             room_notes_mutation: AsyncMutex::new(()),
             room_notes_projection,
+            account_data_types,
             _account_data: client.event_handler_drop_guard(account_handle),
+            _room_account_data: client.event_handler_drop_guard(room_account_handle),
             _state: client.event_handler_drop_guard(state_handle),
         })
     }
@@ -524,6 +559,119 @@ impl NativeImagePackOwner {
         room_id: &str,
     ) -> Result<NativeMDirectMutationResult, &'static str> {
         super::remove_room_from_mdirect(&self.client, room_id).await
+    }
+
+    pub fn account_data_types(
+        &self,
+        room_id: Option<&str>,
+    ) -> Result<NativeAccountDataTypes, RawAccountDataError> {
+        let registry = lock_account_data_types(&self.account_data_types);
+        let (room_id, types) = match room_id {
+            Some(room_id) => {
+                let room_id = parse_raw_room_id(room_id)?;
+                let types = registry.room_types(room_id.as_str());
+                (Some(room_id.to_string()), types)
+            }
+            None => (None, registry.global_types()),
+        };
+        Ok(NativeAccountDataTypes {
+            session_generation: self.session_generation,
+            room_id,
+            types,
+        })
+    }
+
+    pub async fn account_data_get(
+        &self,
+        event_type: &str,
+        room_id: Option<&str>,
+    ) -> Result<NativeAccountDataContent, RawAccountDataError> {
+        let event_type = super::validate_account_data_type(event_type)?;
+        let content = match room_id {
+            Some(room_id) => {
+                let room = self.raw_room(room_id)?;
+                let raw = room
+                    .account_data(event_type.into())
+                    .await
+                    .map_err(|_| RawAccountDataError::FetchFailed)?;
+                match raw {
+                    Some(raw) => raw
+                        .deserialize_as_unchecked::<JsonValue>()
+                        .map_err(|_| RawAccountDataError::FetchFailed)?
+                        .get("content")
+                        .cloned(),
+                    None => None,
+                }
+            }
+            None => {
+                let raw = self
+                    .client
+                    .account()
+                    .account_data_raw(GlobalAccountDataEventType::from(event_type))
+                    .await
+                    .map_err(|_| RawAccountDataError::FetchFailed)?;
+                match raw {
+                    Some(raw) => Some(
+                        raw.deserialize_as_unchecked::<JsonValue>()
+                            .map_err(|_| RawAccountDataError::FetchFailed)?,
+                    ),
+                    None => None,
+                }
+            }
+        };
+        Ok(NativeAccountDataContent {
+            session_generation: self.session_generation,
+            event_type: event_type.to_owned(),
+            room_id: room_id.map(str::to_owned),
+            content,
+        })
+    }
+
+    pub async fn account_data_set(
+        &self,
+        event_type: &str,
+        room_id: Option<&str>,
+        content: JsonValue,
+    ) -> Result<NativeAccountDataContent, RawAccountDataError> {
+        let event_type = super::validate_account_data_type(event_type)?;
+        super::validate_account_data_content(&content)?;
+        let raw_value = to_raw_value(&content).map_err(|_| RawAccountDataError::InvalidContent)?;
+        match room_id {
+            Some(room_id) => {
+                let room = self.raw_room(room_id)?;
+                room.set_account_data_raw(event_type.into(), Raw::from_json(raw_value))
+                    .await
+                    .map_err(|_| RawAccountDataError::SetFailed)?;
+                lock_account_data_types(&self.account_data_types)
+                    .record_room(room.room_id().as_str(), event_type);
+            }
+            None => {
+                self.client
+                    .account()
+                    .set_account_data_raw(
+                        GlobalAccountDataEventType::from(event_type),
+                        Raw::<AnyGlobalAccountDataEventContent>::from_json(raw_value),
+                    )
+                    .await
+                    .map_err(|_| RawAccountDataError::SetFailed)?;
+                lock_account_data_types(&self.account_data_types).record_global(event_type);
+            }
+        }
+        // A successful PUT is not written into the SDK store until it syncs
+        // back, so report the content that was stored.
+        Ok(NativeAccountDataContent {
+            session_generation: self.session_generation,
+            event_type: event_type.to_owned(),
+            room_id: room_id.map(str::to_owned),
+            content: Some(content),
+        })
+    }
+
+    fn raw_room(&self, room_id: &str) -> Result<matrix_sdk::Room, RawAccountDataError> {
+        let room_id = parse_raw_room_id(room_id)?;
+        self.client
+            .get_room(&room_id)
+            .ok_or(RawAccountDataError::RoomNotFound)
     }
 
     pub async fn later_snapshot(&self) -> Result<NativeLaterSnapshot, &'static str> {

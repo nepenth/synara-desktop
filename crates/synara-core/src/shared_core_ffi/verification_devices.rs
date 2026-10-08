@@ -2,22 +2,93 @@
 
 use super::*;
 
+super::wire_enum::wire_enum! {
+    pub enum VerificationDirectionDto {
+        Incoming => "incoming",
+        Outgoing => "outgoing",
+    }
+}
+super::wire_enum::wire_enum_from!(NativeVerificationDirection => VerificationDirectionDto {
+    Incoming, Outgoing
+});
+
+super::wire_enum::wire_enum! {
+    pub enum VerificationPhaseDto {
+        Requested => "requested",
+        Ready => "ready",
+        Started => "started",
+        KeysExchanging => "keys_exchanging",
+        SasReady => "sas_ready",
+        QrScanned => "qr_scanned",
+        Confirmed => "confirmed",
+        Done => "done",
+        Mismatched => "mismatched",
+        Cancelled => "cancelled",
+        Failed => "failed",
+    }
+}
+super::wire_enum::wire_enum_from!(NativeVerificationPhase => VerificationPhaseDto {
+    Requested, Ready, Started, KeysExchanging, SasReady, QrScanned, Confirmed, Done,
+    Mismatched, Cancelled, Failed
+});
+
+super::wire_enum::wire_enum! {
+    pub enum DeviceTrustDto {
+        Verified => "verified",
+        VerifiedLocallyOnly => "verified_locally_only",
+        VerifiedByCertificate => "verified_by_certificate",
+        Unverified => "unverified",
+        NoEncryption => "no_encryption",
+        Dehydrated => "dehydrated",
+    }
+}
+super::wire_enum::wire_enum_from!(NativeDeviceTrust => DeviceTrustDto {
+    Verified, VerifiedLocallyOnly, VerifiedByCertificate, Unverified, NoEncryption, Dehydrated
+});
+
+super::wire_enum::wire_enum! {
+    pub enum OwnDeviceVerificationDto {
+        Unknown => "unknown",
+        Unverified => "unverified",
+        Verified => "verified",
+    }
+}
+super::wire_enum::wire_enum_from!(crate::app::devices::NativeOwnDeviceVerification => OwnDeviceVerificationDto {
+    Unknown, Unverified, Verified
+});
+
+super::wire_enum::wire_enum! {
+    pub enum DeviceDeleteAuthenticationDto {
+        Password => "password",
+    }
+}
+super::wire_enum::wire_enum_from!(NativeDeviceDeleteAuthentication => DeviceDeleteAuthenticationDto {
+    Password
+});
+
+super::wire_enum::wire_enum! {
+    pub enum DeviceDeleteOutcomeDto {
+        Complete => "complete",
+        AuthenticationRequired => "authentication_required",
+    }
+}
+
 /// Privacy-safe SAS emoji. User-visible comparison only; no key material.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct VerificationEmojiDto {
     pub symbol: String,
     pub description: String,
 }
 
 /// Privacy-safe SAS comparison. Emoji/decimals only; no tokens or MACs.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct VerificationSasDto {
     pub emoji: Option<Vec<VerificationEmojiDto>>,
     pub decimals: Option<Vec<u16>>,
 }
 
 /// Privacy-safe show-QR payload. SVG data-URL only; no MAC or QR bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct VerificationQrDto {
     pub image_data_url: String,
     pub scanned: bool,
@@ -25,27 +96,27 @@ pub struct VerificationQrDto {
 
 /// Privacy-safe verification request row. Identity/flow fields and optional
 /// display-only SAS / QR values; no tokens, MACs, or key material.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct VerificationRequestDto {
     pub flow_id: String,
     pub other_user_id: String,
     pub other_device_id: Option<String>,
-    pub direction: String,
-    pub phase: String,
+    pub direction: VerificationDirectionDto,
+    pub phase: VerificationPhaseDto,
     pub started_ts: Option<u64>,
     pub sas: Option<VerificationSasDto>,
     pub qr: Option<VerificationQrDto>,
 }
 
 /// Privacy-safe verification inbox. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct VerificationInboxDto {
     pub session_generation: u64,
     pub requests: Vec<VerificationRequestDto>,
 }
 
 /// Static fail-closed verification-list error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum VerificationListError {
     Failed { code: String, description: String },
 }
@@ -83,30 +154,6 @@ pub(super) fn map_verification_list_core_error(error: MatrixIpcError) -> Verific
     }
 }
 
-pub(super) fn verification_direction_as_str(direction: NativeVerificationDirection) -> String {
-    match direction {
-        NativeVerificationDirection::Incoming => "incoming",
-        NativeVerificationDirection::Outgoing => "outgoing",
-    }
-    .to_owned()
-}
-
-pub(super) fn verification_phase_as_str(phase: NativeVerificationPhase) -> String {
-    match phase {
-        NativeVerificationPhase::Requested => "requested",
-        NativeVerificationPhase::Ready => "ready",
-        NativeVerificationPhase::Started => "started",
-        NativeVerificationPhase::KeysExchanging => "keys_exchanging",
-        NativeVerificationPhase::SasReady => "sas_ready",
-        NativeVerificationPhase::Confirmed => "confirmed",
-        NativeVerificationPhase::Done => "done",
-        NativeVerificationPhase::Mismatched => "mismatched",
-        NativeVerificationPhase::Cancelled => "cancelled",
-        NativeVerificationPhase::Failed => "failed",
-    }
-    .to_owned()
-}
-
 pub(super) fn verification_emoji_dto(emoji: NativeVerificationEmoji) -> VerificationEmojiDto {
     VerificationEmojiDto {
         symbol: emoji.symbol,
@@ -137,8 +184,8 @@ pub(super) fn verification_request_dto_with_sas(
         flow_id: request.flow_id,
         other_user_id: request.other_user_id,
         other_device_id: request.other_device_id,
-        direction: verification_direction_as_str(request.direction),
-        phase: verification_phase_as_str(request.phase),
+        direction: request.direction.into(),
+        phase: request.phase.into(),
         started_ts: request.started_ts,
         sas: request.sas.map(verification_sas_dto),
         qr: request.qr.map(verification_qr_dto),
@@ -146,7 +193,7 @@ pub(super) fn verification_request_dto_with_sas(
 }
 
 /// Static fail-closed verification-SAS error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum VerificationSasError {
     Failed { code: String, description: String },
 }
@@ -190,27 +237,22 @@ pub(super) fn map_verification_sas_core_error(
 }
 
 pub(super) fn parse_verification_sas_request(
-    payload: serde_json::Value,
+    payload: NativeVerificationRequest,
 ) -> Result<VerificationRequestDto, VerificationSasError> {
-    let request: NativeVerificationRequest = serde_json::from_value(payload).map_err(|_| {
-        verification_sas_failed(
-            VERIFICATION_SAS_FAILED_CODE,
-            VERIFICATION_SAS_FAILED_DESCRIPTION,
-        )
-    })?;
+    let request: NativeVerificationRequest = payload;
     Ok(verification_request_dto_with_sas(request))
 }
 
 /// Privacy-safe device row. Identity/presentation fields only; no keys or tokens.
 /// Additive fingerprint/first-seen/cross-sign fields are optional for older
 /// consumers.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct DeviceSummaryDto {
     pub device_id: String,
     pub display_name: Option<String>,
     pub last_seen_ip: Option<String>,
     pub last_seen_ts: Option<u64>,
-    pub trust: String,
+    pub trust: DeviceTrustDto,
     pub is_current: bool,
     pub is_cross_signed_by_owner: Option<bool>,
     pub first_seen_ts: Option<u64>,
@@ -218,33 +260,33 @@ pub struct DeviceSummaryDto {
 }
 
 /// Privacy-safe device inbox. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct DeviceSnapshotDto {
     pub session_generation: u64,
-    pub own_verification: String,
+    pub own_verification: OwnDeviceVerificationDto,
     pub has_devices_to_verify_against: Option<bool>,
     pub devices: Vec<DeviceSummaryDto>,
 }
 
 /// Privacy-safe delete challenge. Authentication type only; no password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct DeviceDeleteChallengeDto {
     pub operation_id: u64,
     pub session_generation: u64,
-    pub authentication: String,
+    pub authentication: DeviceDeleteAuthenticationDto,
     pub authentication_failed: bool,
 }
 
 /// Privacy-safe delete start result. Complete snapshot or challenge; no password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct DeviceDeleteDto {
-    pub outcome: String,
+    pub outcome: DeviceDeleteOutcomeDto,
     pub snapshot: Option<DeviceSnapshotDto>,
     pub challenge: Option<DeviceDeleteChallengeDto>,
 }
 
 /// Static fail-closed device-family error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum DeviceCommandError {
     Failed { code: String, description: String },
 }
@@ -279,27 +321,10 @@ pub(super) fn map_device_core_error(
     }
 }
 
-pub(super) fn device_trust_as_str(trust: NativeDeviceTrust) -> String {
-    match trust {
-        NativeDeviceTrust::Verified => "verified",
-        NativeDeviceTrust::VerifiedLocallyOnly => "verified_locally_only",
-        NativeDeviceTrust::VerifiedByCertificate => "verified_by_certificate",
-        NativeDeviceTrust::Unverified => "unverified",
-        NativeDeviceTrust::NoEncryption => "no_encryption",
-        NativeDeviceTrust::Dehydrated => "dehydrated",
-    }
-    .to_owned()
-}
-
 pub(super) fn device_snapshot_dto(snapshot: NativeDeviceSnapshot) -> DeviceSnapshotDto {
     DeviceSnapshotDto {
         session_generation: snapshot.session_generation,
-        own_verification: match snapshot.own_verification {
-            crate::app::devices::NativeOwnDeviceVerification::Unknown => "unknown",
-            crate::app::devices::NativeOwnDeviceVerification::Unverified => "unverified",
-            crate::app::devices::NativeOwnDeviceVerification::Verified => "verified",
-        }
-        .to_owned(),
+        own_verification: snapshot.own_verification.into(),
         has_devices_to_verify_against: snapshot.has_devices_to_verify_against,
         devices: snapshot
             .devices
@@ -309,7 +334,7 @@ pub(super) fn device_snapshot_dto(snapshot: NativeDeviceSnapshot) -> DeviceSnaps
                 display_name: device.display_name,
                 last_seen_ip: device.last_seen_ip,
                 last_seen_ts: device.last_seen_ts,
-                trust: device_trust_as_str(device.trust),
+                trust: device.trust.into(),
                 is_current: device.is_current,
                 is_cross_signed_by_owner: Some(device.is_cross_signed_by_owner),
                 first_seen_ts: device.first_seen_ts,
@@ -322,19 +347,17 @@ pub(super) fn device_snapshot_dto(snapshot: NativeDeviceSnapshot) -> DeviceSnaps
 pub(super) fn device_delete_dto(result: NativeDeviceDeleteResult) -> DeviceDeleteDto {
     match result {
         NativeDeviceDeleteResult::Complete { snapshot } => DeviceDeleteDto {
-            outcome: "complete".to_owned(),
+            outcome: DeviceDeleteOutcomeDto::Complete,
             snapshot: Some(device_snapshot_dto(snapshot)),
             challenge: None,
         },
         NativeDeviceDeleteResult::AuthenticationRequired { challenge } => DeviceDeleteDto {
-            outcome: "authentication_required".to_owned(),
+            outcome: DeviceDeleteOutcomeDto::AuthenticationRequired,
             snapshot: None,
             challenge: Some(DeviceDeleteChallengeDto {
                 operation_id: challenge.operation_id,
                 session_generation: challenge.session_generation,
-                authentication: match challenge.authentication {
-                    NativeDeviceDeleteAuthentication::Password => "password".to_owned(),
-                },
+                authentication: challenge.authentication.into(),
                 authentication_failed: challenge.authentication_failed,
             }),
         },
@@ -342,24 +365,38 @@ pub(super) fn device_delete_dto(result: NativeDeviceDeleteResult) -> DeviceDelet
 }
 
 impl SharedCore {
+    pub(super) async fn verification_flow_command(
+        &self,
+        no_session: &'static str,
+        request: impl std::future::Future<Output = Result<NativeVerificationRequest, MatrixIpcError>>,
+    ) -> Result<VerificationRequestDto, VerificationSasError> {
+        let response = request
+            .await
+            .map_err(|error| map_verification_sas_core_error(no_session, error))?;
+        parse_verification_sas_request(response)
+    }
+
+    pub(super) async fn device_null_command<T>(
+        &self,
+        no_session: &'static str,
+        request: impl std::future::Future<Output = Result<T, MatrixIpcError>>,
+    ) -> Result<T, DeviceCommandError> {
+        let response = request
+            .await
+            .map_err(|error| map_device_core_error(no_session, error))?;
+        Ok(response)
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl SharedCore {
     pub async fn verification_list(&self) -> Result<VerificationInboxDto, VerificationListError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: VERIFICATION_LIST_COMMAND.to_owned(),
-                session_generation: VERIFICATION_LIST_GENERATION,
-                request_id: None,
-                payload: serde_json::Value::Null,
-            })
+            .verification_list()
             .await
             .map_err(map_verification_list_core_error)?;
-        let inbox: NativeVerificationInbox =
-            serde_json::from_value(response.payload).map_err(|_| {
-                verification_list_failed(
-                    VERIFICATION_LIST_FAILED_CODE,
-                    VERIFICATION_LIST_FAILED_DESCRIPTION,
-                )
-            })?;
+        let inbox: NativeVerificationInbox = response;
         Ok(VerificationInboxDto {
             session_generation: inbox.session_generation,
             requests: inbox
@@ -379,17 +416,12 @@ impl SharedCore {
     ) -> Result<VerificationRequestDto, VerificationSasError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: VERIFICATION_START_COMMAND.to_owned(),
-                session_generation: VERIFICATION_SAS_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "deviceId": device_id }),
-            })
+            .verification_start(crate::core_api::MatrixVerificationStartRequest { device_id })
             .await
             .map_err(|error| {
                 map_verification_sas_core_error(VERIFICATION_START_NO_SESSION_CODE, error)
             })?;
-        parse_verification_sas_request(response.payload)
+        parse_verification_sas_request(response)
     }
 
     pub async fn verification_accept(
@@ -397,9 +429,9 @@ impl SharedCore {
         flow_id: String,
     ) -> Result<VerificationRequestDto, VerificationSasError> {
         self.verification_flow_command(
-            VERIFICATION_ACCEPT_COMMAND,
             VERIFICATION_ACCEPT_NO_SESSION_CODE,
-            flow_id,
+            self.core
+                .verification_accept(crate::core_api::MatrixVerificationAcceptRequest { flow_id }),
         )
         .await
     }
@@ -409,9 +441,11 @@ impl SharedCore {
         flow_id: String,
     ) -> Result<VerificationRequestDto, VerificationSasError> {
         self.verification_flow_command(
-            VERIFICATION_BEGIN_SAS_COMMAND,
             VERIFICATION_BEGIN_SAS_NO_SESSION_CODE,
-            flow_id,
+            self.core
+                .verification_begin_sas(crate::core_api::MatrixVerificationBeginSasRequest {
+                    flow_id,
+                }),
         )
         .await
     }
@@ -421,9 +455,11 @@ impl SharedCore {
         flow_id: String,
     ) -> Result<VerificationRequestDto, VerificationSasError> {
         self.verification_flow_command(
-            VERIFICATION_CONFIRM_COMMAND,
             VERIFICATION_CONFIRM_NO_SESSION_CODE,
-            flow_id,
+            self.core
+                .verification_confirm(crate::core_api::MatrixVerificationConfirmRequest {
+                    flow_id,
+                }),
         )
         .await
     }
@@ -433,9 +469,11 @@ impl SharedCore {
         flow_id: String,
     ) -> Result<VerificationRequestDto, VerificationSasError> {
         self.verification_flow_command(
-            VERIFICATION_MISMATCH_COMMAND,
             VERIFICATION_MISMATCH_NO_SESSION_CODE,
-            flow_id,
+            self.core
+                .verification_mismatch(crate::core_api::MatrixVerificationMismatchRequest {
+                    flow_id,
+                }),
         )
         .await
     }
@@ -445,21 +483,16 @@ impl SharedCore {
         flow_id: String,
     ) -> Result<VerificationRequestDto, VerificationSasError> {
         self.verification_flow_command(
-            VERIFICATION_CANCEL_COMMAND,
             VERIFICATION_CANCEL_NO_SESSION_CODE,
-            flow_id,
+            self.core
+                .verification_cancel(crate::core_api::MatrixVerificationCancelRequest { flow_id }),
         )
         .await
     }
 
     pub async fn verification_dismiss(&self, flow_id: String) -> Result<(), VerificationSasError> {
         self.core
-            .command(CommandEnvelope {
-                command: VERIFICATION_DISMISS_COMMAND.to_owned(),
-                session_generation: VERIFICATION_SAS_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "flowId": flow_id }),
-            })
+            .verification_dismiss(crate::core_api::MatrixVerificationDismissRequest { flow_id })
             .await
             .map_err(|error| {
                 map_verification_sas_core_error(VERIFICATION_DISMISS_NO_SESSION_CODE, error)
@@ -467,31 +500,11 @@ impl SharedCore {
         Ok(())
     }
 
-    pub(super) async fn verification_flow_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        flow_id: String,
-    ) -> Result<VerificationRequestDto, VerificationSasError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: VERIFICATION_SAS_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "flowId": flow_id }),
-            })
-            .await
-            .map_err(|error| map_verification_sas_core_error(no_session, error))?;
-        parse_verification_sas_request(response.payload)
-    }
-
     pub async fn device_snapshot(&self) -> Result<DeviceSnapshotDto, DeviceCommandError> {
         let response = self
-            .device_null_command(DEVICE_SNAPSHOT_COMMAND, DEVICE_SNAPSHOT_NO_SESSION_CODE)
+            .device_null_command(DEVICE_SNAPSHOT_NO_SESSION_CODE, self.core.device_snapshot())
             .await?;
-        let snapshot: NativeDeviceSnapshot = serde_json::from_value(response)
-            .map_err(|_| device_failed(DEVICE_FAILED_CODE, DEVICE_FAILED_DESCRIPTION))?;
+        let snapshot: NativeDeviceSnapshot = response;
         Ok(device_snapshot_dto(snapshot))
     }
 
@@ -502,19 +515,13 @@ impl SharedCore {
     ) -> Result<DeviceSnapshotDto, DeviceCommandError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: DEVICE_RENAME_COMMAND.to_owned(),
-                session_generation: DEVICE_COMMAND_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({
-                    "deviceId": device_id,
-                    "displayName": display_name,
-                }),
+            .device_rename(crate::core_api::MatrixDeviceRenameRequest {
+                device_id,
+                display_name,
             })
             .await
             .map_err(|error| map_device_core_error(DEVICE_RENAME_NO_SESSION_CODE, error))?;
-        let snapshot: NativeDeviceSnapshot = serde_json::from_value(response.payload)
-            .map_err(|_| device_failed(DEVICE_FAILED_CODE, DEVICE_FAILED_DESCRIPTION))?;
+        let snapshot: NativeDeviceSnapshot = response;
         Ok(device_snapshot_dto(snapshot))
     }
 
@@ -524,16 +531,10 @@ impl SharedCore {
     ) -> Result<DeviceDeleteDto, DeviceCommandError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: DEVICE_DELETE_START_COMMAND.to_owned(),
-                session_generation: DEVICE_COMMAND_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "deviceIds": device_ids }),
-            })
+            .device_delete_start(crate::core_api::MatrixDeviceDeleteStartRequest { device_ids })
             .await
             .map_err(|error| map_device_core_error(DEVICE_DELETE_START_NO_SESSION_CODE, error))?;
-        let result: NativeDeviceDeleteResult = serde_json::from_value(response.payload)
-            .map_err(|_| device_failed(DEVICE_FAILED_CODE, DEVICE_FAILED_DESCRIPTION))?;
+        let result: NativeDeviceDeleteResult = response;
         Ok(device_delete_dto(result))
     }
 
@@ -543,14 +544,9 @@ impl SharedCore {
         session_generation: u64,
     ) -> Result<(), DeviceCommandError> {
         self.core
-            .command(CommandEnvelope {
-                command: DEVICE_DELETE_CANCEL_COMMAND.to_owned(),
-                session_generation: DEVICE_COMMAND_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({
-                    "operationId": operation_id,
-                    "sessionGeneration": session_generation,
-                }),
+            .device_delete_cancel(crate::core_api::MatrixDeviceDeleteCancelRequest {
+                operation_id,
+                session_generation,
             })
             .await
             .map_err(|error| map_device_core_error(DEVICE_DELETE_CANCEL_NO_SESSION_CODE, error))?;
@@ -574,23 +570,5 @@ impl SharedCore {
             })?;
         drop(password);
         Ok(device_delete_dto(result))
-    }
-
-    pub(super) async fn device_null_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-    ) -> Result<serde_json::Value, DeviceCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: DEVICE_COMMAND_GENERATION,
-                request_id: None,
-                payload: serde_json::Value::Null,
-            })
-            .await
-            .map_err(|error| map_device_core_error(no_session, error))?;
-        Ok(response.payload)
     }
 }

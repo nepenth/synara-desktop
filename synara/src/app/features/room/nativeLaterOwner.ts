@@ -7,12 +7,8 @@
  */
 
 import { invokeDesktopWithAvailability, type DesktopInvokeResult } from '../../utils/desktop';
-import type { SynaraLaterContent, SynaraLaterItem } from '../../../types/matrix/accountData';
-
-export type NativeLaterSnapshot = {
-  sessionGeneration: number;
-  content: SynaraLaterContent;
-};
+import type { SynaraLaterItem } from '../../../types/matrix/accountData';
+import type { NativeLaterSnapshot } from '../matrix-dto/generated';
 
 export type NativeLaterInvoke = (
   command: string,
@@ -93,3 +89,5 @@ export function markLaterRemindedWithNativeOwner(
 ) {
   return invokeLater('matrix_later_mark_reminded', { itemId, remindedAt }, invoke);
 }
+
+export type { NativeLaterSnapshot };

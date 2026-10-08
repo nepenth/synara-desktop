@@ -1,6 +1,5 @@
 import { ReactNode } from 'react';
 import { RoomToParents } from '../../types/matrix/room';
-import { useMatrixClient } from '../hooks/useMatrixClient';
 import { allRoomsAtom } from '../state/room-list/roomList';
 import { useChildDirectScopeFactory, useSpaceChildren } from '../state/hooks/roomList';
 
@@ -16,12 +15,10 @@ export function SpaceChildDirectsProvider({
   mDirects,
   children,
 }: SpaceChildDirectsProviderProps) {
-  const mx = useMatrixClient();
-
   const childDirects = useSpaceChildren(
     allRoomsAtom,
     spaceId,
-    useChildDirectScopeFactory(mx, mDirects, roomToParents)
+    useChildDirectScopeFactory(mDirects, roomToParents)
   );
 
   return children(childDirects);

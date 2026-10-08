@@ -2,29 +2,25 @@ import type { EventedRoomReading } from '../../utils/roomEvents';
 import React, { useCallback, useMemo } from 'react';
 
 import { usePowerLevels } from '../../hooks/usePowerLevels';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { ImagePackContent } from './ImagePackContent';
 import { ImagePack, PackContent } from '../../plugins/custom-emoji';
 import { StateEvent } from '../../../types/matrix/room';
 import { useRoomImagePack } from '../../hooks/useImagePacks';
 import { randomStr } from '../../utils/common';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
-import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { setRoomImagePackNative } from '../../features/room/nativeImagePack';
 
+import { sendNativeStateEvent } from '../../native/nativeCommands';
 type RoomImagePackProps = {
   room: EventedRoomReading;
   stateKey: string;
 };
 
 export function RoomImagePack({ room, stateKey }: RoomImagePackProps) {
-  const mx = useMatrixClient();
-  const userId = mx.getUserId()!;
   const powerLevels = usePowerLevels(room);
-  const creators = useRoomCreators(room);
 
-  const permissions = useRoomPermissions(creators, powerLevels);
-  const canEditImagePack = permissions.stateEvent(StateEvent.PoniesRoomEmotes, userId);
+  const permissions = useRoomPermissions(powerLevels);
+  const canEditImagePack = permissions.stateEvent(StateEvent.PoniesRoomEmotes);
 
   const fallbackPack = useMemo(() => {
     const fakePackId = randomStr(4);
@@ -45,11 +41,11 @@ export function RoomImagePack({ room, stateKey }: RoomImagePackProps) {
       if (!address) return;
 
       // V-SEND.R-PACK-WRITE: native room-pack update is fail-closed on desktop.
-      // The JS mx.sendStateEvent(PoniesRoomEmotes) path is only for non-native
+      // The JS sendNativeStateEvent(PoniesRoomEmotes) path is only for non-native
       // web.
       const result = await setRoomImagePackNative(address.roomId, address.stateKey, packContent);
       if (result === 'legacy') {
-        await mx.sendStateEvent(
+        await sendNativeStateEvent(
           address.roomId,
           StateEvent.PoniesRoomEmotes as any,
           packContent,
@@ -57,7 +53,7 @@ export function RoomImagePack({ room, stateKey }: RoomImagePackProps) {
         );
       }
     },
-    [mx, imagePack]
+    [imagePack]
   );
 
   return (

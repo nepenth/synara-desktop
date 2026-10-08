@@ -1,33 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getRecentEmojis } from '../plugins/recent-emoji';
-import type { MatrixClientReading, MatrixEventReading } from '../utils/room';
-import { AccountDataEvent } from '../../types/matrix/accountData';
 import { IEmoji } from '../plugins/emoji';
+import { AccountDataEvent } from '../../types/matrix/accountData';
+import { useNativeAccountData } from '../native/nativeAccountData';
 
-export const useRecentEmoji = (mx: MatrixClientReading, limit?: number): IEmoji[] => {
-  const [recentEmoji, setRecentEmoji] = useState(() => getRecentEmojis(mx, limit));
+/**
+ * Recently used emoji (Element's `io.element.recent_emoji` account data).
+ * The list is fixed once loaded so it does not reorder while a picker is open;
+ * a first load that finishes after mount still fills it in.
+ */
+export const useRecentEmoji = (limit?: number): IEmoji[] => {
+  const content = useNativeAccountData(AccountDataEvent.ElementRecentEmoji);
+  const [recentEmoji, setRecentEmoji] = useState(() => getRecentEmojis(limit));
+  const loaded = useRef(content !== undefined);
 
   useEffect(() => {
-    const handleAccountData = (event: MatrixEventReading) => {
-      if (event.getType() !== AccountDataEvent.ElementRecentEmoji) return;
-      setRecentEmoji(getRecentEmojis(mx, limit));
-    };
-
-    (
-      mx as unknown as {
-        on(event: string, listener: (event: MatrixEventReading) => void): void;
-        removeListener(event: string, listener: (event: MatrixEventReading) => void): void;
-      }
-    ).on('AccountData', handleAccountData);
-    return () => {
-      (
-        mx as unknown as {
-          on(event: string, listener: (event: MatrixEventReading) => void): void;
-          removeListener(event: string, listener: (event: MatrixEventReading) => void): void;
-        }
-      ).removeListener('AccountData', handleAccountData);
-    };
-  }, [mx, limit]);
+    if (loaded.current || content === undefined) return;
+    loaded.current = true;
+    setRecentEmoji(getRecentEmojis(limit));
+  }, [content, limit]);
 
   return recentEmoji;
 };

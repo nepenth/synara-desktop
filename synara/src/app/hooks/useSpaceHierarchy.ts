@@ -2,7 +2,6 @@ import { atom, useAtom } from 'jotai';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { RoomReading } from '../utils/room';
 import { useQuery } from '@tanstack/react-query';
-import { useMatrixClient } from './useMatrixClient';
 import { MSpaceChildContent } from '../../types/matrix/room';
 import { isRoomId } from '../utils/matrix';
 import { SortFunc, byOrderKey, byTsOldToNew, factoryRoomIdByActivity } from '../utils/sort';
@@ -20,6 +19,7 @@ import {
   normalizeRoomJoinRulePresentation,
   type RoomJoinRulePresentation,
 } from '../features/matrix-dto/roomJoinRule';
+import { startRoomListUpdateDrivenPoll } from '../utils/nativeRoomListUpdates';
 
 export type HierarchyItemSpace = {
   roomId: string;
@@ -200,10 +200,10 @@ const useNativeSpaceChildEdgeMap = (): SpaceChildEdgeMap => {
     };
 
     void refresh();
-    const pollId = window.setInterval(() => void refresh(), 1_000);
+    const stopPolling = startRoomListUpdateDrivenPoll(() => void refresh());
     return () => {
       disposed = true;
-      window.clearInterval(pollId);
+      stopPolling();
     };
   }, []);
 
@@ -279,19 +279,18 @@ export const useSpaceJoinedHierarchy = (
   excludeRoom: (parentId: string, roomId: string) => boolean,
   sortByActivity: (spaceId: string) => boolean
 ): HierarchyItem[] => {
-  const mx = useMatrixClient();
   const edgeMap = useNativeSpaceChildEdgeMap();
 
   const sortRoomItems = useCallback(
     (sId: string, items: HierarchyItem[]) => {
       if (sortByActivity(sId)) {
-        items.sort((a, b) => factoryRoomIdByActivity(mx)(a.roomId, b.roomId));
+        items.sort((a, b) => factoryRoomIdByActivity()(a.roomId, b.roomId));
         return items;
       }
       items.sort(hierarchyItemTs).sort(hierarchyItemByOrder);
       return items;
     },
-    [mx, sortByActivity]
+    [sortByActivity]
   );
 
   const [hierarchyAtom] = useState(() =>

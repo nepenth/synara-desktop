@@ -1,38 +1,33 @@
-import type { MatrixClientReading } from './room';
-
+import { getNativeRoom } from '../native/nativeSession';
 export type SortFunc<T> = (a: T, b: T) => number;
 
-export const factoryRoomIdByActivity =
-  (mx: MatrixClientReading): SortFunc<string> =>
-  (a, b) => {
-    const room1 = mx.getRoom(a);
-    const room2 = mx.getRoom(b);
+export const factoryRoomIdByActivity = (): SortFunc<string> => (a, b) => {
+  const room1 = getNativeRoom(a);
+  const room2 = getNativeRoom(b);
 
-    return (
-      (room2?.getLastActiveTimestamp?.() ?? Number.MIN_SAFE_INTEGER) -
-      (room1?.getLastActiveTimestamp?.() ?? Number.MIN_SAFE_INTEGER)
-    );
-  };
+  return (
+    (room2?.getLastActiveTimestamp?.() ?? Number.MIN_SAFE_INTEGER) -
+    (room1?.getLastActiveTimestamp?.() ?? Number.MIN_SAFE_INTEGER)
+  );
+};
 
-export const factoryRoomIdByAtoZ =
-  (mx: MatrixClientReading): SortFunc<string> =>
-  (a, b) => {
-    let aName = mx.getRoom(a)?.name ?? '';
-    let bName = mx.getRoom(b)?.name ?? '';
+export const factoryRoomIdByAtoZ = (): SortFunc<string> => (a, b) => {
+  let aName = getNativeRoom(a)?.name ?? '';
+  let bName = getNativeRoom(b)?.name ?? '';
 
-    // remove "#" from the room name
-    // To ignore it in sorting
-    aName = aName.replace(/#/g, '');
-    bName = bName.replace(/#/g, '');
+  // remove "#" from the room name
+  // To ignore it in sorting
+  aName = aName.replace(/#/g, '');
+  bName = bName.replace(/#/g, '');
 
-    if (aName.toLowerCase() < bName.toLowerCase()) {
-      return -1;
-    }
-    if (aName.toLowerCase() > bName.toLowerCase()) {
-      return 1;
-    }
-    return 0;
-  };
+  if (aName.toLowerCase() < bName.toLowerCase()) {
+    return -1;
+  }
+  if (aName.toLowerCase() > bName.toLowerCase()) {
+    return 1;
+  }
+  return 0;
+};
 
 export const factoryRoomIdByUnreadCount =
   (getUnreadCount: (roomId: string) => number): SortFunc<string> =>

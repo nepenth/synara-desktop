@@ -21,7 +21,6 @@ import { SettingTile } from '../../../components/setting-tile';
 import { getPermissionPower, IPowerLevels } from '../../../hooks/usePowerLevels';
 import { useRoom } from '../../../hooks/useRoom';
 import { PowerColorBadge, PowerIcon } from '../../../components/power';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { stopPropagation } from '../../../utils/keyboard';
 import { PermissionGroup } from './types';
@@ -108,14 +107,13 @@ type PowersProps = {
   onEdit?: () => void;
 };
 export function Powers({ powerLevels, permissionGroups, onEdit }: PowersProps) {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const room = useRoom();
   const powerLevelTags = usePowerLevelTags(room, powerLevels);
   const creators = useRoomCreators(room);
   const creatorsTag = useRoomCreatorsTag();
   const creatorTagIconSrc =
-    creatorsTag.icon && getPowerTagIconSrc(mx, useAuthentication, creatorsTag.icon);
+    creatorsTag.icon && getPowerTagIconSrc(useAuthentication, creatorsTag.icon);
 
   return (
     <Box direction="Column" gap="100">
@@ -178,7 +176,7 @@ export function Powers({ powerLevels, permissionGroups, onEdit }: PowersProps) {
           <Box gap="200" wrap="Wrap">
             {getPowers(powerLevelTags).map((power) => {
               const tag = powerLevelTags[power];
-              const tagIconSrc = tag.icon && getPowerTagIconSrc(mx, useAuthentication, tag.icon);
+              const tagIconSrc = tag.icon && getPowerTagIconSrc(useAuthentication, tag.icon);
 
               return (
                 <PeekPermissions

@@ -31,17 +31,63 @@ const loggedIn = {
   value: { status: 'logged_in', sessionGeneration: 7 },
 };
 
-test('native power loading is explicitly fail-closed, including creator bypasses', () => {
-  const permissions = getRoomPermissionsAPI(
-    new Set(['@alice:example.org']),
-    NATIVE_UNAVAILABLE_POWER_LEVELS
-  );
+test('native power loading is explicitly fail-closed', () => {
+  const permissions = getRoomPermissionsAPI(NATIVE_UNAVAILABLE_POWER_LEVELS);
 
-  assert.equal(permissions.event('m.room.message', '@alice:example.org'), false);
-  assert.equal(permissions.stateEvent('m.room.name', '@alice:example.org'), false);
-  assert.equal(permissions.action('invite', '@alice:example.org'), false);
-  assert.equal(permissions.notificationAction('room', '@alice:example.org'), false);
+  assert.equal(permissions.event('m.room.message'), false);
+  assert.equal(permissions.stateEvent('m.room.name'), false);
+  assert.equal(permissions.action('invite'), false);
+  assert.equal(permissions.notificationAction('room'), false);
   assert.deepEqual(NATIVE_UNAVAILABLE_POWER_LEVELS, { nativeUnavailable: true });
+});
+
+const capabilities = {
+  ownPowerLevel: 50,
+  isCreator: false,
+  canSendMessage: true,
+  canReact: true,
+  canRedactOwn: true,
+  canRedactOthers: true,
+  canInvite: true,
+  canKick: true,
+  canBan: false,
+  canNotifyRoom: false,
+  canChangeName: false,
+  canChangeTopic: true,
+  canChangeAvatar: true,
+  canChangeCanonicalAlias: false,
+  canChangeHistoryVisibility: false,
+  canChangeJoinRules: false,
+  canEnableEncryption: false,
+  canChangePowerLevels: false,
+  canChangePinnedEvents: true,
+  canUpgradeRoom: false,
+  canManageSpaceChildren: false,
+  eventsDefaultAllowed: true,
+  stateDefaultAllowed: false,
+  eventAllowed: { 'im.ponies.room_emotes': true, 'com.example.locked': false },
+};
+
+test('permissions read Core capabilities, including explicit and default event levels', () => {
+  const permissions = getRoomPermissionsAPI({ nativeCapabilities: capabilities });
+
+  assert.equal(permissions.event('m.room.message'), true);
+  assert.equal(permissions.event('com.example.locked'), false);
+  assert.equal(permissions.event('com.example.other'), true, 'events default');
+  assert.equal(permissions.stateEvent('m.room.name'), false);
+  assert.equal(permissions.stateEvent('m.room.topic'), true);
+  assert.equal(permissions.stateEvent('im.ponies.room_emotes'), true);
+  assert.equal(permissions.stateEvent('com.example.state'), false, 'state default');
+  assert.equal(permissions.action('kick'), true);
+  assert.equal(permissions.action('ban'), false);
+  assert.equal(permissions.action('redact'), true);
+  assert.equal(permissions.notificationAction('room'), false);
+});
+
+test('levels without Core capabilities deny every check', () => {
+  const permissions = getRoomPermissionsAPI({ users: { '@alice:example.org': 100 } });
+  assert.equal(permissions.stateEvent('m.room.name'), false);
+  assert.equal(permissions.action('invite'), false);
 });
 
 test('lobby header keeps native power loading fail-closed', () => {

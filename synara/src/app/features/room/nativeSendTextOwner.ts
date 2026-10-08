@@ -21,7 +21,12 @@ export type NativeSendTextResult = {
   roomId: string;
   eventId: string;
   localTxnId: string;
-  status: 'sent';
+  /**
+   * `queued`: the native send queue still holds the message and keeps
+   * retrying it. The timeline row shows that state with Discard, so the
+   * composer clears exactly as for `sent`; a second send would duplicate it.
+   */
+  status: 'sent' | 'queued';
 };
 
 export type NativeInvoke = (
@@ -46,6 +51,8 @@ export async function sendTextWithNativeOwner(
     throw new Error('Native Matrix text send is unavailable.');
   }
   const result = send.value as NativeSendTextResult | undefined;
-  if (result?.status !== 'sent') throw new Error('Native Matrix text send is unavailable.');
+  if (result?.status !== 'sent' && result?.status !== 'queued') {
+    throw new Error('Native Matrix text send is unavailable.');
+  }
   return 'native';
 }

@@ -11,20 +11,12 @@ import {
   type DesktopInvokeResult,
 } from '../../utils/desktop';
 import { getSessionBootstrapResult } from '../../state/sessionBootstrap';
-
-export type NativeRtcTransportKind = 'livekit' | 'custom';
-export type NativeRtcTransportsStatus = 'ready' | 'unsupported' | 'unavailable';
-
-export type NativeRtcTransport = {
-  kind: NativeRtcTransportKind;
-  serviceUrl?: string;
-};
-
-export type NativeRtcTransportsSnapshot = {
-  sessionGeneration: number;
-  status: NativeRtcTransportsStatus;
-  transports: NativeRtcTransport[];
-};
+import type {
+  NativeRtcTransport,
+  NativeRtcTransportKind,
+  NativeRtcTransportsSnapshot,
+  NativeRtcTransportsStatus,
+} from '../matrix-dto/generated';
 
 export type NativeRtcTransportsInvoke = (
   command: string,
@@ -135,3 +127,10 @@ export async function refreshRtcTransportsNative(
 ): Promise<NativeRtcTransportsSnapshot | null> {
   return invokeSnapshot('matrix_rtc_transports_refresh', resolveDependencies(deps));
 }
+
+export type {
+  NativeRtcTransport,
+  NativeRtcTransportKind,
+  NativeRtcTransportsSnapshot,
+  NativeRtcTransportsStatus,
+};

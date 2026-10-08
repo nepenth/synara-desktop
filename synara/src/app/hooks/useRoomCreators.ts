@@ -1,15 +1,14 @@
 import type { EventedRoomReading } from '../utils/roomEvents';
-import type { MatrixClientReading, RoomReading, MatrixEventReading } from '../utils/room';
+import type { RoomReading, MatrixEventReading } from '../utils/room';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStateEvent } from './useStateEvent';
-import { useStateEventCallback } from './useStateEventCallback';
-import { useMatrixClient } from './useMatrixClient';
 import { IRoomCreateContent, StateEvent } from '../../types/matrix/room';
 import { creatorsSupported } from '../utils/matrix';
 import { getStateEvent } from '../utils/room';
 import { isNativeMatrixSession } from '../features/verification/nativeVerification';
 import { readRoomCreatorsWithNativeOwner } from './nativeRoomCreatorsOwner';
 
+import { getNativeRoom } from '../native/nativeSession';
 export const getRoomCreators = (createEvent: MatrixEventReading): Set<string> => {
   const createContent = createEvent.getContent<IRoomCreateContent>();
 
@@ -96,7 +95,6 @@ export const useRoomCreators = (room: EventedRoomReading): Set<string> => {
  * creator sets so permission checks remain fail-closed.
  */
 export const useRoomsCreators = (rooms: RoomReading[]): Map<string, Set<string>> => {
-  const mx = useMatrixClient();
   const nativeSession = isNativeMatrixSession();
   const roomIdsKey = rooms.map((room) => room.roomId).join('\u0000');
   const getLegacyCreators = useCallback(() => {
@@ -108,7 +106,7 @@ export const useRoomsCreators = (rooms: RoomReading[]): Map<string, Set<string>>
     return roomToCreators;
   }, [rooms]);
 
-  const [roomToCreators, setRoomToCreators] = useState(() =>
+  const [roomToCreators] = useState(() =>
     nativeSession ? new Map<string, Set<string>>() : getLegacyCreators()
   );
   const [nativeState, setNativeState] = useState<
@@ -150,25 +148,6 @@ export const useRoomsCreators = (rooms: RoomReading[]): Map<string, Set<string>>
     };
   }, [nativeSession, roomIdsKey, rooms]);
 
-  useStateEventCallback(
-    mx,
-    useCallback(
-      (event) => {
-        if (nativeSession) return;
-        const roomId = event.getRoomId();
-        if (
-          roomId &&
-          event.getType() === StateEvent.RoomCreate &&
-          event.getStateKey() === '' &&
-          rooms.some((room) => room.roomId === roomId)
-        ) {
-          setRoomToCreators(getLegacyCreators());
-        }
-      },
-      [getLegacyCreators, nativeSession, rooms]
-    )
-  );
-
   if (nativeSession) {
     if (nativeState.status === 'error') throw nativeState.error;
     if (nativeState.roomIdsKey !== roomIdsKey || nativeState.status !== 'ready') {
@@ -180,10 +159,10 @@ export const useRoomsCreators = (rooms: RoomReading[]): Map<string, Set<string>>
   return roomToCreators;
 };
 
-export const getRoomCreatorsForRoomId = (mx: MatrixClientReading, roomId: string): Set<string> => {
+export const getRoomCreatorsForRoomId = (roomId: string): Set<string> => {
   if (isNativeMatrixSession()) return new Set();
 
-  const room = mx.getRoom(roomId);
+  const room = getNativeRoom(roomId);
   if (!room) return new Set();
 
   const createEvent = getStateEvent(room, StateEvent.RoomCreate);

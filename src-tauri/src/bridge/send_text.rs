@@ -1,12 +1,10 @@
 //! Desktop bridge for composer text send through `Core::command`.
 
 use synara_core::app::send::MatrixSendTextResult;
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
-
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn send_text(
@@ -22,25 +20,20 @@ pub(crate) async fn send_text(
     txn_id: Option<String>,
 ) -> Result<MatrixSendTextResult, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: "matrix_send_text".to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({
-                "roomId": room_id,
-                "body": body,
-                "msgType": msg_type,
-                "formattedBody": formatted_body,
-                "mentionUserIds": mention_user_ids,
-                "mentionRoom": mention_room,
-                "replyTo": reply_to,
-                "threadRoot": thread_root,
-                "txnId": txn_id,
-            }),
+        .send_text(synara_core::core_api::MatrixSendTextRequest {
+            room_id,
+            body,
+            msg_type,
+            formatted_body,
+            mention_user_ids,
+            mention_room,
+            reply_to,
+            thread_root,
+            txn_id,
         })
         .await
         .map_err(map_send_text_core_error)?;
-    parse_send_text_result(response.payload)
+    Ok(response)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -56,47 +49,19 @@ pub(crate) async fn edit_message(
     txn_id: Option<String>,
 ) -> Result<MatrixSendTextResult, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: "matrix_edit_message".to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({
-                "roomId": room_id,
-                "eventId": event_id,
-                "body": body,
-                "msgType": msg_type,
-                "formattedBody": formatted_body,
-                "mentionUserIds": mention_user_ids,
-                "mentionRoom": mention_room,
-                "txnId": txn_id,
-            }),
+        .edit_message(synara_core::core_api::MatrixEditMessageRequest {
+            room_id,
+            event_id,
+            body,
+            msg_type,
+            formatted_body,
+            mention_user_ids,
+            mention_room,
+            txn_id,
         })
         .await
         .map_err(map_edit_message_core_error)?;
-    parse_send_text_result(response.payload)
-}
-
-fn parse_send_text_result(
-    payload: serde_json::Value,
-) -> Result<MatrixSendTextResult, MatrixAuthCommandError> {
-    #[derive(serde::Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct Wire {
-        room_id: String,
-        event_id: String,
-        local_txn_id: String,
-        status: String,
-    }
-    let wire: Wire = serde_json::from_value(payload).map_err(|_| send_text_response_error())?;
-    if wire.status != "sent" {
-        return Err(send_text_response_error());
-    }
-    Ok(MatrixSendTextResult {
-        room_id: wire.room_id,
-        event_id: wire.event_id,
-        local_txn_id: wire.local_txn_id,
-        status: "sent",
-    })
+    Ok(response)
 }
 
 fn map_send_text_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -161,10 +126,71 @@ fn map_edit_message_core_error(error: MatrixIpcError) -> MatrixAuthCommandError 
     }
 }
 
-fn send_text_response_error() -> MatrixAuthCommandError {
+pub(crate) async fn discard_local_echo(
+    core: &Core,
+    room_id: String,
+    transaction_id: String,
+) -> Result<bool, MatrixAuthCommandError> {
+    let response = core
+        .local_echo_discard(synara_core::core_api::MatrixLocalEchoRequest {
+            room_id,
+            transaction_id,
+        })
+        .await
+        .map_err(|error| map_local_echo_error(error, "discard"))?;
+    Ok(response.aborted)
+}
+
+pub(crate) async fn retry_local_echo(
+    core: &Core,
+    room_id: String,
+    transaction_id: String,
+) -> Result<(), MatrixAuthCommandError> {
+    let response = core
+        .local_echo_retry(synara_core::core_api::MatrixLocalEchoRequest {
+            room_id,
+            transaction_id,
+        })
+        .await
+        .map_err(|error| map_local_echo_error(error, "retry"))?;
+    if response.status != "retrying" {
+        return Err(local_echo_response_error("retry"));
+    }
+    Ok(())
+}
+
+fn map_local_echo_error(error: MatrixIpcError, action: &'static str) -> MatrixAuthCommandError {
+    let diagnostic = error
+        .diagnostic_id
+        .as_deref()
+        .unwrap_or("d0.4-send-sdk-failed");
+    match error.category {
+        MatrixIpcErrorCategory::Forbidden => MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            diagnostic,
+        ),
+        MatrixIpcErrorCategory::SdkInvariant => MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "The native Matrix send request is invalid.",
+            diagnostic,
+        ),
+        _ => MatrixAuthCommandError::new("Unknown", local_echo_failure_message(action), diagnostic),
+    }
+}
+
+fn local_echo_failure_message(action: &'static str) -> &'static str {
+    if action == "discard" {
+        "The unsent message could not be discarded."
+    } else {
+        "The unsent message could not be retried."
+    }
+}
+
+fn local_echo_response_error(action: &'static str) -> MatrixAuthCommandError {
     MatrixAuthCommandError::new(
         "Unknown",
-        "The native Matrix message could not be sent.",
+        local_echo_failure_message(action),
         "d0.4-send-sdk-failed",
     )
 }

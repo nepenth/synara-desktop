@@ -10,7 +10,14 @@ test('room read state invokes the native owner for a logged-in desktop session',
     if (command === 'matrix_session_snapshot') {
       return { available: true, value: { status: 'logged_in' } };
     }
-    return { available: true, value: undefined };
+    return {
+      available: true,
+      value: {
+        receiptSent: true,
+        acknowledgedEventId: '$event:example.org',
+        unreadFlagCleared: false,
+      },
+    };
   };
 
   await setRoomReadStateWithNativeOwner('!room:example.org', 'mark_read', true, invoke);
@@ -22,6 +29,19 @@ test('room read state invokes the native owner for a logged-in desktop session',
       args: { roomId: '!room:example.org', action: 'mark_read' },
     },
   ]);
+});
+
+test('explicit mark-read rejects a result that did not send a receipt or clear the flag', async () => {
+  const invoke: NativeInvoke = async (command) => {
+    if (command === 'matrix_session_snapshot') {
+      return { available: true, value: { status: 'logged_in' } };
+    }
+    return { available: true, value: { receiptSent: false, unreadFlagCleared: false } };
+  };
+  await assert.rejects(
+    () => setRoomReadStateWithNativeOwner('!room:example.org', 'mark_read', true, invoke),
+    /Couldn't mark this channel as read\./
+  );
 });
 
 test('room unread invokes the native unread-flag command', async () => {
@@ -77,7 +97,7 @@ test('room read state fails closed when the native session is unavailable or log
 test('desktop mark-as-read helpers route through the native owner, not the JS-sdk GAP', () => {
   const notifications = readFileSync('src/app/utils/notifications.ts', 'utf8');
   assert.match(notifications, /setRoomReadStateWithNativeOwner/);
-  assert.match(notifications, /typeof window !== 'undefined' && isSynaraDesktop\(\)/);
+  assert.match(notifications, /typeof window === 'undefined' \|\| !isSynaraDesktop\(\)/);
   assert.match(notifications, /mark_read/);
   assert.match(notifications, /mark_unread/);
 });

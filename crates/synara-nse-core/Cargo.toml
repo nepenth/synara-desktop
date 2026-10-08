@@ -19,9 +19,6 @@ tokio = { workspace = true, features = ["macros"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 uniffi = { workspace = true, features = ["tokio"] }
 
-[build-dependencies]
-uniffi = { workspace = true, features = ["build"] }
-
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt", "time"] }
 # Live fixture setup alone uses the normal product login/sync owner. The

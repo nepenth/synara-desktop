@@ -1,22 +1,21 @@
 import { Descendant, Editor, Element, Text } from 'slate';
-import type { MatrixClientReading } from '../../utils/room';
 import { sanitizeText } from '../../utils/sanitize';
 import { BlockType } from './types';
 import { CustomElement } from './slate';
 import {
-  parseBlockMD,
-  parseInlineMD,
   unescapeMarkdownBlockSequences,
   unescapeMarkdownInlineSequences,
 } from '../../plugins/markdown';
-import { findAndReplace } from '../../utils/findAndReplace';
 import { sanitizeForRegex } from '../../utils/regex';
 import { isUserId } from '../../utils/matrix';
+import { getMyUserId } from '../../state/nativeIdentity';
 
+/**
+ * Options for the editor's own HTML. Markdown is rendered by Core instead
+ * (see composerMarkdown.ts), so this builder only maps editor formatting.
+ */
 export type OutputOptions = {
   allowTextFormatting?: boolean;
-  allowInlineMarkdown?: boolean;
-  allowBlockMarkdown?: boolean;
 };
 
 const textToCustomHtml = (node: Text, opts: OutputOptions): string => {
@@ -28,10 +27,6 @@ const textToCustomHtml = (node: Text, opts: OutputOptions): string => {
     if (node.strikeThrough) string = `<s>${string}</s>`;
     if (node.code) string = `<code>${string}</code>`;
     if (node.spoiler) string = `<span data-mx-spoiler>${string}</span>`;
-  }
-
-  if (opts.allowInlineMarkdown && string === sanitizeText(node.text)) {
-    string = parseInlineMD(string);
   }
 
   return string;
@@ -94,52 +89,16 @@ const isListElement = (node: Descendant): boolean =>
   Element.isElement(node) &&
   (node.type === BlockType.OrderedList || node.type === BlockType.UnorderedList);
 
-const HTML_TAG_REG_G = /<([\w-]+)(?: [^>]*)?(?:(?:\/>)|(?:>.*?<\/\1>))/g;
 const EDITOR_METADATA_ATTR_REG_G = /\sdata-md(?:=(?:"[^"]*"|'[^']*'|[^\s>]+))?/g;
 
 export const stripEditorMetadataFromCustomHtml = (customHtml: string): string =>
   customHtml.replace(EDITOR_METADATA_ATTR_REG_G, '');
 
-const ignoreHTMLParseInlineMD = (text: string): string =>
-  findAndReplace(
-    text,
-    HTML_TAG_REG_G,
-    (match) => match[0],
-    (txt) => parseInlineMD(txt)
-  ).join('');
-
 const toMatrixCustomHTMLInternal = (
   node: Descendant | Descendant[],
   opts: OutputOptions
 ): string => {
-  let markdownLines = '';
-  const parseNode = (n: Descendant, index: number, targetNodes: Descendant[]) => {
-    if (opts.allowBlockMarkdown && 'type' in n && n.type === BlockType.Paragraph) {
-      const line = toMatrixCustomHTMLInternal(n, {
-        ...opts,
-        allowInlineMarkdown: false,
-        allowBlockMarkdown: false,
-      })
-        .replace(/<br\/>$/, '\n')
-        .replace(/^(\\*)&gt;/, '$1>');
-
-      markdownLines += line;
-      if (index === targetNodes.length - 1) {
-        return parseBlockMD(markdownLines, ignoreHTMLParseInlineMD);
-      }
-      return '';
-    }
-
-    const parsedMarkdown = parseBlockMD(markdownLines, ignoreHTMLParseInlineMD);
-    markdownLines = '';
-    const isCodeLine = 'type' in n && n.type === BlockType.CodeLine;
-    if (isCodeLine) return `${parsedMarkdown}${toMatrixCustomHTMLInternal(n, {})}`;
-
-    return `${parsedMarkdown}${toMatrixCustomHTMLInternal(n, {
-      ...opts,
-      allowBlockMarkdown: false,
-    })}`;
-  };
+  const parseNode = (n: Descendant) => toMatrixCustomHTMLInternal(n, opts);
   if (Array.isArray(node)) return node.map(parseNode).join('');
   if (Text.isText(node)) return textToCustomHtml(node, opts);
 
@@ -155,7 +114,7 @@ const toMatrixCustomHTMLInternal = (
     node.children.forEach((child) => {
       if (isListElement(child)) {
         flushInlineChildren();
-        html += parseNode(child, 0, node.children);
+        html += parseNode(child);
         return;
       }
       if (Element.isElement(child) && child.type === BlockType.Paragraph) {
@@ -301,11 +260,7 @@ export type MentionsData = {
   room: boolean;
   users: Set<string>;
 };
-export const getMentions = (
-  mx: MatrixClientReading,
-  roomId: string,
-  editor: Editor
-): MentionsData => {
+export const getMentions = (roomId: string, editor: Editor): MentionsData => {
   const mentionData: MentionsData = {
     room: false,
     users: new Set(),
@@ -320,7 +275,7 @@ export const getMentions = (
         mentionData.room = true;
       }
 
-      if (isUserId(node.id) && node.id !== mx.getUserId()) {
+      if (isUserId(node.id) && node.id !== getMyUserId()) {
         mentionData.users.add(node.id);
       }
 

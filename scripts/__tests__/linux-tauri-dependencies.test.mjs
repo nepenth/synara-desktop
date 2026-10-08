@@ -8,7 +8,6 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const installerPath = path.join(root, "scripts/install-linux-tauri-dependencies.sh");
 const workflowPaths = [
   ".github/workflows/ci.yml",
-  ".github/workflows/desktop-package-smoke.yml",
   ".github/workflows/release.yml",
 ];
 

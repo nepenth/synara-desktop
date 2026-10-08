@@ -39,7 +39,6 @@ import {
   type NativeReactionReadback,
 } from './nativeReactionOwner';
 import { ReactionViewer } from './reaction-viewer';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { observeNativeTimelineBottom } from './nativeTimelineVisibility';
 import {
   editTextWithNativeTimelineAction,
@@ -71,19 +70,32 @@ import {
   editedFormattedBodyForSubmit,
   filterNativeForwardTargets,
   isNativeTimelineEventPinned,
+  nativeTimelineEchoFields,
+  nativeTimelineRowShield,
+  nativeTimelineUnsentDelivery,
+  NativeLocalEchoActionGuard,
+  runNativeLocalEchoDiscard,
+  runNativeLocalEchoRetry,
   nativeForwardEncryptionDecision,
   nativeThreadFocusEventId,
+  nativeTimelineInlineImageSrc,
   nativeTimelineMediaSrc,
   parseNativeTimelineAgentCard,
+  type NativeLocalEchoActionResult,
   type NativeTimelineMediaHandle,
   type NativeTimelinePollAnswer,
   type NativeTimelineReaction,
   type NativeTimelineReplyPreview,
   type NativeTimelineRowCapabilities,
   type NativeTimelineThreadSummary,
+  type NativeTimelineUnsentDelivery,
   type NativeTimelineViewRow,
   useNativeTimelineView,
 } from './nativeTimelineView';
+import {
+  nativeTimelineShieldPresentation,
+  type NativeTimelineShieldPresentation,
+} from './nativeTimelineShield';
 import type { RoomEncryptionStatus } from '../matrix-dto/room';
 import { incomingCallLabel } from '../matrix-rtc/liveCallChrome';
 import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
@@ -147,6 +159,7 @@ import {
 } from '../../utils/timelinePagination';
 import * as htmlCss from './nativeTimelineHtml.css';
 import * as depthCss from '../../styles/Depth.css';
+import { getMyUserId } from '../../state/nativeIdentity';
 
 const HermesAgentCard = React.lazy(() =>
   import('../../components/hermes/HermesAgentCard').then((module) => ({
@@ -391,6 +404,9 @@ type NativeTimelineRowProps = {
 // event/action lock outside transient presenter state so reopening the menu
 // cannot dispatch the same server mutation twice.
 const nativeTimelineActionsInFlight = new Set<string>();
+// Shared across row remounts so a virtualized row cannot re-run a discard
+// or retry that is still in flight.
+const nativeLocalEchoActions = new NativeLocalEchoActionGuard();
 const nativePollFlights = new NativePollFlightCoordinator();
 const nativeReactionFlights = new NativeReactionFlightCoordinator();
 let nativeTimelineActionSessionGeneration: number | undefined;
@@ -1040,11 +1056,81 @@ const NativeTimelineRowActions = ({
   );
 };
 
+const NativeTimelineUnsentChrome = ({
+  unsent,
+  pending,
+  onDiscard,
+  onRetry,
+}: {
+  unsent: NativeTimelineUnsentDelivery;
+  pending: boolean;
+  onDiscard: (transactionId: string) => void;
+  onRetry: (transactionId: string) => void;
+}) => {
+  const transactionId = unsent.transactionId;
+  return (
+    <div
+      className={htmlCss.UnsentDelivery}
+      data-native-timeline-unsent="true"
+      aria-busy={pending || undefined}
+    >
+      <span
+        aria-label={unsent.accessibleName}
+        data-native-timeline-delivery={unsent.status}
+        data-native-timeline-wedged={unsent.wedged ? 'true' : undefined}
+      >
+        {unsent.accessibleName}
+      </span>
+      {transactionId ? (
+        <button
+          type="button"
+          className={htmlCss.UnsentAction}
+          aria-label="Discard unsent message"
+          data-native-timeline-discard-unsent="true"
+          disabled={pending}
+          onClick={() => onDiscard(transactionId)}
+        >
+          Discard
+        </button>
+      ) : null}
+      {unsent.status === 'failed' && transactionId ? (
+        <button
+          type="button"
+          className={htmlCss.UnsentAction}
+          aria-label="Retry unsent message"
+          data-native-timeline-retry-unsent="true"
+          disabled={pending}
+          onClick={() => onRetry(transactionId)}
+        >
+          Retry
+        </button>
+      ) : null}
+    </div>
+  );
+};
+
 type NativeTimelineRowActionSurfaceProps = {
   children: React.ReactNode;
   actionProps: Omit<NativeTimelineRowActionsProps, 'onRequestClose'>;
   onReaction: (key: string) => void;
+  unsent?: NativeTimelineUnsentDelivery;
+  unsentPending?: boolean;
+  onDiscardUnsent?: (transactionId: string) => void;
+  onRetryUnsent?: (transactionId: string) => void;
+  shield?: NativeTimelineShieldPresentation;
 };
+
+const NativeTimelineShieldBadge = ({ shield }: { shield: NativeTimelineShieldPresentation }) => (
+  <span
+    className={htmlCss.EncryptionShield}
+    data-native-timeline-shield={shield.tone}
+    role="img"
+    aria-label={shield.label}
+    title={shield.label}
+  >
+    <Icon src={shield.icon === 'unencrypted' ? Icons.Warning : Icons.Shield} size="50" />
+  </span>
+);
 
 /**
  * The native presenter owns the action UI as well as the data/actions behind it.
@@ -1056,6 +1142,11 @@ const NativeTimelineRowActionSurface = ({
   children,
   actionProps,
   onReaction,
+  unsent,
+  unsentPending = false,
+  onDiscardUnsent,
+  onRetryUnsent,
+  shield,
 }: NativeTimelineRowActionSurfaceProps) => {
   const { eventId, capabilities } = actionProps;
   const [hovered, setHovered] = useState(false);
@@ -1173,6 +1264,15 @@ const NativeTimelineRowActionSurface = ({
           </Menu>
         </div>
       )}
+      {unsent && onDiscardUnsent && onRetryUnsent ? (
+        <NativeTimelineUnsentChrome
+          unsent={unsent}
+          pending={unsentPending}
+          onDiscard={onDiscardUnsent}
+          onRetry={onRetryUnsent}
+        />
+      ) : null}
+      {shield ? <NativeTimelineShieldBadge shield={shield} /> : null}
       {children}
     </div>
   );
@@ -1305,9 +1405,14 @@ const NativeTimelineMedia = ({
     return <img src={mediaSrc} alt="Sticker" style={mediaStyle(media, reservedBox)} />;
   }
   if (messageType === 'image') {
+    const inlineSrc = media ? nativeTimelineInlineImageSrc(media, reservedBox) : undefined;
     return (
       <Box direction="Column" gap="100">
-        <img src={mediaSrc} alt={caption || filename || 'Image'} style={mediaStyle(media)} />
+        <img
+          src={inlineSrc ?? mediaSrc}
+          alt={caption || filename || 'Image'}
+          style={mediaStyle(media)}
+        />
         {captionView}
       </Box>
     );
@@ -1760,6 +1865,34 @@ const NativeTimelineRow = ({
       nativeTimelineActionsInFlight.delete(completed);
     }
   }, [eventId, roomId, row, sessionGeneration]);
+  const unsentDelivery = nativeTimelineUnsentDelivery(nativeTimelineEchoFields(row));
+  const shield = nativeTimelineShieldPresentation(nativeTimelineRowShield(row));
+  const [unsentPending, setUnsentPending] = useState(() =>
+    unsentDelivery?.transactionId
+      ? nativeLocalEchoActions.isPending(roomId, unsentDelivery.transactionId)
+      : false
+  );
+  const runUnsentAction = (
+    transactionId: string,
+    run: () => Promise<NativeLocalEchoActionResult>
+  ) => {
+    if (nativeLocalEchoActions.isPending(roomId, transactionId)) return;
+    setUnsentPending(true);
+    void run().then((result) => {
+      // A press ignored by the guard leaves the first press to finish.
+      if (result.status === 'ignored') return;
+      if (result.status === 'error') onActionError(result.message);
+      if (rowMountedRef.current) setUnsentPending(false);
+    });
+  };
+  const discardUnsent = (transactionId: string) =>
+    runUnsentAction(transactionId, () =>
+      runNativeLocalEchoDiscard(nativeLocalEchoActions, roomId, transactionId)
+    );
+  const retryUnsent = (transactionId: string) =>
+    runUnsentAction(transactionId, () =>
+      runNativeLocalEchoRetry(nativeLocalEchoActions, roomId, transactionId)
+    );
   const rowViewReactions = nativeReactionsForViewer('reactions' in row ? row.reactions : undefined);
   const openReactionViewer = (initialKey?: string) => {
     if (!eventId) return;
@@ -1796,6 +1929,11 @@ const NativeTimelineRow = ({
             onOpenThread,
           }}
           onReaction={runReaction}
+          unsent={unsentDelivery}
+          shield={shield}
+          unsentPending={unsentPending}
+          onDiscardUnsent={discardUnsent}
+          onRetryUnsent={retryUnsent}
         >
           <div
             className={htmlCss.MessageSwipeSurface}
@@ -1946,6 +2084,11 @@ const NativeTimelineRow = ({
             onOpenThread,
           }}
           onReaction={runReaction}
+          unsent={unsentDelivery}
+          shield={shield}
+          unsentPending={unsentPending}
+          onDiscardUnsent={discardUnsent}
+          onRetryUnsent={retryUnsent}
         >
           <Box className={`${rowClassName} ${htmlCss.SystemRow}`}>
             <Text size="T300">{row.summary}</Text>
@@ -1969,6 +2112,11 @@ const NativeTimelineRow = ({
             onOpenThread,
           }}
           onReaction={runReaction}
+          unsent={unsentDelivery}
+          shield={shield}
+          unsentPending={unsentPending}
+          onDiscardUnsent={discardUnsent}
+          onRetryUnsent={retryUnsent}
         >
           <Box direction="Column" gap="100" className={rowClassName}>
             {originServerTs ? (
@@ -2020,6 +2168,11 @@ const NativeTimelineRow = ({
             onOpenThread,
           }}
           onReaction={runReaction}
+          unsent={unsentDelivery}
+          shield={shield}
+          unsentPending={unsentPending}
+          onDiscardUnsent={discardUnsent}
+          onRetryUnsent={retryUnsent}
         >
           <Box direction="Column" gap="100" className={rowClassName}>
             <Text size="T300">{incomingCallLabel(row.callKind)}</Text>
@@ -2084,6 +2237,11 @@ const NativeTimelineRow = ({
             onOpenThread,
           }}
           onReaction={runReaction}
+          unsent={unsentDelivery}
+          shield={shield}
+          unsentPending={unsentPending}
+          onDiscardUnsent={discardUnsent}
+          onRetryUnsent={retryUnsent}
         >
           <Box className={rowClassName}>
             <Text size="T300">{row.summary ?? 'Message removed'}</Text>
@@ -2107,6 +2265,11 @@ const NativeTimelineRow = ({
             onOpenThread,
           }}
           onReaction={runReaction}
+          unsent={unsentDelivery}
+          shield={shield}
+          unsentPending={unsentPending}
+          onDiscardUnsent={discardUnsent}
+          onRetryUnsent={retryUnsent}
         >
           <Box className={rowClassName}>
             <Text size="T300">This encrypted message is not available on this device.</Text>
@@ -2131,6 +2294,11 @@ const NativeTimelineRow = ({
             onOpenThread,
           }}
           onReaction={runReaction}
+          unsent={unsentDelivery}
+          shield={shield}
+          unsentPending={unsentPending}
+          onDiscardUnsent={discardUnsent}
+          onRetryUnsent={retryUnsent}
         >
           <Box className={rowClassName}>
             <Text size="T300">{row.summary}</Text>
@@ -2155,6 +2323,11 @@ const NativeTimelineRow = ({
             onOpenThread,
           }}
           onReaction={runReaction}
+          unsent={unsentDelivery}
+          shield={shield}
+          unsentPending={unsentPending}
+          onDiscardUnsent={discardUnsent}
+          onRetryUnsent={retryUnsent}
         >
           <Box direction="Column" gap="100" className={rowClassName}>
             <Box gap="200" alignItems="Baseline" className={htmlCss.Metadata}>
@@ -2289,8 +2462,7 @@ export function NativeTimelinePresenter({
       document.visibilityState === 'visible' &&
       document.hasFocus()
   );
-  const mx = useMatrixClient();
-  const ownUserId = mx.getUserId() ?? undefined;
+  const ownUserId = getMyUserId() ?? undefined;
   const [reactionViewer, setReactionViewer] = useState<{
     eventId: string;
     initialKey?: string;

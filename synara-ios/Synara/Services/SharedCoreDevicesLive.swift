@@ -1,4 +1,5 @@
 import Foundation
+import SynaraCore
 
 /// P4-S34 map of privacy-safe SharedCore device snapshot rows to Settings.
 ///
@@ -8,7 +9,7 @@ struct SharedCoreSessionDevice: Equatable, Identifiable {
     let id: String
     let displayName: String
     let isCurrent: Bool
-    let trust: String
+    let trust: DeviceTrustDto
     let lastSeenTs: UInt64?
     let isCrossSignedByOwner: Bool
     let firstSeenTs: UInt64?
@@ -20,7 +21,7 @@ enum SharedCoreDevicesLive {
         deviceId: String,
         displayName: String?,
         isCurrent: Bool,
-        trust: String,
+        trust: DeviceTrustDto,
         lastSeenTs: UInt64? = nil,
         isCrossSignedByOwner: Bool = false,
         firstSeenTs: UInt64? = nil,
@@ -40,20 +41,18 @@ enum SharedCoreDevicesLive {
         )
     }
 
-    static func trustDisplayName(_ trust: String) -> String {
+    static func trustDisplayName(_ trust: DeviceTrustDto) -> String {
         switch trust {
-        case "verified", "verified_locally_only":
+        case .verified, .verifiedLocallyOnly:
             return "Verified"
-        case "verified_by_certificate":
+        case .verifiedByCertificate:
             return "Verified (certificate)"
-        case "unverified":
+        case .unverified:
             return "Unverified"
-        case "dehydrated":
+        case .dehydrated:
             return "Backup device"
-        case "no_encryption", "unsupported":
+        case .noEncryption:
             return "Not encrypted"
-        default:
-            return "Unknown"
         }
     }
 

@@ -1,33 +1,21 @@
 import { getSessionBootstrapResult } from '../../state/sessionBootstrap';
 import { invokeDesktopWithAvailability, isSynaraDesktop, listen } from '../../utils/desktop';
+import type {
+  NativeVerificationDirection,
+  NativeVerificationPhase,
+  NativeVerificationQr,
+  NativeVerificationSas as WireNativeVerificationSas,
+} from '../matrix-dto/generated';
+import type { NullsToOptional } from '../matrix-dto/wireTypes';
 
-export type NativeVerificationDirection = 'incoming' | 'outgoing';
-export type NativeVerificationPhase =
-  | 'requested'
-  | 'ready'
-  | 'started'
-  | 'keys_exchanging'
-  | 'sas_ready'
-  | 'confirmed'
-  | 'done'
-  | 'mismatched'
-  | 'cancelled'
-  | 'failed';
-
-export type NativeVerificationEmoji = {
-  symbol: string;
-  description: string;
-};
-
-export type NativeVerificationSas = {
-  emoji?: NativeVerificationEmoji[];
-  decimals?: [number, number, number];
-};
-
-export type NativeVerificationQr = {
-  imageDataUrl: string;
-  scanned: boolean;
-};
+/** Parsed form of Core's `NativeVerificationSas`: absent instead of `null`. */
+export type NativeVerificationSas = NullsToOptional<WireNativeVerificationSas>;
+export type {
+  NativeVerificationDirection,
+  NativeVerificationEmoji,
+  NativeVerificationPhase,
+  NativeVerificationQr,
+} from '../matrix-dto/generated';
 
 export type NativeVerificationRequest = {
   flowId: string;
@@ -86,6 +74,17 @@ export const verificationRequestNeedsSasStart = (request: NativeVerificationRequ
   request.direction === 'outgoing' &&
   request.phase === 'ready' &&
   !verificationRequestHasQr(request);
+
+/**
+ * The other device scanned the code this device shows. Core waits for the user
+ * to say the other device reported success before it confirms the scan.
+ */
+export const verificationRequestAwaitsQrConfirmation = (
+  request: NativeVerificationRequest
+): boolean => request.phase === 'qr_scanned';
+
+export const QR_SCANNED_CONFIRMATION_PROMPT =
+  'The other device scanned your code. Did it show a confirmation?';
 
 export const verificationRequestCanFallbackToSas = (request: NativeVerificationRequest): boolean =>
   verificationRequestHasQr(request) &&

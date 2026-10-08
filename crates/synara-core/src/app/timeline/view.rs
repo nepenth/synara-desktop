@@ -18,17 +18,18 @@ use matrix_sdk::ruma::{
     UserId as RumaUserId,
 };
 use matrix_sdk_ui::timeline::{
-    AnyOtherStateEventContentChange, EventTimelineItem, MemberProfileChange, MembershipChange,
-    MsgLikeKind, OtherState, RoomMembershipChange, TimelineDetails, TimelineEventItemId,
-    TimelineItem as SdkTimelineItem, TimelineItemContent, VirtualTimelineItem,
+    AnyOtherStateEventContentChange, EventSendState, EventTimelineItem, MemberProfileChange,
+    MembershipChange, MsgLikeKind, OtherState, RoomMembershipChange, TimelineDetails,
+    TimelineEventItemId, TimelineItem as SdkTimelineItem, TimelineItemContent, VirtualTimelineItem,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 use crate::app::agent_approvals::is_eligible_agent_approval_prompt;
-use crate::dto::{EventId, RoomId, TimelineItemId, UserId};
+use crate::dto::{EventId, LocalEchoState, RoomId, TimelineItemId, UserId};
 
 use super::reactions::project_view_reaction_senders;
+use super::shield::{project_encryption_shield, TimelineEncryptionShield, STRICT_SHIELDS};
 use super::TimelineMediaRegistry;
 
 pub const TIMELINE_VIEW_SCHEMA_VERSION: u32 = 1;
@@ -207,7 +208,59 @@ pub struct TimelineEventRowBase {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sender_avatar_url: Option<String>,
     pub origin_server_ts: u64,
+    /// SDK send state for a local echo. Absent on remote rows and on older
+    /// snapshots. `SendingFailed.error` is never copied here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_echo_state: Option<LocalEchoState>,
+    /// SDK transaction id while this row is still a local echo. Discard and
+    /// retry address this id; it is not a server event id.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transaction_id: Option<String>,
+    /// SDK authenticity shield for an event in an encrypted room. Absent when
+    /// the event is trusted, in an unencrypted room, a local echo, or
+    /// undecryptable, and on older snapshots.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encryption_shield: Option<TimelineEncryptionShield>,
     pub capabilities: TimelineRowCapabilities,
+}
+
+/// Delivery classification copied from `EventTimelineItem::send_state()`.
+///
+/// `known_event_id` is `EventTimelineItem::event_id()`. `NotSentYet` and
+/// `SendingFailed` omit it. An empty in-memory product `SendQueue` is not an
+/// input: relaunch builds that queue empty and must still project the SDK state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectedLocalEcho {
+    pub state: Option<LocalEchoState>,
+    pub event_id: Option<String>,
+}
+
+pub fn project_local_echo_status(
+    send_state: Option<&EventSendState>,
+    known_event_id: Option<&str>,
+) -> ProjectedLocalEcho {
+    match send_state {
+        Some(EventSendState::NotSentYet { .. }) => ProjectedLocalEcho {
+            state: Some(LocalEchoState::Sending),
+            event_id: None,
+        },
+        Some(EventSendState::SendingFailed { is_recoverable, .. }) => ProjectedLocalEcho {
+            state: Some(if *is_recoverable {
+                LocalEchoState::Failed
+            } else {
+                LocalEchoState::Wedged
+            }),
+            event_id: None,
+        },
+        Some(EventSendState::Sent { event_id }) => ProjectedLocalEcho {
+            state: Some(LocalEchoState::Sent),
+            event_id: Some(event_id.to_string()),
+        },
+        None => ProjectedLocalEcho {
+            state: None,
+            event_id: known_event_id.map(str::to_owned),
+        },
+    }
 }
 
 /// Project the SDK-owned metadata common to every event row.
@@ -228,13 +281,18 @@ fn project_event_row_base_for_user(
 ) -> TimelineEventRowBase {
     let sender_id = event.sender().to_string();
     let (sender_name, sender_avatar_url) = project_sender_presentation(event);
+    let delivery =
+        project_local_echo_status(event.send_state(), event.event_id().map(|id| id.as_str()));
     TimelineEventRowBase {
         item_id: item_id.to_owned(),
-        event_id: event.event_id().map(ToString::to_string),
+        event_id: delivery.event_id,
         sender_name,
         sender_id,
         sender_avatar_url,
         origin_server_ts: event.timestamp().get().into(),
+        local_echo_state: delivery.state,
+        transaction_id: event.transaction_id().map(ToString::to_string),
+        encryption_shield: project_encryption_shield(event.get_shield(STRICT_SHIELDS)),
         capabilities: project_row_action_capabilities(event, own_user_id, authority),
     }
 }
@@ -540,10 +598,13 @@ pub fn project_poll_answers(
         .collect()
 }
 
-/// Preserve distinct Matrix `formatted_body` protocol content for presenters.
+/// Preserve distinct Matrix `formatted_body` protocol content for presenters,
+/// reduced by Core to the Matrix specification's tag and attribute allowlist
+/// (compat mode, so deprecated tags older clients send still render) with the
+/// rich-reply fallback removed. Desktop and iOS receive the same HTML.
 ///
-/// The returned HTML remains untrusted. Every platform presenter must apply
-/// its output-context sanitizer and bounded parser before rendering it.
+/// Presenters keep their own output-context sanitizer and bounded parser as
+/// defense in depth; this is the shared first pass, not a trust boundary.
 pub fn project_formatted_body(msgtype: &MessageType) -> Option<String> {
     let formatted = match msgtype {
         MessageType::Text(content) => content.formatted.as_ref(),
@@ -558,11 +619,18 @@ pub fn project_formatted_body(msgtype: &MessageType) -> Option<String> {
     if formatted.format != MessageFormat::Html {
         return None;
     }
-    let html = formatted.body.trim();
+    let sanitized = sanitize_incoming_html(&formatted.body);
+    let html = sanitized.trim();
     if html.is_empty() || html == msgtype.body().trim() {
         return None;
     }
     Some(html.to_owned())
+}
+
+/// Reduce untrusted incoming message HTML to the Matrix allowlist.
+pub fn sanitize_incoming_html(html: &str) -> String {
+    use matrix_sdk::ruma::html::{sanitize_html, HtmlSanitizerMode, RemoveReplyFallback};
+    sanitize_html(html, HtmlSanitizerMode::Compat, RemoveReplyFallback::Yes)
 }
 
 /// Keep Matrix media filenames and captions distinct. The legacy `body`
@@ -1432,6 +1500,52 @@ mod tests {
     }
 
     #[test]
+    fn formatted_body_strips_scripts_handlers_and_the_reply_fallback() {
+        let hostile = MessageType::Text(TextMessageEventContent::html(
+            "hi",
+            concat!(
+                "<mx-reply><blockquote>quoted</blockquote></mx-reply>",
+                "<p onclick=\"steal()\">hi <strong>there</strong></p>",
+                "<script>alert(1)</script>",
+                "<a href=\"javascript:alert(1)\">x</a>",
+                "<img src=\"https://evil.example/pixel.png\">",
+            ),
+        ));
+        let html = project_formatted_body(&hostile).expect("formatted body");
+        assert!(html.contains("<strong>there</strong>"));
+        for banned in [
+            "<script",
+            "onclick",
+            "javascript:",
+            "mx-reply",
+            "quoted",
+            "evil.example",
+        ] {
+            assert!(!html.contains(banned), "{banned} must be removed: {html}");
+        }
+    }
+
+    #[test]
+    fn formatted_body_keeps_matrix_markup_other_clients_send() {
+        let html = concat!(
+            "<p><span data-mx-spoiler>secret</span> ",
+            "<a href=\"https://matrix.to/#/@alice:example.org\">Alice</a> ",
+            "<font color=\"#ff0000\">red</font> ",
+            "<code>code</code></p>",
+        );
+        let message = MessageType::Text(TextMessageEventContent::html("x", html));
+        let projected = project_formatted_body(&message).expect("formatted body");
+        assert!(projected.contains("data-mx-spoiler"));
+        assert!(projected.contains("https://matrix.to/#/@alice:example.org"));
+        // Deprecated `<font color>` is rewritten to the spec's `data-mx-color`.
+        assert!(
+            projected.contains("<span data-mx-color=\"#ff0000\">red</span>"),
+            "{projected}"
+        );
+        assert!(projected.contains("<code>code</code>"));
+    }
+
+    #[test]
     fn media_filename_and_caption_are_projected_without_body_inference() {
         let mut image = ImageMessageEventContent::plain(
             "A sunset".to_owned(),
@@ -1640,6 +1754,9 @@ mod tests {
                 sender_name: "@alice:example.org".into(),
                 sender_avatar_url: None,
                 origin_server_ts: 1,
+                local_echo_state: None,
+                transaction_id: None,
+                encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
                     react: true,
                     reply: false,
@@ -1769,6 +1886,9 @@ mod tests {
                 sender_name: "@bob:example.org".into(),
                 sender_avatar_url: None,
                 origin_server_ts: 1,
+                local_echo_state: None,
+                transaction_id: None,
+                encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
                     react: true,
                     reply: true,
@@ -1863,5 +1983,154 @@ mod tests {
         let batch_json = serde_json::to_string(&batch).unwrap();
         assert!(batch_json.contains("\"pinnedEventIds\""));
         assert!(batch_json.contains("$pin:example.org"));
+    }
+
+    fn untrusted_send_failure() -> std::sync::Arc<matrix_sdk::Error> {
+        std::sync::Arc::new(matrix_sdk::Error::Io(std::io::Error::other(
+            "untrusted-send-failure-detail",
+        )))
+    }
+
+    #[test]
+    fn sdk_send_state_projects_sending_failed_and_sent_without_the_failure_detail() {
+        let sending = project_local_echo_status(
+            Some(&EventSendState::NotSentYet { progress: None }),
+            Some("$must-not-stick:example.org"),
+        );
+        assert_eq!(sending.state, Some(LocalEchoState::Sending));
+        assert_eq!(sending.event_id, None);
+
+        let failed = project_local_echo_status(
+            Some(&EventSendState::SendingFailed {
+                error: untrusted_send_failure(),
+                is_recoverable: true,
+            }),
+            Some("$must-not-stick:example.org"),
+        );
+        assert_eq!(failed.state, Some(LocalEchoState::Failed));
+        assert_eq!(failed.event_id, None);
+
+        let wedged = project_local_echo_status(
+            Some(&EventSendState::SendingFailed {
+                error: untrusted_send_failure(),
+                is_recoverable: false,
+            }),
+            None,
+        );
+        assert_eq!(wedged.state, Some(LocalEchoState::Wedged));
+        assert_eq!(wedged.event_id, None);
+        assert_ne!(wedged.state, failed.state);
+
+        let sent_id = "$sent:example.org";
+        let sent = project_local_echo_status(
+            Some(&EventSendState::Sent {
+                event_id: sent_id.parse().expect("event id"),
+            }),
+            None,
+        );
+        assert_eq!(sent.state, Some(LocalEchoState::Sent));
+        assert_eq!(sent.event_id.as_deref(), Some(sent_id));
+
+        let remote = project_local_echo_status(None, Some("$remote:example.org"));
+        assert_eq!(remote.state, None);
+        assert_eq!(remote.event_id.as_deref(), Some("$remote:example.org"));
+
+        let row = TimelineEventRowBase {
+            item_id: "echo".into(),
+            event_id: failed.event_id.clone(),
+            sender_id: "@alice:example.org".into(),
+            sender_name: "Alice".into(),
+            sender_avatar_url: None,
+            origin_server_ts: 1,
+            local_echo_state: failed.state,
+            transaction_id: Some("txn-failed".into()),
+            encryption_shield: None,
+            capabilities: TimelineRowCapabilities {
+                react: false,
+                reply: false,
+                edit: false,
+                redact: false,
+                report: false,
+                pin: false,
+                forward: false,
+                vote: false,
+                decline_call: false,
+            },
+        };
+        let json = serde_json::to_string(&row).expect("row json");
+        assert!(json.contains("\"localEchoState\":\"failed\""));
+        assert!(json.contains("\"transactionId\":\"txn-failed\""));
+        assert!(!json.contains("eventId"));
+        assert!(!json.contains("untrusted-send-failure-detail"));
+        assert!(!json.contains("access_token"));
+        let rendered = format!("{failed:?}{wedged:?}{json}");
+        assert!(!rendered.contains("untrusted-send-failure-detail"));
+
+        let mut legacy = serde_json::to_value(&row).expect("row value");
+        let object = legacy.as_object_mut().expect("object");
+        object.remove("localEchoState");
+        object.remove("transactionId");
+        let decoded: TimelineEventRowBase =
+            serde_json::from_value(legacy).expect("older snapshots omit delivery");
+        assert_eq!(decoded.local_echo_state, None);
+        assert_eq!(decoded.transaction_id, None);
+        assert_eq!(decoded.event_id, None);
+    }
+
+    #[test]
+    fn empty_product_send_queue_does_not_present_a_restored_sdk_echo_as_sent() {
+        let queue = crate::app::send::SendQueue::new(9);
+        assert!(
+            queue.is_empty(),
+            "NativeTimelineOwner::new starts from an empty in-memory SendQueue"
+        );
+        for (state, expected) in [
+            (
+                EventSendState::NotSentYet { progress: None },
+                LocalEchoState::Sending,
+            ),
+            (
+                EventSendState::SendingFailed {
+                    error: untrusted_send_failure(),
+                    is_recoverable: true,
+                },
+                LocalEchoState::Failed,
+            ),
+            (
+                EventSendState::SendingFailed {
+                    error: untrusted_send_failure(),
+                    is_recoverable: false,
+                },
+                LocalEchoState::Wedged,
+            ),
+        ] {
+            let projected = project_local_echo_status(Some(&state), None);
+            assert_eq!(projected.state, Some(expected));
+            assert_eq!(projected.event_id, None);
+            assert_ne!(projected.state, Some(LocalEchoState::Sent));
+            let _ = &queue;
+        }
+
+        let source = include_str!("view.rs");
+        let start = source
+            .find("pub fn project_local_echo_status")
+            .expect("mapper");
+        let end = source[start..]
+            .find("\npub fn ")
+            .map(|offset| start + offset)
+            .expect("mapper ends before the next public function");
+        let body = &source[start..end];
+        assert!(body.contains("is_recoverable"));
+        assert!(body.contains("LocalEchoState::Wedged"));
+        assert!(!body.contains("untrusted-send-failure-detail"));
+        assert!(!body.contains(".error"));
+        assert!(!body.contains("format!"));
+        let call = source
+            .find("project_local_echo_status(event.send_state()")
+            .expect("row projection copies SDK send state");
+        let call_end = (call + 1200).min(source.len());
+        let call_body = &source[call..call_end];
+        assert!(call_body.contains("event.send_state()"));
+        assert!(call_body.contains("event.transaction_id()"));
     }
 }

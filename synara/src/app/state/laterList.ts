@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../utils/desktop';
 import type { SynaraLaterContent } from '../../types/matrix/accountData';
 import { emptyLaterContent, normalizeLaterContent } from '../utils/later';
+import { startRoomListUpdateDrivenPoll } from '../utils/nativeRoomListUpdates';
 
 export type LaterContentAction = {
   type: 'INITIALIZE' | 'PUT';
@@ -71,10 +72,10 @@ export const useBindLaterContentAtom = (
     }
 
     void refresh();
-    const pollId = window.setInterval(() => void refresh(), 1_000);
+    const stopPolling = startRoomListUpdateDrivenPoll(() => void refresh());
     return () => {
       disposed = true;
-      window.clearInterval(pollId);
+      stopPolling();
     };
   }, [setLaterContent]);
 };

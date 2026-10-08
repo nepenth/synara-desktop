@@ -3,12 +3,14 @@
 //! Core owns SDK recovery I/O; platforms retain confirmation and one-time secret display.
 
 mod live;
+pub(crate) use live::enable_recovery;
 pub use live::{bootstrap, reset, status, unlock, SecretStorageSetup};
 
 use serde::Serialize;
 
 pub const RECOVERY_DOCUMENT_NAME: &str = "synara-recovery-key.txt";
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeSecretStorageState {
@@ -18,6 +20,7 @@ pub enum NativeSecretStorageState {
     Ready,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeSecretStorageAction {
@@ -26,6 +29,7 @@ pub enum NativeSecretStorageAction {
     None,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeMissingSecret {
@@ -35,6 +39,7 @@ pub enum NativeMissingSecret {
     EncryptionBackup,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeSecretStorageStatus {
@@ -49,6 +54,7 @@ pub struct NativeSecretStorageStatus {
     pub action: NativeSecretStorageAction,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeSecretStorageOutcome {
@@ -56,12 +62,14 @@ pub enum NativeSecretStorageOutcome {
     AlreadyConfigured,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeSecretStorageOperationResult {
     pub outcome: NativeSecretStorageOutcome,
     pub recovery_document_saved: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub recovery_document_name: Option<&'static str>,
     pub status: NativeSecretStorageStatus,
 }

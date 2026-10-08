@@ -8,6 +8,7 @@ use super::flow::{RoomKeyTransferFlow, RoomKeyTransferKind, RoomKeyTransferPhase
 
 pub const EXPORT_FILE_NAME: &str = "synara-room-keys.txt";
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeRoomKeyTransferKind {
@@ -15,6 +16,7 @@ pub enum NativeRoomKeyTransferKind {
     Import,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeRoomKeyTransferPhase {
@@ -26,6 +28,7 @@ pub enum NativeRoomKeyTransferPhase {
     Cancelled,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomKeyTransferStatus {
@@ -39,9 +42,11 @@ pub struct NativeRoomKeyTransferStatus {
     pub failure_diagnostic_id: Option<&'static str>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomKeyTransferResult {
+    #[cfg_attr(feature = "ts-export", ts(type = "\"complete\""))]
     pub outcome: &'static str,
     pub file_label: String,
     pub keys_processed: u32,
@@ -50,6 +55,7 @@ pub struct NativeRoomKeyTransferResult {
     pub status: NativeRoomKeyTransferStatus,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomKeyFileSelection {

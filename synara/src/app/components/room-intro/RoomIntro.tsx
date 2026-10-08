@@ -5,7 +5,6 @@ import { useAtomValue } from 'jotai';
 import { IRoomCreateContent, Membership, StateEvent } from '../../../types/matrix/room';
 import { getMemberDisplayName, getStateEvent } from '../../utils/room';
 import type { EventedRoomReading } from '../../utils/roomEvents';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { getMxIdLocalPart } from '../../utils/matrix';
@@ -22,12 +21,12 @@ import { settingsAtom } from '../../state/settings';
 import { InviteUserPrompt } from '../invite-user-prompt';
 import { joinRoomWithNativeOwner } from '../nativeRoomJoinOwner';
 
+import { getNativeRoom } from '../../native/nativeSession';
 export type RoomIntroProps = {
   room: EventedRoomReading;
 };
 
 export const RoomIntro = as<'div', RoomIntroProps>(({ room, ...props }, ref) => {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const { navigateRoom } = useRoomNavigate();
   const mDirects = useAtomValue(mDirectAtom);
@@ -38,7 +37,7 @@ export const RoomIntro = as<'div', RoomIntroProps>(({ room, ...props }, ref) => 
   const name = useRoomName(room);
   const topic = useRoomTopic(room);
   const avatarHttpUrl = avatarMxc
-    ? resolveMatrixThumbnailUrl(mx, avatarMxc, 96, { useAuthentication })
+    ? resolveMatrixThumbnailUrl(avatarMxc, 96, { useAuthentication })
     : undefined;
 
   const createContent = createEvent?.getContent<IRoomCreateContent>();
@@ -100,7 +99,7 @@ export const RoomIntro = as<'div', RoomIntroProps>(({ room, ...props }, ref) => 
             <InviteUserPrompt room={room} requestClose={() => setInvitePrompt(false)} />
           )}
           {typeof prevRoomId === 'string' &&
-            (mx.getRoom(prevRoomId)?.getMyMembership() === Membership.Join ? (
+            (getNativeRoom(prevRoomId)?.getMyMembership() === Membership.Join ? (
               <Button
                 onClick={() => navigateRoom(prevRoomId, createContent?.predecessor?.event_id)}
                 variant="Success"

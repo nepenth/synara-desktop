@@ -58,9 +58,12 @@ fn plain_error_text(error: &PlainMediaError) -> String {
 
 #[test]
 fn plain_media_surface_exposes_live_owners_and_keeps_leftover_download() {
-    let udl = include_str!("../src/synara_core.udl");
-    assert!(udl.contains("download_plain_media("));
-    assert!(udl.contains("thumbnail_plain_media("));
+    let udl = crate::ffi_surface::udl();
+    assert!(crate::ffi_surface::declares_fn(udl, "download_plain_media"));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "thumbnail_plain_media"
+    ));
     assert!(udl.contains("dictionary MediaBytesDto"));
     assert!(udl.contains("interface PlainMediaError"));
     assert!(!udl.contains("matrix_login_password"));
@@ -71,12 +74,30 @@ fn plain_media_surface_exposes_live_owners_and_keeps_leftover_download() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("download_plain_media("));
-    assert!(shared_core.contains("thumbnail_plain_media("));
-    assert!(shared_core.contains("media_download("));
-    assert!(shared_core.contains("media_thumbnail("));
-    assert!(shared_core.contains("timeline_media_bytes("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "download_plain_media"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "thumbnail_plain_media"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "media_download"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "media_thumbnail"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_media_bytes"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

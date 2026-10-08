@@ -1,5 +1,6 @@
 //! Credential-free user/room profile IPC DTOs.
 
+use crate::dto::{ThreepidAddStatus, WriteAck};
 use serde::{Deserialize, Serialize};
 
 /// V-SEND.R-AVATAR-UPLOAD — result of a native user-profile write
@@ -7,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatrixProfileWriteResult {
-    pub status: &'static str,
+    pub status: WriteAck,
 }
 
 /// Homeserver own-profile read. Avatar is an `mxc://` URI only — never bytes.
@@ -32,7 +33,7 @@ pub struct MatrixIgnoredUsersSnapshot {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatrixIgnoredUsersWriteResult {
-    pub status: &'static str,
+    pub status: WriteAck,
 }
 
 /// Homeserver-attached email addresses. Addresses only — no tokens, no
@@ -53,7 +54,7 @@ pub struct MatrixThreepidEmail {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatrixThreepidWriteResult {
-    pub status: &'static str,
+    pub status: WriteAck,
 }
 
 /// Result of requesting an email token. `session_id` is the homeserver `sid`.
@@ -69,7 +70,7 @@ pub struct MatrixThreepidEmailTokenResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatrixThreepidAddResult {
-    pub status: String,
+    pub status: ThreepidAddStatus,
 }
 
 /// Result of uploading own-avatar bytes. `mxc` is the content URI only —

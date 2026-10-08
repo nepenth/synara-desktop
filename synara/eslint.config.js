@@ -26,6 +26,7 @@ export default [
       'node_modules/**',
       'playwright-report/**',
       'test-results/**',
+      'src/app/features/matrix-dto/generated/**',
     ],
   },
   js.configs.recommended,

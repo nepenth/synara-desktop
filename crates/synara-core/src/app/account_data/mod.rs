@@ -16,6 +16,7 @@ mod later;
 mod later_live;
 mod mdirect;
 mod mdirect_live;
+mod raw;
 mod room_notes;
 mod room_notes_live;
 
@@ -68,6 +69,12 @@ pub use mdirect::{
     NativeMDirectMutationResult, NativeMDirectSnapshot,
 };
 pub use mdirect_live::{add_room_to_mdirect, remove_room_from_mdirect, snapshot_mdirect};
+pub use raw::{
+    is_secret_bearing_type, validate_account_data_content, validate_account_data_type,
+    AccountDataTypeRegistry, NativeAccountDataContent, NativeAccountDataGetRequest,
+    NativeAccountDataSetRequest, NativeAccountDataTypes, NativeAccountDataTypesRequest,
+    RawAccountDataError, MAX_RAW_ACCOUNT_DATA_BYTES,
+};
 pub use room_notes::{
     complete_room_todo_item, limit_text, move_room_todo_item, normalize_room_note_item,
     normalize_room_notes_content, normalize_room_notes_content_checked, put_room_note_item,

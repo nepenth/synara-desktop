@@ -6,6 +6,7 @@
 //! HTTPS images are omitted (no webview fetch). OpenGraph JSON is cached in
 //! memory per `(session_generation, url)` and never persisted.
 
+use crate::dto::MediaPreviewStatus;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
@@ -34,7 +35,7 @@ const PREVIEW_HANDLE: &str = "v-send.r-media-preview-handle-unavailable";
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatrixMediaPreviewSnapshot {
-    pub status: String,
+    pub status: MediaPreviewStatus,
     pub room_id: String,
     pub session_generation: u64,
     pub url: String,
@@ -267,7 +268,7 @@ pub fn skipped_media_preview(
     url: &str,
 ) -> MatrixMediaPreviewSnapshot {
     MatrixMediaPreviewSnapshot {
-        status: "skipped".into(),
+        status: crate::dto::MediaPreviewStatus::Skipped,
         room_id,
         session_generation,
         url: url.to_owned(),
@@ -284,7 +285,7 @@ pub fn unavailable_media_preview(
     url: &str,
 ) -> MatrixMediaPreviewSnapshot {
     MatrixMediaPreviewSnapshot {
-        status: "unavailable".into(),
+        status: crate::dto::MediaPreviewStatus::Unavailable,
         room_id,
         session_generation,
         url: url.to_owned(),
@@ -303,7 +304,7 @@ fn snapshot_from_mapped(
     thumbnail_handle_id: Option<String>,
 ) -> MatrixMediaPreviewSnapshot {
     MatrixMediaPreviewSnapshot {
-        status: "ok".into(),
+        status: crate::dto::MediaPreviewStatus::Ok,
         room_id,
         session_generation,
         url: url.to_owned(),

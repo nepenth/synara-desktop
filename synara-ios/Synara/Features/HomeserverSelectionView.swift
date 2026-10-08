@@ -7,6 +7,13 @@ struct HomeserverSelectionView: View {
 
     var body: some View {
         Form {
+            if environment.session.sessionExpiredNotice {
+                Section {
+                    Text("Your session expired. Sign in again to reconnect.")
+                        .accessibilityIdentifier("SessionExpiredNotice")
+                }
+            }
+
             Section {
                 SynaraProductHeader(
                     title: "Synara",

@@ -165,7 +165,7 @@ async fn accept_account_setup_and_empty_device_cleanups(
 
 #[test]
 fn http_pusher_surface_exposes_product_and_keeps_leftovers() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("register_http_pusher"));
     assert!(udl.contains("delete_http_pusher"));
     assert!(udl.contains("dictionary PusherWriteDto"));
@@ -186,12 +186,30 @@ fn http_pusher_surface_exposes_product_and_keeps_leftovers() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("register_http_pusher("));
-    assert!(shared_core.contains("bind_http_pusher_owner("));
-    assert!(shared_core.contains("delete_http_pusher("));
-    assert!(shared_core.contains("pusher_set("));
-    assert!(shared_core.contains("pusher_delete("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "register_http_pusher"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "bind_http_pusher_owner"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "delete_http_pusher"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "pusher_set"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "pusher_delete"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_login_password"));
 }
 

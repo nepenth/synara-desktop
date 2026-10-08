@@ -5,7 +5,6 @@ import { useSetAtom } from 'jotai';
 import { UserHero, UserHeroName } from './UserHero';
 import { getMxIdLocalPart, getMxIdServer } from '../../utils/matrix';
 import { getMemberAvatarMxc, getMemberDisplayName } from '../../utils/room';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { useRoom } from '../../hooks/useRoom';
@@ -30,12 +29,12 @@ import { useRoomMembers } from '../../hooks/useRoomMembers';
 import { memberActionVisibility, resolveNativeRoomMembership } from './memberActions';
 import { composerMentionInsertAtom } from '../../state/composerMentionInsert';
 import { nativeIgnoredUsersSnapshot } from '../../features/settings/account/nativeIgnoredUsers';
+import { getSafeMyUserId } from '../../state/nativeIdentity';
 
 type UserRoomProfileProps = {
   userId: string;
 };
 export function UserRoomProfile({ userId }: UserRoomProfileProps) {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const navigate = useNavigate();
   const closeUserRoomProfile = useCloseUserRoomProfile();
@@ -47,7 +46,7 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
   const powerLevels = usePowerLevels(room);
   const creators = useRoomCreators(room);
   const nativeSession = isNativeMatrixSession();
-  const nativeMembers = useRoomMembers(mx, room.roomId, nativeSession);
+  const nativeMembers = useRoomMembers(room.roomId, nativeSession);
   const jsMembership = useMembership(room, userId);
   const membership = nativeSession
     ? resolveNativeRoomMembership(nativeMembers ?? null, userId)
@@ -71,17 +70,17 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
     ? (nativeIgnoredIds ?? []).includes(userId)
     : ignoredUsers.includes(userId);
 
-  const permissions = useRoomPermissions(creators, powerLevels);
+  const permissions = useRoomPermissions(powerLevels);
   const { hasMorePower } = useMemberPowerCompare(creators, powerLevels);
 
-  const myUserId = mx.getSafeUserId();
+  const myUserId = getSafeMyUserId();
   const creator = creators.has(userId);
   const nativeMembersFailed = Boolean(nativeSession && nativeMembers === undefined);
   const permissionsReady =
     !powerLevels.nativeUnavailable && (!nativeSession || Array.isArray(nativeMembers));
-  const canKickUser = permissions.action('kick', myUserId) && hasMorePower(myUserId, userId);
-  const canBanUser = permissions.action('ban', myUserId) && hasMorePower(myUserId, userId);
-  const canInvite = permissions.action('invite', myUserId);
+  const canKickUser = permissions.action('kick') && hasMorePower(myUserId, userId);
+  const canBanUser = permissions.action('ban') && hasMorePower(myUserId, userId);
+  const canInvite = permissions.action('invite');
   const visibility = memberActionVisibility({
     isSelf: userId === myUserId,
     membership,
@@ -112,7 +111,7 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
       ? nativeMember.avatarUrl
       : getMemberAvatarMxc(room, userId);
   const avatarUrl = avatarMxc
-    ? resolveMatrixThumbnailUrl(mx, avatarMxc, 96, { useAuthentication })
+    ? resolveMatrixThumbnailUrl(avatarMxc, 96, { useAuthentication })
     : undefined;
 
   const presence = useNativeUserPresence(userId);

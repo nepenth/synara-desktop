@@ -22,6 +22,7 @@ import { BlockType } from '../types';
 import { toggleBlock } from '../utils';
 import { sanitizeCustomHtml } from '../../../utils/sanitize';
 import { MATRIX_HTML_PROFILE } from '../../../utils/matrixHtmlProfile';
+import { toComposerMarkdown } from '../composerMarkdown';
 
 test('ordered list output preserves start attribute and plain-text numbering', () => {
   const nodes: Descendant[] = [
@@ -53,22 +54,12 @@ test('formatted ordered list input preserves start attribute in Slate', () => {
   assert.equal(node.children.length, 2);
 });
 
-test('markdown ordered list supports multi-digit starts', () => {
+test('markdown ordered list keeps its multi-digit start in the Core source', () => {
   const nodes: Descendant[] = [
     { type: BlockType.Paragraph, children: [{ text: '10. alpha' }] },
     { type: BlockType.Paragraph, children: [{ text: '11. beta' }] },
   ];
-
-  assert.equal(
-    trimCustomHtml(
-      toMatrixCustomHTML(nodes, {
-        allowTextFormatting: true,
-        allowBlockMarkdown: true,
-        allowInlineMarkdown: true,
-      })
-    ),
-    '<ol start="10"><li><p>alpha</p></li><li><p>beta</p></li></ol>'
-  );
+  assert.deepEqual(toComposerMarkdown(nodes), { source: '10. alpha\n11. beta', fragments: [] });
 });
 
 test('spoiler plain-text fallback does not reveal hidden text', () => {
@@ -876,29 +867,36 @@ test('golden rich content contract covers Matrix HTML, fallback text, and edit i
   ]);
 });
 
-test('markdown golden case preserves headings, quotes, code, links, and ordered starts', () => {
+test('typed markdown reaches Core verbatim while mentions travel as fragments', () => {
   const nodes: Descendant[] = [
     { type: BlockType.Paragraph, children: [{ text: '## Heading' }] },
-    { type: BlockType.Paragraph, children: [{ text: '> quoted' }] },
-    { type: BlockType.Paragraph, children: [{ text: '```' }] },
-    { type: BlockType.Paragraph, children: [{ text: 'code' }] },
-    { type: BlockType.Paragraph, children: [{ text: '```' }] },
-    { type: BlockType.Paragraph, children: [{ text: '[label](https://example.org)' }] },
-    { type: BlockType.Paragraph, children: [{ text: '10. ten' }] },
-    { type: BlockType.Paragraph, children: [{ text: '11. eleven' }] },
-  ];
-
-  const html = trimCustomHtml(
-    toMatrixCustomHTML(nodes, {
-      allowTextFormatting: true,
-      allowBlockMarkdown: true,
-      allowInlineMarkdown: true,
-    })
-  );
-
-  assert.doesNotMatch(html, /\[object Object\]/);
+    { type: BlockType.Paragraph, children: [{ text: '> quoted \uE000x\uE001' }] },
+    {
+      type: BlockType.Paragraph,
+      children: [
+        { text: 'hi ' },
+        {
+          type: BlockType.Mention,
+          id: '@alice:example.org',
+          name: 'Alice',
+          highlight: false,
+          children: [{ text: '' }],
+        },
+        { text: ' ', underline: true },
+        { text: 'bold', bold: true },
+      ],
+    },
+    {
+      type: BlockType.CodeBlock,
+      children: [{ type: BlockType.CodeLine, children: [{ text: 'let a = `b`;' }] }],
+    },
+  ] as Descendant[];
+  const { source, fragments } = toComposerMarkdown(nodes);
   assert.equal(
-    html,
-    '<h2>Heading</h2><blockquote>quoted<br/></blockquote><pre><code>code\n</code></pre><a href="https://example.org">label</a><br/><ol start="10"><li><p>ten</p></li><li><p>eleven</p></li></ol>'
+    source,
+    '## Heading\n> quoted x\nhi \uE0000\uE001\uE0001\uE001**bold**\n```\nlet a = `b`;\n```'
   );
+  assert.equal(fragments.length, 2);
+  assert.match(fragments[0], /^<a href="https:\/\/matrix\.to\/#\/@alice:example\.org">Alice<\/a>$/);
+  assert.equal(fragments[1], '<u> </u>');
 });

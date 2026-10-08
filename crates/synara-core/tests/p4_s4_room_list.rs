@@ -52,7 +52,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn room_list_surface_exposes_only_the_registered_snapshot_command() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("room_list_snapshot"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("attach_typing"));
@@ -66,7 +66,10 @@ fn room_list_surface_exposes_only_the_registered_snapshot_command() {
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
     assert!(shared_core.contains("room_list_snapshot"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
 }
 
 #[test]

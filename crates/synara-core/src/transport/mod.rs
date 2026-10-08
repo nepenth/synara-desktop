@@ -20,7 +20,7 @@ mod envelope;
 mod error;
 #[cfg(feature = "full-app")]
 mod protocol;
-#[cfg(feature = "full-app")]
+#[cfg(all(test, feature = "full-app"))]
 mod registry;
 #[cfg(feature = "full-app")]
 mod stream;
@@ -40,7 +40,7 @@ pub use envelope::*;
 pub use error::*;
 #[cfg(feature = "full-app")]
 pub use protocol::*;
-#[cfg(feature = "full-app")]
+#[cfg(all(test, feature = "full-app"))]
 pub use registry::*;
 #[cfg(feature = "full-app")]
 pub use stream::*;

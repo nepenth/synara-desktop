@@ -29,20 +29,13 @@ import {
   AccountDataEditor,
   AccountDataSubmitCallback,
 } from '../../../components/AccountDataEditor';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
-
-type ArbitraryRoomAccountDataWriter = (
-  roomId: string,
-  eventType: string,
-  content: object
-) => Promise<unknown>;
+import { setNativeAccountData } from '../../../native/nativeAccountData';
 
 type DeveloperToolsProps = {
   requestClose: () => void;
 };
 export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
   const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
-  const mx = useMatrixClient();
   const room = useRoom();
 
   const roomState = useRoomState(room);
@@ -63,12 +56,8 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
   }, []);
 
   const submitAccountData: AccountDataSubmitCallback = useCallback(
-    async (type, content) => {
-      // Developer tools intentionally support custom event types beyond the SDK's known event map.
-      const setRoomAccountData = mx.setRoomAccountData.bind(mx) as ArbitraryRoomAccountDataWriter;
-      await setRoomAccountData(room.roomId, type, content);
-    },
-    [mx, room.roomId]
+    (type, content) => setNativeAccountData(type, content as Record<string, unknown>, room.roomId),
+    [room.roomId]
   );
 
   if (accountDataType !== undefined) {

@@ -32,7 +32,6 @@ import {
 import { mDirectAtom } from '../../state/mDirectList';
 import { makeLobbyCategoryId } from '../../state/closedLobbyCategories';
 import { useCategoryHandler } from '../../hooks/useCategoryHandler';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { allRoomsAtom } from '../../state/room-list/roomList';
 import { getCanonicalAliasOrRoomId, rateLimitedActions } from '../../utils/matrix';
 import { getSpaceRoomPath } from '../../pages/pathUtils';
@@ -43,26 +42,23 @@ import { reparentRestrictedJoin, removeSpaceChild, setSpaceChild } from './nativ
 import { useClosedLobbyCategoriesAtom } from '../../state/hooks/closedLobbyCategories';
 import {
   makeSynaraSpacesContent,
+  saveSynaraSpacesContent,
   sidebarItemWithout,
   useSidebarItems,
 } from '../../hooks/useSidebarItems';
 import { useOrphanSpaces } from '../../state/hooks/roomList';
 import { roomToParentsAtom } from '../../state/room/roomToParents';
-import { AccountDataEvent } from '../../../types/matrix/accountData';
 import { SpaceHierarchy } from './SpaceHierarchy';
 import { useGetRoom } from '../../hooks/useGetRoom';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { getRoomPermissionsAPI } from '../../hooks/useRoomPermissions';
-import { useRoomsCreators } from '../../hooks/useRoomCreators';
 
+import { getNativeRoom } from '../../native/nativeSession';
 const useCanDropLobbyItem = (
   space: RoomReading,
   roomsPowerLevels: Map<string, IPowerLevels>,
-  roomCreators: Map<string, Set<string>>,
   getRoom: (roomId: string) => RoomReading | undefined
 ): CanDropCallback => {
-  const mx = useMatrixClient();
-
   const canDropSpace: CanDropCallback = useCallback(
     (item, container) => {
       if (!('space' in container.item)) {
@@ -75,19 +71,18 @@ const useCanDropLobbyItem = (
 
       const powerLevels = roomsPowerLevels.get(containerSpaceId);
       if (!powerLevels) return false;
-      const creators = roomCreators.get(containerSpaceId) ?? new Set<string>();
-      const permissions = getRoomPermissionsAPI(creators, powerLevels);
+      const permissions = getRoomPermissionsAPI(powerLevels);
 
       if (
         getRoom(containerSpaceId) === undefined ||
-        !permissions.stateEvent(StateEvent.SpaceChild, mx.getSafeUserId())
+        !permissions.stateEvent(StateEvent.SpaceChild)
       ) {
         return false;
       }
 
       return true;
     },
-    [space, roomsPowerLevels, roomCreators, getRoom, mx]
+    [space, roomsPowerLevels, getRoom]
   );
 
   const canDropRoom: CanDropCallback = useCallback(
@@ -96,20 +91,16 @@ const useCanDropLobbyItem = (
         'space' in container.item ? container.item.roomId : container.item.parentId;
 
       const draggingOutsideSpace = item.parentId !== containerSpaceId;
-      const restrictedItem = mx.getRoom(item.roomId)?.getJoinRule() === 'restricted';
+      const restrictedItem = getNativeRoom(item.roomId)?.getJoinRule() === 'restricted';
 
       // check and do not allow restricted room to be dragged outside
       // current space if can't change `m.room.join_rules` `content.allow`
       if (draggingOutsideSpace && restrictedItem) {
         const itemPowerLevels = roomsPowerLevels.get(item.roomId);
         if (!itemPowerLevels) return false;
-        const itemCreators = roomCreators.get(item.roomId) ?? new Set<string>();
-        const itemPermissions = getRoomPermissionsAPI(itemCreators, itemPowerLevels);
+        const itemPermissions = getRoomPermissionsAPI(itemPowerLevels);
 
-        const canChangeJoinRuleAllow = itemPermissions.stateEvent(
-          StateEvent.RoomJoinRules,
-          mx.getSafeUserId()
-        );
+        const canChangeJoinRuleAllow = itemPermissions.stateEvent(StateEvent.RoomJoinRules);
         if (!canChangeJoinRuleAllow) {
           return false;
         }
@@ -117,17 +108,16 @@ const useCanDropLobbyItem = (
 
       const powerLevels = roomsPowerLevels.get(containerSpaceId);
       if (!powerLevels) return false;
-      const creators = roomCreators.get(containerSpaceId) ?? new Set<string>();
-      const permissions = getRoomPermissionsAPI(creators, powerLevels);
+      const permissions = getRoomPermissionsAPI(powerLevels);
       if (
         getRoom(containerSpaceId) === undefined ||
-        !permissions.stateEvent(StateEvent.SpaceChild, mx.getSafeUserId())
+        !permissions.stateEvent(StateEvent.SpaceChild)
       ) {
         return false;
       }
       return true;
     },
-    [mx, getRoom, roomsPowerLevels, roomCreators]
+    [getRoom, roomsPowerLevels]
   );
 
   const canDrop: CanDropCallback = useCallback(
@@ -152,7 +142,6 @@ const useCanDropLobbyItem = (
 
 export function Lobby() {
   const navigate = useNavigate();
-  const mx = useMatrixClient();
   const mDirects = useAtomValue(mDirectAtom);
   const allRooms = useAtomValue(allRoomsAtom);
   const allJoinedRooms = useMemo(() => new Set(allRooms), [allRooms]);
@@ -169,7 +158,7 @@ export function Lobby() {
   const [onTop, setOnTop] = useState(true);
   const [closedCategories, setClosedCategories] = useAtom(useClosedLobbyCategoriesAtom());
   const [sidebarItems] = useSidebarItems(
-    useOrphanSpaces(mx, allRoomsAtom, useAtomValue(roomToParentsAtom))
+    useOrphanSpaces(allRoomsAtom, useAtomValue(roomToParentsAtom))
   );
   const sidebarSpaces = useMemo(() => {
     const sideSpaces = sidebarItems.flatMap((item) => {
@@ -223,14 +212,8 @@ export function Lobby() {
     [hierarchy, getRoom]
   );
   const roomsPowerLevels = useRoomsPowerLevels(powerLevelRooms);
-  const roomCreators = useRoomsCreators(powerLevelRooms);
 
-  const canDrop: CanDropCallback = useCanDropLobbyItem(
-    space,
-    roomsPowerLevels,
-    roomCreators,
-    getRoom
-  );
+  const canDrop: CanDropCallback = useCanDropLobbyItem(space, roomsPowerLevels, getRoom);
 
   const [reorderSpaceState, reorderSpace] = useAsyncCallback(
     useCallback(
@@ -268,9 +251,8 @@ export function Lobby() {
             const parentPL = roomsPowerLevels.get(reorder.item.parentId);
             if (!parentPL) return false;
 
-            const creators = roomCreators.get(reorder.item.parentId) ?? new Set<string>();
-            const permissions = getRoomPermissionsAPI(creators, parentPL);
-            const canEdit = permissions.stateEvent(StateEvent.SpaceChild, mx.getSafeUserId());
+            const permissions = getRoomPermissionsAPI(parentPL);
+            const canEdit = permissions.stateEvent(StateEvent.SpaceChild);
             return canEdit && reorder.orderKey !== currentOrders[index];
           });
 
@@ -284,7 +266,7 @@ export function Lobby() {
           });
         }
       },
-      [mx, hierarchy, lex, roomsPowerLevels, roomCreators]
+      [hierarchy, lex, roomsPowerLevels]
     )
   );
   const reorderingSpace = reorderSpaceState.status === AsyncStatus.Loading;
@@ -292,7 +274,7 @@ export function Lobby() {
   const [reorderRoomState, reorderRoom] = useAsyncCallback(
     useCallback(
       async (item: HierarchyItem, containerItem: HierarchyItem) => {
-        const itemRoom = mx.getRoom(item.roomId);
+        const itemRoom = getNativeRoom(item.roomId);
         if (!item.parentId) {
           return;
         }
@@ -355,7 +337,7 @@ export function Lobby() {
           });
         }
       },
-      [mx, hierarchy, lex]
+      [hierarchy, lex]
     )
   );
   const reorderingRoom = reorderRoomState.status === AsyncStatus.Loading;
@@ -399,8 +381,8 @@ export function Lobby() {
   const handleOpenRoom: MouseEventHandler<HTMLButtonElement> = (evt) => {
     const rId = evt.currentTarget.getAttribute('data-room-id');
     if (!rId) return;
-    const pSpaceIdOrAlias = getCanonicalAliasOrRoomId(mx, space.roomId);
-    navigate(getSpaceRoomPath(pSpaceIdOrAlias, getCanonicalAliasOrRoomId(mx, rId)));
+    const pSpaceIdOrAlias = getCanonicalAliasOrRoomId(space.roomId);
+    navigate(getSpaceRoomPath(pSpaceIdOrAlias, getCanonicalAliasOrRoomId(rId)));
   };
 
   const togglePinToSidebar = useCallback(
@@ -409,10 +391,9 @@ export function Lobby() {
       if (!sidebarSpaces.has(rId)) {
         newItems.push(rId);
       }
-      const newSpacesContent = makeSynaraSpacesContent(mx, newItems);
-      mx.setAccountData(AccountDataEvent.SynaraSpaces as any, newSpacesContent as any);
+      void saveSynaraSpacesContent(makeSynaraSpacesContent(newItems)).catch(() => undefined);
     },
-    [mx, sidebarItems, sidebarSpaces]
+    [sidebarItems, sidebarSpaces]
   );
 
   return (
@@ -472,7 +453,6 @@ export function Lobby() {
                             allJoinedRooms={allJoinedRooms}
                             mDirects={mDirects}
                             roomsPowerLevels={roomsPowerLevels}
-                            roomCreators={roomCreators}
                             categoryId={categoryId}
                             closed={
                               closedCategories.has(categoryId) ||

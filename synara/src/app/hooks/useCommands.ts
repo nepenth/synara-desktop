@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { MatrixClientReading, MemberReading, RoomReading } from '../utils/room';
+import type { MemberReading, RoomReading } from '../utils/room';
 import { useTranslation } from 'react-i18next';
 import {
   getDMRoomFor,
@@ -29,51 +29,15 @@ import {
   unbanUserWithNativeOwner,
 } from '../components/nativeRoomModerationOwner';
 import { sendLeftoverStateEvent } from '../components/nativeStateEventOwner';
+import { getSafeMyUserId } from '../state/nativeIdentity';
+import { sendNativeStateEvent } from '../native/nativeCommands';
+import {
+  nativeIgnoredUsersIgnore,
+  nativeIgnoredUsersUnignore,
+} from '../features/settings/account/nativeIgnoredUsers';
+import { bulkRedact } from '../native/nativeRoomExtras';
 
 type ServerMemberReading = MemberReading & { membership: string };
-
-type CommandsClientReading = MatrixClientReading & {
-  getSafeUserId(): string;
-  getIgnoredUsers(): string[];
-  setIgnoredUsers(ids: string[]): Promise<unknown>;
-  sendStateEvent(
-    roomId: string,
-    eventType: string,
-    content: unknown,
-    stateKey?: string
-  ): Promise<unknown>;
-  timestampToEvent(
-    roomId: string,
-    timestamp: number,
-    direction: 'f' | 'b'
-  ): Promise<{ event_id: string }>;
-  http: {
-    authedRequest<T>(method: string, path: string, opts: { limit: number }): Promise<T>;
-  };
-  createMessagesRequest(
-    roomId: string,
-    fromToken: string,
-    limit: number,
-    direction: 'f' | 'b',
-    filter?: unknown
-  ): Promise<{
-    end?: string;
-    chunk: {
-      type: string;
-      sender: string;
-      unsigned?: { redacted_because?: unknown };
-      event_id: string;
-    }[];
-  }>;
-  redactEvent(
-    roomId: string,
-    eventId: string,
-    txnId?: string,
-    opts?: { reason?: string }
-  ): Promise<unknown>;
-};
-
-type ContextResponseReading = { start?: string; end?: string };
 
 type RoomServerAclEventContent = {
   allow?: string[];
@@ -223,11 +187,9 @@ export type CommandRecord = Record<Command, CommandContent>;
 export type PollCommandExecutor = (poll: ParsedPoll) => Promise<void>;
 
 export const useCommands = (
-  mx: MatrixClientReading,
   room: RoomReading,
   executePoll?: PollCommandExecutor
 ): CommandRecord => {
-  const c = useMemo(() => mx as unknown as CommandsClientReading, [mx]);
   const { navigateRoom } = useRoomNavigate();
   const { t } = useTranslation();
 
@@ -263,10 +225,10 @@ export const useCommands = (
         description: 'Start direct message with user. Example: /startdm userId1',
         exe: async (payload) => {
           const rawIds = splitWithSpace(payload);
-          const userIds = rawIds.filter((id) => isUserId(id) && id !== c.getSafeUserId());
+          const userIds = rawIds.filter((id) => isUserId(id) && id !== getSafeMyUserId());
           if (userIds.length === 0) return;
           if (userIds.length === 1) {
-            const dmRoomId = getDMRoomFor(mx, userIds[0])?.roomId;
+            const dmRoomId = getDMRoomFor(userIds[0])?.roomId;
             if (dmRoomId) {
               navigateRoom(dmRoomId);
               return;
@@ -444,10 +406,9 @@ export const useCommands = (
         exe: async (payload) => {
           const rawIds = splitWithSpace(payload);
           const userIds = rawIds.filter((id) => isUserId(id));
-          if (userIds.length > 0) {
-            let ignoredUsers = c.getIgnoredUsers().concat(userIds);
-            ignoredUsers = [...new Set(ignoredUsers)];
-            await c.setIgnoredUsers(ignoredUsers);
+          for (const userId of new Set(userIds)) {
+            // eslint-disable-next-line no-await-in-loop
+            await nativeIgnoredUsersIgnore(userId);
           }
         },
       },
@@ -457,9 +418,9 @@ export const useCommands = (
         exe: async (payload) => {
           const rawIds = splitWithSpace(payload);
           const userIds = rawIds.filter((id) => isUserId(id));
-          if (userIds.length > 0) {
-            const ignoredUsers = c.getIgnoredUsers();
-            await c.setIgnoredUsers(ignoredUsers.filter((id) => !userIds.includes(id)));
+          for (const userId of new Set(userIds)) {
+            // eslint-disable-next-line no-await-in-loop
+            await nativeIgnoredUsersUnignore(userId);
           }
         },
       },
@@ -471,17 +432,17 @@ export const useCommands = (
           if (nick === '') return;
           const mEvent = getRoomCurrentState(
             room as unknown as Parameters<typeof getRoomCurrentState>[0]
-          )?.getStateEvents(StateEvent.RoomMember, c.getSafeUserId());
+          )?.getStateEvents(StateEvent.RoomMember, getSafeMyUserId());
           const content = mEvent?.getContent();
           if (!content) return;
-          await c.sendStateEvent(
+          await sendNativeStateEvent(
             room.roomId,
             StateEvent.RoomMember as any,
             {
               ...content,
               displayname: nick,
             },
-            c.getSafeUserId()
+            getSafeMyUserId()
           );
         },
       },
@@ -492,17 +453,17 @@ export const useCommands = (
           if (payload.match(/^mxc:\/\/\S+$/)) {
             const mEvent = getRoomCurrentState(
               room as unknown as Parameters<typeof getRoomCurrentState>[0]
-            )?.getStateEvents(StateEvent.RoomMember, c.getSafeUserId());
+            )?.getStateEvents(StateEvent.RoomMember, getSafeMyUserId());
             const content = mEvent?.getContent();
             if (!content) return;
-            await c.sendStateEvent(
+            await sendNativeStateEvent(
               room.roomId,
               StateEvent.RoomMember as any,
               {
                 ...content,
                 avatar_url: payload,
               },
-              c.getSafeUserId()
+              getSafeMyUserId()
             );
           }
         },
@@ -511,7 +472,7 @@ export const useCommands = (
         name: Command.ConvertToDm,
         description: 'Convert room to direct message',
         exe: async () => {
-          const dmUserId = guessDmRoomUserId(room, c.getSafeUserId());
+          const dmUserId = guessDmRoomUserId(room, getSafeMyUserId());
           await addRoomIdToMDirect(room.roomId, dmUserId);
         },
       },
@@ -549,38 +510,16 @@ export const useCommands = (
             });
           }
 
-          const result = await c.timestampToEvent(room.roomId, ts, 'f');
-          const startEventId = result.event_id;
-
-          const path = `/rooms/${encodeURIComponent(room.roomId)}/context/${encodeURIComponent(
-            startEventId
-          )}`;
-          const eventContext = await c.http.authedRequest<ContextResponseReading>('GET', path, {
-            limit: 0,
+          if (users.length === 0) return;
+          // Core walks history newest-first from the live end, so events
+          // newer than `ts` are reached without a start-event lookup.
+          await bulkRedact({
+            roomId: room.roomId,
+            userIds: users,
+            sinceTs: ts,
+            eventTypes: messageTypes.length > 0 ? messageTypes : undefined,
+            reason,
           });
-
-          let token: string | undefined = eventContext.start;
-          while (token) {
-            // eslint-disable-next-line no-await-in-loop
-            const response = await c.createMessagesRequest(room.roomId, token, 20, 'f', undefined);
-            const { end, chunk } = response;
-            // remove until the latest event;
-            token = end;
-
-            const eventsToDelete = chunk.filter(
-              (roomEvent) =>
-                (messageTypes.length > 0 ? messageTypes.includes(roomEvent.type) : true) &&
-                users.includes(roomEvent.sender) &&
-                roomEvent.unsigned?.redacted_because === undefined
-            );
-
-            const eventIds = eventsToDelete.map((roomEvent) => roomEvent.event_id);
-
-            // eslint-disable-next-line no-await-in-loop
-            await rateLimitedActions(eventIds, (eventId) =>
-              c.redactEvent(room.roomId, eventId, undefined, { reason })
-            );
-          }
         },
       },
       [Command.Acl]: {
@@ -636,7 +575,7 @@ export const useCommands = (
             StateEvent.RoomServerAcl,
             aclContent as Record<string, unknown>,
             '',
-            () => c.sendStateEvent(room.roomId, StateEvent.RoomServerAcl as any, aclContent)
+            () => sendNativeStateEvent(room.roomId, StateEvent.RoomServerAcl as any, aclContent)
           );
         },
       },
@@ -665,7 +604,7 @@ export const useCommands = (
         },
       },
     }),
-    [c, mx, room, navigateRoom, t, executePoll]
+    [room, navigateRoom, t, executePoll]
   );
 
   return commands;

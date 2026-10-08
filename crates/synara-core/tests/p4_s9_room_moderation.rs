@@ -57,7 +57,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn room_moderation_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("room_invite"));
     assert!(udl.contains("room_kick"));
     assert!(udl.contains("room_ban"));
@@ -75,8 +75,14 @@ fn room_moderation_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("room_ban"));
     assert!(shared_core.contains("room_unban"));
     assert!(shared_core.contains("room_leave"));
-    assert!(shared_core.contains("room_join("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "room_join"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

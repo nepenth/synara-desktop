@@ -4,7 +4,7 @@ use super::*;
 
 /// Privacy-safe owner emit summary. No user id, tokens, or password.
 /// iOS re-fetches via the existing snapshot commands.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct OwnerUpdateDto {
     pub family: String,
     pub session_generation: u64,
@@ -12,7 +12,7 @@ pub struct OwnerUpdateDto {
 }
 
 /// Static fail-closed owner-update poll error.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum OwnerUpdateError {
     Failed { code: String, description: String },
 }
@@ -56,21 +56,21 @@ pub(super) fn push_owner_update(
 }
 
 /// Privacy-safe typing room row. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TypingRoomDto {
     pub room_id: String,
     pub user_ids: Vec<String>,
 }
 
 /// Privacy-safe typing snapshot. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TypingSnapshotDto {
     pub session_generation: u64,
     pub rooms: Vec<TypingRoomDto>,
 }
 
 /// Static fail-closed typing error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum TypingCommandError {
     Failed { code: String, description: String },
 }
@@ -125,7 +125,7 @@ pub(super) fn map_typing_set_core_error(error: MatrixIpcError) -> TypingCommandE
 }
 
 /// Privacy-safe presence snapshot. Identity fields only; no tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PresenceSnapshotDto {
     pub status: String,
     pub session_generation: u64,
@@ -137,7 +137,7 @@ pub struct PresenceSnapshotDto {
 }
 
 /// Privacy-safe presence subscription. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PresenceSubscriptionDto {
     pub subscription_id: String,
     pub user_id: String,
@@ -145,28 +145,39 @@ pub struct PresenceSubscriptionDto {
 }
 
 /// Privacy-safe presence SET ack. Status only; never echo state or statusMsg.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PresenceWriteDto {
-    pub status: String,
+    pub status: WriteAckDto,
 }
 
 /// Privacy-safe MatrixRTC transport. URLs only; no JWTs or tokens.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RtcTransportDto {
     pub kind: String,
     pub service_url: Option<String>,
 }
 
+super::wire_enum::wire_enum! {
+    pub enum RtcTransportsStatusDto {
+        Ready => "ready",
+        Unsupported => "unsupported",
+        Unavailable => "unavailable",
+    }
+}
+super::wire_enum::wire_enum_from!(crate::app::rtc_transports::NativeRtcTransportsStatus => RtcTransportsStatusDto {
+    Ready, Unsupported, Unavailable
+});
+
 /// Privacy-safe MatrixRTC discovery snapshot.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RtcTransportsSnapshotDto {
     pub session_generation: u64,
-    pub status: String,
+    pub status: RtcTransportsStatusDto,
     pub transports: Vec<RtcTransportDto>,
 }
 
 /// Static fail-closed RTC transport error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum RtcTransportsCommandError {
     Failed { code: String, description: String },
 }
@@ -211,15 +222,7 @@ pub(super) fn rtc_transports_snapshot_dto(
 ) -> RtcTransportsSnapshotDto {
     RtcTransportsSnapshotDto {
         session_generation: snapshot.session_generation,
-        status: match snapshot.status {
-            crate::app::rtc_transports::NativeRtcTransportsStatus::Ready => "ready".to_owned(),
-            crate::app::rtc_transports::NativeRtcTransportsStatus::Unsupported => {
-                "unsupported".to_owned()
-            }
-            crate::app::rtc_transports::NativeRtcTransportsStatus::Unavailable => {
-                "unavailable".to_owned()
-            }
-        },
+        status: snapshot.status.into(),
         transports: snapshot
             .transports
             .into_iter()
@@ -232,14 +235,14 @@ pub(super) fn rtc_transports_snapshot_dto(
 }
 
 /// Privacy-safe MSC4426 status field. No tokens.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct UserStatusFieldDto {
     pub emoji: String,
     pub text: String,
 }
 
 /// Privacy-safe MSC4426 snapshot.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct UserStatusSnapshotDto {
     pub session_generation: u64,
     pub user_id: String,
@@ -248,13 +251,13 @@ pub struct UserStatusSnapshotDto {
 }
 
 /// Privacy-safe MSC4426 write ack. Status only; never echo emoji or text.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct UserStatusWriteDto {
-    pub status: String,
+    pub status: WriteAckDto,
 }
 
 /// Static fail-closed user-status error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum UserStatusCommandError {
     Failed { code: String, description: String },
 }
@@ -323,7 +326,7 @@ pub(super) fn user_status_snapshot_dto(
 }
 
 /// Static fail-closed presence error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum PresenceCommandError {
     Failed { code: String, description: String },
 }
@@ -458,26 +461,6 @@ pub(super) fn presence_snapshot_dto(result: NativePresenceSnapshotResult) -> Pre
 }
 
 impl SharedCore {
-    /// Drain queued owner emit summaries. Not `Core.command`.
-    ///
-    /// NSE forbids this. An empty queue returns an empty list. Presence
-    /// user ids are never included. This is not Platform::emit.
-    pub async fn poll_owner_updates(&self) -> Result<Vec<OwnerUpdateDto>, OwnerUpdateError> {
-        if self.is_nse_read_only() {
-            return Err(owner_update_poll_failed(
-                NSE_FORBIDS_OWNER_POLL_CODE,
-                NSE_FORBIDS_OWNER_POLL_DESCRIPTION,
-            ));
-        }
-        let mut guard = self.owner_updates.lock().map_err(|_| {
-            owner_update_poll_failed(
-                OWNER_UPDATE_POLL_FAILED_CODE,
-                OWNER_UPDATE_POLL_FAILED_DESCRIPTION,
-            )
-        })?;
-        Ok(guard.drain(..).collect())
-    }
-
     /// Test-only enqueue onto the attach owner emit queue. Not on UDL.
     #[doc(hidden)]
     pub fn enqueue_owner_update_for_test(
@@ -489,24 +472,42 @@ impl SharedCore {
         push_owner_update(&self.owner_updates, family, session_generation, room_id);
     }
 
+    pub(super) async fn rtc_transports_command(
+        &self,
+        no_session: &'static str,
+        request: impl std::future::Future<Output = Result<NativeRtcTransportsSnapshot, MatrixIpcError>>,
+    ) -> Result<RtcTransportsSnapshotDto, RtcTransportsCommandError> {
+        let response = request
+            .await
+            .map_err(|error| map_rtc_transports_core_error(no_session, error))?;
+        let snapshot: NativeRtcTransportsSnapshot = response;
+        Ok(rtc_transports_snapshot_dto(snapshot))
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl SharedCore {
+    /// Drain queued owner emit summaries. Not `Core.command`.
+    ///
+    /// NSE forbids this. An empty queue returns an empty list. Presence
+    /// user ids are never included. This is not Platform::emit.
+    pub async fn poll_owner_updates(&self) -> Result<Vec<OwnerUpdateDto>, OwnerUpdateError> {
+        let mut guard = self.owner_updates.lock().map_err(|_| {
+            owner_update_poll_failed(
+                OWNER_UPDATE_POLL_FAILED_CODE,
+                OWNER_UPDATE_POLL_FAILED_DESCRIPTION,
+            )
+        })?;
+        Ok(guard.drain(..).collect())
+    }
+
     pub async fn typing_snapshot(&self) -> Result<TypingSnapshotDto, TypingCommandError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: TYPING_SNAPSHOT_COMMAND.to_owned(),
-                session_generation: TYPING_PRESENCE_GENERATION,
-                request_id: None,
-                payload: serde_json::Value::Null,
-            })
+            .typing_snapshot()
             .await
             .map_err(map_typing_snapshot_core_error)?;
-        let snapshot: NativeTypingSnapshot =
-            serde_json::from_value(response.payload).map_err(|_| {
-                typing_failed(
-                    TYPING_SNAPSHOT_FAILED_CODE,
-                    TYPING_SNAPSHOT_FAILED_DESCRIPTION,
-                )
-            })?;
+        let snapshot: NativeTypingSnapshot = response;
         Ok(TypingSnapshotDto {
             session_generation: snapshot.session_generation,
             rooms: snapshot
@@ -526,12 +527,7 @@ impl SharedCore {
         typing: bool,
     ) -> Result<(), TypingCommandError> {
         self.core
-            .command(CommandEnvelope {
-                command: TYPING_SET_COMMAND.to_owned(),
-                session_generation: TYPING_PRESENCE_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "roomId": room_id, "typing": typing }),
-            })
+            .typing_set(crate::core_api::MatrixTypingSetRequest { room_id, typing })
             .await
             .map_err(map_typing_set_core_error)?;
         Ok(())
@@ -543,21 +539,10 @@ impl SharedCore {
     ) -> Result<PresenceSnapshotDto, PresenceCommandError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: PRESENCE_SNAPSHOT_COMMAND.to_owned(),
-                session_generation: TYPING_PRESENCE_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "userId": user_id }),
-            })
+            .presence_snapshot(crate::core_api::MatrixPresenceSnapshotRequest { user_id })
             .await
             .map_err(map_presence_snapshot_core_error)?;
-        let result: NativePresenceSnapshotResult = serde_json::from_value(response.payload)
-            .map_err(|_| {
-                presence_failed(
-                    PRESENCE_SNAPSHOT_FAILED_CODE,
-                    PRESENCE_SNAPSHOT_FAILED_DESCRIPTION,
-                )
-            })?;
+        let result: NativePresenceSnapshotResult = response;
         Ok(presence_snapshot_dto(result))
     }
 
@@ -567,21 +552,10 @@ impl SharedCore {
     ) -> Result<PresenceSubscriptionDto, PresenceCommandError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: PRESENCE_SUBSCRIBE_COMMAND.to_owned(),
-                session_generation: TYPING_PRESENCE_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "userId": user_id }),
-            })
+            .presence_subscribe(crate::core_api::MatrixPresenceSubscribeRequest { user_id })
             .await
             .map_err(map_presence_subscribe_core_error)?;
-        let subscription: NativePresenceSubscription = serde_json::from_value(response.payload)
-            .map_err(|_| {
-                presence_failed(
-                    PRESENCE_SUBSCRIBE_FAILED_CODE,
-                    PRESENCE_SUBSCRIBE_FAILED_DESCRIPTION,
-                )
-            })?;
+        let subscription: NativePresenceSubscription = response;
         Ok(PresenceSubscriptionDto {
             subscription_id: subscription.subscription_id,
             user_id: subscription.user_id,
@@ -594,11 +568,8 @@ impl SharedCore {
         subscription_id: String,
     ) -> Result<(), PresenceCommandError> {
         self.core
-            .command(CommandEnvelope {
-                command: PRESENCE_UNSUBSCRIBE_COMMAND.to_owned(),
-                session_generation: TYPING_PRESENCE_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "subscriptionId": subscription_id }),
+            .presence_unsubscribe(crate::core_api::MatrixPresenceUnsubscribeRequest {
+                subscription_id,
             })
             .await
             .map_err(map_presence_unsubscribe_core_error)?;
@@ -612,20 +583,12 @@ impl SharedCore {
     ) -> Result<PresenceWriteDto, PresenceCommandError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: PRESENCE_SET_COMMAND.to_owned(),
-                session_generation: TYPING_PRESENCE_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "state": state, "statusMsg": status_msg }),
-            })
+            .presence_set(crate::core_api::MatrixPresenceSetRequest { state, status_msg })
             .await
             .map_err(map_presence_set_core_error)?;
-        let result: NativePresenceWriteResult =
-            serde_json::from_value(response.payload).map_err(|_| {
-                presence_failed(PRESENCE_SET_FAILED_CODE, PRESENCE_SET_FAILED_DESCRIPTION)
-            })?;
+        let result: NativePresenceWriteResult = response;
         Ok(PresenceWriteDto {
-            status: result.status,
+            status: result.status.into(),
         })
     }
 
@@ -633,8 +596,8 @@ impl SharedCore {
         &self,
     ) -> Result<RtcTransportsSnapshotDto, RtcTransportsCommandError> {
         self.rtc_transports_command(
-            RTC_TRANSPORTS_SNAPSHOT_COMMAND,
             RTC_TRANSPORTS_NO_SESSION_CODE,
+            self.core.rtc_transports_snapshot(),
         )
         .await
     }
@@ -643,35 +606,10 @@ impl SharedCore {
         &self,
     ) -> Result<RtcTransportsSnapshotDto, RtcTransportsCommandError> {
         self.rtc_transports_command(
-            RTC_TRANSPORTS_REFRESH_COMMAND,
             RTC_TRANSPORTS_REFRESH_NO_SESSION_CODE,
+            self.core.rtc_transports_refresh(),
         )
         .await
-    }
-
-    pub(super) async fn rtc_transports_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-    ) -> Result<RtcTransportsSnapshotDto, RtcTransportsCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: TYPING_PRESENCE_GENERATION,
-                request_id: None,
-                payload: serde_json::Value::Null,
-            })
-            .await
-            .map_err(|error| map_rtc_transports_core_error(no_session, error))?;
-        let snapshot: NativeRtcTransportsSnapshot = serde_json::from_value(response.payload)
-            .map_err(|_| {
-                rtc_transports_failed(
-                    RTC_TRANSPORTS_FAILED_CODE,
-                    RTC_TRANSPORTS_FAILED_DESCRIPTION,
-                )
-            })?;
-        Ok(rtc_transports_snapshot_dto(snapshot))
     }
 
     pub async fn user_status_snapshot(
@@ -680,20 +618,12 @@ impl SharedCore {
     ) -> Result<UserStatusSnapshotDto, UserStatusCommandError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: USER_STATUS_SNAPSHOT_COMMAND.to_owned(),
-                session_generation: TYPING_PRESENCE_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "userId": user_id }),
-            })
+            .user_status_snapshot(crate::core_api::MatrixUserStatusSnapshotRequest { user_id })
             .await
             .map_err(|error| {
                 map_user_status_core_error(USER_STATUS_SNAPSHOT_NO_SESSION_CODE, error)
             })?;
-        let snapshot: NativeUserStatusSnapshot =
-            serde_json::from_value(response.payload).map_err(|_| {
-                user_status_failed(USER_STATUS_FAILED_CODE, USER_STATUS_FAILED_DESCRIPTION)
-            })?;
+        let snapshot: NativeUserStatusSnapshot = response;
         Ok(user_status_snapshot_dto(snapshot))
     }
 
@@ -704,42 +634,22 @@ impl SharedCore {
     ) -> Result<UserStatusWriteDto, UserStatusCommandError> {
         let response = self
             .core
-            .command(CommandEnvelope {
-                command: USER_STATUS_SET_COMMAND.to_owned(),
-                session_generation: TYPING_PRESENCE_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "emoji": emoji, "text": text }),
-            })
+            .user_status_set(crate::core_api::MatrixUserStatusSetRequest { emoji, text })
             .await
             .map_err(|error| map_user_status_core_error(USER_STATUS_SET_NO_SESSION_CODE, error))?;
-        let result: NativeUserStatusWriteResult = serde_json::from_value(response.payload)
-            .map_err(|_| {
-                user_status_failed(USER_STATUS_FAILED_CODE, USER_STATUS_FAILED_DESCRIPTION)
-            })?;
+        let result: NativeUserStatusWriteResult = response;
         Ok(UserStatusWriteDto {
-            status: result.status,
+            status: result.status.into(),
         })
     }
 
     pub async fn user_status_clear(&self) -> Result<UserStatusWriteDto, UserStatusCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: USER_STATUS_CLEAR_COMMAND.to_owned(),
-                session_generation: TYPING_PRESENCE_GENERATION,
-                request_id: None,
-                payload: serde_json::Value::Null,
-            })
-            .await
-            .map_err(|error| {
-                map_user_status_core_error(USER_STATUS_CLEAR_NO_SESSION_CODE, error)
-            })?;
-        let result: NativeUserStatusWriteResult = serde_json::from_value(response.payload)
-            .map_err(|_| {
-                user_status_failed(USER_STATUS_FAILED_CODE, USER_STATUS_FAILED_DESCRIPTION)
-            })?;
+        let response = self.core.user_status_clear().await.map_err(|error| {
+            map_user_status_core_error(USER_STATUS_CLEAR_NO_SESSION_CODE, error)
+        })?;
+        let result: NativeUserStatusWriteResult = response;
         Ok(UserStatusWriteDto {
-            status: result.status,
+            status: result.status.into(),
         })
     }
 }

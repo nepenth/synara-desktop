@@ -1,12 +1,8 @@
 import type { DesktopInvokeResult } from '../../utils/desktop';
+import type { NativeMDirectMutationResult } from '../matrix-dto/generated';
 
 type NativeSessionSnapshot = {
   status: 'logged_out' | 'logged_in';
-};
-
-export type NativeMDirectMutationResult = {
-  roomId: string;
-  status: 'updated';
 };
 
 export type NativeInvoke = (
@@ -63,3 +59,5 @@ export async function removeRoomFromMDirectWithNativeOwner(
     throw new Error('Native Matrix direct-room map is unavailable.');
   }
 }
+
+export type { NativeMDirectMutationResult };

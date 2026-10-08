@@ -22,7 +22,6 @@ import { useSetSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { useRoomAvatar, useRoomName } from '../../hooks/useRoomMeta';
 import { useSpace } from '../../hooks/useSpace';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { RoomAvatar } from '../../components/room-avatar';
 import { nameInitials } from '../../utils/common';
 import * as css from './LobbyHeader.css';
@@ -34,7 +33,6 @@ import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../components/BackRouteHandler';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useOpenSpaceSettings } from '../../state/hooks/spaceSettings';
-import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import * as depthCss from '../../styles/Depth.css';
@@ -46,12 +44,10 @@ type LobbyMenuProps = {
 };
 const LobbyMenu = forwardRef<HTMLDivElement, LobbyMenuProps>(
   ({ powerLevels, requestClose }, ref) => {
-    const mx = useMatrixClient();
     const space = useSpace();
-    const creators = useRoomCreators(space);
 
-    const permissions = useRoomPermissions(creators, powerLevels);
-    const canInvite = permissions.action('invite', mx.getSafeUserId());
+    const permissions = useRoomPermissions(powerLevels);
+    const canInvite = permissions.action('invite');
     const openSpaceSettings = useOpenSpaceSettings();
 
     const [invitePrompt, setInvitePrompt] = useState(false);
@@ -142,7 +138,6 @@ type LobbyHeaderProps = {
   powerLevels: IPowerLevels;
 };
 export function LobbyHeader({ showProfile, powerLevels }: LobbyHeaderProps) {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const space = useSpace();
   const setPeopleDrawer = useSetSetting(settingsAtom, 'isPeopleDrawer');
@@ -152,7 +147,7 @@ export function LobbyHeader({ showProfile, powerLevels }: LobbyHeaderProps) {
   const name = useRoomName(space);
   const avatarMxc = useRoomAvatar(space);
   const avatarUrl = avatarMxc
-    ? resolveMatrixThumbnailUrl(mx, avatarMxc, 96, { useAuthentication })
+    ? resolveMatrixThumbnailUrl(avatarMxc, 96, { useAuthentication })
     : undefined;
 
   const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {

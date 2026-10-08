@@ -23,7 +23,6 @@ import {
 import React, { MouseEventHandler, useCallback, useState } from 'react';
 import FocusTrap from 'focus-trap-react';
 import { isKeyHotkey } from 'is-hotkey';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { PowerColorBadge, PowerIcon } from '../power';
 import { useGetMemberPowerLevel, usePowerLevels } from '../../hooks/usePowerLevels';
@@ -45,6 +44,7 @@ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useMemberPowerCompare } from '../../hooks/useMemberPowerCompare';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { setPowerLevelWithNativeOwner } from '../nativeRoomModerationOwner';
+import { getSafeMyUserId } from '../../state/nativeIdentity';
 
 type SelfDemoteAlertProps = {
   power: number;
@@ -147,7 +147,6 @@ function SharedPowerAlert({ power, onCancel, onChange }: SharedPowerAlertProps) 
 }
 
 export function PowerChip({ userId }: { userId: string }) {
-  const mx = useMatrixClient();
   const room = useRoom();
   const space = useSpaceOptionally();
   const useAuthentication = useMediaAuthentication();
@@ -157,20 +156,20 @@ export function PowerChip({ userId }: { userId: string }) {
   const powerLevels = usePowerLevels(room);
   const creators = useRoomCreators(room);
 
-  const permissions = useRoomPermissions(creators, powerLevels);
+  const permissions = useRoomPermissions(powerLevels);
   const getMemberPowerLevel = useGetMemberPowerLevel(powerLevels);
   const { hasMorePower } = useMemberPowerCompare(creators, powerLevels);
 
   const powerLevelTags = usePowerLevelTags(room, powerLevels);
   const getMemberPowerTag = useGetMemberPowerTag(room, creators, powerLevels);
 
-  const myUserId = mx.getSafeUserId();
+  const myUserId = getSafeMyUserId();
   const canChangePowers =
-    permissions.stateEvent(StateEvent.RoomPowerLevels, myUserId) &&
+    permissions.stateEvent(StateEvent.RoomPowerLevels) &&
     (myUserId === userId ? true : hasMorePower(myUserId, userId));
 
   const tag = getMemberPowerTag(userId);
-  const tagIconSrc = tag.icon && getPowerTagIconSrc(mx, useAuthentication, tag.icon);
+  const tagIconSrc = tag.icon && getPowerTagIconSrc(useAuthentication, tag.icon);
 
   const [cords, setCords] = useState<RectCords>();
 
@@ -204,7 +203,7 @@ export function PowerChip({ userId }: { userId: string }) {
     if (!canChangePowers) return;
     if (power === getMemberPowerLevel(userId)) return;
 
-    if (userId === mx.getSafeUserId()) {
+    if (userId === getSafeMyUserId()) {
       setSelfDemote(power);
       return;
     }
@@ -260,7 +259,7 @@ export function PowerChip({ userId }: { userId: string }) {
                 {getPowers(powerLevelTags).map((power) => {
                   const powerTag = powerLevelTags[power];
                   const powerTagIconSrc =
-                    powerTag.icon && getPowerTagIconSrc(mx, useAuthentication, powerTag.icon);
+                    powerTag.icon && getPowerTagIconSrc(useAuthentication, powerTag.icon);
 
                   const selected = getMemberPowerLevel(userId) === power;
                   const canAssignPower = creators.has(myUserId)

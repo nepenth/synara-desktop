@@ -2,7 +2,6 @@ import React, { FormEventHandler, ReactNode, useMemo } from 'react';
 import { Box, Button, Chip, Icon, Icons, Input, Text } from 'folds';
 import * as css from './style.css';
 import { PackImageReader } from '../../plugins/custom-emoji';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { SettingTile } from '../setting-tile';
 import { useObjectURL } from '../../hooks/useObjectURL';
 import { createUploadAtom, TUploadAtom } from '../../state/upload';
@@ -27,13 +26,12 @@ export function ImageTile({
   onDeleteToggle,
   deleted,
 }: ImageTileProps) {
-  const mx = useMatrixClient();
   return (
     <SettingTile
       before={
         <img
           className={css.ImagePackImage}
-          src={resolveOptionalMatrixMediaUrl(mx, image.url, { useAuthentication }) ?? ''}
+          src={resolveOptionalMatrixMediaUrl(image.url, { useAuthentication }) ?? ''}
           alt={image.shortcode}
           loading="lazy"
         />
@@ -102,7 +100,6 @@ export function ImageTileEdit({
   onCancel,
   onSave,
 }: ImageTileEditProps) {
-  const mx = useMatrixClient();
   const handleSubmit: FormEventHandler<HTMLFormElement> = (evt) => {
     evt.preventDefault();
 
@@ -135,7 +132,7 @@ export function ImageTileEdit({
       before={
         <img
           className={css.ImagePackImage}
-          src={resolveOptionalMatrixMediaUrl(mx, image.url, { useAuthentication }) ?? ''}
+          src={resolveOptionalMatrixMediaUrl(image.url, { useAuthentication }) ?? ''}
           alt={image.shortcode}
           loading="lazy"
         />

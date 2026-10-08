@@ -543,9 +543,14 @@ permission, file pickers, settings chrome.
   not invent a no-bindgen path.
 - Regenerating UniFFI without cargo/bindgen is forbidden. Do not
   hand-edit generated Swift to fake a UDL change.
+- The FFI boundary is declared with UniFFI proc-macros (there is no UDL
+  file since 2026-10): `#[derive(uniffi::Record)]` / `Enum` / `Error` /
+  `Object` on DTOs and `#[uniffi::export(async_runtime = "tokio")]` on
+  exported impl blocks and functions. Every FFI change updates the pinned
+  Swift surface: run `scripts/check-swift-api-snapshot.sh --update` and
+  review the diff of `synara-ios/SynaraCore/api/*.swift-api.txt`.
 - Generated artifacts live under `synara-ios/SynaraCore/`. Follow the
   existing `login_flows` pattern in:
-  - `crates/synara-core/src/synara_core.udl`
   - `crates/synara-core/src/ffi.rs` (namespace probes: login/register flows)
   - `crates/synara-core/src/shared_core_ffi.rs` (**S3 `SharedCore` FFI**)
   - `crates/synara-core/src/session_projection_ffi.rs` (projection only)

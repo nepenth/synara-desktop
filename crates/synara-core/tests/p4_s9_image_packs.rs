@@ -54,7 +54,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn image_pack_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("get_global_image_packs"));
     assert!(udl.contains("get_user_image_pack"));
     assert!(udl.contains("get_room_image_packs"));
@@ -76,7 +76,10 @@ fn image_pack_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("set_global_image_packs"));
     assert!(shared_core.contains("set_room_image_pack"));
     assert!(shared_core.contains("room_join_rule_snapshot"));
-    assert!(!shared_core.contains("command("));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 

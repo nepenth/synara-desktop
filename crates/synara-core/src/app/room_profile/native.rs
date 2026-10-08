@@ -2,11 +2,13 @@
 //!
 //! Live subscribe lives in [`super::live`]; shells map updates onto their emit sink.
 
+use crate::dto::WriteAck;
 use serde::{Deserialize, Serialize};
 
 /// Tauri event: join rule may have changed; UI re-reads via existing snapshot IPC.
 pub const ROOM_JOIN_RULE_UPDATED_EVENT: &str = "matrix-room-join-rule-updated";
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum NativeRoomJoinRuleUpdate {
@@ -16,6 +18,12 @@ pub enum NativeRoomJoinRuleUpdate {
         #[serde(rename = "sessionGeneration")]
         session_generation: u64,
         #[serde(rename = "joinRule")]
+        #[cfg_attr(
+            feature = "ts-export",
+            ts(
+                type = "\"public\" | \"knock\" | \"invite\" | \"restricted\" | \"knock_restricted\" | \"private\""
+            )
+        )]
         join_rule: &'static str,
     },
     Unavailable {
@@ -29,7 +37,7 @@ pub enum NativeRoomJoinRuleUpdate {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatrixRoomDirectoryVisibilityResult {
-    pub status: &'static str,
+    pub status: WriteAck,
     pub room_id: String,
     pub session_generation: u64,
     pub visibility: &'static str,
@@ -38,7 +46,7 @@ pub struct MatrixRoomDirectoryVisibilityResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatrixRoomDirectoryVisibilityWriteResult {
-    pub status: &'static str,
+    pub status: WriteAck,
     pub room_id: String,
     pub session_generation: u64,
     pub requested_visibility: &'static str,
@@ -47,7 +55,7 @@ pub struct MatrixRoomDirectoryVisibilityWriteResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatrixRoomJoinRuleSnapshot {
-    pub status: String,
+    pub status: WriteAck,
     pub room_id: String,
     pub session_generation: u64,
     pub join_rule: String,
@@ -57,7 +65,7 @@ pub struct MatrixRoomJoinRuleSnapshot {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatrixRoomRetentionSnapshot {
-    pub status: String,
+    pub status: WriteAck,
     pub room_id: String,
     pub session_generation: u64,
     pub advertised: bool,
@@ -111,7 +119,7 @@ mod tests {
     #[test]
     fn retention_snapshot_wire_shape_is_camel_case_without_raw_policy() {
         let value = serde_json::to_value(MatrixRoomRetentionSnapshot {
-            status: "ok".into(),
+            status: crate::dto::WriteAck::Ok,
             room_id: "!room:example.org".into(),
             session_generation: 7,
             advertised: true,

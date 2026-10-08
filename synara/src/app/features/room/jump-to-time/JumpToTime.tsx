@@ -20,7 +20,7 @@ import {
   RectCords,
 } from 'folds';
 import type { MatrixError } from '../../../utils/matrix';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { timestampToEventWithNativeOwner } from '../nativeTimelineTimestampToEvent';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { stopPropagation } from '../../../utils/keyboard';
 import { useAlive } from '../../../hooks/useAlive';
@@ -37,7 +37,6 @@ type JumpToTimeProps = {
   onSubmit: (eventId: string) => void;
 };
 export function JumpToTime({ onCancel, onSubmit }: JumpToTimeProps) {
-  const mx = useMatrixClient();
   const room = useRoom();
   const alive = useAlive();
   const createStateEvent = useStateEvent(room, StateEvent.RoomCreate);
@@ -70,18 +69,10 @@ export function JumpToTime({ onCancel, onSubmit }: JumpToTimeProps) {
   const [timestampState, timestampToEvent] = useAsyncCallback<string, MatrixError, [number]>(
     useCallback(
       async (newTs) => {
-        const result = await (
-          mx as unknown as {
-            timestampToEvent(
-              roomId: string,
-              timestamp: number,
-              dir: 'f' | 'b'
-            ): Promise<{ event_id: string }>;
-          }
-        ).timestampToEvent(room.roomId, newTs, 'f');
-        return result.event_id;
+        const result = await timestampToEventWithNativeOwner(room.roomId, newTs);
+        return result.eventId;
       },
-      [mx, room]
+      [room]
     )
   );
 

@@ -353,7 +353,7 @@ impl NativeRoomJoinRuleOwner {
         let join_rule = project_join_rule(&original.content.join_rule)
             .ok_or("v-send.r-room-profile-join-rule-unsupported")?;
         Ok(MatrixRoomJoinRuleSnapshot {
-            status: "ok".to_owned(),
+            status: crate::dto::WriteAck::Ok,
             room_id: room_id.to_string(),
             session_generation: self.session_generation,
             join_rule: join_rule.to_owned(),
@@ -382,7 +382,9 @@ impl NativeRoomJoinRuleOwner {
             .update_join_rule(rule)
             .await
             .map_err(|_| "v-send.r-room-profile-join-rule-set-sdk-failed")?;
-        Ok(MatrixProfileWriteResult { status: "ok" })
+        Ok(MatrixProfileWriteResult {
+            status: crate::dto::WriteAck::Ok,
+        })
     }
 
     pub async fn set_name(
@@ -398,7 +400,9 @@ impl NativeRoomJoinRuleOwner {
         room.set_name(name)
             .await
             .map_err(|_| "v-send.r-room-profile-name-sdk-failed")?;
-        Ok(MatrixProfileWriteResult { status: "ok" })
+        Ok(MatrixProfileWriteResult {
+            status: crate::dto::WriteAck::Ok,
+        })
     }
 
     pub async fn set_topic(
@@ -414,7 +418,9 @@ impl NativeRoomJoinRuleOwner {
         room.set_room_topic(&topic)
             .await
             .map_err(|_| "v-send.r-room-profile-topic-sdk-failed")?;
-        Ok(MatrixProfileWriteResult { status: "ok" })
+        Ok(MatrixProfileWriteResult {
+            status: crate::dto::WriteAck::Ok,
+        })
     }
 
     pub async fn set_avatar(
@@ -439,7 +445,9 @@ impl NativeRoomJoinRuleOwner {
                     .map_err(|_| "v-send.r-room-profile-avatar-remove-sdk-failed")?;
             }
         }
-        Ok(MatrixProfileWriteResult { status: "ok" })
+        Ok(MatrixProfileWriteResult {
+            status: crate::dto::WriteAck::Ok,
+        })
     }
 
     /// Generic leftover state write. SDK `send_state_event_raw` encrypts
@@ -461,7 +469,9 @@ impl NativeRoomJoinRuleOwner {
         room.send_state_event_raw(event_type, state_key, content)
             .await
             .map_err(|_| "v-rooms-state-event-send-failed")?;
-        Ok(MatrixProfileWriteResult { status: "ok" })
+        Ok(MatrixProfileWriteResult {
+            status: crate::dto::WriteAck::Ok,
+        })
     }
 
     /// Enable message encryption and/or opt an already-E2EE room into
@@ -488,12 +498,16 @@ impl NativeRoomJoinRuleOwner {
             encrypted_state_events_setting_enabled(),
             room.is_call(),
         ) {
-            RoomEncryptionEnableWrite::NoOp => Ok(MatrixProfileWriteResult { status: "ok" }),
+            RoomEncryptionEnableWrite::NoOp => Ok(MatrixProfileWriteResult {
+                status: crate::dto::WriteAck::Ok,
+            }),
             RoomEncryptionEnableWrite::Send(content) => {
                 room.send_state_event_raw("m.room.encryption", "", content)
                     .await
                     .map_err(|_| "v-rooms-encryption-enable-failed")?;
-                Ok(MatrixProfileWriteResult { status: "ok" })
+                Ok(MatrixProfileWriteResult {
+                    status: crate::dto::WriteAck::Ok,
+                })
             }
         }
     }
@@ -644,7 +658,7 @@ impl NativeRoomJoinRuleOwner {
             return Err("v-rooms-power-levels-readback-mismatch");
         }
         Ok(NativePowerLevelWriteResult {
-            status: "ok",
+            status: crate::dto::WriteAck::Ok,
             room_id: room_id.to_string(),
             event_type,
             state_key: "",
@@ -895,13 +909,22 @@ impl NativeRoomJoinRuleOwner {
             .await?
             .unwrap_or_else(|| serde_json::json!({}));
         validate_power_levels_snapshot_content(&content)?;
+        // The SDK applies the room version's rules (creators outrank every
+        // level from v12); a failed load leaves capabilities absent.
+        let capabilities = match (room.power_levels().await, self.client.user_id()) {
+            (Ok(levels), Some(user_id)) => Some(crate::app::members::room_permission_capabilities(
+                &levels, user_id,
+            )),
+            _ => None,
+        };
         Ok(NativeRoomPowerLevelsSnapshot {
-            status: "ok",
+            status: crate::dto::WriteAck::Ok,
             session_generation: self.session_generation,
             room_id: room.room_id().to_string(),
             event_type: ROOM_POWER_LEVELS_EVENT_TYPE,
             state_key: "",
             content,
+            capabilities,
         })
     }
 
@@ -912,7 +935,7 @@ impl NativeRoomJoinRuleOwner {
         let room = self.members_room(room_id)?;
         let Some(event) = read_room_state_event(&room, ROOM_CREATE_EVENT_TYPE).await? else {
             return Ok(NativeRoomCreatorsSnapshot {
-                status: "ok",
+                status: crate::dto::WriteAck::Ok,
                 session_generation: self.session_generation,
                 room_id: room.room_id().to_string(),
                 event_type: ROOM_CREATE_EVENT_TYPE,
@@ -922,7 +945,7 @@ impl NativeRoomJoinRuleOwner {
         };
         let creators = project_room_creators(&event)?;
         Ok(NativeRoomCreatorsSnapshot {
-            status: "ok",
+            status: crate::dto::WriteAck::Ok,
             session_generation: self.session_generation,
             room_id: room.room_id().to_string(),
             event_type: ROOM_CREATE_EVENT_TYPE,
@@ -941,7 +964,7 @@ impl NativeRoomJoinRuleOwner {
             .unwrap_or_else(|| serde_json::json!({}));
         validate_power_level_tags_snapshot_content(&content)?;
         Ok(NativeRoomPowerLevelTagsSnapshot {
-            status: "ok",
+            status: crate::dto::WriteAck::Ok,
             session_generation: self.session_generation,
             room_id: room.room_id().to_string(),
             event_type: ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
@@ -977,7 +1000,7 @@ impl NativeRoomJoinRuleOwner {
             _ => return Err("v-send.r-room-profile-directory-visibility-get-sdk-failed"),
         };
         Ok(MatrixRoomDirectoryVisibilityResult {
-            status: "ok",
+            status: crate::dto::WriteAck::Ok,
             room_id: room_id.to_string(),
             session_generation: self.session_generation,
             visibility,
@@ -1086,7 +1109,7 @@ impl NativeRoomJoinRuleOwner {
             .await
             .map_err(|_| "v-send.r-room-profile-directory-visibility-set-sdk-failed")?;
         Ok(MatrixRoomDirectoryVisibilityWriteResult {
-            status: "ok",
+            status: crate::dto::WriteAck::Ok,
             room_id: room_id.to_string(),
             session_generation: self.session_generation,
             requested_visibility,
@@ -1255,6 +1278,14 @@ fn parse_room_favorite_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
         .parse()
         .map_err(|_| "v-rooms-room-favorite-invalid-room")
 }
+
+mod extras;
+pub use extras::{
+    NativeBulkRedactRequest, NativeBulkRedactResult, NativeMutualRooms, NativeMutualRoomsRequest,
+    NativeRoomAliasAvailability, NativeRoomAliasCheck, NativeRoomAliasCreateRequest,
+    NativeRoomAliasRequest, NativeRoomIdRequest, NativeRoomLocalAliases, NativeRoomUpgradeRequest,
+    NativeRoomUpgradeResult,
+};
 
 #[cfg(test)]
 mod favorite_id_tests {

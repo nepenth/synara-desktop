@@ -15,7 +15,6 @@ import {
   Input,
 } from 'folds';
 import { Page, PageHeader } from '../../../components/page';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useRoom } from '../../../hooks/useRoom';
 import { useAlive } from '../../../hooks/useAlive';
 import { useTextAreaCodeEditor } from '../../../hooks/useTextAreaCodeEditor';
@@ -24,6 +23,7 @@ import { syntaxErrorPosition } from '../../../utils/dom';
 import { Cursor } from '../../../plugins/text-area';
 import { sendLeftoverStateEvent } from '../../../components/nativeStateEventOwner';
 
+import { sendNativeEvent, sendNativeStateEvent } from '../../../native/nativeCommands';
 const EDITOR_INTENT_SPACE_COUNT = 2;
 
 export type SendRoomEventProps = {
@@ -32,7 +32,6 @@ export type SendRoomEventProps = {
   requestClose: () => void;
 };
 export function SendRoomEvent({ type, stateKey, requestClose }: SendRoomEventProps) {
-  const mx = useMatrixClient();
   const room = useRoom();
   const alive = useAlive();
   const composeStateEvent = typeof stateKey === 'string';
@@ -58,7 +57,7 @@ export function SendRoomEvent({ type, stateKey, requestClose }: SendRoomEventPro
             evtContent as Record<string, unknown>,
             evtStateKey,
             () =>
-              mx.sendStateEvent(
+              sendNativeStateEvent(
                 room.roomId,
                 evtType as any,
                 evtContent as Record<string, unknown>,
@@ -66,9 +65,9 @@ export function SendRoomEvent({ type, stateKey, requestClose }: SendRoomEventPro
               )
           ).then(() => ({}));
         }
-        return mx.sendEvent(room.roomId, evtType as any, evtContent as Record<string, unknown>);
+        return sendNativeEvent(room.roomId, evtType as any, evtContent as Record<string, unknown>);
       },
-      [mx, room]
+      [room]
     )
   );
   const submitting = submitState.status === AsyncStatus.Loading;

@@ -3,6 +3,7 @@
 //! Recovery secrets are method arguments only. This module never stores or
 //! serializes them.
 
+use crate::dto::WriteAck;
 use matrix_sdk::{
     encryption::{
         backups::BackupState,
@@ -21,7 +22,7 @@ use super::{
 /// Privacy-safe restore ack. Status is always `"ok"` on success.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatrixRestoreBackupResult {
-    pub status: &'static str,
+    pub status: WriteAck,
 }
 
 fn backup_engine_phase(state: BackupState) -> NativeBackupEnginePhase {
@@ -91,7 +92,9 @@ pub async fn restore(
         return Err("v-crypto.3-recovery-secret-empty");
     }
     restore_operation(client, session_generation, recovery_secret).await?;
-    Ok(MatrixRestoreBackupResult { status: "ok" })
+    Ok(MatrixRestoreBackupResult {
+        status: crate::dto::WriteAck::Ok,
+    })
 }
 
 pub async fn setup(
@@ -115,23 +118,16 @@ pub async fn setup(
 
     finish_backup_operation(
         async {
-            let generated_recovery_key = zeroize::Zeroizing::new(
-                client
-                    .encryption()
-                    .recovery()
-                    .enable()
-                    .with_passphrase(passphrase)
-                    .wait_for_backups_to_upload()
-                    .await
-                    .map_err(|error| match error {
-                        RecoveryError::BackupExistsOnServer => "v-crypto.3-setup-existing-backup",
-                        _ => "v-crypto.3-setup-failed",
-                    })?,
-            );
-            let _ =
-                crate::app::dehydrated_devices::start_with_secret(client, &generated_recovery_key)
-                    .await;
-
+            // Same enrolment as secret-storage bootstrap. This command has no
+            // display channel, so the generated key is wiped here. The desktop
+            // backup tile enrols through `secret_storage::bootstrap` instead,
+            // which returns the key for one-time display.
+            let _wiped = crate::app::secret_storage::enable_recovery(client, passphrase)
+                .await
+                .map_err(|error| match error {
+                    RecoveryError::BackupExistsOnServer => "v-crypto.3-setup-existing-backup",
+                    _ => "v-crypto.3-setup-failed",
+                })?;
             Ok(())
         },
         status(client, session_generation),

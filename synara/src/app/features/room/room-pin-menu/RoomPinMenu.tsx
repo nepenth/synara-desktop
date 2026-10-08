@@ -41,7 +41,6 @@ import {
 } from '../../../components/message';
 import { UserAvatar } from '../../../components/user-avatar';
 import { getMxIdLocalPart } from '../../../utils/matrix';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { getEditedEvent, getMemberAvatarMxc, getMemberDisplayName } from '../../../utils/room';
 import type { EventTimelineSetReading, MatrixEventReading } from '../../../utils/room';
 import type { EventedRoomReading } from '../../../utils/roomEvents';
@@ -127,7 +126,6 @@ function PinnedMessage({
 }: PinnedMessageProps) {
   const pinnedEvent = useRoomEvent(room as unknown as Parameters<typeof useRoomEvent>[0], eventId);
   const useAuthentication = useMediaAuthentication();
-  const mx = useMatrixClient();
 
   const [unpinState, unpin] = useAsyncCallback(
     useCallback(
@@ -193,7 +191,7 @@ function PinnedMessage({
     ? accessibleTagColors?.get(memberPowerTag.color)
     : undefined;
   const tagIconSrc = memberPowerTag?.icon
-    ? getPowerTagIconSrc(mx, useAuthentication, memberPowerTag.icon)
+    ? getPowerTagIconSrc(useAuthentication, memberPowerTag.icon)
     : undefined;
 
   const usernameColor = legacyUsernameColor ? colorMXID(sender) : tagColor;
@@ -207,7 +205,7 @@ function PinnedMessage({
               userId={sender}
               src={
                 senderAvatarMxc
-                  ? resolveMatrixThumbnailUrl(mx, senderAvatarMxc, 48, { useAuthentication })
+                  ? resolveMatrixThumbnailUrl(senderAvatarMxc, 48, { useAuthentication })
                   : undefined
               }
               alt={displayName}
@@ -369,14 +367,12 @@ type RoomPinMenuProps = {
 };
 export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
   ({ room, requestClose, mode = 'menu' }, ref) => {
-    const mx = useMatrixClient();
-    const userId = mx.getUserId()!;
     const powerLevels = usePowerLevelsContext();
     const creators = useRoomCreators(room);
 
-    const permissions = useRoomPermissions(creators, powerLevels);
-    const canPinEvent = permissions.stateEvent(StateEvent.RoomPinnedEvents, userId);
-    const canSendReaction = permissions.event(MessageEvent.Reaction, userId);
+    const permissions = useRoomPermissions(powerLevels);
+    const canPinEvent = permissions.stateEvent(StateEvent.RoomPinnedEvents);
+    const canSendReaction = permissions.event(MessageEvent.Reaction);
 
     const creatorsTag = useRoomCreatorsTag();
     const powerLevelTags = usePowerLevelTags(room, powerLevels);
@@ -432,19 +428,19 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
       () => ({
         ...LINKIFY_OPTS,
         render: factoryRenderLinkifyWithMention((href) =>
-          renderMatrixMention(mx, room.roomId, href, makeMentionCustomProps(mentionClickHandler))
+          renderMatrixMention(room.roomId, href, makeMentionCustomProps(mentionClickHandler))
         ),
       }),
-      [mx, room, mentionClickHandler]
+      [room, mentionClickHandler]
     );
     const htmlReactParserOptions = useMemo<HTMLReactParserOptions>(
       () =>
-        getReactCustomHtmlParser(mx, room.roomId, {
+        getReactCustomHtmlParser(room.roomId, {
           linkifyOpts,
           useAuthentication,
           handleMentionClick: mentionClickHandler,
         }),
-      [mx, room, linkifyOpts, mentionClickHandler, useAuthentication]
+      [room, linkifyOpts, mentionClickHandler, useAuthentication]
     );
 
     const renderMatrixEvent = useMatrixEventRenderer<[PinEventReading, string, GetContentCallback]>(

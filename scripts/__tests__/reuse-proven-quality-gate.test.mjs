@@ -105,3 +105,17 @@ test("runs exact-tag validation when no proven Quality gate exists", () => {
     { reuse: false, provenSha: null }
   );
 });
+
+test("hasPendingQualityGate only reports unfinished Quality gate runs", async () => {
+  const { hasPendingQualityGate } = await import("../reuse-proven-quality-gate.mjs");
+  assert.equal(hasPendingQualityGate([green]), false);
+  assert.equal(
+    hasPendingQualityGate([{ name: QUALITY_GATE_CHECK_NAME, status: "queued", conclusion: null }]),
+    true
+  );
+  assert.equal(
+    hasPendingQualityGate([{ name: "Other check", status: "in_progress", conclusion: null }]),
+    false
+  );
+  assert.equal(hasPendingQualityGate(undefined), false);
+});

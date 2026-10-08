@@ -6,7 +6,7 @@ import { configClass, varsClass } from 'folds';
 import 'folds/dist/style.css';
 import { darkTheme } from '../../src/colors.css';
 import { NativeTimelinePresenter } from '../../src/app/features/room/NativeTimelinePresenter';
-import { MatrixClientProvider } from '../../src/app/hooks/useMatrixClient';
+import { setNativeIdentity } from '../../src/app/state/nativeIdentity';
 import { requestRoomLatestAfterSend } from '../../src/app/features/room/nativeTimelineNavigation';
 import {
   applyNativeTimelineViewDelta,
@@ -40,6 +40,17 @@ Use **bold** for emphasis.
 
 See ~~strike~~ and \`inline code\`.
 `;
+const FILE_MD_HTML = [
+  '<h1>Agent notes</h1>',
+  '<p>Use <strong>bold</strong> for emphasis.</p>',
+  '<ul><li>dash item</li></ul>',
+  '<ul><li>star item</li></ul>',
+  '<ol><li>ordered</li></ol>',
+  '<table><thead><tr><th>Name</th><th>Role</th></tr></thead>',
+  '<tbody><tr><td>Ada</td><td>Lead</td></tr></tbody></table>',
+  '<ul><li>[x] done task</li><li>[ ] open task</li></ul>',
+  '<p>See <del>strike</del> and <code>inline code</code>.</p>',
+].join('');
 let sequence = polish
   ? 4
   : scenario === 'sparse-missing' || scenario === 'file-md' || scenario === 'file-zip'
@@ -349,6 +360,11 @@ window.__SYNARA_DESKTOP__ = {
     if (command === 'matrix_timeline_paginate') return snapshots.get(request?.streamId ?? '') as T;
     if (command === 'matrix_media_text_preview') {
       return { text: FILE_MD_BYTES } as T;
+    }
+    if (command === 'desktop_render_markdown') {
+      // Core renders markdown (Rust `render_composer_markdown` tests pin the
+      // rules); the harness returns the HTML Core produces for this fixture.
+      return (args?.source === FILE_MD_BYTES ? FILE_MD_HTML : null) as T;
     }
     if (command === 'matrix_media_save') {
       const filename = typeof args?.filename === 'string' ? args.filename : 'download';
@@ -759,9 +775,7 @@ const api = {
   },
 };
 Object.assign(window, { nativeTimelineFixture: api });
-const mx = {
-  getUserId: () => '@reader0:example.test',
-} as React.ComponentProps<typeof MatrixClientProvider>['value'];
+setNativeIdentity({ userId: '@reader0:example.test' });
 // The shipped app applies the folds theme to <body> (src/index.tsx). Overlay
 // offsets like `config.space.S300` compile to CSS variables that only exist
 // under these classes; without them absolute controls collapse to the origin.
@@ -786,17 +800,15 @@ function App() {
         }}
       >
         {mounted && (
-          <MatrixClientProvider value={mx}>
-            <NativeTimelinePresenter
-              roomId={room}
-              eventId={focusedEventId}
-              roomCreatedTs={
-                params.has('roomCreated')
-                  ? Number(params.get('roomCreated')) || 1_600_000_000_000
-                  : undefined
-              }
-            />
-          </MatrixClientProvider>
+          <NativeTimelinePresenter
+            roomId={room}
+            eventId={focusedEventId}
+            roomCreatedTs={
+              params.has('roomCreated')
+                ? Number(params.get('roomCreated')) || 1_600_000_000_000
+                : undefined
+            }
+          />
         )}
       </div>
     </>

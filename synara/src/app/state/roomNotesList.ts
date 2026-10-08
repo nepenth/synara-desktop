@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../utils/desktop';
 import type { SynaraRoomNotesContent } from '../../types/matrix/accountData';
 import { normalizeRoomNotesContent } from '../utils/roomNotes';
+import { startRoomListUpdateDrivenPoll } from '../utils/nativeRoomListUpdates';
 
 export type RoomNotesContentAction = {
   type: 'INITIALIZE' | 'PUT';
@@ -81,10 +82,10 @@ export const useBindRoomNotesContentAtom = (
     }
 
     void refresh();
-    const pollId = window.setInterval(() => void refresh(), 1_000);
+    const stopPolling = startRoomListUpdateDrivenPoll(() => void refresh());
     return () => {
       disposed = true;
-      window.clearInterval(pollId);
+      stopPolling();
     };
   }, [setRoomNotesContent]);
 };

@@ -21,6 +21,7 @@ pub const DEVICE_LIST_UPDATED_EVENT: &str = "matrix-device-list-updated";
 /// CA-trusted peers (io.element.x509) are `verified_by_certificate` and must
 /// not be labeled as emoji-verified. The previous `unsupported` wire value
 /// deserializes as `no_encryption`.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeDeviceTrust {
@@ -107,6 +108,7 @@ pub fn format_ed25519_fingerprint(unpadded_base64: &str) -> Option<String> {
     )
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NativeDeviceSummary {
@@ -119,11 +121,14 @@ pub struct NativeDeviceSummary {
     #[serde(default)]
     pub is_cross_signed_by_owner: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub first_seen_ts: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub ed25519_fingerprint: Option<String>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NativeDeviceSnapshot {
@@ -153,6 +158,7 @@ impl NativeDeviceSnapshot {
     }
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeOwnDeviceVerification {
@@ -161,12 +167,14 @@ pub enum NativeOwnDeviceVerification {
     Verified,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeDeviceDeleteAuthentication {
     Password,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NativeDeviceDeleteChallenge {
@@ -176,6 +184,7 @@ pub struct NativeDeviceDeleteChallenge {
     pub authentication_failed: bool,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "outcome", rename_all = "snake_case")]
 pub enum NativeDeviceDeleteResult {

@@ -9,7 +9,6 @@ import {
   useBindUploadAtom,
   makeUploadError,
 } from '../../state/upload';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { TUploadContent } from '../../utils/matrix';
 import { bytesToSize, getFileTypeIcon } from '../../utils/common';
 import { useMediaConfig } from '../../hooks/useMediaConfig';
@@ -29,7 +28,6 @@ export function CompactUploadCardRenderer({
   onRemove,
   onComplete,
 }: CompactUploadCardRendererProps) {
-  const mx = useMatrixClient();
   const mediaConfig = useMediaConfig();
   const desktop = isSynaraDesktop();
   const serverAllowSize = mediaConfig['m.upload.size'];
@@ -38,14 +36,14 @@ export function CompactUploadCardRenderer({
     : serverAllowSize || Infinity;
   const [, setUpload] = useAtom(uploadAtom);
 
-  const { upload, startUpload, cancelUpload } = useBindUploadAtom(mx, uploadAtom, isEncrypted);
+  const { upload, startUpload, cancelUpload } = useBindUploadAtom(uploadAtom, isEncrypted);
   const { file } = upload;
   const fileSizeExceeded = file.size > allowSize;
   const nativeStarted = useRef(false);
 
   const startNativeUpload = useCallback(async () => {
     // V-SEND.R-PACK-UPLOAD: fail-closed native media upload on desktop.
-    // Reuses matrix_upload_media; never falls through to mx.uploadContent.
+    // Reuses matrix_upload_media; never falls through to a renderer upload.
     const loadingPromise = Promise.resolve({ content_uri: '' } as never);
     setUpload({ promise: loadingPromise });
     try {

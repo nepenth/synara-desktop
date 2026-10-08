@@ -3,16 +3,27 @@
 //! SDK room objects and vector diffs stop here. The Tauri boundary receives
 //! only ordered room IDs and product-owned, privacy-safe summaries.
 
-use std::sync::Arc;
-use std::time::Duration;
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
-use eyeball_im::VectorDiff;
+use eyeball_im::{Vector, VectorDiff};
 use futures_util::StreamExt;
-use matrix_sdk::notification_settings::RoomNotificationMode;
-use matrix_sdk::ruma::events::MessageLikeEventContent;
-use matrix_sdk::{EncryptionState, Room, RoomState};
-use matrix_sdk_ui::room_list_service::filters;
+use matrix_sdk::event_handler::EventHandlerHandle;
+use matrix_sdk::notification_settings::{
+    IsEncrypted, IsOneToOne, NotificationSettings, RoomNotificationMode,
+};
+use matrix_sdk::ruma::events::{
+    AnyGlobalAccountDataEvent, AnyRoomAccountDataEvent, MessageLikeEventContent,
+};
+use matrix_sdk::ruma::serde::Raw;
+use matrix_sdk::ruma::{OwnedRoomId, RoomId};
+use matrix_sdk::sync::RoomUpdates;
+use matrix_sdk::{Client, EncryptionState, Room, RoomState};
+use matrix_sdk_ui::room_list_service::{filters, RoomListItem};
 use serde::{Deserialize, Serialize};
+use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
 
 use crate::app::room_list::counts::{room_unread_presentation, RoomUnreadMembership};
@@ -22,27 +33,73 @@ use crate::app::room_list::last_message::{
     last_message_preview_from_event_json, last_message_preview_from_event_json_str,
     last_message_preview_from_invite,
 };
+use crate::app::room_list::presentation::{room_list_presentation, RoomListPresentation};
 use crate::app::sync::SyncServiceOwner;
 use crate::dto::{Membership, NotificationMode, RoomEncryptionStatus, RoomSummary};
 
 /// Privacy-safe room-list wake-up. No room ids, names, tokens, or password.
-/// iOS re-fetches via the existing snapshot command.
+/// Consumers re-fetch via the existing snapshot command. `revision` grows by
+/// one per coalesced change for this owner; it is not a wall-clock value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NativeRoomListUpdateSignal {
     pub session_generation: u64,
+    pub revision: u64,
 }
 
 pub type RoomListUpdateEmit = Arc<dyn Fn(NativeRoomListUpdateSignal) + Send + Sync>;
 
+/// Changes inside this window collapse into one wake-up. The first change
+/// emits after at most this delay, so a burst of sync updates costs one
+/// snapshot instead of one per room.
+pub const ROOM_LIST_UPDATE_DEBOUNCE: Duration = Duration::from_millis(150);
+
+/// Safety net for a change no SDK stream reports. Room-info writes (unread
+/// counts, receipts, latest events, names, tags), invites, push rules and
+/// account data already wake the owner.
+pub const ROOM_LIST_SAFETY_PULSE: Duration = Duration::from_secs(60);
+
 /// Owns one joined-room entries stream for an attached SyncService.
+///
+/// Wakes consumers only when something they render can have changed:
+/// room-list diffs (the SDK turns every room-info notable update into a
+/// `Set` diff), invite/leave/knock sync updates, push-rule changes and
+/// account data. It also keeps the sliding-sync room subscriptions equal to
+/// the joined set, so encrypted rooms keep receiving events without a
+/// renderer poll.
 pub struct NativeRoomListOwner {
     task: JoinHandle<()>,
+    client: Client,
+    handlers: Vec<EventHandlerHandle>,
+    revision: Arc<AtomicU64>,
 }
 
 impl NativeRoomListOwner {
-    pub fn start(owner: &SyncServiceOwner, emit: RoomListUpdateEmit) -> Self {
+    pub fn start(owner: &Arc<SyncServiceOwner>, emit: RoomListUpdateEmit) -> Self {
         let service = owner.room_list_service();
+        let client = service.client().clone();
+        let sync_owner = Arc::clone(owner);
         let session_generation = owner.session_generation();
+        let revision = Arc::new(AtomicU64::new(0));
+        let (wake, wakes) = mpsc::unbounded_channel::<()>();
+        let handlers = vec![
+            client.add_event_handler({
+                let wake = wake.clone();
+                move |_: Raw<AnyGlobalAccountDataEvent>| {
+                    let _ = wake.send(());
+                    async {}
+                }
+            }),
+            client.add_event_handler({
+                let wake = wake.clone();
+                move |_: Raw<AnyRoomAccountDataEvent>| {
+                    let _ = wake.send(());
+                    async {}
+                }
+            }),
+        ];
+        let room_updates = client.subscribe_to_all_room_updates();
+        let task_revision = Arc::clone(&revision);
+        let task_client = client.clone();
         let task = tokio::spawn(async move {
             let Ok(list) = service.all_rooms().await else {
                 return;
@@ -51,38 +108,217 @@ impl NativeRoomListOwner {
             if !controller.set_filter(Box::new(filters::new_filter_joined())) {
                 return;
             }
-            futures_util::pin_mut!(entries);
-            // Entry diffs fire on join/leave/reorder, not on unread-only
-            // receipt changes. Pulse so iOS (and any snapshot consumer that
-            // waits on this signal) re-reads counts after decrypt/sync.
-            let mut pulse = tokio::time::interval(Duration::from_secs(2));
-            pulse.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-            loop {
-                tokio::select! {
-                    diffs = entries.next() => {
-                        match diffs {
-                            Some(diffs) if !diffs.is_empty() => {
-                                emit(NativeRoomListUpdateSignal { session_generation });
-                            }
-                            Some(_) => {}
-                            None => break,
-                        }
-                    }
-                    _ = pulse.tick() => {
-                        emit(NativeRoomListUpdateSignal { session_generation });
-                    }
-                }
-            }
+            let settings = task_client.notification_settings().await;
+            run_room_list_updates(
+                entries,
+                RoomListWakeSources {
+                    wakes,
+                    push_rules: settings.subscribe_to_changes(),
+                    room_updates,
+                },
+                |room_ids| {
+                    let sync_owner = Arc::clone(&sync_owner);
+                    async move { sync_owner.subscribe_to_room_list(&room_ids).await }
+                },
+                move || {
+                    let revision = task_revision.fetch_add(1, Ordering::AcqRel) + 1;
+                    emit(NativeRoomListUpdateSignal {
+                        session_generation,
+                        revision,
+                    });
+                },
+            )
+            .await;
+            drop(settings);
             drop(controller);
         });
-        Self { task }
+        Self {
+            task,
+            client,
+            handlers,
+            revision,
+        }
+    }
+
+    /// Coalesced changes emitted so far. Zero until the first change.
+    pub fn revision(&self) -> u64 {
+        self.revision.load(Ordering::Acquire)
     }
 }
 
 impl Drop for NativeRoomListOwner {
     fn drop(&mut self) {
         self.task.abort();
+        for handle in self.handlers.drain(..) {
+            self.client.remove_event_handler(handle);
+        }
     }
+}
+
+struct RoomListWakeSources {
+    wakes: mpsc::UnboundedReceiver<()>,
+    push_rules: broadcast::Receiver<()>,
+    room_updates: broadcast::Receiver<RoomUpdates>,
+}
+
+/// True when a sync update touches rooms outside the joined filter. Joined
+/// rooms already arrive as entry diffs.
+fn room_updates_change_non_joined(update: &RoomUpdates) -> bool {
+    !update.invited.is_empty() || !update.left.is_empty() || !update.knocked.is_empty()
+}
+
+/// Apply entry diffs, keep subscriptions equal to the joined set, and emit
+/// one debounced wake-up per burst of changes. Returns when the entries
+/// stream ends.
+async fn run_room_list_updates<S, Subscribe, SubscribeFuture, Emit>(
+    entries: S,
+    mut sources: RoomListWakeSources,
+    subscribe: Subscribe,
+    emit: Emit,
+) where
+    S: futures_util::Stream<Item = Vec<VectorDiff<RoomListItem>>>,
+    Subscribe: Fn(Vec<OwnedRoomId>) -> SubscribeFuture,
+    SubscribeFuture: std::future::Future<Output = ()>,
+    Emit: Fn(),
+{
+    futures_util::pin_mut!(entries);
+    let mut rooms: Vector<RoomListItem> = Vector::new();
+    let mut subscribed: HashSet<OwnedRoomId> = HashSet::new();
+    let mut debounce = RoomListDebounce::default();
+    let mut wakes_open = true;
+    let mut push_rules_open = true;
+    let mut room_updates_open = true;
+    let mut pulse = tokio::time::interval_at(
+        tokio::time::Instant::now() + ROOM_LIST_SAFETY_PULSE,
+        ROOM_LIST_SAFETY_PULSE,
+    );
+    pulse.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+    loop {
+        tokio::select! {
+            diffs = entries.next() => {
+                let Some(diffs) = diffs else { break };
+                if diffs.is_empty() {
+                    continue;
+                }
+                for diff in diffs {
+                    diff.apply(&mut rooms);
+                }
+                let joined: HashSet<OwnedRoomId> =
+                    rooms.iter().map(|room| room.room_id().to_owned()).collect();
+                if joined != subscribed {
+                    let room_ids = rooms.iter().map(|room| room.room_id().to_owned()).collect();
+                    subscribe(room_ids).await;
+                    subscribed = joined;
+                }
+                debounce.mark();
+            }
+            wake = sources.wakes.recv(), if wakes_open => match wake {
+                Some(()) => debounce.mark(),
+                None => wakes_open = false,
+            },
+            changed = sources.push_rules.recv(), if push_rules_open => match changed {
+                Ok(()) | Err(broadcast::error::RecvError::Lagged(_)) => debounce.mark(),
+                Err(broadcast::error::RecvError::Closed) => push_rules_open = false,
+            },
+            update = sources.room_updates.recv(), if room_updates_open => match update {
+                Ok(update) if room_updates_change_non_joined(&update) => debounce.mark(),
+                Ok(_) => {}
+                Err(broadcast::error::RecvError::Lagged(_)) => debounce.mark(),
+                Err(broadcast::error::RecvError::Closed) => room_updates_open = false,
+            },
+            () = debounce.elapsed(), if debounce.is_pending() => {
+                debounce.clear();
+                emit();
+            }
+            _ = pulse.tick() => debounce.mark(),
+        }
+    }
+}
+
+/// Leading-edge debounce: the first change starts the window and later ones
+/// in that window join it.
+#[derive(Default)]
+struct RoomListDebounce {
+    deadline: Option<tokio::time::Instant>,
+}
+
+impl RoomListDebounce {
+    fn mark(&mut self) {
+        if self.deadline.is_none() {
+            self.deadline = Some(tokio::time::Instant::now() + ROOM_LIST_UPDATE_DEBOUNCE);
+        }
+    }
+
+    fn is_pending(&self) -> bool {
+        self.deadline.is_some()
+    }
+
+    fn clear(&mut self) {
+        self.deadline = None;
+    }
+
+    async fn elapsed(&self) {
+        match self.deadline {
+            Some(deadline) => tokio::time::sleep_until(deadline).await,
+            None => std::future::pending().await,
+        }
+    }
+}
+
+/// Retry window for a room whose encryption state could not be learned.
+/// `latest_encryption_state` sends `GET /state/m.room.encryption` whenever the
+/// state is unknown, so without a throttle every snapshot repeated that
+/// request for each such room.
+const ENCRYPTION_PROBE_RETRY: Duration = Duration::from_secs(300);
+const ENCRYPTION_PROBE_MAX_TRACKED: usize = 4096;
+
+fn encryption_probes() -> &'static Mutex<HashMap<OwnedRoomId, Instant>> {
+    static PROBES: OnceLock<Mutex<HashMap<OwnedRoomId, Instant>>> = OnceLock::new();
+    PROBES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn encryption_probe_allowed(room_id: &RoomId, now: Instant) -> bool {
+    let Ok(probes) = encryption_probes().lock() else {
+        return false;
+    };
+    probes
+        .get(room_id)
+        .is_none_or(|last| now.saturating_duration_since(*last) >= ENCRYPTION_PROBE_RETRY)
+}
+
+fn record_encryption_probe(room_id: &RoomId, resolved: bool, now: Instant) {
+    let Ok(mut probes) = encryption_probes().lock() else {
+        return;
+    };
+    if resolved {
+        probes.remove(room_id);
+        return;
+    }
+    if probes.len() >= ENCRYPTION_PROBE_MAX_TRACKED {
+        probes.retain(|_, last| now.saturating_duration_since(*last) < ENCRYPTION_PROBE_RETRY);
+        if probes.len() >= ENCRYPTION_PROBE_MAX_TRACKED {
+            probes.clear();
+        }
+    }
+    probes.insert(room_id.to_owned(), now);
+}
+
+/// Cached encryption state, probing the homeserver at most once per
+/// [`ENCRYPTION_PROBE_RETRY`] while it stays unknown.
+async fn room_encryption_state(room: &Room) -> matrix_sdk::Result<EncryptionState> {
+    let cached = room.encryption_state();
+    if !cached.is_unknown() {
+        return Ok(cached);
+    }
+    let now = Instant::now();
+    if !encryption_probe_allowed(room.room_id(), now) {
+        return Ok(cached);
+    }
+    let result = room.latest_encryption_state().await;
+    let resolved = result.as_ref().is_ok_and(|state| !state.is_unknown());
+    record_encryption_probe(room.room_id(), resolved, now);
+    result
 }
 
 const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -93,6 +329,10 @@ pub struct NativeRoomListSnapshot {
     pub session_generation: u64,
     pub ordered_room_ids: Vec<String>,
     pub rooms: Vec<RoomSummary>,
+    /// Section orders, favorites and unread attention derived by Core, so the
+    /// renderer does not re-apply room rules.
+    #[serde(default)]
+    pub presentation: RoomListPresentation,
 }
 
 pub async fn snapshot_from_sync_owner(
@@ -132,31 +372,51 @@ pub async fn snapshot_from_sync_owner(
         .collect::<Vec<_>>();
     owner.subscribe_to_room_list(&subscribed_room_ids).await;
 
+    // One push-rule read per snapshot. `Room::notification_mode` builds a new
+    // `NotificationSettings` (a store read plus an event handler) per room.
+    let settings = service.client().notification_settings().await;
     let mut ordered_room_ids = Vec::with_capacity(values.len());
     let mut rooms = Vec::with_capacity(values.len());
     for item in values {
         ordered_room_ids.push(item.room_id().to_string());
-        rooms.push(project_room(&item).await);
+        rooms.push(project_room(&item, &settings).await);
     }
+
+    // Space rollup needs the parent graph. A failed read leaves rollup empty
+    // rather than failing the whole snapshot.
+    let parents = crate::app::spaces::snapshot_space_parents(service.client(), 0)
+        .await
+        .map(|snapshot| {
+            snapshot
+                .entries
+                .into_iter()
+                .map(|entry| (entry.room_id, entry.parent_ids))
+                .collect::<std::collections::BTreeMap<_, _>>()
+        })
+        .unwrap_or_default();
+    let presentation = room_list_presentation(&rooms, &parents);
 
     Ok(NativeRoomListSnapshot {
         session_generation: owner.session_generation(),
         ordered_room_ids,
         rooms,
+        presentation,
     })
 }
 
-async fn project_room(room: &Room) -> RoomSummary {
+async fn project_room(room: &Room, settings: &NotificationSettings) -> RoomSummary {
     let counts = room.unread_notification_counts();
     // `recency_stamp` is an opaque ordering value, not wall-clock time. Only
     // expose a timestamp when the SDK has an actual latest-event timestamp.
     let last_activity_ts = room
         .latest_event_timestamp()
         .map(|timestamp| timestamp.get().into());
-    let notification_mode = match room.cached_user_defined_notification_mode() {
-        Some(mode) => Some(map_notification_mode(mode)),
-        None => room.notification_mode().await.map(map_notification_mode),
-    };
+    // Same answer as `Room::notification_mode`, without its per-room HTTP
+    // encryption probe or push-rule reload.
+    let latest_encryption = room_encryption_state(room).await;
+    let notification_mode = room_notification_mode(room, settings, &latest_encryption)
+        .await
+        .map(map_notification_mode);
     let membership = membership(room.state());
     let last_message_preview = last_message_preview(room);
     // Classification uses the raw latest event, not the sanitized preview.
@@ -192,7 +452,6 @@ async fn project_room(room: &Room) -> RoomSummary {
     );
     // Room derefs to `BaseRoom`: `is_favourite`/`is_low_priority` read cached
     // `notable_tags` derived from the room's m.tag account data.
-    let latest_encryption = room.latest_encryption_state().await;
     let state_encrypted = latest_encryption
         .as_ref()
         .is_ok_and(|state| state.is_state_encrypted());
@@ -237,6 +496,39 @@ async fn project_room(room: &Room) -> RoomSummary {
         heroes: None,
         tombstone_successor_room_id: None,
     }
+}
+
+async fn room_notification_mode(
+    room: &Room,
+    settings: &NotificationSettings,
+    encryption: &matrix_sdk::Result<EncryptionState>,
+) -> Option<RoomNotificationMode> {
+    if !matches!(room.state(), RoomState::Joined) {
+        return None;
+    }
+    if let Some(mode) = room.cached_user_defined_notification_mode() {
+        return Some(mode);
+    }
+    if let Some(mode) = settings
+        .get_user_defined_room_notification_mode(room.room_id())
+        .await
+    {
+        return Some(mode);
+    }
+    let Ok(state) = encryption else {
+        return None;
+    };
+    // From the point of view of notification settings, a one-to-one room
+    // involves exactly two people.
+    let is_one_to_one = IsOneToOne::from(room.active_members_count() == 2);
+    Some(
+        settings
+            .get_default_room_notification_mode(
+                IsEncrypted::from(state.is_encrypted()),
+                is_one_to_one,
+            )
+            .await,
+    )
 }
 
 const MAX_ACTIVE_CALL_PARTICIPANTS: u32 = 99;
@@ -472,6 +764,65 @@ mod tests {
     }
 
     #[test]
+    fn encryption_probe_is_throttled_until_the_state_resolves() {
+        let room_id: OwnedRoomId = "!probe-throttle:example.org".try_into().unwrap();
+        let now = Instant::now();
+        assert!(encryption_probe_allowed(&room_id, now));
+        record_encryption_probe(&room_id, false, now);
+        assert!(!encryption_probe_allowed(&room_id, now));
+        assert!(!encryption_probe_allowed(
+            &room_id,
+            now + ENCRYPTION_PROBE_RETRY - Duration::from_secs(1)
+        ));
+        assert!(encryption_probe_allowed(
+            &room_id,
+            now + ENCRYPTION_PROBE_RETRY
+        ));
+        record_encryption_probe(&room_id, true, now);
+        assert!(encryption_probe_allowed(&room_id, now));
+    }
+
+    #[test]
+    fn only_non_joined_sync_updates_wake_the_owner() {
+        let mut update = RoomUpdates::default();
+        assert!(!room_updates_change_non_joined(&update));
+        update.joined.insert(
+            "!joined:example.org".try_into().unwrap(),
+            Default::default(),
+        );
+        assert!(
+            !room_updates_change_non_joined(&update),
+            "joined rooms arrive as entry diffs"
+        );
+        update.invited.insert(
+            "!invite:example.org".try_into().unwrap(),
+            Default::default(),
+        );
+        assert!(room_updates_change_non_joined(&update));
+    }
+
+    #[tokio::test]
+    async fn debounce_collapses_a_burst_into_one_emit() {
+        let mut debounce = RoomListDebounce::default();
+        assert!(!debounce.is_pending());
+        let started = tokio::time::Instant::now();
+        debounce.mark();
+        let first_deadline = debounce.deadline;
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        debounce.mark();
+        assert_eq!(
+            debounce.deadline, first_deadline,
+            "later marks join the window"
+        );
+        debounce.elapsed().await;
+        let waited = started.elapsed();
+        assert!(waited >= ROOM_LIST_UPDATE_DEBOUNCE);
+        assert!(waited < ROOM_LIST_UPDATE_DEBOUNCE + Duration::from_millis(100));
+        debounce.clear();
+        assert!(!debounce.is_pending());
+    }
+
+    #[test]
     fn room_list_subscriptions_cover_the_full_joined_snapshot() {
         let source = include_str!("live.rs");
         assert!(source.contains("subscribed_room_ids"));
@@ -490,5 +841,165 @@ mod tests {
             0,
             "encrypted rooms only get client-side unreads after set_room_subscriptions"
         );
+    }
+}
+
+#[cfg(test)]
+mod live_owner_tests {
+    use super::*;
+    use crate::app::sync::{build_sync_service, SyncServiceConfig};
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use wiremock::matchers::{body_partial_json, method, path, path_regex};
+    use wiremock::{Mock, ResponseTemplate};
+
+    const SLIDING_SYNC: &str = "/_matrix/client/unstable/org.matrix.simplified_msc3575/sync";
+    const ROOM: &str = "!live-owner:example.org";
+
+    fn room_list_response(pos: &str, name: &str) -> serde_json::Value {
+        serde_json::json!({
+            "pos": pos,
+            "lists": { "all_rooms": { "count": 1 } },
+            "rooms": { ROOM: { "name": name, "initial": true, "timeline": [] } },
+            "extensions": {}
+        })
+    }
+
+    async fn mount_room_list_response(server: &MatrixMockServer, pos: &str, name: &str) {
+        Mock::given(method("POST"))
+            .and(path(SLIDING_SYNC))
+            .and(body_partial_json(
+                serde_json::json!({"conn_id": "room-list"}),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(room_list_response(pos, name)))
+            .up_to_n_times(1)
+            .with_priority(1)
+            .mount(server.server())
+            .await;
+    }
+
+    async fn requests_matching(
+        server: &MatrixMockServer,
+        matches: impl Fn(&wiremock::Request) -> bool,
+    ) -> usize {
+        server
+            .server()
+            .received_requests()
+            .await
+            .unwrap_or_default()
+            .iter()
+            .filter(|request| matches(request))
+            .count()
+    }
+
+    fn subscribes_room(request: &wiremock::Request) -> bool {
+        request.url.path() == SLIDING_SYNC
+            && request
+                .body_json::<serde_json::Value>()
+                .ok()
+                .and_then(|body| body.get("room_subscriptions").cloned())
+                .is_some_and(|subscriptions| subscriptions.get(ROOM).is_some())
+    }
+
+    #[tokio::test]
+    async fn owner_emits_on_room_changes_and_stays_quiet_while_idle() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        Mock::given(method("GET"))
+            .and(path("/_matrix/client/versions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "versions": ["v1.12"],
+                "unstable_features": { "org.matrix.simplified_msc3575": true }
+            })))
+            .mount(server.server())
+            .await;
+        server.mock_upload_keys().ok().mount().await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"/state/m\.room\.encryption"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(server.server())
+            .await;
+        mount_room_list_response(&server, "1", "Room A").await;
+        // Idle long-poll: nothing about the room changes.
+        Mock::given(method("POST"))
+            .and(path(SLIDING_SYNC))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({
+                        "pos": "idle", "lists": {}, "rooms": {}, "extensions": {}
+                    }))
+                    .set_delay(Duration::from_millis(100)),
+            )
+            .mount(server.server())
+            .await;
+
+        let owner = Arc::new(
+            build_sync_service(&client, 4, SyncServiceConfig::default())
+                .await
+                .expect("sync service"),
+        );
+        let signals = Arc::new(Mutex::new(Vec::<NativeRoomListUpdateSignal>::new()));
+        let sink = Arc::clone(&signals);
+        let live = NativeRoomListOwner::start(
+            &owner,
+            Arc::new(move |signal| sink.lock().unwrap().push(signal)),
+        );
+        owner.start().await.expect("sync starts");
+
+        let wait_for = |count: usize| {
+            let signals = Arc::clone(&signals);
+            async move {
+                tokio::time::timeout(Duration::from_secs(5), async {
+                    while signals.lock().unwrap().len() < count {
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                    }
+                })
+                .await
+                .is_ok()
+            }
+        };
+        assert!(wait_for(1).await, "the joined room wakes the owner");
+        // The owner keeps sliding-sync subscriptions equal to the joined set
+        // without a snapshot poll.
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while requests_matching(&server, subscribes_room).await == 0 {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("the owner subscribes the joined room");
+
+        // Two snapshots with an unknown encryption state probe it once.
+        snapshot_from_sync_owner(&owner).await.expect("snapshot");
+        snapshot_from_sync_owner(&owner).await.expect("snapshot");
+        let probes = requests_matching(&server, |request| {
+            request.url.path().contains("/state/m.room.encryption")
+        })
+        .await;
+        assert!(probes <= 1, "encryption probes are throttled, saw {probes}");
+
+        // Let the initial burst settle, then idle across what used to be the
+        // unconditional 2 s pulse.
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        let settled = signals.lock().unwrap().len();
+        tokio::time::sleep(Duration::from_millis(2500)).await;
+        assert_eq!(
+            signals.lock().unwrap().len(),
+            settled,
+            "an idle room list must not wake consumers"
+        );
+
+        mount_room_list_response(&server, "2", "Room A renamed").await;
+        assert!(wait_for(settled + 1).await, "a room change wakes the owner");
+        let signals = signals.lock().unwrap().clone();
+        assert!(signals.iter().all(|signal| signal.session_generation == 4));
+        assert!(
+            signals
+                .windows(2)
+                .all(|pair| pair[1].revision == pair[0].revision + 1),
+            "revisions are consecutive"
+        );
+        assert_eq!(live.revision(), signals.last().unwrap().revision);
+        drop(live);
+        owner.stop().await.expect("sync stops");
     }
 }

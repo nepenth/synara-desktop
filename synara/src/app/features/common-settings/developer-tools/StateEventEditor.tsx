@@ -20,7 +20,6 @@ import { TextViewerContent } from '../../../components/text-viewer';
 import { useStateEvent } from '../../../hooks/useStateEvent';
 import { useRoom } from '../../../hooks/useRoom';
 import { StateEvent } from '../../../../types/matrix/room';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useAlive } from '../../../hooks/useAlive';
 import { Cursor } from '../../../plugins/text-area';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
@@ -29,10 +28,10 @@ import { SettingTile } from '../../../components/setting-tile';
 import { SequenceCardStyle } from '../styles.css';
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
 import { useTextAreaCodeEditor } from '../../../hooks/useTextAreaCodeEditor';
-import { useRoomCreators } from '../../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../../hooks/useRoomPermissions';
 import { sendLeftoverStateEvent } from '../../../components/nativeStateEventOwner';
 
+import { sendNativeStateEvent } from '../../../native/nativeCommands';
 const EDITOR_INTENT_SPACE_COUNT = 2;
 
 type StateEventEditProps = {
@@ -42,7 +41,6 @@ type StateEventEditProps = {
   requestClose: () => void;
 };
 function StateEventEdit({ type, stateKey, content, requestClose }: StateEventEditProps) {
-  const mx = useMatrixClient();
   const room = useRoom();
   const alive = useAlive();
 
@@ -62,9 +60,9 @@ function StateEventEdit({ type, stateKey, content, requestClose }: StateEventEdi
     useCallback(
       (c) =>
         sendLeftoverStateEvent(room.roomId, type, c as Record<string, unknown>, stateKey, () =>
-          mx.sendStateEvent(room.roomId, type as any, c as Record<string, unknown>, stateKey)
+          sendNativeStateEvent(room.roomId, type as any, c as Record<string, unknown>, stateKey)
         ).then(() => ({})),
-      [mx, room, type, stateKey]
+      [room, type, stateKey]
     )
   );
   const submitting = submitState.status === AsyncStatus.Loading;
@@ -245,15 +243,13 @@ export type StateEventEditorProps = StateEventInfo & {
 };
 
 export function StateEventEditor({ type, stateKey, requestClose }: StateEventEditorProps) {
-  const mx = useMatrixClient();
   const room = useRoom();
   const stateEvent = useStateEvent(room, type as unknown as StateEvent, stateKey);
   const [editContent, setEditContent] = useState<object>();
   const powerLevels = usePowerLevels(room);
-  const creators = useRoomCreators(room);
 
-  const permissions = useRoomPermissions(creators, powerLevels);
-  const canEdit = permissions.stateEvent(type, mx.getSafeUserId());
+  const permissions = useRoomPermissions(powerLevels);
+  const canEdit = permissions.stateEvent(type);
 
   const eventJSONStr = useMemo(() => {
     if (!stateEvent) return '';

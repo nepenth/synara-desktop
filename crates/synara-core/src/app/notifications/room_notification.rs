@@ -75,7 +75,9 @@ pub async fn set_room_notification(
                 .map_err(|_| "v-push.sdk-failed")?;
         }
     }
-    Ok(MatrixRoomNotificationWriteResult { status: "ok" })
+    Ok(MatrixRoomNotificationWriteResult {
+        status: crate::dto::WriteAck::Ok,
+    })
 }
 
 pub async fn snapshot_room_notifications(

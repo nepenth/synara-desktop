@@ -80,14 +80,14 @@ fn error_text(error: &TimelinePinError) -> String {
 
 #[test]
 fn timeline_pin_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
-    assert!(udl.contains("timeline_pin("));
-    assert!(udl.contains("timeline_unpin("));
+    let udl = crate::ffi_surface::udl();
+    assert!(crate::ffi_surface::declares_fn(udl, "timeline_pin"));
+    assert!(crate::ffi_surface::declares_fn(udl, "timeline_unpin"));
     assert!(udl.contains("dictionary TimelinePinDto"));
     assert!(udl.contains("interface TimelinePinError"));
-    assert!(udl.contains("timeline_edit_text("));
-    assert!(udl.contains("timeline_redact("));
-    assert!(udl.contains("timeline_report("));
+    assert!(crate::ffi_surface::declares_fn(udl, "timeline_edit_text"));
+    assert!(crate::ffi_surface::declares_fn(udl, "timeline_redact"));
+    assert!(crate::ffi_surface::declares_fn(udl, "timeline_report"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
     assert!(!udl.contains("matrix_backup_status"));
@@ -100,12 +100,30 @@ fn timeline_pin_surface_exposes_only_the_registered_family() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("timeline_pin("));
-    assert!(shared_core.contains("timeline_unpin("));
-    assert!(shared_core.contains("timeline_edit_text("));
-    assert!(shared_core.contains("timeline_redact("));
-    assert!(shared_core.contains("timeline_report("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_pin"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_unpin"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_edit_text"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_redact"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_report"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
     assert!(!shared_core.contains("matrix_crypto_status"));
 }

@@ -17,7 +17,13 @@ pub use index::{
     MAX_ALIAS_CHARS, MAX_ALT_ALIASES, MAX_AVATAR_URL_CHARS, MAX_CACHED_ROOMS, MAX_NAME_CHARS,
     MAX_TOPIC_CHARS,
 };
-pub use live::{project_join_rule, JoinRuleUpdateEmit, NativeRoomJoinRuleOwner};
+pub use live::{
+    project_join_rule, JoinRuleUpdateEmit, NativeBulkRedactRequest, NativeBulkRedactResult,
+    NativeMutualRooms, NativeMutualRoomsRequest, NativeRoomAliasAvailability, NativeRoomAliasCheck,
+    NativeRoomAliasCreateRequest, NativeRoomAliasRequest, NativeRoomIdRequest,
+    NativeRoomJoinRuleOwner, NativeRoomLocalAliases, NativeRoomUpgradeRequest,
+    NativeRoomUpgradeResult,
+};
 pub use native::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
     MatrixRoomJoinRuleSnapshot, MatrixRoomRetentionSnapshot, NativeRoomJoinRuleUpdate,

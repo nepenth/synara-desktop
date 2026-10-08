@@ -1,55 +1,27 @@
-import type { EventedRoomReading } from '../utils/roomEvents';
-import { RoomEvent } from '../utils/roomEvents';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { RoomReading } from '../utils/room';
+import { loadAllNativeAccountData, subscribeNativeAccountData } from '../native/nativeAccountData';
 
-type AccountDataEventReading = {
-  getContent(): object;
-};
-
-/**
- * Copy room account data for Developer Tools. Native rooms may expose a
- * get-only stub instead of a js-sdk Map; missing iterators fail closed empty.
- */
-export const collectRoomAccountData = (accountDataSource: unknown): Map<string, object> => {
-  const accountData = new Map<string, object>();
-  if (
-    !accountDataSource ||
-    typeof accountDataSource !== 'object' ||
-    typeof (accountDataSource as { entries?: unknown }).entries !== 'function'
-  ) {
-    return accountData;
-  }
-
-  for (const [type, mEvent] of (
-    accountDataSource as Map<string, AccountDataEventReading>
-  ).entries()) {
-    if (!mEvent || typeof mEvent.getContent !== 'function') continue;
-    accountData.set(type, mEvent.getContent());
-  }
-
-  return accountData;
-};
-
-export const useRoomAccountData = (room: EventedRoomReading): Map<string, object> => {
-  const getAccountData = useCallback(
-    (): Map<string, object> => collectRoomAccountData(room.accountData),
-    [room]
-  );
-
-  const [accountData, setAccountData] = useState<Map<string, object>>(getAccountData);
+/** Room account data for Developer Tools, read through Core and kept current. */
+export const useRoomAccountData = (room: Pick<RoomReading, 'roomId'>): Map<string, object> => {
+  const [accountData, setAccountData] = useState<Map<string, object>>(() => new Map());
 
   useEffect(() => {
-    if (typeof room.on !== 'function' || typeof room.removeListener !== 'function') {
-      return undefined;
-    }
-    const handleEvent: (...args: unknown[]) => void = () => {
-      setAccountData(getAccountData());
+    let cancelled = false;
+    const reload = () => {
+      void loadAllNativeAccountData(room.roomId)
+        .then((next) => {
+          if (!cancelled) setAccountData(next);
+        })
+        .catch(() => undefined);
     };
-    room.on(RoomEvent.AccountData, handleEvent);
+    reload();
+    const unsubscribe = subscribeNativeAccountData(reload);
     return () => {
-      room.removeListener(RoomEvent.AccountData, handleEvent);
+      cancelled = true;
+      unsubscribe();
     };
-  }, [room, getAccountData]);
+  }, [room.roomId]);
 
   return accountData;
 };

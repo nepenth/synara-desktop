@@ -671,3 +671,42 @@ mod internal_mirror {
         assert_eq!(counts.highlight_messages, u32::MAX);
     }
 }
+
+#[test]
+fn room_list_update_payload_is_generation_and_revision_only() {
+    let payload = RoomListUpdatedPayload::from(NativeRoomListUpdateSignal {
+        session_generation: 7,
+        revision: 3,
+    });
+    let json = serde_json::to_value(payload).expect("payload serializes");
+    assert_eq!(
+        json,
+        serde_json::json!({ "sessionGeneration": 7, "revision": 3 })
+    );
+    assert_eq!(MATRIX_ROOM_LIST_UPDATED_EVENT, "matrix-room-list-updated");
+}
+
+#[test]
+fn every_session_install_path_owns_the_room_list_live_owner() {
+    let commands = include_str!("../auth/product_commands.rs");
+    // Login, register and restore all build their session record through the
+    // one shared `into_session`, which owns the room-list live owner.
+    let installs = commands.matches("install.publish(managed).await;").count();
+    assert_eq!(installs, 3, "login, register and restore install sessions");
+    assert_eq!(commands.matches("owners.into_session(").count(), installs);
+    assert_eq!(
+        commands.matches("_room_list_live: room_list_live,").count(),
+        1
+    );
+    assert_eq!(
+        commands
+            .matches("crate::matrix::room_list::start_room_list_live(&self.sync, app.clone())")
+            .count(),
+        1
+    );
+    // Widget webviews never render room lists.
+    let module = include_str!("mod.rs");
+    assert!(module.contains(
+        "crate::desktop::MAIN_WINDOW_LABEL,\n            MATRIX_ROOM_LIST_UPDATED_EVENT"
+    ));
+}

@@ -13,16 +13,8 @@ import path from "node:path";
 import test from "node:test";
 
 const root = path.resolve(import.meta.dirname, "../..");
-const workflow = readFileSync(
-  path.join(root, ".github/workflows/ci.yml"),
-  "utf8",
-);
-const start = workflow.indexOf("          set -euo pipefail");
-const end = workflow.indexOf("\n  validate-rust:", start);
-assert.ok(start > 0 && end > start);
-const scopeScript = workflow.slice(start, end).replace(/^          /gm, "");
 
-// Execute the actual workflow shell over real git diffs. These assertions
+// Execute the actual scope script over real git diffs. These assertions
 // cover the output gates, not merely the spelling of path filters.
 function scopes(files, extraEnv = {}) {
   const cwd = mkdtempSync(path.join(tmpdir(), "synara-ci-scope-"));
@@ -34,7 +26,11 @@ function scopes(files, extraEnv = {}) {
     }).trim();
   try {
     mkdirSync(path.join(cwd, "scripts"));
-    for (const script of ["ci-icon-only.mjs", "ci-metadata-only.mjs"]) {
+    for (const script of [
+      "ci-icon-only.mjs",
+      "ci-metadata-only.mjs",
+      "ci-scopes.sh",
+    ]) {
       copyFileSync(
         path.join(root, "scripts", script),
         path.join(cwd, "scripts", script),
@@ -63,7 +59,7 @@ function scopes(files, extraEnv = {}) {
       "change",
     );
     const output = path.join(cwd, "outputs");
-    execFileSync("bash", ["-c", scopeScript], {
+    execFileSync("bash", ["scripts/ci-scopes.sh"], {
       cwd,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -97,10 +93,8 @@ for (const file of [
   "rust-toolchain.toml",
   ".cargo/config.toml",
 ]) {
-  test(`${file} alone runs Rust compile and tests`, () => {
-    const result = scopes([file]);
-    assert.equal(result.validate_rust, "true");
-    assert.equal(result.validate_rust_tests, "true");
+  test(`${file} alone runs Rust lint and tests`, () => {
+    assert.equal(scopes([file]).validate_rust, "true");
   });
 }
 for (const file of [
@@ -116,20 +110,12 @@ for (const file of [
     assert.equal(scopes([file]).validate_frontend, "true");
   });
 }
-test("release PRs into main run iOS gates even for notes-only diffs", () => {
+test("release PRs run iOS unit tests even for notes-only diffs; UI tests stay nightly", () => {
   const result = scopes(["docs/releases/v2.1.2.md"], {
     GITHUB_HEAD_REF: "release/v2.1.2",
   });
   assert.equal(result.ios, "true");
-  assert.equal(result.ios_ui, "true");
-});
-test("release pushes run iOS gates even for notes-only diffs", () => {
-  const result = scopes(["docs/releases/v2.1.2.md"], {
-    EVENT_NAME: "push",
-    GITHUB_REF_NAME: "release/v2.1.2",
-  });
-  assert.equal(result.ios, "true");
-  assert.equal(result.ios_ui, "true");
+  assert.equal(result.ios_ui, "false");
 });
 test("explicit iOS opt-in cannot be skipped as release metadata", () => {
   assert.equal(
@@ -163,7 +149,7 @@ test("adding an icon cannot hide a workflow or dependency edit", () => {
 test("iOS path changes on an unlabeled feature PR run the compile gate only", () => {
   for (const file of [
     "synara-ios/Synara/App/SynaraApp.swift",
-    "crates/synara-core/src/synara_core.udl",
+    "crates/synara-core/src/shared_core_ffi/session_lifecycle.rs",
     "crates/synara-core/src/ffi.rs",
     "crates/synara-core/src/core.rs",
     "crates/synara-core/src/core/notifications.rs",
@@ -274,9 +260,8 @@ test("shared Core changes on main run Apple unit tests without enabling UI tests
     assert.equal(result.ios_compile, "false", file);
   }
 });
-test("release pushes and scheduled/manual full runs retain both Apple test lanes", () => {
+test("scheduled and manual full runs retain both Apple test lanes", () => {
   for (const env of [
-    { EVENT_NAME: "push", GITHUB_REF_NAME: "release/v2.1.2" },
     { EVENT_NAME: "schedule" },
     { EVENT_NAME: "workflow_dispatch" },
   ]) {
@@ -294,4 +279,38 @@ test("a main push with missing diff metadata still keeps UI tests opt-in", () =>
   });
   assert.equal(result.ios, "true");
   assert.equal(result.ios_ui, "false");
+});
+
+test("shared Core sources run the live Synapse proofs; renderer-only changes do not", () => {
+  for (const file of [
+    "crates/synara-core/src/app/timeline/live.rs",
+    "crates/synara-core/src/app/send/room_queue.rs",
+    "src-tauri/src/matrix/send/live_synapse_proof/tests.rs",
+    "src-tauri/src/bridge/send_text.rs",
+    "integration/synapse/homeserver.yaml",
+    "Cargo.lock",
+  ]) {
+    assert.equal(scopes([file]).synapse, "true", file);
+  }
+  for (const file of [
+    "synara/src/app/pages/auth/AuthFooter.tsx",
+    "docs/releases/v2.1.2.md",
+    "synara-ios/Synara/App/SynaraApp.swift",
+  ]) {
+    assert.equal(scopes([file]).synapse, "false", file);
+  }
+});
+
+test("package builds and cache seeding run nightly or on request only", () => {
+  assert.equal(scopes(["src-tauri/src/lib.rs"]).packages, "false");
+  assert.equal(
+    scopes(["src-tauri/src/lib.rs"], { EVENT_NAME: "push", GITHUB_REF_NAME: "main" }).packages,
+    "false",
+  );
+  assert.equal(scopes([], { EVENT_NAME: "schedule" }).packages, "true");
+  assert.equal(scopes([], { EVENT_NAME: "workflow_dispatch" }).packages, "false");
+  assert.equal(
+    scopes([], { EVENT_NAME: "workflow_dispatch", PACKAGES_INPUT: "true" }).packages,
+    "true",
+  );
 });

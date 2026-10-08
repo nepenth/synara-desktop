@@ -174,21 +174,6 @@ fn test_runtime() -> tokio::runtime::Runtime {
 }
 
 #[test]
-fn session_status_oversize_payload_fails_closed_without_truncate_or_echo() {
-    let marker = "s931OversizeMarker";
-    let payload = serde_json::json!({
-        "pad": format!("{marker}{}", "x".repeat(MAX_ENVELOPE_PAYLOAD_JSON_BYTES + 8))
-    });
-    let error = session_status_envelope_payload(payload)
-        .expect_err("oversize session/status payload must fail closed");
-    let text = format!("{error:?}{error}");
-    assert!(text.contains(SESSION_STATUS_FAILED_CODE));
-    assert!(!text.contains(marker));
-    assert!(!text.contains("syt_"));
-    assert!(!text.contains("@alice"));
-}
-
-#[test]
 fn shared_core_constructs_and_retains_the_built_in_core() {
     let shared_core = SharedCore::new();
     assert!(
@@ -287,41 +272,6 @@ fn sync_stop_closes_retained_client_stores_and_start_reopens_them() {
     drop(_enter);
     drop(rt);
     let _ = fs::remove_dir_all(&root);
-}
-
-#[test]
-fn nse_store_key_lookup_never_mints_a_missing_key() {
-    let values = std::sync::Arc::new(Mutex::new(HashMap::new()));
-    let store: Arc<dyn SecretVault + Send + Sync> = Arc::new(CallbackSecretVault {
-        inner: Box::new(MemoryCallbackVault(std::sync::Arc::clone(&values))),
-    });
-
-    let error = store_key_for_read_only(&store, &alice()).expect_err("missing key");
-
-    assert!(matches!(
-        error,
-        SessionRestoreError::Failed { ref code, .. } if code == RESTORE_FAILED_CODE
-    ));
-    assert!(values.lock().expect("vault").is_empty());
-}
-
-#[test]
-fn nse_store_key_lookup_returns_the_existing_current_key() {
-    let values = std::sync::Arc::new(Mutex::new(HashMap::new()));
-    let store: Arc<dyn SecretVault + Send + Sync> = Arc::new(CallbackSecretVault {
-        inner: Box::new(MemoryCallbackVault(std::sync::Arc::clone(&values))),
-    });
-    let identity = alice();
-    let expected = StoreKeyMaterial::from_bytes([7; STORE_KEY_LEN]);
-    values.lock().expect("vault").insert(
-        StoreKeyId::from_identity(&identity).account().to_owned(),
-        expected.as_bytes().to_vec(),
-    );
-
-    let actual = store_key_for_read_only(&store, &identity).expect("existing key");
-
-    assert_eq!(actual.as_bytes(), expected.as_bytes());
-    assert_eq!(values.lock().expect("vault").len(), 1);
 }
 
 #[test]
@@ -433,7 +383,7 @@ fn restore_from_vault_installs_session_without_password_or_token_leak() {
     assert!(snapshot.is_some());
     assert!(matches!(
         *shared.restored_client.lock().expect("client"),
-        RestoredClientSlot::Ready(_)
+        RestoredClientSlot::Ready(..)
     ));
     let keys: Vec<String> = map.lock().expect("vault").keys().cloned().collect();
     assert!(keys.iter().any(|key| key.starts_with("store-key:")));
@@ -450,7 +400,7 @@ fn restore_from_vault_installs_session_without_password_or_token_leak() {
     assert!(!format!("{second:?}").contains(RESTORE_FAILED_CODE));
     assert!(matches!(
         *shared.restored_client.lock().expect("client"),
-        RestoredClientSlot::Ready(_)
+        RestoredClientSlot::Ready(..)
     ));
     drop(shared);
     drop(_enter);
@@ -594,6 +544,9 @@ fn timeline_view_row_dto_maps_message_without_token_echo() {
             sender_name: "Alice Example".to_owned(),
             sender_avatar_url: Some("mxc://example.org/alice".to_owned()),
             origin_server_ts: 1_700_000_000_000,
+            local_echo_state: None,
+            transaction_id: None,
+            encryption_shield: None,
             capabilities: TimelineRowCapabilities {
                 react: true,
                 reply: true,
@@ -710,6 +663,9 @@ fn timeline_view_row_dto_preserves_open_and_closed_poll_semantics() {
                 sender_name: "Alice".to_owned(),
                 sender_avatar_url: None,
                 origin_server_ts: 1_700_000_000_002,
+                local_echo_state: None,
+                transaction_id: None,
+                encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
                     react: true,
                     reply: false,
@@ -796,6 +752,9 @@ fn timeline_view_row_dto_preserves_incoming_sticker_media() {
             sender_name: "Alice".to_owned(),
             sender_avatar_url: Some("mxc://example.org/alice".to_owned()),
             origin_server_ts: 1_700_000_000_001,
+            local_echo_state: None,
+            transaction_id: None,
+            encryption_shield: None,
             capabilities: TimelineRowCapabilities {
                 react: true,
                 reply: true,
@@ -866,6 +825,9 @@ fn timeline_view_row_dto_preserves_base_metadata_for_non_message_events() {
         sender_name: "Alice".to_owned(),
         sender_avatar_url: Some("mxc://example.org/alice".to_owned()),
         origin_server_ts: 1_700_000_000_003,
+        local_echo_state: None,
+        transaction_id: None,
+        encryption_shield: None,
         capabilities: TimelineRowCapabilities {
             react: false,
             reply: false,
@@ -920,4 +882,381 @@ fn timeline_view_row_dto_preserves_base_metadata_for_non_message_events() {
     assert_eq!(other.kind, "other");
     assert_base(&other, "$other:example.org");
     assert_eq!(other.message_type.as_deref(), Some("org.example.unknown"));
+}
+
+#[test]
+fn session_generation_is_monotonic_per_instance() {
+    // A re-login in the same process must install a new generation, so a
+    // shell fence keyed on a retired generation cannot match its successor.
+    let shared = SharedCore::new();
+    let first = shared.allocate_session_generation();
+    let second = shared.allocate_session_generation();
+    assert_eq!(first, 1);
+    assert!(second > first);
+    // A fresh instance starts again at 1 and never yields 0 (attach rejects 0).
+    assert_eq!(SharedCore::new().allocate_session_generation(), 1);
+}
+
+#[test]
+fn logout_fences_late_token_rotation_saves_out_of_the_vault() {
+    let identity = alice();
+    let map = std::sync::Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(
+        std::sync::Arc::clone(&map),
+    )));
+    let root = temp_root("rotation-fence");
+    let rt = test_runtime();
+    let _enter = rt.enter();
+    rt.block_on(shared.persist_planted_session_for_test(
+        identity.user_id().to_owned(),
+        identity.homeserver_url().to_owned(),
+        root.to_string_lossy().into_owned(),
+        "DEVICEABC".to_owned(),
+        "syt_rotation_fence_access".to_owned(),
+        Some("syr_rotation_fence_refresh".to_owned()),
+    ))
+    .expect("planted session");
+
+    // The SDK save callback holds this lease; capture it like the callback does.
+    let lease = match &*shared.restored_client.lock().expect("client") {
+        RestoredClientSlot::Ready(_, persistence) => persistence.callback_lease(),
+        _ => panic!("planted session is retained"),
+    };
+    assert!(!lease.is_revoked());
+
+    rt.block_on(shared.logout()).expect("logout");
+    assert!(lease.is_revoked(), "logout revokes the rotation fence");
+
+    map.lock().expect("vault").clear();
+    let late = lease.save(|| {
+        map.lock()
+            .expect("vault")
+            .insert("matrix-session:late".to_owned(), b"tokens".to_vec());
+        Ok::<(), crate::app::lifecycle::session::SessionFault>(())
+    });
+    assert_eq!(
+        late.unwrap_err().diagnostic_id,
+        "d0.1-session-persistence-retired"
+    );
+    assert!(
+        map.lock().expect("vault").is_empty(),
+        "a refresh after logout never writes credentials"
+    );
+    drop(shared);
+    drop(_enter);
+    drop(rt);
+    let _ = fs::remove_dir_all(&root);
+}
+
+struct FlakyCallbackVault {
+    map: std::sync::Arc<Mutex<HashMap<String, Vec<u8>>>>,
+    fail_puts: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl IosSecretVault for FlakyCallbackVault {
+    fn get(&self, key: String) -> Result<Option<Vec<u8>>, IosSecretVaultError> {
+        Ok(self.map.lock().expect("vault").get(&key).cloned())
+    }
+
+    fn put(&self, key: String, value: Vec<u8>) -> Result<(), IosSecretVaultError> {
+        if self.fail_puts.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err(IosSecretVaultError::Unavailable {
+                code: "test".to_owned(),
+                description: "test".to_owned(),
+            });
+        }
+        self.map.lock().expect("vault").insert(key, value);
+        Ok(())
+    }
+
+    fn delete(&self, key: String) -> Result<(), IosSecretVaultError> {
+        self.map.lock().expect("vault").remove(&key);
+        Ok(())
+    }
+}
+
+#[test]
+fn failed_rotation_save_is_retried_with_backoff_and_stops_after_logout() {
+    use std::sync::atomic::Ordering;
+    use std::time::{Duration, Instant};
+
+    let identity = alice();
+    let map = std::sync::Arc::new(Mutex::new(HashMap::new()));
+    let fail_puts = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let shared = SharedCore::new_with_secret_store(Box::new(FlakyCallbackVault {
+        map: std::sync::Arc::clone(&map),
+        fail_puts: std::sync::Arc::clone(&fail_puts),
+    }));
+    let root = temp_root("rotation-retry");
+    let rt = test_runtime();
+    let _enter = rt.enter();
+    rt.block_on(shared.persist_planted_session_for_test(
+        identity.user_id().to_owned(),
+        identity.homeserver_url().to_owned(),
+        root.to_string_lossy().into_owned(),
+        "DEVICEABC".to_owned(),
+        "syt_rotation_retry_access".to_owned(),
+        Some("syr_rotation_retry_refresh".to_owned()),
+    ))
+    .expect("planted session");
+    let start = Instant::now();
+    assert_eq!(
+        shared.retry_failed_session_save(start),
+        None,
+        "nothing to retry after a good save"
+    );
+
+    let lease = match &*shared.restored_client.lock().expect("client") {
+        RestoredClientSlot::Ready(_, persistence) => persistence.callback_lease(),
+        _ => panic!("planted session is retained"),
+    };
+    // A rotation save fails (vault unavailable).
+    let _ = lease.save(|| {
+        Err::<(), _>(crate::app::lifecycle::session::SessionFault::unavailable(
+            "session-rotation-persist-failed",
+        ))
+    });
+    assert!(lease.save_failed());
+
+    fail_puts.store(true, Ordering::Relaxed);
+    assert_eq!(shared.retry_failed_session_save(start), Some(false));
+    assert_eq!(
+        shared.retry_failed_session_save(start + Duration::from_secs(4)),
+        None,
+        "backoff holds the next attempt"
+    );
+
+    fail_puts.store(false, Ordering::Relaxed);
+    map.lock().expect("vault").clear();
+    assert_eq!(
+        shared.retry_failed_session_save(start + Duration::from_secs(5)),
+        Some(true)
+    );
+    assert!(!lease.save_failed());
+    assert!(map
+        .lock()
+        .expect("vault")
+        .keys()
+        .any(|key| key.starts_with("matrix-session:")));
+
+    let _ = lease.save(|| {
+        Err::<(), _>(crate::app::lifecycle::session::SessionFault::unavailable(
+            "session-rotation-persist-failed",
+        ))
+    });
+    rt.block_on(shared.logout()).expect("logout");
+    assert_eq!(
+        shared.retry_failed_session_save(start + Duration::from_secs(120)),
+        None,
+        "logout ends retries"
+    );
+    drop(shared);
+    drop(_enter);
+    drop(rt);
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn rejected_session_retirement_forgets_credentials_locally_in_either_order() {
+    for stop_first in [false, true] {
+        let identity = alice();
+        let map = std::sync::Arc::new(Mutex::new(HashMap::new()));
+        let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(
+            std::sync::Arc::clone(&map),
+        )));
+        let root = temp_root(if stop_first {
+            "retire-rejected-after-logout"
+        } else {
+            "retire-rejected-live"
+        });
+        let rt = test_runtime();
+        let _enter = rt.enter();
+        rt.block_on(shared.persist_planted_session_for_test(
+            identity.user_id().to_owned(),
+            identity.homeserver_url().to_owned(),
+            root.to_string_lossy().into_owned(),
+            "DEVICEABC".to_owned(),
+            "syt_retire_success_access".to_owned(),
+            Some("syr_retire_success_refresh".to_owned()),
+        ))
+        .expect("planted session");
+        let generation = shared
+            .core
+            .session_snapshot()
+            .expect("projection")
+            .expect("session")
+            .session_generation;
+        let session_keys = |map: &Mutex<HashMap<String, Vec<u8>>>| {
+            map.lock()
+                .expect("vault")
+                .keys()
+                .filter(|key| key.starts_with("matrix-session:"))
+                .count()
+        };
+        assert_eq!(session_keys(&map), 1);
+
+        // The sync status poll observed the rejected refresh for this generation.
+        shared.note_authentication_rejection(Some(
+            crate::app::sync::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID,
+        ));
+        if stop_first {
+            // The shell already tore the session down locally; the latch, not
+            // the live sync owner, still identifies what to forget.
+            rt.block_on(shared.logout()).expect("local teardown");
+            assert_eq!(session_keys(&map), 1, "teardown alone keeps the vault");
+        }
+
+        // The homeserver in this fixture is unreachable, so success also shows
+        // retirement needs no remote call.
+        let ack = rt
+            .block_on(shared.retire_rejected_session(generation))
+            .expect("retire the rejected generation");
+        assert_eq!(ack.status, "retired");
+        assert_eq!(session_keys(&map), 0, "session material is forgotten");
+        assert!(shared.core.session_snapshot().unwrap().is_none());
+        assert!(
+            map.lock()
+                .expect("vault")
+                .keys()
+                .any(|key| key.starts_with("store-key:")),
+            "the store key and encrypted history stay"
+        );
+        let again = rt
+            .block_on(shared.retire_rejected_session(generation))
+            .expect("idempotent");
+        assert_eq!(again.status, "retired");
+        drop(shared);
+        drop(_enter);
+        drop(rt);
+        let _ = fs::remove_dir_all(&root);
+    }
+}
+
+#[test]
+fn rejected_session_retirement_is_generation_fenced_and_idempotent() {
+    let identity = alice();
+    let map = std::sync::Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(
+        std::sync::Arc::clone(&map),
+    )));
+    let root = temp_root("retire-rejected");
+    let rt = test_runtime();
+    let _enter = rt.enter();
+    rt.block_on(shared.persist_planted_session_for_test(
+        identity.user_id().to_owned(),
+        identity.homeserver_url().to_owned(),
+        root.to_string_lossy().into_owned(),
+        "DEVICEABC".to_owned(),
+        "syt_retire_rejected_access".to_owned(),
+        Some("syr_retire_rejected_refresh".to_owned()),
+    ))
+    .expect("planted session");
+    let generation = shared
+        .core
+        .session_snapshot()
+        .expect("projection")
+        .expect("session")
+        .session_generation;
+    let session_keys = |map: &Mutex<HashMap<String, Vec<u8>>>| {
+        map.lock()
+            .expect("vault")
+            .keys()
+            .filter(|key| key.starts_with("matrix-session:"))
+            .count()
+    };
+    assert_eq!(session_keys(&map), 1);
+
+    // A different generation, or one whose sync never reported the rejection,
+    // is refused and leaves the session and vault alone.
+    assert!(rt
+        .block_on(shared.retire_rejected_session(generation + 1))
+        .is_err());
+    assert!(rt
+        .block_on(shared.retire_rejected_session(generation))
+        .is_err());
+    assert_eq!(session_keys(&map), 1);
+    assert!(shared.core.session_snapshot().unwrap().is_some());
+
+    // Once the session is gone, retirement is a no-op success.
+    rt.block_on(shared.logout()).expect("logout");
+    let ack = rt
+        .block_on(shared.retire_rejected_session(generation))
+        .expect("idempotent after retirement");
+    assert_eq!(ack.status, "retired");
+    assert!(
+        map.lock()
+            .expect("vault")
+            .keys()
+            .any(|key| key.starts_with("store-key:")),
+        "the store key and encrypted history stay"
+    );
+    drop(shared);
+    drop(_enter);
+    drop(rt);
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn ios_store_preparation_records_the_revision_and_refuses_a_newer_layout() {
+    use crate::app::store::{StorePaths, StoreRevisionManifest, STORE_LAYOUT_VERSION};
+    let root = temp_root("store-revision");
+    let identity =
+        AccountIdentity::new("@alice:example.org", "https://matrix.example.org").unwrap();
+    let paths = StorePaths::derive(&root, &identity).unwrap();
+    let manifest_path = paths.account_root().join("revision.json");
+
+    // A legacy store with no manifest keeps its data and gains the baseline.
+    fs::create_dir_all(paths.account_root()).unwrap();
+    let marker = paths.account_root().join("legacy-marker");
+    fs::write(&marker, b"kept").unwrap();
+    super::session_lifecycle::prepare_session_store(&root, &identity).unwrap();
+    let manifest: StoreRevisionManifest =
+        serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+    assert_eq!(manifest.layout_version, STORE_LAYOUT_VERSION);
+    assert_eq!(fs::read(&marker).unwrap(), b"kept");
+    // Preparing again is a no-op.
+    super::session_lifecycle::prepare_session_store(&root, &identity).unwrap();
+
+    // A store written by a newer layout fails closed before the SDK opens it.
+    let ahead = StoreRevisionManifest {
+        layout_version: STORE_LAYOUT_VERSION + 1,
+        ..manifest
+    };
+    fs::write(&manifest_path, serde_json::to_vec(&ahead).unwrap()).unwrap();
+    assert!(super::session_lifecycle::prepare_session_store(&root, &identity).is_err());
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn ios_logout_and_attach_use_the_shared_core_policies() {
+    let source = include_str!("session_lifecycle.rs");
+    let logout = source
+        .split("pub async fn logout(&self)")
+        .nth(1)
+        .and_then(|rest| rest.split("pub async fn recover(").next())
+        .expect("logout body");
+    assert!(logout.contains("session_policy::LogoutPolicy::IOS"));
+    assert!(logout.contains("session_policy::run_local_logout("));
+    assert!(!logout.contains("matrix_auth().logout()"));
+    let attach = source
+        .split("pub async fn attach_session_owners(&self)")
+        .nth(1)
+        .and_then(|rest| rest.split("pub async fn start_sync(&self)").next())
+        .expect("attach body");
+    assert!(attach.contains("session_policy::attach_owner_set("));
+    for restore_or_login in [
+        "restore_persisted_session_with_policy",
+        "login_with_password_inner",
+    ] {
+        let body = source
+            .split(&format!("async fn {restore_or_login}("))
+            .nth(1)
+            .expect("restore/login body");
+        let prepare = body.find("prepare_session_store(root, &identity)").unwrap();
+        let build = body.find("build_unauthenticated_client(&config)").unwrap();
+        assert!(
+            prepare < build,
+            "{restore_or_login} migrates before the SDK opens the store"
+        );
+    }
 }

@@ -1,12 +1,34 @@
 import PhotosUI
 import SwiftUI
+import SynaraCore
 import UIKit
 import UserNotifications
+
+/// Log Out confirmation copy, including the last-device warning.
+enum SignOutCopy {
+    static let standardMessage =
+        "This clears local sign-in data and cached rooms. Synara also attempts to revoke this session and remove its push registration; remote cleanup requires a connection."
+    static let lastDeviceWarning =
+        "This is your last signed-in device. Save your recovery key before logging out, or you will lose access to your encrypted messages."
+
+    /// `isLastDevice` is `nil` while the device list is unknown; only a
+    /// confirmed last device shows the warning.
+    static func message(isLastDevice: Bool?) -> String {
+        isLastDevice == true ? "\(lastDeviceWarning)\n\n\(standardMessage)" : standardMessage
+    }
+
+    static func isOtherSignedInDevice(isCurrent: Bool, trust: DeviceTrustDto) -> Bool {
+        isCurrent == false && trust != .dehydrated
+    }
+}
 
 struct SettingsView: View {
     @Environment(\.appEnvironment) private var environment
     @State private var state: SettingsState = .idle
+    @State private var logoutAttempt = 0
+    @State private var inFlightLogout: Task<Void, Error>?
     @State private var isLogoutConfirmationPresented = false
+    @StateObject private var logoutCrypto = SessionCryptoStatusObserver()
 
     var body: some View {
         Form {
@@ -86,6 +108,8 @@ struct SettingsView: View {
             Section("Danger Zone") {
                 Button(role: .destructive) {
                     isLogoutConfirmationPresented = true
+                    // Read the device list for the last-device warning.
+                    Task { await logoutCrypto.refresh(crypto: environment.crypto) }
                 } label: {
                     if state.isLoading {
                         ProgressView()
@@ -107,7 +131,7 @@ struct SettingsView: View {
                     .accessibilityIdentifier("ConfirmLogoutButton")
                     Button("Cancel", role: .cancel) {}
                 } message: {
-                    Text("This clears local sign-in data and cached rooms. Synara also attempts to revoke this session and remove its push registration; remote cleanup requires a connection.")
+                    Text(SignOutCopy.message(isLastDevice: logoutCrypto.status.isLastDevice))
                 }
             }
 
@@ -132,16 +156,48 @@ struct SettingsView: View {
 
     private func logout() {
         state = .loading
+        logoutAttempt += 1
+        let attempt = logoutAttempt
+        // Reuse a logout that outlived an earlier timeout instead of starting a
+        // second one; Sign Out never adds a store wipe of its own here.
+        let work: Task<Void, Error>
+        if let inFlightLogout {
+            work = inFlightLogout
+        } else {
+            let wipe = environment.wipe
+            work = Task { try await wipe.logoutAndWipe() }
+            inFlightLogout = work
+            // Forget the task once it settles, even after a timeout, so a later
+            // tap starts a fresh attempt instead of rereading a stale failure.
+            Task {
+                _ = try? await work.value
+                await MainActor.run {
+                    if inFlightLogout == work {
+                        inFlightLogout = nil
+                    }
+                }
+            }
+        }
 
         Task {
+            let outcome: Result<Void, Error>
             do {
-                try await environment.wipe.logoutAndWipe()
-                await MainActor.run {
+                try await BoundedSignOut.wait(for: work)
+                outcome = .success(())
+            } catch {
+                outcome = .failure(error)
+            }
+            await MainActor.run {
+                // A later attempt owns the screen state. A timeout leaves the
+                // spinner with the retry copy while the logout keeps running.
+                guard attempt == logoutAttempt else {
+                    return
+                }
+                switch outcome {
+                case .success:
                     state = .idle
                     environment.logger.info("Local logout completed", category: .auth)
-                }
-            } catch {
-                await MainActor.run {
+                case .failure(let error):
                     state = .failed(LocalWipeError.displayMessage(for: error))
                     environment.logger.error("Local logout failed", category: .auth)
                 }
@@ -669,10 +725,10 @@ private struct AccountSettingsView: View {
             }
             let status = await environment.matrix.addThreepidEmail()
             await MainActor.run {
-                if status == "authenticationRequired" {
+                if status == .authenticationRequired {
                     needsEmailPassword = true
                     emailMessage = "Enter your account password to confirm this email."
-                } else if status == "ok" {
+                } else if status == .ok {
                     emailDraft = ""
                     needsEmailPassword = false
                     emailMessage = "Email attached."
@@ -690,7 +746,7 @@ private struct AccountSettingsView: View {
         Task {
             let status = await environment.matrix.addThreepidEmailPassword(password)
             await MainActor.run {
-                if status == "ok" {
+                if status == .ok {
                     emailDraft = ""
                     needsEmailPassword = false
                     emailMessage = "Email attached."

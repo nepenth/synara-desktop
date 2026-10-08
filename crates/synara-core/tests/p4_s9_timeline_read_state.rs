@@ -13,7 +13,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use synara_core::app::store::AccountIdentity;
 use synara_core::transport::MAX_ENVELOPE_PAYLOAD_JSON_BYTES;
-use synara_core::{IosSecretVault, IosSecretVaultError, SharedCore};
+use synara_core::{
+    IosSecretVault, IosSecretVaultError, SharedCore, TimelineReadActionDto, TimelineReadIntentDto,
+};
 
 struct MemoryCallbackVault(Arc<Mutex<HashMap<String, Vec<u8>>>>);
 
@@ -57,15 +59,21 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn timeline_read_state_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
-    assert!(udl.contains("timeline_event_readback("));
-    assert!(udl.contains("timeline_set_read_state("));
-    assert!(udl.contains("timeline_jump_latest("));
+    let udl = crate::ffi_surface::udl();
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "timeline_event_readback"
+    ));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "timeline_set_read_state"
+    ));
+    assert!(crate::ffi_surface::declares_fn(udl, "timeline_jump_latest"));
     assert!(udl.contains("dictionary TimelineEventReadbackDto"));
     assert!(udl.contains("dictionary TimelineReadStateDto"));
     assert!(udl.contains("dictionary TimelineOpenDto"));
     assert!(udl.contains("interface TimelineReadStateError"));
-    assert!(udl.contains("timeline_open("));
+    assert!(crate::ffi_surface::declares_fn(udl, "timeline_open"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
     assert!(!udl.contains("matrix_send_sticker"));
@@ -77,12 +85,30 @@ fn timeline_read_state_surface_exposes_only_the_registered_family() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("timeline_event_readback("));
-    assert!(shared_core.contains("timeline_set_read_state("));
-    assert!(shared_core.contains("timeline_jump_latest("));
-    assert!(shared_core.contains("invites_accept("));
-    assert!(shared_core.contains("timeline_open("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_event_readback"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_set_read_state"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_jump_latest"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "invites_accept"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_open"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 
@@ -99,8 +125,8 @@ fn timeline_read_state_family_without_session_fails_closed_without_echo() {
     let set_read = rt
         .block_on(shared.timeline_set_read_state(
             stream_id.to_owned(),
-            "mark_read".to_owned(),
-            "explicit_user".to_owned(),
+            TimelineReadActionDto::MarkRead,
+            TimelineReadIntentDto::ExplicitUser,
             None,
         ))
         .expect_err("no attached set-read-state owner");
@@ -138,8 +164,8 @@ fn timeline_read_state_oversize_payload_fails_closed_without_truncate_or_echo() 
     let set_read = rt
         .block_on(shared.timeline_set_read_state(
             stream_id.clone(),
-            "mark_read".to_owned(),
-            "explicit_user".to_owned(),
+            TimelineReadActionDto::MarkRead,
+            TimelineReadIntentDto::ExplicitUser,
             None,
         ))
         .expect_err("oversize set-read-state payload must fail closed");
@@ -193,8 +219,8 @@ fn timeline_read_state_family_without_started_sync_returns_handler_result_withou
         rt.block_on(shared.timeline_event_readback(room_id.to_owned(), invalid_event.to_owned()));
     let set_read = rt.block_on(shared.timeline_set_read_state(
         stream_id.to_owned(),
-        "mark_read".to_owned(),
-        "explicit_user".to_owned(),
+        TimelineReadActionDto::MarkRead,
+        TimelineReadIntentDto::ExplicitUser,
         None,
     ));
     let jump = rt.block_on(shared.timeline_jump_latest(stream_id.to_owned()));

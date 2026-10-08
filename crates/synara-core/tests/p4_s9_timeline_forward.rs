@@ -90,14 +90,23 @@ fn error_text(error: &TimelineForwardError) -> String {
 
 #[test]
 fn timeline_forward_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
-    assert!(udl.contains("timeline_forward_text("));
-    assert!(udl.contains("timeline_forward_media("));
+    let udl = crate::ffi_surface::udl();
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "timeline_forward_text"
+    ));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "timeline_forward_media"
+    ));
     assert!(udl.contains("dictionary TimelineForwardDto"));
     assert!(udl.contains("interface TimelineForwardError"));
-    assert!(udl.contains("timeline_poll_vote("));
-    assert!(udl.contains("timeline_call_decline("));
-    assert!(udl.contains("timeline_pin("));
+    assert!(crate::ffi_surface::declares_fn(udl, "timeline_poll_vote"));
+    assert!(crate::ffi_surface::declares_fn(
+        udl,
+        "timeline_call_decline"
+    ));
+    assert!(crate::ffi_surface::declares_fn(udl, "timeline_pin"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
     assert!(!udl.contains("matrix_backup_status"));
@@ -110,12 +119,30 @@ fn timeline_forward_surface_exposes_only_the_registered_family() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("timeline_forward_text("));
-    assert!(shared_core.contains("timeline_forward_media("));
-    assert!(shared_core.contains("timeline_poll_vote("));
-    assert!(shared_core.contains("timeline_call_decline("));
-    assert!(shared_core.contains("timeline_pin("));
-    assert!(!shared_core.contains("command("));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_forward_text"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_forward_media"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_poll_vote"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_call_decline"
+    ));
+    assert!(crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "timeline_pin"
+    ));
+    assert!(!crate::ffi_surface::shared_core_declares(
+        shared_core,
+        "command"
+    ));
     assert!(!shared_core.contains("matrix_backup_status"));
     assert!(!shared_core.contains("matrix_crypto_status"));
 }

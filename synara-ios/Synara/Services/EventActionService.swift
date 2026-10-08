@@ -1,4 +1,5 @@
 import Foundation
+import SynaraCore
 
 enum EventActionType: Equatable {
     case reply
@@ -30,23 +31,31 @@ enum EventActionType: Equatable {
 
 enum TimelineActionReadbackPolicy {
     static let schemaVersion: UInt32 = 1
+    /// Core's send queue still holds the write and retries it in order.
+    /// Accepted like the expected status so the user is not invited to repeat
+    /// it; only these queued writes can report it.
+    static let queueableActions: Set<TimelineActionKindDto> = [.editText, .forwardText, .forwardMedia, .pollVote]
 
     static func accepts(
         schemaVersion: UInt32,
-        action: String,
+        action: TimelineActionKindDto,
         roomID: String,
         eventID: String,
-        status: String,
-        expectedAction: String,
+        status: TimelineActionStatusDto,
+        expectedAction: TimelineActionKindDto,
         expectedRoomID: String,
-        expectedStatus: String,
+        expectedStatus: TimelineActionStatusDto,
         expectedEventID: String? = nil
     ) -> Bool {
-        schemaVersion == Self.schemaVersion
+        let queued = status == .queued && Self.queueableActions.contains(expectedAction)
+        // A still-queued forward has no new event id yet; every other readback
+        // names an event.
+        let eventIDPresent = eventID.isEmpty == false || (queued && expectedEventID == nil)
+        return schemaVersion == Self.schemaVersion
             && action == expectedAction
             && roomID == expectedRoomID
-            && eventID.isEmpty == false
-            && status == expectedStatus
+            && eventIDPresent
+            && (status == expectedStatus || queued)
             && (expectedEventID == nil || eventID == expectedEventID)
     }
 }

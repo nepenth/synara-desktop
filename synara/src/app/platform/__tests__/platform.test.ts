@@ -428,7 +428,10 @@ test('platform session store restores only identity metadata from native', async
 });
 
 test('platform notification count preserves existing desktop badge semantics', () => {
-  assert.equal(getPlatformNotificationCount([{ total: 4, highlight: 2 }, { total: 3 }], 1), 6);
+  assert.equal(
+    getPlatformNotificationCount({ highlightTotal: 2, unreadTotal: 3, laterActiveCount: 1 }),
+    6
+  );
 });
 
 test('platform notifications normalize shared requests before desktop delivery', async () => {

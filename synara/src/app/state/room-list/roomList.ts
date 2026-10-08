@@ -3,11 +3,16 @@ import { useEffect } from 'react';
 import { parseRoomSummary, type RoomSummary } from '../../features/matrix-dto/room';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { RoomsAction } from './utils';
+import { startRoomListUpdateDrivenPoll } from '../../utils/nativeRoomListUpdates';
+import type { RoomListPresentation } from '../../features/matrix-dto/generated';
+import { EMPTY_ROOM_LIST_PRESENTATION, parseRoomListPresentation } from './roomListPresentation';
 
 export type NativeRoomListSnapshot = {
   sessionGeneration: number;
   orderedRoomIds: string[];
   rooms: RoomSummary[];
+  /** Section orders, favorites and unread attention, derived by Core. */
+  presentation: RoomListPresentation;
 };
 
 export type NativeSessionSnapshot =
@@ -24,6 +29,7 @@ const emptyRoomListSnapshot: NativeRoomListSnapshot = {
   sessionGeneration: 0,
   orderedRoomIds: [],
   rooms: [],
+  presentation: EMPTY_ROOM_LIST_PRESENTATION,
 };
 
 export const sameStringList = (left: readonly string[], right: readonly string[]): boolean =>
@@ -71,6 +77,7 @@ export const sameNativeRoomListSnapshot = (
   if (left.sessionGeneration !== right.sessionGeneration) return false;
   if (!sameStringList(left.orderedRoomIds, right.orderedRoomIds)) return false;
   if (left.rooms.length !== right.rooms.length) return false;
+  if (JSON.stringify(left.presentation) !== JSON.stringify(right.presentation)) return false;
   return left.rooms.every((room, index) => sameRoomSummary(room, right.rooms[index]));
 };
 
@@ -122,10 +129,13 @@ const parseNativeRoomListSnapshot = (value: unknown): NativeRoomListSnapshot | n
     if (!parsed) return null;
     rooms.push(parsed);
   }
+  const presentation = parseRoomListPresentation(record.presentation);
+  if (!presentation) return null;
   return {
     sessionGeneration: record.sessionGeneration,
     orderedRoomIds,
     rooms,
+    presentation,
   };
 };
 
@@ -187,7 +197,7 @@ export const useBindAllRoomsAtom = (
         if (sameNativeRoomListSnapshot(latestNativeRoomListSnapshot, snapshot)) return;
         latestNativeRoomListSnapshot = snapshot;
         // Hydrate the synchronous facade before either atom setter can schedule
-        // selectors that combine a fresh room id with mx.getRoom().
+        // selectors that combine a fresh room id with getNativeRoom().
         onSnapshot?.(snapshot);
         setSnapshot(snapshot);
         setRooms({ type: 'INITIALIZE', rooms: snapshot.orderedRoomIds });
@@ -206,10 +216,10 @@ export const useBindAllRoomsAtom = (
     }
 
     void refresh();
-    const pollId = window.setInterval(() => void refresh(), 1_000);
+    const stopPolling = startRoomListUpdateDrivenPoll(() => void refresh());
     return () => {
       disposed = true;
-      window.clearInterval(pollId);
+      stopPolling();
     };
   }, [onSessionSnapshot, onSnapshot, setRooms, setSnapshot]);
 };
