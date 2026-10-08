@@ -104,7 +104,9 @@ security-framework = "3.7"
 
 [lib]
 name = "app_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# Desktop only: main.rs calls app_lib::run(). The Tauri mobile template's
+# staticlib/cdylib outputs only linked the whole graph twice more per build.
+crate-type = ["rlib"]
 
 [dev-dependencies]
 # Direct HTTP calls and SyncService SDK types are used only by desktop tests.
