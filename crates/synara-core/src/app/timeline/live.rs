@@ -539,10 +539,11 @@ impl ApprovalDecisionRegistry {
     }
 }
 
-/// A redaction that is still in the persisted send queue (recoverable error or
-/// slow server) will be sent in order, so it is accepted rather than reported
-/// as a failure the user would retry. Wedged, cancelled or rejected requests fail.
-fn queued_redaction_outcome(
+/// A redaction or reaction that is still in the persisted send queue
+/// (recoverable error or slow server) will be sent in order and already shows
+/// as a local echo, so it is accepted rather than reported as a failure the
+/// user would retry. Wedged, cancelled or rejected requests fail.
+fn accept_still_queued(
     result: Result<crate::app::send::QueuedSendAck, crate::app::send::QueuedSendError>,
     failed: &'static str,
 ) -> Result<(), &'static str> {
@@ -1731,7 +1732,7 @@ impl NativeTimelineOwner {
         if !authorized {
             return Err("v-timeline-redact-permission-denied");
         }
-        queued_redaction_outcome(
+        accept_still_queued(
             redact_via_room_queue(&room, &event_id, reason.as_deref()).await,
             "v-timeline-redact-failed",
         )?;
@@ -3211,13 +3212,21 @@ impl NativeTimelineRegistry {
         let room = client
             .get_room(parse_room_id(&room_id)?.as_ref())
             .ok_or("v-send.2-reaction-room-not-found")?;
-        send_event_via_room_queue(
-            &room,
-            ReactionEventContent::from(Annotation::new(target_event_id.clone(), key.to_owned()))
+        // A reaction the SDK still holds after a recoverable error is already
+        // shown as the user's local echo and will retry; reporting it failed
+        // would invite a second, duplicate annotation. Same rule as redaction.
+        accept_still_queued(
+            send_event_via_room_queue(
+                &room,
+                ReactionEventContent::from(Annotation::new(
+                    target_event_id.clone(),
+                    key.to_owned(),
+                ))
                 .into(),
-        )
-        .await
-        .map_err(|_| "v-send.2-reaction-ensure-failed")?;
+            )
+            .await,
+            "v-send.2-reaction-ensure-failed",
+        )?;
 
         let readback = self
             .reaction_readback(client, &room_id, &target_event_id, key, false)
@@ -3256,7 +3265,7 @@ impl NativeTimelineRegistry {
         let room = client
             .get_room(parse_room_id(&room_id)?.as_ref())
             .ok_or("v-send.2-reaction-room-not-found")?;
-        queued_redaction_outcome(
+        accept_still_queued(
             redact_via_room_queue(&room, &reaction_event_id, Some("Removed reaction")).await,
             "v-send.2-reaction-redact-failed",
         )?;

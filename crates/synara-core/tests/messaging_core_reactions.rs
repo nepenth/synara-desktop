@@ -238,3 +238,61 @@ async fn remote_reaction_ids_recover_for_other_sender_and_toggle_unreact_stays_i
         .expect("ensure re-add after toggle remove");
     assert_eq!(readded.mutation, NativeReactionMutation::Added);
 }
+
+#[tokio::test]
+async fn ensure_reaction_reports_a_still_queued_annotation_as_added_not_failed() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    client.event_cache().subscribe().unwrap();
+    let room_id = room_id!("!reactions-queued:example.org");
+    let target = event_id!("$queued-reaction-target");
+    let f = EventFactory::new().room(room_id);
+    let own_user_id = client.user_id().unwrap().to_owned();
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f.create(&own_user_id, RoomVersionId::V11))
+                .add_timeline_event(f.text_msg("target").sender(*BOB).event_id(target)),
+        )
+        .await;
+    server.mock_room_state_encryption().plain().mount().await;
+    server
+        .mock_room_messages()
+        .ok(RoomMessagesResponseTemplate::default())
+        .mount()
+        .await;
+    // Exhaust the SDK's short HTTP retry so the room queue sees one
+    // recoverable `SendError` for this annotation.
+    server
+        .mock_room_send()
+        .respond_with(
+            wiremock::ResponseTemplate::new(500).set_body_json(serde_json::json!({
+                "errcode": "M_UNKNOWN",
+                "error": "transient failure",
+            })),
+        )
+        .up_to_n_times(3)
+        .expect(3)
+        .mount()
+        .await;
+
+    let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 53);
+    let ensured = owner
+        .ensure_reaction(room_id.as_str(), target.as_str(), "🎉")
+        .await
+        .expect("a recoverable reaction failure is still queued, not a failed send");
+    assert_eq!(
+        ensured.mutation,
+        NativeReactionMutation::Added,
+        "reporting a still-queued reaction as failed invites a duplicate annotation"
+    );
+
+    let room = client.get_room(room_id).expect("room");
+    let (echoes, _) = room.send_queue().subscribe().await.expect("echoes");
+    assert_eq!(echoes.len(), 1, "the reaction stays in the persisted queue");
+    let txn = echoes[0].transaction_id.to_string();
+    assert!(!synara_core::app::send::queued_send_is_wedged(&room, &txn)
+        .await
+        .unwrap_or(true));
+}
