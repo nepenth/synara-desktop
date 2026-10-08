@@ -89,6 +89,8 @@ const LobbyMenu = forwardRef<HTMLDivElement, LobbyMenuProps>(
             </Text>
           </MenuItem>
           <MenuItem
+            variant="Surface"
+            fill="None"
             onClick={handleRoomSettings}
             size="300"
             after={<Icon size="100" src={Icons.Setting} />}

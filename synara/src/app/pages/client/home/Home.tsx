@@ -97,6 +97,8 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
     <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
         <MenuItem
+          variant="Surface"
+          fill="None"
           onClick={handleMarkAsRead}
           size="300"
           after={<Icon size="100" src={Icons.CheckTwice} />}
@@ -141,6 +143,8 @@ function RoomListSortIcons({
           <Menu style={{ width: toRem(190) }}>
             <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
               <MenuItem
+                variant="Surface"
+                fill="None"
                 size="300"
                 radii="300"
                 onClick={() => {
@@ -152,6 +156,8 @@ function RoomListSortIcons({
                 <Text size="T300">Recent activity</Text>
               </MenuItem>
               <MenuItem
+                variant="Surface"
+                fill="None"
                 size="300"
                 radii="300"
                 onClick={() => {

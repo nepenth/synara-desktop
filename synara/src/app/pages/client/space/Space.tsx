@@ -156,6 +156,8 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
           />
         )}
         <MenuItem
+          variant="Surface"
+          fill="None"
           onClick={handleMarkAsRead}
           size="300"
           after={<Icon size="100" src={Icons.CheckTwice} />}
@@ -185,6 +187,8 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
           </Text>
         </MenuItem>
         <MenuItem
+          variant="Surface"
+          fill="None"
           onClick={handleCopyLink}
           size="300"
           after={<Icon size="100" src={Icons.Link} />}
@@ -195,6 +199,8 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
           </Text>
         </MenuItem>
         <MenuItem
+          variant="Surface"
+          fill="None"
           onClick={handleRoomSettings}
           size="300"
           after={<Icon size="100" src={Icons.Setting} />}
@@ -206,6 +212,8 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
         </MenuItem>
         {developerTools && (
           <MenuItem
+            variant="Surface"
+            fill="None"
             onClick={handleOpenTimeline}
             size="300"
             after={<Icon size="100" src={Icons.Terminal} />}

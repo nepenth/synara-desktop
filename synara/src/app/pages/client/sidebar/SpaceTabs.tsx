@@ -153,6 +153,8 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(
         )}
         <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
           <MenuItem
+            variant="Surface"
+            fill="None"
             onClick={handleMarkAsRead}
             size="300"
             after={<Icon size="100" src={Icons.CheckTwice} />}
@@ -165,6 +167,8 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(
           </MenuItem>
           {onUnpin && (
             <MenuItem
+              variant="Surface"
+              fill="None"
               size="300"
               radii="300"
               onClick={handleUnpin}
@@ -194,6 +198,8 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(
             </Text>
           </MenuItem>
           <MenuItem
+            variant="Surface"
+            fill="None"
             onClick={handleCopyLink}
             size="300"
             after={<Icon size="100" src={Icons.Link} />}
@@ -204,6 +210,8 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(
             </Text>
           </MenuItem>
           <MenuItem
+            variant="Surface"
+            fill="None"
             onClick={handleRoomSettings}
             size="300"
             after={<Icon size="100" src={Icons.Setting} />}

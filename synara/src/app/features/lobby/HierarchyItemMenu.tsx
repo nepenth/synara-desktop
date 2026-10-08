@@ -60,6 +60,8 @@ function SuggestMenuItem({
 
   return (
     <MenuItem
+      variant="Surface"
+      fill="None"
       onClick={handleToggleSuggested}
       size="300"
       radii="300"
@@ -181,7 +183,14 @@ function SettingsMenuItem({
   };
 
   return (
-    <MenuItem onClick={handleSettings} size="300" radii="300" disabled={disabled}>
+    <MenuItem
+      variant="Surface"
+      fill="None"
+      onClick={handleSettings}
+      size="300"
+      radii="300"
+      disabled={disabled}
+    >
       <Text as="span" size="T300" truncate>
         Settings
       </Text>
@@ -260,6 +269,8 @@ export function HierarchyItemMenu({
                   <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
                     {onTogglePin && (
                       <MenuItem
+                        variant="Surface"
+                        fill="None"
                         size="300"
                         radii="300"
                         onClick={() => {
