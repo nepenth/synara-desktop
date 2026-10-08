@@ -1191,3 +1191,68 @@ fn rejected_session_retirement_is_generation_fenced_and_idempotent() {
     drop(rt);
     let _ = fs::remove_dir_all(&root);
 }
+
+#[test]
+fn ios_store_preparation_records_the_revision_and_refuses_a_newer_layout() {
+    use crate::app::store::{StorePaths, StoreRevisionManifest, STORE_LAYOUT_VERSION};
+    let root = temp_root("store-revision");
+    let identity =
+        AccountIdentity::new("@alice:example.org", "https://matrix.example.org").unwrap();
+    let paths = StorePaths::derive(&root, &identity).unwrap();
+    let manifest_path = paths.account_root().join("revision.json");
+
+    // A legacy store with no manifest keeps its data and gains the baseline.
+    fs::create_dir_all(paths.account_root()).unwrap();
+    let marker = paths.account_root().join("legacy-marker");
+    fs::write(&marker, b"kept").unwrap();
+    super::session_lifecycle::prepare_session_store(&root, &identity).unwrap();
+    let manifest: StoreRevisionManifest =
+        serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+    assert_eq!(manifest.layout_version, STORE_LAYOUT_VERSION);
+    assert_eq!(fs::read(&marker).unwrap(), b"kept");
+    // Preparing again is a no-op.
+    super::session_lifecycle::prepare_session_store(&root, &identity).unwrap();
+
+    // A store written by a newer layout fails closed before the SDK opens it.
+    let ahead = StoreRevisionManifest {
+        layout_version: STORE_LAYOUT_VERSION + 1,
+        ..manifest
+    };
+    fs::write(&manifest_path, serde_json::to_vec(&ahead).unwrap()).unwrap();
+    assert!(super::session_lifecycle::prepare_session_store(&root, &identity).is_err());
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn ios_logout_and_attach_use_the_shared_core_policies() {
+    let source = include_str!("session_lifecycle.rs");
+    let logout = source
+        .split("pub async fn logout(&self)")
+        .nth(1)
+        .and_then(|rest| rest.split("pub async fn recover(").next())
+        .expect("logout body");
+    assert!(logout.contains("session_policy::LogoutPolicy::IOS"));
+    assert!(logout.contains("session_policy::run_local_logout("));
+    assert!(!logout.contains("matrix_auth().logout()"));
+    let attach = source
+        .split("pub async fn attach_session_owners(&self)")
+        .nth(1)
+        .and_then(|rest| rest.split("pub async fn start_sync(&self)").next())
+        .expect("attach body");
+    assert!(attach.contains("session_policy::attach_owner_set("));
+    for restore_or_login in [
+        "restore_persisted_session_with_policy",
+        "login_with_password_inner",
+    ] {
+        let body = source
+            .split(&format!("async fn {restore_or_login}("))
+            .nth(1)
+            .expect("restore/login body");
+        let prepare = body.find("prepare_session_store(root, &identity)").unwrap();
+        let build = body.find("build_unauthenticated_client(&config)").unwrap();
+        assert!(
+            prepare < build,
+            "{restore_or_login} migrates before the SDK opens the store"
+        );
+    }
+}

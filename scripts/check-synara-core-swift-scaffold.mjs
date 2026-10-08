@@ -97,6 +97,10 @@ const sessionProjectionFfi = readFileSync(
   resolve(root, "crates/synara-core/src/session_projection_ffi.rs"),
   "utf8"
 );
+const sessionOwnerWiring = readFileSync(
+  resolve(root, "crates/synara-core/src/app/lifecycle/session/owners.rs"),
+  "utf8"
+);
 const sharedCoreFfi = readRustModuleSources(
   resolve(root, "crates/synara-core/src/shared_core_ffi.rs"),
   { includeTests: true }
@@ -390,14 +394,16 @@ const assertions = [
   [sharedCoreLogin, "core: SharedCore", "P4-S3c helper takes an already-constructed SharedCore"],
   [sharedCoreLogin, "core.loginWithPassword", "P4-S3c helper logs in on the caller-owned instance"],
   [sharedCoreFfi, "attach_session_owners", "P4-S3d attach FFI"],
-  [sharedCoreFfi, "attach_typing", "P4-S3d wires Core attach_typing"],
-  [sharedCoreFfi, "attach_presence", "P4-S3d wires Core attach_presence"],
-  [sharedCoreFfi, "attach_verification", "P4-S3d wires Core attach_verification"],
-  [sharedCoreFfi, "attach_devices", "P4-S3d wires Core attach_devices"],
-  [sharedCoreFfi, "attach_join_rules", "P4-S3d wires Core attach_join_rules"],
-  [sharedCoreFfi, "attach_image_packs", "P4-S3d wires Core attach_image_packs"],
-  [sharedCoreFfi, "attach_timelines", "P4-S3d wires Core attach_timelines"],
-  [sharedCoreFfi, "attach_sync", "P4-S3d wires Core attach_sync"],
+  // SharedCore hands its owners to the shared canonical Core attach order.
+  [sharedCoreFfi, "session_policy::attach_owner_set(", "P4-S3d wires Core owners in the shared attach order"],
+  [sessionOwnerWiring, "core.attach_typing(typing)", "P4-S3d wires Core attach_typing"],
+  [sessionOwnerWiring, "core.attach_presence(presence)", "P4-S3d wires Core attach_presence"],
+  [sessionOwnerWiring, "core.attach_verification(verification)", "P4-S3d wires Core attach_verification"],
+  [sessionOwnerWiring, "core.attach_devices(devices)", "P4-S3d wires Core attach_devices"],
+  [sessionOwnerWiring, "core.attach_join_rules(join_rules)", "P4-S3d wires Core attach_join_rules"],
+  [sessionOwnerWiring, "core.attach_image_packs(image_packs)", "P4-S3d wires Core attach_image_packs"],
+  [sessionOwnerWiring, "core.attach_timelines(timelines)", "P4-S3d wires Core attach_timelines"],
+  [sessionOwnerWiring, "core.attach_sync(sync)", "P4-S3d wires Core attach_sync"],
   [udl, "attach_session_owners", "P4-S3d SharedCore attach operation"],
   [udl, "dictionary SessionAttachDto", "P4-S3d privacy-safe attach DTO"],
   [udl, "interface SessionAttachError", "P4-S3d static attach error"],

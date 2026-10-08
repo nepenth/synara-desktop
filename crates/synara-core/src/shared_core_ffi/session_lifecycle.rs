@@ -711,6 +711,20 @@ impl SessionMaterialVault for SecretStoreSessionVault {
     }
 }
 
+/// Bring the account store to the current layout revision before the SDK opens
+/// it, exactly as desktop does. A legacy store without a manifest gets the
+/// baseline revision record and keeps all of its data; a store written by a
+/// newer layout or another account fails closed instead of being opened.
+pub(super) fn prepare_session_store(
+    root: &std::path::Path,
+    identity: &AccountIdentity,
+) -> Result<(), ()> {
+    let paths = crate::app::store::StorePaths::derive(root, identity).map_err(|_| ())?;
+    crate::app::store::migrate_store_to_current(&paths)
+        .map(|_| ())
+        .map_err(|_| ())
+}
+
 pub(super) fn vault_unavailable() -> MatrixIpcError {
     MatrixIpcError::new(MatrixIpcErrorCategory::StoreUnavailable)
         .with_diagnostic("p4-s3-secret-vault-unavailable")
@@ -751,6 +765,8 @@ impl SharedCore {
         }
 
         let store_key = store_key_for(&self.secret_store, &identity)?;
+        prepare_session_store(root, &identity)
+            .map_err(|()| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
         let config = ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))
             .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
         let client = build_unauthenticated_client(&config)
@@ -798,13 +814,16 @@ impl SharedCore {
             .await
             .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
 
-        if claim.commit(client, persistence).is_err() {
-            let _ = self.core.close().await;
-            return Err(restore_failed(
-                RESTORE_FAILED_CODE,
-                RESTORE_FAILED_DESCRIPTION,
-            ));
-        }
+        session_policy::finish_session_preparation(
+            claim
+                .commit(client, persistence)
+                .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION)),
+            || async {
+                let _ = self.core.close().await;
+                Ok(())
+            },
+        )
+        .await?;
 
         Ok(SessionRestoreDto {
             user_id: outcome.meta.user_id,
@@ -850,6 +869,8 @@ impl SharedCore {
                 }
                 _ => login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION),
             })?;
+        prepare_session_store(root, &identity)
+            .map_err(|()| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let config = ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let existing_device_id = existing_sqlite_crypto_device_id(
@@ -939,6 +960,8 @@ impl SharedCore {
                 }
                 _ => login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION),
             })?;
+        prepare_session_store(root, &identity)
+            .map_err(|()| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let config = ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let client = build_unauthenticated_client(&config)
@@ -1000,10 +1023,16 @@ impl SharedCore {
             .await
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
 
-        if claim.commit(client, persistence).is_err() {
-            let _ = self.core.close().await;
-            return Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION));
-        }
+        session_policy::finish_session_preparation(
+            claim
+                .commit(client, persistence)
+                .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION)),
+            || async {
+                let _ = self.core.close().await;
+                Ok(())
+            },
+        )
+        .await?;
 
         Ok(SessionLoginDto {
             user_id: identity.user_id().to_owned(),
@@ -1016,6 +1045,34 @@ impl SharedCore {
     /// rotation save, at most once per backoff window. It never replays an old
     /// refresh token, and a revoked lease (logout, forget) makes it a no-op.
     /// Returns whether a retry ran and succeeded.
+    /// Drop every per-session shell slot and queue after Core closed.
+    fn retire_session_slots(&self) {
+        if let Ok(mut live) = self.room_list_live.lock() {
+            *live = None;
+        }
+        if let Ok(mut live) = self.own_profile_live.lock() {
+            *live = None;
+        }
+        if let Ok(mut live) = self.media_retention_live.lock() {
+            *live = None;
+        }
+        if let Ok(mut updates) = self.timeline_view_updates.lock() {
+            updates.clear();
+        }
+        if let Ok(mut updates) = self.room_list_updates.lock() {
+            updates.clear();
+        }
+        if let Ok(mut updates) = self.owner_updates.lock() {
+            updates.clear();
+        }
+        if let Ok(mut guard) = self.restored_client.lock() {
+            *guard = RestoredClientSlot::Empty;
+        }
+        if let Ok(mut attach) = self.owner_attach.lock() {
+            *attach = OwnerAttachSlot::Empty;
+        }
+    }
+
     pub(super) fn retry_failed_session_save(&self, now: std::time::Instant) -> Option<bool> {
         let (client, lease) = match &*self.restored_client.lock().ok()? {
             RestoredClientSlot::Ready(client, persistence)
@@ -1025,8 +1082,8 @@ impl SharedCore {
             }
             _ => return None,
         };
-        let mut backoff = self.save_retry_backoff.lock().ok()?;
-        if !backoff.ready(now) {
+        let mut maintenance = self.maintenance.lock().ok()?;
+        if !maintenance.save_retry_due(now) {
             return None;
         }
         let snapshot = self.core.session_snapshot().ok().flatten()?;
@@ -1041,7 +1098,7 @@ impl SharedCore {
                     .map_err(|_| SessionFault::unavailable(RotationDiagnostics::IOS.persist_failed))
             })
             .is_ok();
-        backoff.record(now, saved);
+        maintenance.record_save_retry(now, saved);
         Some(saved)
     }
 
@@ -1131,7 +1188,7 @@ impl SharedCore {
             own_profile_live: Arc::new(Mutex::new(None)),
             media_retention_live: Arc::new(Mutex::new(None)),
             generations: crate::app::lifecycle::session::SessionGenerations::new(),
-            save_retry_backoff: Mutex::new(crate::app::lifecycle::session::RetryBackoff::new()),
+            maintenance: Mutex::new(Default::default()),
             rejected_session: Mutex::new(None),
         }
     }
@@ -1155,7 +1212,7 @@ impl SharedCore {
             own_profile_live: Arc::new(Mutex::new(None)),
             media_retention_live: Arc::new(Mutex::new(None)),
             generations: crate::app::lifecycle::session::SessionGenerations::new(),
-            save_retry_backoff: Mutex::new(crate::app::lifecycle::session::RetryBackoff::new()),
+            maintenance: Mutex::new(Default::default()),
             rejected_session: Mutex::new(None),
         }
     }
@@ -1347,42 +1404,26 @@ impl SharedCore {
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
 
-        self.core
-            .attach_typing(typing)
-            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
-        self.core
-            .attach_presence(presence)
-            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
-        self.core
-            .attach_rtc_transports(rtc_transports)
-            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
-        self.core
-            .attach_user_status(user_status)
-            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
-        self.core
-            .attach_verification(verification)
-            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
-        self.core
-            .attach_devices(devices)
-            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
-        self.core
-            .attach_dehydrated_devices(dehydrated_devices)
-            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
-        self.core
-            .attach_join_rules(join_rules)
-            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
-        self.core
-            .attach_image_packs(image_packs)
-            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
-        self.core
-            .attach_http_pusher(http_pusher)
-            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
-        self.core
-            .attach_timelines(timelines)
-            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
-        self.core
-            .attach_sync(sync)
-            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        session_policy::attach_owner_set(
+            &self.core,
+            session_policy::SessionOwnerSet {
+                typing,
+                presence,
+                rtc_transports,
+                user_status,
+                widgets: None,
+                verification,
+                devices,
+                dehydrated_devices,
+                join_rules,
+                image_packs,
+                http_pusher: Some(http_pusher),
+                timelines,
+                notification_decisions: None,
+                sync,
+            },
+        )
+        .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
 
         claim
             .commit()
@@ -1632,54 +1673,28 @@ impl SharedCore {
         // Serialize teardown with foreground resume and release every store
         // before dropping ownership. This operation performs no remote logout.
         let _lifecycle = self.sync_lifecycle.lock().await;
-        // Fence token-rotation saves before teardown: a refresh that lands
-        // while sync stops must not write credentials back into the vault.
-        self.revoke_retained_persistence();
-        if self.owners_attached() {
-            self.core
-                .stop_attached_sync()
-                .await
-                .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
-        }
-        if let Ok(client) = self.retained_client() {
-            client
-                .pause()
-                .await
-                .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
-        }
-        self.core
-            .close()
-            .await
-            .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
-        if let Ok(mut live) = self.room_list_live.lock() {
-            *live = None;
-        }
-        if let Ok(mut live) = self.own_profile_live.lock() {
-            *live = None;
-        }
-        if let Ok(mut live) = self.media_retention_live.lock() {
-            *live = None;
-        }
-        if let Ok(mut updates) = self.timeline_view_updates.lock() {
-            updates.clear();
-        }
-        if let Ok(mut updates) = self.room_list_updates.lock() {
-            updates.clear();
-        }
-        if let Ok(mut updates) = self.owner_updates.lock() {
-            updates.clear();
-        }
-        let mut guard = self
-            .restored_client
-            .lock()
-            .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
-        *guard = RestoredClientSlot::Empty;
-        drop(guard);
-        let mut attach = self
-            .owner_attach
-            .lock()
-            .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
-        *attach = OwnerAttachSlot::Empty;
+        let failed = || leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION);
+        // iOS policy: revoke the persistence fence first (a refresh landing
+        // while sync stops must not write credentials back), stop sync and
+        // pause the client, close Core, then retire the shell slots. The Swift
+        // host owns forgetting credentials; the first failure stops teardown.
+        session_policy::run_local_logout(
+            session_policy::LogoutPolicy::IOS,
+            || self.revoke_retained_persistence(),
+            || async {
+                if self.owners_attached() {
+                    self.core.stop_attached_sync().await.map_err(|_| failed())?;
+                }
+                if let Ok(client) = self.retained_client() {
+                    client.pause().await.map_err(|_| failed())?;
+                }
+                Ok(())
+            },
+            || Ok(()),
+            || self.retire_session_slots(),
+            || async { self.core.close().await.map(|_| ()).map_err(|_| failed()) },
+        )
+        .await?;
         Ok(LeftoverAckDto {
             status: "logged_out".to_owned(),
         })

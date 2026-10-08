@@ -179,6 +179,11 @@ test('desktop wake path restarts native sync instead of only rereading status', 
   const facade = readFileSync('src/app/features/native-client/nativeClientFacade.ts', 'utf8');
   const product = readFileSync('../src-tauri/src/matrix/auth/product.rs', 'utf8');
   const lib = readFileSync('../src-tauri/src/lib.rs', 'utf8');
+  // The recover gate and its wall-clock cooldown live in the shared Core owner.
+  const recoverGate = readFileSync(
+    '../crates/synara-core/src/app/lifecycle/session/recover.rs',
+    'utf8'
+  );
 
   assert.match(clientRoot, /shouldRecoverSyncOnWake/);
   assert.match(clientRoot, /consumeHiddenDurationMs/);
@@ -187,9 +192,11 @@ test('desktop wake path restarts native sync instead of only rereading status', 
   assert.match(facade, /await invoke\('matrix_sync_recover'\)/);
   assert.match(product, /spawn_suspend_resume_watch/);
   assert.match(product, /suspend_detected/);
-  assert.match(product, /recover_cooldown_active/);
-  assert.match(product, /last_success_wall/);
+  assert.match(product, /self\.recover_live\(/);
+  assert.match(recoverGate, /recover_cooldown_active/);
+  assert.match(recoverGate, /last_success_wall/);
   assert.match(product, /recover_sync_after_detected_suspend/);
   assert.doesNotMatch(product, /last\.elapsed\(\)/);
+  assert.doesNotMatch(recoverGate, /last\.elapsed\(\)/);
   assert.match(lib, /spawn_suspend_resume_watch/);
 });

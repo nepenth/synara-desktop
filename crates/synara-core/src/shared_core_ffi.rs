@@ -613,7 +613,7 @@ pub struct SharedCore {
     /// process must not reuse the generation a retired session carried.
     generations: crate::app::lifecycle::session::SessionGenerations,
     /// Backoff for re-saving tokens after a failed rotation save.
-    save_retry_backoff: Mutex<crate::app::lifecycle::session::RetryBackoff>,
+    maintenance: Mutex<crate::app::lifecycle::session::SessionMaintenance>,
     /// The generation (and account) whose sync reported a rejected refresh.
     /// Latched when observed so retirement does not depend on the live sync
     /// owner still existing, or still reporting, after the shell stops it.
