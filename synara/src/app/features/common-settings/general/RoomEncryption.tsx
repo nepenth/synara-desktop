@@ -57,7 +57,7 @@ export function RoomEncryption({ permissions }: RoomEncryptionProps) {
   const nativeRooms = useNativeRoomListSnapshot();
   const nativeSummary = nativeRooms.rooms.find((item) => item.roomId === room.roomId);
 
-  const canEnable = permissions.stateEvent(StateEvent.RoomEncryption, mx.getSafeUserId());
+  const canEnable = permissions.stateEvent(StateEvent.RoomEncryption);
   const content = useStateEvent(room, StateEvent.RoomEncryption)?.getContent<{
     algorithm: string;
     encrypt_state_events?: boolean;

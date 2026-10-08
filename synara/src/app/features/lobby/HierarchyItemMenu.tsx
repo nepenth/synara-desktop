@@ -196,7 +196,6 @@ type HierarchyItemMenuProps = {
   };
   joined: boolean;
   powerLevels?: IPowerLevels;
-  creators?: Set<string>;
   canEditChild: boolean;
   pinned?: boolean;
   onTogglePin?: (roomId: string) => void;
@@ -205,19 +204,17 @@ export function HierarchyItemMenu({
   item,
   joined,
   powerLevels,
-  creators,
   canEditChild,
   pinned,
   onTogglePin,
 }: HierarchyItemMenuProps) {
-  const mx = useMatrixClient();
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
 
   const canInvite = (): boolean => {
     if (!powerLevels) return false;
-    const permissions = getRoomPermissionsAPI(creators ?? new Set<string>(), powerLevels);
+    const permissions = getRoomPermissionsAPI(powerLevels);
 
-    return permissions.action('invite', mx.getSafeUserId());
+    return permissions.action('invite');
   };
 
   const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {

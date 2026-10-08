@@ -5,7 +5,6 @@ import { isKeyHotkey } from 'is-hotkey';
 import { useStateEvent } from '../../hooks/useStateEvent';
 import { StateEvent } from '../../../types/matrix/room';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useEditor } from '../../components/editor';
 import { RoomInputPlaceholder } from './RoomInputPlaceholder';
 import { NativeTimelinePresenter } from './NativeTimelinePresenter';
@@ -19,7 +18,6 @@ import { editableActiveElement } from '../../utils/dom';
 import { settingsAtom } from '../../state/settings';
 import { useSetting } from '../../state/hooks/settings';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
-import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { VoiceRoom } from './VoiceRoom';
 import { useRoom } from '../../hooks/useRoom';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
@@ -72,19 +70,13 @@ export function RoomView({
   const editor = useEditor();
   const { navigateRoom, navigateThread } = useRoomNavigate();
 
-  const mx = useMatrixClient();
-
   const tombstoneEvent = useStateEvent(room, StateEvent.RoomTombstone);
   const createEvent = useStateEvent(room, StateEvent.RoomCreate);
   const roomCreatedTs = createEvent?.getTs();
   const powerLevels = usePowerLevelsContext();
-  const creators = useRoomCreators(room);
 
-  const permissions = useRoomPermissions(creators, powerLevels);
-  const canMessage = permissions.event(
-    'm.room.message',
-    (mx as unknown as { getSafeUserId(): string }).getSafeUserId()
-  );
+  const permissions = useRoomPermissions(powerLevels);
+  const canMessage = permissions.event('m.room.message');
 
   useKeyDown(
     window,

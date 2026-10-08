@@ -31,6 +31,11 @@ pub struct NativeRoomPowerLevelsSnapshot {
     pub event_type: &'static str,
     pub state_key: &'static str,
     pub content: serde_json::Value,
+    /// The signed-in user's permissions under these levels, evaluated with
+    /// the room version's rules. `None` when the SDK could not load them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
+    pub capabilities: Option<super::RoomPermissionCapabilities>,
 }
 
 /// V-ROOMS.MEMBERS-READ — live native room creator projection.

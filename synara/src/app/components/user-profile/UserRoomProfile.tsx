@@ -71,7 +71,7 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
     ? (nativeIgnoredIds ?? []).includes(userId)
     : ignoredUsers.includes(userId);
 
-  const permissions = useRoomPermissions(creators, powerLevels);
+  const permissions = useRoomPermissions(powerLevels);
   const { hasMorePower } = useMemberPowerCompare(creators, powerLevels);
 
   const myUserId = mx.getSafeUserId();
@@ -79,9 +79,9 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
   const nativeMembersFailed = Boolean(nativeSession && nativeMembers === undefined);
   const permissionsReady =
     !powerLevels.nativeUnavailable && (!nativeSession || Array.isArray(nativeMembers));
-  const canKickUser = permissions.action('kick', myUserId) && hasMorePower(myUserId, userId);
-  const canBanUser = permissions.action('ban', myUserId) && hasMorePower(myUserId, userId);
-  const canInvite = permissions.action('invite', myUserId);
+  const canKickUser = permissions.action('kick') && hasMorePower(myUserId, userId);
+  const canBanUser = permissions.action('ban') && hasMorePower(myUserId, userId);
+  const canInvite = permissions.action('invite');
   const visibility = memberActionVisibility({
     isSelf: userId === myUserId,
     membership,

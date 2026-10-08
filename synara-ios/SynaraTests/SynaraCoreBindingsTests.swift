@@ -1200,6 +1200,47 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    static let adminCapabilities = RoomPermissionCapabilitiesDto(
+        ownPowerLevel: 100,
+        isCreator: false,
+        canSendMessage: true,
+        canReact: true,
+        canRedactOwn: true,
+        canRedactOthers: true,
+        canInvite: true,
+        canKick: true,
+        canBan: true,
+        canNotifyRoom: true,
+        canChangeName: true,
+        canChangeTopic: true,
+        canChangeAvatar: true,
+        canChangeCanonicalAlias: true,
+        canChangeHistoryVisibility: true,
+        canChangeJoinRules: true,
+        canEnableEncryption: true,
+        canChangePowerLevels: true,
+        canChangePinnedEvents: true,
+        canUpgradeRoom: true,
+        canManageSpaceChildren: true
+    )
+
+    func testSharedCoreRoomDetailsDeniesEveryPermissionWithoutCoreCapabilities() {
+        let details = SharedCoreRoomDetails.details(
+            roomID: "!s22:example.org",
+            ownUserID: "@alice:example.org",
+            room: nil,
+            members: [],
+            powerLevelsJSON: #"{"users":{"@alice:example.org":100}}"#,
+            joinRule: nil,
+            topic: nil,
+            encryptionStatus: .encrypted
+        )
+        XCTAssertFalse(details.canInvite)
+        XCTAssertFalse(details.canEditName)
+        XCTAssertFalse(details.canEditAliases)
+        XCTAssertEqual(details.powerLevels?.canEditPowerLevels, false)
+    }
+
     func testSharedCoreRoomDetailsMapsSnapshotsWithoutEcho() {
         let powerJSON = """
         {"users_default":0,"events_default":0,"state_default":50,"invite":50,"kick":50,"ban":50,"redact":50,"events":{"m.room.name":50,"m.room.topic":50,"m.room.avatar":50,"m.room.canonical_alias":50},"users":{"@alice:example.org":100}}
@@ -1228,6 +1269,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 ),
             ],
             powerLevelsJSON: powerJSON,
+            capabilities: Self.adminCapabilities,
             joinRule: "public",
             topic: "Invite topic",
             encryptionStatus: .encrypted

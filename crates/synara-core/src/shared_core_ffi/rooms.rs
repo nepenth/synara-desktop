@@ -928,6 +928,65 @@ pub struct RoomPowerLevelsSnapshotDto {
     pub event_type: String,
     pub state_key: String,
     pub content_json: String,
+    /// The signed-in user's permissions, evaluated by Core with the room
+    /// version's rules. Swift reads these instead of comparing raw levels.
+    pub capabilities: Option<RoomPermissionCapabilitiesDto>,
+}
+
+/// The signed-in user's permissions in one room (see
+/// `app::members::RoomPermissionCapabilities`).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct RoomPermissionCapabilitiesDto {
+    /// `None` for a room creator, whose power is unbounded from room v12.
+    pub own_power_level: Option<i64>,
+    pub is_creator: bool,
+    pub can_send_message: bool,
+    pub can_react: bool,
+    pub can_redact_own: bool,
+    pub can_redact_others: bool,
+    pub can_invite: bool,
+    pub can_kick: bool,
+    pub can_ban: bool,
+    pub can_notify_room: bool,
+    pub can_change_name: bool,
+    pub can_change_topic: bool,
+    pub can_change_avatar: bool,
+    pub can_change_canonical_alias: bool,
+    pub can_change_history_visibility: bool,
+    pub can_change_join_rules: bool,
+    pub can_enable_encryption: bool,
+    pub can_change_power_levels: bool,
+    pub can_change_pinned_events: bool,
+    pub can_upgrade_room: bool,
+    pub can_manage_space_children: bool,
+}
+
+impl From<crate::app::members::RoomPermissionCapabilities> for RoomPermissionCapabilitiesDto {
+    fn from(caps: crate::app::members::RoomPermissionCapabilities) -> Self {
+        Self {
+            own_power_level: caps.own_power_level,
+            is_creator: caps.is_creator,
+            can_send_message: caps.can_send_message,
+            can_react: caps.can_react,
+            can_redact_own: caps.can_redact_own,
+            can_redact_others: caps.can_redact_others,
+            can_invite: caps.can_invite,
+            can_kick: caps.can_kick,
+            can_ban: caps.can_ban,
+            can_notify_room: caps.can_notify_room,
+            can_change_name: caps.can_change_name,
+            can_change_topic: caps.can_change_topic,
+            can_change_avatar: caps.can_change_avatar,
+            can_change_canonical_alias: caps.can_change_canonical_alias,
+            can_change_history_visibility: caps.can_change_history_visibility,
+            can_change_join_rules: caps.can_change_join_rules,
+            can_enable_encryption: caps.can_enable_encryption,
+            can_change_power_levels: caps.can_change_power_levels,
+            can_change_pinned_events: caps.can_change_pinned_events,
+            can_upgrade_room: caps.can_upgrade_room,
+            can_manage_space_children: caps.can_manage_space_children,
+        }
+    }
 }
 
 /// Privacy-safe creators snapshot. Creator user ids only.
@@ -1089,6 +1148,7 @@ pub(super) fn room_power_levels_snapshot_dto(
         event_type: event_type.to_owned(),
         state_key: payload.state_key.to_owned(),
         content_json: snapshot_content_json(&payload.content)?,
+        capabilities: payload.capabilities.map(Into::into),
     })
 }
 

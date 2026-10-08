@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Permissions: Core evaluates what you may do in a room with the room version's rules (room v12 creators outrank every level) for desktop and iOS, and plans the iOS member menu. The renderer and Swift no longer compare raw power-level numbers, and permission checks are denied when Core has not evaluated them.
 - Room list: Core now owns section ordering, name normalization, the favorites split, which rooms count as unread, the space unread rollup and badge totals for desktop and iOS. The desktop app badge no longer counts a room inside a space once for the room and again for each space above it.
 - Internals: pin the generated Swift API surface in CI, generate Swift bindings in UniFFI library mode from proc-macro exports (no UDL), call one typed Core method per matrix command from desktop and iOS instead of JSON envelopes (the envelope registry is now test-only), and generate the renderer's native wire types from Rust.
 - iOS: agent approvals stamped slightly ahead of the device clock stay actionable in notifications as they already were in Core, four notification failure codes now record their specific diagnostics stage, and Swift no longer keeps its own Later codec or agent-card extraction; shared vectors pin the remaining Swift mirrors to Core.

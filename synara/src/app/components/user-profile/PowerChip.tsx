@@ -157,7 +157,7 @@ export function PowerChip({ userId }: { userId: string }) {
   const powerLevels = usePowerLevels(room);
   const creators = useRoomCreators(room);
 
-  const permissions = useRoomPermissions(creators, powerLevels);
+  const permissions = useRoomPermissions(powerLevels);
   const getMemberPowerLevel = useGetMemberPowerLevel(powerLevels);
   const { hasMorePower } = useMemberPowerCompare(creators, powerLevels);
 
@@ -166,7 +166,7 @@ export function PowerChip({ userId }: { userId: string }) {
 
   const myUserId = mx.getSafeUserId();
   const canChangePowers =
-    permissions.stateEvent(StateEvent.RoomPowerLevels, myUserId) &&
+    permissions.stateEvent(StateEvent.RoomPowerLevels) &&
     (myUserId === userId ? true : hasMorePower(myUserId, userId));
 
   const tag = getMemberPowerTag(userId);

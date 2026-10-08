@@ -41,7 +41,6 @@ import {
   RoomNotificationMode,
 } from '../../hooks/useRoomsNotificationPreferences';
 import { RoomNotificationModeSwitcher } from '../../components/RoomNotificationSwitcher';
-import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { useRoomName } from '../../hooks/useRoomMeta';
@@ -70,10 +69,9 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
     const [readError, setReadError] = useState<string>();
     const [readBusy, setReadBusy] = useState(false);
     const powerLevels = usePowerLevels(room);
-    const creators = useRoomCreators(room);
 
-    const permissions = useRoomPermissions(creators, powerLevels);
-    const canInvite = permissions.action('invite', mx.getSafeUserId());
+    const permissions = useRoomPermissions(powerLevels);
+    const canInvite = permissions.action('invite');
     const openRoomSettings = useOpenRoomSettings();
     const space = useSpaceOptionally();
 

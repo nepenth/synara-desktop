@@ -895,6 +895,14 @@ impl NativeRoomJoinRuleOwner {
             .await?
             .unwrap_or_else(|| serde_json::json!({}));
         validate_power_levels_snapshot_content(&content)?;
+        // The SDK applies the room version's rules (creators outrank every
+        // level from v12); a failed load leaves capabilities absent.
+        let capabilities = match (room.power_levels().await, self.client.user_id()) {
+            (Ok(levels), Some(user_id)) => Some(crate::app::members::room_permission_capabilities(
+                &levels, user_id,
+            )),
+            _ => None,
+        };
         Ok(NativeRoomPowerLevelsSnapshot {
             status: "ok",
             session_generation: self.session_generation,
@@ -902,6 +910,7 @@ impl NativeRoomJoinRuleOwner {
             event_type: ROOM_POWER_LEVELS_EVENT_TYPE,
             state_key: "",
             content,
+            capabilities,
         })
     }
 

@@ -29,7 +29,6 @@ import { SettingTile } from '../../../components/setting-tile';
 import { SequenceCardStyle } from '../styles.css';
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
 import { useTextAreaCodeEditor } from '../../../hooks/useTextAreaCodeEditor';
-import { useRoomCreators } from '../../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../../hooks/useRoomPermissions';
 import { sendLeftoverStateEvent } from '../../../components/nativeStateEventOwner';
 
@@ -245,15 +244,13 @@ export type StateEventEditorProps = StateEventInfo & {
 };
 
 export function StateEventEditor({ type, stateKey, requestClose }: StateEventEditorProps) {
-  const mx = useMatrixClient();
   const room = useRoom();
   const stateEvent = useStateEvent(room, type as unknown as StateEvent, stateKey);
   const [editContent, setEditContent] = useState<object>();
   const powerLevels = usePowerLevels(room);
-  const creators = useRoomCreators(room);
 
-  const permissions = useRoomPermissions(creators, powerLevels);
-  const canEdit = permissions.stateEvent(type, mx.getSafeUserId());
+  const permissions = useRoomPermissions(powerLevels);
+  const canEdit = permissions.stateEvent(type);
 
   const eventJSONStr = useMemo(() => {
     if (!stateEvent) return '';

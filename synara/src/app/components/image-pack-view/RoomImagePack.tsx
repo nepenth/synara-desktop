@@ -9,7 +9,6 @@ import { StateEvent } from '../../../types/matrix/room';
 import { useRoomImagePack } from '../../hooks/useImagePacks';
 import { randomStr } from '../../utils/common';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
-import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { setRoomImagePackNative } from '../../features/room/nativeImagePack';
 
 type RoomImagePackProps = {
@@ -19,12 +18,10 @@ type RoomImagePackProps = {
 
 export function RoomImagePack({ room, stateKey }: RoomImagePackProps) {
   const mx = useMatrixClient();
-  const userId = mx.getUserId()!;
   const powerLevels = usePowerLevels(room);
-  const creators = useRoomCreators(room);
 
-  const permissions = useRoomPermissions(creators, powerLevels);
-  const canEditImagePack = permissions.stateEvent(StateEvent.PoniesRoomEmotes, userId);
+  const permissions = useRoomPermissions(powerLevels);
+  const canEditImagePack = permissions.stateEvent(StateEvent.PoniesRoomEmotes);
 
   const fallbackPack = useMemo(() => {
     const fakePackId = randomStr(4);

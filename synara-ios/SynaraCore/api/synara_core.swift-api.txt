@@ -57,6 +57,8 @@ extension MediaBytesDto: Sendable
 extension MediaConfigDto: Sendable
 extension MediaUploadDto: Sendable
 extension MediaUploadError: Sendable
+extension MemberActionContext: Sendable
+extension MemberActionPlan: Sendable
 extension MessageSearchDto: Sendable
 extension MessageSearchError: Sendable
 extension MessageSearchGroupDto: Sendable
@@ -126,6 +128,7 @@ extension RoomNotificationSnapshotDto: Sendable
 extension RoomNotificationWriteDto: Sendable
 extension RoomNotificationsSnapshotDto: Sendable
 extension RoomOrderInput: Sendable
+extension RoomPermissionCapabilitiesDto: Sendable
 extension RoomPowerLevelCommandError: Sendable
 extension RoomPowerLevelTagsSnapshotDto: Sendable
 extension RoomPowerLevelWriteDto: Sendable
@@ -656,6 +659,7 @@ public func bindingScaffoldVersion() -> String
 public func loginFlows(homeserverUrl: String) async throws -> [LoginFlowDto]
 public func markdownToHtml(body: String) -> String?
 public func orderRoomIds(rooms: [RoomOrderInput], order: RoomListOrder) -> [String]
+public func planMemberActions(context: MemberActionContext) -> MemberActionPlan
 public func registerFlows(homeserverUrl: String) async throws -> RegisterFlowsDto
 public func roomActivityRecoveryRequired(latestRequiresRecovery: Bool, previousState: RoomActivityPreviousState) -> Bool
 public func roomUnreadPresentation(membership: RoomUnreadMembership, numUnreadMessages: UInt64, numUnreadNotifications: UInt64, numUnreadMentions: UInt64, isMarkedUnread: Bool) -> RoomUnreadPresentationDto
@@ -1080,6 +1084,29 @@ public struct MediaConfigDto: Equatable, Hashable
 public struct MediaUploadDto: Equatable, Hashable
   public var mxc: String
   public init(mxc: String)
+public struct MemberActionContext: Equatable, Hashable
+  public var isSelf: Bool
+  public var memberMembership: String
+  public var memberPowerLevel: Int64?
+  public var ownPowerLevel: Int64?
+  public var canInvite: Bool
+  public var canKick: Bool
+  public var canBan: Bool
+  public var canChangePowerLevels: Bool
+  public init(isSelf: Bool, memberMembership: String, memberPowerLevel: Int64?, ownPowerLevel: Int64?, canInvite: Bool, canKick: Bool, canBan: Bool, canChangePowerLevels: Bool)
+public struct MemberActionPlan: Equatable, Hashable
+  public var canMessage: Bool
+  public var canIgnore: Bool
+  public var canInvite: Bool
+  public var canCancelInvite: Bool
+  public var canAcceptKnock: Bool
+  public var canDenyKnock: Bool
+  public var canRemove: Bool
+  public var canBan: Bool
+  public var canUnban: Bool
+  public var canEditPowerLevel: Bool
+  public var assignablePowerLevels: [Int64]
+  public init(canMessage: Bool, canIgnore: Bool, canInvite: Bool, canCancelInvite: Bool, canAcceptKnock: Bool, canDenyKnock: Bool, canRemove: Bool, canBan: Bool, canUnban: Bool, canEditPowerLevel: Bool, assignablePowerLevels: [Int64])
 public struct MessageSearchDto: Equatable, Hashable
   public var nextToken: String?
   public var highlights: [String]
@@ -1350,6 +1377,29 @@ public struct RoomOrderInput: Equatable, Hashable
   public var name: String?
   public var lastActivityMs: UInt64?
   public init(roomId: String, name: String?, lastActivityMs: UInt64?)
+public struct RoomPermissionCapabilitiesDto: Equatable, Hashable
+  public var ownPowerLevel: Int64?
+  public var isCreator: Bool
+  public var canSendMessage: Bool
+  public var canReact: Bool
+  public var canRedactOwn: Bool
+  public var canRedactOthers: Bool
+  public var canInvite: Bool
+  public var canKick: Bool
+  public var canBan: Bool
+  public var canNotifyRoom: Bool
+  public var canChangeName: Bool
+  public var canChangeTopic: Bool
+  public var canChangeAvatar: Bool
+  public var canChangeCanonicalAlias: Bool
+  public var canChangeHistoryVisibility: Bool
+  public var canChangeJoinRules: Bool
+  public var canEnableEncryption: Bool
+  public var canChangePowerLevels: Bool
+  public var canChangePinnedEvents: Bool
+  public var canUpgradeRoom: Bool
+  public var canManageSpaceChildren: Bool
+  public init(ownPowerLevel: Int64?, isCreator: Bool, canSendMessage: Bool, canReact: Bool, canRedactOwn: Bool, canRedactOthers: Bool, canInvite: Bool, canKick: Bool, canBan: Bool, canNotifyRoom: Bool, canChangeName: Bool, canChangeTopic: Bool, canChangeAvatar: Bool, canChangeCanonicalAlias: Bool, canChangeHistoryVisibility: Bool, canChangeJoinRules: Bool, canEnableEncryption: Bool, canChangePowerLevels: Bool, canChangePinnedEvents: Bool, canUpgradeRoom: Bool, canManageSpaceChildren: Bool)
 public struct RoomPowerLevelTagsSnapshotDto: Equatable, Hashable
   public var status: String
   public var sessionGeneration: UInt64
@@ -1368,7 +1418,8 @@ public struct RoomPowerLevelsSnapshotDto: Equatable, Hashable
   public var eventType: String
   public var stateKey: String
   public var contentJson: String
-  public init(status: String, sessionGeneration: UInt64, roomId: String, eventType: String, stateKey: String, contentJson: String)
+  public var capabilities: RoomPermissionCapabilitiesDto?
+  public init(status: String, sessionGeneration: UInt64, roomId: String, eventType: String, stateKey: String, contentJson: String, capabilities: RoomPermissionCapabilitiesDto?)
 public struct RoomProfileWriteDto: Equatable, Hashable
   public var status: String
   public init(status: String)

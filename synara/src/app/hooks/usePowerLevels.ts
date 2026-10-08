@@ -8,7 +8,11 @@ import { useStateEventCallback } from './useStateEventCallback';
 import { useMatrixClient } from './useMatrixClient';
 import { getStateEvent } from '../utils/room';
 import { isNativeMatrixSession } from '../features/verification/nativeVerification';
-import { readRoomPowerLevelsWithNativeOwner } from './nativeRoomPowerLevelsOwner';
+import {
+  readRoomPowerLevelsWithNativeOwner,
+  type NativeRoomPowerLevelsSnapshot,
+} from './nativeRoomPowerLevelsOwner';
+import type { RoomPermissionCapabilities } from '../features/matrix-dto/generated';
 
 export type PowerLevelActions = 'invite' | 'redact' | 'kick' | 'ban' | 'historical';
 export type PowerLevelNotificationsAction = 'room';
@@ -16,6 +20,8 @@ export type PowerLevelNotificationsAction = 'room';
 export type IPowerLevels = {
   /** Native read is not ready; permission consumers must deny all actions. */
   nativeUnavailable?: true;
+  /** Core's permission evaluation for the signed-in user (see useRoomPermissions). */
+  nativeCapabilities?: RoomPermissionCapabilities;
   users_default?: number;
   state_default?: number;
   events_default?: number;
@@ -30,7 +36,13 @@ export type IPowerLevels = {
   notifications?: Record<string, number>;
 };
 
-type CompletePowerLevels = Omit<Required<IPowerLevels>, 'nativeUnavailable'>;
+type CompletePowerLevels = Omit<Required<IPowerLevels>, 'nativeUnavailable' | 'nativeCapabilities'>;
+
+/** Levels for display plus Core's capabilities for permission checks. */
+const powerLevelsFromNativeSnapshot = (snapshot: NativeRoomPowerLevelsSnapshot): IPowerLevels => ({
+  ...(snapshot.content as IPowerLevels),
+  nativeCapabilities: snapshot.capabilities,
+});
 
 const DEFAULT_POWER_LEVELS: CompletePowerLevels = {
   users_default: 0,
@@ -96,7 +108,7 @@ export function usePowerLevels(room: EventedRoomReading): IPowerLevels {
           setNativeState({
             roomId: room.roomId,
             status: 'ready',
-            content: snapshot.content as IPowerLevels,
+            content: powerLevelsFromNativeSnapshot(snapshot),
           });
         }
       })
@@ -179,7 +191,7 @@ export const useRoomsPowerLevels = (rooms: RoomReading[]): Map<string, IPowerLev
         const values = new Map<string, IPowerLevels>();
         rooms.forEach((room, index) => {
           const snapshot = snapshots[index];
-          if (snapshot) values.set(room.roomId, snapshot.content as IPowerLevels);
+          if (snapshot) values.set(room.roomId, powerLevelsFromNativeSnapshot(snapshot));
         });
         setNativeState({ roomIdsKey, status: 'ready', values });
       })

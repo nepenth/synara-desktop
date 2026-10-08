@@ -39,13 +39,9 @@ type RoomPublishedAddressesProps = {
 };
 
 export function RoomPublishedAddresses({ permissions }: RoomPublishedAddressesProps) {
-  const mx = useMatrixClient();
   const room = useRoom();
 
-  const canEditCanonical = permissions.stateEvent(
-    StateEvent.RoomCanonicalAlias,
-    mx.getSafeUserId()
-  );
+  const canEditCanonical = permissions.stateEvent(StateEvent.RoomCanonicalAlias);
 
   const [canonicalAlias, publishedAliases] = usePublishedAliases(room);
   const setMainAlias = useSetMainAlias(room);
@@ -360,13 +356,9 @@ function LocalAddressesList({
 }
 
 export function RoomLocalAddresses({ permissions }: { permissions: RoomPermissionsAPI }) {
-  const mx = useMatrixClient();
   const room = useRoom();
 
-  const canEditCanonical = permissions.stateEvent(
-    StateEvent.RoomCanonicalAlias,
-    mx.getSafeUserId()
-  );
+  const canEditCanonical = permissions.stateEvent(StateEvent.RoomCanonicalAlias);
 
   const [expand, setExpand] = useState(false);
 

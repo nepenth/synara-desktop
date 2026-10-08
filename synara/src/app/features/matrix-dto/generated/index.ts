@@ -98,6 +98,7 @@ export type { NativeX509CaSummary } from './NativeX509CaSummary';
 export type { NativeX509IdentityStatus } from './NativeX509IdentityStatus';
 export type { RoomListPresentation } from './RoomListPresentation';
 export type { RoomMember } from './RoomMember';
+export type { RoomPermissionCapabilities } from './RoomPermissionCapabilities';
 export type { RoomUnreadAttention } from './RoomUnreadAttention';
 export type { SynaraAgentApprovalHistoryDecision } from './SynaraAgentApprovalHistoryDecision';
 export type { SynaraAgentApprovalHistoryItem } from './SynaraAgentApprovalHistoryItem';

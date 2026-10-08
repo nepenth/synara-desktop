@@ -36,7 +36,6 @@ import { StateEvent } from '../../../../types/matrix/room';
 import { suffixRename } from '../../../utils/common';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useAlive } from '../../../hooks/useAlive';
-import { useRoomCreators } from '../../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../../hooks/useRoomPermissions';
 import { resolveOptionalMatrixMediaUrl } from '../../../matrix/media';
 import { NativeAvatarImage } from '../../../components/NativeAvatarImage';
@@ -153,10 +152,9 @@ export function RoomPacks({ onViewPack }: RoomPacksProps) {
   const alive = useAlive();
 
   const powerLevels = usePowerLevels(room);
-  const creators = useRoomCreators(room);
 
-  const permissions = useRoomPermissions(creators, powerLevels);
-  const canEdit = permissions.stateEvent(StateEvent.PoniesRoomEmotes, mx.getSafeUserId());
+  const permissions = useRoomPermissions(powerLevels);
+  const canEdit = permissions.stateEvent(StateEvent.PoniesRoomEmotes);
 
   const unfilteredPacks = useRoomImagePacks(room);
   const packs = useMemo(() => unfilteredPacks.filter((pack) => !pack.deleted), [unfilteredPacks]);

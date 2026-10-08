@@ -8,6 +8,7 @@
 mod error;
 mod index;
 mod native;
+mod permissions;
 mod power_levels;
 mod snapshots;
 
@@ -17,6 +18,10 @@ pub use native::{
     NativePowerLevelWriteResult, NativeRoomCreatorsSnapshot, NativeRoomMembersSnapshot,
     NativeRoomPowerLevelTagsSnapshot, NativeRoomPowerLevelsSnapshot, ROOM_CREATE_EVENT_TYPE,
     ROOM_POWER_LEVELS_EVENT_TYPE, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
+};
+pub use permissions::{
+    plan_member_actions, room_permission_capabilities, MemberActionContext, MemberActionPlan,
+    RoomPermissionCapabilities,
 };
 pub use power_levels::{
     validate_power_level_tags_content, validate_room_power_levels_content,

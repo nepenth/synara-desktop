@@ -65,7 +65,7 @@ export function RoomHistoryVisibility({ permissions }: RoomHistoryVisibilityProp
   const mx = useMatrixClient();
   const room = useRoom();
 
-  const canEdit = permissions.stateEvent(StateEvent.RoomHistoryVisibility, mx.getSafeUserId());
+  const canEdit = permissions.stateEvent(StateEvent.RoomHistoryVisibility);
 
   const visibilityEvent = useStateEvent(room, StateEvent.RoomHistoryVisibility);
   const historyVisibility: HistoryVisibility =

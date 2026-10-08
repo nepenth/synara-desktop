@@ -370,13 +370,12 @@ type RoomPinMenuProps = {
 export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
   ({ room, requestClose, mode = 'menu' }, ref) => {
     const mx = useMatrixClient();
-    const userId = mx.getUserId()!;
     const powerLevels = usePowerLevelsContext();
     const creators = useRoomCreators(room);
 
-    const permissions = useRoomPermissions(creators, powerLevels);
-    const canPinEvent = permissions.stateEvent(StateEvent.RoomPinnedEvents, userId);
-    const canSendReaction = permissions.event(MessageEvent.Reaction, userId);
+    const permissions = useRoomPermissions(powerLevels);
+    const canPinEvent = permissions.stateEvent(StateEvent.RoomPinnedEvents);
+    const canSendReaction = permissions.event(MessageEvent.Reaction);
 
     const creatorsTag = useRoomCreatorsTag();
     const powerLevelTags = usePowerLevelTags(room, powerLevels);

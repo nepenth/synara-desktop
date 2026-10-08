@@ -1,4 +1,5 @@
 import { invokeDesktopWithAvailability, type DesktopInvokeResult } from '../utils/desktop';
+import type { RoomPermissionCapabilities } from '../features/matrix-dto/generated';
 import {
   beginNativeRoomStateSession,
   clearNativeRoomStateProjections,
@@ -15,6 +16,8 @@ export type NativeRoomPowerLevelsSnapshot = {
   stateKey: '';
   sessionGeneration: number;
   content: NativeRoomPowerLevelsContent;
+  /** Core's evaluation of these levels for the signed-in user. */
+  capabilities?: RoomPermissionCapabilities;
 };
 
 export type NativeRoomPowerLevelsInvoke = (
@@ -70,6 +73,46 @@ const isPowerLevelsContent = (value: unknown): value is NativeRoomPowerLevelsCon
     if (field in value && !isPowerLevelMap(value[field])) return false;
   }
   return true;
+};
+
+const CAPABILITY_FLAGS = [
+  'isCreator',
+  'canSendMessage',
+  'canReact',
+  'canRedactOwn',
+  'canRedactOthers',
+  'canInvite',
+  'canKick',
+  'canBan',
+  'canNotifyRoom',
+  'canChangeName',
+  'canChangeTopic',
+  'canChangeAvatar',
+  'canChangeCanonicalAlias',
+  'canChangeHistoryVisibility',
+  'canChangeJoinRules',
+  'canEnableEncryption',
+  'canChangePowerLevels',
+  'canChangePinnedEvents',
+  'canUpgradeRoom',
+  'canManageSpaceChildren',
+  'eventsDefaultAllowed',
+  'stateDefaultAllowed',
+] as const;
+
+/** Validate Core's capabilities; anything malformed is treated as absent. */
+export const parseRoomPermissionCapabilities = (
+  value: unknown
+): RoomPermissionCapabilities | undefined => {
+  if (!isRecord(value)) return undefined;
+  if (!CAPABILITY_FLAGS.every((flag) => typeof value[flag] === 'boolean')) return undefined;
+  const own = value.ownPowerLevel;
+  if (own !== null && own !== undefined && !isSafePowerLevel(own)) return undefined;
+  const allowed = value.eventAllowed;
+  if (!isRecord(allowed) || !Object.values(allowed).every((item) => typeof item === 'boolean')) {
+    return undefined;
+  }
+  return value as unknown as RoomPermissionCapabilities;
 };
 
 const invokeSafely = async (
@@ -128,7 +171,10 @@ export async function readRoomPowerLevelsWithNativeOwner(
       throw new Error(unavailableMessage);
     }
 
-    const snapshot = value as NativeRoomPowerLevelsSnapshot;
+    const snapshot: NativeRoomPowerLevelsSnapshot = {
+      ...(value as NativeRoomPowerLevelsSnapshot),
+      capabilities: parseRoomPermissionCapabilities(value.capabilities),
+    };
     publishNativeRoomPowerLevelsProjection(
       snapshot.roomId,
       snapshot.sessionGeneration,

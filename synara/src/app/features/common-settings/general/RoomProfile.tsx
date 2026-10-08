@@ -288,9 +288,9 @@ export function RoomProfile({ permissions }: RoomProfileProps) {
   const joinRule = useRoomJoinRule(room);
   const joinRulePresentation = normalizeRoomJoinRulePresentation(joinRule?.join_rule);
 
-  const canEditAvatar = permissions.stateEvent(StateEvent.RoomAvatar, mx.getSafeUserId());
-  const canEditName = permissions.stateEvent(StateEvent.RoomName, mx.getSafeUserId());
-  const canEditTopic = permissions.stateEvent(StateEvent.RoomTopic, mx.getSafeUserId());
+  const canEditAvatar = permissions.stateEvent(StateEvent.RoomAvatar);
+  const canEditName = permissions.stateEvent(StateEvent.RoomName);
+  const canEditTopic = permissions.stateEvent(StateEvent.RoomTopic);
   const canEdit = canEditAvatar || canEditName || canEditTopic;
 
   const avatarUrl = avatar

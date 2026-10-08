@@ -2074,6 +2074,8 @@ fn power_level_and_creator_snapshots_have_fixed_wire_shapes() {
             "users": { "@alice:example.org": 100 },
             "retained": { "value": true },
         }),
+        // Absent capabilities stay off the wire, keeping the fixed shape below.
+        capabilities: None,
     };
     assert_eq!(
         serde_json::to_value(power_levels).unwrap(),
