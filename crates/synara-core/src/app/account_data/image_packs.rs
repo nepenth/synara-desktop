@@ -16,27 +16,33 @@ pub const ROOM_EMOTES_EVENT_TYPE: &str = "im.ponies.room_emotes";
 pub const IMAGE_PACKS_UPDATED_EVENT: &str = "matrix-image-packs-updated";
 
 /// Privacy-safe pack DTO (no secrets). Content is the ponies pack JSON body.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeImagePack {
     /// Stable id: user id for personal pack, event id for room state packs.
     pub id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub room_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub state_key: Option<String>,
     /// Raw pack content (`pack` + `images` keys per MSC2545-style ponies packs).
     pub content: JsonValue,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeUserImagePackSnapshot {
     pub session_generation: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub pack: Option<NativeImagePack>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomImagePacksSnapshot {
@@ -45,6 +51,7 @@ pub struct NativeRoomImagePacksSnapshot {
     pub packs: Vec<NativeImagePack>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeGlobalImagePacksSnapshot {

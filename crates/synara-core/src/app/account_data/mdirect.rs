@@ -19,10 +19,12 @@ pub struct NativeMDirectSnapshot {
     pub user_ids: Vec<String>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeMDirectMutationResult {
     pub room_id: String,
+    #[cfg_attr(feature = "ts-export", ts(type = "\"updated\""))]
     pub status: &'static str,
 }
 

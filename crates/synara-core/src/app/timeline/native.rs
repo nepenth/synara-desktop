@@ -21,16 +21,20 @@ pub const NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS: u64 = 10 * 60 * 1000;
 /// `Normal` is the native owner route for an ordinary room open. It resolves
 /// shared unread state before considering the optional, UI-held restore hint;
 /// the hint is neither sync state nor a server-side viewport command.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct NativeTimelineViewportHint {
     #[serde(default)]
     pub at_bottom: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub restored_anchor_event_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub live_tail_event_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub updated_at_ms: Option<u64>,
 }
 
@@ -188,6 +192,7 @@ pub struct NativeTimelineItem {
     pub reactions: Vec<NativeTimelineReaction>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineReaction {
@@ -195,9 +200,14 @@ pub struct NativeTimelineReaction {
     pub count: u32,
     pub me: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(
+        feature = "ts-export",
+        ts(as = "Option<Vec<NativeTimelineReactionSender>>", optional)
+    )]
     pub senders: Vec<NativeTimelineReactionSender>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineReactionSender {
@@ -205,9 +215,11 @@ pub struct NativeTimelineReactionSender {
     /// Remote reaction annotations can be redacted by their event id. Local
     /// echoes intentionally have no fabricated event id.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub reaction_event_id: Option<String>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeReactionMutation {
@@ -217,6 +229,7 @@ pub enum NativeReactionMutation {
     Redacted,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeReactionMutationResult {
@@ -236,6 +249,7 @@ pub struct NativeAgentApprovalDecisionRequest {
     pub action_id: String,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeAgentApprovalDecisionResult {
@@ -243,6 +257,7 @@ pub struct NativeAgentApprovalDecisionResult {
     pub event_id: String,
     pub status: crate::app::agent_approvals::AgentApprovalDecisionStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub reaction: Option<NativeReactionMutationResult>,
 }
 
@@ -292,6 +307,7 @@ pub struct NativeTimelineEventReadback {
 }
 
 /// Homeserver `/timestamp_to_event` result for a full-room date-rail jump.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineTimestampToEventReadback {

@@ -27,6 +27,7 @@ pub const MAX_AGENT_APPROVAL_HISTORY_ROOM_ID_BYTES: usize = 255;
 pub const MAX_AGENT_APPROVAL_HISTORY_EVENT_ID_BYTES: usize = 255;
 pub const MAX_AGENT_APPROVAL_HISTORY_SENDER_LENGTH: usize = 256;
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SynaraAgentApprovalHistoryDecision {
@@ -75,6 +76,7 @@ impl SynaraAgentApprovalHistoryDecision {
     }
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SynaraAgentApprovalHistoryItem {
@@ -104,6 +106,7 @@ impl Default for SynaraAgentApprovalHistoryContent {
     }
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeAgentApprovalHistorySnapshot {

@@ -11,6 +11,7 @@ pub const ROOM_CREATE_EVENT_TYPE: &str = "m.room.create";
 pub const ROOM_POWER_LEVEL_TAGS_EVENT_TYPE: &str = "in.synara.room.power_level_tags";
 
 /// V-ROOMS.R-MEMBERS-READ — live native room-member projection.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomMembersSnapshot {
@@ -20,6 +21,7 @@ pub struct NativeRoomMembersSnapshot {
 }
 
 /// V-ROOMS.MEMBERS-READ — live native room power-level projection.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomPowerLevelsSnapshot {
@@ -32,18 +34,23 @@ pub struct NativeRoomPowerLevelsSnapshot {
 }
 
 /// V-ROOMS.MEMBERS-READ — live native room creator projection.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomCreatorsSnapshot {
+    #[cfg_attr(feature = "ts-export", ts(type = "\"ok\""))]
     pub status: &'static str,
     pub session_generation: u64,
     pub room_id: String,
+    #[cfg_attr(feature = "ts-export", ts(type = "\"m.room.create\""))]
     pub event_type: &'static str,
+    #[cfg_attr(feature = "ts-export", ts(type = "\"\""))]
     pub state_key: &'static str,
     pub creators: Vec<String>,
 }
 
 /// V-ROOMS.MEMBERS-READ — live native custom power-level tag projection.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomPowerLevelTagsSnapshot {
@@ -56,6 +63,7 @@ pub struct NativeRoomPowerLevelTagsSnapshot {
 }
 
 /// V-ROOMS.R-POWERS-BULK — acknowledged complete state replacement.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativePowerLevelWriteResult {

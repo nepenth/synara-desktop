@@ -9,6 +9,7 @@ const MAX_SERVICE_URL_CHARS: usize = 2048;
 /// Closed discovery outcome. `unsupported` is missing endpoint / nothing
 /// discovered (`None`). `unavailable` is an advertised empty list or a
 /// failed lookup. `ready` is at least one mapped transport.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeRtcTransportsStatus {
@@ -18,6 +19,7 @@ pub enum NativeRtcTransportsStatus {
 }
 
 /// Closed transport kind. Custom types are named only; extra JSON is dropped.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeRtcTransportKind {
@@ -35,14 +37,17 @@ impl NativeRtcTransportKind {
     }
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRtcTransport {
     pub kind: NativeRtcTransportKind,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub service_url: Option<String>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRtcTransportsSnapshot {

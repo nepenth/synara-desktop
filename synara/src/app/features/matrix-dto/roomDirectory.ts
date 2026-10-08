@@ -6,6 +6,13 @@
  * room types are rejected before data reaches Explore.
  */
 
+import type {
+  DirectoryProtocolInstance,
+  DirectoryRoomHitDto,
+  NativeRoomDirectoryPage,
+  NativeRoomDirectoryProtocols,
+  NativeRoomDirectorySearchResponse,
+} from './generated';
 import { hasForbiddenWireFields, isObject } from './parseUtil';
 
 export const DIRECTORY_MAX_TEXT_CHARS = 256;
@@ -15,47 +22,15 @@ export const DIRECTORY_MAX_BATCH_CHARS = 512;
 export const DIRECTORY_MAX_HITS = 200;
 export const DIRECTORY_MAX_PROTOCOL_INSTANCES = 128;
 
-export type DirectoryRoomType = 'room' | 'space';
-
-export type DirectoryRoomHit = {
-  roomId: string;
-  name?: string;
-  topic?: string;
-  canonicalAlias?: string;
-  avatarUrl?: string;
-  memberCount: number;
-  worldReadable: boolean;
-  guestCanJoin: boolean;
-  roomType: DirectoryRoomType;
-};
-
-export type DirectoryPage = {
-  sessionGeneration: number;
-  requestId: number;
-  chunk: DirectoryRoomHit[];
-  prevBatch?: string;
-  nextBatch?: string;
-};
-
-export type DirectoryProtocolInstance = {
-  protocolId: string;
-  instanceId: string;
-  description: string;
-};
-
-export type DirectoryProtocols = {
-  sessionGeneration: number;
-  instances: DirectoryProtocolInstance[];
-};
-
-export type DirectorySearchStatus = 'ready' | 'stale' | 'cancelled';
-
-export type DirectorySearchResponse = {
-  sessionGeneration: number;
-  requestId: number;
-  status: DirectorySearchStatus;
-  page?: DirectoryPage;
-};
+// Wire shapes are generated from the Rust Core types; this module only adds
+// the strict parse that rejects unknown or secret-looking fields.
+export type DirectoryRoomHit = DirectoryRoomHitDto;
+export type DirectoryRoomType = DirectoryRoomHit['roomType'];
+export type DirectoryPage = NativeRoomDirectoryPage;
+export type { DirectoryProtocolInstance };
+export type DirectoryProtocols = NativeRoomDirectoryProtocols;
+export type DirectorySearchResponse = NativeRoomDirectorySearchResponse;
+export type DirectorySearchStatus = DirectorySearchResponse['status'];
 
 const PAGE_KEYS = ['sessionGeneration', 'requestId', 'chunk', 'prevBatch', 'nextBatch'];
 const HIT_KEYS = [

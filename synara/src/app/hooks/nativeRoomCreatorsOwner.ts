@@ -5,15 +5,7 @@ import {
   invalidateNativeRoomStateProjection,
   publishNativeRoomCreatorsProjection,
 } from '../features/matrix-dto/nativeRoomStateProjection';
-
-export type NativeRoomCreatorsSnapshot = {
-  status: 'ok';
-  roomId: string;
-  eventType: 'm.room.create';
-  stateKey: '';
-  sessionGeneration: number;
-  creators: string[];
-};
+import type { NativeRoomCreatorsSnapshot } from '../features/matrix-dto/generated';
 
 export type NativeRoomCreatorsInvoke = (
   command: string,
@@ -111,3 +103,5 @@ export async function readRoomCreatorsWithNativeOwner(
 
 export const defaultNativeRoomCreatorsInvoke: NativeRoomCreatorsInvoke = (command, args) =>
   invokeDesktopWithAvailability(command, args);
+
+export type { NativeRoomCreatorsSnapshot };

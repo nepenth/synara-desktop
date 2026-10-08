@@ -4,6 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeCrossSigningKeyPublication {
@@ -11,6 +12,7 @@ pub enum NativeCrossSigningKeyPublication {
     Published,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeCrossSigningPrivateIdentity {
@@ -19,6 +21,7 @@ pub enum NativeCrossSigningPrivateIdentity {
     Complete,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeOwnIdentityVerification {
@@ -27,6 +30,7 @@ pub enum NativeOwnIdentityVerification {
     Verified,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeCrossSigningReadiness {
@@ -37,6 +41,7 @@ pub enum NativeCrossSigningReadiness {
     Ready,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeCrossSigningBootstrap {
@@ -44,6 +49,7 @@ pub enum NativeCrossSigningBootstrap {
     NotNeeded,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeCrossSigningStatus {
@@ -57,6 +63,7 @@ pub struct NativeCrossSigningStatus {
     pub bootstrap: NativeCrossSigningBootstrap,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeCrossSigningSetupOutcome {
@@ -65,6 +72,7 @@ pub enum NativeCrossSigningSetupOutcome {
     AuthenticationRequired,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeCrossSigningSetupResult {

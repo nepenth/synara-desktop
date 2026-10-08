@@ -68,6 +68,7 @@ struct AppliedFile {
     verifier_configured: bool,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeX509CaSummary {
@@ -75,6 +76,7 @@ pub struct NativeX509CaSummary {
     pub label: String,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeX509IdentityStatus {
@@ -85,6 +87,7 @@ pub struct NativeX509IdentityStatus {
     pub verifier_configured: bool,
     pub reload_required: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(feature = "ts-export", ts(as = "Option<Vec<String>>", optional))]
     pub certificate_verified_identities: Vec<String>,
 }
 

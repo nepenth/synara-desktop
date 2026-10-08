@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 /// Tauri event: join rule may have changed; UI re-reads via existing snapshot IPC.
 pub const ROOM_JOIN_RULE_UPDATED_EVENT: &str = "matrix-room-join-rule-updated";
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum NativeRoomJoinRuleUpdate {

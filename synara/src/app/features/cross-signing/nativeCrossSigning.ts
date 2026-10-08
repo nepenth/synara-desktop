@@ -1,26 +1,12 @@
 import { invokeDesktopWithAvailability } from '../../utils/desktop';
-
-export type NativeCrossSigningKeyPublication = 'missing' | 'published';
-export type NativeCrossSigningPrivateIdentity = 'missing' | 'partial' | 'complete';
-export type NativeOwnIdentityVerification = 'missing' | 'unverified' | 'verified';
-export type NativeCrossSigningReadiness =
-  'unavailable' | 'setup_required' | 'recovery_required' | 'verification_required' | 'ready';
-
-export type NativeCrossSigningStatus = {
-  sessionGeneration: number;
-  readiness: NativeCrossSigningReadiness;
-  masterSigning: NativeCrossSigningKeyPublication;
-  selfSigning: NativeCrossSigningKeyPublication;
-  userSigning: NativeCrossSigningKeyPublication;
-  privateIdentity: NativeCrossSigningPrivateIdentity;
-  ownIdentityVerification: NativeOwnIdentityVerification;
-  bootstrap: 'needed' | 'not_needed';
-};
-
-export type NativeCrossSigningSetupResult = {
-  outcome: 'complete' | 'already_configured' | 'authentication_required';
-  status: NativeCrossSigningStatus;
-};
+import type {
+  NativeCrossSigningKeyPublication,
+  NativeCrossSigningPrivateIdentity,
+  NativeCrossSigningReadiness,
+  NativeCrossSigningSetupResult,
+  NativeCrossSigningStatus,
+  NativeOwnIdentityVerification,
+} from '../matrix-dto/generated';
 
 export const NATIVE_CROSS_SIGNING_CHANGED = 'synara-native-cross-signing-changed';
 
@@ -84,4 +70,13 @@ export const canOfferNativeDeviceVerification = (status?: NativeCrossSigningStat
     status.readiness === 'verification_required' ||
     status.bootstrap === 'not_needed'
   );
+};
+
+export type {
+  NativeCrossSigningKeyPublication,
+  NativeCrossSigningPrivateIdentity,
+  NativeCrossSigningReadiness,
+  NativeCrossSigningSetupResult,
+  NativeCrossSigningStatus,
+  NativeOwnIdentityVerification,
 };

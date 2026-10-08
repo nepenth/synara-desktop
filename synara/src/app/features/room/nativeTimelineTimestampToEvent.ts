@@ -1,10 +1,5 @@
 import { invokeDesktopWithAvailability } from '../../utils/desktop';
-
-export type NativeTimelineTimestampToEventReadback = {
-  roomId: string;
-  eventId: string;
-  originServerTs: number;
-};
+import type { NativeTimelineTimestampToEventReadback } from '../matrix-dto/generated';
 
 const acceptTimestampToEventReadback = (
   value: unknown
@@ -38,3 +33,5 @@ export async function timestampToEventWithNativeOwner(
   }
   return readback;
 }
+
+export type { NativeTimelineTimestampToEventReadback };

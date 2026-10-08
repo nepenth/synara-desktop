@@ -54,6 +54,7 @@ pub const NOTIFICATION_OBSERVATION_WINDOW_MS: u64 = 5 * 60 * 1000;
 /// Push delivery verdicts remain private to the decision owner. Approval
 /// classification does not assert terminal reaction state; the action owner
 /// revalidates current SDK reaction aggregation before sending any reaction.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeNotificationObservation {
@@ -68,6 +69,7 @@ pub struct NativeNotificationObservation {
 }
 
 /// Core classification; delayed consumers must revalidate through decide_observed.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeAgentApprovalObservation {

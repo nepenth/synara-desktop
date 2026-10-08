@@ -68,6 +68,7 @@ pub fn is_eligible_agent_approval_prompt(
         && is_agent_approval_prompt(body)
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentApprovalDecisionStatus {

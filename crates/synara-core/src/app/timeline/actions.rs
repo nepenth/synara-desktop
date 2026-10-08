@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 /// Version of the bounded timeline-action readback contract.
 pub const NATIVE_TIMELINE_ACTION_SCHEMA_VERSION: u32 = 1;
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeTimelineActionKind {
@@ -117,6 +118,7 @@ pub struct NativeTimelineCallDeclineRequest {
     pub event_id: String,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineActionReadback {

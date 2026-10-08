@@ -10,6 +10,7 @@ pub const MAX_STATUS_EMOJI_BYTES: usize = 32;
 pub const MAX_STATUS_TEXT_BYTES: usize = 256;
 
 /// MSC4426 `m.status` projection. Emoji and text are independent of presence.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeUserStatus {
@@ -18,21 +19,26 @@ pub struct NativeUserStatus {
 }
 
 /// MSC4426 `m.call` projection. Timestamp is seconds since Unix epoch.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeInCall {
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub call_joined_ts: Option<u64>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeUserStatusSnapshot {
     pub session_generation: u64,
     pub user_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub user_status: Option<NativeUserStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub in_call: Option<NativeInCall>,
 }
 

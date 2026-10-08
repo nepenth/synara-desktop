@@ -7,16 +7,8 @@
  */
 
 import { invokeDesktopWithAvailability, type DesktopInvokeResult } from '../../utils/desktop';
-import type {
-  SynaraRoomNoteItem,
-  SynaraRoomNoteItemKind,
-  SynaraRoomNotesContent,
-} from '../../../types/matrix/accountData';
-
-export type NativeRoomNotesSnapshot = {
-  sessionGeneration: number;
-  content: SynaraRoomNotesContent;
-};
+import type { SynaraRoomNoteItem, SynaraRoomNoteItemKind } from '../../../types/matrix/accountData';
+import type { NativeRoomNotesSnapshot } from '../matrix-dto/generated';
 
 export type NativeRoomNotesInvoke = (
   command: string,
@@ -125,3 +117,5 @@ export function moveRoomTodoWithNativeOwner(
 ) {
   return invokeRoomNotes('matrix_room_notes_move_todo', { roomId, itemId, direction }, invoke);
 }
+
+export type { NativeRoomNotesSnapshot };

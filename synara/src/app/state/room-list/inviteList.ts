@@ -2,31 +2,12 @@ import { atom, useAtomValue, useSetAtom } from 'jotai';
 import { useCallback, useEffect } from 'react';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { startRoomListUpdateDrivenPoll } from '../../utils/nativeRoomListUpdates';
-import type { SyncReadinessSnapshot } from '../../features/matrix-dto/generated';
-
-export type NativeInviteTriage = 'known' | 'public' | 'spam';
-
-export type NativeInvite = {
-  roomId: string;
-  roomName: string;
-  avatarHandleId?: string;
-  roomTopic?: string;
-  roomAlias?: string;
-  senderId: string;
-  senderName: string;
-  senderIgnored: boolean;
-  inviteTs?: number;
-  reason?: string;
-  isSpace: boolean;
-  isDirect: boolean;
-  isEncrypted: boolean;
-  triage: NativeInviteTriage;
-};
-
-export type NativeInviteSnapshot = {
-  sessionGeneration: number;
-  invites: NativeInvite[];
-};
+import type {
+  NativeInvite,
+  NativeInviteSnapshot,
+  NativeInviteTriage,
+  SyncReadinessSnapshot,
+} from '../../features/matrix-dto/generated';
 
 type NativeSyncReadiness = Pick<SyncReadinessSnapshot, 'readiness'>;
 
@@ -117,3 +98,5 @@ export const useNativeInviteCommand = () => {
     [setSnapshot]
   );
 };
+
+export type { NativeInvite, NativeInviteSnapshot, NativeInviteTriage };

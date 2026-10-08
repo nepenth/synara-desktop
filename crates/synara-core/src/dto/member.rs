@@ -6,6 +6,7 @@ use super::ids::{RoomId, UserId};
 use super::room::Membership;
 
 /// Single room member projection.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RoomMember {

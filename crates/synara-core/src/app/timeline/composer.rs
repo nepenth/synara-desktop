@@ -43,6 +43,7 @@ pub struct NativeComposerClearReplyDraftRequest {
     pub thread_root_event_id: Option<String>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeComposerReplyDraft {
@@ -53,12 +54,15 @@ pub struct NativeComposerReplyDraft {
     pub sender_id: String,
     pub body: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub formatted_body: Option<String>,
     /// Present when the reply should carry an `m.thread` relation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub thread_root_event_id: Option<String>,
 }
 
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeComposerReplyDraftReadback {
@@ -68,6 +72,7 @@ pub struct NativeComposerReplyDraftReadback {
     #[serde(deserialize_with = "deserialize_reply_draft_status")]
     pub status: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
     pub draft: Option<NativeComposerReplyDraft>,
 }
 

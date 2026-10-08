@@ -1,33 +1,14 @@
 import type { DesktopInvokeResult } from '../../utils/desktop';
 import type { MSpaceChildContent } from '../../../types/matrix/room';
+import type {
+  NativeRestrictedJoinReparentResult,
+  NativeSpaceChildEdge,
+  NativeSpaceChildMutationResult,
+  NativeSpaceChildrenSnapshot,
+} from '../matrix-dto/generated';
 
 type NativeSessionSnapshot = {
   status: 'logged_out' | 'logged_in';
-};
-
-export type NativeSpaceChildEdge = {
-  parentId: string;
-  childId: string;
-  order?: string;
-  suggested: boolean;
-  via: string[];
-  originServerTs: number;
-};
-
-export type NativeSpaceChildrenSnapshot = {
-  sessionGeneration: number;
-  edges: NativeSpaceChildEdge[];
-};
-
-export type NativeSpaceChildMutationResult = {
-  parentId: string;
-  childId: string;
-  status: 'updated' | 'removed';
-};
-
-export type NativeRestrictedJoinReparentResult = {
-  roomId: string;
-  status: 'updated' | 'skipped';
 };
 
 export type NativeInvoke = (
@@ -142,3 +123,10 @@ export const spaceChildContentFromEdge = (edge: NativeSpaceChildEdge): MSpaceChi
   suggested: edge.suggested,
   order: edge.order,
 });
+
+export type {
+  NativeRestrictedJoinReparentResult,
+  NativeSpaceChildEdge,
+  NativeSpaceChildMutationResult,
+  NativeSpaceChildrenSnapshot,
+};
