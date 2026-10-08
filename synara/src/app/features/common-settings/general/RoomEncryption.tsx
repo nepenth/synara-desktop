@@ -17,7 +17,7 @@ import {
 } from 'folds';
 import React, { useCallback, useState } from 'react';
 import type { MatrixError } from '../../../utils/matrix';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../../components/FocusTrap';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../../room-settings/styles.css';
 import { SettingTile } from '../../../components/setting-tile';

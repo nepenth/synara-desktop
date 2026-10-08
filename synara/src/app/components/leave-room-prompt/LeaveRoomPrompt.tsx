@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect } from 'react';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../FocusTrap';
 import {
   Dialog,
   Overlay,

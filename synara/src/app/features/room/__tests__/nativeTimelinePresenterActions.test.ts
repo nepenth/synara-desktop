@@ -235,14 +235,12 @@ test('native timeline navigation uses contextual controls and edge pagination', 
     'src/app/features/room/NativeTimelineHistoryStatus.tsx',
     'utf8'
   );
-  const dateRail = readFileSync('src/app/features/room/NativeTimelineDateRail.tsx', 'utf8');
   assert.match(presenter, /NativeTimelineHistoryStatus/);
   assert.match(presenter, /requestPagination\('backwards'\)/);
   assert.match(presenter, /event instanceof WheelEvent/);
   assert.match(presenter, /shouldPaginateOnWheel/);
   assert.match(presenter, /followingLive: followingLiveRef\.current/);
   assert.match(presenter, /overscrollBehavior: 'contain'/);
-  assert.match(htmlCss, /zIndex: 80/);
   assert.match(historyStatus, /Loading older messages/);
   assert.match(historyStatus, /Loading newer messages/);
   assert.match(historyStatus, /edge === 'backward'/);
@@ -264,56 +262,33 @@ test('native timeline navigation uses contextual controls and edge pagination', 
     htmlCss,
     /export const HistoryStatusCardError = style\(\{[\s\S]*?backgroundColor: color\.Critical\.Container,/
   );
-  assert.match(dateRail, /Jump to a date in the last 7 days/);
-  assert.match(dateRail, /hasPointerCapture/);
-  assert.match(dateRail, /previewFromClientY\(event\.clientY, true\)/);
-  assert.match(presenter, /timestampToEventWithNativeOwner/);
-  assert.match(presenter, /sevenDayRailAxis/);
-  assert.match(presenter, /collectSevenDayRailMarks/);
-  assert.match(presenter, /needsSevenDayHistoryFill/);
   assert.match(presenter, /canPaginateTimelineForward/);
-  assert.match(presenter, /roomCreatedTs/);
   assert.doesNotMatch(presenter, /mx\.timestampToEvent/);
-  assert.match(dateRail, /aria-controls="native-timeline-history"/);
-  assert.match(dateRail, /translate3d/);
-  assert.match(dateRail, /React\.memo/);
-  assert.doesNotMatch(dateRail, /TooltipProvider/);
-  assert.doesNotMatch(dateRail, /visibleStartIndex/);
   assert.match(historyStatus, /htmlCss\.HistoryStatusDateChip/);
   assert.match(historyStatus, /htmlCss\.HistoryStatusDateChipCard/);
-  assert.match(historyStatus, /kind === 'hidden' && !reserveRail/);
+  assert.match(historyStatus, /kind === 'hidden';/);
+  // A standard, always-visible scrollbar: no custom date rail over the timeline.
+  assert.match(presenter, /id="native-timeline-history"[\s\S]*?visibility="Always"/);
+  assert.doesNotMatch(presenter, /DateRail|reserveRail|sevenDayRailAxis|needsSevenDayHistoryFill/);
+  assert.doesNotMatch(htmlCss, /DateRail/);
+  assert.match(presenter, /formatTimelineDayLabel\(visibleStartTimestamp\)/);
   assert.match(htmlCss, /export const HistoryStatusDateChip = style\(/);
   assert.match(htmlCss, /export const HistoryStatusDateChipCard = style\(/);
   assert.doesNotMatch(
     htmlCss.slice(
       htmlCss.indexOf('export const HistoryStatusDateChip'),
-      htmlCss.indexOf('export const DateRail')
+      htmlCss.indexOf('export const HistoryStatusHitTarget')
     ),
     /linear-gradient/
   );
   assert.doesNotMatch(
     htmlCss.slice(
       htmlCss.indexOf('export const HistoryStatusDateChipCard'),
-      htmlCss.indexOf('export const DateRail')
+      htmlCss.indexOf('export const HistoryStatusHitTarget')
     ),
     /raisedShadow/
   );
-  assert.match(presenter, /NativeTimelineDateRail/);
-  assert.match(presenter, /const showDateRail = shouldShowTimelineDateRail/);
-  assert.match(presenter, /showDateRail \|\| atLiveBottom/);
-  assert.match(presenter, /visibleTimestampForRail/);
-  assert.match(presenter, /atLiveBottom,/);
-  assert.match(dateRail, /htmlCss\.DateRailSpine/);
-  assert.match(dateRail, /translate3d\(-50%/);
-  assert.match(htmlCss, /export const DateRailSpine = style\(/);
-  assert.match(htmlCss, /DATE_RAIL_HIT = 16/);
-  assert.match(htmlCss, /DATE_RAIL_TICK = 8/);
-  const dateRailCss = htmlCss.slice(htmlCss.indexOf('export const DateRailTrack'));
-  assert.doesNotMatch(
-    dateRailCss.slice(0, dateRailCss.indexOf('export const DateRailLabel')),
-    /raisedShadow/
-  );
-  assert.match(presenter, /reserveRail=\{showDateRail\}/);
+
   assert.match(htmlCss, /export const HistoryStatusHitTarget = style\(/);
   assert.doesNotMatch(historyStatus, /pointerEvents: 'auto'/);
   assert.match(historyStatus, /htmlCss\.HistoryStatusHitTarget/);
@@ -472,9 +447,20 @@ test('native timeline message rows sit on chat chrome and highlight on hover', (
   );
 
   assert.match(messageRowCss, /export const MessageRow = recipe\(/);
-  assert.match(messageRowCss, /backgroundColor: color\.SurfaceVariant\.ContainerHover/);
+  assert.match(messageRowCss, /backgroundColor: messageHoverTint/);
   assert.match(messageRowCss, /borderRadius: config\.radii\.R400/);
   assert.match(messageRowCss, /MessageActionSurface\}:hover/);
+  // Hover must not pull the eye: a faint tint only, no lift, border or shadow.
+  assert.match(
+    htmlCss,
+    /const messageHoverTint = `color-mix\(in srgb, \$\{color\.SurfaceVariant\.ContainerHover\} 10%, transparent\)`/
+  );
+  const hoverRule = messageRowCss.slice(messageRowCss.indexOf(':hover &'));
+  assert.doesNotMatch(
+    hoverRule.slice(0, hoverRule.indexOf('}')),
+    /boxShadow|borderColor|transform/
+  );
+  assert.match(messageRowCss, /transition: 'background-color 80ms ease-out'/);
   assert.match(messageBodyCss, /background: 'transparent'/);
   assert.match(messageBodyCss, /color: 'var\(--synara-message-foreground\)'/);
 

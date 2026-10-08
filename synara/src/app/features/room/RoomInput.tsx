@@ -43,7 +43,7 @@ import {
   config,
   toRem,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 
 import { requestRoomLatestAfterSend } from './nativeTimelineNavigation';
 import * as depthCss from '../../styles/Depth.css';

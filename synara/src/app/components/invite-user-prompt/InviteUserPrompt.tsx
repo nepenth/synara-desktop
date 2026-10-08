@@ -33,7 +33,7 @@ import {
 } from 'folds';
 
 import { isKeyHotkey } from 'is-hotkey';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../FocusTrap';
 import { stopPropagation } from '../../utils/keyboard';
 import { useDirectUsers } from '../../hooks/useDirectUsers';
 import { getMxIdLocalPart, getMxIdServer, isUserId } from '../../utils/matrix';

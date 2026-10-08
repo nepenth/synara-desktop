@@ -104,6 +104,8 @@ export const MessageActionDivider = style({
 
 export const TimelineAvatar = style([avatarSurface]);
 
+const messageHoverTint = `color-mix(in srgb, ${color.SurfaceVariant.ContainerHover} 10%, transparent)`;
+
 export const MessageRow = recipe({
   base: {
     paddingTop: config.space.S200,
@@ -122,20 +124,14 @@ export const MessageRow = recipe({
         border: `${config.borderWidth.B300} solid transparent`,
         boxShadow: 'none',
         borderRadius: config.radii.R400,
+        // Reading comes first: hover is only a faint tint, about a tenth of
+        // the old surface change, with no border, lift or shadow.
         selectors: {
-          [`${MessageActionSurface}:hover &`]: {
-            backgroundColor: color.SurfaceVariant.ContainerHover,
-            borderColor: color.SurfaceVariant.ContainerLine,
-            boxShadow: raisedShadow,
-          },
-          [`${MessageActionSurface}:focus-within &`]: {
-            backgroundColor: color.SurfaceVariant.ContainerHover,
-            borderColor: color.SurfaceVariant.ContainerLine,
-            boxShadow: raisedShadow,
+          [`${MessageActionSurface}:hover &, ${MessageActionSurface}:focus-within &`]: {
+            backgroundColor: messageHoverTint,
           },
         },
-        transition:
-          'background-color 140ms ease-out, border-color 140ms ease-out, box-shadow 140ms ease-out',
+        transition: 'background-color 80ms ease-out',
         '@media': {
           '(prefers-reduced-motion: reduce)': {
             transition: 'none',
@@ -785,7 +781,7 @@ const historyStatusOverlay = {
   position: 'absolute',
   top: 0,
   left: 0,
-  right: toRem(88),
+  right: 0,
   zIndex: 4,
   display: 'flex',
   justifyContent: 'center',
@@ -855,114 +851,4 @@ export const HistoryStatusDateChipCard = style({
   color: color.SurfaceVariant.OnContainer,
   border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
   contain: 'layout style paint',
-});
-
-export const DateRail = style({
-  position: 'absolute',
-  top: config.space.S700,
-  right: config.space.S100,
-  bottom: toRem(88),
-  width: toRem(88),
-  zIndex: 80,
-  isolation: 'isolate',
-  pointerEvents: 'none',
-  overflow: 'visible',
-  contain: 'layout style',
-});
-
-const DATE_RAIL_INSET = 8;
-const DATE_RAIL_HIT = 16;
-const DATE_RAIL_SPINE = 2;
-const DATE_RAIL_TICK = 8;
-const DATE_RAIL_THUMB = 8;
-
-export const DateRailTrack = style({
-  position: 'absolute',
-  top: 0,
-  right: toRem(DATE_RAIL_INSET),
-  bottom: 0,
-  width: toRem(DATE_RAIL_HIT),
-  background: 'transparent',
-  pointerEvents: 'auto',
-  cursor: 'pointer',
-});
-
-export const DateRailSpine = style({
-  position: 'absolute',
-  top: 0,
-  bottom: 0,
-  left: '50%',
-  width: toRem(DATE_RAIL_SPINE),
-  marginLeft: toRem(-DATE_RAIL_SPINE / 2),
-  borderRadius: config.radii.R400,
-  background: color.SurfaceVariant.ContainerLine,
-  pointerEvents: 'none',
-});
-
-export const DateRailThumb = style({
-  position: 'absolute',
-  top: 0,
-  left: '50%',
-  width: toRem(DATE_RAIL_THUMB),
-  height: toRem(DATE_RAIL_THUMB),
-  marginTop: toRem(-DATE_RAIL_THUMB / 2),
-  borderRadius: '50%',
-  background: color.Primary.Main,
-  boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
-  pointerEvents: 'none',
-  willChange: 'transform',
-});
-
-export const DateRailTick = style({
-  position: 'absolute',
-  right: toRem(DATE_RAIL_INSET),
-  width: toRem(DATE_RAIL_HIT),
-  height: toRem(DATE_RAIL_HIT),
-  marginTop: toRem(-DATE_RAIL_HIT / 2),
-  padding: 0,
-  zIndex: 4,
-  border: 0,
-  background: 'transparent',
-  boxShadow: 'none',
-  pointerEvents: 'auto',
-  cursor: 'pointer',
-  selectors: {
-    '&::before': {
-      content: '""',
-      position: 'absolute',
-      top: '50%',
-      left: '50%',
-      width: toRem(DATE_RAIL_TICK),
-      height: toRem(DATE_RAIL_TICK),
-      marginTop: toRem(-DATE_RAIL_TICK / 2),
-      marginLeft: toRem(-DATE_RAIL_TICK / 2),
-      borderRadius: '50%',
-      background: color.Surface.Container,
-      boxShadow: `inset 0 0 0 ${config.borderWidth.B300} ${color.SurfaceVariant.ContainerLine}`,
-    },
-    '&:hover::before, &:focus-visible::before': {
-      boxShadow: `inset 0 1px 0 ${quietEdgeLight}, inset 0 0 0 ${config.borderWidth.B300} ${color.SurfaceVariant.ContainerLine}`,
-    },
-    '&[aria-current="true"]::before': {
-      background: color.Primary.Main,
-      boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
-    },
-  },
-});
-
-export const DateRailLabel = style({
-  position: 'absolute',
-  top: 0,
-  right: toRem(40),
-  zIndex: 5,
-  isolation: 'isolate',
-  color: color.Surface.OnContainer,
-  pointerEvents: 'none',
-  whiteSpace: 'nowrap',
-  textAlign: 'right',
-  padding: `${config.space.S100} ${config.space.S200}`,
-  borderRadius: config.radii.R400,
-  backgroundColor: color.Surface.Container,
-  border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
-  boxShadow: raisedShadow,
 });

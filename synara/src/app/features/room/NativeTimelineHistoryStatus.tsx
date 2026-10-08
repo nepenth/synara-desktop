@@ -11,7 +11,6 @@ type NativeTimelineHistoryStatusProps = {
   kind: TimelineHistoryOverlayKind;
   errorMessage?: string;
   visibleDateLabel?: string;
-  reserveRail?: boolean;
   onRetry?: () => void;
   onLoadMore?: () => void;
 };
@@ -31,15 +30,11 @@ const copyForEdge = (edge: 'backward' | 'forward') =>
         loadMore: 'Load newer messages',
       };
 
-const edgeInsetStyle = (reserveRail?: boolean): React.CSSProperties | undefined =>
-  reserveRail ? undefined : { right: 0 };
-
 function NativeTimelineHistoryStatusView({
   edge,
   kind,
   errorMessage,
   visibleDateLabel,
-  reserveRail,
   onRetry,
   onLoadMore,
 }: NativeTimelineHistoryStatusProps) {
@@ -75,7 +70,7 @@ function NativeTimelineHistoryStatusView({
             ? 'hidden'
             : kind;
   const copy = copyForEdge(edge);
-  const showDate = Boolean(visibleDateLabel) && kind === 'hidden' && !reserveRail;
+  const showDate = Boolean(visibleDateLabel) && kind === 'hidden';
   if (paintedKind === 'hidden' && !showDate) return null;
 
   if (paintedKind === 'hidden' && showDate) {
@@ -99,7 +94,6 @@ function NativeTimelineHistoryStatusView({
           ? htmlCss.HistoryStatusOverlayBackward
           : htmlCss.HistoryStatusOverlayForward
       }
-      style={edgeInsetStyle(reserveRail)}
     >
       {paintedKind === 'loading' ? (
         <div

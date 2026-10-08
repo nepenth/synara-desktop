@@ -15,7 +15,7 @@ import {
   Icon,
   Icons,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../../components/FocusTrap';
 import type { MatrixError } from '../../../utils/matrix';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../../room-settings/styles.css';

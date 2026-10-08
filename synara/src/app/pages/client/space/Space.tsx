@@ -35,7 +35,7 @@ type RoomJoinRulesEventContent = {
     not_room_id?: string;
   }>;
 };
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../../components/FocusTrap';
 import {
   NavCategory,
   NavCategoryHeader,

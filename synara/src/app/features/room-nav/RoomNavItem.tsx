@@ -16,7 +16,7 @@ import {
   Spinner,
 } from 'folds';
 import { useFocusWithin, useHover } from 'react-aria';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 import { NavItem, NavItemContent, NavItemOptions, NavLink } from '../../components/nav';
 import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
 import { usePowerLevels } from '../../hooks/usePowerLevels';

@@ -2,7 +2,7 @@ import { observeRoomLatestAfterSend } from './nativeTimelineNavigation';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useFocusWithin, useHover } from 'react-aria';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 import { ErrorBoundary } from 'react-error-boundary';
 import {
   Avatar,
@@ -134,21 +134,7 @@ import {
 } from './nativeTimelineViewportPolicy';
 import { shouldGroupNativeTimelineRows } from './nativeTimelineGrouping';
 import { NativeTimelineHistoryStatus } from './NativeTimelineHistoryStatus';
-import { NativeTimelineDateRail } from './NativeTimelineDateRail';
-import { timestampToEventWithNativeOwner } from './nativeTimelineTimestampToEvent';
-import {
-  activeTimelineHistoryMarkIndex,
-  collectSevenDayRailMarks,
-  collectTimedTimelineRows,
-  formatTimelineHistoryMarkLabel,
-  isTimestampInLoadedWindow,
-  rowIndexForTimestamp,
-  rowTimestampMs,
-  sevenDayRailAxis,
-  shouldShowTimelineDateRail,
-  needsSevenDayHistoryFill,
-  visibleTimestampForRail,
-} from '../../utils/timelineDateMarks';
+import { formatTimelineDayLabel, rowTimestampMs } from '../../utils/timelineDateMarks';
 import {
   canPaginateTimelineForward,
   clearTimelinePaginationError,
@@ -173,8 +159,6 @@ type NativeTimelinePresenterProps = {
   threadRootEventId?: string;
   onOpenThreadRoute?: (rootEventId: string) => void;
   onCloseThreadRoute?: () => void;
-  /** `m.room.create` origin timestamp; retained for callers of the presenter. */
-  roomCreatedTs?: number;
 };
 
 type NativeTimelineViewport = {
@@ -2474,19 +2458,15 @@ export function NativeTimelinePresenter({
   )?.encryptionStatus;
   const scrollRef = useRef<HTMLDivElement>(null);
   const paginationInFlightRef = useRef<'backwards' | 'forwards' | undefined>(undefined);
-  const dateJumpInFlightRef = useRef(false);
   const [paginationInFlight, setPaginationInFlight] = useState<'backwards' | 'forwards'>();
   const [paginationErrors, setPaginationErrors] = useState<TimelinePaginationErrors>({});
   const [atHistoryEdge, setAtHistoryEdge] = useState({ backward: false, forward: false });
-  const sevenDayFillAttemptsRef = useRef(0);
   useEffect(() => {
     paginationInFlightRef.current = undefined;
     setPaginationInFlight(undefined);
     setPaginationErrors({});
     setAtHistoryEdge({ backward: false, forward: false });
     setFilePreview(undefined);
-    dateJumpInFlightRef.current = false;
-    sevenDayFillAttemptsRef.current = 0;
   }, [eventId, roomId]);
   const pendingBackwardGrowRef = useRef(false);
   const lastParkedStartRef = useRef(-1);
@@ -2523,7 +2503,6 @@ export function NativeTimelinePresenter({
   const [hideNickAvatarEvents] = useSetting(settingsAtom, 'hideNickAvatarEvents');
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const [messageSpacing] = useSetting(settingsAtom, 'messageSpacing');
-  const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
   const timelineReady = readyState !== undefined;
   useEffect(() => {
     const element = scrollRef.current;
@@ -2642,96 +2621,6 @@ export function NativeTimelinePresenter({
       if (index !== undefined) virtualizer.measureElement(element);
     }
   }, [rows, messageSpacing, rowIndexByKey, virtualizer, virtualizer.isScrolling]);
-  const timedRows = useMemo(() => collectTimedTimelineRows(rows), [rows]);
-  const railAxis = useMemo(
-    () => (rows.length === 0 ? undefined : sevenDayRailAxis(Date.now(), timedRows)),
-    [rows.length, timedRows]
-  );
-  const historyMarks = useMemo(
-    () => collectSevenDayRailMarks(railAxis?.endMs ?? Date.now()),
-    [railAxis]
-  );
-  const railContextRef = useRef({
-    axis: railAxis,
-    timed: timedRows,
-    backwardAvailable: false,
-    forwardAvailable: false,
-  });
-  railContextRef.current = {
-    axis: railAxis,
-    timed: timedRows,
-    backwardAvailable: readyState?.snapshot.pagination.backward === 'available',
-    forwardAvailable: readyState?.snapshot.pagination.forward === 'available',
-  };
-  const getVisibleTimestamp = useCallback(() => {
-    const axisEndMs = railContextRef.current.axis?.endMs ?? Date.now();
-    const index = virtualizer.getVirtualItems()[0]?.index ?? 0;
-    const row = rowsRef.current[index];
-    return visibleTimestampForRail({
-      atLiveBottom,
-      axisEndMs,
-      viewportStartTimestampMs: row ? rowTimestampMs(row) : undefined,
-    });
-  }, [atLiveBottom, virtualizer]);
-  const scrollToHistoryTimestamp = useCallback(
-    (timestampMs: number) => {
-      followingLiveRef.current = false;
-      userInitiatedScrollRef.current = true;
-      programmaticScrollUntilRef.current = 0;
-      virtualizer.scrollToIndex(rowIndexForTimestamp(railContextRef.current.timed, timestampMs), {
-        align: 'start',
-        behavior: 'auto',
-      });
-    },
-    [virtualizer]
-  );
-  const previewHistoryTimestamp = useCallback(
-    (timestampMs: number) => {
-      const { axis, backwardAvailable, forwardAvailable } = railContextRef.current;
-      if (!axis) return;
-      if (isTimestampInLoadedWindow(timestampMs, axis, { backwardAvailable, forwardAvailable })) {
-        scrollToHistoryTimestamp(timestampMs);
-      }
-    },
-    [scrollToHistoryTimestamp]
-  );
-  const commitHistoryTimestamp = useCallback(
-    (timestampMs: number) => {
-      const { axis, backwardAvailable, forwardAvailable } = railContextRef.current;
-      if (!axis) return;
-      if (isTimestampInLoadedWindow(timestampMs, axis, { backwardAvailable, forwardAvailable })) {
-        scrollToHistoryTimestamp(timestampMs);
-        return;
-      }
-      if (dateJumpInFlightRef.current) return;
-      dateJumpInFlightRef.current = true;
-      setActionError(undefined);
-      const navigation = roomId;
-      void timestampToEventWithNativeOwner(roomId, timestampMs)
-        .then((found) => {
-          if (mountedRoomRef.current !== navigation) return;
-          const index = findAnchorIndex(rowsRef.current, {
-            itemId: found.eventId,
-            eventId: found.eventId,
-          });
-          if (index >= 0) {
-            smoothScrollActiveRef.current = true;
-            virtualizer.scrollToIndex(index, { align: 'center', behavior: 'smooth' });
-            return;
-          }
-          setFocusEventId(found.eventId);
-        })
-        .catch((error) => {
-          if (mountedRoomRef.current === navigation) {
-            setActionError(error instanceof Error ? error.message : 'Could not jump to that time.');
-          }
-        })
-        .finally(() => {
-          dateJumpInFlightRef.current = false;
-        });
-    },
-    [roomId, scrollToHistoryTimestamp, virtualizer]
-  );
 
   const initialPlacementRef = useRef<string | undefined>(undefined);
   const saveViewport = useCallback(() => {
@@ -3014,20 +2903,6 @@ export function NativeTimelinePresenter({
   );
   const requestPaginationRef = useRef(requestPagination);
   requestPaginationRef.current = requestPagination;
-  const SEVEN_DAY_FILL_MAX_PAGES = 24;
-  useEffect(() => {
-    if (!hasReadyState || !railAxis) return;
-    const current = readyStateRef.current;
-    if (!current || dateJumpInFlightRef.current || paginationInFlight) return;
-    if (paginationErrors.backward) return;
-    if (sevenDayFillAttemptsRef.current >= SEVEN_DAY_FILL_MAX_PAGES) return;
-    const backwardAvailable =
-      current.snapshot.capabilities.paginateBackward &&
-      current.snapshot.pagination.backward === 'available';
-    if (!needsSevenDayHistoryFill(railAxis, { backwardAvailable })) return;
-    sevenDayFillAttemptsRef.current += 1;
-    requestPagination('backwards');
-  }, [hasReadyState, paginationErrors.backward, paginationInFlight, railAxis, requestPagination]);
   useEffect(() => {
     if (!hasReadyState) {
       scrollHandlersRef.current = undefined;
@@ -3591,17 +3466,14 @@ export function NativeTimelinePresenter({
       }),
     hasSparseLoadButton: true,
   });
-  // One date chrome at a time: the rail already labels loaded history.
-  const showDateRail = shouldShowTimelineDateRail(rows.length, historyMarks.length);
-  const visibleStartIndex = virtualizer.getVirtualItems()[0]?.index ?? 0;
-  const activeMarkIndex =
-    showDateRail || atLiveBottom
-      ? -1
-      : activeTimelineHistoryMarkIndex(historyMarks, visibleStartIndex);
-  const activeMark = activeMarkIndex >= 0 ? historyMarks[activeMarkIndex] : undefined;
-  const visibleDateLabel = activeMark
-    ? formatTimelineHistoryMarkLabel(activeMark, hour24Clock)
-    : undefined;
+  // The day of the oldest visible message, shown over the top edge while
+  // reading history (not at the live bottom, where it would only say Today).
+  const visibleStartRow = rows[virtualizer.getVirtualItems()[0]?.index ?? 0];
+  const visibleStartTimestamp = visibleStartRow ? rowTimestampMs(visibleStartRow) : undefined;
+  const visibleDateLabel =
+    !atLiveBottom && visibleStartTimestamp !== undefined
+      ? formatTimelineDayLabel(visibleStartTimestamp)
+      : undefined;
 
   return (
     <Box grow="Yes" direction="Column" style={{ minHeight: 0 }}>
@@ -3631,7 +3503,7 @@ export function NativeTimelinePresenter({
           id="native-timeline-history"
           data-native-timeline-scrolling={virtualizer.isScrolling}
           ref={scrollRef}
-          visibility="Hover"
+          visibility="Always"
           style={{ height: '100%', overscrollBehavior: 'contain' }}
         >
           {rows.length === 0 ? (
@@ -3717,7 +3589,6 @@ export function NativeTimelinePresenter({
           kind={backwardOverlay.kind}
           errorMessage={backwardOverlay.message}
           visibleDateLabel={visibleDateLabel}
-          reserveRail={showDateRail}
           onRetry={() => requestPagination('backwards')}
           onLoadMore={() => requestPagination('backwards')}
         />
@@ -3725,21 +3596,9 @@ export function NativeTimelinePresenter({
           edge="forward"
           kind={forwardOverlay.kind}
           errorMessage={forwardOverlay.message}
-          reserveRail={showDateRail}
           onRetry={() => requestPagination('forwards')}
           onLoadMore={() => requestPagination('forwards')}
         />
-        {showDateRail && railAxis ? (
-          <NativeTimelineDateRail
-            marks={historyMarks}
-            axis={railAxis}
-            hour24Clock={hour24Clock}
-            scrollRef={scrollRef}
-            getVisibleTimestamp={getVisibleTimestamp}
-            onPreviewTimestamp={previewHistoryTimestamp}
-            onCommitTimestamp={commitHistoryTimestamp}
-          />
-        ) : null}
         {(showJumpToLastRead || showJumpToLatest) && (
           <Box
             direction="Column"

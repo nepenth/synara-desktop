@@ -15,7 +15,7 @@ import {
   as,
 } from 'folds';
 import { EncryptedAttachmentInfo, IFileInfo } from '../../../../types/matrix/common';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../FocusTrap';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { bytesToSize } from '../../../utils/common';
 import {

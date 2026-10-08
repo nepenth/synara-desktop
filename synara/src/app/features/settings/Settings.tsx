@@ -14,7 +14,7 @@ import {
   OverlayCenter,
   Text,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 import { General } from './general';
 import { AppearancePage as AppearanceSettings } from './appearance';
 import { PageNav, PageNavContent, PageNavHeader, PageRoot } from '../../components/page';

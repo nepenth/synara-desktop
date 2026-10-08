@@ -15,7 +15,7 @@ import {
   OverlayBackdrop,
   OverlayCenter,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../../components/FocusTrap';
 import { SettingTile } from '../../../components/setting-tile';
 import { timeDayMonYear, timeHourMinute, today, yesterday } from '../../../utils/time';
 import { BreakWord } from '../../../styles/Text.css';

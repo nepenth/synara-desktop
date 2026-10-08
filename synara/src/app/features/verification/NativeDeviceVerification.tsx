@@ -14,7 +14,7 @@ import {
   Spinner,
   Text,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import { NATIVE_CROSS_SIGNING_CHANGED } from '../cross-signing/nativeCrossSigning';
 import {

@@ -16,7 +16,7 @@ import {
   OverlayCenter,
 } from 'folds';
 import React, { useCallback, useRef, useState } from 'react';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../FocusTrap';
 import { useRoom } from '../../hooks/useRoom';
 import { stopPropagation } from '../../utils/keyboard';
 import { CutoutCard } from '../cutout-card';
