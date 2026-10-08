@@ -8,7 +8,7 @@ import { nameInitials } from '../../../utils/common';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { Settings } from '../../../features/settings';
 import { useUserProfile } from '../../../hooks/useUserProfile';
-import { Modal500 } from '../../../components/Modal500';
+import { SettingsModal } from '../../../components/settings-layout';
 import { getSafeMyUserId } from '../../../state/nativeIdentity';
 
 export function SettingsTab() {
@@ -40,9 +40,9 @@ export function SettingsTab() {
         )}
       </SidebarItemTooltip>
       {settings && (
-        <Modal500 requestClose={closeSettings}>
+        <SettingsModal requestClose={closeSettings}>
           <Settings requestClose={closeSettings} />
-        </Modal500>
+        </SettingsModal>
       )}
     </SidebarItem>
   );

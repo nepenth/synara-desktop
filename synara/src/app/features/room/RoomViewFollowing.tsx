@@ -12,7 +12,7 @@ import {
   config,
 } from 'folds';
 import classNames from 'classnames';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 
 import { getMemberDisplayName } from '../../utils/room';
 import { getMxIdLocalPart } from '../../utils/matrix';

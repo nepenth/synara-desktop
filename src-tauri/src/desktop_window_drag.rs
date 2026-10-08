@@ -37,6 +37,23 @@ const GDK_2BUTTON_PRESS: i32 = 5;
 #[cfg(target_os = "linux")]
 const DRAG_MESSAGE_HANDLER: &str = "synaraLinuxTitleDrag";
 
+/// Opt-in trace for diagnosing the title-strip drag on a live session:
+/// `SYNARA_DEBUG_DRAG=/path/to/file synara`. Off when the variable is unset.
+#[cfg(target_os = "linux")]
+fn drag_trace(message: impl FnOnce() -> String) {
+    use std::io::Write;
+    let Some(path) = std::env::var_os("SYNARA_DEBUG_DRAG") else {
+        return;
+    };
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        let _ = writeln!(file, "{}", message());
+    }
+}
+
 #[cfg(any(target_os = "linux", test))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PressKind {
@@ -82,6 +99,7 @@ struct LiveTitleHitMap {
 }
 
 #[cfg(any(target_os = "linux", test))]
+#[derive(Debug)]
 struct TitlePress {
     button: u32,
     kind: PressKind,
@@ -412,7 +430,9 @@ fn install_gtk_drag(view: webkit2gtk::WebView) {
     use webkit2gtk::glib::prelude::*;
 
     let hit: SharedHitMap = Rc::new(RefCell::new(None));
-    if !install_hit_reporter(&view, Rc::clone(&hit)) {
+    let reporter = install_hit_reporter(&view, Rc::clone(&hit));
+    drag_trace(|| format!("install: hit reporter installed={reporter}"));
+    if !reporter {
         // Without geometry from the page nothing is a drag surface. Leave
         // every press to WebKit rather than guess where the strip is.
         return;
@@ -470,20 +490,31 @@ fn install_hit_reporter(view: &webkit2gtk::WebView, hit: SharedHitMap) -> bool {
         let hit = Rc::clone(&hit);
         move |_manager, result| {
             let Some(json) = javascript_result_json(result) else {
+                drag_trace(|| "message: unreadable script result".to_owned());
                 return;
             };
-            if let HitMessage::Replace(map) = parse_hit_message(&json, &token) {
+            let parsed = parse_hit_message(&json, &token);
+            drag_trace(|| format!("message: {json} -> {parsed:?}"));
+            if let HitMessage::Replace(map) = parsed {
                 *hit.borrow_mut() = map;
             }
         }
     });
     // A new document has not published yet; the old map no longer applies.
+    // The user script only reaches loads that start after it is added, and
+    // the app's first document is already loading by the time this hook is
+    // installed, so evaluate the reporter again whenever a load finishes. The
+    // script's own guard keeps it to one instance per document.
     view.connect_load_changed({
         let hit = Rc::clone(&hit);
-        move |_view, event| {
-            if matches!(event, LoadEvent::Committed) {
-                *hit.borrow_mut() = None;
+        let script = script.clone();
+        move |view, event| match event {
+            LoadEvent::Committed => *hit.borrow_mut() = None,
+            LoadEvent::Finished => {
+                let cancellable: Option<&webkit2gtk::gio::Cancellable> = None;
+                view.evaluate_javascript(&script, None, None, cancellable, |_| {});
             }
+            _ => {}
         }
     });
     manager.add_script(&UserScript::new(
@@ -624,7 +655,7 @@ fn handle_button_press(
     let Some((root_x, root_y)) = event_root(event) else {
         return false;
     };
-    let action = classify_title_press(&TitlePress {
+    let press = TitlePress {
         button,
         kind: press_kind_from_gdk(event_type(event)),
         x,
@@ -632,9 +663,11 @@ fn handle_button_press(
         surface_width: allocated_width(view),
         zoom: view.zoom_level(),
         live: hit.borrow().clone(),
-    });
+    };
+    let action = classify_title_press(&press);
 
     let step = gesture.borrow_mut().press(action, button, root_x, root_y);
+    drag_trace(|| format!("press: {press:?} root=({root_x},{root_y}) -> {action:?} / {step:?}"));
     match step {
         PressStep::Pass => false,
         PressStep::Consume => true,
@@ -666,6 +699,7 @@ fn handle_motion(
     let step = gesture
         .borrow_mut()
         .motion(root_x, root_y, held, drag_threshold());
+    drag_trace(|| format!("motion: root=({root_x},{root_y}) held={held} -> {step:?}"));
     match step {
         MotionStep::Pass => false,
         MotionStep::Wait => true,
@@ -687,8 +721,15 @@ fn press_kind_from_gdk(event_type: i32) -> PressKind {
 #[cfg(target_os = "linux")]
 fn begin_move(view: &webkit2gtk::WebView, start: PendingMove, time: u32) -> bool {
     let Some(window) = gtk_window(view) else {
+        drag_trace(|| "begin_move: no toplevel GtkWindow".to_owned());
         return false;
     };
+    drag_trace(|| {
+        format!(
+            "begin_move: button={} root=({},{}) time={time}",
+            start.button, start.root_x, start.root_y
+        )
+    });
     // GTK 3's Wayland backend ignores this timestamp and sends the seat's
     // implicit-grab serial from the press that armed the move; the button is
     // still held, so the compositor accepts it. This is how GtkWindow starts

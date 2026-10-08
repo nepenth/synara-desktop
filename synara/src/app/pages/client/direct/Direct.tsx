@@ -23,7 +23,7 @@ import {
   toRem,
 } from 'folds';
 import { useSharedScrollVirtualizer } from '../../../hooks/useSharedScrollVirtualizer';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../../components/FocusTrap';
 import { useNavigate } from 'react-router-dom';
 import { factoryRoomIdByActivity } from '../../../utils/sort';
 import {
@@ -73,6 +73,8 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
     <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
         <MenuItem
+          variant="Surface"
+          fill="None"
           onClick={handleMarkAsRead}
           size="300"
           after={<Icon size="100" src={Icons.CheckTwice} />}

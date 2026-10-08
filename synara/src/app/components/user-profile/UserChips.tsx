@@ -1,7 +1,7 @@
 import type { RoomReading } from '../../utils/room';
 import React, { MouseEventHandler, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../FocusTrap';
 import { isKeyHotkey } from 'is-hotkey';
 
 import {

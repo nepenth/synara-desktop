@@ -1,6 +1,6 @@
 import React, { MouseEventHandler, forwardRef, useEffect, useState } from 'react';
 import { useAtomValue } from 'jotai';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 import {
   Box,
   Text,
@@ -153,6 +153,8 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
       )}
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
         <MenuItem
+          variant="Surface"
+          fill="None"
           onClick={() => {
             if (unread) void handleMarkAsRead();
             else handleMarkAsUnread();
@@ -175,6 +177,8 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
         <RoomNotificationModeSwitcher roomId={room.roomId} value={notificationMode}>
           {(handleOpen, opened, changing) => (
             <MenuItem
+              variant="Surface"
+              fill="None"
               size="300"
               after={
                 changing ? (
@@ -213,6 +217,8 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
           </Text>
         </MenuItem>
         <MenuItem
+          variant="Surface"
+          fill="None"
           onClick={handleCopyLink}
           size="300"
           after={<Icon size="100" src={Icons.Link} />}
@@ -224,6 +230,8 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
           </Text>
         </MenuItem>
         <MenuItem
+          variant="Surface"
+          fill="None"
           onClick={handleOpenSettings}
           size="300"
           after={<Icon size="100" src={Icons.Setting} />}
@@ -238,6 +246,8 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
           {(promptJump, setPromptJump) => (
             <>
               <MenuItem
+                variant="Surface"
+                fill="None"
                 onClick={() => setPromptJump(true)}
                 size="300"
                 after={<Icon size="100" src={Icons.RecentClock} />}
@@ -346,6 +356,8 @@ const RoomCallMenu = forwardRef<HTMLDivElement>((_, ref) => {
       <Line variant="Surface" size="300" />
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
         <MenuItem
+          variant="Surface"
+          fill="None"
           size="300"
           radii="300"
           disabled

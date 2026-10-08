@@ -41,7 +41,10 @@ test('desktop hierarchy uses semantic depth while keeping text itself flat', () 
   assert.match(timeline, /MessageActionSurface}:hover/);
   assert.match(timeline, /boxShadow: 'none'/);
   assert.match(timeline, /boxShadow: raisedShadow/);
-  assert.match(timeline, /border-color 140ms ease-out/);
+  // Message hover stays a faint tint so it never pulls the eye off the text.
+  // Message hover switches instantly; a fade on the tint reads as flicker.
+  assert.doesNotMatch(timeline, /background-color [0-9]+ms/);
+  assert.match(timeline, /messageHoverTint/);
   assert.match(timeline, /synara-depth-contrast-edge/);
   assert.match(timeline, /TimelineAvatar = style\(\[avatarSurface\]\)/);
   assert.match(timeline, /ReplySurface/);
@@ -237,7 +240,8 @@ test('quiet-depth restyle covers new settings, explore, notes, approvals, and su
   assert.match(deviceTile, /wrap="Wrap"/);
   assert.match(deviceTile, /aria-expanded=\{details\}/);
   assert.match(deviceTile, /userSelect: 'all'/);
-  assert.match(devices, /SettingsQuietControl/);
+  // Page chrome (close/back) comes from the shared SettingsPage quiet controls.
+  assert.match(devices, /<SettingsPage/);
   assert.match(explore, /aria-haspopup="dialog"/);
   assert.match(explore, /initialFocus: \(\) => serverInputRef\.current/);
   assert.match(server, /wrap="Wrap"/);

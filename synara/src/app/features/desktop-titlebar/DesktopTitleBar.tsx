@@ -17,25 +17,25 @@ export function useDesktopTitleBarVisible(): boolean {
   return isSynaraDesktop() && isLinuxOS();
 }
 
-function MaximizeIcon({ maximized }: { maximized: boolean }) {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      aria-hidden
-    >
-      {maximized ? (
-        <path d="M9 5h12v12M5 9h12v12H5z" />
-      ) : (
-        <rect x="5" y="5" width="14" height="14" rx="1" />
-      )}
-    </svg>
-  );
-}
+// Drawn on the folds 24-unit grid with the Cross icon's 1.5-unit line, and
+// rendered through `Icon` so all three window controls share one size.
+const MaximizeIconSrc = () => (
+  <path
+    fillRule="evenodd"
+    clipRule="evenodd"
+    d="M5 5H19V19H5V5ZM6.5 6.5V17.5H17.5V6.5H6.5Z"
+    fill="currentColor"
+  />
+);
+
+const RestoreIconSrc = () => (
+  <path
+    fillRule="evenodd"
+    clipRule="evenodd"
+    d="M8 5H19V16H16.5V14.5H17.5V6.5H9.5V7.5H8V5ZM5 8.5H15.5V19H5V8.5ZM6.5 10V17.5H14V10H6.5Z"
+    fill="currentColor"
+  />
+);
 
 export function DesktopTitleBar() {
   const [maximized, setMaximized] = useState(false);
@@ -97,7 +97,7 @@ export function DesktopTitleBar() {
           className={depthCss.quietInteractiveSurface}
           onClick={toggleMaximize}
         >
-          <MaximizeIcon maximized={maximized} />
+          <Icon size="100" src={maximized ? RestoreIconSrc : MaximizeIconSrc} />
         </IconButton>
         <IconButton
           size="300"

@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Box, Text, IconButton, Icon, Icons, Scroll, Button, Input, Spinner } from 'folds';
-import { Page, PageContent, PageHeader } from '../../../components/page';
+import { Box, Text, IconButton, Icon, Icons, Button, Input, Spinner } from 'folds';
 import { SystemNotification } from './SystemNotification';
 import { AgentNotifications } from './AgentNotifications';
 import { SequenceCard } from '../../../components/sequence-card';
@@ -16,6 +15,7 @@ import {
   type NativePushRuleMode,
   type NativePushRulesSnapshot,
 } from './nativePushRules';
+import { SettingsPage, SettingsSection } from '../../../components/settings-layout';
 
 const MODE_LABEL: Record<NativePushRuleMode, string> = {
   all: 'All messages',
@@ -44,7 +44,14 @@ function NativeModePicker({
           outlined
           radii="300"
           aria-pressed={mode === value}
-          before={mode === value ? <Icon size="100" src={Icons.Check} /> : undefined}
+          before={
+            <Icon
+              size="100"
+              src={Icons.Check}
+              aria-hidden
+              style={{ visibility: mode === value ? 'visible' : 'hidden' }}
+            />
+          }
           disabled={disabled}
           onClick={() => onChange(mode)}
         >
@@ -87,8 +94,7 @@ function NativePushRulesEditor() {
 
   return (
     <Box direction="Column" gap="700">
-      <Box direction="Column" gap="100">
-        <Text size="L400">All Messages</Text>
+      <SettingsSection title="All Messages">
         <SequenceCard
           className={SequenceCardStyle}
           variant="SurfaceVariant"
@@ -165,10 +171,9 @@ function NativePushRulesEditor() {
             }
           />
         </SequenceCard>
-      </Box>
+      </SettingsSection>
 
-      <Box direction="Column" gap="100">
-        <Text size="L400">Mentions</Text>
+      <SettingsSection title="Mentions">
         {[
           ['userMention', 'Mentions of your user ID'] as const,
           ['displayName', 'Contains your display name'] as const,
@@ -196,7 +201,12 @@ function NativePushRulesEditor() {
                     radii="300"
                     aria-pressed={snapshot.mentions[ruleId]}
                     before={
-                      snapshot.mentions[ruleId] ? <Icon size="100" src={Icons.Check} /> : undefined
+                      <Icon
+                        size="100"
+                        src={Icons.Check}
+                        aria-hidden
+                        style={{ visibility: snapshot.mentions[ruleId] ? 'visible' : 'hidden' }}
+                      />
                     }
                     disabled={busy}
                     onClick={() =>
@@ -210,10 +220,9 @@ function NativePushRulesEditor() {
             />
           </SequenceCard>
         ))}
-      </Box>
+      </SettingsSection>
 
-      <Box direction="Column" gap="100">
-        <Text size="L400">Keyword Messages</Text>
+      <SettingsSection title="Keyword Messages">
         <SequenceCard
           className={SequenceCardStyle}
           variant="SurfaceVariant"
@@ -288,7 +297,7 @@ function NativePushRulesEditor() {
             />
           </SequenceCard>
         ))}
-      </Box>
+      </SettingsSection>
       {message && <Text size="T200">{message}</Text>}
     </Box>
   );
@@ -299,38 +308,14 @@ type NotificationsProps = {
 };
 export function Notifications({ requestClose }: NotificationsProps) {
   return (
-    <Page>
-      <PageHeader outlined={false}>
-        <Box grow="Yes" gap="200">
-          <Box grow="Yes" alignItems="Center" gap="200">
-            <Text size="H3" truncate>
-              Notifications
-            </Text>
-          </Box>
-          <Box shrink="No">
-            <IconButton
-              className={SettingsQuietControl}
-              onClick={requestClose}
-              variant="Surface"
-              fill="None"
-              aria-label="Close"
-            >
-              <Icon src={Icons.Cross} />
-            </IconButton>
-          </Box>
-        </Box>
-      </PageHeader>
-      <Box grow="Yes">
-        <Scroll hideTrack visibility="Hover">
-          <PageContent>
-            <Box direction="Column" gap="700">
-              <SystemNotification />
-              <AgentNotifications />
-              <NativePushRulesEditor />
-            </Box>
-          </PageContent>
-        </Scroll>
-      </Box>
-    </Page>
+    <SettingsPage
+      title="Notifications"
+      description="What notifies you, where it appears and which sounds play."
+      requestClose={requestClose}
+    >
+      <SystemNotification />
+      <AgentNotifications />
+      <NativePushRulesEditor />
+    </SettingsPage>
   );
 }

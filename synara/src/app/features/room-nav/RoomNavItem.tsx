@@ -16,7 +16,7 @@ import {
   Spinner,
 } from 'folds';
 import { useFocusWithin, useHover } from 'react-aria';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 import { NavItem, NavItemContent, NavItemOptions, NavLink } from '../../components/nav';
 import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
@@ -148,6 +148,8 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
         )}
         <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
           <MenuItem
+            variant="Surface"
+            fill="None"
             onClick={() => {
               if (unread) void handleMarkAsRead();
               else handleMarkAsUnread();
@@ -167,6 +169,8 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
             </Text>
           )}
           <MenuItem
+            variant="Surface"
+            fill="None"
             onClick={() => {
               void handleToggleFavorite();
             }}
@@ -193,6 +197,8 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
           <RoomNotificationModeSwitcher roomId={room.roomId} value={notificationMode}>
             {(handleOpen, opened, changing) => (
               <MenuItem
+                variant="Surface"
+                fill="None"
                 size="300"
                 after={
                   changing ? (
@@ -230,6 +236,8 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
             </Text>
           </MenuItem>
           <MenuItem
+            variant="Surface"
+            fill="None"
             onClick={handleCopyLink}
             size="300"
             after={<Icon size="100" src={Icons.Link} />}
@@ -240,6 +248,8 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
             </Text>
           </MenuItem>
           <MenuItem
+            variant="Surface"
+            fill="None"
             onClick={handleRoomSettings}
             size="300"
             after={<Icon size="100" src={Icons.Setting} />}

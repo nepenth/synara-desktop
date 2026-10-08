@@ -9,6 +9,7 @@ import {
   subscribeAgentNotificationPreferences,
   type AgentNotificationPreferences,
 } from './nativeAgentNotificationPreferences';
+import { SettingsSection } from '../../../components/settings-layout';
 
 const categories = [
   ['notifyToolActivity', 'Notify for tool activity', 'Messages starting with “🛠 Tool activity”.'],
@@ -97,8 +98,7 @@ export function AgentNotifications() {
   };
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Agent Notifications</Text>
+    <SettingsSection title="Agent Notifications">
       <SequenceCard
         className={SequenceCardStyle}
         variant="SurfaceVariant"
@@ -229,6 +229,6 @@ export function AgentNotifications() {
           </Text>
         )}
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }

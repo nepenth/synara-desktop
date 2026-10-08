@@ -12,22 +12,19 @@ import {
   color,
   config,
   Icon,
-  IconButton,
   Icons,
   Input,
   Menu,
   MenuItem,
   PopOut,
   RectCords,
-  Scroll,
   Switch,
   Text,
   toRem,
 } from 'folds';
 import { isKeyHotkey } from 'is-hotkey';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../../components/FocusTrap';
 import { useTranslation } from 'react-i18next';
-import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { useSetting } from '../../../state/hooks/settings';
 import { MessageLayout, MessageSpacing, settingsAtom } from '../../../state/settings';
@@ -49,6 +46,7 @@ import { SequenceCardStyle, SettingsQuietControl, SettingsThemeSwatch } from '..
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import { normalizeAccentColor, themeDefaultAccentColor } from '../../../utils/themeAccent';
 import { MESSAGE_TEXT_TONES, type MessageTextTone } from '../../../utils/messageTextTone';
+import { THREAD_DISPLAY_LABELS, THREAD_DISPLAY_MODES } from '../../../utils/threadDisplay';
 import {
   chromeColorsForRamp,
   DEFAULT_THEME_BASE_COLOR,
@@ -56,6 +54,7 @@ import {
   normalizeThemeBaseColor,
   THEME_BASE_PRESETS,
 } from '../../../utils/themeBase';
+import { SettingsPage, SettingsSection } from '../../../components/settings-layout';
 
 type ThemeSelectorProps = {
   themeNames: Record<string, string>;
@@ -184,27 +183,29 @@ function SystemThemePreferences() {
   };
 
   return (
-    <Box wrap="Wrap" gap="400">
+    <>
       <SettingTile
-        title="Light Theme:"
+        title="Light Theme"
+        description={
+          themeKind === ThemeKind.Light
+            ? 'Used while your system is in light mode. Active now.'
+            : 'Used while your system is in light mode.'
+        }
         after={
-          <Chip
+          <Button
             className={SettingsQuietControl}
+            size="300"
             variant="Secondary"
-            fill={themeKind === ThemeKind.Light ? 'Soft' : 'None'}
             outlined
-            radii="Pill"
-            aria-pressed={themeKind === ThemeKind.Light}
+            fill="None"
+            radii="300"
+            after={<Icon size="300" src={Icons.ChevronBottom} />}
+            onClick={handleLightThemeMenu}
             aria-haspopup="menu"
             aria-expanded={ltCords !== undefined}
-            before={
-              themeKind === ThemeKind.Light ? <Icon size="100" src={Icons.Check} /> : undefined
-            }
-            after={<Icon size="200" src={Icons.ChevronBottom} />}
-            onClick={handleLightThemeMenu}
           >
-            <Text size="B300">{themeNames[selectedLightTheme.id] ?? selectedLightTheme.id}</Text>
-          </Chip>
+            <Text size="T300">{themeNames[selectedLightTheme.id] ?? selectedLightTheme.id}</Text>
+          </Button>
         }
       />
       <PopOut
@@ -235,25 +236,27 @@ function SystemThemePreferences() {
         }
       />
       <SettingTile
-        title="Dark Theme:"
+        title="Dark Theme"
+        description={
+          themeKind === ThemeKind.Dark
+            ? 'Used while your system is in dark mode. Active now.'
+            : 'Used while your system is in dark mode.'
+        }
         after={
-          <Chip
+          <Button
             className={SettingsQuietControl}
+            size="300"
             variant="Secondary"
-            fill={themeKind === ThemeKind.Dark ? 'Soft' : 'None'}
             outlined
-            radii="Pill"
-            aria-pressed={themeKind === ThemeKind.Dark}
+            fill="None"
+            radii="300"
+            after={<Icon size="300" src={Icons.ChevronBottom} />}
+            onClick={handleDarkThemeMenu}
             aria-haspopup="menu"
             aria-expanded={dtCords !== undefined}
-            before={
-              themeKind === ThemeKind.Dark ? <Icon size="100" src={Icons.Check} /> : undefined
-            }
-            after={<Icon size="200" src={Icons.ChevronBottom} />}
-            onClick={handleDarkThemeMenu}
           >
-            <Text size="B300">{themeNames[selectedDarkTheme.id] ?? selectedDarkTheme.id}</Text>
-          </Chip>
+            <Text size="T300">{themeNames[selectedDarkTheme.id] ?? selectedDarkTheme.id}</Text>
+          </Button>
         }
       />
       <PopOut
@@ -283,7 +286,7 @@ function SystemThemePreferences() {
           </FocusTrap>
         }
       />
-    </Box>
+    </>
   );
 }
 
@@ -372,8 +375,7 @@ function Appearance() {
   const baseColor = normalizeThemeBaseColor(themeBaseColor) ?? DEFAULT_THEME_BASE_COLOR;
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Theme</Text>
+    <SettingsSection title="Theme">
       <SequenceCard
         className={SequenceCardStyle}
         variant="SurfaceVariant"
@@ -411,9 +413,9 @@ function Appearance() {
             'Tint for rail, room list, and chat. Use a swatch, the color well, or paste a hex value. Lightness is mapped to stacked greys, not used as a fill.'
           )}
           after={
-            <Box direction="Column" gap="200" style={{ minWidth: toRem(220) }}>
+            <Box direction="Column" gap="200" style={{ minWidth: toRem(220) }} alignItems="End">
               <ThemeRampPreview baseColor={baseColor} kind={activeTheme.kind} />
-              <Box gap="100" wrap="Wrap" alignItems="Center">
+              <Box gap="100" wrap="Wrap" alignItems="Center" justifyContent="End">
                 {THEME_BASE_PRESETS.map((preset) => {
                   const selected = baseColor === preset.hex;
                   return (
@@ -537,7 +539,44 @@ function Appearance() {
           }
         />
       </SequenceCard>
-    </Box>
+    </SettingsSection>
+  );
+}
+
+function ThreadDisplaySetting() {
+  const [threadDisplay, setThreadDisplay] = useSetting(settingsAtom, 'threadDisplay');
+
+  return (
+    <SettingTile
+      title="Thread Display"
+      description="Open threads in place of the room, in a side panel beside it, or inline beneath their first message."
+      after={
+        <Box gap="100" role="group" aria-label="Thread display">
+          {THREAD_DISPLAY_MODES.map((mode) => (
+            <Button
+              key={mode}
+              className={SettingsQuietControl}
+              size="300"
+              radii="300"
+              variant="Secondary"
+              fill={threadDisplay === mode ? 'Soft' : 'None'}
+              aria-pressed={threadDisplay === mode}
+              before={
+                <Icon
+                  size="100"
+                  src={Icons.Check}
+                  aria-hidden
+                  style={{ visibility: threadDisplay === mode ? 'visible' : 'hidden' }}
+                />
+              }
+              onClick={() => setThreadDisplay(mode)}
+            >
+              <Text size="B300">{THREAD_DISPLAY_LABELS[mode]}</Text>
+            </Button>
+          ))}
+        </Box>
+      }
+    />
   );
 }
 
@@ -545,8 +584,7 @@ function TextAndZoom() {
   const [messageTextTone, setMessageTextTone] = useSetting(settingsAtom, 'messageTextTone');
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Text</Text>
+    <SettingsSection title="Text">
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
           title="Message Text"
@@ -563,7 +601,12 @@ function TextAndZoom() {
                   fill={messageTextTone === tone ? 'Soft' : 'None'}
                   aria-pressed={messageTextTone === tone}
                   before={
-                    messageTextTone === tone ? <Icon size="100" src={Icons.Check} /> : undefined
+                    <Icon
+                      size="100"
+                      src={Icons.Check}
+                      aria-hidden
+                      style={{ visibility: messageTextTone === tone ? 'visible' : 'hidden' }}
+                    />
                   }
                   onClick={() => setMessageTextTone(tone as MessageTextTone)}
                 >
@@ -578,13 +621,17 @@ function TextAndZoom() {
       </SequenceCard>
 
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <ThreadDisplaySetting />
+      </SequenceCard>
+
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
           title="Page Zoom"
           description="Scale the whole interface, from 75% to 150%. Press Enter to apply."
           after={<PageZoomInput />}
         />
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }
 
@@ -753,8 +800,7 @@ function MessageDisplay() {
   );
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Messages</Text>
+    <SettingsSection title="Messages">
       {!isNativeMatrixSession() && (
         <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
           <SettingTile title="Message Layout" after={<SelectMessageLayout />} />
@@ -776,7 +822,7 @@ function MessageDisplay() {
           }
         />
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }
 
@@ -785,38 +831,14 @@ type AppearancePageProps = {
 };
 export function AppearancePage({ requestClose }: AppearancePageProps) {
   return (
-    <Page>
-      <PageHeader outlined={false}>
-        <Box grow="Yes" gap="200">
-          <Box grow="Yes" alignItems="Center" gap="200">
-            <Text size="H3" truncate>
-              Appearance
-            </Text>
-          </Box>
-          <Box shrink="No">
-            <IconButton
-              className={SettingsQuietControl}
-              onClick={requestClose}
-              variant="Surface"
-              fill="None"
-              aria-label="Close"
-            >
-              <Icon src={Icons.Cross} />
-            </IconButton>
-          </Box>
-        </Box>
-      </PageHeader>
-      <Box grow="Yes">
-        <Scroll hideTrack visibility="Hover">
-          <PageContent>
-            <Box direction="Column" gap="700">
-              <Appearance />
-              <TextAndZoom />
-              <MessageDisplay />
-            </Box>
-          </PageContent>
-        </Scroll>
-      </Box>
-    </Page>
+    <SettingsPage
+      title="Appearance"
+      description="Theme, colors, density and text size for this device."
+      requestClose={requestClose}
+    >
+      <Appearance />
+      <TextAndZoom />
+      <MessageDisplay />
+    </SettingsPage>
   );
 }

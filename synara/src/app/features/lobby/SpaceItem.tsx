@@ -16,7 +16,7 @@ import {
   RectCords,
   config,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 import classNames from 'classnames';
 import type { RoomReading } from '../../utils/room';
 import { HierarchyItem, SpaceHierarchyRoom } from '../../hooks/useSpaceHierarchy';

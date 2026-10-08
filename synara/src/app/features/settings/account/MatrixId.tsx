@@ -1,17 +1,17 @@
 import React from 'react';
-import { Box, Text, Chip } from 'folds';
+import { Text, Chip } from 'folds';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { copyToClipboard } from '../../../utils/dom';
 import { getSafeMyUserId } from '../../../state/nativeIdentity';
+import { SettingsSection } from '../../../components/settings-layout';
 
 export function MatrixId() {
   const userId = getSafeMyUserId();
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Matrix ID</Text>
+    <SettingsSection title="Matrix ID">
       <SequenceCard
         className={SequenceCardStyle}
         variant="SurfaceVariant"
@@ -33,6 +33,6 @@ export function MatrixId() {
           }
         />
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }

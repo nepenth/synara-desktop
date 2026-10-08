@@ -24,7 +24,7 @@ import {
   config,
   Spinner,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../../components/FocusTrap';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
@@ -70,6 +70,7 @@ import { profileWriteErrorMessage } from './nativeProfileOwner';
 import { getSafeMyUserId } from '../../../state/nativeIdentity';
 
 import { setNativeDisplayName, setNativeAvatarUrl } from '../../../native/nativeCommands';
+import { SettingsSection } from '../../../components/settings-layout';
 type ProfileProps = {
   profile: UserProfile;
   userId: string;
@@ -492,7 +493,14 @@ function ProfilePresence({ userId }: { userId: string }) {
               outlined
               radii="300"
               aria-pressed={state === current}
-              before={state === current ? <Icon size="100" src={Icons.Check} /> : undefined}
+              before={
+                <Icon
+                  size="100"
+                  src={Icons.Check}
+                  aria-hidden
+                  style={{ visibility: state === current ? 'visible' : 'hidden' }}
+                />
+              }
               disabled={busy || unavailable}
               onClick={() => {
                 if (state === current || busy || unavailable) return;
@@ -709,8 +717,7 @@ export function Profile() {
   const profile = useUserProfile(userId);
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Profile</Text>
+    <SettingsSection title="Profile">
       <SequenceCard
         className={SequenceCardStyle}
         variant="SurfaceVariant"
@@ -723,6 +730,6 @@ export function Profile() {
         <ProfileStatus userId={userId} />
         <ProfileRtcTransports />
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }

@@ -1,5 +1,5 @@
 import type { RoomReading } from '../../utils/room';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 import {
   Avatar,
   Box,

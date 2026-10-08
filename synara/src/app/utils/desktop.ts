@@ -15,6 +15,8 @@ type TauriInternals = {
 
 type SynaraDesktopBridge = {
   platform: 'tauri';
+  /** `std::env::consts::OS` of the shell, e.g. `linux` or `macos`. */
+  os?: string;
   supportsTray?: boolean;
   supportsGlobalShortcuts?: boolean;
   supportsIntegrationStatus?: boolean;

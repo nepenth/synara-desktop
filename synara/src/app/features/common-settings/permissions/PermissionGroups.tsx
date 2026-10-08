@@ -19,6 +19,7 @@ import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useAlive } from '../../../hooks/useAlive';
 import { isSynaraDesktop, invokeDesktopWithAvailability } from '../../../utils/desktop';
 import { setRoomPowerLevelsWithNativeOwner } from './nativeRoomPowerLevelsOwner';
+import { SettingsSection } from '../../../components/settings-layout';
 
 const USER_DEFAULT_LOCATION: PermissionLocation = {
   user: true,
@@ -117,8 +118,7 @@ export function PermissionGroups({
     const powerChanges = value !== power;
 
     return (
-      <Box direction="Column" gap="100">
-        <Text size="L400">Users</Text>
+      <SettingsSection title="Users">
         <SequenceCard
           variant="SurfaceVariant"
           className={SequenceCardStyle}
@@ -163,7 +163,7 @@ export function PermissionGroups({
             }
           />
         </SequenceCard>
-      </Box>
+      </SettingsSection>
     );
   };
 
@@ -171,8 +171,7 @@ export function PermissionGroups({
     <>
       {renderUserGroup()}
       {permissionGroups.map((group, groupIndex) => (
-        <Box key={groupIndex} direction="Column" gap="100">
-          <Text size="L400">{group.name}</Text>
+        <SettingsSection key={groupIndex} title={group.name}>
           {group.items.map((item, itemIndex) => {
             const power = getPermissionPower(powerLevels, item.location);
             const powerUpdate = permissionUpdate.get(item.location);
@@ -233,7 +232,7 @@ export function PermissionGroups({
               </SequenceCard>
             );
           })}
-        </Box>
+        </SettingsSection>
       ))}
 
       {hasChanges && (

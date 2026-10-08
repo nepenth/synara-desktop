@@ -1,6 +1,6 @@
 import React from 'react';
 import { Avatar, Overlay, OverlayBackdrop, OverlayCenter, Text } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 import { useRoomAvatar, useRoomName, useRoomTopic } from '../../hooks/useRoomMeta';
 import { useSpace } from '../../hooks/useSpace';
 import { RoomAvatar } from '../../components/room-avatar';

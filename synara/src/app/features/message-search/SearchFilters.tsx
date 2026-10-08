@@ -29,7 +29,7 @@ import {
   RectCords,
 } from 'folds';
 import { useTranslation } from 'react-i18next';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getRoomIconSrc } from '../../utils/room';
 import { factoryRoomIdByAtoZ } from '../../utils/sort';

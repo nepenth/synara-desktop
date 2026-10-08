@@ -43,7 +43,7 @@ import {
   config,
   toRem,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 
 import { requestRoomLatestAfterSend } from './nativeTimelineNavigation';
 import * as depthCss from '../../styles/Depth.css';
@@ -175,9 +175,16 @@ interface RoomInputProps {
   editor: Editor;
   roomId: string;
   room: EventedRoomReading;
+  /**
+   * The side-pane thread composer sends into this root. It keeps its own
+   * draft and uploads, and does not move the room timeline after a send.
+   * Without it the composer follows the room's open thread view.
+   */
+  threadRootOverride?: string;
 }
 export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
-  ({ editor, roomId, room }, ref) => {
+  ({ editor, roomId, room, threadRootOverride }, ref) => {
+    const draftKey = threadRootOverride ? `${roomId}#thread:${threadRootOverride}` : roomId;
     const clientConfig = useClientConfig();
     const [enterForNewline] = useSetting(settingsAtom, 'enterForNewline');
     const [isMarkdown] = useSetting(settingsAtom, 'isMarkdown');
@@ -196,7 +203,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const powerLevels = usePowerLevelsContext();
     const creators = useRoomCreators(room);
 
-    const [msgDraft, setMsgDraft] = useAtom(roomIdToMsgDraftAtomFamily(roomId));
+    const [msgDraft, setMsgDraft] = useAtom(roomIdToMsgDraftAtomFamily(draftKey));
     const [mentionInsert, setMentionInsert] = useAtom(composerMentionInsertAtom);
     useEffect(() => {
       if (!mentionInsert || mentionInsert.roomId !== roomId) return;
@@ -210,7 +217,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       ReactEditor.focus(editor);
       setMentionInsert(undefined);
     }, [mentionInsert, roomId, editor, setMentionInsert]);
-    const threadRootEventId = useNativeThreadRoot(roomId);
+    const roomThreadRootEventId = useNativeThreadRoot(roomId);
+    const threadRootEventId = threadRootOverride ?? roomThreadRootEventId;
     const replyDraft = useNativeComposerReplyDraft(roomId, threadRootEventId);
     const clearReplyDraft = useCallback(
       async (expectedDraftRevision: number) => {
@@ -258,7 +266,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       legacyUsernameColor || direct ? colorMXID(replyUserID ?? '') : replyPowerColor;
 
     const [uploadBoard, setUploadBoard] = useState(true);
-    const [selectedFiles, setSelectedFiles] = useAtom(roomIdToUploadItemsAtomFamily(roomId));
+    const [selectedFiles, setSelectedFiles] = useAtom(roomIdToUploadItemsAtomFamily(draftKey));
     const [nativeComposerSend, setNativeComposerSend] = useState(false);
     const uploadFamilyObserverAtom = createUploadFamilyObserverAtom(
       roomUploadAtomFamily,
@@ -471,43 +479,43 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     }, [replyDraft, threadRootEventId]);
 
     useEffect(() => {
-      const storedDraft = loadRoomDraft(window.localStorage, getSafeMyUserId(), roomId);
+      const storedDraft = loadRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
       const draft = msgDraft.length > 0 ? msgDraft : storedDraft;
       if (draft && draft.length > 0) {
         Transforms.insertFragment(editor, draft);
       }
-    }, [roomId, editor, msgDraft]);
+    }, [roomId, draftKey, editor, msgDraft]);
 
     useEffect(
       () => () => {
         if (!isEmptyEditor(editor)) {
           const parsedDraft = JSON.parse(JSON.stringify(editor.children));
           setMsgDraft(parsedDraft);
-          saveRoomDraft(window.localStorage, getSafeMyUserId(), roomId, parsedDraft);
+          saveRoomDraft(window.localStorage, getSafeMyUserId(), draftKey, parsedDraft);
         } else {
           setMsgDraft([]);
-          clearRoomDraft(window.localStorage, getSafeMyUserId(), roomId);
+          clearRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
         }
         resetEditor(editor);
         resetEditorHistory(editor);
       },
-      [roomId, editor, setMsgDraft]
+      [roomId, draftKey, editor, setMsgDraft]
     );
 
     const handleEditorChange = useCallback(
       (value: Parameters<EditorChangeHandler>[0]) => {
         if (isEmptyEditor(editor)) {
-          clearRoomDraft(window.localStorage, getSafeMyUserId(), roomId);
+          clearRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
           setComposerPreviewUrl(undefined);
           setComposerPreview(null);
           return;
         }
-        saveRoomDraft(window.localStorage, getSafeMyUserId(), roomId, value);
+        saveRoomDraft(window.localStorage, getSafeMyUserId(), draftKey, value);
         const nextUrl = trailingComposerPreviewUrl(toPlainText(editor.children, isMarkdown));
         setComposerPreviewUrl(nextUrl);
         if (!nextUrl) setComposerPreview(null);
       },
-      [roomId, editor, isMarkdown]
+      [draftKey, editor, isMarkdown]
     );
 
     useEffect(() => {
@@ -741,12 +749,12 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             mentionUserIds: attachmentCaption ? Array.from(mentionData.users) : undefined,
             mentionRoom: attachmentCaption ? mentionData.room : undefined,
           });
-          requestRoomLatestAfterSend(roomId);
+          if (!threadRootOverride) requestRoomLatestAfterSend(roomId);
           if (!hasTrailingAttachmentText(plan)) {
             attachmentSendPlan.current = undefined;
             resetEditor(editor);
             resetEditorHistory(editor);
-            clearRoomDraft(window.localStorage, getSafeMyUserId(), roomId);
+            clearRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
             await clearReplyDraftAfterSend(sendRelation.draftRevision, () => {
               setSendError(
                 t(
@@ -773,10 +781,10 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         if (nativeOwner === 'legacy') {
           await sendNativeMessage(roomId, content as any);
         }
-        requestRoomLatestAfterSend(roomId);
+        if (!threadRootOverride) requestRoomLatestAfterSend(roomId);
         resetEditor(editor);
         resetEditorHistory(editor);
-        clearRoomDraft(window.localStorage, getSafeMyUserId(), roomId);
+        clearRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
         await clearReplyDraftAfterSend(sendRelation.draftRevision, () => {
           setSendError(
             t(
@@ -802,6 +810,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       }
     }, [
       roomId,
+      draftKey,
+      threadRootOverride,
       editor,
       replyDraft,
       sendTypingStatus,

@@ -15,7 +15,7 @@ import {
 } from 'folds';
 /** The installed native session, as `initClient` returns it. */
 type ClientMatrix = Awaited<ReturnType<typeof initClient>>;
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 import { listen } from '@tauri-apps/api/event';
 import { recordSessionExpiry } from '../../utils/sessionExpiry';
 import React, {

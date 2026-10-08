@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAtomValue } from 'jotai';
-import { Box, Button, Header, Icon, IconButton, Icons, Scroll, Switch, Text } from 'folds';
-import { Page, PageContent, PageHeader } from '../../../components/page';
+import { Box, Button, Header, Switch, Text } from 'folds';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SettingTile } from '../../../components/setting-tile';
 import { useSetting } from '../../../state/hooks/settings';
@@ -23,6 +22,7 @@ import {
   MAX_CLIPBOARD_REPORT_CHARS,
 } from '../../../utils/diagnosticsReport';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
+import { SettingsPage, SettingsSection } from '../../../components/settings-layout';
 
 const formatBytes = (bytes: number): string => {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
@@ -173,212 +173,176 @@ export function Diagnostics({ requestClose }: DiagnosticsProps) {
   const reportActionsDisabled = busyAction !== undefined || status?.available !== true;
 
   return (
-    <Page>
-      <PageHeader outlined={false}>
-        <Box grow="Yes" gap="200">
-          <Box grow="Yes" alignItems="Center" gap="200">
-            <Text size="H3" truncate>
-              Diagnostics
-            </Text>
-          </Box>
-          <Box shrink="No">
-            <IconButton
-              className={SettingsQuietControl}
-              onClick={requestClose}
-              variant="Surface"
-              fill="None"
-              aria-label="Close"
-            >
-              <Icon src={Icons.Cross} />
-            </IconButton>
-          </Box>
-        </Box>
-      </PageHeader>
-      <Box grow="Yes">
-        <Scroll hideTrack visibility="Hover">
-          <PageContent>
-            <Box direction="Column" gap="700">
-              <Box direction="Column" gap="100">
-                <Text size="L400">Diagnostic Capture</Text>
-                <SequenceCard
-                  className={SequenceCardStyle}
-                  variant="SurfaceVariant"
-                  direction="Column"
-                  gap="400"
-                >
-                  <SettingTile
-                    title="Enable Diagnostic Capture"
-                    description="Record additional privacy-filtered evidence while reproducing a problem. Normal client behavior is unchanged."
-                    after={
-                      <Switch variant="Primary" value={enabled} onChange={handleEnabledChange} />
-                    }
-                  />
-                  <SettingTile
-                    title="Performance"
-                    description="Capture frame cadence, long tasks, rendered timeline size, and slow timeline operations."
-                    after={
-                      <Switch
-                        variant="Primary"
-                        value={enabled && performance}
-                        disabled={categoryControlsDisabled}
-                        onChange={handlePerformanceChange}
-                      />
-                    }
-                  />
-                  <SettingTile
-                    title="Session Persistence"
-                    description="Capture credential-store availability, bootstrap source, token-refresh outcomes, and sync lifecycle without recording credentials."
-                    after={
-                      <Switch
-                        variant="Primary"
-                        value={enabled && session}
-                        disabled={categoryControlsDisabled}
-                        onChange={(nextEnabled) => {
-                          updateDesktopDiagnosticsConfig({
-                            desktopDiagnosticsSession: nextEnabled,
-                          });
-                          setSession(nextEnabled);
-                        }}
-                      />
-                    }
-                  />
-                  <SettingTile
-                    title="Room State and Positioning"
-                    description="Capture room-open decisions, read-marker outcomes, recent-room updates, pagination, anchoring, and unexpected scroll movement."
-                    after={
-                      <Switch
-                        variant="Primary"
-                        value={enabled && roomState}
-                        disabled={categoryControlsDisabled}
-                        onChange={(nextEnabled) => {
-                          updateDesktopDiagnosticsConfig({
-                            desktopDiagnosticsRoomState: nextEnabled,
-                          });
-                          setRoomState(nextEnabled);
-                        }}
-                      />
-                    }
-                  />
-                  <SettingTile
-                    title="Performance Overlay"
-                    description="Show live frame rate, long-task, timeline-row, and memory counters over the client."
-                    after={
-                      <Switch
-                        variant="Primary"
-                        value={enabled && performance && overlay}
-                        disabled={!enabled || !performance}
-                        onChange={(nextEnabled) => {
-                          updateDesktopDiagnosticsConfig({
-                            desktopDiagnosticsOverlay: nextEnabled,
-                          });
-                          setOverlay(nextEnabled);
-                        }}
-                      />
-                    }
-                  />
-                </SequenceCard>
-              </Box>
+    <SettingsPage
+      title="Diagnostics"
+      description="Connection and runtime information to share when reporting a problem."
+      requestClose={requestClose}
+    >
+      <SettingsSection title="Diagnostic Capture">
+        <SequenceCard
+          className={SequenceCardStyle}
+          variant="SurfaceVariant"
+          direction="Column"
+          gap="400"
+        >
+          <SettingTile
+            title="Enable Diagnostic Capture"
+            description="Record additional privacy-filtered evidence while reproducing a problem. Normal client behavior is unchanged."
+            after={<Switch variant="Primary" value={enabled} onChange={handleEnabledChange} />}
+          />
+          <SettingTile
+            title="Performance"
+            description="Capture frame cadence, long tasks, rendered timeline size, and slow timeline operations."
+            after={
+              <Switch
+                variant="Primary"
+                value={enabled && performance}
+                disabled={categoryControlsDisabled}
+                onChange={handlePerformanceChange}
+              />
+            }
+          />
+          <SettingTile
+            title="Session Persistence"
+            description="Capture credential-store availability, bootstrap source, token-refresh outcomes, and sync lifecycle without recording credentials."
+            after={
+              <Switch
+                variant="Primary"
+                value={enabled && session}
+                disabled={categoryControlsDisabled}
+                onChange={(nextEnabled) => {
+                  updateDesktopDiagnosticsConfig({
+                    desktopDiagnosticsSession: nextEnabled,
+                  });
+                  setSession(nextEnabled);
+                }}
+              />
+            }
+          />
+          <SettingTile
+            title="Room State and Positioning"
+            description="Capture room-open decisions, read-marker outcomes, recent-room updates, pagination, anchoring, and unexpected scroll movement."
+            after={
+              <Switch
+                variant="Primary"
+                value={enabled && roomState}
+                disabled={categoryControlsDisabled}
+                onChange={(nextEnabled) => {
+                  updateDesktopDiagnosticsConfig({
+                    desktopDiagnosticsRoomState: nextEnabled,
+                  });
+                  setRoomState(nextEnabled);
+                }}
+              />
+            }
+          />
+          <SettingTile
+            title="Performance Overlay"
+            description="Show live frame rate, long-task, timeline-row, and memory counters over the client."
+            after={
+              <Switch
+                variant="Primary"
+                value={enabled && performance && overlay}
+                disabled={!enabled || !performance}
+                onChange={(nextEnabled) => {
+                  updateDesktopDiagnosticsConfig({
+                    desktopDiagnosticsOverlay: nextEnabled,
+                  });
+                  setOverlay(nextEnabled);
+                }}
+              />
+            }
+          />
+        </SequenceCard>
+      </SettingsSection>
 
-              <Box direction="Column" gap="100">
-                <Text size="L400">Stored Report</Text>
-                <SequenceCard
-                  className={SequenceCardStyle}
-                  variant="SurfaceVariant"
-                  direction="Column"
-                  gap="400"
-                >
-                  <SettingTile
-                    title={
-                      status?.available === false
-                        ? 'Native diagnostics unavailable'
-                        : 'Local diagnostics'
-                    }
-                    description={
-                      status?.available === false
-                        ? 'Diagnostic report storage is not available in this client.'
-                        : `${status?.entryCount ?? 0} records · ${formatBytes(
-                            status?.sizeBytes ?? 0
-                          )}`
-                    }
-                  />
-                  {status?.available && status.entryCount > 0 && (
-                    <Box direction="Column" gap="100">
-                      <Text size="T200" priority="300">
-                        {`Oldest record: ${formatTimestamp(status.oldestTimestampMs)}`}
-                      </Text>
-                      <Text size="T200" priority="300">
-                        {`Newest record: ${formatTimestamp(status.newestTimestampMs)}`}
-                      </Text>
-                    </Box>
-                  )}
-                  <Box wrap="Wrap" gap="200">
-                    <Button
-                      className={SettingsQuietControl}
-                      size="300"
-                      variant="Primary"
-                      fill="Soft"
-                      radii="300"
-                      disabled={reportActionsDisabled}
-                      onClick={handleExport}
-                    >
-                      <Text size="B300">
-                        {busyAction === 'export' ? 'Exporting…' : 'Export report'}
-                      </Text>
-                    </Button>
-                    <Button
-                      className={SettingsQuietControl}
-                      size="300"
-                      variant="Secondary"
-                      fill="None"
-                      radii="300"
-                      disabled={reportActionsDisabled}
-                      onClick={handleCopy}
-                    >
-                      <Text size="B300">{busyAction === 'copy' ? 'Copying…' : 'Copy recent'}</Text>
-                    </Button>
-                    <Button
-                      className={SettingsQuietControl}
-                      size="300"
-                      variant="Critical"
-                      fill="None"
-                      radii="300"
-                      disabled={reportActionsDisabled}
-                      onClick={handleClear}
-                    >
-                      <Text size="B300">
-                        {busyAction === 'clear' ? 'Clearing…' : 'Clear records'}
-                      </Text>
-                    </Button>
-                  </Box>
-                  {feedback && <Text size="T200">{feedback}</Text>}
-                </SequenceCard>
-              </Box>
-
-              <Box direction="Column" gap="100">
-                <Header size="300">
-                  <Text size="L400">Privacy</Text>
-                </Header>
-                <SequenceCard
-                  className={SequenceCardStyle}
-                  variant="SurfaceVariant"
-                  direction="Column"
-                  gap="200"
-                >
-                  <Text size="T300">
-                    Diagnostic reports are stored only on this device until you export or clear
-                    them. Synara excludes message bodies, access and refresh tokens, Matrix user,
-                    room and event identifiers, server URLs, and attachment contents.
-                  </Text>
-                  <Text size="T200" priority="300">
-                    Review an exported report before sharing it outside your trusted support or
-                    development team.
-                  </Text>
-                </SequenceCard>
-              </Box>
+      <SettingsSection title="Stored Report">
+        <SequenceCard
+          className={SequenceCardStyle}
+          variant="SurfaceVariant"
+          direction="Column"
+          gap="400"
+        >
+          <SettingTile
+            title={
+              status?.available === false ? 'Native diagnostics unavailable' : 'Local diagnostics'
+            }
+            description={
+              status?.available === false
+                ? 'Diagnostic report storage is not available in this client.'
+                : `${status?.entryCount ?? 0} records · ${formatBytes(status?.sizeBytes ?? 0)}`
+            }
+          />
+          {status?.available && status.entryCount > 0 && (
+            <Box direction="Column" gap="100">
+              <Text size="T200" priority="300">
+                {`Oldest record: ${formatTimestamp(status.oldestTimestampMs)}`}
+              </Text>
+              <Text size="T200" priority="300">
+                {`Newest record: ${formatTimestamp(status.newestTimestampMs)}`}
+              </Text>
             </Box>
-          </PageContent>
-        </Scroll>
+          )}
+          <Box wrap="Wrap" gap="200">
+            <Button
+              className={SettingsQuietControl}
+              size="300"
+              variant="Primary"
+              fill="Soft"
+              radii="300"
+              disabled={reportActionsDisabled}
+              onClick={handleExport}
+            >
+              <Text size="B300">{busyAction === 'export' ? 'Exporting…' : 'Export report'}</Text>
+            </Button>
+            <Button
+              className={SettingsQuietControl}
+              size="300"
+              variant="Secondary"
+              fill="None"
+              radii="300"
+              disabled={reportActionsDisabled}
+              onClick={handleCopy}
+            >
+              <Text size="B300">{busyAction === 'copy' ? 'Copying…' : 'Copy recent'}</Text>
+            </Button>
+            <Button
+              className={SettingsQuietControl}
+              size="300"
+              variant="Critical"
+              fill="None"
+              radii="300"
+              disabled={reportActionsDisabled}
+              onClick={handleClear}
+            >
+              <Text size="B300">{busyAction === 'clear' ? 'Clearing…' : 'Clear records'}</Text>
+            </Button>
+          </Box>
+          {feedback && <Text size="T200">{feedback}</Text>}
+        </SequenceCard>
+      </SettingsSection>
+
+      <Box direction="Column" gap="100">
+        <Header size="300">
+          <Text size="L400">Privacy</Text>
+        </Header>
+        <SequenceCard
+          className={SequenceCardStyle}
+          variant="SurfaceVariant"
+          direction="Column"
+          gap="200"
+        >
+          <Text size="T300">
+            Diagnostic reports are stored only on this device until you export or clear them. Synara
+            excludes message bodies, access and refresh tokens, Matrix user, room and event
+            identifiers, server URLs, and attachment contents.
+          </Text>
+          <Text size="T200" priority="300">
+            Review an exported report before sharing it outside your trusted support or development
+            team.
+          </Text>
+        </SequenceCard>
       </Box>
-    </Page>
+    </SettingsPage>
   );
 }

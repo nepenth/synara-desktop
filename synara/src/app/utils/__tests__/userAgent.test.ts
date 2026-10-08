@@ -41,3 +41,24 @@ test('UA-parser2 keeps desktop shortcut and device-name platform decisions accur
     Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
   }
 });
+
+test('the desktop shell OS wins over a borrowed macOS user agent', () => {
+  const originalWindow = globalThis.window;
+  try {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        navigator: {
+          userAgent:
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15',
+        },
+        __SYNARA_DESKTOP__: { platform: 'tauri', os: 'linux' },
+      },
+    });
+    assert.equal(isLinuxOS(), true);
+    assert.equal(isMacOS(), false);
+    assert.equal(synaraDeviceDisplayName(), 'Synara Linux');
+  } finally {
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+  }
+});

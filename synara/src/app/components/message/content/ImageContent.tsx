@@ -18,7 +18,7 @@ import {
 } from 'folds';
 import classNames from 'classnames';
 import { BlurhashCanvas } from 'react-blurhash';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../FocusTrap';
 import {
   EncryptedAttachmentInfo,
   IImageInfo,

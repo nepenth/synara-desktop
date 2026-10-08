@@ -1,6 +1,6 @@
 import { Box, config, Icon, Menu, MenuItem, PopOut, RectCords, Text } from 'folds';
 import React, { MouseEventHandler, ReactNode, useMemo, useState } from 'react';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from './FocusTrap';
 import { useTranslation } from 'react-i18next';
 import { stopPropagation } from '../utils/keyboard';
 import {

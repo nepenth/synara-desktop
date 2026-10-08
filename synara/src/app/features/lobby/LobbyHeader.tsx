@@ -16,7 +16,7 @@ import {
   config,
   toRem,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 import { PageHeader } from '../../components/page';
 import { useSetSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
@@ -89,6 +89,8 @@ const LobbyMenu = forwardRef<HTMLDivElement, LobbyMenuProps>(
             </Text>
           </MenuItem>
           <MenuItem
+            variant="Surface"
+            fill="None"
             onClick={handleRoomSettings}
             size="300"
             after={<Icon size="100" src={Icons.Setting} />}
@@ -240,6 +242,7 @@ export function LobbyHeader({ showProfile, powerLevels }: LobbyHeaderProps) {
                 fill="None"
                 onClick={handleOpenMenu}
                 ref={triggerRef}
+                aria-label="More Options"
                 aria-pressed={!!menuAnchor}
               >
                 <Icon size="400" src={Icons.VerticalDots} filled={!!menuAnchor} />

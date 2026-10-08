@@ -12,7 +12,7 @@ import {
   Chip,
   IconButton,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from './FocusTrap';
 
 export type UIAFlowOverlayProps = {
   currentStep: number;

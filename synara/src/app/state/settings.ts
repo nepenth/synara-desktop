@@ -6,6 +6,13 @@ import {
   normalizeMessageTextTone,
   type MessageTextTone,
 } from '../utils/messageTextTone';
+import {
+  DEFAULT_THREAD_DISPLAY,
+  DEFAULT_THREAD_PANE_WIDTH,
+  clampThreadPaneWidth,
+  normalizeThreadDisplay,
+  type ThreadDisplayMode,
+} from '../utils/threadDisplay';
 
 const SHARED_SETTINGS_STORAGE_KEY = 'settings';
 const PLATFORM_SETTINGS_STORAGE_KEY = 'platformSettings';
@@ -27,6 +34,10 @@ export interface SharedSettings {
   customAccentColor?: string;
   themeBaseColor?: string;
   messageTextTone: MessageTextTone;
+  /** How a desktop room opens threads. */
+  threadDisplay: ThreadDisplayMode;
+  /** Side-pane thread width in CSS px. */
+  threadPaneWidth: number;
   isMarkdown: boolean;
   editorToolbar: boolean;
   twitterEmoji: boolean;
@@ -106,6 +117,8 @@ export const defaultSharedSettings: SharedSettings = {
   customAccentColor: undefined,
   themeBaseColor: undefined,
   messageTextTone: DEFAULT_MESSAGE_TEXT_TONE,
+  threadDisplay: DEFAULT_THREAD_DISPLAY,
+  threadPaneWidth: DEFAULT_THREAD_PANE_WIDTH,
   isMarkdown: true,
   editorToolbar: false,
   twitterEmoji: false,
@@ -239,6 +252,8 @@ const sanitizeSharedSettings = (settings: SharedSettings): SharedSettings => ({
     typeof settings.themeBaseColor === 'string' ? settings.themeBaseColor : undefined
   ),
   messageTextTone: normalizeMessageTextTone(settings.messageTextTone),
+  threadDisplay: normalizeThreadDisplay(settings.threadDisplay),
+  threadPaneWidth: clampThreadPaneWidth(settings.threadPaneWidth),
 });
 
 export const mergeSettingsSnapshot = (snapshot: SettingsSnapshot): Settings => ({

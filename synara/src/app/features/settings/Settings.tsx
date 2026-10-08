@@ -1,23 +1,20 @@
 import React, { useMemo, useState } from 'react';
 import {
   Avatar,
-  Box,
   Button,
-  config,
   Icon,
   IconButton,
   Icons,
-  IconSrc,
-  MenuItem,
   Overlay,
   OverlayBackdrop,
   OverlayCenter,
   Text,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 import { General } from './general';
 import { AppearancePage as AppearanceSettings } from './appearance';
-import { PageNav, PageNavContent, PageNavHeader, PageRoot } from '../../components/page';
+import { PageRoot } from '../../components/page';
+import { SettingsNav, SettingsNavGroup } from '../../components/settings-layout';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { Account } from './account';
 import { useUserProfile } from '../../hooks/useUserProfile';
@@ -47,58 +44,103 @@ export enum SettingsPages {
   AboutPage,
 }
 
-type SettingsMenuItem = {
-  page: SettingsPages;
-  name: string;
-  icon: IconSrc;
-};
-
-const useSettingsMenuItems = (): SettingsMenuItem[] =>
+const useSettingsNavGroups = (): SettingsNavGroup<SettingsPages>[] =>
   useMemo(
     () => [
       {
-        page: SettingsPages.GeneralPage,
-        name: 'General',
-        icon: Icons.Setting,
+        label: 'Preferences',
+        items: [
+          {
+            id: SettingsPages.GeneralPage,
+            name: 'General',
+            icon: Icons.Setting,
+            keywords: [
+              'widgets',
+              'calls',
+              'date',
+              'time',
+              'editor',
+              'enter',
+              'markdown',
+              'storage',
+              'updates',
+            ],
+          },
+          {
+            id: SettingsPages.AppearancePage,
+            name: 'Appearance',
+            icon: Icons.Sun,
+            keywords: [
+              'theme',
+              'dark',
+              'light',
+              'color',
+              'accent',
+              'font',
+              'text',
+              'density',
+              'zoom',
+            ],
+          },
+          {
+            id: SettingsPages.NotificationPage,
+            name: 'Notifications',
+            icon: Icons.Bell,
+            keywords: ['sound', 'mentions', 'keywords', 'agent', 'approvals', 'system', 'badge'],
+          },
+        ],
       },
       {
-        page: SettingsPages.AppearancePage,
-        name: 'Appearance',
-        icon: Icons.Sun,
+        label: 'Account',
+        items: [
+          {
+            id: SettingsPages.AccountPage,
+            name: 'Account',
+            icon: Icons.User,
+            keywords: ['profile', 'name', 'avatar', 'email', 'contact', 'ignored', 'matrix id'],
+          },
+          {
+            id: SettingsPages.DevicesPage,
+            name: 'Devices',
+            icon: Icons.Monitor,
+            keywords: [
+              'sessions',
+              'verification',
+              'security',
+              'backup',
+              'recovery',
+              'keys',
+              'encryption',
+            ],
+          },
+        ],
       },
       {
-        page: SettingsPages.AccountPage,
-        name: 'Account',
-        icon: Icons.User,
-      },
-      {
-        page: SettingsPages.NotificationPage,
-        name: 'Notifications',
-        icon: Icons.Bell,
-      },
-      {
-        page: SettingsPages.DevicesPage,
-        name: 'Devices',
-        icon: Icons.Monitor,
-      },
-      ...(isDesktopPlatform()
-        ? [
-            {
-              page: SettingsPages.DiagnosticsPage,
-              name: 'Diagnostics',
-              icon: Icons.File,
-            },
-          ]
-        : []),
-      {
-        page: SettingsPages.DeveloperToolsPage,
-        name: 'Developer Tools',
-        icon: Icons.Terminal,
-      },
-      {
-        page: SettingsPages.AboutPage,
-        name: 'About',
-        icon: Icons.Info,
+        label: 'Advanced',
+        items: [
+          ...(isDesktopPlatform()
+            ? [
+                {
+                  id: SettingsPages.DiagnosticsPage,
+                  name: 'Diagnostics',
+                  icon: Icons.File,
+                  keywords: ['logs', 'report', 'capture', 'support'],
+                },
+              ]
+            : []),
+          {
+            id: SettingsPages.DeveloperToolsPage,
+            name: 'Developer Tools',
+            icon: Icons.Terminal,
+            keywords: ['account data', 'debug', 'json'],
+          },
+          {
+            id: SettingsPages.AboutPage,
+            name: 'About',
+            icon: Icons.Info,
+            keywords: ['version', 'build', 'credits', 'license'],
+          },
+        ],
       },
     ],
     []
@@ -119,7 +161,7 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
     if (initialPage) return initialPage;
     return screenSize === ScreenSize.Mobile ? undefined : SettingsPages.GeneralPage;
   });
-  const menuItems = useSettingsMenuItems();
+  const navGroups = useSettingsNavGroups();
 
   const handlePageRequestClose = () => {
     if (screenSize === ScreenSize.Mobile) {
@@ -133,9 +175,9 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
     <PageRoot
       nav={
         screenSize === ScreenSize.Mobile && activePage !== undefined ? undefined : (
-          <PageNav size="300">
-            <PageNavHeader outlined={false}>
-              <Box grow="Yes" gap="200">
+          <SettingsNav
+            header={
+              <>
                 <Avatar size="200" radii="300">
                   <UserAvatar
                     userId={userId}
@@ -146,84 +188,60 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
                 <Text size="H4" truncate>
                   Settings
                 </Text>
-              </Box>
-              <Box shrink="No">
-                {screenSize === ScreenSize.Mobile && (
-                  <IconButton
-                    className={depthCss.quietInteractiveSurface}
-                    onClick={requestClose}
-                    variant="Surface"
-                    fill="None"
-                    aria-label="Close"
-                  >
-                    <Icon src={Icons.Cross} />
-                  </IconButton>
-                )}
-              </Box>
-            </PageNavHeader>
-            <Box grow="Yes" direction="Column">
-              <PageNavContent>
-                <Box direction="Column" gap="400" style={{ flexGrow: 1 }}>
-                  {menuItems.map((item) => (
-                    <MenuItem
+              </>
+            }
+            headerAfter={
+              screenSize === ScreenSize.Mobile ? (
+                <IconButton
+                  className={depthCss.quietInteractiveSurface}
+                  onClick={requestClose}
+                  variant="Surface"
+                  fill="None"
+                  aria-label="Close"
+                >
+                  <Icon src={Icons.Cross} />
+                </IconButton>
+              ) : undefined
+            }
+            groups={navGroups}
+            active={activePage}
+            onSelect={setActivePage}
+            footer={
+              <UseStateProvider initial={false}>
+                {(logout, setLogout) => (
+                  <>
+                    <Button
                       className={depthCss.quietInteractiveSurface}
-                      key={item.name}
-                      variant="Surface"
+                      size="300"
+                      variant="Critical"
                       fill="None"
-                      radii="400"
-                      aria-pressed={activePage === item.page}
-                      before={<Icon src={item.icon} size="100" filled={activePage === item.page} />}
-                      onClick={() => setActivePage(item.page)}
+                      radii="300"
+                      style={{ width: '100%', justifyContent: 'flex-start' }}
+                      before={<Icon src={Icons.Power} size="100" />}
+                      onClick={() => setLogout(true)}
                     >
-                      <Text
-                        style={{
-                          fontWeight: activePage === item.page ? config.fontWeight.W600 : undefined,
-                        }}
-                        size="T300"
-                        truncate
-                      >
-                        {item.name}
-                      </Text>
-                    </MenuItem>
-                  ))}
-                </Box>
-              </PageNavContent>
-              <Box style={{ padding: config.space.S200 }} shrink="No" direction="Column">
-                <UseStateProvider initial={false}>
-                  {(logout, setLogout) => (
-                    <>
-                      <Button
-                        className={depthCss.quietInteractiveSurface}
-                        size="300"
-                        variant="Critical"
-                        fill="None"
-                        radii="Pill"
-                        before={<Icon src={Icons.Power} size="100" />}
-                        onClick={() => setLogout(true)}
-                      >
-                        <Text size="B400">Logout</Text>
-                      </Button>
-                      {logout && (
-                        <Overlay open backdrop={<OverlayBackdrop />}>
-                          <OverlayCenter>
-                            <FocusTrap
-                              focusTrapOptions={{
-                                onDeactivate: () => setLogout(false),
-                                clickOutsideDeactivates: true,
-                                escapeDeactivates: stopPropagation,
-                              }}
-                            >
-                              <LogoutDialog handleClose={() => setLogout(false)} />
-                            </FocusTrap>
-                          </OverlayCenter>
-                        </Overlay>
-                      )}
-                    </>
-                  )}
-                </UseStateProvider>
-              </Box>
-            </Box>
-          </PageNav>
+                      <Text size="B400">Logout</Text>
+                    </Button>
+                    {logout && (
+                      <Overlay open backdrop={<OverlayBackdrop />}>
+                        <OverlayCenter>
+                          <FocusTrap
+                            focusTrapOptions={{
+                              onDeactivate: () => setLogout(false),
+                              clickOutsideDeactivates: true,
+                              escapeDeactivates: stopPropagation,
+                            }}
+                          >
+                            <LogoutDialog handleClose={() => setLogout(false)} />
+                          </FocusTrap>
+                        </OverlayCenter>
+                      </Overlay>
+                    )}
+                  </>
+                )}
+              </UseStateProvider>
+            }
+          />
         )
       }
     >

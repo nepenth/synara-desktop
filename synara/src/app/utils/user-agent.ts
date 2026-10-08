@@ -2,18 +2,38 @@ import { UAParser } from 'ua-parser-js';
 
 export const ua = () => UAParser(window.navigator.userAgent);
 
-export const isMacOS = () => ua().os.name === 'macOS';
+const SHELL_OS_NAMES: Record<string, string> = {
+  linux: 'Linux',
+  macos: 'macOS',
+  windows: 'Windows',
+};
 
-export const isLinuxOS = () => ua().os.name === 'Linux';
+/**
+ * Operating system name, preferring the desktop shell's own report.
+ *
+ * WebKitGTK can send a Safari "Macintosh" user agent for site compatibility,
+ * so inside the shell the user agent is not evidence of the OS. The shell
+ * publishes `std::env::consts::OS` on the bridge; browsers fall back to the
+ * user agent.
+ */
+export const osName = (): string | undefined => {
+  const shellOs = window.__SYNARA_DESKTOP__?.os;
+  if (typeof shellOs === 'string' && shellOs in SHELL_OS_NAMES) return SHELL_OS_NAMES[shellOs];
+  return ua().os.name;
+};
+
+export const isMacOS = () => osName() === 'macOS';
+
+export const isLinuxOS = () => osName() === 'Linux';
 
 export const synaraDeviceDisplayName = (): string => {
-  const osName = ua().os.name;
+  const name = osName();
 
-  if (osName === 'macOS') return 'Synara macOS';
-  if (osName === 'Linux') return 'Synara Linux';
-  if (osName === 'Windows') return 'Synara Windows';
-  if (osName === 'iOS') return 'Synara iOS';
-  if (osName === 'Android') return 'Synara Android';
+  if (name === 'macOS') return 'Synara macOS';
+  if (name === 'Linux') return 'Synara Linux';
+  if (name === 'Windows') return 'Synara Windows';
+  if (name === 'iOS') return 'Synara iOS';
+  if (name === 'Android') return 'Synara Android';
 
   return 'Synara Desktop';
 };

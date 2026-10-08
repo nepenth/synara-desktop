@@ -2,7 +2,7 @@ import React, { MouseEventHandler, forwardRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Icon, Icons, Menu, MenuItem, PopOut, RectCords, Text, config, toRem } from 'folds';
 import { useAtomValue } from 'jotai';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../../components/FocusTrap';
 import { useNativeNavigationScope } from '../../../state/hooks/navigationUnread';
 import { getHomePath, joinPathComponent } from '../../pathUtils';
 import {

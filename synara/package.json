@@ -21,8 +21,9 @@
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
     "test:browser:native-timeline": "playwright test --config e2e/native-timeline-harness/playwright.config.ts",
-    "test:browser:desktop-polish:ci": "playwright test --config e2e/room-list-harness/playwright.config.ts --project=chromium && playwright test --config e2e/approvals-harness/playwright.config.ts --project=chromium && npm run test:browser:runtime-maturity -- --project=chromium",
-    "test:browser:desktop-polish": "playwright test --config e2e/room-list-harness/playwright.config.ts && playwright test --config e2e/approvals-harness/playwright.config.ts && npm run test:browser:runtime-maturity",
+    "test:browser:desktop-polish:ci": "playwright test --config e2e/room-list-harness/playwright.config.ts --project=chromium && playwright test --config e2e/approvals-harness/playwright.config.ts --project=chromium && npm run test:browser:runtime-maturity -- --project=chromium && npm run test:browser:settings",
+    "test:browser:desktop-polish": "playwright test --config e2e/room-list-harness/playwright.config.ts && playwright test --config e2e/approvals-harness/playwright.config.ts && npm run test:browser:runtime-maturity && npm run test:browser:settings",
+    "test:browser:settings": "playwright test --config e2e/settings-harness/playwright.config.ts",
     "test:browser:runtime-maturity": "playwright test --config e2e/runtime-maturity-harness/playwright.config.ts"
   },
   "lint-staged": {
