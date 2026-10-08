@@ -1,10 +1,10 @@
 import { useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useMatrixClient } from './useMatrixClient';
 import type { MatrixEventReading } from '../utils/room';
 import type { EventedRoomReading } from '../utils/roomEvents';
 import { eventFromWire, type RoomEventReading } from '../utils/nativeEventAdapter';
 
+import { fetchNativeRoomEvent } from '../native/nativeCommands';
 export type { RoomEventReading } from '../utils/nativeEventAdapter';
 export type { RoomEventUnsignedReading } from '../utils/nativeEventAdapter';
 
@@ -14,15 +14,13 @@ export type RoomEventSourceReading = EventedRoomReading & {
 };
 
 const useFetchEvent = (room: RoomEventSourceReading, eventId: string) => {
-  const mx = useMatrixClient();
-
   const fetchEventCallback = useCallback(async () => {
-    const evt = await mx.fetchRoomEvent(room.roomId, eventId);
+    const evt = await fetchNativeRoomEvent(room.roomId, eventId);
     if (!evt) {
       throw new Error('Room event not found');
     }
     return eventFromWire(evt, room.roomId);
-  }, [mx, room.roomId, eventId]);
+  }, [room.roomId, eventId]);
 
   return fetchEventCallback;
 };

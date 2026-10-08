@@ -26,7 +26,6 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { useRoom } from '../../../hooks/useRoom';
 import { useRoomMembers } from '../../../hooks/useRoomMembers';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useGetMemberPowerLevel, usePowerLevels } from '../../../hooks/usePowerLevels';
 import { VirtualTile } from '../../../components/virtualizer';
 import { MemberTile } from '../../../components/member-tile';
@@ -80,11 +79,10 @@ type MembersProps = {
   requestClose: () => void;
 };
 export function Members({ requestClose }: MembersProps) {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const room = useRoom();
   const nativeSession = isSynaraDesktop() && getSessionBootstrapResult().source === 'native';
-  const memberSnapshot = useRoomMembers(mx, room.roomId, nativeSession);
+  const memberSnapshot = useRoomMembers(room.roomId, nativeSession);
   const members = memberSnapshot ?? EMPTY_ROOM_MEMBERS;
   const joinedMemberCount = nativeSession
     ? memberSnapshot?.filter((member) => member.membership === Membership.Join).length
@@ -342,7 +340,6 @@ export function Members({ requestClose }: MembersProps) {
                             data-user-id={tagOrMember.userId}
                             onClick={handleMemberClick}
                             aria-pressed={profileUser?.userId === tagOrMember.userId}
-                            mx={mx}
                             room={room}
                             member={tagOrMember}
                             useAuthentication={useAuthentication}

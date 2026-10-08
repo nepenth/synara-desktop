@@ -3,7 +3,6 @@ import { Avatar, Overlay, OverlayBackdrop, OverlayCenter, Text } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import { useRoomAvatar, useRoomName, useRoomTopic } from '../../hooks/useRoomMeta';
 import { useSpace } from '../../hooks/useSpace';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { RoomAvatar } from '../../components/room-avatar';
 import { nameInitials } from '../../utils/common';
 import { UseStateProvider } from '../../components/UseStateProvider';
@@ -15,7 +14,6 @@ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 
 export function LobbyHero() {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const space = useSpace();
 
@@ -23,7 +21,7 @@ export function LobbyHero() {
   const topic = useRoomTopic(space);
   const avatarMxc = useRoomAvatar(space);
   const avatarUrl = avatarMxc
-    ? resolveMatrixThumbnailUrl(mx, avatarMxc, 96, { useAuthentication })
+    ? resolveMatrixThumbnailUrl(avatarMxc, 96, { useAuthentication })
     : undefined;
 
   return (

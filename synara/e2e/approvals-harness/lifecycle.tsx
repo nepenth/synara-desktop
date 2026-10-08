@@ -9,7 +9,7 @@ import {
 } from '../../src/app/features/approvals/ApprovalInboxProvider';
 import type { ApprovalInboxSnapshot } from '../../src/app/features/approvals/nativeApprovalInbox';
 import { decideAgentApprovalWithNativeOwner } from '../../src/app/features/room/nativeReactionOwner';
-import { MatrixClientProvider } from '../../src/app/hooks/useMatrixClient';
+import { setNativeIdentity } from '../../src/app/state/nativeIdentity';
 
 let account = 1;
 let heldRead = false;
@@ -76,7 +76,11 @@ Object.assign(window, {
     },
   },
 });
-const clients = [{}, {}] as React.ComponentProps<typeof MatrixClientProvider>['value'][];
+const accountIdentity = (n: number) => ({
+  userId: `@account${n}:example.test`,
+  deviceId: `DEVICE${n}`,
+});
+setNativeIdentity(accountIdentity(1));
 const SummaryProbe = memo(() => {
   const summary = useApprovalInboxSummary();
   useLayoutEffect(() => {
@@ -136,17 +140,16 @@ function Fixture() {
       <button
         onClick={() => {
           account = 2;
+          setNativeIdentity(accountIdentity(2));
           setIdentity(2);
         }}
       >
         Replace account
       </button>
-      <MatrixClientProvider value={clients[identity - 1]}>
-        <ApprovalInboxProvider>
-          <SummaryProbe />
-          <DetailProbe identity={identity} />
-        </ApprovalInboxProvider>
-      </MatrixClientProvider>
+      <ApprovalInboxProvider>
+        <SummaryProbe />
+        <DetailProbe identity={identity} />
+      </ApprovalInboxProvider>
     </MemoryRouter>
   );
 }

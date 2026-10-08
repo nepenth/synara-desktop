@@ -33,7 +33,6 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { stopPropagation } from '../../utils/keyboard';
 import { useDirects, useRooms, useSpaces } from '../../state/hooks/roomList';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { allRoomsAtom } from '../../state/room-list/roomList';
 import { mDirectAtom } from '../../state/mDirectList';
 import { roomToParentsAtom } from '../../state/room/roomToParents';
@@ -42,7 +41,6 @@ import { VirtualTile } from '../../components/virtualizer';
 import { getDirectRoomAvatarUrl, getRoomAvatarUrl } from '../../utils/room';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
 import { nameInitials } from '../../utils/common';
-import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { factoryRoomIdByAtoZ } from '../../utils/sort';
 import {
   SearchItemStrGetter,
@@ -73,14 +71,12 @@ type AddExistingModalProps = {
   requestClose: () => void;
 };
 export function AddExistingModal({ parentId, space, requestClose }: AddExistingModalProps) {
-  const mx = useMatrixClient();
-  const useAuthentication = useMediaAuthentication();
   const alive = useAlive();
 
   const mDirects = useAtomValue(mDirectAtom);
-  const spaces = useSpaces(mx, allRoomsAtom);
-  const rooms = useRooms(mx, allRoomsAtom, mDirects);
-  const directs = useDirects(mx, allRoomsAtom, mDirects);
+  const spaces = useSpaces(allRoomsAtom);
+  const rooms = useRooms(allRoomsAtom, mDirects);
+  const directs = useDirects(allRoomsAtom, mDirects);
   const roomIdToParents = useAtomValue(roomToParentsAtom);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -94,8 +90,8 @@ export function AddExistingModal({ parentId, space, requestClose }: AddExistingM
 
     return rIds
       .filter((rId) => rId !== parentId && !roomIdToParents.get(rId)?.has(parentId))
-      .sort(factoryRoomIdByAtoZ(mx));
-  }, [spaces, rooms, directs, space, parentId, roomIdToParents, mx]);
+      .sort(factoryRoomIdByAtoZ());
+  }, [spaces, rooms, directs, space, parentId, roomIdToParents]);
 
   const getRoomNameStr: SearchItemStrGetter<string> = useCallback(
     (rId) => getRoom(rId)?.name ?? rId,
@@ -277,8 +273,8 @@ export function AddExistingModal({ parentId, space, requestClose }: AddExistingM
                                       roomId={room.roomId}
                                       src={
                                         dm
-                                          ? getDirectRoomAvatarUrl(mx, room, 96, useAuthentication)
-                                          : getRoomAvatarUrl(mx, room, 96, useAuthentication)
+                                          ? getDirectRoomAvatarUrl(room, 96)
+                                          : getRoomAvatarUrl(room, 96)
                                       }
                                       alt={room.name}
                                       renderFallback={() => (

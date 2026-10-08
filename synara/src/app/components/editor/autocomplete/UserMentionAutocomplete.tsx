@@ -1,12 +1,11 @@
 import React, { useEffect, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Editor } from 'slate';
 import { Avatar, Icon, Icons, MenuItem, Text } from 'folds';
-import type { MatrixClientReading, RoomReading } from '../../../utils/room';
+import type { RoomReading } from '../../../utils/room';
 
 import { AutocompleteQuery } from './autocompleteQuery';
 import { AutocompleteMenu } from './AutocompleteMenu';
 import { useRoomMembers, type RoomMemberListItem } from '../../../hooks/useRoomMembers';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import {
   SearchItemStrGetter,
   UseAsyncSearchOptions,
@@ -27,7 +26,7 @@ import { getMyUserId } from '../../../state/nativeIdentity';
 
 type MentionAutoCompleteHandler = (userId: string, name: string) => void;
 
-const userIdFromQueryText = (mx: MatrixClientReading, text: string) =>
+const userIdFromQueryText = (text: string) =>
   isUserId(`@${text}`)
     ? `@${text}`
     : `@${text}${text.endsWith(':') ? '' : ':'}${getMxIdServer(getMyUserId() ?? '')}`;
@@ -95,12 +94,11 @@ export function UserMentionAutocomplete({
   query,
   requestClose,
 }: UserMentionAutocompleteProps) {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const roomId: string = room.roomId!;
   const roomAliasOrId = room.getCanonicalAlias() || roomId;
   const nativeSession = isSynaraDesktop() && getSessionBootstrapResult().source === 'native';
-  const memberSnapshot = useRoomMembers(mx, roomId, nativeSession);
+  const memberSnapshot = useRoomMembers(roomId, nativeSession);
   const members = memberSnapshot ?? EMPTY_ROOM_MEMBERS;
 
   const [result, search, resetSearch] = useAsyncSearch(members, getRoomMemberStr, SEARCH_OPTIONS);
@@ -138,7 +136,7 @@ export function UserMentionAutocomplete({
         return;
       }
       if (autoCompleteMembers.length === 0) {
-        const userId = userIdFromQueryText(mx, query.text);
+        const userId = userIdFromQueryText(query.text);
         handleAutocomplete(userId, userId);
         return;
       }
@@ -158,8 +156,8 @@ export function UserMentionAutocomplete({
       )}
       {autoCompleteMembers.length === 0 ? (
         <UnknownMentionItem
-          userId={userIdFromQueryText(mx, query.text)}
-          name={userIdFromQueryText(mx, query.text)}
+          userId={userIdFromQueryText(query.text)}
+          name={userIdFromQueryText(query.text)}
           handleAutocomplete={handleAutocomplete}
         />
       ) : (
@@ -168,7 +166,7 @@ export function UserMentionAutocomplete({
             ? roomMember.avatarUrl
             : roomMember.getMxcAvatarUrl();
           const avatarUrl = avatarMxcUrl
-            ? resolveMatrixThumbnailUrl(mx, avatarMxcUrl, 32, { useAuthentication })
+            ? resolveMatrixThumbnailUrl(avatarMxcUrl, 32, { useAuthentication })
             : undefined;
           return (
             <MenuItem

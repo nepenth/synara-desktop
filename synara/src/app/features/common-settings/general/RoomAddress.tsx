@@ -355,13 +355,11 @@ function LocalAddressesList({
 }
 
 export function RoomLocalAddresses({ permissions }: { permissions: RoomPermissionsAPI }) {
-  const room = useRoom();
-
   const canEditCanonical = permissions.stateEvent(StateEvent.RoomCanonicalAlias);
 
   const [expand, setExpand] = useState(false);
 
-  const { localAliasesState, addLocalAlias, removeLocalAlias } = useLocalAliases(room.roomId);
+  const { localAliasesState, addLocalAlias, removeLocalAlias } = useLocalAliases();
 
   return (
     <SequenceCard

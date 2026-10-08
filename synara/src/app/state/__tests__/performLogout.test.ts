@@ -9,6 +9,12 @@ import {
   performLogout,
 } from '../../../client/initMatrix';
 import {
+  nativeSession,
+  setNativeSessionForTests,
+  type NativeSession,
+} from '../../native/nativeSession';
+import { setNativeIdentity } from '../nativeIdentity';
+import {
   notifiedEventIdsCache,
   unreadNotificationCache,
 } from '../../notifications/notificationCaches';
@@ -181,6 +187,7 @@ for (const withClient of [false, true]) {
 test('Reload Application clears renderer caches without logging out or invoking native deletion', async () => {
   const originalWindow = globalThis.window;
   const originalLocalStorage = globalThis.localStorage;
+  const originalSession = nativeSession();
   const storage = createEnumeratedMemoryStorage({ 'navToActivePath@alice:example.org': '/home' });
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage });
   let reloaded = false;
@@ -202,20 +209,23 @@ test('Reload Application clears renderer caches without logging out or invoking 
     },
   });
   try {
-    await reloadApplication({
-      stopClient: async () => {
+    setNativeIdentity({ userId: '@alice:example.org' });
+    setNativeSessionForTests({
+      stop: async () => {
         stopped = true;
       },
-      getSafeUserId: () => '@alice:example.org',
       logout: async () => {
         assert.fail('renderer refresh must not log out');
       },
-    } as any);
+    } as unknown as NativeSession);
+    await reloadApplication();
     assert.equal(stopped, true);
     assert.equal(storage.getItem('navToActivePath@alice:example.org'), null);
     assert.equal(reloaded, true);
     assert.equal(notifiedEventIdsCache.size, 0);
   } finally {
+    setNativeSessionForTests(originalSession);
+    setNativeIdentity({});
     Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
@@ -258,6 +268,7 @@ for (const storageFails of [false, true]) {
   test(`renderer recovery reloads after stop listener failure (storageFails=${storageFails})`, async () => {
     const originalWindow = globalThis.window;
     const originalStorage = globalThis.localStorage;
+    const originalSession = nativeSession();
     const calls: string[] = [];
     notifiedEventIdsCache.add('$wedged-renderer');
     Object.defineProperty(globalThis, 'localStorage', {
@@ -280,19 +291,19 @@ for (const storageFails of [false, true]) {
       },
     });
     try {
-      await reloadApplication({
-        getSafeUserId: () => {
-          calls.push('identity');
-          return '@alice:example.org';
-        },
-        stopClient: async () => {
+      setNativeIdentity({ userId: '@alice:example.org' });
+      setNativeSessionForTests({
+        stop: async () => {
           calls.push('stop');
           throw new Error('renderer listener threw');
         },
-      } as any);
-      assert.deepEqual(calls, ['identity', 'stop', 'navigation', 'reload']);
+      } as unknown as NativeSession);
+      await reloadApplication();
+      assert.deepEqual(calls, ['stop', 'navigation', 'reload']);
       assert.equal(notifiedEventIdsCache.size, 0);
     } finally {
+      setNativeSessionForTests(originalSession);
+      setNativeIdentity({});
       Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
       Object.defineProperty(globalThis, 'localStorage', {
         configurable: true,
@@ -335,7 +346,7 @@ test('attemptLogout resolves logged_out after native and renderer cleanup', asyn
 
 test('LogoutDialog renders the fixed retry copy from the logout outcome', () => {
   const dialog = readFileSync('src/app/components/LogoutDialog.tsx', 'utf8');
-  assert.match(dialog, /attemptLogout\(mx\)/);
+  assert.match(dialog, /attemptLogout\(nativeSession\(\)\)/);
   assert.match(dialog, /logoutState\.data === 'retry'/);
   assert.match(dialog, /\{LOGOUT_RETRY_COPY\}/);
   assert.doesNotMatch(dialog, /\.catch\(\(\) => undefined\)/);

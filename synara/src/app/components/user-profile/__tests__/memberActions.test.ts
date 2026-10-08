@@ -148,13 +148,13 @@ test('profile ignore uses the native ignored-user owner', () => {
   const chips = readFileSync('src/app/components/user-profile/UserChips.tsx', 'utf8');
   assert.match(chips, /nativeIgnoredUsersIgnore/);
   assert.match(chips, /nativeIgnoredUsersUnignore/);
-  assert.match(chips, /isNativeMatrixSession/);
+  assert.doesNotMatch(chips, /setIgnoredUsers/);
 });
 
 test('desktop profile reads native membership instead of room.getMember()', () => {
   const profile = readFileSync('src/app/components/user-profile/UserRoomProfile.tsx', 'utf8');
   const moderation = readFileSync('src/app/components/user-profile/UserModeration.tsx', 'utf8');
-  assert.match(profile, /useRoomMembers\(mx, room\.roomId, nativeSession\)/);
+  assert.match(profile, /useRoomMembers\(room\.roomId, nativeSession\)/);
   assert.match(profile, /resolveNativeRoomMembership/);
   assert.match(profile, /memberActionVisibility/);
   assert.match(profile, /nativeIgnoredUsersSnapshot/);

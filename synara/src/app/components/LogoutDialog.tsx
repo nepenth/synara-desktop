@@ -6,7 +6,6 @@ import {
   LOGOUT_RETRY_COPY,
   type LogoutAttemptOutcome,
 } from '../../client/initMatrix';
-import { useMatrixClient } from '../hooks/useMatrixClient';
 import { useCrossSigningActive } from '../hooks/useCrossSigning';
 import { InfoCard } from './info-card';
 import { useDeviceList } from '../hooks/useDeviceList';
@@ -16,19 +15,19 @@ import {
   LAST_DEVICE_LOGOUT_WARNING,
 } from './logoutLastDevice';
 
+import { getNativeRooms, nativeSession } from '../native/nativeSession';
 type LogoutDialogProps = {
   handleClose: () => void;
 };
 export const LogoutDialog = forwardRef<HTMLDivElement, LogoutDialogProps>(
   ({ handleClose }, ref) => {
-    const mx = useMatrixClient();
-    const hasEncryptedRoom = !!mx.getRooms().find((room) => room.hasEncryptionStateEvent());
+    const hasEncryptedRoom = !!getNativeRooms().find((room) => room.hasEncryptionStateEvent());
     const crossSigningActive = useCrossSigningActive();
     const [deviceSnapshot] = useDeviceList();
     const lastSignedInDevice = isLastSignedInDevice(deviceSnapshot) === true;
 
     const [logoutState, logout] = useAsyncCallback<LogoutAttemptOutcome, Error, []>(
-      useCallback(() => attemptLogout(mx), [mx])
+      useCallback(() => attemptLogout(nativeSession()), [])
     );
 
     const ongoingLogout = logoutState.status === AsyncStatus.Loading;

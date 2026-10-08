@@ -1,6 +1,5 @@
 import { atom, useAtom } from 'jotai';
 import { atomFamily } from 'jotai-family';
-import type { MatrixClientReading } from '../utils/room';
 import {
   MatrixError,
   type TUploadContent,
@@ -108,11 +107,7 @@ export const createUploadAtom = (file: TUploadContent) => {
 };
 export type TUploadAtom = ReturnType<typeof createUploadAtom>;
 
-export const useBindUploadAtom = (
-  mx: MatrixClientReading,
-  uploadAtom: TUploadAtom,
-  hideFilename?: boolean
-) => {
+export const useBindUploadAtom = (uploadAtom: TUploadAtom, hideFilename?: boolean) => {
   const [upload, setUpload] = useAtom(uploadAtom);
   const { file } = upload;
 
@@ -123,25 +118,18 @@ export const useBindUploadAtom = (
 
   const startUpload = useCallback(
     () =>
-      uploadContent(mx, file, {
+      uploadContent(file, {
         hideFilename,
         onPromise: (promise: Promise<UploadResponse>) => setUpload({ promise }),
         onProgress: handleProgress,
         onSuccess: (mxc) => setUpload({ mxc }),
         onError: (error) => setUpload({ error }),
       }),
-    [mx, file, hideFilename, setUpload, handleProgress]
+    [file, hideFilename, setUpload, handleProgress]
   );
 
-  const cancelUpload = useCallback(async () => {
-    if (upload.status === UploadStatus.Loading) {
-      await (
-        mx as unknown as {
-          cancelUpload(promise: Promise<UploadResponse>): Promise<void>;
-        }
-      ).cancelUpload(upload.promise);
-    }
-  }, [mx, upload]);
+  // Native uploads run to completion in Core; there is no renderer-side cancel.
+  const cancelUpload = useCallback(async () => undefined, []);
 
   /** Mark a composer file staged for native Rust upload+send (no JS upload). */
   const markNativeStaged = useCallback(() => {

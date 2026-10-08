@@ -1,11 +1,9 @@
-import type { MatrixClientReading, MatrixEventReading } from '../utils/room';
-import { Dispatch, SetStateAction, useCallback, useEffect, useState } from 'react';
+import { Dispatch, SetStateAction, useEffect, useState } from 'react';
 import { AccountDataEvent } from '../../types/matrix/accountData';
-import { useMatrixClient } from './useMatrixClient';
 import { getAccountData, isSpace } from '../utils/room';
 import { Membership } from '../../types/matrix/room';
-import { useAccountDataCallback } from './useAccountDataCallback';
 
+import { getNativeRoom } from '../native/nativeSession';
 export type ISidebarFolder = {
   name?: string;
   id: string;
@@ -19,11 +17,7 @@ export type InSynaraSpacesContent = {
   sidebar?: SidebarItems;
 };
 
-export const parseSidebar = (
-  mx: MatrixClientReading,
-  orphanSpaces: string[],
-  content?: InSynaraSpacesContent
-) => {
+export const parseSidebar = (orphanSpaces: string[], content?: InSynaraSpacesContent) => {
   const sidebar = content?.sidebar ?? content?.shortcut ?? [];
   const orphans = new Set(orphanSpaces);
 
@@ -31,7 +25,7 @@ export const parseSidebar = (
 
   const safeToAdd = (spaceId: string): boolean => {
     if (typeof spaceId !== 'string') return false;
-    const space = mx.getRoom(spaceId);
+    const space = getNativeRoom(spaceId);
     if (space?.getMyMembership() !== Membership.Join) return false;
     return isSpace(space);
   };
@@ -66,36 +60,19 @@ export const parseSidebar = (
 export const useSidebarItems = (
   orphanSpaces: string[]
 ): [SidebarItems, Dispatch<SetStateAction<SidebarItems>>] => {
-  const mx = useMatrixClient();
-
   const [sidebarItems, setSidebarItems] = useState(() => {
     const inSynaraSpacesContent = getAccountData(
-      mx,
       AccountDataEvent.SynaraSpaces
     )?.getContent<InSynaraSpacesContent>();
-    return parseSidebar(mx, orphanSpaces, inSynaraSpacesContent);
+    return parseSidebar(orphanSpaces, inSynaraSpacesContent);
   });
 
   useEffect(() => {
     const inSynaraSpacesContent = getAccountData(
-      mx,
       AccountDataEvent.SynaraSpaces
     )?.getContent<InSynaraSpacesContent>();
-    setSidebarItems(parseSidebar(mx, orphanSpaces, inSynaraSpacesContent));
-  }, [mx, orphanSpaces]);
-
-  useAccountDataCallback(
-    mx,
-    useCallback(
-      (mEvent: MatrixEventReading) => {
-        if (mEvent.getType() === AccountDataEvent.SynaraSpaces) {
-          const newContent = mEvent.getContent<InSynaraSpacesContent>();
-          setSidebarItems(parseSidebar(mx, orphanSpaces, newContent));
-        }
-      },
-      [mx, orphanSpaces]
-    )
-  );
+    setSidebarItems(parseSidebar(orphanSpaces, inSynaraSpacesContent));
+  }, [orphanSpaces]);
 
   return [sidebarItems, setSidebarItems];
 };
@@ -122,12 +99,9 @@ export const sidebarItemWithout = (items: SidebarItems, roomId: string) => {
   return newItems;
 };
 
-export const makeSynaraSpacesContent = (
-  mx: MatrixClientReading,
-  items: SidebarItems
-): InSynaraSpacesContent => {
+export const makeSynaraSpacesContent = (items: SidebarItems): InSynaraSpacesContent => {
   const currentInSpaces =
-    getAccountData(mx, AccountDataEvent.SynaraSpaces)?.getContent<InSynaraSpacesContent>() ?? {};
+    getAccountData(AccountDataEvent.SynaraSpaces)?.getContent<InSynaraSpacesContent>() ?? {};
 
   const newSpacesContent: InSynaraSpacesContent = {
     ...currentInSpaces,

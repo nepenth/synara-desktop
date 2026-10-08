@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import type { DesktopInvokeResult } from '../../../utils/desktop';
-import { isRoom, isSpace } from '../../../utils/room';
+import type { DesktopInvokeResult } from '../../utils/desktop';
+import { isRoom, isSpace } from '../../utils/room';
+import { createNativeSession } from '../nativeSession';
 import {
-  createNativeMatrixClient,
   readinessToSyncState,
   type NativeInvoke,
   type NativeRoomListSnapshot,
-} from '../nativeClientFacade';
+} from '../nativeWire';
 
 const ok = (value: unknown): DesktopInvokeResult<unknown> => ({ available: true, value });
 const unavailable: DesktopInvokeResult<unknown> = { available: false };
@@ -49,7 +49,7 @@ const invokingWith = (routes: Record<string, unknown>) => {
   return { invoke, callLog };
 };
 
-test('readinessToSyncState maps Rust readiness to js-sdk literals', () => {
+test('readinessToSyncState maps Rust readiness to connection states', () => {
   assert.equal(readinessToSyncState('running'), 'PREPARED');
   assert.equal(readinessToSyncState('running', 'open'), 'PREPARED');
   assert.equal(readinessToSyncState('running', 'closed'), 'ERROR');
@@ -122,21 +122,6 @@ test('the iOS connection status tests carry the same shared table', () => {
   assert.deepEqual(rows, SHARED_CONNECTION_STATUS_CASES);
 });
 
-test('mxcUrlToHttp turns a requested size into a native thumbnail', () => {
-  const { invoke } = invokingWith({});
-  const client = createNativeMatrixClient(invoke);
-  assert.equal(client.mxcUrlToHttp('mxc://example.org/a'), 'mxc://example.org/a');
-  assert.equal(
-    client.mxcUrlToHttp('mxc://example.org/a', 48, 48, 'crop'),
-    'thumbnail/48x48/crop/mxc://example.org/a'
-  );
-  assert.equal(
-    client.mxcUrlToHttp('mxc://example.org/a', 320, 240, 'scale'),
-    'thumbnail/320x240/scale/mxc://example.org/a'
-  );
-  assert.equal(client.mxcUrlToHttp('https://example.org/a', 48, 48, 'crop'), null);
-});
-
 test('getSyncState proxies matrix_sync_status and caches PREPARED when running', async () => {
   const { invoke } = invokingWith({
     matrix_sync_status: {
@@ -145,10 +130,10 @@ test('getSyncState proxies matrix_sync_status and caches PREPARED when running',
       offlineModeEnabled: false,
     },
   });
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
   assert.equal(client.getSyncState(), 'PREPARED');
-  assert.equal(client.clientRunning(), true);
+  assert.equal(client.isSyncRunning(), true);
   assert.deepEqual(client.getSyncStateData(), {
     readiness: 'running',
     sessionGeneration: 7,
@@ -175,7 +160,7 @@ test('a closed command gate is ERROR even while readiness is running', async () 
       commandGate: 'closed',
     },
   });
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
   assert.equal(client.hasSignedInSession(), true);
   assert.equal(client.getSyncState(), 'ERROR');
@@ -191,7 +176,7 @@ test('an unknown command gate fails closed and a missing gate stays open', async
       commandGate: 'https://private.example/token',
     },
   });
-  const closedClient = createNativeMatrixClient(closed.invoke);
+  const closedClient = createNativeSession(closed.invoke);
   await closedClient.refresh();
   assert.equal(closedClient.getSyncState(), 'ERROR');
 
@@ -203,7 +188,7 @@ test('an unknown command gate fails closed and a missing gate stays open', async
       offlineModeEnabled: false,
     },
   });
-  const openClient = createNativeMatrixClient(open.invoke);
+  const openClient = createNativeSession(open.invoke);
   await openClient.refresh();
   assert.equal(openClient.getSyncState(), 'PREPARED');
 });
@@ -218,7 +203,7 @@ test('a closed gate without a signed-in session is not connection loss', async (
       commandGate: 'closed',
     },
   });
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
   assert.equal(client.hasSignedInSession(), false);
   assert.notEqual(client.getSyncState(), 'ERROR');
@@ -244,11 +229,11 @@ test('voluntary logout does not paint Connection Lost while native tears down', 
     }
     return unavailable;
   };
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
   assert.equal(client.getSyncState(), 'PREPARED');
   const emitted: unknown[] = [];
-  client.on('sync', (state: unknown) => emitted.push(state));
+  client.subscribe('sync', (state: unknown) => emitted.push(state));
 
   const logout = client.logout();
   assert.equal(client.hasSignedInSession(), false, 'logging out is not a signed-in session');
@@ -278,7 +263,7 @@ test('a failed logout restores the signed-in banner mapping', async () => {
     },
     matrix_logout: { status: 'logged_in' },
   });
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
   await assert.rejects(client.logout(), /did not complete/);
   assert.equal(client.hasSignedInSession(), true);
@@ -286,29 +271,29 @@ test('a failed logout restores the signed-in banner mapping', async () => {
   assert.equal(client.getSyncState(), 'ERROR');
 });
 
-test('stopClient before reload is not a signed-in session', async () => {
+test('stop before reload is not a signed-in session', async () => {
   const { invoke } = invokingWith({
     matrix_session_snapshot: LOGGED_IN_SESSION,
     matrix_sync_status: { readiness: 'running', sessionGeneration: 7, offlineModeEnabled: false },
   });
-  const client = createNativeMatrixClient(invoke);
-  await client.startClient();
+  const client = createNativeSession(invoke);
+  await client.start();
   assert.equal(client.hasSignedInSession(), true);
-  await client.stopClient();
+  await client.stop();
   assert.equal(client.hasSignedInSession(), false);
-  await client.startClient();
+  await client.start();
   assert.equal(client.hasSignedInSession(), true);
 });
 
 test('getSyncState fails closed when the native command is unavailable', async () => {
   const { invoke } = invokingWith({});
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
   assert.equal(client.getSyncState(), null);
-  assert.equal(client.clientRunning(), false);
+  assert.equal(client.isSyncRunning(), false);
 });
 
-test('retryImmediately recovers native sync then refreshes status', async () => {
+test('retrySyncNow recovers native sync then refreshes status', async () => {
   const { invoke, callLog } = invokingWith({
     matrix_sync_recover: {
       readiness: 'running',
@@ -322,13 +307,13 @@ test('retryImmediately recovers native sync then refreshes status', async () => 
     },
     matrix_session_snapshot: { status: 'logged_out' },
   });
-  const client = createNativeMatrixClient(invoke);
-  await client.retryImmediately();
+  const client = createNativeSession(invoke);
+  await client.retrySyncNow();
   assert.equal(callLog[0], 'matrix_sync_recover');
   assert.ok(callLog.includes('matrix_sync_status'));
 });
 
-test('retryImmediately still refreshes status when recover is unavailable', async () => {
+test('retrySyncNow still refreshes status when recover is unavailable', async () => {
   const { invoke, callLog } = invokingWith({
     matrix_sync_status: {
       readiness: 'running',
@@ -337,8 +322,8 @@ test('retryImmediately still refreshes status when recover is unavailable', asyn
     },
     matrix_session_snapshot: { status: 'logged_out' },
   });
-  const client = createNativeMatrixClient(invoke);
-  await client.retryImmediately();
+  const client = createNativeSession(invoke);
+  await client.retrySyncNow();
   assert.equal(callLog[0], 'matrix_sync_recover');
   assert.ok(callLog.includes('matrix_sync_status'));
 });
@@ -353,7 +338,7 @@ test('slidingSyncCapable tri-state: true/false/null propagate through getSyncSta
         ...(capable === null ? {} : { slidingSyncCapable: capable }),
       },
     });
-    const client = createNativeMatrixClient(invoke);
+    const client = createNativeSession(invoke);
     await client.refresh();
     assert.equal(client.getSyncStateData()?.slidingSyncCapable, capable);
   }
@@ -367,25 +352,25 @@ test('slidingSyncCapable absent on the wire yields null (unknown)', async () => 
       offlineModeEnabled: false,
     },
   });
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
   assert.equal(client.getSyncState(), 'STOPPED');
   assert.equal(client.getSyncStateData()?.slidingSyncCapable, null);
 });
 
-test('sync emitter delivers the sync payload to listeners and removeListener detaches', async () => {
+test('sync subscribers receive each state and unsubscribe detaches', async () => {
   const { invoke } = invokingWith({
     matrix_sync_status: { readiness: 'failed', sessionGeneration: 3, offlineModeEnabled: false },
   });
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   const seen: unknown[] = [];
   const listener = (payload: unknown): void => {
     seen.push(payload);
   };
-  client.on('sync', listener);
+  const unsubscribe = client.subscribe('sync', listener);
   await client.refresh();
   assert.deepEqual(seen, ['ERROR']);
-  client.removeListener('sync', listener);
+  unsubscribe();
   await client.refresh();
   assert.deepEqual(seen, ['ERROR']);
 });
@@ -400,37 +385,27 @@ test('identity comes from matrix_session_snapshot (logged_in)', async () => {
       sessionGeneration: 9,
     },
   });
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
-  assert.equal(client.getUserId(), '@alice:example.org');
-  assert.equal(client.getSafeUserId(), '@alice:example.org');
-  assert.equal(client.getDeviceId(), 'DEVICE');
+  assert.equal(client.getIdentity().userId ?? null, '@alice:example.org');
+  assert.equal(client.getIdentity().userId ?? '', '@alice:example.org');
+  assert.equal(client.getIdentity().deviceId, 'DEVICE');
 });
 
 test('identity is empty when the session is logged out', async () => {
   const { invoke } = invokingWith({ matrix_session_snapshot: { status: 'logged_out' } });
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
-  assert.equal(client.getUserId(), null);
-  assert.equal(client.getSafeUserId(), '');
+  assert.equal(client.getIdentity().userId ?? null, null);
+  assert.equal(client.getIdentity().userId ?? '', '');
 });
 
-test('write commands call the native profile commands', async () => {
-  const { invoke } = invokingWith({
-    matrix_set_own_display_name: { status: 'ok' },
-    matrix_set_own_avatar: { status: 'ok' },
-  });
-  const client = createNativeMatrixClient(invoke);
-  assert.deepEqual(await client.setDisplayName('Alice'), { status: 'ok' });
-  assert.deepEqual(await client.setAvatarUrl('mxc://example.org/a'), { status: 'ok' });
-});
-
-test('D1C: the facade exposes NO token surface (renderer cedes custody)', async () => {
-  const client = createNativeMatrixClient(async () => unavailable);
-  const facade = client as unknown as Record<string, unknown>;
-  assert.equal('getAccessToken' in facade, false);
-  assert.equal('setAccessToken' in facade, false);
-  assert.equal('refreshToken' in facade, false);
+test('D1C: the native session exposes no token surface (renderer cedes custody)', async () => {
+  const client = createNativeSession(async () => unavailable);
+  const surface = client as unknown as Record<string, unknown>;
+  assert.equal('getAccessToken' in surface, false);
+  assert.equal('setAccessToken' in surface, false);
+  assert.equal('refreshToken' in surface, false);
 });
 
 test('watchSync emits on readiness change into PREPARED', async () => {
@@ -441,9 +416,9 @@ test('watchSync emits on readiness change into PREPARED', async () => {
     }
     return unavailable;
   };
-  const client = createNativeMatrixClient(invokeDyn);
+  const client = createNativeSession(invokeDyn);
   const seen: unknown[] = [];
-  client.on('sync', (payload) => seen.push(payload));
+  client.subscribe('sync', (payload) => seen.push(payload));
   await new Promise<void>((resolve) => {
     const unwatch = client.watchSync(5);
     setTimeout(() => {
@@ -470,9 +445,9 @@ test('watchSync ignores an in-flight result after disposal', async () => {
       resolveStatus = resolve;
     });
   };
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   const seen: unknown[] = [];
-  client.on('sync', (state) => seen.push(state));
+  client.subscribe('sync', (state) => seen.push(state));
   const unwatch = client.watchSync(10_000);
   await requested;
   unwatch();
@@ -493,7 +468,7 @@ test('watchSync never overlaps a slow native status read', async () => {
       resolveStatus = resolve;
     });
   };
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   const unwatch = client.watchSync(5);
   await new Promise((resolve) => setTimeout(resolve, 25));
   assert.equal(calls, 1);
@@ -502,7 +477,7 @@ test('watchSync never overlaps a slow native status read', async () => {
   resolveStatus(ok({ readiness: 'running', sessionGeneration: 4, offlineModeEnabled: false }));
 });
 
-test('room-list bridge hydrates the facade before atom writes and ClientRoot owns one watcher', () => {
+test('room-list bridge hydrates the session before atom writes and ClientRoot owns one watcher', () => {
   const roomListSource = readFileSync('src/app/state/room-list/roomList.ts', 'utf8');
   const successfulSnapshotStart = roomListSource.indexOf(
     'latestNativeRoomListSnapshot = snapshot;'
@@ -530,7 +505,7 @@ test('room-list bridge hydrates the facade before atom writes and ClientRoot own
   assert.equal(syncHookSource.includes('watchSync'), false);
 });
 
-test('F2 getRooms proxies matrix_room_list_snapshot and maps summaries', async () => {
+test('getRooms reads matrix_room_list_snapshot and maps summaries', async () => {
   const summary = {
     roomId: '!r:example.org',
     name: 'Engineering',
@@ -551,7 +526,7 @@ test('F2 getRooms proxies matrix_room_list_snapshot and maps summaries', async (
   const { invoke } = invokingWith({
     matrix_room_list_snapshot: { sessionGeneration: 8, rooms: [summary] },
   });
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
   const rooms = client.getRooms();
   assert.equal(rooms.length, 1);
@@ -562,7 +537,7 @@ test('F2 getRooms proxies matrix_room_list_snapshot and maps summaries', async (
   assert.equal(rooms[0].getCanonicalAlias(), '#eng:example.org');
 });
 
-test('F2 getRoom finds a single room by id or null', async () => {
+test('getRoom finds a single room by id or null', async () => {
   const { invoke } = invokingWith({
     matrix_room_list_snapshot: {
       sessionGeneration: 8,
@@ -596,26 +571,26 @@ test('F2 getRoom finds a single room by id or null', async () => {
       ],
     },
   });
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
   assert.equal(client.getRoom('!b:example.org')?.name, 'B');
   assert.equal(client.getRoom('!missing:example.org'), null);
 });
 
-test('F2 getRooms fails closed when the command is unavailable', async () => {
-  const client = createNativeMatrixClient(async () => unavailable);
+test('getRooms fails closed when the command is unavailable', async () => {
+  const client = createNativeSession(async () => unavailable);
   await client.refresh();
   assert.deepEqual(client.getRooms(), []);
   assert.equal(client.getRoom('!r:example.org'), null);
 });
 
-test('room-list snapshots update held facade wrappers and clear a valid empty list', async () => {
+test('room-list snapshots update held rooms and clear a valid empty list', async () => {
   let snapshot = roomSnapshot({ name: 'Before', unreadCount: 1 });
   const invoke: NativeInvoke = async (command) => {
     if (command === 'matrix_room_list_snapshot') return ok(snapshot);
     return unavailable;
   };
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
   const heldRoom = client.getRoom('!r:example.org');
   assert.ok(heldRoom);
@@ -635,7 +610,7 @@ test('room-list snapshots update held facade wrappers and clear a valid empty li
 });
 
 test('a native Space summary is classified without a fabricated create event', () => {
-  const client = createNativeMatrixClient(async () => unavailable);
+  const client = createNativeSession(async () => unavailable);
   client.applyRoomListSnapshot(roomSnapshot({ isSpace: true }));
   const space = client.getRoom('!r:example.org');
 
@@ -644,7 +619,7 @@ test('a native Space summary is classified without a fabricated create event', (
   assert.equal(isRoom(space), false);
 });
 
-test('a native logged-out transition clears facade identity once and notifies the session listener', async () => {
+test('a native logged-out transition clears identity once and notifies loggedOut subscribers', async () => {
   let session: unknown = {
     status: 'logged_in',
     user_id: '@alice:example.org',
@@ -657,20 +632,20 @@ test('a native logged-out transition clears facade identity once and notifies th
     if (command === 'matrix_room_list_snapshot') return ok(roomSnapshot());
     return unavailable;
   };
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
-  assert.equal(client.getUserId(), '@alice:example.org');
+  assert.equal(client.getIdentity().userId ?? null, '@alice:example.org');
   assert.ok(client.getRoom('!r:example.org'));
 
   let loggedOutEvents = 0;
-  client.on('Session.logged_out', () => {
+  client.subscribe('loggedOut', () => {
     loggedOutEvents += 1;
   });
   session = { status: 'logged_out' };
   await client.refresh();
 
-  assert.equal(client.getUserId(), null);
-  assert.equal(client.getSafeUserId(), '');
+  assert.equal(client.getIdentity().userId ?? null, null);
+  assert.equal(client.getIdentity().userId ?? '', '');
   assert.deepEqual(client.getRooms(), []);
   assert.equal(loggedOutEvents, 1);
 
@@ -688,12 +663,12 @@ test('an invalid session snapshot preserves a previously hydrated identity', asy
   };
   const invoke: NativeInvoke = async (command) =>
     command === 'matrix_session_snapshot' ? ok(session) : unavailable;
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
   session = { status: 'unexpected' };
   await client.refresh();
 
-  assert.equal(client.getUserId(), '@alice:example.org');
+  assert.equal(client.getIdentity().userId ?? null, '@alice:example.org');
 });
 
 test('a replacement session clears old rooms and rejects a stale-generation snapshot', async () => {
@@ -710,14 +685,14 @@ test('a replacement session clears old rooms and rejects a stale-generation snap
     if (command === 'matrix_room_list_snapshot') return ok(snapshot);
     return unavailable;
   };
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
   assert.ok(client.getRoom('!r:example.org'));
 
   const sessionEvents: unknown[] = [];
   const loggedOutEvents: unknown[] = [];
-  client.on('session', (event) => sessionEvents.push(event));
-  client.on('Session.logged_out', (event) => loggedOutEvents.push(event));
+  client.subscribe('session', (event) => sessionEvents.push(event));
+  client.subscribe('loggedOut', (event) => loggedOutEvents.push(event));
   const replacement = {
     status: 'logged_in' as const,
     userId: '@bob:example.org',
@@ -725,9 +700,9 @@ test('a replacement session clears old rooms and rejects a stale-generation snap
     homeserverUrl: 'https://matrix.example.org',
     sessionGeneration: 9,
   };
-  client.applyNativeSessionSnapshot(replacement);
+  client.applySessionSnapshot(replacement);
 
-  assert.equal(client.getUserId(), '@bob:example.org');
+  assert.equal(client.getIdentity().userId ?? null, '@bob:example.org');
   assert.equal(client.getRoom('!r:example.org'), null);
   assert.deepEqual(sessionEvents, [replacement]);
   assert.deepEqual(loggedOutEvents, []);
@@ -743,7 +718,7 @@ test('a replacement session clears old rooms and rejects a stale-generation snap
   assert.equal(client.getRoom('!r:example.org')?.name, 'Bob room');
 });
 
-test('logout clears the facade identity after the native command succeeds', async () => {
+test('logout clears the identity after the native command succeeds', async () => {
   const { invoke } = invokingWith({
     matrix_session_snapshot: {
       status: 'logged_in',
@@ -754,12 +729,12 @@ test('logout clears the facade identity after the native command succeeds', asyn
     },
     matrix_logout: { status: 'logged_out' },
   });
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
   await client.logout();
 
-  assert.equal(client.getUserId(), null);
-  assert.equal(client.getSafeUserId(), '');
+  assert.equal(client.getIdentity().userId ?? null, null);
+  assert.equal(client.getIdentity().userId ?? '', '');
 });
 
 test('native logout rejects unavailable, malformed, and failed completion without clearing identity', async () => {
@@ -769,7 +744,7 @@ test('native logout rejects unavailable, malformed, and failed completion withou
     ok(undefined),
     new Error('local deletion failed'),
   ]) {
-    const client = createNativeMatrixClient(async (command) => {
+    const client = createNativeSession(async (command) => {
       if (command === 'matrix_logout') {
         if (outcome instanceof Error) throw outcome;
         return outcome;
@@ -786,191 +761,12 @@ test('native logout rejects unavailable, malformed, and failed completion withou
     });
     await client.refresh();
     await assert.rejects(client.logout());
-    assert.equal(client.getUserId(), '@alice:example.org');
-    assert.equal(client.getSafeUserId(), '@alice:example.org');
+    assert.equal(client.getIdentity().userId ?? null, '@alice:example.org');
+    assert.equal(client.getIdentity().userId ?? '', '@alice:example.org');
   }
 });
 
-test('F2 fetchRoomEvent proxies matrix_timeline_event_readback', async () => {
-  const { invoke } = invokingWith({
-    matrix_timeline_event_readback: {
-      sessionGeneration: 8,
-      roomId: '!r:example.org',
-      eventId: '$evt1',
-      item: {
-        itemId: 'i1',
-        eventId: '$evt1',
-        sender: '@alice:example.org',
-        type: 'm.room.message',
-        body: 'hello',
-        originServerTs: 999,
-      },
-    },
-  });
-  const client = createNativeMatrixClient(invoke);
-  const evt = await client.fetchRoomEvent('!r:example.org', '$evt1');
-  assert.equal(evt?.eventId, '$evt1');
-  assert.equal(evt?.sender, '@alice:example.org');
-  assert.equal(evt?.type, 'm.room.message');
-  assert.equal(evt?.body, 'hello');
-});
-
-test('F2 fetchRoomEvent returns null on unavailable command', async () => {
-  const client = createNativeMatrixClient(async () => unavailable);
-  assert.equal(await client.fetchRoomEvent('!r:example.org', '$evt1'), null);
-});
-
-test('F3 sendMessage proxies matrix_send_text', async () => {
-  const { invoke, callLog } = invokingWith({
-    matrix_send_text: {
-      roomId: '!r:example.org',
-      eventId: '$e1',
-      localTxnId: 't1',
-      status: 'sent',
-    },
-  });
-  const client = createNativeMatrixClient(invoke);
-  const sent = await client.sendMessage('!r:example.org', { body: 'hello' });
-  assert.equal(sent?.eventId, '$e1');
-  assert.deepEqual(callLog, ['matrix_send_text']);
-});
-
-test('F3 sendMessage fails closed when the command is unavailable', async () => {
-  const client = createNativeMatrixClient(async () => unavailable);
-  assert.equal(await client.sendMessage('!r:example.org', { body: 'x' }), null);
-});
-
-test('F3 sendEvent tunnels m.room.message to send_text and GAPs other types', async () => {
-  const { invoke } = invokingWith({
-    matrix_send_text: {
-      roomId: '!r:example.org',
-      eventId: '$msg',
-      localTxnId: 't2',
-      status: 'sent',
-    },
-  });
-  const client = createNativeMatrixClient(invoke);
-  const msg = await client.sendEvent('!r:example.org', 'm.room.message', { body: 'hi' });
-  assert.equal(msg?.eventId, '$msg');
-  const gap = await client.sendEvent('!r:example.org', 'm.custom.type', {});
-  assert.equal(gap, null);
-});
-
-test('F3 sendStateEvent maps covered room-state types and leftover native send', async () => {
-  const { invoke, callLog } = invokingWith({
-    matrix_set_room_name: { status: 'ok', roomId: '!r:example.org', sessionGeneration: 8 },
-    matrix_send_state_event: { status: 'ok' },
-  });
-  const client = createNativeMatrixClient(invoke);
-  const name = await client.sendStateEvent('!r:example.org', 'm.room.name', { name: 'New' });
-  assert.equal(name?.status, 'ok');
-  const leftover = await client.sendStateEvent('!r:example.org', 'm.room.canonical_alias', {
-    alias: '#r:example.org',
-  });
-  assert.equal(leftover?.status, 'ok');
-  assert.deepEqual(callLog, ['matrix_set_room_name', 'matrix_send_state_event']);
-});
-
-test('F3 account-data methods are documented GAP (fail-closed)', async () => {
-  const client = createNativeMatrixClient(async () => unavailable);
-  assert.equal(client.getAccountData('m.tag'), undefined);
-  assert.equal(await client.setAccountData('m.tag', {}), null);
-  assert.equal(await client.setRoomAccountData('!r:example.org', 'm.tag', {}), null);
-});
-
-test('F3 D1C still holds: no token surface after send/state additions', async () => {
-  const client = createNativeMatrixClient(async () => unavailable) as unknown as Record<
-    string,
-    unknown
-  >;
-  assert.equal('getAccessToken' in client, false);
-  assert.equal('setAccessToken' in client, false);
-  assert.equal('refreshToken' in client, false);
-});
-
-test('F4 uploadContent proxies matrix_upload_media', async () => {
-  const { invoke, callLog } = invokingWith({
-    matrix_upload_media: { mxc: 'mxc://example.org/up1' },
-  });
-  const client = createNativeMatrixClient(invoke);
-  const uploaded = await client.uploadContent({ mimeType: 'image/png', bytes: [1, 2, 3] });
-  assert.equal(uploaded?.mxc, 'mxc://example.org/up1');
-  assert.deepEqual(callLog, ['matrix_upload_media']);
-});
-
-test('F4 uploadContent throws when unavailable (js-sdk non-null contract)', async () => {
-  const client = createNativeMatrixClient(async () => unavailable);
-  await assert.rejects(() => client.uploadContent({ mimeType: 'x', bytes: [1] }));
-});
-
-test('F4 getMediaConfig reads m.upload.size wire key', async () => {
-  const { invoke } = invokingWith({
-    matrix_media_config: { 'm.upload.size': 10485760 },
-  });
-  const client = createNativeMatrixClient(invoke);
-  assert.deepEqual(await client.getMediaConfig(), { maxUploadSizeBytes: 10485760 });
-});
-
-test('F4 getMediaConfig fails closed (empty) when unavailable', async () => {
-  const client = createNativeMatrixClient(async () => unavailable);
-  assert.deepEqual(await client.getMediaConfig(), {});
-});
-
-test('F4 downloadMedia does not return decrypted file bytes', async () => {
-  const seen: string[] = [];
-  const client = createNativeMatrixClient(async (command) => {
-    seen.push(command);
-    return unavailable;
-  });
-  assert.equal(await client.downloadMedia('mxc://example.org/f1'), null);
-  assert.deepEqual(seen, []);
-});
-
-test('F4 getProfileInfo loads own profile from the native owner', async () => {
-  const { invoke, callLog } = invokingWith({
-    matrix_session_snapshot: {
-      status: 'logged_in',
-      user_id: '@alice:example.org',
-      device_id: 'DEV',
-      homeserver_url: 'https://matrix.example.org',
-      sessionGeneration: 5,
-    },
-    matrix_get_own_profile: {
-      userId: '@alice:example.org',
-      displayName: 'Alice',
-      avatarUrl: 'mxc://example.org/avatar',
-    },
-  });
-  const client = createNativeMatrixClient(invoke);
-  await client.refresh();
-  const profile = await client.getProfileInfo('@alice:example.org');
-  assert.equal(profile.avatar_url, 'mxc://example.org/avatar');
-  assert.equal(profile.displayname, 'Alice');
-  assert.equal(callLog.includes('matrix_get_own_profile'), true);
-});
-
-test('F4 getProfileInfo rejects non-mxc avatars', async () => {
-  const { invoke } = invokingWith({
-    matrix_session_snapshot: {
-      status: 'logged_in',
-      user_id: '@alice:example.org',
-      device_id: 'DEV',
-      homeserver_url: 'https://matrix.example.org',
-      sessionGeneration: 5,
-    },
-    matrix_get_own_profile: {
-      userId: '@alice:example.org',
-      displayName: 'Alice',
-      avatarUrl: 'data:image/png;base64,AAAA',
-    },
-  });
-  const client = createNativeMatrixClient(invoke);
-  await client.refresh();
-  const profile = await client.getProfileInfo('@alice:example.org');
-  assert.equal(profile.avatar_url, undefined);
-  assert.equal(profile.displayname, 'Alice');
-});
-test('F5 getIdentity snapshot preserves userId/deviceId', async () => {
+test('getIdentity preserves userId and deviceId', async () => {
   const { invoke } = invokingWith({
     matrix_session_snapshot: {
       status: 'logged_in',
@@ -980,152 +776,13 @@ test('F5 getIdentity snapshot preserves userId/deviceId', async () => {
       sessionGeneration: 5,
     },
   });
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
   assert.equal(client.getIdentity().userId, '@alice:example.org');
   assert.equal(client.getIdentity().deviceId, 'DEV');
 });
 
-test('F5 getCryptoStatus proxies matrix_crypto_status (no keys, D1C)', async () => {
-  const { invoke, callLog } = invokingWith({
-    matrix_crypto_status: {
-      sessionGeneration: 7,
-      encryptionEnabled: true,
-      crossSigningState: 'Ready',
-    },
-  });
-  const client = createNativeMatrixClient(invoke);
-  const crypto = await client.getCryptoStatus();
-  assert.equal(crypto?.encryptionEnabled, true);
-  assert.equal(crypto?.crossSigningState, 'Ready');
-  assert.equal(callLog[0], 'matrix_crypto_status');
-});
-
-test('F5 getCrypto returns status-backed, key-free reading', async () => {
-  const { invoke } = invokingWith({
-    matrix_crypto_status: {
-      sessionGeneration: 3,
-      encryptionEnabled: true,
-      crossSigningState: 'Ready',
-    },
-  });
-  const client = createNativeMatrixClient(invoke);
-  const crypto = client.getCrypto();
-  assert.equal(await crypto.isCrossSigningReady(), true);
-  assert.equal(await crypto.isEncryptionEnabled(), true);
-  assert.equal(await crypto.getCrossSigningState(), 'Ready');
-});
-
-test('F5 getCryptoStatus fails closed when unavailable', async () => {
-  const client = createNativeMatrixClient(async () => unavailable);
-  assert.equal(await client.getCryptoStatus(), null);
-  const crypto = client.getCrypto();
-  assert.equal(await crypto.isCrossSigningReady(), false);
-});
-
-test('F5 decryptEventIfNeeded is a documented no-op (native events pre-decrypted)', async () => {
-  const client = createNativeMatrixClient(async () => unavailable);
-  await client.decryptEventIfNeeded({ eventId: '$e' });
-  assert.ok(true);
-});
-
-test('F5 downloadKeysForUsers is a D1C-key-free stub', async () => {
-  const client = createNativeMatrixClient(async () => unavailable);
-  assert.deepEqual(await client.downloadKeysForUsers(['@alice:example.org']), {});
-});
-
-test('F5 extended GAP stubs satisfy the anchor without data', async () => {
-  const client = createNativeMatrixClient(async () => unavailable);
-  assert.deepEqual(await client.getCapabilities(), {});
-  assert.equal(await client.getOpenIdToken(), null);
-  assert.equal(await client.search({ body: {}, next_batch: undefined }), null);
-});
-
-test('F6c redactEvent proxies matrix_timeline_redact', async () => {
-  const { invoke, callLog } = invokingWith({
-    matrix_timeline_redact: { event_id: '$evt1', room_id: '!r:example.org' },
-  });
-  const client = createNativeMatrixClient(invoke);
-  const redacted = await client.redactEvent('!r:example.org', '$evt1', 'spam');
-  assert.equal(redacted?.event_id, '$evt1');
-  assert.equal(callLog[0], 'matrix_timeline_redact');
-});
-
-test('F6c redactEvent fails closed when unavailable', async () => {
-  const client = createNativeMatrixClient(async () => unavailable);
-  assert.equal(await client.redactEvent('!r:example.org', '$evt1'), null);
-});
-
-test('F6c GAP-safe stubs (searchUserDirectory, queueToDevice, delayed events)', async () => {
-  const client = createNativeMatrixClient(async () => unavailable);
-  assert.deepEqual(await client.searchUserDirectory({ term: 'term' }), {
-    limited: false,
-    results: [],
-  });
-  assert.deepEqual(await client.searchUserDirectoryFn('term'), {
-    limited: false,
-    results: [],
-  });
-  await client.queueToDevice({ eventType: 'm.test', batch: [] });
-  assert.equal(await client._unstable_sendDelayedEvent('!r', {}, null, 'm.test', {}), null);
-  assert.equal(await client._unstable_sendDelayedStateEvent('!r', {}, 'm.test', {}, '$k'), null);
-  assert.equal(await client._unstable_updateDelayedEvent('$evt', '!r', {}, {}), null);
-  assert.equal(await client.getOpenIdTokenData(), null);
-});
-
-test('searchUserDirectory maps native user-directory hits and omits non-mxc avatars', async () => {
-  const { invoke, callLog } = invokingWith({
-    matrix_user_directory_search: {
-      limited: true,
-      results: [
-        {
-          userId: '@bob:example.org',
-          displayName: 'Bob',
-          avatarUrl: 'mxc://example.org/abc',
-        },
-        {
-          userId: '@eve:example.org',
-          displayName: 'Eve',
-          avatarUrl: 'data:image/png;base64,AAAA',
-        },
-      ],
-    },
-  });
-  const client = createNativeMatrixClient(invoke);
-  const listed = {
-    limited: true,
-    results: [
-      {
-        user_id: '@bob:example.org',
-        display_name: 'Bob',
-        avatar_url: 'mxc://example.org/abc',
-      },
-      {
-        user_id: '@eve:example.org',
-        display_name: 'Eve',
-        avatar_url: undefined,
-      },
-    ],
-  };
-  assert.deepEqual(await client.searchUserDirectory({ term: 'bo', limit: 10 }), listed);
-  assert.equal(callLog[0], 'matrix_user_directory_search');
-  assert.deepEqual(await client.searchUserDirectoryFn('bo'), listed);
-  assert.equal(callLog[1], 'matrix_user_directory_search');
-});
-
-test('F6c crypto reading includes encryptToDeviceMessages no-op', async () => {
-  const client = createNativeMatrixClient(async () => unavailable);
-  const crypto = client.getCrypto();
-  const batch = await crypto.encryptToDeviceMessages(
-    'm.test',
-    [{ userId: '@u:example.org', deviceId: 'D' }],
-    {}
-  );
-  assert.deepEqual(batch, []);
-  assert.ok(true);
-});
-
-test('F6c-2a evented room cache satisfies EventedRoomReading contract', async () => {
+test('native rooms satisfy the EventedRoomReading contract', async () => {
   const { invoke } = invokingWith({
     matrix_room_list_snapshot: {
       sessionGeneration: 8,
@@ -1148,7 +805,7 @@ test('F6c-2a evented room cache satisfies EventedRoomReading contract', async ()
     matrix_sync_status: { readiness: 'Prepared', session_generation: 1, failure: null },
     matrix_session_snapshot: {},
   });
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
   const room = client.getRoom('!r:example.org');
   assert.ok(room);
@@ -1163,30 +820,6 @@ test('F6c-2a evented room cache satisfies EventedRoomReading contract', async ()
   assert.equal(typeof (room?.accountData as { entries?: unknown }).entries, 'function');
 });
 
-test('F6c-2a GAP stub batch (user/pusher/alias/upload/verification)', async () => {
-  const client = createNativeMatrixClient(async () => unavailable);
-  assert.equal(await client.getUser('@u:example.org'), null);
-  assert.equal(await client.getThreePids(), null);
-  assert.equal(await client.getPushers(), null);
-  await client.setPusher({});
-  assert.deepEqual(await client.getLocalAliases('!r'), { aliases: [] });
-  assert.equal(await client.createAlias('#a', '!r'), null);
-  assert.equal(await client.deleteAlias('#a'), null);
-  assert.equal(await client.cancelUpload('tok'), null);
-  assert.equal(await client.getBaseUrl(), null);
-  assert.equal(await client.setRoomReadMarkers('!r', '$e'), null);
-  assert.equal(await client.sendReadReceipt({}), null);
-  assert.equal(await client.getLatestTimeline(undefined), null);
-});
-
-test('F6c-2a crypto reading exposes getOwnDeviceKeys continuity surfaceless stub', async () => {
-  const client = createNativeMatrixClient(async () => unavailable);
-  const crypto = client.getCrypto() as {
-    getOwnDeviceKeys?(): Promise<{ ed25519: string; curve25519: string }>;
-  };
-  assert.ok(!crypto.getOwnDeviceKeys, 'D1C: renderer crypto must not expose own-device keys');
-});
-
 test('confirmed native logout clears identity even when a stopped-sync listener throws', async () => {
   const { invoke } = invokingWith({
     matrix_session_snapshot: {
@@ -1199,13 +832,13 @@ test('confirmed native logout clears identity even when a stopped-sync listener 
     matrix_sync_status: { readiness: 'running', sessionGeneration: 7 },
     matrix_logout: { status: 'logged_out' },
   });
-  const client = createNativeMatrixClient(invoke);
+  const client = createNativeSession(invoke);
   await client.refresh();
   assert.equal(client.getSessionGeneration(), 7);
-  client.on('sync', () => {
+  client.subscribe('sync', () => {
     throw new Error('renderer listener failed');
   });
   await client.logout();
-  assert.equal(client.getSafeUserId(), '');
+  assert.equal(client.getIdentity().userId ?? '', '');
   assert.equal(client.getSessionGeneration(), undefined);
 });

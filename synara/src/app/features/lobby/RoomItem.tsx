@@ -22,7 +22,6 @@ import FocusTrap from 'focus-trap-react';
 import type { RoomReading } from '../../utils/room';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
 import { SequenceCard } from '../../components/sequence-card';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { HierarchyItem, SpaceHierarchyRoom } from '../../hooks/useSpaceHierarchy';
 import { millify } from '../../plugins/millify';
 import { LocalRoomSummaryLoader } from '../../components/RoomSummaryLoader';
@@ -332,7 +331,6 @@ export const RoomItemCard = as<'div', RoomItemCardProps>(
     },
     ref
   ) => {
-    const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
     const { roomId, content } = item;
     const room = getRoom(roomId);
@@ -364,11 +362,7 @@ export const RoomItemCard = as<'div', RoomItemCardProps>(
                   roomType={localSummary.roomType}
                   name={localSummary.name}
                   topic={localSummary.topic}
-                  avatarUrl={
-                    dm
-                      ? getDirectRoomAvatarUrl(mx, room, 96, useAuthentication)
-                      : getRoomAvatarUrl(mx, room, 96, useAuthentication)
-                  }
+                  avatarUrl={dm ? getDirectRoomAvatarUrl(room, 96) : getRoomAvatarUrl(room, 96)}
                   memberCount={localSummary.memberCount}
                   suggested={content.suggested}
                   joinRule={normalizeRoomJoinRulePresentation(localSummary.joinRule)}
@@ -425,7 +419,7 @@ export const RoomItemCard = as<'div', RoomItemCardProps>(
                   topic={summary.topic}
                   avatarUrl={
                     summary?.avatar_url
-                      ? resolveMatrixThumbnailUrl(mx, summary.avatar_url, 96, { useAuthentication })
+                      ? resolveMatrixThumbnailUrl(summary.avatar_url, 96, { useAuthentication })
                       : undefined
                   }
                   memberCount={summary.num_joined_members}

@@ -31,7 +31,6 @@ import {
 import { useTranslation } from 'react-i18next';
 import FocusTrap from 'focus-trap-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { getRoomIconSrc } from '../../utils/room';
 import { factoryRoomIdByAtoZ } from '../../utils/sort';
 import {
@@ -51,6 +50,7 @@ import {
 import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 import * as depthCss from '../../styles/Depth.css';
 
+import { getNativeRoom, getNativeRooms } from '../../native/nativeSession';
 type OrderButtonProps = {
   order?: string;
   onChange: (order?: string) => void;
@@ -144,14 +144,13 @@ type SelectRoomButtonProps = {
   onChange: (rooms?: string[]) => void;
 };
 function SelectRoomButton({ roomList, selectedRooms, onChange }: SelectRoomButtonProps) {
-  const mx = useMatrixClient();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
   const [localSelected, setLocalSelected] = useState(selectedRooms);
 
   const getRoomNameStr: SearchItemStrGetter<string> = useCallback(
-    (rId) => mx.getRoom(rId)?.name ?? rId,
-    [mx]
+    (rId) => getNativeRoom(rId)?.name ?? rId,
+    []
   );
 
   const [searchResult, _searchRoom, resetSearch] = useAsyncSearch(
@@ -159,7 +158,7 @@ function SelectRoomButton({ roomList, selectedRooms, onChange }: SelectRoomButto
     getRoomNameStr,
     SEARCH_OPTS
   );
-  const rooms = Array.from(searchResult?.items ?? roomList).sort(factoryRoomIdByAtoZ(mx));
+  const rooms = Array.from(searchResult?.items ?? roomList).sort(factoryRoomIdByAtoZ());
 
   const virtualizer = useVirtualizer({
     count: rooms.length,
@@ -274,7 +273,7 @@ function SelectRoomButton({ roomList, selectedRooms, onChange }: SelectRoomButto
                   >
                     {vItems.map((vItem) => {
                       const roomId = rooms[vItem.index];
-                      const room = mx.getRoom(roomId);
+                      const room = getNativeRoom(roomId);
                       if (!room) return null;
                       const selected = localSelected?.includes(roomId);
 
@@ -397,7 +396,6 @@ export function SearchFilters({
   onDateRangeChange,
   relevanceOnly,
 }: SearchFiltersProps) {
-  const mx = useMatrixClient();
   const { t } = useTranslation();
   const senderListId = useId();
   const [senderText, setSenderText] = useState(senders?.join(', ') ?? '');
@@ -415,13 +413,13 @@ export function SearchFilters({
 
   const senderSuggestions = useMemo(() => {
     const suggestions = new Set<string>();
-    mx.getRooms().forEach((room) => {
+    getNativeRooms().forEach((room) => {
       room.getMembers().forEach((member) => {
         if (member.userId) suggestions.add(member.userId);
       });
     });
     return Array.from(suggestions).sort().slice(0, 250);
-  }, [mx]);
+  }, []);
 
   const typeFilters = [
     [MessageSearchTypeFilter.All, t('modernization.search.type_all', 'All')],
@@ -483,7 +481,7 @@ export function SearchFilters({
           size="300"
         />
         {selectedRooms?.map((roomId) => {
-          const room = mx.getRoom(roomId);
+          const room = getNativeRoom(roomId);
           if (!room) return null;
 
           return (

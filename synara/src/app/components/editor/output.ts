@@ -1,5 +1,4 @@
 import { Descendant, Editor, Element, Text } from 'slate';
-import type { MatrixClientReading } from '../../utils/room';
 import { sanitizeText } from '../../utils/sanitize';
 import { BlockType } from './types';
 import { CustomElement } from './slate';
@@ -261,11 +260,7 @@ export type MentionsData = {
   room: boolean;
   users: Set<string>;
 };
-export const getMentions = (
-  mx: MatrixClientReading,
-  roomId: string,
-  editor: Editor
-): MentionsData => {
+export const getMentions = (roomId: string, editor: Editor): MentionsData => {
   const mentionData: MentionsData = {
     room: false,
     users: new Set(),

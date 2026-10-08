@@ -1,6 +1,5 @@
 import { ReactNode, useCallback, useEffect } from 'react';
 import { IThumbnailContent } from '../../../../types/matrix/common';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { FALLBACK_MIMETYPE } from '../../../utils/mimeTypes';
@@ -11,7 +10,6 @@ export type ThumbnailContentProps = {
   renderImage: (src: string) => ReactNode;
 };
 export function ThumbnailContent({ info, renderImage }: ThumbnailContentProps) {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
 
   const [thumbSrcState, loadThumbSrc] = useAsyncCallback(
@@ -23,12 +21,12 @@ export function ThumbnailContent({ info, renderImage }: ThumbnailContentProps) {
         throw new Error('Failed to load thumbnail');
       }
 
-      return createMatrixMediaObjectUrl(mx, thumbMxcUrl, {
+      return createMatrixMediaObjectUrl(thumbMxcUrl, {
         useAuthentication,
         mimeType: thumbInfo.mimetype ?? FALLBACK_MIMETYPE,
         encryptedInfo: encInfo,
       });
-    }, [mx, info, useAuthentication])
+    }, [info, useAuthentication])
   );
 
   useEffect(() => {

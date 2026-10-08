@@ -17,7 +17,6 @@ import {
   config,
 } from 'folds';
 import * as css from './ReactionViewer.css';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { Reaction } from '../../../components/message';
 import { getHexcodeForEmoji, getShortcodeFor } from '../../../plugins/emoji';
 import { UserAvatar } from '../../../components/user-avatar';
@@ -67,7 +66,6 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
     ref
   ) => {
     void legacyRelations;
-    const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
     const openProfile = useOpenUserRoomProfile();
     const resolvedRoomId = roomId ?? room?.roomId;
@@ -115,7 +113,6 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
               {reactions.map((reaction) => (
                 <Reaction
                   key={reaction.key}
-                  mx={mx}
                   reaction={reaction.key}
                   count={reaction.count}
                   aria-selected={reaction.key === selectedKey}

@@ -1,5 +1,4 @@
 import { useCallback, useMemo } from 'react';
-import type { MatrixClientReading } from '../utils/room';
 import type { EventedRoomReading } from '../utils/roomEvents';
 import { getPowerLevelTag, PowerLevelTags, usePowerLevelTags } from './usePowerLevelTags';
 import { IPowerLevels, readPowerLevel } from './usePowerLevels';
@@ -39,14 +38,13 @@ export const useGetMemberPowerTag = (
 };
 
 export const getPowerTagIconSrc = (
-  mx: MatrixClientReading,
   useAuthentication: boolean,
   icon: MemberPowerTagIcon
 ): string | undefined => {
   if (!icon?.key?.startsWith('mxc://')) return icon?.key;
 
   try {
-    return resolveMatrixMediaUrl(mx, icon.key, {
+    return resolveMatrixMediaUrl(icon.key, {
       useAuthentication,
       width: 96,
       height: 96,

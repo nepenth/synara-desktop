@@ -4,8 +4,8 @@ import type {
   NativeVerificationDirection,
   NativeVerificationPhase,
   NativeVerificationQr,
+  NativeVerificationSas as WireNativeVerificationSas,
 } from '../matrix-dto/generated';
-import type { NativeVerificationSas as WireNativeVerificationSas } from '../matrix-dto/generated';
 import type { NullsToOptional } from '../matrix-dto/wireTypes';
 
 /** Parsed form of Core's `NativeVerificationSas`: absent instead of `null`. */

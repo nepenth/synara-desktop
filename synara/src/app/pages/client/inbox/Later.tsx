@@ -3,7 +3,6 @@ import { Box, Button, Chip, Icon, IconButton, Icons, Scroll, Text, config, toRem
 import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAtomValue } from 'jotai';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { SynaraLaterItem } from '../../../../types/matrix/accountData';
 import { getSortedLaterItems } from '../../../utils/later';
 import { laterContentAtom } from '../../../state/laterList';
@@ -21,6 +20,7 @@ import { getMemberDisplayName, getThreadRootEventId } from '../../../utils/room'
 import { getMxIdLocalPart } from '../../../utils/matrix';
 import { VirtualTile } from '../../../components/virtualizer';
 
+import { getNativeRoom } from '../../../native/nativeSession';
 const formatDue = (dueTs?: number, now = Date.now()): string | undefined => {
   if (!dueTs) return undefined;
   const due = new Date(dueTs);
@@ -72,11 +72,10 @@ type LaterItemCardProps = {
 
 function LaterItemCard({ item }: LaterItemCardProps) {
   const { t } = useTranslation();
-  const mx = useMatrixClient();
   const { navigateRoom } = useRoomNavigate();
   const [editingDue, setEditingDue] = useState(false);
   const [customDue, setCustomDue] = useState(() => toDateTimeLocal(item.dueTs));
-  const room = mx.getRoom(item.roomId);
+  const room = getNativeRoom(item.roomId);
   const event = room?.findEventById(item.eventId);
   const sender = event?.getSender() ?? undefined;
   const member = sender ? room?.getMember(sender) : undefined;

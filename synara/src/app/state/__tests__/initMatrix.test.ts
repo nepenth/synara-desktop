@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 // Native-boot contract for initClient (Option A + D1C). The renderer ceded
 // token custody and crypto to native; no js-sdk stores/continuity remain.
 import { initClient } from '../../../client/initMatrix';
-import { createNativeMatrixClient } from '../../features/native-client/nativeClientFacade';
+import { createNativeSession } from '../../native/nativeSession';
 import { markPendingFreshLoginIdentity } from '../sessionPersistence';
 import { PENDING_FRESH_LOGIN_IDENTITY_KEY } from '../sessions';
 
@@ -74,7 +74,7 @@ for (const change of [
       homeserverUrl: change === 'homeserver' ? 'https://other.example.org' : freshSession.baseUrl,
       sessionGeneration: change === 'generation' ? 8 : 7,
     };
-    const client = createNativeMatrixClient(async (command) => {
+    const client = createNativeSession(async (command: string) => {
       if (change === 'failed') throw new Error('refresh failed');
       if (command !== 'matrix_session_snapshot' || change === 'unavailable')
         return { available: false };

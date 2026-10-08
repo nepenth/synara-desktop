@@ -13,7 +13,6 @@ import {
   Chip,
 } from 'folds';
 import Linkify from 'linkify-react';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { nameInitials } from '../../utils/common';
 import { BreakWord } from '../../styles/Text.css';
 import { LINKIFY_OPTS } from '../../plugins/react-custom-html-parser';
@@ -52,9 +51,8 @@ type ImagePackProfileProps = {
   onEdit?: () => void;
 };
 export function ImagePackProfile({ meta, canEdit, onEdit }: ImagePackProfileProps) {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
-  const avatarUrl = resolveOptionalMatrixMediaUrl(mx, meta.avatar, { useAuthentication });
+  const avatarUrl = resolveOptionalMatrixMediaUrl(meta.avatar, { useAuthentication });
 
   return (
     <Box gap="400">
@@ -97,11 +95,10 @@ type ImagePackProfileEditProps = {
   onSave: (meta: PackMetaReader) => void;
 };
 export function ImagePackProfileEdit({ meta, onCancel, onSave }: ImagePackProfileEditProps) {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const [avatar, setAvatar] = useState(meta.avatar);
 
-  const avatarUrl = resolveOptionalMatrixMediaUrl(mx, avatar, { useAuthentication });
+  const avatarUrl = resolveOptionalMatrixMediaUrl(avatar, { useAuthentication });
 
   const [imageFile, setImageFile] = useState<File>();
   const avatarFileUrl = useObjectURL(imageFile);

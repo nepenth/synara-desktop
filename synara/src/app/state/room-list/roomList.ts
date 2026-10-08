@@ -197,7 +197,7 @@ export const useBindAllRoomsAtom = (
         if (sameNativeRoomListSnapshot(latestNativeRoomListSnapshot, snapshot)) return;
         latestNativeRoomListSnapshot = snapshot;
         // Hydrate the synchronous facade before either atom setter can schedule
-        // selectors that combine a fresh room id with mx.getRoom().
+        // selectors that combine a fresh room id with getNativeRoom().
         onSnapshot?.(snapshot);
         setSnapshot(snapshot);
         setRooms({ type: 'INITIALIZE', rooms: snapshot.orderedRoomIds });

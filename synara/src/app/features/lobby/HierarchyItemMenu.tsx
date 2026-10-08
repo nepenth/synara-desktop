@@ -16,7 +16,6 @@ import {
   toRem,
 } from 'folds';
 import { HierarchyItem } from '../../hooks/useSpaceHierarchy';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { MSpaceChildContent } from '../../../types/matrix/room';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { removeSpaceChild, setSpaceChild } from './nativeSpaceChild';
@@ -32,6 +31,7 @@ import { getRoomPermissionsAPI } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import * as depthCss from '../../styles/Depth.css';
 
+import { getNativeRoom } from '../../native/nativeSession';
 type HierarchyItemWithParent = HierarchyItem & {
   parentId: string;
 };
@@ -122,8 +122,7 @@ function InviteMenuItem({
   requestClose: () => void;
   disabled?: boolean;
 }) {
-  const mx = useMatrixClient();
-  const room = mx.getRoom(item.roomId);
+  const room = getNativeRoom(item.roomId);
   const [invitePrompt, setInvitePrompt] = useState(false);
 
   const handleInvite = () => {

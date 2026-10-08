@@ -35,7 +35,6 @@ import { Opts as LinkifyOpts } from 'linkifyjs';
 import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { Page, PageContent, PageContentCenter, PageHeader } from '../../../components/page';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { getMxIdLocalPart } from '../../../utils/matrix';
 import { InboxNotificationsPathSearchParams } from '../../paths';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
@@ -117,6 +116,7 @@ import {
   useRoomsNotificationPreferencesContext,
 } from '../../../hooks/useRoomsNotificationPreferences';
 
+import { getNativeRoom } from '../../../native/nativeSession';
 type LoadTimeline = (from?: string) => Promise<void>;
 type SilentReloadTimeline = () => Promise<void>;
 
@@ -244,7 +244,6 @@ function RoomNotificationsGroupComp({
   hour24Clock,
   dateFormatString,
 }: RoomNotificationsGroupProps) {
-  const mx = useMatrixClient();
   const { t } = useTranslation();
   const useAuthentication = useMediaAuthentication();
   const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
@@ -267,19 +266,19 @@ function RoomNotificationsGroupComp({
     () => ({
       ...LINKIFY_OPTS,
       render: factoryRenderLinkifyWithMention((href) =>
-        renderMatrixMention(mx, room.roomId, href, makeMentionCustomProps(mentionClickHandler))
+        renderMatrixMention(room.roomId, href, makeMentionCustomProps(mentionClickHandler))
       ),
     }),
-    [mx, room, mentionClickHandler]
+    [room, mentionClickHandler]
   );
   const htmlReactParserOptions = useMemo<HTMLReactParserOptions>(
     () =>
-      getReactCustomHtmlParser(mx, room.roomId, {
+      getReactCustomHtmlParser(room.roomId, {
         linkifyOpts,
         useAuthentication,
         handleMentionClick: mentionClickHandler,
       }),
-    [mx, room, linkifyOpts, mentionClickHandler, useAuthentication]
+    [room, linkifyOpts, mentionClickHandler, useAuthentication]
   );
 
   const renderMatrixEvent = useMatrixEventRenderer<
@@ -440,7 +439,7 @@ function RoomNotificationsGroupComp({
     onOpen(room.roomId, eventId);
   };
   const handleMarkAsRead = () => {
-    markAsReadFromExplicitUserActionInBackground(mx, room.roomId);
+    markAsReadFromExplicitUserActionInBackground(room.roomId);
   };
 
   return (
@@ -450,7 +449,7 @@ function RoomNotificationsGroupComp({
           <Avatar size="200" radii="300">
             <RoomAvatar
               roomId={room.roomId}
-              src={getRoomAvatarUrl(mx, room, 96, useAuthentication)}
+              src={getRoomAvatarUrl(room, 96)}
               alt={room.name}
               renderFallback={() => (
                 <RoomIcon
@@ -513,7 +512,7 @@ function RoomNotificationsGroupComp({
             ? accessibleTagColors?.get(memberPowerTag.color)
             : undefined;
           const tagIconSrc = memberPowerTag?.icon
-            ? getPowerTagIconSrc(mx, useAuthentication, memberPowerTag.icon)
+            ? getPowerTagIconSrc(useAuthentication, memberPowerTag.icon)
             : undefined;
 
           const usernameColor = legacyUsernameColor ? colorMXID(event.sender) : tagColor;
@@ -533,7 +532,7 @@ function RoomNotificationsGroupComp({
                         userId={event.sender}
                         src={
                           senderAvatarMxc
-                            ? resolveMatrixThumbnailUrl(mx, senderAvatarMxc, 48, {
+                            ? resolveMatrixThumbnailUrl(senderAvatarMxc, 48, {
                                 useAuthentication,
                               })
                             : undefined
@@ -606,7 +605,6 @@ const useNotificationsSearchParams = (
 const DEFAULT_REFRESH_MS = 7000;
 
 export function Notifications() {
-  const mx = useMatrixClient();
   const { t } = useTranslation();
   const [mediaAutoLoad] = useSetting(settingsAtom, 'mediaAutoLoad');
   const [legacyUsernameColor] = useSetting(settingsAtom, 'legacyUsernameColor');
@@ -643,12 +641,10 @@ export function Notifications() {
   const [markVisibleState, markVisibleRead] = useAsyncCallback(
     useCallback(async () => {
       await Promise.all(
-        notificationTimeline.groups.map((group) =>
-          markAsReadFromExplicitUserAction(mx, group.roomId)
-        )
+        notificationTimeline.groups.map((group) => markAsReadFromExplicitUserAction(group.roomId))
       );
       await silentReloadTimeline();
-    }, [mx, notificationTimeline.groups, silentReloadTimeline])
+    }, [notificationTimeline.groups, silentReloadTimeline])
   );
 
   const getGroupKey = useCallback(
@@ -790,7 +786,7 @@ export function Notifications() {
                   {vItems.map((vItem) => {
                     const group = notificationTimeline.groups[vItem.index];
                     if (!group) return null;
-                    const groupRoom = mx.getRoom(group.roomId);
+                    const groupRoom = getNativeRoom(group.roomId);
                     if (!groupRoom) return null;
 
                     return (

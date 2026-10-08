@@ -1,5 +1,4 @@
 import { getAccountData } from '../utils/room';
-import type { MatrixClientReading } from '../utils/room';
 import { IEmoji, emojis } from './emoji';
 import { AccountDataEvent } from '../../types/matrix/accountData';
 
@@ -10,8 +9,8 @@ export type IRecentEmojiContent = {
   recent_emoji?: [EmojiUnicode, EmojiUsageCount][];
 };
 
-export const getRecentEmojis = (mx: MatrixClientReading, limit?: number): IEmoji[] => {
-  const recentEmojiEvent = getAccountData(mx, AccountDataEvent.ElementRecentEmoji);
+export const getRecentEmojis = (limit?: number): IEmoji[] => {
+  const recentEmojiEvent = getAccountData(AccountDataEvent.ElementRecentEmoji);
   const recentEmoji = recentEmojiEvent?.getContent<IRecentEmojiContent>().recent_emoji;
   if (!Array.isArray(recentEmoji)) return [];
 
@@ -25,31 +24,10 @@ export const getRecentEmojis = (mx: MatrixClientReading, limit?: number): IEmoji
     }, []);
 };
 
-export function addRecentEmoji(mx: MatrixClientReading, unicode: string) {
-  const recentEmojiEvent = getAccountData(mx, AccountDataEvent.ElementRecentEmoji);
-  const recentEmojiContent = recentEmojiEvent?.getContent<IRecentEmojiContent>();
-  const recentEmoji =
-    recentEmojiContent && Array.isArray(recentEmojiContent.recent_emoji)
-      ? structuredClone(recentEmojiContent.recent_emoji)
-      : [];
-
-  const emojiIndex = recentEmoji.findIndex(([u]) => u === unicode);
-  let entry: [EmojiUnicode, EmojiUsageCount];
-  if (emojiIndex < 0) {
-    entry = [unicode, 1];
-  } else {
-    [entry] = recentEmoji.splice(emojiIndex, 1);
-    entry[1] += 1;
-  }
-  recentEmoji.unshift(entry);
-  (
-    mx as unknown as {
-      setAccountData(eventType: string, content: unknown): Promise<object>;
-    }
-  ).setAccountData(
-    AccountDataEvent.ElementRecentEmoji as any,
-    {
-      recent_emoji: recentEmoji.slice(0, 100),
-    } as any
-  );
+/**
+ * Record an emoji use. Recent emoji is account data, which has no native write
+ * command, so nothing is recorded yet.
+ */
+export function addRecentEmoji(unicode: string): void {
+  void unicode;
 }

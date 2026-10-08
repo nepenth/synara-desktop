@@ -10,7 +10,6 @@ import React, {
   useState,
 } from 'react';
 import { HTMLReactParserOptions, attributesToProps, domToReact } from 'html-react-parser';
-import type { MatrixClientReading } from '../utils/room';
 import classNames from 'classnames';
 import { Box, Chip, config, Header, Icon, IconButton, Icons, Scroll, Text, toRem } from 'folds';
 import { IntermediateRepresentation, Opts as LinkifyOpts, OptFn } from 'linkifyjs';
@@ -41,6 +40,7 @@ import { isDesktopPlatform, openPlatformExternalUrl } from '../platform';
 import { MatrixColorSpan, MatrixColorSurface } from '../components/message/MatrixColorSpan';
 import { getMyUserId } from '../state/nativeIdentity';
 
+import { getNativeRoom } from '../native/nativeSession';
 const ReactPrism = lazy(() => import('./react-prism/ReactPrism'));
 const PRISM_CHAR_LIMIT = 50_000;
 
@@ -97,14 +97,13 @@ export const makeMentionCustomProps = (
 });
 
 export const renderMatrixMention = (
-  mx: MatrixClientReading,
   currentRoomId: string | undefined,
   href: string,
   customProps: ComponentPropsWithoutRef<'a'>
 ) => {
   const userId = parseMatrixToUser(href);
   if (userId) {
-    const currentRoom = mx.getRoom(currentRoomId ?? '');
+    const currentRoom = getNativeRoom(currentRoomId ?? '');
 
     return (
       <a
@@ -123,10 +122,8 @@ export const renderMatrixMention = (
   const matrixToRoom = parseMatrixToRoom(href);
   if (matrixToRoom) {
     const { roomIdOrAlias, viaServers } = matrixToRoom;
-    const mentionRoom = mx.getRoom(
-      isRoomAlias(roomIdOrAlias)
-        ? (getCanonicalAliasRoomId(mx, roomIdOrAlias) ?? '')
-        : roomIdOrAlias
+    const mentionRoom = getNativeRoom(
+      isRoomAlias(roomIdOrAlias) ? (getCanonicalAliasRoomId(roomIdOrAlias) ?? '') : roomIdOrAlias
     );
 
     const fallbackContent = mentionRoom ? `#${mentionRoom.name}` : roomIdOrAlias;
@@ -149,10 +146,8 @@ export const renderMatrixMention = (
   const matrixToRoomEvent = parseMatrixToRoomEvent(href);
   if (matrixToRoomEvent) {
     const { roomIdOrAlias, eventId, viaServers } = matrixToRoomEvent;
-    const mentionRoom = mx.getRoom(
-      isRoomAlias(roomIdOrAlias)
-        ? (getCanonicalAliasRoomId(mx, roomIdOrAlias) ?? '')
-        : roomIdOrAlias
+    const mentionRoom = getNativeRoom(
+      isRoomAlias(roomIdOrAlias) ? (getCanonicalAliasRoomId(roomIdOrAlias) ?? '') : roomIdOrAlias
     );
 
     return (
@@ -426,7 +421,6 @@ function CompatibilitySpoiler({
 }
 
 export const getReactCustomHtmlParser = (
-  mx: MatrixClientReading,
   roomId: string | undefined,
   params: {
     linkifyOpts: LinkifyOpts;
@@ -585,7 +579,6 @@ export const getReactCustomHtmlParser = (
             : children.map((c) => (isText(c) ? c.data : '')).join();
 
           const mention = renderMatrixMention(
-            mx,
             roomId,
             tryDecodeURIComponent(typeof props.href === 'string' ? props.href : ''),
             makeMentionCustomProps(params.handleMentionClick, content)
@@ -627,7 +620,6 @@ export const getReactCustomHtmlParser = (
 
         if (name === 'img') {
           const htmlSrc = mxcUrlToHttp(
-            mx,
             typeof props.src === 'string' ? props.src : '',
             params.useAuthentication
           );

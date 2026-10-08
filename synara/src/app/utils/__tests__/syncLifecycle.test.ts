@@ -176,7 +176,7 @@ test('a short hide is consumed so a later focus cannot reuse a stale duration', 
 
 test('desktop wake path restarts native sync instead of only rereading status', () => {
   const clientRoot = readFileSync('src/app/pages/client/ClientRoot.tsx', 'utf8');
-  const facade = readFileSync('src/app/features/native-client/nativeClientFacade.ts', 'utf8');
+  const session = readFileSync('src/app/native/nativeSession.ts', 'utf8');
   const product = readFileSync('../src-tauri/src/matrix/auth/product.rs', 'utf8');
   const lib = readFileSync('../src-tauri/src/lib.rs', 'utf8');
   // The recover gate and its wall-clock cooldown live in the shared Core owner.
@@ -188,8 +188,8 @@ test('desktop wake path restarts native sync instead of only rereading status', 
   assert.match(clientRoot, /shouldRecoverSyncOnWake/);
   assert.match(clientRoot, /consumeHiddenDurationMs/);
   assert.match(clientRoot, /scheduleRetry\('online'\)/);
-  assert.match(facade, /matrix_sync_recover/);
-  assert.match(facade, /await invoke\('matrix_sync_recover'\)/);
+  assert.match(session, /matrix_sync_recover/);
+  assert.match(session, /await invoke\('matrix_sync_recover'\)/);
   assert.match(product, /spawn_suspend_resume_watch/);
   assert.match(product, /suspend_detected/);
   assert.match(product, /self\.recover_live\(/);

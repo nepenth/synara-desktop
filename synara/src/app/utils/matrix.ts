@@ -1,9 +1,11 @@
 import to from 'await-to-js';
-import { type MatrixClientReading, type MatrixEventReading, type RoomReading } from './room';
+import { type MatrixEventReading, type RoomReading } from './room';
 import { IImageInfo, IVideoInfo } from '../../types/matrix/common';
 import { getStateEvent } from './room';
 import { Membership, StateEvent } from '../../types/matrix/room';
 
+import { getNativeRoom, getNativeRooms } from '../native/nativeSession';
+import { mxcUrlToNative, uploadNativeMedia } from '../native/nativeCommands';
 export type UploadProgress = {
   loaded: number;
   total?: number;
@@ -77,24 +79,19 @@ export const isRoomId = (id: string): boolean => id.startsWith('!');
 
 export const isRoomAlias = (id: string): boolean => validMxId(id) && id.startsWith('#');
 
-export const getCanonicalAliasRoomId = (
-  mx: MatrixClientReading,
-  alias: string
-): string | undefined =>
-  mx
-    .getRooms()
-    ?.find(
-      (room) =>
-        (room as DMRoomReading).getCanonicalAlias() === alias &&
-        getStateEvent(room, StateEvent.RoomTombstone) === undefined
-    )?.roomId;
+export const getCanonicalAliasRoomId = (alias: string): string | undefined =>
+  getNativeRooms()?.find(
+    (room) =>
+      (room as DMRoomReading).getCanonicalAlias() === alias &&
+      getStateEvent(room, StateEvent.RoomTombstone) === undefined
+  )?.roomId;
 
-export const getCanonicalAliasOrRoomId = (mx: MatrixClientReading, roomId: string): string => {
-  const room = mx.getRoom(roomId);
+export const getCanonicalAliasOrRoomId = (roomId: string): string => {
+  const room = getNativeRoom(roomId);
   if (!room) return roomId;
   if (getStateEvent(room, StateEvent.RoomTombstone) !== undefined) return roomId;
   const alias = (room as DMRoomReading).getCanonicalAlias();
-  if (alias && getCanonicalAliasRoomId(mx, alias) === roomId) {
+  if (alias && getCanonicalAliasRoomId(alias) === roomId) {
     return alias;
   }
   return roomId;
@@ -131,30 +128,11 @@ export type ContentUploadOptions = {
   onError: (error: MatrixError) => void;
 };
 
-export const uploadContent = async (
-  mx: MatrixClientReading,
-  file: TUploadContent,
-  options: ContentUploadOptions
-) => {
-  const { name, fileType, hideFilename, onProgress, onPromise, onSuccess, onError } = options;
-
-  const uploadClient = mx as unknown as {
-    uploadContent(
-      file: TUploadContent,
-      opts: {
-        name?: string;
-        type?: string;
-        includeFilename?: boolean;
-        progressHandler?: (progress: UploadProgress) => void;
-      }
-    ): Promise<UploadResponse>;
-  };
-  const uploadPromise = uploadClient.uploadContent(file, {
-    name,
-    type: fileType,
-    includeFilename: !hideFilename,
-    progressHandler: onProgress,
-  });
+export const uploadContent = async (file: TUploadContent, options: ContentUploadOptions) => {
+  // Native upload reads the file itself; name, type and progress options have
+  // no native counterpart.
+  const { onPromise, onSuccess, onError } = options;
+  const uploadPromise: Promise<UploadResponse> = uploadNativeMedia(file);
   onPromise?.(uploadPromise);
   try {
     const data = await uploadPromise;
@@ -177,15 +155,13 @@ export const factoryEventSentBy = (senderId: string) => (ev: MatrixEventReading)
 export const eventWithShortcode = (ev: MatrixEventReading) =>
   typeof ev.getContent().shortcode === 'string';
 
-export const getDMRoomFor = (mx: MatrixClientReading, userId: string): RoomReading | undefined => {
-  const dmLikeRooms = mx
-    .getRooms()
-    .filter(
-      (room) =>
-        room.getMyMembership() === Membership.Join &&
-        (room as DMRoomReading).hasEncryptionStateEvent() &&
-        room.getMembers().length <= 2
-    );
+export const getDMRoomFor = (userId: string): RoomReading | undefined => {
+  const dmLikeRooms = getNativeRooms().filter(
+    (room) =>
+      room.getMyMembership() === Membership.Join &&
+      (room as DMRoomReading).hasEncryptionStateEvent() &&
+      room.getMembers().length <= 2
+  );
 
   return dmLikeRooms.find((room) => room.getMember(userId));
 };
@@ -227,24 +203,12 @@ export const guessDmRoomUserId = (room: RoomReading, myUserId: string): string =
 };
 
 export const mxcUrlToHttp = (
-  mx: MatrixClientReading,
   mxcUrl: string,
-  useAuthentication?: boolean,
+  _useAuthentication?: boolean,
   width?: number,
   height?: number,
-  resizeMethod?: string,
-  allowDirectLinks?: boolean,
-  allowRedirects?: boolean
-): string | null =>
-  mx.mxcUrlToHttp(
-    mxcUrl,
-    width,
-    height,
-    resizeMethod,
-    allowDirectLinks,
-    allowRedirects,
-    useAuthentication
-  );
+  resizeMethod?: string
+): string | null => mxcUrlToNative(mxcUrl, width, height, resizeMethod);
 
 export const downloadMedia = async (src: string): Promise<Blob> => {
   const res = await fetch(src, { method: 'GET' });

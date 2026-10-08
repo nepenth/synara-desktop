@@ -1,15 +1,13 @@
 import { ReactNode, useCallback, useEffect } from 'react';
 import { AsyncStatus, useAsyncCallback } from '../hooks/useAsyncCallback';
-import { useMatrixClient } from '../hooks/useMatrixClient';
 import { MediaConfig } from '../hooks/useMediaConfig';
 
+import { getNativeMediaConfig } from '../native/nativeCommands';
 type MediaConfigLoaderProps = {
   children: (mediaConfig: MediaConfig | undefined) => ReactNode;
 };
 export function MediaConfigLoader({ children }: MediaConfigLoaderProps) {
-  const mx = useMatrixClient();
-
-  const [state, load] = useAsyncCallback(useCallback(() => mx.getMediaConfig(), [mx]));
+  const [state, load] = useAsyncCallback(useCallback(() => getNativeMediaConfig(), []));
 
   useEffect(() => {
     load();

@@ -11,7 +11,6 @@ import {
   replaceWithElement,
 } from '../../components/editor';
 import { UseAsyncSearchOptions, useAsyncSearch } from '../../hooks/useAsyncSearch';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useKeyDown } from '../../hooks/useKeyDown';
 import { onTabPress } from '../../utils/keyboard';
 
@@ -36,8 +35,7 @@ export function CommandAutocomplete({
   query,
   requestClose,
 }: CommandAutocompleteProps) {
-  const mx = useMatrixClient();
-  const commands = useCommands(mx, room as unknown as Parameters<typeof useCommands>[1]);
+  const commands = useCommands(room as unknown as Parameters<typeof useCommands>[0]);
   const commandNames = useMemo(() => Object.keys(commands) as Command[], [commands]);
 
   const [result, search, resetSearch] = useAsyncSearch(

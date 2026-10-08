@@ -29,7 +29,6 @@ import { mDirectAtom } from '../../../state/mDirectList';
 import { BreakWord, LineClamp3 } from '../../../styles/Text.css';
 import { LINKIFY_OPTS } from '../../../plugins/react-custom-html-parser';
 import { RoomAvatar, RoomIcon } from '../../../components/room-avatar';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { StateEvent } from '../../../../types/matrix/room';
 import { CompactUploadCardRenderer } from '../../../components/upload-card';
@@ -43,6 +42,7 @@ import { resolveMatrixThumbnailUrl, resolveOptionalMatrixMediaUrl } from '../../
 import { setRoomAvatarNative, setRoomNameNative, setRoomTopicNative } from './nativeRoomProfile';
 import { normalizeRoomJoinRulePresentation } from '../../matrix-dto/roomJoinRule';
 
+import { sendNativeStateEvent } from '../../../native/nativeCommands';
 type RoomProfileEditProps = {
   canEditAvatar: boolean;
   canEditName: boolean;
@@ -62,14 +62,13 @@ export function RoomProfileEdit({
   onClose,
 }: RoomProfileEditProps) {
   const room = useRoom();
-  const mx = useMatrixClient();
   const alive = useAlive();
   const useAuthentication = useMediaAuthentication();
   const joinRule = useRoomJoinRule(room);
   const joinRulePresentation = normalizeRoomJoinRulePresentation(joinRule?.join_rule);
   const [roomAvatar, setRoomAvatar] = useState(avatar);
 
-  const avatarUrl = resolveOptionalMatrixMediaUrl(mx, roomAvatar, { useAuthentication });
+  const avatarUrl = resolveOptionalMatrixMediaUrl(roomAvatar, { useAuthentication });
 
   const [imageFile, setImageFile] = useState<File>();
   const avatarFileUrl = useObjectURL(imageFile);
@@ -94,12 +93,12 @@ export function RoomProfileEdit({
     useCallback(
       async (roomAvatarMxc?: string | null, roomName?: string, roomTopic?: string) => {
         // R-ROOM-PROFILE: native room name/topic/avatar writes are fail-closed
-        // on desktop. The JS mx.sendStateEvent paths are only for non-native web.
+        // on desktop. There is no renderer fallback.
         if (roomAvatarMxc !== undefined) {
           const mxc = roomAvatarMxc || '';
           const result = await setRoomAvatarNative(room.roomId, mxc);
           if (result === 'legacy') {
-            await mx.sendStateEvent(room.roomId, StateEvent.RoomAvatar as any, {
+            await sendNativeStateEvent(room.roomId, StateEvent.RoomAvatar as any, {
               url: roomAvatarMxc,
             });
           }
@@ -107,17 +106,19 @@ export function RoomProfileEdit({
         if (roomName !== undefined) {
           const result = await setRoomNameNative(room.roomId, roomName);
           if (result === 'legacy') {
-            await mx.sendStateEvent(room.roomId, StateEvent.RoomName as any, { name: roomName });
+            await sendNativeStateEvent(room.roomId, StateEvent.RoomName as any, { name: roomName });
           }
         }
         if (roomTopic !== undefined) {
           const result = await setRoomTopicNative(room.roomId, roomTopic);
           if (result === 'legacy') {
-            await mx.sendStateEvent(room.roomId, StateEvent.RoomTopic as any, { topic: roomTopic });
+            await sendNativeStateEvent(room.roomId, StateEvent.RoomTopic as any, {
+              topic: roomTopic,
+            });
           }
         }
       },
-      [mx, room.roomId]
+      [room.roomId]
     )
   );
   const submitting = submitState.status === AsyncStatus.Loading;
@@ -277,7 +278,6 @@ type RoomProfileProps = {
   permissions: RoomPermissionsAPI;
 };
 export function RoomProfile({ permissions }: RoomProfileProps) {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const room = useRoom();
   const directs = useAtomValue(mDirectAtom);
@@ -294,7 +294,7 @@ export function RoomProfile({ permissions }: RoomProfileProps) {
   const canEdit = canEditAvatar || canEditName || canEditTopic;
 
   const avatarUrl = avatar
-    ? resolveMatrixThumbnailUrl(mx, avatar, 96, { useAuthentication })
+    ? resolveMatrixThumbnailUrl(avatar, 96, { useAuthentication })
     : undefined;
 
   const [edit, setEdit] = useState(false);
