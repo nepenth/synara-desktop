@@ -136,6 +136,7 @@ pub(super) async fn typing_set(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn matrix_typing_set(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixTypingSetRequest = serde_json::from_value(request.payload)
@@ -166,6 +167,7 @@ pub(super) async fn typing_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_typing_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -196,6 +198,7 @@ pub(super) async fn presence_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_presence_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -225,6 +228,7 @@ pub(super) async fn presence_subscribe(
     Ok(subscription)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_presence_subscribe(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -254,6 +258,7 @@ pub(super) async fn presence_unsubscribe(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn matrix_presence_unsubscribe(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -282,6 +287,7 @@ pub(super) async fn presence_set(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_presence_set(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -307,6 +313,7 @@ pub(super) async fn rtc_transports_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_rtc_transports_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -335,6 +342,7 @@ pub(super) async fn rtc_transports_refresh(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_rtc_transports_refresh(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -367,6 +375,7 @@ pub(super) async fn user_status_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_user_status_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -396,6 +405,7 @@ pub(super) async fn user_status_set(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_user_status_set(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -422,6 +432,7 @@ pub(super) async fn user_status_clear(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_user_status_clear(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -456,6 +467,7 @@ pub(super) async fn widgets_list(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_widgets_list(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -498,6 +510,7 @@ pub(super) async fn widget_open(
     Ok(opened)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_widget_open(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixWidgetOpenRequest = serde_json::from_value(request.payload)
@@ -524,6 +537,7 @@ pub(super) async fn widget_close(
     Ok(closed)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_widget_close(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -557,6 +571,7 @@ pub(super) async fn widget_post(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn matrix_widget_post(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixWidgetPostRequest = serde_json::from_value(request.payload)
@@ -582,6 +597,7 @@ pub(super) async fn widget_subscribe(
     Ok(sessions)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_widget_subscribe(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -650,4 +666,63 @@ pub(super) fn widget_owner_error(diagnostic_id: &'static str) -> MatrixIpcError 
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+/// Registers this domain's JSON adapters with the test-only command registry.
+#[cfg(test)]
+pub(super) fn register_commands(registry: &mut CommandRegistry) {
+    registry
+        .register("matrix_typing_snapshot", matrix_typing_snapshot)
+        .expect("built-in matrix_typing_snapshot must remain in the command census");
+    registry
+        .register("matrix_presence_set", matrix_presence_set)
+        .expect("built-in matrix_presence_set must remain in the command census");
+    registry
+        .register("matrix_presence_snapshot", matrix_presence_snapshot)
+        .expect("built-in matrix_presence_snapshot must remain in the command census");
+    registry
+        .register("matrix_presence_subscribe", matrix_presence_subscribe)
+        .expect("built-in matrix_presence_subscribe must remain in the command census");
+    registry
+        .register("matrix_presence_unsubscribe", matrix_presence_unsubscribe)
+        .expect("built-in matrix_presence_unsubscribe must remain in the command census");
+    registry
+        .register(
+            "matrix_rtc_transports_refresh",
+            matrix_rtc_transports_refresh,
+        )
+        .expect("built-in matrix_rtc_transports_refresh must remain in the command census");
+    registry
+        .register(
+            "matrix_rtc_transports_snapshot",
+            matrix_rtc_transports_snapshot,
+        )
+        .expect("built-in matrix_rtc_transports_snapshot must remain in the command census");
+    registry
+        .register("matrix_widgets_list", matrix_widgets_list)
+        .expect("built-in matrix_widgets_list must remain in the command census");
+    registry
+        .register("matrix_widget_open", matrix_widget_open)
+        .expect("built-in matrix_widget_open must remain in the command census");
+    registry
+        .register("matrix_widget_close", matrix_widget_close)
+        .expect("built-in matrix_widget_close must remain in the command census");
+    registry
+        .register("matrix_widget_post", matrix_widget_post)
+        .expect("built-in matrix_widget_post must remain in the command census");
+    registry
+        .register("matrix_widget_subscribe", matrix_widget_subscribe)
+        .expect("built-in matrix_widget_subscribe must remain in the command census");
+    registry
+        .register("matrix_user_status_clear", matrix_user_status_clear)
+        .expect("built-in matrix_user_status_clear must remain in the command census");
+    registry
+        .register("matrix_user_status_set", matrix_user_status_set)
+        .expect("built-in matrix_user_status_set must remain in the command census");
+    registry
+        .register("matrix_user_status_snapshot", matrix_user_status_snapshot)
+        .expect("built-in matrix_user_status_snapshot must remain in the command census");
+    registry
+        .register("matrix_typing_set", matrix_typing_set)
+        .expect("built-in matrix_typing_set must remain in the command census");
 }

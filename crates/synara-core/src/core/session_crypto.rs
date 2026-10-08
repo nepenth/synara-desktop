@@ -601,6 +601,7 @@ pub(super) async fn verification_list(
     Ok(inbox)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_verification_list(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -631,6 +632,7 @@ pub(super) async fn verification_accept(
     Ok(request)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_verification_accept(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -675,6 +677,7 @@ pub(super) async fn verification_begin_sas(
     Ok(request)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_verification_begin_sas(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -704,6 +707,7 @@ pub(super) async fn verification_cancel(
     Ok(request)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_verification_cancel(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -733,6 +737,7 @@ pub(super) async fn verification_confirm(
     Ok(request)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_verification_confirm(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -762,6 +767,7 @@ pub(super) async fn verification_dismiss(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn matrix_verification_dismiss(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -790,6 +796,7 @@ pub(super) async fn verification_mismatch(
     Ok(request)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_verification_mismatch(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -819,6 +826,7 @@ pub(super) async fn verification_start(
     Ok(request)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_verification_start(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -847,6 +855,7 @@ pub(super) async fn backup_status(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_backup_status(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -888,6 +897,7 @@ pub(super) async fn room_key_transfer_status(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_key_transfer_status(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -919,6 +929,7 @@ pub(super) async fn cross_signing_setup(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_cross_signing_setup(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -957,6 +968,7 @@ pub(super) async fn device_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_device_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -987,6 +999,7 @@ pub(super) async fn device_rename(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_device_rename(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1016,6 +1029,7 @@ pub(super) async fn device_delete_start(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_device_delete_start(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1044,6 +1058,7 @@ pub(super) async fn device_delete_cancel(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn matrix_device_delete_cancel(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1079,6 +1094,7 @@ pub(super) fn device_snapshot_owner_error(diagnostic_id: &'static str) -> Matrix
 }
 
 /// Typed `matrix_session_snapshot`.
+#[cfg(test)]
 pub(super) async fn session_snapshot(
     state: &Arc<CoreState>,
 ) -> Result<MatrixSessionSnapshot, MatrixIpcError> {
@@ -1086,6 +1102,7 @@ pub(super) async fn session_snapshot(
     Ok(response)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_session_snapshot(
     state: Arc<CoreState>,
     _request: CommandEnvelope,
@@ -1169,6 +1186,7 @@ pub(super) fn public_sync_status(
 /// its registry entry and exact wire serialization; the Platform remains the
 /// sole owner of the live SDK client from which it reads the safe projection.
 /// Typed `matrix_sync_status`.
+#[cfg(test)]
 pub(super) async fn sync_status(
     state: &Arc<CoreState>,
 ) -> Result<SyncReadinessSnapshot, MatrixIpcError> {
@@ -1176,6 +1194,7 @@ pub(super) async fn sync_status(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_sync_status(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         if !request.payload.is_null() {
@@ -1191,6 +1210,7 @@ pub(super) fn matrix_sync_status(state: Arc<CoreState>, request: CommandEnvelope
 /// owns its registry entry, validation, and exact wire serialization; the
 /// Platform remains the sole owner of the live SDK crypto observation.
 /// Typed `matrix_crypto_status`.
+#[cfg(test)]
 pub(super) async fn crypto_status(
     state: &Arc<CoreState>,
 ) -> Result<MatrixCryptoStatus, MatrixIpcError> {
@@ -1198,6 +1218,7 @@ pub(super) async fn crypto_status(
     Ok(response)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_crypto_status(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1229,6 +1250,7 @@ pub(super) async fn cross_signing_status(
     Ok(response)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_cross_signing_status(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1293,6 +1315,7 @@ pub(super) async fn secret_storage_status(
     Ok(response)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_secret_storage_status(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1350,6 +1373,7 @@ pub(super) async fn login_flows(
     Ok(response)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_login_flows(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixLoginFlowsRequest = serde_json::from_value(request.payload)
@@ -1374,6 +1398,7 @@ pub(super) async fn register_flows(
     Ok(response)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_register_flows(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1401,4 +1426,81 @@ pub(super) fn auth_transport_error(error: AuthError) -> MatrixIpcError {
         transport = transport.with_retry_after_ms(retry_after_ms);
     }
     transport
+}
+
+/// Registers this domain's JSON adapters with the test-only command registry.
+#[cfg(test)]
+pub(super) fn register_commands(registry: &mut CommandRegistry) {
+    registry
+        .register("matrix_session_snapshot", matrix_session_snapshot)
+        .expect("built-in matrix_session_snapshot must remain in the command census");
+    registry
+        .register("matrix_sync_status", matrix_sync_status)
+        .expect("built-in matrix_sync_status must remain in the command census");
+    registry
+        .register("matrix_crypto_status", matrix_crypto_status)
+        .expect("built-in matrix_crypto_status must remain in the command census");
+    registry
+        .register("matrix_cross_signing_status", matrix_cross_signing_status)
+        .expect("built-in matrix_cross_signing_status must remain in the command census");
+    registry
+        .register("matrix_cross_signing_setup", matrix_cross_signing_setup)
+        .expect("built-in matrix_cross_signing_setup must remain in the command census");
+    registry
+        .register("matrix_secret_storage_status", matrix_secret_storage_status)
+        .expect("built-in matrix_secret_storage_status must remain in the command census");
+    registry
+        .register("matrix_backup_status", matrix_backup_status)
+        .expect("built-in matrix_backup_status must remain in the command census");
+    registry
+        .register(
+            "matrix_room_key_transfer_status",
+            matrix_room_key_transfer_status,
+        )
+        .expect("built-in matrix_room_key_transfer_status must remain in the command census");
+    registry
+        .register("matrix_login_flows", matrix_login_flows)
+        .expect("built-in matrix_login_flows must remain in the command census");
+    registry
+        .register("matrix_register_flows", matrix_register_flows)
+        .expect("built-in matrix_register_flows must remain in the command census");
+    registry
+        .register("matrix_verification_accept", matrix_verification_accept)
+        .expect("built-in matrix_verification_accept must remain in the command census");
+    registry
+        .register(
+            "matrix_verification_begin_sas",
+            matrix_verification_begin_sas,
+        )
+        .expect("built-in matrix_verification_begin_sas must remain in the command census");
+    registry
+        .register("matrix_verification_cancel", matrix_verification_cancel)
+        .expect("built-in matrix_verification_cancel must remain in the command census");
+    registry
+        .register("matrix_verification_confirm", matrix_verification_confirm)
+        .expect("built-in matrix_verification_confirm must remain in the command census");
+    registry
+        .register("matrix_verification_dismiss", matrix_verification_dismiss)
+        .expect("built-in matrix_verification_dismiss must remain in the command census");
+    registry
+        .register("matrix_verification_list", matrix_verification_list)
+        .expect("built-in matrix_verification_list must remain in the command census");
+    registry
+        .register("matrix_verification_mismatch", matrix_verification_mismatch)
+        .expect("built-in matrix_verification_mismatch must remain in the command census");
+    registry
+        .register("matrix_verification_start", matrix_verification_start)
+        .expect("built-in matrix_verification_start must remain in the command census");
+    registry
+        .register("matrix_device_snapshot", matrix_device_snapshot)
+        .expect("built-in matrix_device_snapshot must remain in the command census");
+    registry
+        .register("matrix_device_rename", matrix_device_rename)
+        .expect("built-in matrix_device_rename must remain in the command census");
+    registry
+        .register("matrix_device_delete_start", matrix_device_delete_start)
+        .expect("built-in matrix_device_delete_start must remain in the command census");
+    registry
+        .register("matrix_device_delete_cancel", matrix_device_delete_cancel)
+        .expect("built-in matrix_device_delete_cancel must remain in the command census");
 }

@@ -214,6 +214,7 @@ pub(super) async fn room_list_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_list_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -247,6 +248,7 @@ pub(super) async fn invites_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_invites_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -277,6 +279,7 @@ pub(super) async fn invites_accept(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_invites_accept(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -306,6 +309,7 @@ pub(super) async fn invites_decline(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_invites_decline(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -335,6 +339,7 @@ pub(super) async fn invites_report_spam(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_invites_report_spam(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -364,6 +369,7 @@ pub(super) async fn invites_block_sender(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_invites_block_sender(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -456,6 +462,7 @@ pub(super) async fn room_join_rule_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_join_rule_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -489,6 +496,7 @@ pub(super) async fn room_set_join_rule(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_set_join_rule(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -518,6 +526,7 @@ pub(super) async fn room_leave(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_leave(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixRoomLeaveRequest = serde_json::from_value(request.payload)
@@ -543,6 +552,7 @@ pub(super) async fn room_join(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_join(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixRoomJoinRequest = serde_json::from_value(request.payload)
@@ -568,6 +578,7 @@ pub(super) async fn room_set_favorite(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_set_favorite(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -596,6 +607,7 @@ pub(super) async fn room_set_read_state(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_set_read_state(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -649,6 +661,7 @@ pub(super) async fn room_invite(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_invite(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixRoomModerationRequest = serde_json::from_value(request.payload)
@@ -674,6 +687,7 @@ pub(super) async fn room_kick(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_kick(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixRoomModerationRequest = serde_json::from_value(request.payload)
@@ -699,6 +713,7 @@ pub(super) async fn room_ban(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_ban(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixRoomModerationRequest = serde_json::from_value(request.payload)
@@ -724,6 +739,7 @@ pub(super) async fn room_unban(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_unban(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixRoomUnbanRequest = serde_json::from_value(request.payload)
@@ -749,6 +765,7 @@ pub(super) async fn room_create(
     Ok(room_id)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_create(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixRoomCreateRequest = serde_json::from_value(request.payload)
@@ -775,6 +792,7 @@ pub(super) async fn room_members_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_members_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -804,6 +822,7 @@ pub(super) async fn room_power_levels_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_power_levels_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -833,6 +852,7 @@ pub(super) async fn room_creators_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_creators_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -862,6 +882,7 @@ pub(super) async fn room_power_level_tags_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_power_level_tags_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -920,6 +941,7 @@ pub(super) async fn space_parents_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_space_parents_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -952,6 +974,7 @@ pub(super) async fn space_hierarchy_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_space_hierarchy_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -980,6 +1003,7 @@ pub(super) async fn space_children_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_space_children_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1018,6 +1042,7 @@ pub(super) async fn space_child_set(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_space_child_set(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1047,6 +1072,7 @@ pub(super) async fn space_child_remove(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_space_child_remove(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1080,6 +1106,7 @@ pub(super) async fn restricted_join_reparent(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_restricted_join_reparent(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1137,6 +1164,7 @@ pub(super) async fn room_set_power_level(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_set_power_level(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1169,6 +1197,7 @@ pub(super) async fn room_set_power_levels(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_set_power_levels(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1202,6 +1231,7 @@ pub(super) async fn room_set_power_level_tags(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_set_power_level_tags(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1255,6 +1285,7 @@ pub(super) async fn set_room_name(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_set_room_name(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1284,6 +1315,7 @@ pub(super) async fn set_room_topic(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_set_room_topic(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1313,6 +1345,7 @@ pub(super) async fn set_room_avatar(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_set_room_avatar(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1347,6 +1380,7 @@ pub(super) async fn send_state_event(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_send_state_event(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1376,6 +1410,7 @@ pub(super) async fn enable_room_encrypted_state(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_enable_room_encrypted_state(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1409,6 +1444,7 @@ pub(super) fn set_encrypted_state_events_setting(
     }
 }
 
+#[cfg(test)]
 pub(super) fn matrix_set_encrypted_state_events_setting(
     _state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1440,6 +1476,7 @@ pub(super) async fn room_retention(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_retention(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1554,4 +1591,155 @@ pub(super) fn join_rule_snapshot_owner_error(diagnostic_id: &'static str) -> Mat
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+/// Registers this domain's JSON adapters with the test-only command registry.
+#[cfg(test)]
+pub(super) fn register_commands(registry: &mut CommandRegistry) {
+    registry
+        .register("matrix_room_list_snapshot", matrix_room_list_snapshot)
+        .expect("built-in matrix_room_list_snapshot must remain in the command census");
+    registry
+        .register("matrix_invites_accept", matrix_invites_accept)
+        .expect("built-in matrix_invites_accept must remain in the command census");
+    registry
+        .register("matrix_invites_block_sender", matrix_invites_block_sender)
+        .expect("built-in matrix_invites_block_sender must remain in the command census");
+    registry
+        .register("matrix_invites_decline", matrix_invites_decline)
+        .expect("built-in matrix_invites_decline must remain in the command census");
+    registry
+        .register("matrix_invites_report_spam", matrix_invites_report_spam)
+        .expect("built-in matrix_invites_report_spam must remain in the command census");
+    registry
+        .register("matrix_invites_snapshot", matrix_invites_snapshot)
+        .expect("built-in matrix_invites_snapshot must remain in the command census");
+    registry
+        .register(
+            "matrix_space_parents_snapshot",
+            matrix_space_parents_snapshot,
+        )
+        .expect("built-in matrix_space_parents_snapshot must remain in the command census");
+    registry
+        .register(
+            "matrix_space_hierarchy_snapshot",
+            matrix_space_hierarchy_snapshot,
+        )
+        .expect("built-in matrix_space_hierarchy_snapshot must remain in the command census");
+    registry
+        .register(
+            "matrix_space_children_snapshot",
+            matrix_space_children_snapshot,
+        )
+        .expect("built-in matrix_space_children_snapshot must remain in the command census");
+    registry
+        .register("matrix_space_child_set", matrix_space_child_set)
+        .expect("built-in matrix_space_child_set must remain in the command census");
+    registry
+        .register("matrix_space_child_remove", matrix_space_child_remove)
+        .expect("built-in matrix_space_child_remove must remain in the command census");
+    registry
+        .register(
+            "matrix_restricted_join_reparent",
+            matrix_restricted_join_reparent,
+        )
+        .expect("built-in matrix_restricted_join_reparent must remain in the command census");
+    registry
+        .register(
+            "matrix_enable_room_encrypted_state",
+            matrix_enable_room_encrypted_state,
+        )
+        .expect("built-in matrix_enable_room_encrypted_state must remain in the command census");
+    registry
+        .register(
+            "matrix_room_join_rule_snapshot",
+            matrix_room_join_rule_snapshot,
+        )
+        .expect("built-in matrix_room_join_rule_snapshot must remain in the command census");
+    registry
+        .register("matrix_room_set_join_rule", matrix_room_set_join_rule)
+        .expect("built-in matrix_room_set_join_rule must remain in the command census");
+    registry
+        .register("matrix_room_leave", matrix_room_leave)
+        .expect("built-in matrix_room_leave must remain in the command census");
+    registry
+        .register("matrix_room_join", matrix_room_join)
+        .expect("built-in matrix_room_join must remain in the command census");
+    registry
+        .register("matrix_room_set_favorite", matrix_room_set_favorite)
+        .expect("built-in matrix_room_set_favorite must remain in the command census");
+    registry
+        .register("matrix_room_set_read_state", matrix_room_set_read_state)
+        .expect("built-in matrix_room_set_read_state must remain in the command census");
+    registry
+        .register("matrix_room_invite", matrix_room_invite)
+        .expect("built-in matrix_room_invite must remain in the command census");
+    registry
+        .register("matrix_room_kick", matrix_room_kick)
+        .expect("built-in matrix_room_kick must remain in the command census");
+    registry
+        .register("matrix_room_ban", matrix_room_ban)
+        .expect("built-in matrix_room_ban must remain in the command census");
+    registry
+        .register("matrix_room_create", matrix_room_create)
+        .expect("built-in matrix_room_create must remain in the command census");
+    registry
+        .register("matrix_room_members_snapshot", matrix_room_members_snapshot)
+        .expect("built-in matrix_room_members_snapshot must remain in the command census");
+    registry
+        .register(
+            "matrix_room_power_levels_snapshot",
+            matrix_room_power_levels_snapshot,
+        )
+        .expect("built-in matrix_room_power_levels_snapshot must remain in the command census");
+    registry
+        .register("matrix_room_retention", matrix_room_retention)
+        .expect("built-in matrix_room_retention must remain in the command census");
+    registry
+        .register(
+            "matrix_room_creators_snapshot",
+            matrix_room_creators_snapshot,
+        )
+        .expect("built-in matrix_room_creators_snapshot must remain in the command census");
+    registry
+        .register(
+            "matrix_room_power_level_tags_snapshot",
+            matrix_room_power_level_tags_snapshot,
+        )
+        .expect("built-in matrix_room_power_level_tags_snapshot must remain in the command census");
+    registry
+        .register("matrix_room_unban", matrix_room_unban)
+        .expect("built-in matrix_room_unban must remain in the command census");
+    registry
+        .register("matrix_room_set_power_level", matrix_room_set_power_level)
+        .expect("built-in matrix_room_set_power_level must remain in the command census");
+    registry
+        .register("matrix_room_set_power_levels", matrix_room_set_power_levels)
+        .expect("built-in matrix_room_set_power_levels must remain in the command census");
+    registry
+        .register(
+            "matrix_room_set_power_level_tags",
+            matrix_room_set_power_level_tags,
+        )
+        .expect("built-in matrix_room_set_power_level_tags must remain in the command census");
+    registry
+        .register("matrix_set_room_name", matrix_set_room_name)
+        .expect("built-in matrix_set_room_name must remain in the command census");
+    registry
+        .register("matrix_set_room_topic", matrix_set_room_topic)
+        .expect("built-in matrix_set_room_topic must remain in the command census");
+    registry
+        .register("matrix_set_room_avatar", matrix_set_room_avatar)
+        .expect("built-in matrix_set_room_avatar must remain in the command census");
+    registry
+        .register("matrix_send_state_event", matrix_send_state_event)
+        .expect("built-in matrix_send_state_event must remain in the command census");
+    registry
+        .register(
+            "matrix_set_encrypted_state_events_setting",
+            matrix_set_encrypted_state_events_setting,
+        )
+        .expect(
+            "built-in matrix_set_encrypted_state_events_setting must remain in the command census",
+        );
 }

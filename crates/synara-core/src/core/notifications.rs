@@ -76,6 +76,7 @@ pub(super) async fn push_rules_snapshot(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_push_rules_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -106,6 +107,7 @@ pub(super) async fn push_rules_set_default(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_push_rules_set_default(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -135,6 +137,7 @@ pub(super) async fn push_rules_set_mention(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_push_rules_set_mention(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -164,6 +167,7 @@ pub(super) async fn push_rules_add_keyword(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_push_rules_add_keyword(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -193,6 +197,7 @@ pub(super) async fn push_rules_remove_keyword(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_push_rules_remove_keyword(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -222,6 +227,7 @@ pub(super) async fn room_notification_snapshot(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_notification_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -251,6 +257,7 @@ pub(super) async fn room_notification_set(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_notification_set(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -287,6 +294,7 @@ pub(super) async fn inbox_notifications(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_inbox_notifications(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -316,6 +324,7 @@ pub(super) async fn room_notifications_snapshot(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_notifications_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -382,6 +391,7 @@ pub(super) async fn notification_focus_set(
     })
 }
 
+#[cfg(test)]
 pub(super) fn matrix_notification_focus_set(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -422,6 +432,7 @@ pub(super) async fn notification_decide(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_notification_decide(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -457,6 +468,7 @@ pub(super) async fn notification_dismiss(
     })
 }
 
+#[cfg(test)]
 pub(super) fn matrix_notification_dismiss(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -489,6 +501,7 @@ pub(super) async fn notification_pending_snapshot(
     })
 }
 
+#[cfg(test)]
 pub(super) fn matrix_notification_pending_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -542,6 +555,7 @@ pub(super) async fn agent_notification_preferences_snapshot(
     Ok(preferences)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_agent_notification_preferences_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -580,6 +594,7 @@ pub(super) async fn agent_notification_preferences_set(
     Ok(preferences)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_agent_notification_preferences_set(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -591,4 +606,84 @@ pub(super) fn matrix_agent_notification_preferences_set(
         serde_json::to_value(response)
             .map_err(|_| agent_preferences_error("agent-notification-preferences-invalid"))
     })
+}
+
+/// Registers this domain's JSON adapters with the test-only command registry.
+#[cfg(test)]
+pub(super) fn register_commands(registry: &mut CommandRegistry) {
+    registry
+        .register("matrix_inbox_notifications", matrix_inbox_notifications)
+        .expect("built-in matrix_inbox_notifications must remain in the command census");
+    registry
+        .register(
+            "matrix_agent_notification_preferences_snapshot",
+            matrix_agent_notification_preferences_snapshot,
+        )
+        .expect("agent preferences snapshot census");
+    registry
+        .register(
+            "matrix_agent_notification_preferences_set",
+            matrix_agent_notification_preferences_set,
+        )
+        .expect("agent preferences set census");
+    registry
+        .register("matrix_push_rules_snapshot", matrix_push_rules_snapshot)
+        .expect("built-in matrix_push_rules_snapshot must remain in the command census");
+    registry
+        .register(
+            "matrix_push_rules_set_default",
+            matrix_push_rules_set_default,
+        )
+        .expect("built-in matrix_push_rules_set_default must remain in the command census");
+    registry
+        .register(
+            "matrix_push_rules_set_mention",
+            matrix_push_rules_set_mention,
+        )
+        .expect("built-in matrix_push_rules_set_mention must remain in the command census");
+    registry
+        .register(
+            "matrix_push_rules_add_keyword",
+            matrix_push_rules_add_keyword,
+        )
+        .expect("built-in matrix_push_rules_add_keyword must remain in the command census");
+    registry
+        .register(
+            "matrix_push_rules_remove_keyword",
+            matrix_push_rules_remove_keyword,
+        )
+        .expect("built-in matrix_push_rules_remove_keyword must remain in the command census");
+    registry
+        .register(
+            "matrix_room_notification_snapshot",
+            matrix_room_notification_snapshot,
+        )
+        .expect("built-in matrix_room_notification_snapshot must remain in the command census");
+    registry
+        .register("matrix_room_notification_set", matrix_room_notification_set)
+        .expect("built-in matrix_room_notification_set must remain in the command census");
+    registry
+        .register(
+            "matrix_room_notifications_snapshot",
+            matrix_room_notifications_snapshot,
+        )
+        .expect("built-in matrix_room_notifications_snapshot must remain in the command census");
+    registry
+        .register("matrix_notification_decide", matrix_notification_decide)
+        .expect("built-in matrix_notification_decide must remain in the command census");
+    registry
+        .register("matrix_notification_dismiss", matrix_notification_dismiss)
+        .expect("built-in matrix_notification_dismiss must remain in the command census");
+    registry
+        .register(
+            "matrix_notification_focus_set",
+            matrix_notification_focus_set,
+        )
+        .expect("built-in matrix_notification_focus_set must remain in the command census");
+    registry
+        .register(
+            "matrix_notification_pending_snapshot",
+            matrix_notification_pending_snapshot,
+        )
+        .expect("built-in matrix_notification_pending_snapshot must remain in the command census");
 }

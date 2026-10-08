@@ -317,6 +317,7 @@ pub(super) async fn timeline_close(
     Ok(closed)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_close(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -356,6 +357,7 @@ pub(super) async fn timeline_open(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_open(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -387,6 +389,7 @@ pub(super) async fn timeline_jump_latest(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_jump_latest(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -416,6 +419,7 @@ pub(super) async fn timeline_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -445,6 +449,7 @@ pub(super) async fn timeline_retry_decryption(
     Ok(requested)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_retry_decryption(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -488,6 +493,7 @@ pub(super) async fn timeline_event_readback(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_event_readback(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -531,6 +537,7 @@ pub(super) async fn timeline_timestamp_to_event(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_timestamp_to_event(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -577,6 +584,7 @@ pub(super) async fn timeline_paginate(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_paginate(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -630,6 +638,7 @@ pub(super) async fn timeline_set_read_state(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_set_read_state(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -662,6 +671,7 @@ pub(super) async fn timeline_follow_live(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_follow_live(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -691,6 +701,7 @@ pub(super) async fn timeline_reaction_toggle(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_reaction_toggle(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -720,6 +731,7 @@ pub(super) async fn reaction_ensure(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_reaction_ensure(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -759,6 +771,7 @@ pub(super) async fn agent_approvals_list(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_agent_approvals_list(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -794,6 +807,7 @@ pub(super) async fn agent_approval_decide(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_agent_approval_decide(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -829,6 +843,7 @@ pub(super) async fn reaction_redact(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_reaction_redact(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -879,6 +894,7 @@ pub(super) async fn send_text(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_send_text(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixSendTextRequest = serde_json::from_value(request.payload)
@@ -929,6 +945,7 @@ pub(super) async fn local_echo_discard(
     })
 }
 
+#[cfg(test)]
 pub(super) fn matrix_local_echo_discard(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -963,6 +980,7 @@ pub(super) async fn local_echo_retry(
     })
 }
 
+#[cfg(test)]
 pub(super) fn matrix_local_echo_retry(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1047,6 +1065,7 @@ pub(super) async fn send_poll(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_send_poll(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixSendPollRequest = serde_json::from_value(request.payload)
@@ -1073,6 +1092,7 @@ pub(super) async fn poll_respond(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_poll_respond(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1111,6 +1131,7 @@ pub(super) async fn edit_message(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_edit_message(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1145,6 +1166,7 @@ pub(super) async fn timeline_edit_text(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_edit_text(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1178,6 +1200,7 @@ pub(super) async fn timeline_redact(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_redact(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1211,6 +1234,7 @@ pub(super) async fn timeline_report(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_report(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1240,6 +1264,7 @@ pub(super) async fn timeline_pin(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_pin(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1269,6 +1294,7 @@ pub(super) async fn timeline_unpin(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_unpin(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1298,6 +1324,7 @@ pub(super) async fn pinned_events(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_pinned_events(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1327,6 +1354,7 @@ pub(super) async fn timeline_poll_vote(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_poll_vote(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1356,6 +1384,7 @@ pub(super) async fn timeline_call_decline(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_call_decline(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1391,6 +1420,7 @@ pub(super) async fn timeline_forward_text(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_forward_text(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1425,6 +1455,7 @@ pub(super) async fn timeline_forward_media(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_timeline_forward_media(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1454,6 +1485,7 @@ pub(super) async fn composer_set_reply_draft(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_composer_set_reply_draft(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1488,6 +1520,7 @@ pub(super) async fn composer_clear_reply_draft(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_composer_clear_reply_draft(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1517,6 +1550,7 @@ pub(super) async fn composer_get_reply_draft(
     Ok(readback)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_composer_get_reply_draft(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1550,6 +1584,7 @@ pub(super) async fn thread_list(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_thread_list(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixThreadListRequest = serde_json::from_value(request.payload)
@@ -1614,4 +1649,141 @@ pub(super) fn timeline_action_owner_error(diagnostic_id: &'static str) -> Matrix
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+/// Registers this domain's JSON adapters with the test-only command registry.
+#[cfg(test)]
+pub(super) fn register_commands(registry: &mut CommandRegistry) {
+    registry
+        .register("matrix_send_text", matrix_send_text)
+        .expect("built-in matrix_send_text must remain in the command census");
+    registry
+        .register("matrix_local_echo_discard", matrix_local_echo_discard)
+        .expect("built-in matrix_local_echo_discard must remain in the command census");
+    registry
+        .register("matrix_local_echo_retry", matrix_local_echo_retry)
+        .expect("built-in matrix_local_echo_retry must remain in the command census");
+    registry
+        .register("matrix_send_poll", matrix_send_poll)
+        .expect("built-in matrix_send_poll must remain in the command census");
+    registry
+        .register("matrix_poll_respond", matrix_poll_respond)
+        .expect("built-in matrix_poll_respond must remain in the command census");
+    registry
+        .register("matrix_edit_message", matrix_edit_message)
+        .expect("built-in matrix_edit_message must remain in the command census");
+    registry
+        .register("matrix_agent_approval_decide", matrix_agent_approval_decide)
+        .expect("built-in matrix_agent_approval_decide must remain in the command census");
+    registry
+        .register("matrix_agent_approvals_list", matrix_agent_approvals_list)
+        .expect("built-in matrix_agent_approvals_list must remain in the command census");
+    registry
+        .register("matrix_timeline_close", matrix_timeline_close)
+        .expect("built-in matrix_timeline_close must remain in the command census");
+    registry
+        .register("matrix_timeline_open", matrix_timeline_open)
+        .expect("built-in matrix_timeline_open must remain in the command census");
+    registry
+        .register(
+            "matrix_timeline_retry_decryption",
+            matrix_timeline_retry_decryption,
+        )
+        .expect("built-in matrix_timeline_retry_decryption must remain in the command census");
+    registry
+        .register("matrix_timeline_snapshot", matrix_timeline_snapshot)
+        .expect("built-in matrix_timeline_snapshot must remain in the command census");
+    registry
+        .register("matrix_timeline_jump_latest", matrix_timeline_jump_latest)
+        .expect("built-in matrix_timeline_jump_latest must remain in the command census");
+    registry
+        .register(
+            "matrix_timeline_event_readback",
+            matrix_timeline_event_readback,
+        )
+        .expect("built-in matrix_timeline_event_readback must remain in the command census");
+    registry
+        .register(
+            "matrix_timeline_timestamp_to_event",
+            matrix_timeline_timestamp_to_event,
+        )
+        .expect("built-in matrix_timeline_timestamp_to_event must remain in the command census");
+    registry
+        .register("matrix_timeline_paginate", matrix_timeline_paginate)
+        .expect("built-in matrix_timeline_paginate must remain in the command census");
+    registry
+        .register("matrix_timeline_follow_live", matrix_timeline_follow_live)
+        .expect("built-in matrix_timeline_follow_live must remain in the command census");
+    registry
+        .register(
+            "matrix_timeline_reaction_toggle",
+            matrix_timeline_reaction_toggle,
+        )
+        .expect("built-in matrix_timeline_reaction_toggle must remain in the command census");
+    registry
+        .register(
+            "matrix_timeline_set_read_state",
+            matrix_timeline_set_read_state,
+        )
+        .expect("built-in matrix_timeline_set_read_state must remain in the command census");
+    registry
+        .register("matrix_reaction_ensure", matrix_reaction_ensure)
+        .expect("built-in matrix_reaction_ensure must remain in the command census");
+    registry
+        .register("matrix_reaction_redact", matrix_reaction_redact)
+        .expect("built-in matrix_reaction_redact must remain in the command census");
+    registry
+        .register("matrix_timeline_edit_text", matrix_timeline_edit_text)
+        .expect("built-in matrix_timeline_edit_text must remain in the command census");
+    registry
+        .register("matrix_timeline_redact", matrix_timeline_redact)
+        .expect("built-in matrix_timeline_redact must remain in the command census");
+    registry
+        .register("matrix_timeline_report", matrix_timeline_report)
+        .expect("built-in matrix_timeline_report must remain in the command census");
+    registry
+        .register("matrix_timeline_pin", matrix_timeline_pin)
+        .expect("built-in matrix_timeline_pin must remain in the command census");
+    registry
+        .register("matrix_timeline_unpin", matrix_timeline_unpin)
+        .expect("built-in matrix_timeline_unpin must remain in the command census");
+    registry
+        .register("matrix_pinned_events", matrix_pinned_events)
+        .expect("built-in matrix_pinned_events must remain in the command census");
+    registry
+        .register("matrix_timeline_poll_vote", matrix_timeline_poll_vote)
+        .expect("built-in matrix_timeline_poll_vote must remain in the command census");
+    registry
+        .register("matrix_timeline_call_decline", matrix_timeline_call_decline)
+        .expect("built-in matrix_timeline_call_decline must remain in the command census");
+    registry
+        .register("matrix_timeline_forward_text", matrix_timeline_forward_text)
+        .expect("built-in matrix_timeline_forward_text must remain in the command census");
+    registry
+        .register(
+            "matrix_timeline_forward_media",
+            matrix_timeline_forward_media,
+        )
+        .expect("built-in matrix_timeline_forward_media must remain in the command census");
+    registry
+        .register(
+            "matrix_composer_set_reply_draft",
+            matrix_composer_set_reply_draft,
+        )
+        .expect("built-in matrix_composer_set_reply_draft must remain in the command census");
+    registry
+        .register(
+            "matrix_composer_clear_reply_draft",
+            matrix_composer_clear_reply_draft,
+        )
+        .expect("built-in matrix_composer_clear_reply_draft must remain in the command census");
+    registry
+        .register(
+            "matrix_composer_get_reply_draft",
+            matrix_composer_get_reply_draft,
+        )
+        .expect("built-in matrix_composer_get_reply_draft must remain in the command census");
+    registry
+        .register("matrix_thread_list", matrix_thread_list)
+        .expect("built-in matrix_thread_list must remain in the command census");
 }

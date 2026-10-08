@@ -102,10 +102,7 @@ use crate::platform::{
     PlatformSecretStorageAction, PlatformSecretStorageState, PlatformSecretStorageStatus,
     PlatformSecretStorageStatusError, PlatformSyncFailure, PlatformSyncStatus,
 };
-use crate::transport::{
-    CommandEnvelope, CommandFuture, CommandRegistry, CommandResponseEnvelope, MatrixIpcError,
-    MatrixIpcErrorCategory, MAX_WIRE_COUNTER,
-};
+use crate::transport::{MatrixIpcError, MatrixIpcErrorCategory, MAX_WIRE_COUNTER};
 
 // Domain command implementations keep request validation, closed projections,
 // and owner error mapping together. Only the parent registry imports them.
@@ -122,6 +119,8 @@ use realtime::*;
 mod room_administration;
 use room_administration::*;
 mod session_crypto;
+#[cfg(test)]
+use crate::transport::{CommandEnvelope, CommandFuture, CommandRegistry, CommandResponseEnvelope};
 use session_crypto::*;
 mod typed_api;
 
@@ -281,18 +280,34 @@ impl CoreState {
 /// Platform-neutral native engine root.
 pub struct Core {
     state: Arc<CoreState>,
+    /// JSON envelope dispatch, kept only for handler and census tests.
+    #[cfg(test)]
     registry: CommandRegistry,
 }
 
 impl Core {
-    /// Build a core with the built-in P2 command handlers. P3 shells
-    /// instantiate this once at startup; [`Self::with_registry`] remains for
-    /// explicit construction and handler-focused tests.
+    /// Build a core over `platform`. Shells instantiate this once at startup
+    /// and call the typed methods; tests also get the JSON command registry.
     pub fn new(platform: Arc<dyn Platform>) -> Self {
-        Self::with_registry(platform, built_in_registry())
+        let core = Self::with_state(platform);
+        #[cfg(test)]
+        let core = Self {
+            registry: built_in_registry(),
+            ..core
+        };
+        core
     }
 
+    /// Test-only: a core whose JSON command dispatch uses `registry`.
+    #[cfg(test)]
     pub fn with_registry(platform: Arc<dyn Platform>, registry: CommandRegistry) -> Self {
+        Self {
+            registry,
+            ..Self::with_state(platform)
+        }
+    }
+
+    fn with_state(platform: Arc<dyn Platform>) -> Self {
         Self {
             state: Arc::new(CoreState {
                 platform,
@@ -312,11 +327,13 @@ impl Core {
                 sync: Mutex::new(None),
                 widgets: Mutex::new(None),
             }),
-            registry,
+            #[cfg(test)]
+            registry: CommandRegistry::new(),
         }
     }
 
-    /// Dispatch one validated `matrix_*` request to the registered core handler.
+    /// Test-only: dispatch one validated `matrix_*` envelope to its JSON adapter.
+    #[cfg(test)]
     pub async fn command(
         &self,
         request: CommandEnvelope,
@@ -1047,644 +1064,22 @@ impl Core {
         owner.stop().await.map_err(|_| "p4-s12-sync-stop-failed")
     }
 
+    #[cfg(test)]
     pub fn registered_commands(&self) -> Vec<String> {
         self.registry.command_names()
     }
 }
 
+#[cfg(test)]
 fn built_in_registry() -> CommandRegistry {
     let mut registry = CommandRegistry::new();
-    registry
-        .register("matrix_session_snapshot", matrix_session_snapshot)
-        .expect("built-in matrix_session_snapshot must remain in the command census");
-    registry
-        .register("matrix_sync_status", matrix_sync_status)
-        .expect("built-in matrix_sync_status must remain in the command census");
-    registry
-        .register("matrix_crypto_status", matrix_crypto_status)
-        .expect("built-in matrix_crypto_status must remain in the command census");
-    registry
-        .register("matrix_cross_signing_status", matrix_cross_signing_status)
-        .expect("built-in matrix_cross_signing_status must remain in the command census");
-    registry
-        .register("matrix_cross_signing_setup", matrix_cross_signing_setup)
-        .expect("built-in matrix_cross_signing_setup must remain in the command census");
-    registry
-        .register("matrix_room_list_snapshot", matrix_room_list_snapshot)
-        .expect("built-in matrix_room_list_snapshot must remain in the command census");
-    registry
-        .register("matrix_invites_accept", matrix_invites_accept)
-        .expect("built-in matrix_invites_accept must remain in the command census");
-    registry
-        .register("matrix_invites_block_sender", matrix_invites_block_sender)
-        .expect("built-in matrix_invites_block_sender must remain in the command census");
-    registry
-        .register("matrix_invites_decline", matrix_invites_decline)
-        .expect("built-in matrix_invites_decline must remain in the command census");
-    registry
-        .register("matrix_invites_report_spam", matrix_invites_report_spam)
-        .expect("built-in matrix_invites_report_spam must remain in the command census");
-    registry
-        .register("matrix_inbox_notifications", matrix_inbox_notifications)
-        .expect("built-in matrix_inbox_notifications must remain in the command census");
-    registry
-        .register("matrix_invites_snapshot", matrix_invites_snapshot)
-        .expect("built-in matrix_invites_snapshot must remain in the command census");
-    registry
-        .register("matrix_secret_storage_status", matrix_secret_storage_status)
-        .expect("built-in matrix_secret_storage_status must remain in the command census");
-    registry
-        .register("matrix_backup_status", matrix_backup_status)
-        .expect("built-in matrix_backup_status must remain in the command census");
-    registry
-        .register(
-            "matrix_room_key_transfer_status",
-            matrix_room_key_transfer_status,
-        )
-        .expect("built-in matrix_room_key_transfer_status must remain in the command census");
-    registry
-        .register(
-            "matrix_room_directory_protocols",
-            matrix_room_directory_protocols,
-        )
-        .expect("built-in matrix_room_directory_protocols must remain in the command census");
-    registry
-        .register("matrix_room_directory_search", matrix_room_directory_search)
-        .expect("built-in matrix_room_directory_search must remain in the command census");
-    registry
-        .register("matrix_room_directory_cancel", matrix_room_directory_cancel)
-        .expect("built-in matrix_room_directory_cancel must remain in the command census");
-    registry
-        .register("matrix_send_text", matrix_send_text)
-        .expect("built-in matrix_send_text must remain in the command census");
-    registry
-        .register("matrix_local_echo_discard", matrix_local_echo_discard)
-        .expect("built-in matrix_local_echo_discard must remain in the command census");
-    registry
-        .register("matrix_local_echo_retry", matrix_local_echo_retry)
-        .expect("built-in matrix_local_echo_retry must remain in the command census");
-    registry
-        .register("matrix_send_poll", matrix_send_poll)
-        .expect("built-in matrix_send_poll must remain in the command census");
-    registry
-        .register(
-            "matrix_space_parents_snapshot",
-            matrix_space_parents_snapshot,
-        )
-        .expect("built-in matrix_space_parents_snapshot must remain in the command census");
-    registry
-        .register(
-            "matrix_space_hierarchy_snapshot",
-            matrix_space_hierarchy_snapshot,
-        )
-        .expect("built-in matrix_space_hierarchy_snapshot must remain in the command census");
-    registry
-        .register(
-            "matrix_space_children_snapshot",
-            matrix_space_children_snapshot,
-        )
-        .expect("built-in matrix_space_children_snapshot must remain in the command census");
-    registry
-        .register("matrix_space_child_set", matrix_space_child_set)
-        .expect("built-in matrix_space_child_set must remain in the command census");
-    registry
-        .register("matrix_space_child_remove", matrix_space_child_remove)
-        .expect("built-in matrix_space_child_remove must remain in the command census");
-    registry
-        .register(
-            "matrix_restricted_join_reparent",
-            matrix_restricted_join_reparent,
-        )
-        .expect("built-in matrix_restricted_join_reparent must remain in the command census");
-    registry
-        .register("matrix_poll_respond", matrix_poll_respond)
-        .expect("built-in matrix_poll_respond must remain in the command census");
-    registry
-        .register("matrix_edit_message", matrix_edit_message)
-        .expect("built-in matrix_edit_message must remain in the command census");
-    registry
-        .register(
-            "matrix_enable_room_encrypted_state",
-            matrix_enable_room_encrypted_state,
-        )
-        .expect("built-in matrix_enable_room_encrypted_state must remain in the command census");
-    registry
-        .register("matrix_media_config", matrix_media_config)
-        .expect("built-in matrix_media_config must remain in the command census");
-    registry
-        .register("matrix_media_preview", matrix_media_preview)
-        .expect("built-in matrix_media_preview must remain in the command census");
-    registry
-        .register("matrix_login_flows", matrix_login_flows)
-        .expect("built-in matrix_login_flows must remain in the command census");
-    registry
-        .register("matrix_register_flows", matrix_register_flows)
-        .expect("built-in matrix_register_flows must remain in the command census");
-    registry
-        .register("matrix_typing_snapshot", matrix_typing_snapshot)
-        .expect("built-in matrix_typing_snapshot must remain in the command census");
-    registry
-        .register("matrix_presence_set", matrix_presence_set)
-        .expect("built-in matrix_presence_set must remain in the command census");
-    registry
-        .register("matrix_presence_snapshot", matrix_presence_snapshot)
-        .expect("built-in matrix_presence_snapshot must remain in the command census");
-    registry
-        .register("matrix_presence_subscribe", matrix_presence_subscribe)
-        .expect("built-in matrix_presence_subscribe must remain in the command census");
-    registry
-        .register("matrix_presence_unsubscribe", matrix_presence_unsubscribe)
-        .expect("built-in matrix_presence_unsubscribe must remain in the command census");
-    registry
-        .register(
-            "matrix_rtc_transports_refresh",
-            matrix_rtc_transports_refresh,
-        )
-        .expect("built-in matrix_rtc_transports_refresh must remain in the command census");
-    registry
-        .register(
-            "matrix_rtc_transports_snapshot",
-            matrix_rtc_transports_snapshot,
-        )
-        .expect("built-in matrix_rtc_transports_snapshot must remain in the command census");
-    registry
-        .register("matrix_widgets_list", matrix_widgets_list)
-        .expect("built-in matrix_widgets_list must remain in the command census");
-    registry
-        .register("matrix_widget_open", matrix_widget_open)
-        .expect("built-in matrix_widget_open must remain in the command census");
-    registry
-        .register("matrix_widget_close", matrix_widget_close)
-        .expect("built-in matrix_widget_close must remain in the command census");
-    registry
-        .register("matrix_widget_post", matrix_widget_post)
-        .expect("built-in matrix_widget_post must remain in the command census");
-    registry
-        .register("matrix_widget_subscribe", matrix_widget_subscribe)
-        .expect("built-in matrix_widget_subscribe must remain in the command census");
-    registry
-        .register("matrix_verification_accept", matrix_verification_accept)
-        .expect("built-in matrix_verification_accept must remain in the command census");
-    registry
-        .register(
-            "matrix_verification_begin_sas",
-            matrix_verification_begin_sas,
-        )
-        .expect("built-in matrix_verification_begin_sas must remain in the command census");
-    registry
-        .register("matrix_verification_cancel", matrix_verification_cancel)
-        .expect("built-in matrix_verification_cancel must remain in the command census");
-    registry
-        .register("matrix_verification_confirm", matrix_verification_confirm)
-        .expect("built-in matrix_verification_confirm must remain in the command census");
-    registry
-        .register("matrix_verification_dismiss", matrix_verification_dismiss)
-        .expect("built-in matrix_verification_dismiss must remain in the command census");
-    registry
-        .register("matrix_verification_list", matrix_verification_list)
-        .expect("built-in matrix_verification_list must remain in the command census");
-    registry
-        .register("matrix_verification_mismatch", matrix_verification_mismatch)
-        .expect("built-in matrix_verification_mismatch must remain in the command census");
-    registry
-        .register("matrix_verification_start", matrix_verification_start)
-        .expect("built-in matrix_verification_start must remain in the command census");
-    registry
-        .register("matrix_device_snapshot", matrix_device_snapshot)
-        .expect("built-in matrix_device_snapshot must remain in the command census");
-    registry
-        .register("matrix_device_rename", matrix_device_rename)
-        .expect("built-in matrix_device_rename must remain in the command census");
-    registry
-        .register("matrix_device_delete_start", matrix_device_delete_start)
-        .expect("built-in matrix_device_delete_start must remain in the command census");
-    registry
-        .register("matrix_device_delete_cancel", matrix_device_delete_cancel)
-        .expect("built-in matrix_device_delete_cancel must remain in the command census");
-    registry
-        .register(
-            "matrix_room_join_rule_snapshot",
-            matrix_room_join_rule_snapshot,
-        )
-        .expect("built-in matrix_room_join_rule_snapshot must remain in the command census");
-    registry
-        .register("matrix_room_set_join_rule", matrix_room_set_join_rule)
-        .expect("built-in matrix_room_set_join_rule must remain in the command census");
-    registry
-        .register("matrix_room_leave", matrix_room_leave)
-        .expect("built-in matrix_room_leave must remain in the command census");
-    registry
-        .register("matrix_room_join", matrix_room_join)
-        .expect("built-in matrix_room_join must remain in the command census");
-    registry
-        .register("matrix_room_set_favorite", matrix_room_set_favorite)
-        .expect("built-in matrix_room_set_favorite must remain in the command census");
-    registry
-        .register("matrix_room_set_read_state", matrix_room_set_read_state)
-        .expect("built-in matrix_room_set_read_state must remain in the command census");
-    registry
-        .register("matrix_room_invite", matrix_room_invite)
-        .expect("built-in matrix_room_invite must remain in the command census");
-    registry
-        .register("matrix_room_kick", matrix_room_kick)
-        .expect("built-in matrix_room_kick must remain in the command census");
-    registry
-        .register("matrix_room_ban", matrix_room_ban)
-        .expect("built-in matrix_room_ban must remain in the command census");
-    registry
-        .register("matrix_room_create", matrix_room_create)
-        .expect("built-in matrix_room_create must remain in the command census");
-    registry
-        .register("matrix_room_members_snapshot", matrix_room_members_snapshot)
-        .expect("built-in matrix_room_members_snapshot must remain in the command census");
-    registry
-        .register(
-            "matrix_room_power_levels_snapshot",
-            matrix_room_power_levels_snapshot,
-        )
-        .expect("built-in matrix_room_power_levels_snapshot must remain in the command census");
-    registry
-        .register("matrix_room_retention", matrix_room_retention)
-        .expect("built-in matrix_room_retention must remain in the command census");
-    registry
-        .register(
-            "matrix_room_creators_snapshot",
-            matrix_room_creators_snapshot,
-        )
-        .expect("built-in matrix_room_creators_snapshot must remain in the command census");
-    registry
-        .register(
-            "matrix_room_power_level_tags_snapshot",
-            matrix_room_power_level_tags_snapshot,
-        )
-        .expect("built-in matrix_room_power_level_tags_snapshot must remain in the command census");
-    registry
-        .register("matrix_room_unban", matrix_room_unban)
-        .expect("built-in matrix_room_unban must remain in the command census");
-    registry
-        .register("matrix_room_set_power_level", matrix_room_set_power_level)
-        .expect("built-in matrix_room_set_power_level must remain in the command census");
-    registry
-        .register("matrix_room_set_power_levels", matrix_room_set_power_levels)
-        .expect("built-in matrix_room_set_power_levels must remain in the command census");
-    registry
-        .register(
-            "matrix_room_set_power_level_tags",
-            matrix_room_set_power_level_tags,
-        )
-        .expect("built-in matrix_room_set_power_level_tags must remain in the command census");
-    registry
-        .register("matrix_set_room_name", matrix_set_room_name)
-        .expect("built-in matrix_set_room_name must remain in the command census");
-    registry
-        .register("matrix_set_room_topic", matrix_set_room_topic)
-        .expect("built-in matrix_set_room_topic must remain in the command census");
-    registry
-        .register("matrix_set_room_avatar", matrix_set_room_avatar)
-        .expect("built-in matrix_set_room_avatar must remain in the command census");
-    registry
-        .register("matrix_send_state_event", matrix_send_state_event)
-        .expect("built-in matrix_send_state_event must remain in the command census");
-    registry
-        .register(
-            "matrix_set_encrypted_state_events_setting",
-            matrix_set_encrypted_state_events_setting,
-        )
-        .expect(
-            "built-in matrix_set_encrypted_state_events_setting must remain in the command census",
-        );
-    registry
-        .register(
-            "matrix_get_room_directory_visibility",
-            matrix_get_room_directory_visibility,
-        )
-        .expect("built-in matrix_get_room_directory_visibility must remain in the command census");
-    registry
-        .register(
-            "matrix_set_room_directory_visibility",
-            matrix_set_room_directory_visibility,
-        )
-        .expect("built-in matrix_set_room_directory_visibility must remain in the command census");
-    registry
-        .register(
-            "matrix_get_global_image_packs",
-            matrix_get_global_image_packs,
-        )
-        .expect("built-in matrix_get_global_image_packs must remain in the command census");
-    registry
-        .register("matrix_get_user_image_pack", matrix_get_user_image_pack)
-        .expect("built-in matrix_get_user_image_pack must remain in the command census");
-    registry
-        .register("matrix_get_room_image_packs", matrix_get_room_image_packs)
-        .expect("built-in matrix_get_room_image_packs must remain in the command census");
-    registry
-        .register("matrix_set_user_image_pack", matrix_set_user_image_pack)
-        .expect("built-in matrix_set_user_image_pack must remain in the command census");
-    registry
-        .register(
-            "matrix_set_global_image_packs",
-            matrix_set_global_image_packs,
-        )
-        .expect("built-in matrix_set_global_image_packs must remain in the command census");
-    registry
-        .register("matrix_set_own_display_name", matrix_set_own_display_name)
-        .expect("built-in matrix_set_own_display_name must remain in the command census");
-    registry
-        .register("matrix_set_own_avatar", matrix_set_own_avatar)
-        .expect("built-in matrix_set_own_avatar must remain in the command census");
-    registry
-        .register("matrix_get_own_profile", matrix_get_own_profile)
-        .expect("built-in matrix_get_own_profile must remain in the command census");
-    registry
-        .register(
-            "matrix_ignored_users_snapshot",
-            matrix_ignored_users_snapshot,
-        )
-        .expect("built-in matrix_ignored_users_snapshot must remain in the command census");
-    registry
-        .register("matrix_ignored_users_ignore", matrix_ignored_users_ignore)
-        .expect("built-in matrix_ignored_users_ignore must remain in the command census");
-    registry
-        .register(
-            "matrix_ignored_users_unignore",
-            matrix_ignored_users_unignore,
-        )
-        .expect("built-in matrix_ignored_users_unignore must remain in the command census");
-    registry
-        .register("matrix_user_directory_search", matrix_user_directory_search)
-        .expect("built-in matrix_user_directory_search must remain in the command census");
-    registry
-        .register("matrix_user_status_clear", matrix_user_status_clear)
-        .expect("built-in matrix_user_status_clear must remain in the command census");
-    registry
-        .register("matrix_user_status_set", matrix_user_status_set)
-        .expect("built-in matrix_user_status_set must remain in the command census");
-    registry
-        .register("matrix_user_status_snapshot", matrix_user_status_snapshot)
-        .expect("built-in matrix_user_status_snapshot must remain in the command census");
-    registry
-        .register("matrix_message_search", matrix_message_search)
-        .expect("built-in matrix_message_search must remain in the command census");
-    registry
-        .register(
-            "matrix_agent_notification_preferences_snapshot",
-            matrix_agent_notification_preferences_snapshot,
-        )
-        .expect("agent preferences snapshot census");
-    registry
-        .register(
-            "matrix_agent_notification_preferences_set",
-            matrix_agent_notification_preferences_set,
-        )
-        .expect("agent preferences set census");
-    registry
-        .register("matrix_push_rules_snapshot", matrix_push_rules_snapshot)
-        .expect("built-in matrix_push_rules_snapshot must remain in the command census");
-    registry
-        .register(
-            "matrix_push_rules_set_default",
-            matrix_push_rules_set_default,
-        )
-        .expect("built-in matrix_push_rules_set_default must remain in the command census");
-    registry
-        .register(
-            "matrix_push_rules_set_mention",
-            matrix_push_rules_set_mention,
-        )
-        .expect("built-in matrix_push_rules_set_mention must remain in the command census");
-    registry
-        .register(
-            "matrix_push_rules_add_keyword",
-            matrix_push_rules_add_keyword,
-        )
-        .expect("built-in matrix_push_rules_add_keyword must remain in the command census");
-    registry
-        .register(
-            "matrix_push_rules_remove_keyword",
-            matrix_push_rules_remove_keyword,
-        )
-        .expect("built-in matrix_push_rules_remove_keyword must remain in the command census");
-    registry
-        .register(
-            "matrix_room_notification_snapshot",
-            matrix_room_notification_snapshot,
-        )
-        .expect("built-in matrix_room_notification_snapshot must remain in the command census");
-    registry
-        .register("matrix_room_notification_set", matrix_room_notification_set)
-        .expect("built-in matrix_room_notification_set must remain in the command census");
-    registry
-        .register(
-            "matrix_room_notifications_snapshot",
-            matrix_room_notifications_snapshot,
-        )
-        .expect("built-in matrix_room_notifications_snapshot must remain in the command census");
-    registry
-        .register("matrix_notification_decide", matrix_notification_decide)
-        .expect("built-in matrix_notification_decide must remain in the command census");
-    registry
-        .register("matrix_notification_dismiss", matrix_notification_dismiss)
-        .expect("built-in matrix_notification_dismiss must remain in the command census");
-    registry
-        .register(
-            "matrix_notification_focus_set",
-            matrix_notification_focus_set,
-        )
-        .expect("built-in matrix_notification_focus_set must remain in the command census");
-    registry
-        .register(
-            "matrix_notification_pending_snapshot",
-            matrix_notification_pending_snapshot,
-        )
-        .expect("built-in matrix_notification_pending_snapshot must remain in the command census");
-    registry
-        .register("matrix_threepid_snapshot", matrix_threepid_snapshot)
-        .expect("built-in matrix_threepid_snapshot must remain in the command census");
-    registry
-        .register("matrix_threepid_delete", matrix_threepid_delete)
-        .expect("built-in matrix_threepid_delete must remain in the command census");
-    registry
-        .register(
-            "matrix_threepid_request_email_token",
-            matrix_threepid_request_email_token,
-        )
-        .expect("built-in matrix_threepid_request_email_token must remain in the command census");
-    registry
-        .register("matrix_threepid_add_email", matrix_threepid_add_email)
-        .expect("built-in matrix_threepid_add_email must remain in the command census");
-    registry
-        .register("matrix_set_room_image_pack", matrix_set_room_image_pack)
-        .expect("built-in matrix_set_room_image_pack must remain in the command census");
-    registry
-        .register("matrix_later_snapshot", matrix_later_snapshot)
-        .expect("built-in matrix_later_snapshot must remain in the command census");
-    registry
-        .register("matrix_later_upsert", matrix_later_upsert)
-        .expect("built-in matrix_later_upsert must remain in the command census");
-    registry
-        .register("matrix_later_complete", matrix_later_complete)
-        .expect("built-in matrix_later_complete must remain in the command census");
-    registry
-        .register("matrix_later_snooze", matrix_later_snooze)
-        .expect("built-in matrix_later_snooze must remain in the command census");
-    registry
-        .register("matrix_later_clear_completed", matrix_later_clear_completed)
-        .expect("built-in matrix_later_clear_completed must remain in the command census");
-    registry
-        .register("matrix_later_mark_reminded", matrix_later_mark_reminded)
-        .expect("built-in matrix_later_mark_reminded must remain in the command census");
-    registry
-        .register("matrix_room_notes_snapshot", matrix_room_notes_snapshot)
-        .expect("built-in matrix_room_notes_snapshot must remain in the command census");
-    registry
-        .register("matrix_room_notes_upsert", matrix_room_notes_upsert)
-        .expect("built-in matrix_room_notes_upsert must remain in the command census");
-    registry
-        .register("matrix_room_notes_delete", matrix_room_notes_delete)
-        .expect("built-in matrix_room_notes_delete must remain in the command census");
-    registry
-        .register(
-            "matrix_room_notes_complete_todo",
-            matrix_room_notes_complete_todo,
-        )
-        .expect("built-in matrix_room_notes_complete_todo must remain in the command census");
-    registry
-        .register("matrix_room_notes_move_todo", matrix_room_notes_move_todo)
-        .expect("built-in matrix_room_notes_move_todo must remain in the command census");
-    registry
-        .register("matrix_mdirect_snapshot", matrix_mdirect_snapshot)
-        .expect("built-in matrix_mdirect_snapshot must remain in the command census");
-    registry
-        .register("matrix_mdirect_add", matrix_mdirect_add)
-        .expect("built-in matrix_mdirect_add must remain in the command census");
-    registry
-        .register("matrix_mdirect_remove", matrix_mdirect_remove)
-        .expect("built-in matrix_mdirect_remove must remain in the command census");
-    registry
-        .register("matrix_agent_approval_decide", matrix_agent_approval_decide)
-        .expect("built-in matrix_agent_approval_decide must remain in the command census");
-    registry
-        .register(
-            "matrix_agent_approval_history_snapshot",
-            matrix_agent_approval_history_snapshot,
-        )
-        .expect(
-            "built-in matrix_agent_approval_history_snapshot must remain in the command census",
-        );
-    registry
-        .register("matrix_agent_approvals_list", matrix_agent_approvals_list)
-        .expect("built-in matrix_agent_approvals_list must remain in the command census");
-    registry
-        .register("matrix_typing_set", matrix_typing_set)
-        .expect("built-in matrix_typing_set must remain in the command census");
-    registry
-        .register("matrix_timeline_close", matrix_timeline_close)
-        .expect("built-in matrix_timeline_close must remain in the command census");
-    registry
-        .register("matrix_timeline_open", matrix_timeline_open)
-        .expect("built-in matrix_timeline_open must remain in the command census");
-    registry
-        .register(
-            "matrix_timeline_retry_decryption",
-            matrix_timeline_retry_decryption,
-        )
-        .expect("built-in matrix_timeline_retry_decryption must remain in the command census");
-    registry
-        .register("matrix_timeline_snapshot", matrix_timeline_snapshot)
-        .expect("built-in matrix_timeline_snapshot must remain in the command census");
-    registry
-        .register("matrix_timeline_jump_latest", matrix_timeline_jump_latest)
-        .expect("built-in matrix_timeline_jump_latest must remain in the command census");
-    registry
-        .register(
-            "matrix_timeline_event_readback",
-            matrix_timeline_event_readback,
-        )
-        .expect("built-in matrix_timeline_event_readback must remain in the command census");
-    registry
-        .register(
-            "matrix_timeline_timestamp_to_event",
-            matrix_timeline_timestamp_to_event,
-        )
-        .expect("built-in matrix_timeline_timestamp_to_event must remain in the command census");
-    registry
-        .register("matrix_timeline_paginate", matrix_timeline_paginate)
-        .expect("built-in matrix_timeline_paginate must remain in the command census");
-    registry
-        .register("matrix_timeline_follow_live", matrix_timeline_follow_live)
-        .expect("built-in matrix_timeline_follow_live must remain in the command census");
-    registry
-        .register(
-            "matrix_timeline_reaction_toggle",
-            matrix_timeline_reaction_toggle,
-        )
-        .expect("built-in matrix_timeline_reaction_toggle must remain in the command census");
-    registry
-        .register(
-            "matrix_timeline_set_read_state",
-            matrix_timeline_set_read_state,
-        )
-        .expect("built-in matrix_timeline_set_read_state must remain in the command census");
-    registry
-        .register("matrix_reaction_ensure", matrix_reaction_ensure)
-        .expect("built-in matrix_reaction_ensure must remain in the command census");
-    registry
-        .register("matrix_reaction_redact", matrix_reaction_redact)
-        .expect("built-in matrix_reaction_redact must remain in the command census");
-    registry
-        .register("matrix_timeline_edit_text", matrix_timeline_edit_text)
-        .expect("built-in matrix_timeline_edit_text must remain in the command census");
-    registry
-        .register("matrix_timeline_redact", matrix_timeline_redact)
-        .expect("built-in matrix_timeline_redact must remain in the command census");
-    registry
-        .register("matrix_timeline_report", matrix_timeline_report)
-        .expect("built-in matrix_timeline_report must remain in the command census");
-    registry
-        .register("matrix_timeline_pin", matrix_timeline_pin)
-        .expect("built-in matrix_timeline_pin must remain in the command census");
-    registry
-        .register("matrix_timeline_unpin", matrix_timeline_unpin)
-        .expect("built-in matrix_timeline_unpin must remain in the command census");
-    registry
-        .register("matrix_pinned_events", matrix_pinned_events)
-        .expect("built-in matrix_pinned_events must remain in the command census");
-    registry
-        .register("matrix_timeline_poll_vote", matrix_timeline_poll_vote)
-        .expect("built-in matrix_timeline_poll_vote must remain in the command census");
-    registry
-        .register("matrix_timeline_call_decline", matrix_timeline_call_decline)
-        .expect("built-in matrix_timeline_call_decline must remain in the command census");
-    registry
-        .register("matrix_timeline_forward_text", matrix_timeline_forward_text)
-        .expect("built-in matrix_timeline_forward_text must remain in the command census");
-    registry
-        .register(
-            "matrix_timeline_forward_media",
-            matrix_timeline_forward_media,
-        )
-        .expect("built-in matrix_timeline_forward_media must remain in the command census");
-    registry
-        .register(
-            "matrix_composer_set_reply_draft",
-            matrix_composer_set_reply_draft,
-        )
-        .expect("built-in matrix_composer_set_reply_draft must remain in the command census");
-    registry
-        .register(
-            "matrix_composer_clear_reply_draft",
-            matrix_composer_clear_reply_draft,
-        )
-        .expect("built-in matrix_composer_clear_reply_draft must remain in the command census");
-    registry
-        .register(
-            "matrix_composer_get_reply_draft",
-            matrix_composer_get_reply_draft,
-        )
-        .expect("built-in matrix_composer_get_reply_draft must remain in the command census");
-    registry
-        .register("matrix_thread_list", matrix_thread_list)
-        .expect("built-in matrix_thread_list must remain in the command census");
+    session_crypto::register_commands(&mut registry);
+    room_administration::register_commands(&mut registry);
+    notifications::register_commands(&mut registry);
+    account_data::register_commands(&mut registry);
+    messaging::register_commands(&mut registry);
+    profile_media::register_commands(&mut registry);
+    realtime::register_commands(&mut registry);
     registry
 }
 

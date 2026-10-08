@@ -157,6 +157,7 @@ pub(super) async fn agent_approval_history_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_agent_approval_history_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -186,6 +187,7 @@ pub(super) async fn room_directory_protocols(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_directory_protocols(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -233,6 +235,7 @@ pub(super) async fn room_directory_search(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_directory_search(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -265,6 +268,7 @@ pub(super) async fn room_directory_cancel(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_directory_cancel(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -294,6 +298,7 @@ pub(super) async fn get_room_directory_visibility(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_get_room_directory_visibility(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -329,6 +334,7 @@ pub(super) async fn set_room_directory_visibility(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_set_room_directory_visibility(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -359,6 +365,7 @@ pub(super) async fn get_global_image_packs(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_get_global_image_packs(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -388,6 +395,7 @@ pub(super) async fn get_user_image_pack(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_get_user_image_pack(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -418,6 +426,7 @@ pub(super) async fn get_room_image_packs(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_get_room_image_packs(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -462,6 +471,7 @@ pub(super) async fn set_user_image_pack(
     Ok(MatrixStatusOk::ok())
 }
 
+#[cfg(test)]
 pub(super) fn matrix_set_user_image_pack(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -491,6 +501,7 @@ pub(super) async fn set_global_image_packs(
     Ok(MatrixStatusOk::ok())
 }
 
+#[cfg(test)]
 pub(super) fn matrix_set_global_image_packs(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -520,6 +531,7 @@ pub(super) async fn set_room_image_pack(
     Ok(MatrixStatusOk::ok())
 }
 
+#[cfg(test)]
 pub(super) fn matrix_set_room_image_pack(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -545,6 +557,7 @@ pub(super) async fn later_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_later_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -575,6 +588,7 @@ pub(super) async fn later_upsert(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_later_upsert(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -604,6 +618,7 @@ pub(super) async fn later_complete(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_later_complete(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -633,6 +648,7 @@ pub(super) async fn later_snooze(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_later_snooze(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -661,6 +677,7 @@ pub(super) async fn later_clear_completed(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_later_clear_completed(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -691,6 +708,7 @@ pub(super) async fn later_mark_reminded(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_later_mark_reminded(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -727,6 +745,7 @@ pub(super) async fn room_notes_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_notes_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -757,6 +776,7 @@ pub(super) async fn room_notes_upsert(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_notes_upsert(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -786,6 +806,7 @@ pub(super) async fn room_notes_delete(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_notes_delete(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -815,6 +836,7 @@ pub(super) async fn room_notes_complete_todo(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_notes_complete_todo(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -845,6 +867,7 @@ pub(super) async fn room_notes_move_todo(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_room_notes_move_todo(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -881,6 +904,7 @@ pub(super) async fn mdirect_snapshot(
     Ok(snapshot)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_mdirect_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -911,6 +935,7 @@ pub(super) async fn mdirect_add(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_mdirect_add(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixMDirectAddRequest = serde_json::from_value(request.payload)
@@ -937,6 +962,7 @@ pub(super) async fn mdirect_remove(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_mdirect_remove(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -979,4 +1005,110 @@ pub(super) fn image_pack_snapshot_owner_error(diagnostic_id: &'static str) -> Ma
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+/// Registers this domain's JSON adapters with the test-only command registry.
+#[cfg(test)]
+pub(super) fn register_commands(registry: &mut CommandRegistry) {
+    registry
+        .register(
+            "matrix_room_directory_protocols",
+            matrix_room_directory_protocols,
+        )
+        .expect("built-in matrix_room_directory_protocols must remain in the command census");
+    registry
+        .register("matrix_room_directory_search", matrix_room_directory_search)
+        .expect("built-in matrix_room_directory_search must remain in the command census");
+    registry
+        .register("matrix_room_directory_cancel", matrix_room_directory_cancel)
+        .expect("built-in matrix_room_directory_cancel must remain in the command census");
+    registry
+        .register(
+            "matrix_get_room_directory_visibility",
+            matrix_get_room_directory_visibility,
+        )
+        .expect("built-in matrix_get_room_directory_visibility must remain in the command census");
+    registry
+        .register(
+            "matrix_set_room_directory_visibility",
+            matrix_set_room_directory_visibility,
+        )
+        .expect("built-in matrix_set_room_directory_visibility must remain in the command census");
+    registry
+        .register(
+            "matrix_get_global_image_packs",
+            matrix_get_global_image_packs,
+        )
+        .expect("built-in matrix_get_global_image_packs must remain in the command census");
+    registry
+        .register("matrix_get_user_image_pack", matrix_get_user_image_pack)
+        .expect("built-in matrix_get_user_image_pack must remain in the command census");
+    registry
+        .register("matrix_get_room_image_packs", matrix_get_room_image_packs)
+        .expect("built-in matrix_get_room_image_packs must remain in the command census");
+    registry
+        .register("matrix_set_user_image_pack", matrix_set_user_image_pack)
+        .expect("built-in matrix_set_user_image_pack must remain in the command census");
+    registry
+        .register(
+            "matrix_set_global_image_packs",
+            matrix_set_global_image_packs,
+        )
+        .expect("built-in matrix_set_global_image_packs must remain in the command census");
+    registry
+        .register("matrix_set_room_image_pack", matrix_set_room_image_pack)
+        .expect("built-in matrix_set_room_image_pack must remain in the command census");
+    registry
+        .register("matrix_later_snapshot", matrix_later_snapshot)
+        .expect("built-in matrix_later_snapshot must remain in the command census");
+    registry
+        .register("matrix_later_upsert", matrix_later_upsert)
+        .expect("built-in matrix_later_upsert must remain in the command census");
+    registry
+        .register("matrix_later_complete", matrix_later_complete)
+        .expect("built-in matrix_later_complete must remain in the command census");
+    registry
+        .register("matrix_later_snooze", matrix_later_snooze)
+        .expect("built-in matrix_later_snooze must remain in the command census");
+    registry
+        .register("matrix_later_clear_completed", matrix_later_clear_completed)
+        .expect("built-in matrix_later_clear_completed must remain in the command census");
+    registry
+        .register("matrix_later_mark_reminded", matrix_later_mark_reminded)
+        .expect("built-in matrix_later_mark_reminded must remain in the command census");
+    registry
+        .register("matrix_room_notes_snapshot", matrix_room_notes_snapshot)
+        .expect("built-in matrix_room_notes_snapshot must remain in the command census");
+    registry
+        .register("matrix_room_notes_upsert", matrix_room_notes_upsert)
+        .expect("built-in matrix_room_notes_upsert must remain in the command census");
+    registry
+        .register("matrix_room_notes_delete", matrix_room_notes_delete)
+        .expect("built-in matrix_room_notes_delete must remain in the command census");
+    registry
+        .register(
+            "matrix_room_notes_complete_todo",
+            matrix_room_notes_complete_todo,
+        )
+        .expect("built-in matrix_room_notes_complete_todo must remain in the command census");
+    registry
+        .register("matrix_room_notes_move_todo", matrix_room_notes_move_todo)
+        .expect("built-in matrix_room_notes_move_todo must remain in the command census");
+    registry
+        .register("matrix_mdirect_snapshot", matrix_mdirect_snapshot)
+        .expect("built-in matrix_mdirect_snapshot must remain in the command census");
+    registry
+        .register("matrix_mdirect_add", matrix_mdirect_add)
+        .expect("built-in matrix_mdirect_add must remain in the command census");
+    registry
+        .register("matrix_mdirect_remove", matrix_mdirect_remove)
+        .expect("built-in matrix_mdirect_remove must remain in the command census");
+    registry
+        .register(
+            "matrix_agent_approval_history_snapshot",
+            matrix_agent_approval_history_snapshot,
+        )
+        .expect(
+            "built-in matrix_agent_approval_history_snapshot must remain in the command census",
+        );
 }

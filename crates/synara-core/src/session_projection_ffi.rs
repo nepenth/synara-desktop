@@ -17,9 +17,7 @@ use crate::platform::{
     PlatformMediaConfigError, PlatformStatus, PlatformSyncStatusError, SecretVault,
     SyncStatusFuture, UnavailableSecretVault,
 };
-use crate::transport::{
-    CommandRegistry, MatrixIpcEnvelope, MatrixIpcError, MatrixIpcErrorCategory,
-};
+use crate::transport::{MatrixIpcEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
 
 const INVALID_PROJECTION_CODE: &str = "p4.3-session-projection-rejected";
 const INVALID_PROJECTION_DESCRIPTION: &str = "The session projection is invalid.";
@@ -303,7 +301,7 @@ impl SessionProjectionCore {
     #[uniffi::constructor]
     pub fn new() -> Self {
         Self {
-            core: Core::with_registry(Arc::new(ProjectionOnlyPlatform), CommandRegistry::new()),
+            core: Core::new(Arc::new(ProjectionOnlyPlatform)),
         }
     }
 

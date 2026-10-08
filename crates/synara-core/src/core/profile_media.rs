@@ -87,6 +87,7 @@ pub struct MatrixThreepidEmailRequest {
     pub email: String,
 }
 
+#[cfg(test)]
 pub(super) fn own_profile_read_payload_is_empty(payload: &serde_json::Value) -> bool {
     payload.is_null() || payload.as_object().is_some_and(serde_json::Map::is_empty)
 }
@@ -123,6 +124,7 @@ pub(super) async fn media_preview(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_media_preview(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -164,6 +166,7 @@ pub(super) async fn set_own_display_name(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_set_own_display_name(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -193,6 +196,7 @@ pub(super) async fn set_own_avatar(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_set_own_avatar(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -221,6 +225,7 @@ pub(super) async fn get_own_profile(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_get_own_profile(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -296,6 +301,7 @@ pub(super) async fn ignored_users_snapshot(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_ignored_users_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -328,6 +334,7 @@ pub(super) async fn ignored_users_ignore(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_ignored_users_ignore(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -357,6 +364,7 @@ pub(super) async fn ignored_users_unignore(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_ignored_users_unignore(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -398,6 +406,7 @@ pub(super) async fn user_directory_search(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_user_directory_search(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -487,6 +496,7 @@ pub(super) async fn message_search(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_message_search(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -515,6 +525,7 @@ pub(super) async fn threepid_snapshot(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_threepid_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -545,6 +556,7 @@ pub(super) async fn threepid_delete(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_threepid_delete(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -574,6 +586,7 @@ pub(super) async fn threepid_request_email_token(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_threepid_request_email_token(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -602,6 +615,7 @@ pub(super) async fn threepid_add_email(
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_threepid_add_email(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -632,6 +646,7 @@ pub(super) async fn media_config(
     Ok(response)
 }
 
+#[cfg(test)]
 pub(super) fn matrix_media_config(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -668,4 +683,60 @@ pub(super) fn media_config_transport_error(error: PlatformMediaConfigError) -> M
                 .with_diagnostic("p2-media-config-unsafe-size")
         }
     }
+}
+
+/// Registers this domain's JSON adapters with the test-only command registry.
+#[cfg(test)]
+pub(super) fn register_commands(registry: &mut CommandRegistry) {
+    registry
+        .register("matrix_media_config", matrix_media_config)
+        .expect("built-in matrix_media_config must remain in the command census");
+    registry
+        .register("matrix_media_preview", matrix_media_preview)
+        .expect("built-in matrix_media_preview must remain in the command census");
+    registry
+        .register("matrix_set_own_display_name", matrix_set_own_display_name)
+        .expect("built-in matrix_set_own_display_name must remain in the command census");
+    registry
+        .register("matrix_set_own_avatar", matrix_set_own_avatar)
+        .expect("built-in matrix_set_own_avatar must remain in the command census");
+    registry
+        .register("matrix_get_own_profile", matrix_get_own_profile)
+        .expect("built-in matrix_get_own_profile must remain in the command census");
+    registry
+        .register(
+            "matrix_ignored_users_snapshot",
+            matrix_ignored_users_snapshot,
+        )
+        .expect("built-in matrix_ignored_users_snapshot must remain in the command census");
+    registry
+        .register("matrix_ignored_users_ignore", matrix_ignored_users_ignore)
+        .expect("built-in matrix_ignored_users_ignore must remain in the command census");
+    registry
+        .register(
+            "matrix_ignored_users_unignore",
+            matrix_ignored_users_unignore,
+        )
+        .expect("built-in matrix_ignored_users_unignore must remain in the command census");
+    registry
+        .register("matrix_user_directory_search", matrix_user_directory_search)
+        .expect("built-in matrix_user_directory_search must remain in the command census");
+    registry
+        .register("matrix_message_search", matrix_message_search)
+        .expect("built-in matrix_message_search must remain in the command census");
+    registry
+        .register("matrix_threepid_snapshot", matrix_threepid_snapshot)
+        .expect("built-in matrix_threepid_snapshot must remain in the command census");
+    registry
+        .register("matrix_threepid_delete", matrix_threepid_delete)
+        .expect("built-in matrix_threepid_delete must remain in the command census");
+    registry
+        .register(
+            "matrix_threepid_request_email_token",
+            matrix_threepid_request_email_token,
+        )
+        .expect("built-in matrix_threepid_request_email_token must remain in the command census");
+    registry
+        .register("matrix_threepid_add_email", matrix_threepid_add_email)
+        .expect("built-in matrix_threepid_add_email must remain in the command census");
 }
