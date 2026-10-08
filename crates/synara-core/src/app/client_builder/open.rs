@@ -9,10 +9,22 @@ use matrix_sdk::encryption::{BackupDownloadStrategy, EncryptionSettings};
 #[cfg(feature = "search-index")]
 use matrix_sdk::search_index::SearchIndexStoreKind;
 use matrix_sdk::Client;
+use matrix_sdk_crypto::CollectStrategy;
 
 use super::ClientBuilderError;
 use super::{ClientBuildConfig, HomeserverMode};
 use crate::transport::MatrixIpcErrorCategory;
+
+/// Which devices receive this client's room keys.
+///
+/// matrix-sdk 0.19.1 recommends `IdentityBased` (MSC4153), which only shares
+/// with devices their owner cross-signed. Synara's agent bots and many small
+/// accounts never set up cross-signing, so identity-based sharing would
+/// silently stop them reading new messages. Keep the SDK default that Element
+/// X also uses outside its opt-in "exclude insecure devices" mode. The
+/// timeline's authenticity shields and the identity-change banner surface the
+/// trust problems this strategy does not block.
+const ROOM_KEY_RECIPIENT_STRATEGY: CollectStrategy = CollectStrategy::AllDevices;
 
 /// Build an **unauthenticated** Matrix Rust SDK client from a validated config.
 ///
@@ -75,6 +87,7 @@ async fn build_client(
         .request_config(request_config)
         .user_agent(&config.user_agent)
         .with_encryption_settings(encryption_settings)
+        .with_room_key_recipient_strategy(ROOM_KEY_RECIPIENT_STRATEGY)
         .cross_process_store_config(cross_process.clone());
 
     match config.homeserver_mode {
@@ -619,6 +632,17 @@ mod privacy_tests {
             .contains("backup_download_strategy: BackupDownloadStrategy::AfterDecryptionFailure"));
         assert!(!settings.auto_enable_cross_signing);
         assert!(!settings.auto_enable_backups);
+    }
+
+    #[test]
+    fn room_keys_go_to_all_devices_explicitly() {
+        assert_eq!(ROOM_KEY_RECIPIENT_STRATEGY, CollectStrategy::AllDevices);
+        assert_eq!(CollectStrategy::default(), CollectStrategy::AllDevices);
+        let source = include_str!("open.rs");
+        let production = source.split("#[cfg(test)]").next().unwrap_or("");
+        assert!(
+            production.contains(".with_room_key_recipient_strategy(ROOM_KEY_RECIPIENT_STRATEGY)")
+        );
     }
 
     #[test]
