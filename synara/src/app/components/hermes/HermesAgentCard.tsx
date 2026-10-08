@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../FocusTrap';
 import {
   Box,
   Button,

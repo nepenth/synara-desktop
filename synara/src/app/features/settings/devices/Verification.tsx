@@ -16,7 +16,7 @@ import {
   OverlayCenter,
   IconButton,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../../components/FocusTrap';
 import { VerificationStatus } from './nativeDevices';
 import { InfoCard } from '../../../components/info-card';
 import { NativeStartVerification } from '../../verification/NativeDeviceVerification';

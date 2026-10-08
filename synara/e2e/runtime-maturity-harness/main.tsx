@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import FocusTrap from 'focus-trap-react';
+import SafeFocusTrap from '../../src/app/components/FocusTrap';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import parse, { domToReact } from 'html-react-parser';
 import { CDATA, Document, Element, Text } from 'domhandler';
@@ -102,6 +103,7 @@ function MaturityHarness() {
   const editor = useEditor();
   const [composerState, setComposerState] = useState('[]');
   const [trap, setTrap] = useState(false);
+  const [emptyMenu, setEmptyMenu] = useState(false);
   const [pdf, loadPdf] = usePdfJSLoader();
   const [src] = useState(createPdf);
   const [documentState, loadDocument] = usePdfDocumentLoader(
@@ -132,6 +134,20 @@ function MaturityHarness() {
     <>
       <button onClick={update}>Update {count}</button>
       <button onClick={() => setTrap(true)}>Open dialog</button>
+      <button onClick={() => setEmptyMenu(true)}>Open empty menu</button>
+      {emptyMenu && (
+        <SafeFocusTrap
+          focusTrapOptions={{
+            initialFocus: false,
+            clickOutsideDeactivates: true,
+            onDeactivate: () => setEmptyMenu(false),
+          }}
+        >
+          <div role="menu" aria-label="Empty call menu">
+            <button disabled>Start call</button>
+          </div>
+        </SafeFocusTrap>
+      )}
       {trap && (
         <FocusTrap>
           <div role="dialog">

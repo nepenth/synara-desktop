@@ -1,6 +1,6 @@
 import React, { MouseEventHandler, forwardRef, useEffect, useState } from 'react';
 import { useAtomValue } from 'jotai';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 import {
   Box,
   Text,

@@ -1,5 +1,5 @@
 import React, { FormEventHandler, useState } from 'react';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../FocusTrap';
 import {
   Dialog,
   Overlay,

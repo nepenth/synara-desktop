@@ -1,4 +1,4 @@
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from './FocusTrap';
 import React from 'react';
 import { config, Menu, MenuItem, Text } from 'folds';
 import * as depthCss from '../styles/Depth.css';

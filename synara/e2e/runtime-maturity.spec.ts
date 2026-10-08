@@ -339,6 +339,20 @@ test('the typed update hook, dialog focus trap and PDF worker run without Node p
   expect(warnings.some((warning) => warning.includes('fake worker'))).toBe(false);
 });
 
+test('a focus trap whose only control is disabled opens without crashing', async ({ page }) => {
+  // The room Call menu has only a disabled "Start call" item when calls are
+  // unavailable. focus-trap used to throw there, which reached the error page.
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/e2e/runtime-maturity-harness/index.html', { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: 'Open empty menu' }).click();
+  const menu = page.getByRole('menu', { name: 'Empty call menu' });
+  await expect(menu).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
 test('the production custom parser renders empty pre and code blocks without crashing', async ({
   page,
 }) => {

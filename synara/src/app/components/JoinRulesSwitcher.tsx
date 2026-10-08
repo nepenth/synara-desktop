@@ -13,7 +13,7 @@ import {
   Button,
   Spinner,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from './FocusTrap';
 import { stopPropagation } from '../utils/keyboard';
 import { getRoomIconSrc } from '../utils/room';
 import {

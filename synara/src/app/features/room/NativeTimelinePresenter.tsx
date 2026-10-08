@@ -2,7 +2,7 @@ import { observeRoomLatestAfterSend } from './nativeTimelineNavigation';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useFocusWithin, useHover } from 'react-aria';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 import { ErrorBoundary } from 'react-error-boundary';
 import {
   Avatar,

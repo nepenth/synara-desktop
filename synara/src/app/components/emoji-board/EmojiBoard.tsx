@@ -10,7 +10,7 @@ import React, {
   useRef,
 } from 'react';
 import { Box, config, Icons, Scroll } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../FocusTrap';
 import { isKeyHotkey } from 'is-hotkey';
 import { atom, PrimitiveAtom, useAtom, useSetAtom } from 'jotai';
 import { useVirtualizer } from '@tanstack/react-virtual';

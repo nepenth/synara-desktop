@@ -28,7 +28,7 @@ import {
   toRem,
 } from 'folds';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../../components/FocusTrap';
 import { useAtomValue } from 'jotai';
 import { useQuery } from '@tanstack/react-query';
 import { Page, PageContent, PageContentCenter, PageHeader } from '../../../components/page';

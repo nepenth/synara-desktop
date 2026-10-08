@@ -21,7 +21,7 @@ import {
   toRem,
 } from 'folds';
 import React, { MouseEventHandler, useCallback, useState } from 'react';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../FocusTrap';
 import { isKeyHotkey } from 'is-hotkey';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { PowerColorBadge, PowerIcon } from '../power';

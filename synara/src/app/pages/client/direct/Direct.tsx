@@ -23,7 +23,7 @@ import {
   toRem,
 } from 'folds';
 import { useSharedScrollVirtualizer } from '../../../hooks/useSharedScrollVirtualizer';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../../components/FocusTrap';
 import { useNavigate } from 'react-router-dom';
 import { factoryRoomIdByActivity } from '../../../utils/sort';
 import {

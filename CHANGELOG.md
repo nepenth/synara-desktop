@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix the error screen when opening the room Call menu while calls are unavailable: focus traps with only disabled controls now fall back to their own container instead of throwing.
+
 ## [2.2.0] - 2026-10-08
 
 - Sessions: desktop and iOS share one Core session lifecycle; a rejected session retires locally without contacting the homeserver, logout is bounded and race-free, waits briefly for the key backup and warns on the last device, and a closed command gate shows as Connection Lost with static diagnostic ids in the log.

@@ -21,7 +21,7 @@ import {
   Spinner,
   Text,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../components/FocusTrap';
 import { SettingTile } from '../../components/setting-tile';
 import {
   checkDesktopUpdate,

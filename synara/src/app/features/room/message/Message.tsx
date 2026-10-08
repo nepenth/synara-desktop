@@ -30,7 +30,7 @@ import React, {
   useCallback,
   useState,
 } from 'react';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../../components/FocusTrap';
 import { useHover, useFocusWithin } from 'react-aria';
 import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';

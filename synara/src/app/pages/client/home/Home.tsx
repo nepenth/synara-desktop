@@ -24,7 +24,7 @@ import {
 } from 'folds';
 import { useSharedScrollVirtualizer } from '../../../hooks/useSharedScrollVirtualizer';
 import { useAtom, useAtomValue } from 'jotai';
-import FocusTrap from 'focus-trap-react';
+import FocusTrap from '../../../components/FocusTrap';
 import {
   NavButton,
   NavCategory,
