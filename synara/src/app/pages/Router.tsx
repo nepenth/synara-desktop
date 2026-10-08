@@ -73,7 +73,7 @@ import { CreateSpaceModalRenderer } from '../features/create-space';
 import { SearchModalRenderer } from '../features/search';
 import { getActiveSession } from '../state/sessionBootstrap';
 import { Settings } from '../features/settings';
-import { Modal500 } from '../components/Modal500';
+import { SettingsModal } from '../components/settings-layout';
 import { RouteError } from './RouteError';
 import { ApprovalInboxProvider } from '../features/approvals/ApprovalInboxProvider';
 import { Approvals } from '../features/approvals/Approvals';
@@ -83,9 +83,9 @@ function SettingsRoute() {
   const closeSettings = () => navigate(getHomePath());
 
   return (
-    <Modal500 requestClose={closeSettings}>
+    <SettingsModal requestClose={closeSettings}>
       <Settings requestClose={closeSettings} />
-    </Modal500>
+    </SettingsModal>
   );
 }
 

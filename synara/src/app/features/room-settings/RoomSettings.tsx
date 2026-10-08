@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { useAtomValue } from 'jotai';
-import { Avatar, Box, config, Icon, IconButton, Icons, IconSrc, MenuItem, Text } from 'folds';
-import { PageNav, PageNavContent, PageNavHeader, PageRoot } from '../../components/page';
+import { Avatar, Icon, IconButton, Icons, IconSrc, Text } from 'folds';
+import { PageRoot } from '../../components/page';
+import { SettingsNav, SettingsNavGroup } from '../../components/settings-layout';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
@@ -22,6 +23,7 @@ type RoomSettingsMenuItem = {
   page: RoomSettingsPage;
   name: string;
   icon: IconSrc;
+  keywords?: string[];
 };
 
 const useRoomSettingsMenuItems = (): RoomSettingsMenuItem[] =>
@@ -81,6 +83,29 @@ export function RoomSettings({ initialPage, requestClose }: RoomSettingsProps) {
   });
   const menuItems = useRoomSettingsMenuItems();
 
+  const navGroups = useMemo<SettingsNavGroup<RoomSettingsPage>[]>(() => {
+    const byPage = new Map(menuItems.map((item) => [item.page, item]));
+    const pick = (...pages: RoomSettingsPage[]) =>
+      pages.flatMap((page) => {
+        const item = byPage.get(page);
+        return item
+          ? [{ id: item.page, name: item.name, icon: item.icon, keywords: item.keywords }]
+          : [];
+      });
+    return [
+      {
+        label: 'Room',
+        items: pick(
+          RoomSettingsPage.GeneralPage,
+          RoomSettingsPage.MembersPage,
+          RoomSettingsPage.PermissionsPage
+        ),
+      },
+      { label: 'Content', items: pick(RoomSettingsPage.EmojisStickersPage) },
+      { label: 'Advanced', items: pick(RoomSettingsPage.DeveloperToolsPage) },
+    ];
+  }, [menuItems]);
+
   const handlePageRequestClose = () => {
     if (screenSize === ScreenSize.Mobile) {
       setActivePage(undefined);
@@ -93,9 +118,9 @@ export function RoomSettings({ initialPage, requestClose }: RoomSettingsProps) {
     <PageRoot
       nav={
         screenSize === ScreenSize.Mobile && activePage !== undefined ? undefined : (
-          <PageNav size="300">
-            <PageNavHeader outlined={false}>
-              <Box grow="Yes" gap="200">
+          <SettingsNav
+            header={
+              <>
                 <Avatar size="200" radii="300">
                   <RoomAvatar
                     roomId={room.roomId}
@@ -114,49 +139,25 @@ export function RoomSettings({ initialPage, requestClose }: RoomSettingsProps) {
                 <Text size="H4" truncate>
                   {roomName}
                 </Text>
-              </Box>
-              <Box shrink="No">
-                {screenSize === ScreenSize.Mobile && (
-                  <IconButton onClick={requestClose} variant="Background">
-                    <Icon src={Icons.Cross} />
-                  </IconButton>
-                )}
-              </Box>
-            </PageNavHeader>
-            <Box grow="Yes" direction="Column">
-              <PageNavContent>
-                <div style={{ flexGrow: 1 }}>
-                  <Box direction="Column" gap="100" data-settings-nav>
-                    {menuItems.map((item) => (
-                      <MenuItem
-                        className={depthCss.quietInteractiveSurface}
-                        key={item.name}
-                        variant="Surface"
-                        fill="None"
-                        radii="400"
-                        aria-pressed={activePage === item.page}
-                        before={
-                          <Icon src={item.icon} size="100" filled={activePage === item.page} />
-                        }
-                        onClick={() => setActivePage(item.page)}
-                      >
-                        <Text
-                          style={{
-                            fontWeight:
-                              activePage === item.page ? config.fontWeight.W600 : undefined,
-                          }}
-                          size="T300"
-                          truncate
-                        >
-                          {item.name}
-                        </Text>
-                      </MenuItem>
-                    ))}
-                  </Box>
-                </div>
-              </PageNavContent>
-            </Box>
-          </PageNav>
+              </>
+            }
+            headerAfter={
+              screenSize === ScreenSize.Mobile ? (
+                <IconButton
+                  className={depthCss.quietInteractiveSurface}
+                  onClick={requestClose}
+                  variant="Surface"
+                  fill="None"
+                  aria-label="Close"
+                >
+                  <Icon src={Icons.Cross} />
+                </IconButton>
+              ) : undefined
+            }
+            groups={navGroups}
+            active={activePage}
+            onSelect={setActivePage}
+          />
         )
       }
     >

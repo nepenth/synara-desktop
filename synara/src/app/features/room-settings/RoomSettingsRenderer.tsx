@@ -1,7 +1,7 @@
 import React from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { RoomSettings } from './RoomSettings';
-import { Modal500 } from '../../components/Modal500';
+import { SettingsModal } from '../../components/settings-layout';
 import { AppErrorFallback } from '../../components/app-error';
 import { useCloseRoomSettings, useRoomSettingsState } from '../../state/hooks/roomSettings';
 import { useAllJoinedRoomsSet, useGetRoom } from '../../hooks/useGetRoom';
@@ -23,7 +23,7 @@ function RenderSettings({ state }: RenderSettingsProps) {
   if (!room) return null;
 
   return (
-    <Modal500 requestClose={closeSettings}>
+    <SettingsModal requestClose={closeSettings}>
       <ErrorBoundary
         fallbackRender={({ error, resetErrorBoundary }) => (
           <AppErrorFallback
@@ -40,7 +40,7 @@ function RenderSettings({ state }: RenderSettingsProps) {
           </RoomProvider>
         </SpaceProvider>
       </ErrorBoundary>
-    </Modal500>
+    </SettingsModal>
   );
 }
 

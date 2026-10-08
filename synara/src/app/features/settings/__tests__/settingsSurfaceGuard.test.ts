@@ -57,14 +57,17 @@ test('appearance does not offer Twitter Emoji and does not advertise unused mint
 });
 
 test('settings left nav stacks categories with a gap on the reading plane', () => {
-  const nav = settings.slice(
-    settings.indexOf('<PageNavContent>'),
-    settings.indexOf('<Text size="B400">Logout</Text>')
+  // App, Room and Space settings share one grouped nav; selection uses the
+  // room list's NavItem so the selected state matches everywhere.
+  assert.match(settings, /<SettingsNav/);
+  assert.match(settings, /label: 'Preferences'/);
+  const layout = readFileSync(
+    join(process.cwd(), 'src/app/components/settings-layout/SettingsLayout.tsx'),
+    'utf8'
   );
-  assert.match(nav, /<Box direction="Column" gap="(?:100|200|300|400)"/);
-  assert.match(nav, /fill="None"/);
-  assert.match(nav, /quietInteractiveSurface/);
-  assert.match(nav, /variant="Surface"/);
+  assert.match(layout, /<NavItem\s+key=\{item\.name\}\s+variant="Background"/);
+  assert.match(layout, /aria-selected=\{selected\}/);
+  assert.match(layout, /data-settings-nav/);
 });
 
 test('native Appearance hides Message Layout and does not name other clients', () => {
@@ -97,7 +100,7 @@ test('Appearance is its own Settings page and General no longer hosts theme or l
 });
 
 test('maintenance actions live once, under General > Storage, not duplicated in About', () => {
-  assert.match(general, /<Text size="L400">Storage<\/Text>/);
+  assert.match(general, /<SettingsSection title="Storage">/);
   assert.match(general, /Reload Application/);
   assert.match(general, /isDesktopPlatform\(\) && <SecretStoreTile \/>/);
   assert.equal(about.includes('Clear Cache'), false);
@@ -137,7 +140,7 @@ const developerTools = readFileSync(
 );
 
 test('General hosts the first-class Widgets card and Developer Tools does not duplicate it', () => {
-  assert.match(general, /<Text size="L400">Widgets<\/Text>/);
+  assert.match(general, /<SettingsSection title="Widgets">/);
   assert.match(general, /experimentalWidgetsEnabled/);
   assert.match(general, /agentWidgetEntries/);
   assert.match(general, /widgetsSettingsDescription/);
@@ -149,7 +152,7 @@ test('General hosts the first-class Widgets card and Developer Tools does not du
 });
 
 test('General hosts a Calls card with honest MatrixRTC transport status', () => {
-  assert.match(general, /<Text size="L400">Calls<\/Text>/);
+  assert.match(general, /<SettingsSection title="Calls">/);
   assert.match(general, /rtcCallAvailabilityCopy/);
   assert.match(general, /snapshotRtcTransportsNative/);
   assert.equal(general.includes('set_call'), false);
