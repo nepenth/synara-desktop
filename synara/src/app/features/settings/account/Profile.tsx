@@ -68,6 +68,7 @@ import {
 } from '../../matrix-rtc/nativeRtcTransports';
 import { rtcTransportsDiagnosticCopy } from '../../matrix-rtc/liveCallChrome';
 import { profileWriteErrorMessage } from './nativeProfileOwner';
+import { getSafeMyUserId } from '../../../state/nativeIdentity';
 
 type ProfileProps = {
   profile: UserProfile;
@@ -709,8 +710,7 @@ function ProfileRtcTransports() {
 }
 
 export function Profile() {
-  const mx = useMatrixClient();
-  const userId = mx.getUserId()!;
+  const userId = getSafeMyUserId();
   const profile = useUserProfile(userId);
 
   return (

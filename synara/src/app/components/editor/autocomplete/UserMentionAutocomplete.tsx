@@ -23,13 +23,14 @@ import { Membership } from '../../../../types/matrix/room';
 import { resolveMatrixThumbnailUrl } from '../../../matrix/media';
 import { getSessionBootstrapResult } from '../../../state/sessionBootstrap';
 import { isSynaraDesktop } from '../../../utils/desktop';
+import { getMyUserId } from '../../../state/nativeIdentity';
 
 type MentionAutoCompleteHandler = (userId: string, name: string) => void;
 
 const userIdFromQueryText = (mx: MatrixClientReading, text: string) =>
   isUserId(`@${text}`)
     ? `@${text}`
-    : `@${text}${text.endsWith(':') ? '' : ':'}${getMxIdServer(mx.getUserId() ?? '')}`;
+    : `@${text}${text.endsWith(':') ? '' : ':'}${getMxIdServer(getMyUserId() ?? '')}`;
 
 function UnknownMentionItem({
   userId,
@@ -116,7 +117,7 @@ export function UserMentionAutocomplete({
     const mentionEl = createMentionElement(
       uId,
       name.startsWith('@') ? name : `@${name}`,
-      mx.getUserId() === uId || roomAliasOrId === uId
+      getMyUserId() === uId || roomAliasOrId === uId
     );
     replaceWithElement(editor, query.range, mentionEl);
     moveCursor(editor, true);

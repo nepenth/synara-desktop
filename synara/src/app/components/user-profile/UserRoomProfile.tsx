@@ -30,6 +30,7 @@ import { useRoomMembers } from '../../hooks/useRoomMembers';
 import { memberActionVisibility, resolveNativeRoomMembership } from './memberActions';
 import { composerMentionInsertAtom } from '../../state/composerMentionInsert';
 import { nativeIgnoredUsersSnapshot } from '../../features/settings/account/nativeIgnoredUsers';
+import { getSafeMyUserId } from '../../state/nativeIdentity';
 
 type UserRoomProfileProps = {
   userId: string;
@@ -74,7 +75,7 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
   const permissions = useRoomPermissions(powerLevels);
   const { hasMorePower } = useMemberPowerCompare(creators, powerLevels);
 
-  const myUserId = mx.getSafeUserId();
+  const myUserId = getSafeMyUserId();
   const creator = creators.has(userId);
   const nativeMembersFailed = Boolean(nativeSession && nativeMembers === undefined);
   const permissionsReady =

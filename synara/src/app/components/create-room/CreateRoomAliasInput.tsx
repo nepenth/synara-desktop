@@ -13,6 +13,7 @@ import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { replaceSpaceWithDash } from '../../utils/common';
 import { AsyncState, AsyncStatus, useAsync } from '../../hooks/useAsyncCallback';
 import { useDebounce } from '../../hooks/useDebounce';
+import { getSafeMyUserId } from '../../state/nativeIdentity';
 
 export function CreateRoomAliasInput({ disabled }: { disabled?: boolean }) {
   const mx = useMatrixClient();
@@ -30,7 +31,7 @@ export function CreateRoomAliasInput({ disabled }: { disabled?: boolean }) {
   const checkAliasAvail = useAsync(
     useCallback(
       async (aliasLocalPart: string) => {
-        const roomAlias = `#${aliasLocalPart}:${getMxIdServer(mx.getSafeUserId())}`;
+        const roomAlias = `#${aliasLocalPart}:${getMxIdServer(getSafeMyUserId())}`;
         try {
           const result = await mx.getRoomIdForAlias(roomAlias);
           return typeof result?.room_id !== 'string';
@@ -93,7 +94,7 @@ export function CreateRoomAliasInput({ disabled }: { disabled?: boolean }) {
         }
         after={
           <Text style={{ maxWidth: toRem(150) }} truncate>
-            :{getMxIdServer(mx.getSafeUserId())}
+            :{getMxIdServer(getSafeMyUserId())}
           </Text>
         }
         onKeyDown={handleAliasKeyDown}

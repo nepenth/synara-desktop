@@ -9,6 +9,7 @@ import {
 } from '../../plugins/markdown';
 import { sanitizeForRegex } from '../../utils/regex';
 import { isUserId } from '../../utils/matrix';
+import { getMyUserId } from '../../state/nativeIdentity';
 
 /**
  * Options for the editor's own HTML. Markdown is rendered by Core instead
@@ -279,7 +280,7 @@ export const getMentions = (
         mentionData.room = true;
       }
 
-      if (isUserId(node.id) && node.id !== mx.getUserId()) {
+      if (isUserId(node.id) && node.id !== getMyUserId()) {
         mentionData.users.add(node.id);
       }
 

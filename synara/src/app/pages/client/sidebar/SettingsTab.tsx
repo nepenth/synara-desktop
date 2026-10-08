@@ -10,11 +10,12 @@ import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { Settings } from '../../../features/settings';
 import { useUserProfile } from '../../../hooks/useUserProfile';
 import { Modal500 } from '../../../components/Modal500';
+import { getSafeMyUserId } from '../../../state/nativeIdentity';
 
 export function SettingsTab() {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
-  const userId = mx.getUserId()!;
+  const userId = getSafeMyUserId();
   const profile = useUserProfile(userId);
 
   const [settings, setSettings] = useState(false);

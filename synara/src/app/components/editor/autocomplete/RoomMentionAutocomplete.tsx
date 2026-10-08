@@ -19,13 +19,14 @@ import { factoryRoomIdByActivity } from '../../../utils/sort';
 import { RoomAvatar, RoomIcon } from '../../room-avatar';
 import { getViaServers } from '../../../plugins/via-servers';
 import { normalizeRoomJoinRulePresentation } from '../../../features/matrix-dto/roomJoinRule';
+import { getMyUserId } from '../../../state/nativeIdentity';
 
 type MentionAutoCompleteHandler = (roomAliasOrId: string, name: string) => void | Promise<void>;
 
 const roomAliasFromQueryText = (mx: MatrixClientReading, text: string) =>
   isRoomAlias(`#${text}`)
     ? `#${text}`
-    : `#${text}${text.endsWith(':') ? '' : ':'}${getMxIdServer(mx.getUserId() ?? '')}`;
+    : `#${text}${text.endsWith(':') ? '' : ':'}${getMxIdServer(getMyUserId() ?? '')}`;
 
 function UnknownRoomMentionItem({
   query,

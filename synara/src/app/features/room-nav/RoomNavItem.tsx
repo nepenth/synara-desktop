@@ -51,6 +51,7 @@ import { LiveCallChip } from './LiveCallChip';
 import { useNativeUserStatus } from '../matrix-presence/nativeUserStatus';
 import * as css from './styles.css';
 import * as depthCss from '../../styles/Depth.css';
+import { getMyUserId } from '../../state/nativeIdentity';
 
 type RoomNavItemMenuProps = {
   room: EventedRoomReading;
@@ -292,7 +293,6 @@ type RoomNavItemProps = {
   notificationMode?: RoomNotificationMode;
 };
 function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNavItemProps) {
-  const mx = useMatrixClient();
   const [hover, setHover] = useState(false);
   const { hoverProps } = useHover({ onHoverChange: setHover });
   const { focusWithinProps } = useFocusWithin({ onFocusWithinChange: setHover });
@@ -309,7 +309,7 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
   const dmPeerStatus = useNativeUserStatus(dmPeerId);
   const showDmInCall = Boolean(dmPeerId && dmPeerStatus?.inCall);
   const typingMember = useRoomTypingMember(room.roomId).filter(
-    (receipt) => receipt.userId !== mx.getUserId()
+    (receipt) => receipt.userId !== getMyUserId()
   );
 
   const roomName = useRoomName(room);

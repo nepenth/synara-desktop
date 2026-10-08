@@ -84,6 +84,7 @@ import {
   reportWithNativeTimelineAction,
   unpinWithNativeTimelineAction,
 } from '../nativeTimelineAction';
+import { getMyUserId } from '../../../state/nativeIdentity';
 
 const EMPTY_IMAGE_PACK_ROOMS: string[] = [];
 
@@ -1550,7 +1551,7 @@ export const Message = as<'div', MessageProps>(
                           </PopOut>
                         </Box>
                         {((!mEvent.isRedacted() && canDelete) ||
-                          mEvent.getSender() !== mx.getUserId()) && (
+                          mEvent.getSender() !== getMyUserId()) && (
                           <>
                             <Line size="300" />
                             <Box direction="Column" gap="100" className={css.MessageMenuGroup}>
@@ -1561,7 +1562,7 @@ export const Message = as<'div', MessageProps>(
                                   onClose={closeMenu}
                                 />
                               )}
-                              {mEvent.getSender() !== mx.getUserId() && (
+                              {mEvent.getSender() !== getMyUserId() && (
                                 <MessageReportItem
                                   room={room}
                                   mEvent={mEvent}
@@ -1635,7 +1636,6 @@ export const Event = as<'div', EventProps>(
     },
     ref
   ) => {
-    const mx = useMatrixClient();
     const [hover, setHover] = useState(false);
     const { hoverProps } = useHover({ onHoverChange: setHover });
     const { focusWithinProps } = useFocusWithin({ onFocusWithinChange: setHover });
@@ -1716,7 +1716,7 @@ export const Event = as<'div', EventProps>(
                           <MessageCopyLinkItem room={room} mEvent={mEvent} onClose={closeMenu} />
                         </Box>
                         {((!mEvent.isRedacted() && canDelete && !stateEvent) ||
-                          (mEvent.getSender() !== mx.getUserId() && !stateEvent)) && (
+                          (mEvent.getSender() !== getMyUserId() && !stateEvent)) && (
                           <>
                             <Line size="300" />
                             <Box direction="Column" gap="100" className={css.MessageMenuGroup}>
@@ -1727,7 +1727,7 @@ export const Event = as<'div', EventProps>(
                                   onClose={closeMenu}
                                 />
                               )}
-                              {mEvent.getSender() !== mx.getUserId() && (
+                              {mEvent.getSender() !== getMyUserId() && (
                                 <MessageReportItem
                                   room={room}
                                   mEvent={mEvent}

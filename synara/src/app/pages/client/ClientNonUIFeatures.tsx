@@ -72,6 +72,7 @@ import {
   subscribeNativeNotificationObservations,
   type NativeNotificationObservation,
 } from '../../features/room/nativeNotificationObservation';
+import { getMyUserId } from '../../state/nativeIdentity';
 
 // Local submit-memory bound. Core `(room, event)` dedup is authoritative;
 // this set only guards against a duplicated observation of the same event.
@@ -503,7 +504,7 @@ function AgentApprovalNotifications() {
   const mx = useMatrixClient();
   const browserNotifications = useMemo(createObservedBrowserNotificationRegistry, []);
   useEffect(() => () => browserNotifications.clear(), [mx, browserNotifications]);
-  const accountScope = mx.getUserId();
+  const accountScope = getMyUserId();
   const nativeActionState = useMemo(
     () => ({
       inFlight: new Set<string>(),

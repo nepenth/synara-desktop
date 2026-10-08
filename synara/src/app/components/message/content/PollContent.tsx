@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { respondPollWithNativeDesktopOwner } from '../../../features/room/nativePoll';
 import { ParsedPoll, parsePollResponseContent, summarizePollResponses } from '../../../utils/polls';
+import { getMyUserId } from '../../../state/nativeIdentity';
 
 export type PollContentProps = {
   roomId: string;
@@ -26,7 +27,7 @@ export function PollContent({ roomId, eventId, poll }: PollContentProps) {
     [responses, answerIds]
   );
   const totalVotes = Object.values(counts).reduce((total, count) => total + count, 0);
-  const myUserId = mx.getUserId() ?? undefined;
+  const myUserId = getMyUserId() ?? undefined;
   const myAnswerIds = useMemo(() => {
     let latest: { ts?: number; answers: string[] } | undefined;
     responses.forEach((response) => {

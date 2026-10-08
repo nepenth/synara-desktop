@@ -18,7 +18,6 @@ import type { MatrixError } from '../../../utils/matrix';
 import { SettingTile } from '../../../components/setting-tile';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../../room-settings/styles.css';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useRoom } from '../../../hooks/useRoom';
 import {
   useLocalAliases,
@@ -33,6 +32,7 @@ import { useAlive } from '../../../hooks/useAlive';
 import { StateEvent } from '../../../../types/matrix/room';
 import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
 import { getMxIdServer } from '../../../utils/matrix';
+import { getSafeMyUserId } from '../../../state/nativeIdentity';
 
 type RoomPublishedAddressesProps = {
   permissions: RoomPermissionsAPI;
@@ -127,8 +127,7 @@ export function RoomPublishedAddresses({ permissions }: RoomPublishedAddressesPr
 }
 
 function LocalAddressInput({ addLocalAlias }: { addLocalAlias: (alias: string) => Promise<void> }) {
-  const mx = useMatrixClient();
-  const userId = mx.getSafeUserId();
+  const userId = getSafeMyUserId();
   const server = getMxIdServer(userId);
   const alive = useAlive();
 

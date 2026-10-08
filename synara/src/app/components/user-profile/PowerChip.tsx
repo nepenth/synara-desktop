@@ -45,6 +45,7 @@ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useMemberPowerCompare } from '../../hooks/useMemberPowerCompare';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { setPowerLevelWithNativeOwner } from '../nativeRoomModerationOwner';
+import { getSafeMyUserId } from '../../state/nativeIdentity';
 
 type SelfDemoteAlertProps = {
   power: number;
@@ -164,7 +165,7 @@ export function PowerChip({ userId }: { userId: string }) {
   const powerLevelTags = usePowerLevelTags(room, powerLevels);
   const getMemberPowerTag = useGetMemberPowerTag(room, creators, powerLevels);
 
-  const myUserId = mx.getSafeUserId();
+  const myUserId = getSafeMyUserId();
   const canChangePowers =
     permissions.stateEvent(StateEvent.RoomPowerLevels) &&
     (myUserId === userId ? true : hasMorePower(myUserId, userId));
@@ -204,7 +205,7 @@ export function PowerChip({ userId }: { userId: string }) {
     if (!canChangePowers) return;
     if (power === getMemberPowerLevel(userId)) return;
 
-    if (userId === mx.getSafeUserId()) {
+    if (userId === getSafeMyUserId()) {
       setSelfDemote(power);
       return;
     }

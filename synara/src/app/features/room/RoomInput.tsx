@@ -174,6 +174,7 @@ import {
   makeOrReuseAttachmentSendPlan,
 } from './attachmentSendPlan';
 import { renderComposerHtml } from '../../components/editor/composerMarkdown';
+import { getMyUserId, getSafeMyUserId } from '../../state/nativeIdentity';
 
 interface RoomInputProps {
   editor: Editor;
@@ -208,7 +209,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       const mentionEl = createMentionElement(
         mentionInsert.userId,
         mentionInsert.name.startsWith('@') ? mentionInsert.name : `@${mentionInsert.name}`,
-        mx.getUserId() === mentionInsert.userId
+        getMyUserId() === mentionInsert.userId
       );
       Transforms.insertNodes(editor, mentionEl);
       moveCursor(editor, true);
@@ -477,7 +478,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     }, [replyDraft, threadRootEventId]);
 
     useEffect(() => {
-      const storedDraft = loadRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
+      const storedDraft = loadRoomDraft(window.localStorage, getSafeMyUserId(), roomId);
       const draft = msgDraft.length > 0 ? msgDraft : storedDraft;
       if (draft && draft.length > 0) {
         Transforms.insertFragment(editor, draft);
@@ -489,10 +490,10 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         if (!isEmptyEditor(editor)) {
           const parsedDraft = JSON.parse(JSON.stringify(editor.children));
           setMsgDraft(parsedDraft);
-          saveRoomDraft(window.localStorage, mx.getSafeUserId(), roomId, parsedDraft);
+          saveRoomDraft(window.localStorage, getSafeMyUserId(), roomId, parsedDraft);
         } else {
           setMsgDraft([]);
-          clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
+          clearRoomDraft(window.localStorage, getSafeMyUserId(), roomId);
         }
         resetEditor(editor);
         resetEditorHistory(editor);
@@ -503,17 +504,17 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const handleEditorChange = useCallback(
       (value: Parameters<EditorChangeHandler>[0]) => {
         if (isEmptyEditor(editor)) {
-          clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
+          clearRoomDraft(window.localStorage, getSafeMyUserId(), roomId);
           setComposerPreviewUrl(undefined);
           setComposerPreview(null);
           return;
         }
-        saveRoomDraft(window.localStorage, mx.getSafeUserId(), roomId, value);
+        saveRoomDraft(window.localStorage, getSafeMyUserId(), roomId, value);
         const nextUrl = trailingComposerPreviewUrl(toPlainText(editor.children, isMarkdown));
         setComposerPreviewUrl(nextUrl);
         if (!nextUrl) setComposerPreview(null);
       },
-      [mx, roomId, editor, isMarkdown]
+      [roomId, editor, isMarkdown]
     );
 
     useEffect(() => {
@@ -707,7 +708,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         body,
       };
 
-      if (replyDraft && replyDraft.senderId !== mx.getUserId()) {
+      if (replyDraft && replyDraft.senderId !== getMyUserId()) {
         mentionData.users.add(replyDraft.senderId);
       }
 
@@ -756,7 +757,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             attachmentSendPlan.current = undefined;
             resetEditor(editor);
             resetEditorHistory(editor);
-            clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
+            clearRoomDraft(window.localStorage, getSafeMyUserId(), roomId);
             await clearReplyDraftAfterSend(sendRelation.draftRevision, () => {
               setSendError(
                 t(
@@ -786,7 +787,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         requestRoomLatestAfterSend(roomId);
         resetEditor(editor);
         resetEditorHistory(editor);
-        clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
+        clearRoomDraft(window.localStorage, getSafeMyUserId(), roomId);
         await clearReplyDraftAfterSend(sendRelation.draftRevision, () => {
           setSendError(
             t(
