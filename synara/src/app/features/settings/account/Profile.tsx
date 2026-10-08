@@ -70,6 +70,7 @@ import { profileWriteErrorMessage } from './nativeProfileOwner';
 import { getSafeMyUserId } from '../../../state/nativeIdentity';
 
 import { setNativeDisplayName, setNativeAvatarUrl } from '../../../native/nativeCommands';
+import { SettingsSection } from '../../../components/settings-layout';
 type ProfileProps = {
   profile: UserProfile;
   userId: string;
@@ -716,8 +717,7 @@ export function Profile() {
   const profile = useUserProfile(userId);
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Profile</Text>
+    <SettingsSection title="Profile">
       <SequenceCard
         className={SequenceCardStyle}
         variant="SurfaceVariant"
@@ -730,6 +730,6 @@ export function Profile() {
         <ProfileStatus userId={userId} />
         <ProfileRtcTransports />
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }

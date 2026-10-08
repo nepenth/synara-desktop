@@ -240,7 +240,8 @@ test('quiet-depth restyle covers new settings, explore, notes, approvals, and su
   assert.match(deviceTile, /wrap="Wrap"/);
   assert.match(deviceTile, /aria-expanded=\{details\}/);
   assert.match(deviceTile, /userSelect: 'all'/);
-  assert.match(devices, /SettingsQuietControl/);
+  // Page chrome (close/back) comes from the shared SettingsPage quiet controls.
+  assert.match(devices, /<SettingsPage/);
   assert.match(explore, /aria-haspopup="dialog"/);
   assert.match(explore, /initialFocus: \(\) => serverInputRef\.current/);
   assert.match(server, /wrap="Wrap"/);

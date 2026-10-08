@@ -11,6 +11,7 @@ import {
   nativeThreepidRequestEmailToken,
   nativeThreepidSnapshot,
 } from './nativeThreepid';
+import { SettingsSection } from '../../../components/settings-layout';
 
 export function ContactInformation() {
   return <NativeContactInformation />;
@@ -82,8 +83,7 @@ function NativeContactInformation() {
     passwordState.status === AsyncStatus.Loading;
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Contact Information</Text>
+    <SettingsSection title="Contact Information">
       <SequenceCard
         className={SequenceCardStyle}
         variant="SurfaceVariant"
@@ -170,6 +170,6 @@ function NativeContactInformation() {
           </Box>
         </SettingTile>
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }

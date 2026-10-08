@@ -43,6 +43,7 @@ import { setRoomAvatarNative, setRoomNameNative, setRoomTopicNative } from './na
 import { normalizeRoomJoinRulePresentation } from '../../matrix-dto/roomJoinRule';
 
 import { sendNativeStateEvent } from '../../../native/nativeCommands';
+import { SettingsSection } from '../../../components/settings-layout';
 type RoomProfileEditProps = {
   canEditAvatar: boolean;
   canEditName: boolean;
@@ -302,8 +303,7 @@ export function RoomProfile({ permissions }: RoomProfileProps) {
   const handleCloseEdit = useCallback(() => setEdit(false), []);
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Profile</Text>
+    <SettingsSection title="Profile">
       <SequenceCard
         className={SequenceCardStyle}
         variant="SurfaceVariant"
@@ -368,6 +368,6 @@ export function RoomProfile({ permissions }: RoomProfileProps) {
           </Box>
         )}
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }

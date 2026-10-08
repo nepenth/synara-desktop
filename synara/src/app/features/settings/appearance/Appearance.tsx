@@ -12,14 +12,12 @@ import {
   color,
   config,
   Icon,
-  IconButton,
   Icons,
   Input,
   Menu,
   MenuItem,
   PopOut,
   RectCords,
-  Scroll,
   Switch,
   Text,
   toRem,
@@ -27,7 +25,6 @@ import {
 import { isKeyHotkey } from 'is-hotkey';
 import FocusTrap from '../../../components/FocusTrap';
 import { useTranslation } from 'react-i18next';
-import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { useSetting } from '../../../state/hooks/settings';
 import { MessageLayout, MessageSpacing, settingsAtom } from '../../../state/settings';
@@ -56,6 +53,7 @@ import {
   normalizeThemeBaseColor,
   THEME_BASE_PRESETS,
 } from '../../../utils/themeBase';
+import { SettingsPage, SettingsSection } from '../../../components/settings-layout';
 
 type ThemeSelectorProps = {
   themeNames: Record<string, string>;
@@ -376,8 +374,7 @@ function Appearance() {
   const baseColor = normalizeThemeBaseColor(themeBaseColor) ?? DEFAULT_THEME_BASE_COLOR;
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Theme</Text>
+    <SettingsSection title="Theme">
       <SequenceCard
         className={SequenceCardStyle}
         variant="SurfaceVariant"
@@ -541,7 +538,7 @@ function Appearance() {
           }
         />
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }
 
@@ -549,8 +546,7 @@ function TextAndZoom() {
   const [messageTextTone, setMessageTextTone] = useSetting(settingsAtom, 'messageTextTone');
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Text</Text>
+    <SettingsSection title="Text">
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
           title="Message Text"
@@ -593,7 +589,7 @@ function TextAndZoom() {
           after={<PageZoomInput />}
         />
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }
 
@@ -762,8 +758,7 @@ function MessageDisplay() {
   );
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Messages</Text>
+    <SettingsSection title="Messages">
       {!isNativeMatrixSession() && (
         <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
           <SettingTile title="Message Layout" after={<SelectMessageLayout />} />
@@ -785,7 +780,7 @@ function MessageDisplay() {
           }
         />
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }
 
@@ -794,38 +789,14 @@ type AppearancePageProps = {
 };
 export function AppearancePage({ requestClose }: AppearancePageProps) {
   return (
-    <Page>
-      <PageHeader outlined={false}>
-        <Box grow="Yes" gap="200">
-          <Box grow="Yes" alignItems="Center" gap="200">
-            <Text size="H3" truncate>
-              Appearance
-            </Text>
-          </Box>
-          <Box shrink="No">
-            <IconButton
-              className={SettingsQuietControl}
-              onClick={requestClose}
-              variant="Surface"
-              fill="None"
-              aria-label="Close"
-            >
-              <Icon src={Icons.Cross} />
-            </IconButton>
-          </Box>
-        </Box>
-      </PageHeader>
-      <Box grow="Yes">
-        <Scroll hideTrack visibility="Hover">
-          <PageContent>
-            <Box direction="Column" gap="700">
-              <Appearance />
-              <TextAndZoom />
-              <MessageDisplay />
-            </Box>
-          </PageContent>
-        </Scroll>
-      </Box>
-    </Page>
+    <SettingsPage
+      title="Appearance"
+      description="Theme, colors, density and text size for this device."
+      requestClose={requestClose}
+    >
+      <Appearance />
+      <TextAndZoom />
+      <MessageDisplay />
+    </SettingsPage>
   );
 }

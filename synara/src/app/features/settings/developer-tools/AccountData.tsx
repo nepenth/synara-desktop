@@ -5,6 +5,7 @@ import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { CutoutCard } from '../../../components/cutout-card';
 import { listNativeAccountDataTypes } from '../../../native/nativeAccountData';
+import { SettingsSection } from '../../../components/settings-layout';
 
 type AccountDataProps = {
   expand: boolean;
@@ -27,8 +28,7 @@ export function AccountData({ expand, onExpandToggle, onSelect }: AccountDataPro
   }, [expand]);
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Account Data</Text>
+    <SettingsSection title="Account Data">
       <SequenceCard
         className={SequenceCardStyle}
         variant="SurfaceVariant"
@@ -99,6 +99,6 @@ export function AccountData({ expand, onExpandToggle, onSelect }: AccountDataPro
           </Box>
         )}
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }

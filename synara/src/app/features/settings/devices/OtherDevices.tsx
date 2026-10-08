@@ -20,6 +20,7 @@ import {
   isNativeDeviceSelectableForLogout,
 } from './nativeDevices';
 import { RefreshDeviceList } from '../../../hooks/useDeviceList';
+import { SettingsSection } from '../../../components/settings-layout';
 
 type OtherDevicesProps = {
   devices: NativeDevice[];
@@ -171,8 +172,7 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
 
   return devices.length > 0 ? (
     <>
-      <Box direction="Column" gap="100">
-        <Text size="L400">Others</Text>
+      <SettingsSection title="Others">
         {authMetadata && (
           <SequenceCard
             className={SequenceCardStyle}
@@ -238,7 +238,7 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
             )}
           </SequenceCard>
         ))}
-      </Box>
+      </SettingsSection>
       {deleted.size > 0 && !authMetadata && (
         <Menu
           style={{

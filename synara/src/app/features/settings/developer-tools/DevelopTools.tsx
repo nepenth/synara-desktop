@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Badge, Box, Text, IconButton, Icon, Icons, Scroll, Switch } from 'folds';
-import { Page, PageContent, PageHeader } from '../../../components/page';
+import { Badge, Text, Switch } from 'folds';
 import { SequenceCard } from '../../../components/sequence-card';
-import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
+import { SequenceCardStyle } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
@@ -23,6 +22,7 @@ import {
   type PlatformSecretStoreStatus,
 } from '../../../platform';
 import { setNativeAccountData, useNativeAccountData } from '../../../native/nativeAccountData';
+import { SettingsPage, SettingsSection } from '../../../components/settings-layout';
 
 function NativeSessionStoreStatus() {
   const [status, setStatus] = useState<PlatformSecretStoreStatus>();
@@ -109,112 +109,76 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
   }
 
   return (
-    <Page>
-      <PageHeader outlined={false}>
-        <Box grow="Yes" gap="200">
-          <Box grow="Yes" alignItems="Center" gap="200">
-            <Text size="H3" truncate>
-              Developer Tools
-            </Text>
-          </Box>
-          <Box shrink="No">
-            <IconButton
-              className={SettingsQuietControl}
-              onClick={requestClose}
-              variant="Surface"
-              fill="None"
-              aria-label="Close"
-            >
-              <Icon src={Icons.Cross} />
-            </IconButton>
-          </Box>
-        </Box>
-      </PageHeader>
-      <Box grow="Yes">
-        <Scroll hideTrack visibility="Hover">
-          <PageContent>
-            <Box direction="Column" gap="700">
-              <Box direction="Column" gap="100">
-                <Text size="L400">Options</Text>
-                <SequenceCard
-                  className={SequenceCardStyle}
-                  variant="SurfaceVariant"
-                  direction="Column"
-                  gap="400"
-                >
-                  <SettingTile
-                    title="Enable Developer Tools"
-                    after={
-                      <Switch
-                        variant="Primary"
-                        value={developerTools}
-                        onChange={setDeveloperTools}
-                      />
-                    }
-                  />
-                  <SettingTile
-                    title="Encrypted state events (experimental)"
-                    description="MSC4362. Older clients will not see room name, topic, or avatar. This cannot be turned off for rooms that already opted in; this device will still decrypt those rooms."
-                    after={
-                      <Switch
-                        variant="Primary"
-                        value={encryptedStateEvents}
-                        onChange={setEncryptedStateEvents}
-                      />
-                    }
-                  />
-                </SequenceCard>
-                {isSynaraDesktop() && (
-                  <SequenceCard
-                    className={SequenceCardStyle}
-                    variant="SurfaceVariant"
-                    direction="Column"
-                    gap="400"
-                  >
-                    <SettingTile
-                      title="Experimental Widgets"
-                      description="Widgets are configured under General."
-                    />
-                  </SequenceCard>
-                )}
-                {developerTools && (
-                  <SequenceCard
-                    className={SequenceCardStyle}
-                    variant="SurfaceVariant"
-                    direction="Column"
-                    gap="400"
-                  >
-                    <NativeSessionStoreStatus />
-                  </SequenceCard>
-                )}
-              </Box>
-              {developerTools && !isNativeMatrixSession() && (
-                <AccountData
-                  expand={expand}
-                  onExpandToggle={setExpend}
-                  onSelect={setAccountDataType}
-                />
-              )}
-              {developerTools && isNativeMatrixSession() && (
-                <Box direction="Column" gap="100">
-                  <Text size="L400">Account Data</Text>
-                  <SequenceCard
-                    className={SequenceCardStyle}
-                    variant="SurfaceVariant"
-                    direction="Column"
-                    gap="400"
-                  >
-                    <SettingTile
-                      title="Global"
-                      description="Account-data browsing is not available in this native session."
-                    />
-                  </SequenceCard>
-                </Box>
-              )}
-            </Box>
-          </PageContent>
-        </Scroll>
-      </Box>
-    </Page>
+    <SettingsPage
+      title="Developer Tools"
+      description="Low-level account data and protocol tools. Changes here take effect immediately."
+      requestClose={requestClose}
+    >
+      <SettingsSection title="Options">
+        <SequenceCard
+          className={SequenceCardStyle}
+          variant="SurfaceVariant"
+          direction="Column"
+          gap="400"
+        >
+          <SettingTile
+            title="Enable Developer Tools"
+            after={<Switch variant="Primary" value={developerTools} onChange={setDeveloperTools} />}
+          />
+          <SettingTile
+            title="Encrypted state events (experimental)"
+            description="MSC4362. Older clients will not see room name, topic, or avatar. This cannot be turned off for rooms that already opted in; this device will still decrypt those rooms."
+            after={
+              <Switch
+                variant="Primary"
+                value={encryptedStateEvents}
+                onChange={setEncryptedStateEvents}
+              />
+            }
+          />
+        </SequenceCard>
+        {isSynaraDesktop() && (
+          <SequenceCard
+            className={SequenceCardStyle}
+            variant="SurfaceVariant"
+            direction="Column"
+            gap="400"
+          >
+            <SettingTile
+              title="Experimental Widgets"
+              description="Widgets are configured under General."
+            />
+          </SequenceCard>
+        )}
+        {developerTools && (
+          <SequenceCard
+            className={SequenceCardStyle}
+            variant="SurfaceVariant"
+            direction="Column"
+            gap="400"
+          >
+            <NativeSessionStoreStatus />
+          </SequenceCard>
+        )}
+      </SettingsSection>
+      {developerTools && !isNativeMatrixSession() && (
+        <AccountData expand={expand} onExpandToggle={setExpend} onSelect={setAccountDataType} />
+      )}
+      {developerTools && isNativeMatrixSession() && (
+        <SettingsSection title="Account Data">
+          <SequenceCard
+            className={SequenceCardStyle}
+            variant="SurfaceVariant"
+            direction="Column"
+            gap="400"
+          >
+            <SettingTile
+              title="Global"
+              description="Account-data browsing is not available in this native session."
+            />
+          </SequenceCard>
+        </SettingsSection>
+      )}
+    </SettingsPage>
   );
 }
