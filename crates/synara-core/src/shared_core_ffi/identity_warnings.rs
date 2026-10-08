@@ -6,13 +6,39 @@ use crate::app::verification::{
     NativeRoomIdentityWarningsRequest,
 };
 
-/// A room member whose identity changed. `kind` is `verification_violation`
-/// or `pin_violation`. No key material.
+super::wire_enum::wire_enum! {
+    pub enum IdentityWarningKindDto {
+        VerificationViolation => "verification_violation",
+        PinViolation => "pin_violation",
+    }
+}
+super::wire_enum::wire_enum_from!(crate::app::verification::NativeIdentityWarningKind => IdentityWarningKindDto {
+    VerificationViolation, PinViolation
+});
+
+super::wire_enum::wire_enum! {
+    /// How to resolve an identity warning.
+    pub enum IdentityWarningActionDto {
+        Dismiss => "dismiss",
+        WithdrawVerification => "withdraw_verification",
+    }
+}
+
+impl From<IdentityWarningActionDto> for NativeIdentityWarningAction {
+    fn from(action: IdentityWarningActionDto) -> Self {
+        match action {
+            IdentityWarningActionDto::Dismiss => Self::Dismiss,
+            IdentityWarningActionDto::WithdrawVerification => Self::WithdrawVerification,
+        }
+    }
+}
+
+/// A room member whose identity changed. No key material.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomIdentityWarningDto {
     pub user_id: String,
     pub display_name: Option<String>,
-    pub kind: String,
+    pub kind: IdentityWarningKindDto,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -71,22 +97,9 @@ pub(super) fn room_identity_warnings_dto(
             .map(|warning| RoomIdentityWarningDto {
                 user_id: warning.user_id,
                 display_name: warning.display_name,
-                kind: warning.kind.as_str().to_owned(),
+                kind: warning.kind.into(),
             })
             .collect(),
-    }
-}
-
-fn identity_warning_action(
-    action: &str,
-) -> Result<NativeIdentityWarningAction, RoomIdentityWarningError> {
-    match action {
-        "dismiss" => Ok(NativeIdentityWarningAction::Dismiss),
-        "withdraw_verification" => Ok(NativeIdentityWarningAction::WithdrawVerification),
-        _ => Err(RoomIdentityWarningError::Failed {
-            code: "v-crypto.identity-warning-invalid-action".to_owned(),
-            description: "The identity change could not be updated.".to_owned(),
-        }),
     }
 }
 
@@ -104,16 +117,15 @@ impl SharedCore {
             .map_err(map_identity_warning_core_error)
     }
 
-    /// `action` is `dismiss` (accept the new identity) or
-    /// `withdraw_verification` (drop an old verification). Returns the room's
-    /// remaining warnings.
+    /// `dismiss` accepts the new identity; `withdraw_verification` drops an old
+    /// verification. Returns the room's remaining warnings.
     pub async fn resolve_room_identity_warning(
         &self,
         room_id: String,
         user_id: String,
-        action: String,
+        action: IdentityWarningActionDto,
     ) -> Result<RoomIdentityWarningsDto, RoomIdentityWarningError> {
-        let action = identity_warning_action(&action)?;
+        let action = action.into();
         self.core
             .room_identity_warning_resolve(NativeIdentityWarningResolveRequest {
                 room_id,
@@ -153,9 +165,9 @@ mod tests {
                 .with_diagnostic("@bob:example.org"),
         );
         assert_eq!(code, "v-crypto.identity-warning-failed");
-        assert!(identity_warning_action("verify").is_err());
+        assert_eq!(IdentityWarningActionDto::from_wire("verify"), None);
         assert_eq!(
-            identity_warning_action("withdraw_verification").unwrap(),
+            NativeIdentityWarningAction::from(IdentityWarningActionDto::WithdrawVerification),
             NativeIdentityWarningAction::WithdrawVerification
         );
     }

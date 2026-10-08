@@ -440,13 +440,13 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertNil(
             SharedCoreTimelineRows.authoritativeOutcome(
                 from: [],
-                paginationBackward: "available"
+                paginationBackward: .available
             )
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.authoritativeOutcome(
                 from: [],
-                paginationBackward: "exhausted"
+                paginationBackward: .exhausted
             ),
             .empty
         )
@@ -530,7 +530,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
     func testSharedCoreTimelineRowsMapsNonMessageBodiesWithoutEcho() {
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
-                rowKind: "poll",
+                rowKind: .poll,
                 body: "Lunch?",
                 formattedBody: nil
             ),
@@ -538,7 +538,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
-                rowKind: "membership",
+                rowKind: .membership,
                 body: "@alex joined",
                 formattedBody: nil
             ),
@@ -546,7 +546,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
-                rowKind: "state",
+                rowKind: .state,
                 body: "Topic changed",
                 formattedBody: nil
             ),
@@ -554,7 +554,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
-                rowKind: "call",
+                rowKind: .call,
                 body: "voice",
                 formattedBody: nil
             ),
@@ -562,7 +562,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
-                rowKind: "call",
+                rowKind: .call,
                 body: "notification",
                 formattedBody: nil
             ),
@@ -570,14 +570,14 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
-                rowKind: "sticker",
+                rowKind: .sticker,
                 body: "",
                 formattedBody: nil
             ),
             .unknown(type: "sticker")
         )
         if case let .mediaPlaceholder(resource) = SharedCoreTimelineRows.displayKind(
-            rowKind: "sticker",
+            rowKind: .sticker,
             body: "",
             formattedBody: nil,
             messageType: "m.sticker",
@@ -596,14 +596,14 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
         XCTAssertNil(
             SharedCoreTimelineRows.displayKind(
-                rowKind: "date_separator",
+                rowKind: .dateSeparator,
                 body: "",
                 formattedBody: nil
             )
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
-                rowKind: "encrypted",
+                rowKind: .encrypted,
                 body: "unable_to_decrypt",
                 formattedBody: nil
             ),
@@ -611,7 +611,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         let projectedAgentJSON = #"{"title":"Approval required","status":"pending","summary":"Review","actions":[]}"#
         if case let .agentCard(card) = SharedCoreTimelineRows.displayKind(
-            rowKind: "message",
+            rowKind: .message,
             body: "fallback",
             formattedBody: nil,
             agentCardJSON: projectedAgentJSON
@@ -626,7 +626,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
             ["👍": 2, "🎉": 1]
         )
         if case let .mediaPlaceholder(resource) = SharedCoreTimelineRows.displayKind(
-            rowKind: "message",
+            rowKind: .message,
             body: "A sunset",
             formattedBody: "<strong>A sunset</strong>",
             messageType: "image",
@@ -647,7 +647,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 deviceId: "DEVICE1",
                 displayName: "iPhone",
                 isCurrent: true,
-                trust: "verified"
+                trust: .verified
             ).displayName,
             "iPhone"
         )
@@ -669,7 +669,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(stickers.first?.mxc, "mxc://example.org/abc")
         XCTAssertEqual(stickers.first?.packName, "Mine")
         let publicError = String(describing: SharedCoreTimelineRows.displayKind(
-            rowKind: "poll",
+            rowKind: .poll,
             body: "Lunch?",
             formattedBody: nil
         ))
@@ -681,7 +681,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
     func testSharedCoreTimelineRowsPreservesRelationsPollsCapabilitiesAndReactionOwnership() {
         let mappedRow = SharedCoreTimelineRows.item(
             from: TimelineViewRowDto(
-                kind: "message",
+                kind: .message,
                 itemId: "item-1",
                 eventId: "$message:example.org",
                 sender: "@alice:example.org",
@@ -840,15 +840,15 @@ final class SynaraCoreBindingsTests: XCTestCase {
             vote: false,
             declineCall: false
         )
-        let row = { (kind: String) in
+        let row = { (kind: TimelineRowKindDto) in
             TimelineViewRowDto(
                 kind: kind,
-                itemId: "\(kind)-item",
-                eventId: "$\(kind):example.org",
+                itemId: "\(kind.wireLabel)-item",
+                eventId: "$\(kind.wireLabel):example.org",
                 sender: "@alice:example.org",
                 senderName: "Alice Example",
                 senderAvatarUrl: "mxc://example.org/alice",
-                body: "\(kind) event",
+                body: "\(kind.wireLabel) event",
                 originServerTs: 1_700_000_000_123,
                 edited: false,
                 replyToEventId: nil,
@@ -875,9 +875,9 @@ final class SynaraCoreBindingsTests: XCTestCase {
             )
         }
 
-        for kind in ["membership", "state", "call"] {
+        for kind in [TimelineRowKindDto.membership, .state, .call] {
             let item = try XCTUnwrap(SharedCoreTimelineRows.item(from: row(kind)))
-            XCTAssertEqual(item.eventID, "$\(kind):example.org")
+            XCTAssertEqual(item.eventID, "$\(kind.wireLabel):example.org")
             XCTAssertEqual(item.senderID, "@alice:example.org")
             XCTAssertEqual(item.senderProfileDisplayName, "Alice Example")
             XCTAssertEqual(item.senderAvatarURL?.absoluteString, "mxc://example.org/alice")
@@ -1052,7 +1052,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
     func testSharedCoreTimelineWithoutSessionFailsClosed() async {
         let core = SharedCore()
         let position = TimelineOpenPositionDto(
-            kind: "live_bottom",
+            kind: .liveBottom,
             atBottom: false,
             restoredAnchorEventId: nil,
             liveTailEventId: nil,
@@ -1101,7 +1101,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
             _ = try await SharedCoreTimeline.timelinePaginate(
                 core: core,
                 streamId: "view-1",
-                direction: "backwards"
+                direction: .backwards
             )
             XCTFail("Fail-closed SharedCore must not paginate a timeline without a session")
         } catch {
@@ -1260,13 +1260,13 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 SharedCoreRoomDetails.MemberRow(
                     userId: "@alice:example.org",
                     displayName: "Alice",
-                    membership: "join",
+                    membership: .join,
                     powerLevel: 100
                 ),
                 SharedCoreRoomDetails.MemberRow(
                     userId: "@bob:example.org",
                     displayName: nil,
-                    membership: "leave",
+                    membership: .leave,
                     powerLevel: 0
                 ),
             ],
@@ -1354,7 +1354,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     roomId: "!s25:example.org",
                     name: "Ops",
                     avatarUrl: "mxc://example.org/room",
-                    membership: "invite",
+                    membership: .invite,
                     isDirect: false,
                     unreadCount: 0,
                     highlightCount: 0,
@@ -1373,7 +1373,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     roomId: "!space:example.org",
                     name: "Team",
                     avatarUrl: nil,
-                    membership: "join",
+                    membership: .join,
                     isDirect: false,
                     unreadCount: 0,
                     highlightCount: 0,
@@ -1472,12 +1472,12 @@ final class SynaraCoreBindingsTests: XCTestCase {
 
     func testSharedCoreSessionCryptoMapsLeftoverStatusWithoutEcho() {
         let ready = SharedCoreSessionCrypto.status(
-            crossSigningState: "ready",
+            crossSigningState: .ready,
             backupEnabled: true,
-            backupAvailability: "available",
-            backupDeviceState: "ready",
-            recoveryState: "ready",
-            secretStorageState: "ready"
+            backupAvailability: .available,
+            backupDeviceState: .ready,
+            recoveryState: .ready,
+            secretStorageState: .ready
         )
         XCTAssertEqual(ready.verification, .verified)
         XCTAssertEqual(ready.recovery, .enabled)
@@ -1487,24 +1487,24 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertNil(ready.unableToDecryptCount)
 
         let attention = SharedCoreSessionCrypto.status(
-            crossSigningState: "not_set_up",
+            crossSigningState: .notSetUp,
             backupEnabled: false,
-            backupAvailability: "available",
-            backupDeviceState: "downloading",
-            recoveryState: "incomplete",
-            secretStorageState: "locked"
+            backupAvailability: .available,
+            backupDeviceState: .downloading,
+            recoveryState: .incomplete,
+            secretStorageState: .locked
         )
         XCTAssertEqual(attention.verification, .unverified)
         XCTAssertEqual(attention.recovery, .incomplete)
         XCTAssertEqual(attention.backup, .syncing)
 
         let missing = SharedCoreSessionCrypto.status(
-            crossSigningState: "unavailable",
+            crossSigningState: .unavailable,
             backupEnabled: false,
-            backupAvailability: "missing",
-            backupDeviceState: "unavailable",
-            recoveryState: "not_set_up",
-            secretStorageState: "unavailable"
+            backupAvailability: .missing,
+            backupDeviceState: .unavailable,
+            recoveryState: .notSetUp,
+            secretStorageState: .unavailable
         )
         XCTAssertEqual(missing.verification, .unverified)
         XCTAssertEqual(missing.recovery, .disabled)
@@ -1516,7 +1516,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
             backupAvailability: nil,
             backupDeviceState: nil,
             recoveryState: nil,
-            secretStorageState: "locked"
+            secretStorageState: .locked
         )
         XCTAssertEqual(secretStorageFallback.verification, .unknown)
         XCTAssertEqual(secretStorageFallback.recovery, .incomplete)
@@ -1545,12 +1545,12 @@ final class SynaraCoreBindingsTests: XCTestCase {
 
     func testSharedCoreRoomCryptoMapsInviteAndSessionWithoutEcho() {
         let session = SharedCoreSessionCrypto.status(
-            crossSigningState: "not_set_up",
+            crossSigningState: .notSetUp,
             backupEnabled: false,
-            backupAvailability: "available",
-            backupDeviceState: "ready",
-            recoveryState: "incomplete",
-            secretStorageState: "locked"
+            backupAvailability: .available,
+            backupDeviceState: .ready,
+            recoveryState: .incomplete,
+            secretStorageState: .locked
         )
         let invited = SharedCoreSessionCrypto.roomStatus(isEncrypted: true, session: session)
         XCTAssertEqual(invited.encryption, .encrypted)
@@ -1592,22 +1592,22 @@ final class SynaraCoreBindingsTests: XCTestCase {
         let joinedRows = [
             SharedCoreCryptoStatusService.JoinedRoomEncryptionRow(
                 roomID: "!encrypted:example.org",
-                membership: "join",
+                membership: .join,
                 encryption: .encrypted
             ),
             SharedCoreCryptoStatusService.JoinedRoomEncryptionRow(
                 roomID: "!clear:example.org",
-                membership: "join",
+                membership: .join,
                 encryption: .notEncrypted
             ),
             SharedCoreCryptoStatusService.JoinedRoomEncryptionRow(
                 roomID: "!unknown:example.org",
-                membership: "join",
+                membership: .join,
                 encryption: .unknown
             ),
             SharedCoreCryptoStatusService.JoinedRoomEncryptionRow(
                 roomID: "!invite:example.org",
-                membership: "invite",
+                membership: .invite,
                 encryption: .notEncrypted
             ),
         ]
@@ -1762,14 +1762,14 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
         XCTAssertEqual(
             SharedCoreRtcTransports.diagnosticCopy(
-                SharedCoreRtcTransportsSnapshot(status: "unsupported", transports: [])
+                SharedCoreRtcTransportsSnapshot(status: .unsupported, transports: [])
             ),
             "This homeserver does not advertise a call transport"
         )
         XCTAssertEqual(
             SharedCoreRtcTransports.diagnosticCopy(
                 SharedCoreRtcTransportsSnapshot(
-                    status: "ready",
+                    status: .ready,
                     transports: [
                         SharedCoreRtcTransport(kind: "livekit", serviceURL: "https://livekit.example.org")
                     ]
@@ -1817,8 +1817,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
 
     func testSharedCoreVerificationLiveMapsPhasesWithoutEcho() {
         let incoming = SharedCoreVerificationLive.state(
-            phase: "requested",
-            direction: "incoming",
+            phase: .requested,
+            direction: .incoming,
             flowId: "flow-1",
             otherUserId: "@bob:example.org",
             otherDeviceId: "DEVICE1"
@@ -1835,8 +1835,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
         XCTAssertEqual(
             SharedCoreVerificationLive.state(
-                phase: "requested",
-                direction: "outgoing",
+                phase: .requested,
+                direction: .outgoing,
                 flowId: "flow-2",
                 otherUserId: "@bob:example.org",
                 otherDeviceId: nil
@@ -1845,8 +1845,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreVerificationLive.state(
-                phase: "sas_ready",
-                direction: "outgoing",
+                phase: .sasReady,
+                direction: .outgoing,
                 flowId: "flow-3",
                 otherUserId: "@bob:example.org",
                 otherDeviceId: "DEVICE1",
@@ -1856,8 +1856,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreVerificationLive.state(
-                phase: "done",
-                direction: "outgoing",
+                phase: .done,
+                direction: .outgoing,
                 flowId: "flow-4",
                 otherUserId: "@bob:example.org",
                 otherDeviceId: nil
@@ -1866,8 +1866,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreVerificationLive.state(
-                phase: "confirmed",
-                direction: "outgoing",
+                phase: .confirmed,
+                direction: .outgoing,
                 flowId: "flow-5",
                 otherUserId: "@bob:example.org",
                 otherDeviceId: "DEVICE1"
@@ -1876,8 +1876,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertNotEqual(
             SharedCoreVerificationLive.state(
-                phase: "confirmed",
-                direction: "outgoing",
+                phase: .confirmed,
+                direction: .outgoing,
                 flowId: "flow-5",
                 otherUserId: "@bob:example.org",
                 otherDeviceId: "DEVICE1"
@@ -1886,8 +1886,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreVerificationLive.state(
-                phase: "mismatched",
-                direction: "outgoing",
+                phase: .mismatched,
+                direction: .outgoing,
                 flowId: "flow-6",
                 otherUserId: "@bob:example.org",
                 otherDeviceId: "DEVICE1"
@@ -1896,8 +1896,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreVerificationLive.state(
-                phase: "sas_ready",
-                direction: "outgoing",
+                phase: .sasReady,
+                direction: .outgoing,
                 flowId: "flow-7",
                 otherUserId: "@bob:example.org",
                 otherDeviceId: "DEVICE1"
@@ -1906,54 +1906,54 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreVerificationLive.state(
-                phase: "failed",
-                direction: "incoming",
+                phase: .failed,
+                direction: .incoming,
                 flowId: "flow-8",
                 otherUserId: "@bob:example.org",
                 otherDeviceId: "DEVICE1"
             ),
             .failed
         )
-        XCTAssertTrue(SharedCoreVerificationLive.needsSasStart(phase: "ready", direction: "outgoing"))
+        XCTAssertTrue(SharedCoreVerificationLive.needsSasStart(phase: .ready, direction: .outgoing))
         XCTAssertTrue(
-            SharedCoreVerificationLive.needsSasStart(phase: "started", direction: "outgoing"),
+            SharedCoreVerificationLive.needsSasStart(phase: .started, direction: .outgoing),
             "Outgoing Started must still offer SAS when iOS cannot show QR"
         )
         XCTAssertTrue(
-            SharedCoreVerificationLive.needsSasStart(phase: "ready", direction: "outgoing", hasShownQr: true),
+            SharedCoreVerificationLive.needsSasStart(phase: .ready, direction: .outgoing, hasShownQr: true),
             "A QR DTO must not skip SAS start on iOS"
         )
-        XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "started", direction: "incoming"))
-        XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "ready", direction: "incoming"))
-        XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "sas_ready", direction: "incoming"))
-        XCTAssertTrue(SharedCoreVerificationLive.isTerminal(phase: "done"))
-        XCTAssertTrue(SharedCoreVerificationLive.isTerminal(phase: "cancelled"))
-        XCTAssertTrue(SharedCoreVerificationLive.isTerminal(phase: "failed"))
-        XCTAssertFalse(SharedCoreVerificationLive.isTerminal(phase: "sas_ready"))
+        XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: .started, direction: .incoming))
+        XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: .ready, direction: .incoming))
+        XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: .sasReady, direction: .incoming))
+        XCTAssertTrue(SharedCoreVerificationLive.isTerminal(phase: .done))
+        XCTAssertTrue(SharedCoreVerificationLive.isTerminal(phase: .cancelled))
+        XCTAssertTrue(SharedCoreVerificationLive.isTerminal(phase: .failed))
+        XCTAssertFalse(SharedCoreVerificationLive.isTerminal(phase: .sasReady))
         XCTAssertEqual(
             SharedCoreVerificationLive.selectedFlowId(
-                requests: [("incoming", "requested"), ("sas", "sas_ready")],
+                requests: [("incoming", .requested), ("sas", .sasReady)],
                 preferring: "sas"
             ),
             "sas"
         )
         XCTAssertEqual(
             SharedCoreVerificationLive.selectedFlowId(
-                requests: [("incoming", "requested"), ("sas", "sas_ready")],
+                requests: [("incoming", .requested), ("sas", .sasReady)],
                 preferring: nil
             ),
             "incoming"
         )
         XCTAssertEqual(
             SharedCoreVerificationLive.selectedFlowId(
-                requests: [("done", "done"), ("incoming", "requested")],
+                requests: [("done", .done), ("incoming", .requested)],
                 preferring: "done"
             ),
             "done"
         )
         XCTAssertEqual(
             SharedCoreVerificationLive.selectedFlowId(
-                requests: [("done", "done")],
+                requests: [("done", .done)],
                 preferring: nil
             ),
             "done"
@@ -1963,8 +1963,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreVerificationLive.state(
-                phase: "ready",
-                direction: "outgoing",
+                phase: .ready,
+                direction: .outgoing,
                 flowId: "flow-8",
                 otherUserId: "@bob:example.org",
                 otherDeviceId: "DEVICE1"
@@ -1973,8 +1973,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreVerificationLive.state(
-                phase: "ready",
-                direction: "incoming",
+                phase: .ready,
+                direction: .incoming,
                 flowId: "flow-9",
                 otherUserId: "@bob:example.org",
                 otherDeviceId: "DEVICE1"
@@ -1983,8 +1983,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreVerificationLive.state(
-                phase: "started",
-                direction: "incoming",
+                phase: .started,
+                direction: .incoming,
                 flowId: "flow-10",
                 otherUserId: "@bob:example.org",
                 otherDeviceId: "DEVICE1"
@@ -1994,8 +1994,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreVerificationLive.state(
-                phase: "started",
-                direction: "outgoing",
+                phase: .started,
+                direction: .outgoing,
                 flowId: "flow-11",
                 otherUserId: "@bob:example.org",
                 otherDeviceId: "DEVICE1"
@@ -2289,7 +2289,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         let core = SharedCore()
         let item = LaterItemDto(
             id: "later-s95",
-            kind: "saved",
+            kind: .saved,
             roomId: "!s95later:example.org",
             eventId: "$s95event",
             createdAt: 1_700_000_000_000,
@@ -3095,8 +3095,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
             _ = try await SharedCoreTimelineReadState.timelineSetReadState(
                 core: core,
                 streamId: streamId,
-                action: "mark_read",
-                intent: "explicit_user"
+                action: .markRead,
+                intent: .explicitUser
             )
             XCTFail("Fail-closed SharedCore must not set timeline read-state without a session")
         } catch {
@@ -3474,7 +3474,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
 
         do {
             let snapshot = try await SharedCoreSessionStatus.sessionSnapshot(core: core)
-            XCTAssertEqual(snapshot.status, "logged_out")
+            XCTAssertEqual(snapshot.status, .loggedOut)
             XCTAssertNil(snapshot.userId)
             XCTAssertNil(snapshot.deviceId)
             XCTAssertNil(snapshot.homeserverUrl)
@@ -3845,10 +3845,9 @@ final class SynaraCoreBindingsTests: XCTestCase {
         let dto = RoomIdentityWarningsDto(
             roomId: "!room:example.org",
             warnings: [
-                RoomIdentityWarningDto(userId: "@amy:example.org", displayName: "Amy", kind: "pin_violation"),
-                RoomIdentityWarningDto(userId: "@bob:example.org", displayName: "  ", kind: "verification_violation"),
-                RoomIdentityWarningDto(userId: "eve", displayName: nil, kind: "pin_violation"),
-                RoomIdentityWarningDto(userId: "@zed:example.org", displayName: nil, kind: "verified"),
+                RoomIdentityWarningDto(userId: "@amy:example.org", displayName: "Amy", kind: .pinViolation),
+                RoomIdentityWarningDto(userId: "@bob:example.org", displayName: "  ", kind: .verificationViolation),
+                RoomIdentityWarningDto(userId: "eve", displayName: nil, kind: .pinViolation),
             ]
         )
         XCTAssertEqual(
@@ -3862,12 +3861,12 @@ final class SynaraCoreBindingsTests: XCTestCase {
         let banner = try? XCTUnwrap(RoomIdentityWarning.banner(for: warnings))
         XCTAssertEqual(banner?.userID, "@bob:example.org")
         XCTAssertEqual(banner?.message, "@bob:example.org's verified identity changed.")
-        XCTAssertEqual(banner?.resolveAction, "withdraw_verification")
+        XCTAssertEqual(banner?.resolveAction, .withdrawVerification)
         XCTAssertEqual(banner?.actionTitle, "Withdraw verification")
 
         let pinned = RoomIdentityWarning.banner(for: [warnings[0]])
         XCTAssertEqual(pinned?.message, "Amy's identity changed.")
-        XCTAssertEqual(pinned?.resolveAction, "dismiss")
+        XCTAssertEqual(pinned?.resolveAction, .dismiss)
         XCTAssertNil(RoomIdentityWarning.banner(for: []))
     }
 

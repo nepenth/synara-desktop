@@ -133,7 +133,6 @@ fn start_sync_after_planted_attach_returns_privacy_safe_readiness() {
         })
         .expect("start after attach");
     let dto_text = format!("{dto:?}");
-    assert!(!dto.readiness.is_empty());
     assert_eq!(
         dto.started,
         dto.readiness == "running" || dto.readiness == "offline",

@@ -1,5 +1,6 @@
 import XCTest
 @testable import Synara
+import SynaraCore
 
 final class ConnectionStatusCopyTests: XCTestCase {
     enum BannerClass { case connected, reconnecting, lost, cold }
@@ -28,9 +29,9 @@ final class ConnectionStatusCopyTests: XCTestCase {
     func testConnectionStatusFollowsTheSharedDesktopTable() {
         for (readiness, gate, connectedEarlier, expected) in sharedConnectionStatusCases {
             let status = ConnectionStatusCopy.fromReadiness(
-                readiness,
+                Self.readiness(wire: readiness),
                 previous: connectedEarlier ? .connected : .starting,
-                commandGate: gate
+                commandGate: Self.commandGate(wire: gate)
             )
             let actual: BannerClass
             switch status {
@@ -46,6 +47,24 @@ final class ConnectionStatusCopyTests: XCTestCase {
             XCTAssertEqual(actual, expected, "\(readiness)/\(gate)/\(connectedEarlier)")
         }
     }
+    /// Wire label to enum, as Core's `from_wire` does. Unknown readiness is a
+    /// missing value; an unknown gate fails closed.
+    static func readiness(wire: String) -> SyncReadinessDto? {
+        switch wire {
+        case "unconfigured": return .unconfigured
+        case "idle": return .idle
+        case "running": return .running
+        case "offline": return .offline
+        case "terminated": return .terminated
+        case "failed": return .failed
+        default: return nil
+        }
+    }
+
+    static func commandGate(wire: String) -> CommandGateDto {
+        wire == "open" ? .open : .closed
+    }
+
     func testCopyMatchesDesktopMeaningWithoutSecrets() {
         XCTAssertEqual(ConnectionStatusCopy.banner(.connected), "Connected")
         XCTAssertEqual(ConnectionStatusCopy.banner(.syncing), "Syncing history…")
@@ -68,31 +87,27 @@ final class ConnectionStatusCopyTests: XCTestCase {
     }
 
     func testReadinessMappingDoesNotTreatIdleAsCatchup() {
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("running"), .connected)
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("idle"), .starting)
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("idle", previous: .starting), .starting)
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("idle", previous: .connected), .disconnected)
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("idle", previous: .syncing), .disconnected)
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("offline"), .reconnecting)
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("failed"), .disconnected)
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("terminated"), .disconnected)
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("unconfigured"), .starting)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness(.running), .connected)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness(.idle), .starting)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness(.idle, previous: .starting), .starting)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness(.idle, previous: .connected), .disconnected)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness(.idle, previous: .syncing), .disconnected)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness(.offline), .reconnecting)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness(.failed), .disconnected)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness(.terminated), .disconnected)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness(.unconfigured), .starting)
         XCTAssertEqual(
-            ConnectionStatusCopy.fromReadiness("unconfigured", previous: .connected),
+            ConnectionStatusCopy.fromReadiness(.unconfigured, previous: .connected),
             .disconnected
         )
         XCTAssertEqual(ConnectionStatusCopy.fromReadiness(nil), .starting)
         XCTAssertEqual(
-            ConnectionStatusCopy.fromReadiness("running", commandGate: "closed"),
+            ConnectionStatusCopy.fromReadiness(.running, commandGate: .closed),
             .disconnected
         )
         XCTAssertEqual(
-            ConnectionStatusCopy.fromReadiness("running", commandGate: "open"),
+            ConnectionStatusCopy.fromReadiness(.running, commandGate: .open),
             .connected
-        )
-        XCTAssertEqual(
-            ConnectionStatusCopy.fromReadiness("running", commandGate: "https://secret.example/token"),
-            .disconnected
         )
     }
 

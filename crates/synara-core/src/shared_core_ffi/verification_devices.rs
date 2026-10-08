@@ -2,6 +2,77 @@
 
 use super::*;
 
+super::wire_enum::wire_enum! {
+    pub enum VerificationDirectionDto {
+        Incoming => "incoming",
+        Outgoing => "outgoing",
+    }
+}
+super::wire_enum::wire_enum_from!(NativeVerificationDirection => VerificationDirectionDto {
+    Incoming, Outgoing
+});
+
+super::wire_enum::wire_enum! {
+    pub enum VerificationPhaseDto {
+        Requested => "requested",
+        Ready => "ready",
+        Started => "started",
+        KeysExchanging => "keys_exchanging",
+        SasReady => "sas_ready",
+        QrScanned => "qr_scanned",
+        Confirmed => "confirmed",
+        Done => "done",
+        Mismatched => "mismatched",
+        Cancelled => "cancelled",
+        Failed => "failed",
+    }
+}
+super::wire_enum::wire_enum_from!(NativeVerificationPhase => VerificationPhaseDto {
+    Requested, Ready, Started, KeysExchanging, SasReady, QrScanned, Confirmed, Done,
+    Mismatched, Cancelled, Failed
+});
+
+super::wire_enum::wire_enum! {
+    pub enum DeviceTrustDto {
+        Verified => "verified",
+        VerifiedLocallyOnly => "verified_locally_only",
+        VerifiedByCertificate => "verified_by_certificate",
+        Unverified => "unverified",
+        NoEncryption => "no_encryption",
+        Dehydrated => "dehydrated",
+    }
+}
+super::wire_enum::wire_enum_from!(NativeDeviceTrust => DeviceTrustDto {
+    Verified, VerifiedLocallyOnly, VerifiedByCertificate, Unverified, NoEncryption, Dehydrated
+});
+
+super::wire_enum::wire_enum! {
+    pub enum OwnDeviceVerificationDto {
+        Unknown => "unknown",
+        Unverified => "unverified",
+        Verified => "verified",
+    }
+}
+super::wire_enum::wire_enum_from!(crate::app::devices::NativeOwnDeviceVerification => OwnDeviceVerificationDto {
+    Unknown, Unverified, Verified
+});
+
+super::wire_enum::wire_enum! {
+    pub enum DeviceDeleteAuthenticationDto {
+        Password => "password",
+    }
+}
+super::wire_enum::wire_enum_from!(NativeDeviceDeleteAuthentication => DeviceDeleteAuthenticationDto {
+    Password
+});
+
+super::wire_enum::wire_enum! {
+    pub enum DeviceDeleteOutcomeDto {
+        Complete => "complete",
+        AuthenticationRequired => "authentication_required",
+    }
+}
+
 /// Privacy-safe SAS emoji. User-visible comparison only; no key material.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct VerificationEmojiDto {
@@ -30,8 +101,8 @@ pub struct VerificationRequestDto {
     pub flow_id: String,
     pub other_user_id: String,
     pub other_device_id: Option<String>,
-    pub direction: String,
-    pub phase: String,
+    pub direction: VerificationDirectionDto,
+    pub phase: VerificationPhaseDto,
     pub started_ts: Option<u64>,
     pub sas: Option<VerificationSasDto>,
     pub qr: Option<VerificationQrDto>,
@@ -83,31 +154,6 @@ pub(super) fn map_verification_list_core_error(error: MatrixIpcError) -> Verific
     }
 }
 
-pub(super) fn verification_direction_as_str(direction: NativeVerificationDirection) -> String {
-    match direction {
-        NativeVerificationDirection::Incoming => "incoming",
-        NativeVerificationDirection::Outgoing => "outgoing",
-    }
-    .to_owned()
-}
-
-pub(super) fn verification_phase_as_str(phase: NativeVerificationPhase) -> String {
-    match phase {
-        NativeVerificationPhase::Requested => "requested",
-        NativeVerificationPhase::Ready => "ready",
-        NativeVerificationPhase::Started => "started",
-        NativeVerificationPhase::KeysExchanging => "keys_exchanging",
-        NativeVerificationPhase::SasReady => "sas_ready",
-        NativeVerificationPhase::QrScanned => "qr_scanned",
-        NativeVerificationPhase::Confirmed => "confirmed",
-        NativeVerificationPhase::Done => "done",
-        NativeVerificationPhase::Mismatched => "mismatched",
-        NativeVerificationPhase::Cancelled => "cancelled",
-        NativeVerificationPhase::Failed => "failed",
-    }
-    .to_owned()
-}
-
 pub(super) fn verification_emoji_dto(emoji: NativeVerificationEmoji) -> VerificationEmojiDto {
     VerificationEmojiDto {
         symbol: emoji.symbol,
@@ -138,8 +184,8 @@ pub(super) fn verification_request_dto_with_sas(
         flow_id: request.flow_id,
         other_user_id: request.other_user_id,
         other_device_id: request.other_device_id,
-        direction: verification_direction_as_str(request.direction),
-        phase: verification_phase_as_str(request.phase),
+        direction: request.direction.into(),
+        phase: request.phase.into(),
         started_ts: request.started_ts,
         sas: request.sas.map(verification_sas_dto),
         qr: request.qr.map(verification_qr_dto),
@@ -206,7 +252,7 @@ pub struct DeviceSummaryDto {
     pub display_name: Option<String>,
     pub last_seen_ip: Option<String>,
     pub last_seen_ts: Option<u64>,
-    pub trust: String,
+    pub trust: DeviceTrustDto,
     pub is_current: bool,
     pub is_cross_signed_by_owner: Option<bool>,
     pub first_seen_ts: Option<u64>,
@@ -217,7 +263,7 @@ pub struct DeviceSummaryDto {
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct DeviceSnapshotDto {
     pub session_generation: u64,
-    pub own_verification: String,
+    pub own_verification: OwnDeviceVerificationDto,
     pub has_devices_to_verify_against: Option<bool>,
     pub devices: Vec<DeviceSummaryDto>,
 }
@@ -227,14 +273,14 @@ pub struct DeviceSnapshotDto {
 pub struct DeviceDeleteChallengeDto {
     pub operation_id: u64,
     pub session_generation: u64,
-    pub authentication: String,
+    pub authentication: DeviceDeleteAuthenticationDto,
     pub authentication_failed: bool,
 }
 
 /// Privacy-safe delete start result. Complete snapshot or challenge; no password.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct DeviceDeleteDto {
-    pub outcome: String,
+    pub outcome: DeviceDeleteOutcomeDto,
     pub snapshot: Option<DeviceSnapshotDto>,
     pub challenge: Option<DeviceDeleteChallengeDto>,
 }
@@ -275,27 +321,10 @@ pub(super) fn map_device_core_error(
     }
 }
 
-pub(super) fn device_trust_as_str(trust: NativeDeviceTrust) -> String {
-    match trust {
-        NativeDeviceTrust::Verified => "verified",
-        NativeDeviceTrust::VerifiedLocallyOnly => "verified_locally_only",
-        NativeDeviceTrust::VerifiedByCertificate => "verified_by_certificate",
-        NativeDeviceTrust::Unverified => "unverified",
-        NativeDeviceTrust::NoEncryption => "no_encryption",
-        NativeDeviceTrust::Dehydrated => "dehydrated",
-    }
-    .to_owned()
-}
-
 pub(super) fn device_snapshot_dto(snapshot: NativeDeviceSnapshot) -> DeviceSnapshotDto {
     DeviceSnapshotDto {
         session_generation: snapshot.session_generation,
-        own_verification: match snapshot.own_verification {
-            crate::app::devices::NativeOwnDeviceVerification::Unknown => "unknown",
-            crate::app::devices::NativeOwnDeviceVerification::Unverified => "unverified",
-            crate::app::devices::NativeOwnDeviceVerification::Verified => "verified",
-        }
-        .to_owned(),
+        own_verification: snapshot.own_verification.into(),
         has_devices_to_verify_against: snapshot.has_devices_to_verify_against,
         devices: snapshot
             .devices
@@ -305,7 +334,7 @@ pub(super) fn device_snapshot_dto(snapshot: NativeDeviceSnapshot) -> DeviceSnaps
                 display_name: device.display_name,
                 last_seen_ip: device.last_seen_ip,
                 last_seen_ts: device.last_seen_ts,
-                trust: device_trust_as_str(device.trust),
+                trust: device.trust.into(),
                 is_current: device.is_current,
                 is_cross_signed_by_owner: Some(device.is_cross_signed_by_owner),
                 first_seen_ts: device.first_seen_ts,
@@ -318,19 +347,17 @@ pub(super) fn device_snapshot_dto(snapshot: NativeDeviceSnapshot) -> DeviceSnaps
 pub(super) fn device_delete_dto(result: NativeDeviceDeleteResult) -> DeviceDeleteDto {
     match result {
         NativeDeviceDeleteResult::Complete { snapshot } => DeviceDeleteDto {
-            outcome: "complete".to_owned(),
+            outcome: DeviceDeleteOutcomeDto::Complete,
             snapshot: Some(device_snapshot_dto(snapshot)),
             challenge: None,
         },
         NativeDeviceDeleteResult::AuthenticationRequired { challenge } => DeviceDeleteDto {
-            outcome: "authentication_required".to_owned(),
+            outcome: DeviceDeleteOutcomeDto::AuthenticationRequired,
             snapshot: None,
             challenge: Some(DeviceDeleteChallengeDto {
                 operation_id: challenge.operation_id,
                 session_generation: challenge.session_generation,
-                authentication: match challenge.authentication {
-                    NativeDeviceDeleteAuthentication::Password => "password".to_owned(),
-                },
+                authentication: challenge.authentication.into(),
                 authentication_failed: challenge.authentication_failed,
             }),
         },

@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import SynaraCore
 import UserNotifications
 
 enum SessionState: Equatable {
@@ -637,15 +638,22 @@ struct RoomIdentityWarning: Equatable, Identifiable {
         self.kind = kind
     }
 
-    init?(userID: String, displayName: String?, kind rawKind: String) {
-        guard userID.hasPrefix("@"), let kind = Kind(rawValue: rawKind) else { return nil }
+    init?(userID: String, displayName: String?, kind coreKind: IdentityWarningKindDto) {
+        guard userID.hasPrefix("@") else { return nil }
+        let kind: Kind
+        switch coreKind {
+        case .verificationViolation:
+            kind = .verificationViolation
+        case .pinViolation:
+            kind = .pinViolation
+        }
         let trimmed = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.init(userID: userID, displayName: trimmed?.isEmpty == false ? trimmed : nil, kind: kind)
     }
 
     /// Core action for the banner's button.
-    var resolveAction: String {
-        kind == .verificationViolation ? "withdraw_verification" : "dismiss"
+    var resolveAction: IdentityWarningActionDto {
+        kind == .verificationViolation ? .withdrawVerification : .dismiss
     }
 
     var actionTitle: String {
@@ -835,7 +843,7 @@ struct RoomPowerLevelSummary: Equatable {
 struct RoomMemberSummary: Equatable, Identifiable {
     let userID: String
     let displayName: String?
-    let membership: String
+    let membership: RoomMembershipDto
     let powerLevel: Int
 
     var id: String { userID }
@@ -847,9 +855,9 @@ struct RoomMemberSummary: Equatable, Identifiable {
 
     static func previewMembers() -> [RoomMemberSummary] {
         [
-            RoomMemberSummary(userID: "@alice:matrix.org", displayName: "Alice", membership: "join", powerLevel: 100),
-            RoomMemberSummary(userID: "@bob:matrix.org", displayName: "Bob", membership: "join", powerLevel: 0),
-            RoomMemberSummary(userID: "@carol:matrix.org", displayName: "Carol", membership: "leave", powerLevel: 0),
+            RoomMemberSummary(userID: "@alice:matrix.org", displayName: "Alice", membership: .join, powerLevel: 100),
+            RoomMemberSummary(userID: "@bob:matrix.org", displayName: "Bob", membership: .join, powerLevel: 0),
+            RoomMemberSummary(userID: "@carol:matrix.org", displayName: "Carol", membership: .leave, powerLevel: 0),
         ]
     }
 }
@@ -1251,7 +1259,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             throw RoomManagementError.invalidMatrixID
         }
         invitedUsers.append((roomID: roomID, userID: trimmedUserID))
-        updateMember(roomID: roomID, userID: trimmedUserID, membership: "invite")
+        updateMember(roomID: roomID, userID: trimmedUserID, membership: .invite)
     }
 
     func kickUser(roomID: String, userID: String, reason: String?) async throws {
@@ -1260,7 +1268,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             throw RoomManagementError.invalidMatrixID
         }
         kickedUsers.append((roomID: roomID, userID: trimmedUserID, reason: reason))
-        updateMember(roomID: roomID, userID: trimmedUserID, membership: "leave")
+        updateMember(roomID: roomID, userID: trimmedUserID, membership: .leave)
     }
 
     func banUser(roomID: String, userID: String, reason: String?) async throws {
@@ -1269,7 +1277,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             throw RoomManagementError.invalidMatrixID
         }
         bannedUsers.append((roomID: roomID, userID: trimmedUserID, reason: reason))
-        updateMember(roomID: roomID, userID: trimmedUserID, membership: "ban")
+        updateMember(roomID: roomID, userID: trimmedUserID, membership: .ban)
     }
 
     func unbanUser(roomID: String, userID: String) async throws {
@@ -1278,7 +1286,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             throw RoomManagementError.invalidMatrixID
         }
         unbannedUsers.append((roomID: roomID, userID: trimmedUserID))
-        updateMember(roomID: roomID, userID: trimmedUserID, membership: "leave")
+        updateMember(roomID: roomID, userID: trimmedUserID, membership: .leave)
     }
 
     func setMemberPowerLevel(roomID: String, userID: String, powerLevel: Int) async throws {
@@ -1421,7 +1429,7 @@ final class MockRoomManagementService: RoomManagementServicing {
     private func updateMember(
         roomID: String,
         userID: String,
-        membership: String? = nil,
+        membership: RoomMembershipDto? = nil,
         powerLevel: Int? = nil
     ) {
         let existing = storedDetails(roomID: roomID)
@@ -1441,7 +1449,7 @@ final class MockRoomManagementService: RoomManagementServicing {
                 RoomMemberSummary(
                     userID: userID,
                     displayName: nil,
-                    membership: membership ?? "join",
+                    membership: membership ?? .join,
                     powerLevel: powerLevel ?? 0
                 )
             )
@@ -1453,7 +1461,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             aliases: existing.aliases,
             encryptionStatus: existing.encryptionStatus,
             isPublic: existing.isPublic,
-            memberCount: members.filter { $0.membership == "join" }.count,
+            memberCount: members.filter { $0.membership == .join }.count,
             canInvite: existing.canInvite,
             canEditName: existing.canEditName,
             canEditTopic: existing.canEditTopic,

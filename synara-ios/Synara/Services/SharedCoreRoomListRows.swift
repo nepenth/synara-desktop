@@ -25,7 +25,7 @@ enum SharedCoreRoomListRows {
         let roomId: String
         let name: String?
         let avatarUrl: String?
-        let membership: String
+        let membership: RoomMembershipDto
         let isDirect: Bool
         let unreadCount: Int
         let highlightCount: Int
@@ -104,7 +104,7 @@ enum SharedCoreRoomListRows {
     }
 
     static func preview(
-        membership: String,
+        membership: RoomMembershipDto,
         invite: InviteRow?,
         lastMessagePreview: String?
     ) -> String {
@@ -125,12 +125,12 @@ enum SharedCoreRoomListRows {
         return lastMessagePreview?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
-    static func preview(membership: String, invite: InviteRow?) -> String {
+    static func preview(membership: RoomMembershipDto, invite: InviteRow?) -> String {
         preview(membership: membership, invite: invite, lastMessagePreview: nil)
     }
 
-    static func isInvited(_ membership: String) -> Bool {
-        membership == "invite" || membership == "invited"
+    static func isInvited(_ membership: RoomMembershipDto) -> Bool {
+        membership == .invite
     }
 
     static func parentSpaces(parentIds: [String], namesByID: [String: String]) -> [SpaceSummary] {
@@ -145,5 +145,30 @@ enum SharedCoreRoomListRows {
         isMarkedUnread: Bool = false
     ) -> Bool {
         unreadCount > 0 || hasHighlight || isMarkedUnread
+    }
+}
+
+extension RoomMembershipDto {
+    /// User-facing membership text.
+    var displayName: String {
+        switch self {
+        case .join: return "Joined"
+        case .invite: return "Invited"
+        case .ban: return "Banned"
+        case .leave: return "Left"
+        case .knock: return "Knocking"
+        }
+    }
+
+    /// Core's stable wire label (`join`, `invite`, ...), for Core inputs that
+    /// still take the Matrix spelling.
+    var wireLabel: String {
+        switch self {
+        case .invite: return "invite"
+        case .join: return "join"
+        case .knock: return "knock"
+        case .leave: return "leave"
+        case .ban: return "ban"
+        }
     }
 }

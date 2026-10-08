@@ -4,15 +4,19 @@
 //! Credentials use dedicated zeroizing arguments; generic command envelopes
 //! never carry recovery secrets. Narrow NSE product builds use synara-nse-core.
 
+mod wire_enum;
+
 mod agent_notification_preferences;
 pub use agent_notification_preferences::*;
 mod approval_inbox;
 pub use approval_inbox::{
     AgentApprovalInboxDto, AgentApprovalInboxError, AgentApprovalInboxItemDto,
+    AgentApprovalInboxStatusDto,
 };
 mod agent_approval_history;
 pub use agent_approval_history::{
-    AgentApprovalHistoryCommandError, AgentApprovalHistoryItemDto, AgentApprovalHistorySnapshotDto,
+    AgentApprovalHistoryCommandError, AgentApprovalHistoryDecisionDto, AgentApprovalHistoryItemDto,
+    AgentApprovalHistorySnapshotDto,
 };
 mod inbox_notifications;
 pub use inbox_notifications::{
@@ -641,12 +645,6 @@ mod store_keys;
 use store_keys::*;
 
 /// The serde label of a closed Core enum (`snake_case`), for string DTO fields.
-pub(super) fn wire_label<T: serde::Serialize>(value: &T) -> String {
-    match serde_json::to_value(value) {
-        Ok(serde_json::Value::String(label)) => label,
-        _ => String::new(),
-    }
-}
 mod profile_search;
 pub use profile_search::*;
 mod push_preferences;

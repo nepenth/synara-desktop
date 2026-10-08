@@ -570,7 +570,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
 
     func coreSessionIdentity() async -> CoreSessionIdentity? {
         guard let snapshot = try? await SharedCoreSessionStatus.sessionSnapshot(core: host.core),
-              snapshot.status == "logged_in",
+              snapshot.status == .loggedIn,
               let userID = snapshot.userId,
               let deviceID = snapshot.deviceId,
               let homeserver = snapshot.homeserverUrl
@@ -768,7 +768,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         guard readyOwner(),
               await MainActor.run(body: { host.sessionStore.currentState == .signedIn(session) }),
               let before = try? await SharedCoreSessionStatus.sessionSnapshot(core: host.core),
-              before.status == "logged_in", before.userId == session.userID,
+              before.status == .loggedIn, before.userId == session.userID,
               before.deviceId == session.deviceID,
               URL(string: before.homeserverUrl ?? "") == session.homeserverURL,
               let generation = before.sessionGeneration,
@@ -779,7 +779,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
                   host.sessionStore.sessionEpoch == accountEpoch && host.sessionStore.currentState == .signedIn(session)
               }),
               let after = try? await SharedCoreSessionStatus.sessionSnapshot(core: host.core),
-              after.status == "logged_in", after.sessionGeneration == generation,
+              after.status == .loggedIn, after.sessionGeneration == generation,
               after.userId == before.userId, after.deviceId == before.deviceId,
               after.homeserverUrl == before.homeserverUrl
         else { return true }
@@ -1145,7 +1145,7 @@ final class SharedCoreTimelineService: TimelineServicing {
                 _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: previous)
             }
             let position = TimelineOpenPositionDto(
-                kind: focusedEventID == nil ? "live" : "focused",
+                kind: focusedEventID == nil ? .liveBottom : .focused,
                 atBottom: focusedEventID == nil,
                 restoredAnchorEventId: nil,
                 liveTailEventId: nil,
@@ -1183,7 +1183,7 @@ final class SharedCoreTimelineService: TimelineServicing {
                 let snapshot = try await SharedCoreTimeline.timelinePaginate(
                     core: host.core,
                     streamId: initialState.streamID,
-                    direction: "backwards"
+                    direction: .backwards
                 )
                 paginationProgress.recordPage(rowIDs: Self.nativeRowIDs(snapshot.rows))
                 let items = SharedCoreTimelineRows.items(from: snapshot.rows, visibleTailEventID: snapshot.visibleTailEventId, receiptTailEventID: snapshot.receiptTailEventId)
@@ -1198,10 +1198,10 @@ final class SharedCoreTimelineService: TimelineServicing {
                 if containsNewItems {
                     return .loaded(items)
                 }
-                if snapshot.paginationBackward == "exhausted" {
+                if snapshot.paginationBackward == .exhausted {
                     return .empty
                 }
-                guard snapshot.paginationBackward == "available" else {
+                guard snapshot.paginationBackward == .available else {
                     return .failed(Self.temporarilyUnavailableFailure)
                 }
             } catch {
@@ -1352,7 +1352,7 @@ final class SharedCoreTimelineService: TimelineServicing {
             ) {
                 return outcome
             }
-            guard snapshot.paginationBackward == "available" else {
+            guard snapshot.paginationBackward == .available else {
                 return .failed(Self.temporarilyUnavailableFailure)
             }
             guard paginationProgress.canRequestPage else {
@@ -1362,7 +1362,7 @@ final class SharedCoreTimelineService: TimelineServicing {
                 snapshot = try await SharedCoreTimeline.timelinePaginate(
                     core: host.core,
                     streamId: streamID,
-                    direction: "backwards"
+                    direction: .backwards
                 )
                 paginationProgress.recordPage(rowIDs: Self.nativeRowIDs(snapshot.rows))
             } catch {
@@ -1514,7 +1514,7 @@ final class SharedCoreLaterService: LaterServicing {
                     id: item.id,
                     roomID: item.roomId,
                     eventID: item.eventId,
-                    kind: item.kind == "reminder" ? .reminder : .saved,
+                    kind: item.kind == .reminder ? .reminder : .saved,
                     dueTs: item.dueTs.map { Int($0) },
                     completedAt: item.completedAt.map { Int($0) },
                     createdAt: Int(item.createdAt),
@@ -1755,9 +1755,9 @@ final class SharedCoreEventActionService: EventActionServicing {
                     roomID: readback.roomId,
                     eventID: readback.eventId,
                     status: readback.status,
-                    expectedAction: "redact",
+                    expectedAction: .redact,
                     expectedRoomID: roomID,
-                    expectedStatus: "redacted",
+                    expectedStatus: .redacted,
                     expectedEventID: item.eventID
                 ) else {
                     throw EventActionError.failed
@@ -1811,9 +1811,9 @@ final class SharedCoreEventActionService: EventActionServicing {
                     roomID: readback.roomId,
                     eventID: readback.eventId,
                     status: readback.status,
-                    expectedAction: "report",
+                    expectedAction: .report,
                     expectedRoomID: roomID,
-                    expectedStatus: "reported",
+                    expectedStatus: .reported,
                     expectedEventID: item.eventID
                 ) else {
                     throw EventActionError.failed
@@ -1840,9 +1840,9 @@ final class SharedCoreEventActionService: EventActionServicing {
                         roomID: readback.roomId,
                         eventID: readback.eventId,
                         status: readback.status,
-                        expectedAction: "forward_text",
+                        expectedAction: .forwardText,
                         expectedRoomID: targetRoomID,
-                        expectedStatus: "sent"
+                        expectedStatus: .sent
                     ) else {
                         throw EventActionError.failed
                     }
@@ -1860,9 +1860,9 @@ final class SharedCoreEventActionService: EventActionServicing {
                         roomID: readback.roomId,
                         eventID: readback.eventId,
                         status: readback.status,
-                        expectedAction: "forward_media",
+                        expectedAction: .forwardMedia,
                         expectedRoomID: targetRoomID,
-                        expectedStatus: "sent"
+                        expectedStatus: .sent
                     ) else {
                         throw EventActionError.failed
                     }
@@ -1894,9 +1894,9 @@ final class SharedCoreEventActionService: EventActionServicing {
                     roomID: readback.roomId,
                     eventID: readback.eventId,
                     status: readback.status,
-                    expectedAction: "poll_vote",
+                    expectedAction: .pollVote,
                     expectedRoomID: roomID,
-                    expectedStatus: "voted",
+                    expectedStatus: .voted,
                     expectedEventID: item.eventID
                 ) else {
                     throw EventActionError.failed
@@ -1918,9 +1918,9 @@ final class SharedCoreEventActionService: EventActionServicing {
                     roomID: readback.roomId,
                     eventID: readback.eventId,
                     status: readback.status,
-                    expectedAction: "call_decline",
+                    expectedAction: .callDecline,
                     expectedRoomID: roomID,
-                    expectedStatus: "declined",
+                    expectedStatus: .declined,
                     expectedEventID: item.eventID
                 ) else {
                     throw EventActionError.failed
@@ -1985,12 +1985,10 @@ final class SharedCoreAgentApprovalDecisionService: AgentApprovalDecisionServici
                 actionId: request.actionIdentifier
             )
             switch result.status {
-            case "applied":
+            case .applied:
                 return .applied
-            case "already_decided":
+            case .alreadyDecided:
                 return .alreadyDecided
-            default:
-                throw SynaraAgentApprovalError.failed
             }
         } catch {
             throw SynaraAgentApprovalError.failed
@@ -2001,7 +1999,7 @@ final class SharedCoreAgentApprovalDecisionService: AgentApprovalDecisionServici
 final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     struct JoinedRoomEncryptionRow: Equatable {
         let roomID: String
-        let membership: String
+        let membership: RoomMembershipDto
         let encryption: SynaraRoomEncryptionStatus
     }
 
@@ -2087,11 +2085,11 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         }
         let verification: SynaraCryptoVerificationStatus
         switch deviceSnapshot?.ownVerification {
-        case "verified":
+        case .verified:
             verification = .verified
-        case "unverified":
+        case .unverified:
             verification = .unverified
-        default:
+        case .unknown, nil:
             verification = .unknown
         }
         return SessionCryptoStatus(
@@ -2299,10 +2297,10 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 core: host.core,
                 deviceIds: [deviceId]
             )
-            if started.outcome == "complete" {
+            if started.outcome == .complete {
                 return .completed("Session signed out.")
             }
-            guard started.outcome == "authentication_required",
+            guard started.outcome == .authenticationRequired,
                   let challenge = started.challenge
             else {
                 return .failed("Could not sign out that session.")
@@ -2313,7 +2311,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 sessionGeneration: challenge.sessionGeneration,
                 password: trimmedPassword
             )
-            if finished.outcome == "complete" {
+            if finished.outcome == .complete {
                 return .completed("Session signed out.")
             }
             if finished.challenge?.authenticationFailed == true {
@@ -2330,7 +2328,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         rows: [JoinedRoomEncryptionRow]?
     ) -> SynaraRoomEncryptionStatus {
         guard let row = rows?.first(where: {
-            $0.roomID == roomID && $0.membership == "join"
+            $0.roomID == roomID && $0.membership == .join
         }) else {
             return .unknown
         }
@@ -2621,7 +2619,7 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
             roomListReadFailed = true
         }
         let room = list?.rooms.first(where: {
-            $0.roomId == roomID && $0.membership == "join"
+            $0.roomId == roomID && $0.membership == .join
         })
         let members = try? await SharedCoreRoomMembersSnapshots.roomMembersSnapshot(
             core: host.core,
@@ -3038,8 +3036,8 @@ final class SharedCoreRoomReadMarkerService: RoomReadMarkerServicing {
             let readback = try? await SharedCoreTimelineReadState.timelineSetReadState(
                 core: self.host.core,
                 streamId: opened.streamId,
-                action: "mark_read",
-                intent: "automatic_visibility",
+                action: .markRead,
+                intent: .automaticVisibility,
                 observedLiveTailEventId: eventID
             )
             return readback?.receiptSent == true
@@ -3053,8 +3051,8 @@ final class SharedCoreRoomReadMarkerService: RoomReadMarkerServicing {
                 let readback = try await SharedCoreTimelineReadState.timelineSetReadState(
                     core: host.core,
                     streamId: opened.streamId,
-                    action: "mark_read",
-                    intent: "explicit_user"
+                    action: .markRead,
+                    intent: .explicitUser
                 )
                 return ExplicitRoomReadReceipt.acknowledgedEventID(
                     receiptSent: readback.receiptSent,
@@ -3071,7 +3069,7 @@ final class SharedCoreRoomReadMarkerService: RoomReadMarkerServicing {
         body: (TimelineOpenDto) async -> T?
     ) async -> T? {
         let position = TimelineOpenPositionDto(
-            kind: "live",
+            kind: .liveBottom,
             atBottom: true,
             restoredAnchorEventId: nil,
             liveTailEventId: nil,

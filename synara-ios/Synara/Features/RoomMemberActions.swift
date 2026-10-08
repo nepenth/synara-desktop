@@ -23,7 +23,7 @@ struct RoomMemberActionPlan: Equatable {
     ) -> RoomMemberActionPlan {
         let core = planMemberActions(context: MemberActionContext(
             isSelf: member.userID == ownUserID,
-            memberMembership: member.membership,
+            memberMembership: member.membership.wireLabel,
             memberPowerLevel: Int64(member.powerLevel),
             ownPowerLevel: powerLevels?.isCreator == true ? nil : (powerLevels?.ownUserLevel ?? 0),
             canInvite: powerLevels?.canInvite ?? false,
@@ -225,20 +225,7 @@ struct RoomMemberActionsView: View {
     }
 
     private var membershipLabel: String {
-        switch member.membership {
-        case "join":
-            return "Joined"
-        case "invite":
-            return "Invited"
-        case "ban":
-            return "Banned"
-        case "leave":
-            return "Left"
-        case "knock":
-            return "Knocking"
-        default:
-            return member.membership
-        }
+        member.membership.displayName
     }
 
     private enum ConfirmAction {

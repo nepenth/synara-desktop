@@ -4,7 +4,7 @@
 //! privacy-safe row bodies on the UniFFI DTO so iOS product timeline can
 //! render. No media bytes. Not P4 acceptance.
 
-use synara_core::{SharedCore, TimelineOpenPositionDto};
+use synara_core::{SharedCore, TimelineOpenKindDto, TimelineOpenPositionDto};
 
 fn test_runtime() -> tokio::runtime::Runtime {
     tokio::runtime::Builder::new_current_thread()
@@ -15,7 +15,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 fn live_bottom() -> TimelineOpenPositionDto {
     TimelineOpenPositionDto {
-        kind: "live".to_owned(),
+        kind: TimelineOpenKindDto::LiveBottom,
         at_bottom: true,
         restored_anchor_event_id: None,
         live_tail_event_id: None,

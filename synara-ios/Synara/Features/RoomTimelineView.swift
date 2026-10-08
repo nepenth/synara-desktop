@@ -1,5 +1,6 @@
 import PhotosUI
 import SwiftUI
+import SynaraCore
 import UniformTypeIdentifiers
 #if canImport(UIKit)
     import UIKit
@@ -5739,7 +5740,7 @@ private struct RoomMemberPresenceRow: View {
                 Text(member.title)
                     .font(SynaraTypography.body)
                     .foregroundStyle(SynaraColor.primaryText)
-                Text(presence?.displayName ?? member.membership)
+                Text(presence?.displayName ?? member.membership.displayName)
                     .font(SynaraTypography.supporting)
                     .foregroundStyle(SynaraColor.secondaryText)
                 if let status = userStatus?.userStatus {

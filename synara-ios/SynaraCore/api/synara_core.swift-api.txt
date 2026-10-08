@@ -1,32 +1,47 @@
 extension AgentApprovalDecisionDto: Sendable
+extension AgentApprovalDecisionStatusDto: Sendable
 extension AgentApprovalHistoryCommandError: Sendable
+extension AgentApprovalHistoryDecisionDto: Sendable
 extension AgentApprovalHistoryItemDto: Sendable
 extension AgentApprovalHistorySnapshotDto: Sendable
 extension AgentApprovalInboxDto: Sendable
 extension AgentApprovalInboxError: Sendable
 extension AgentApprovalInboxItemDto: Sendable
+extension AgentApprovalInboxStatusDto: Sendable
 extension AgentApprovalSendDto: Sendable
 extension AgentApprovalSendError: Sendable
 extension AgentNotificationPreferencesDto: Sendable
 extension AgentNotificationPreferencesError: Sendable
+extension BackupActionDto: Sendable
+extension BackupAvailabilityDto: Sendable
+extension BackupDeviceStateDto: Sendable
+extension BackupRecoveryStateDto: Sendable
 extension BackupStatusDto: Sendable
 extension BadgeSummary: Sendable
 extension BadgeSummaryInput: Sendable
+extension CommandGateDto: Sendable
 extension ComposerReplyDraftDto: Sendable
 extension ComposerReplyDraftError: Sendable
 extension ComposerReplyDraftPreviewDto: Sendable
+extension CrossSigningReadinessDto: Sendable
+extension CrossSigningStateDto: Sendable
 extension CrossSigningStatusDto: Sendable
 extension CryptoStatusDto: Sendable
 extension DeviceCommandError: Sendable
+extension DeviceDeleteAuthenticationDto: Sendable
 extension DeviceDeleteChallengeDto: Sendable
 extension DeviceDeleteDto: Sendable
+extension DeviceDeleteOutcomeDto: Sendable
 extension DeviceSnapshotDto: Sendable
 extension DeviceSummaryDto: Sendable
+extension DeviceTrustDto: Sendable
 extension DirectorySearchCommandError: Sendable
 extension DirectoryVisibilityCommandError: Sendable
 extension EditMessageDto: Sendable
 extension EditMessageError: Sendable
 extension GlobalImagePacksSnapshotDto: Sendable
+extension IdentityWarningActionDto: Sendable
+extension IdentityWarningKindDto: Sendable
 extension IgnoredUsersCommandError: Sendable
 extension IgnoredUsersSnapshotDto: Sendable
 extension IgnoredUsersWriteDto: Sendable
@@ -44,8 +59,10 @@ extension IosSecretVaultError: Sendable
 extension JoinRuleCommandError: Sendable
 extension LaterCommandError: Sendable
 extension LaterItemDto: Sendable
+extension LaterItemKindDto: Sendable
 extension LaterSnapshotDto: Sendable
 extension LeftoverAckDto: Sendable
+extension LeftoverAckStatusDto: Sendable
 extension LeftoverBytesDto: Sendable
 extension LeftoverCommandError: Sendable
 extension LoginFlowDto: Sendable
@@ -63,6 +80,8 @@ extension MessageSearchDto: Sendable
 extension MessageSearchError: Sendable
 extension MessageSearchGroupDto: Sendable
 extension MessageSearchItemDto: Sendable
+extension MissingSecretDto: Sendable
+extension OwnDeviceVerificationDto: Sendable
 extension OwnProfileCommandError: Sendable
 extension OwnProfileDto: Sendable
 extension OwnProfileUploadDto: Sendable
@@ -109,6 +128,7 @@ extension RoomIdentityWarningsDto: Sendable
 extension RoomImagePacksSnapshotDto: Sendable
 extension RoomJoinRuleSnapshotDto: Sendable
 extension RoomJoinRuleWriteDto: Sendable
+extension RoomKeyTransferPhaseDto: Sendable
 extension RoomKeyTransferStatusDto: Sendable
 extension RoomListOrder: Sendable
 extension RoomListRoomDto: Sendable
@@ -120,6 +140,7 @@ extension RoomMemberDto: Sendable
 extension RoomMembersSnapshotDto: Sendable
 extension RoomMembersSnapshotError: Sendable
 extension RoomMembershipCommandError: Sendable
+extension RoomMembershipDto: Sendable
 extension RoomMembershipWriteDto: Sendable
 extension RoomModerationCommandError: Sendable
 extension RoomModerationWriteDto: Sendable
@@ -143,7 +164,10 @@ extension RoomUnreadPresentationDto: Sendable
 extension RtcTransportDto: Sendable
 extension RtcTransportsCommandError: Sendable
 extension RtcTransportsSnapshotDto: Sendable
+extension RtcTransportsStatusDto: Sendable
+extension SecretStorageActionDto: Sendable
 extension SecretStorageSetupDto: Sendable
+extension SecretStorageStateDto: Sendable
 extension SecretStorageStatusDto: Sendable
 extension SendPollDto: Sendable
 extension SendPollError: Sendable
@@ -161,6 +185,7 @@ extension SessionProjectionLifecycle: Sendable
 extension SessionRestoreDto: Sendable
 extension SessionRestoreError: Sendable
 extension SessionSnapshotDto: Sendable
+extension SessionStatusDto: Sendable
 extension SessionStatusError: Sendable
 extension SpaceChildEdgeDto: Sendable
 extension SpaceChildMutationDto: Sendable
@@ -170,6 +195,7 @@ extension SpaceHierarchyRoomDto: Sendable
 extension SpaceHierarchySnapshotDto: Sendable
 extension SpaceParentEntryDto: Sendable
 extension SpaceParentsSnapshotDto: Sendable
+extension SyncReadinessDto: Sendable
 extension SyncStartDto: Sendable
 extension SyncStartError: Sendable
 extension SyncStatusDto: Sendable
@@ -181,6 +207,9 @@ extension ThreepidEmailDto: Sendable
 extension ThreepidEmailTokenDto: Sendable
 extension ThreepidSnapshotDto: Sendable
 extension ThreepidWriteDto: Sendable
+extension TimelineActionKindDto: Sendable
+extension TimelineActionStatusDto: Sendable
+extension TimelineDirectionDto: Sendable
 extension TimelineError: Sendable
 extension TimelineEventItemDto: Sendable
 extension TimelineEventReadbackDto: Sendable
@@ -190,15 +219,21 @@ extension TimelineMediaError: Sendable
 extension TimelineMutateDto: Sendable
 extension TimelineMutateError: Sendable
 extension TimelineOpenDto: Sendable
+extension TimelineOpenKindDto: Sendable
 extension TimelineOpenPositionDto: Sendable
+extension TimelinePageStateDto: Sendable
 extension TimelinePinDto: Sendable
 extension TimelinePinError: Sendable
+extension TimelinePositionKindDto: Sendable
 extension TimelineReactionDto: Sendable
 extension TimelineReactionError: Sendable
 extension TimelineReactionMutationDto: Sendable
 extension TimelineReactionSenderDto: Sendable
+extension TimelineReadActionDto: Sendable
+extension TimelineReadIntentDto: Sendable
 extension TimelineReadStateDto: Sendable
 extension TimelineReadStateError: Sendable
+extension TimelineRowKindDto: Sendable
 extension TimelineSnapshotDto: Sendable
 extension TimelineViewEncryptionShieldDto: Sendable
 extension TimelineViewPollAnswerDto: Sendable
@@ -225,9 +260,11 @@ extension UserStatusCommandError: Sendable
 extension UserStatusFieldDto: Sendable
 extension UserStatusSnapshotDto: Sendable
 extension UserStatusWriteDto: Sendable
+extension VerificationDirectionDto: Sendable
 extension VerificationEmojiDto: Sendable
 extension VerificationInboxDto: Sendable
 extension VerificationListError: Sendable
+extension VerificationPhaseDto: Sendable
 extension VerificationQrDto: Sendable
 extension VerificationRequestDto: Sendable
 extension VerificationSasDto: Sendable
@@ -316,7 +353,7 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func reactionRedact(roomId: String, targetEventId: String, reactionEventId: String, key: String) async throws -> TimelineReactionMutationDto
   open func recover(recoveryKey: String) async throws -> LeftoverAckDto
   open func registerHttpPusher(pushKey: String, appId: String, gatewayUrl: String, appDisplayName: String, lang: String) async throws -> PusherWriteDto
-  open func resolveRoomIdentityWarning(roomId: String, userId: String, action: String) async throws -> RoomIdentityWarningsDto
+  open func resolveRoomIdentityWarning(roomId: String, userId: String, action: IdentityWarningActionDto) async throws -> RoomIdentityWarningsDto
   open func restoreBackup(recoverySecret: String) async throws -> RestoreBackupDto
   open func restorePersistedSession(userId: String, homeserverUrl: String, storeRoot: String) async throws -> SessionRestoreDto
   open func restrictedJoinReparent(roomId: String, removeParentId: String?, addParentId: String) async throws -> RestrictedJoinReparentDto
@@ -398,14 +435,14 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func timelineJumpLatest(streamId: String) async throws -> TimelineOpenDto
   open func timelineMediaBytes(handleId: String) async throws -> LeftoverBytesDto
   open func timelineOpen(roomId: String, position: TimelineOpenPositionDto) async throws -> TimelineOpenDto
-  open func timelinePaginate(streamId: String, direction: String) async throws -> TimelineSnapshotDto
+  open func timelinePaginate(streamId: String, direction: TimelineDirectionDto) async throws -> TimelineSnapshotDto
   open func timelinePin(roomId: String, eventId: String) async throws -> TimelinePinDto
   open func timelinePollVote(roomId: String, eventId: String, answerIds: [String]) async throws -> TimelineVoteDeclineDto
   open func timelineReactionToggle(roomId: String, eventId: String, key: String) async throws -> TimelineReactionMutationDto
   open func timelineRedact(roomId: String, eventId: String, reason: String?) async throws -> TimelineMutateDto
   open func timelineReport(roomId: String, eventId: String, reason: String?) async throws -> TimelineMutateDto
   open func timelineRetryDecryption(streamId: String) async throws -> Bool
-  open func timelineSetReadState(streamId: String, action: String, intent: String, observedLiveTailEventId: String?) async throws -> TimelineReadStateDto
+  open func timelineSetReadState(streamId: String, action: TimelineReadActionDto, intent: TimelineReadIntentDto, observedLiveTailEventId: String?) async throws -> TimelineReadStateDto
   open func timelineSnapshot(streamId: String) async throws -> TimelineSnapshotDto
   open func timelineUnpin(roomId: String, eventId: String) async throws -> TimelinePinDto
   open func typingSet(roomId: String, typing: Bool) async throws
@@ -427,24 +464,81 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func wipePersistedStores(storeRoot: String) async throws -> LeftoverAckDto
   public convenience init()
   public static func newWithSecretStore(store: IosSecretVault) -> SharedCore
+public enum AgentApprovalDecisionStatusDto: Equatable, Hashable
+  case applied
+  case alreadyDecided
 public enum AgentApprovalHistoryCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum AgentApprovalHistoryDecisionDto: Equatable, Hashable
+  case approveOnce
+  case approveAlways
+  case deny
 public enum AgentApprovalInboxError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum AgentApprovalInboxStatusDto: Equatable, Hashable
+  case pending
+  case decided
+  case expired
 public enum AgentApprovalSendError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
 public enum AgentNotificationPreferencesError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum BackupActionDto: Equatable, Hashable
+  case setupRequired
+  case restoreRequired
+  case repairRequired
+  case noAction
+public enum BackupAvailabilityDto: Equatable, Hashable
+  case missing
+  case available
+public enum BackupDeviceStateDto: Equatable, Hashable
+  case unavailable
+  case disconnected
+  case connecting
+  case downloading
+  case uploading
+  case ready
+public enum BackupRecoveryStateDto: Equatable, Hashable
+  case unknown
+  case notSetUp
+  case incomplete
+  case ready
+public enum CommandGateDto: Equatable, Hashable
+  case `open`
+  case closed
 public enum ComposerReplyDraftError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum CrossSigningReadinessDto: Equatable, Hashable
+  case unavailable
+  case setupRequired
+  case recoveryRequired
+  case verificationRequired
+  case ready
+public enum CrossSigningStateDto: Equatable, Hashable
+  case unavailable
+  case notSetUp
+  case partial
+  case ready
 public enum DeviceCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum DeviceDeleteAuthenticationDto: Equatable, Hashable
+  case password
+public enum DeviceDeleteOutcomeDto: Equatable, Hashable
+  case complete
+  case authenticationRequired
+public enum DeviceTrustDto: Equatable, Hashable
+  case verified
+  case verifiedLocallyOnly
+  case verifiedByCertificate
+  case unverified
+  case noEncryption
+  case dehydrated
 public enum DirectorySearchCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -454,6 +548,12 @@ public enum DirectoryVisibilityCommandError: Swift.Error, Equatable, Hashable, F
 public enum EditMessageError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum IdentityWarningActionDto: Equatable, Hashable
+  case dismiss
+  case withdrawVerification
+public enum IdentityWarningKindDto: Equatable, Hashable
+  case verificationViolation
+  case pinViolation
 public enum IgnoredUsersCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -478,6 +578,14 @@ public enum JoinRuleCommandError: Swift.Error, Equatable, Hashable, Foundation.L
 public enum LaterCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum LaterItemKindDto: Equatable, Hashable
+  case saved
+  case reminder
+public enum LeftoverAckStatusDto: Equatable, Hashable
+  case wiped
+  case forgotten
+  case retired
+  case loggedOut
 public enum LeftoverCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -493,6 +601,15 @@ public enum MediaUploadError: Swift.Error, Equatable, Hashable, Foundation.Local
 public enum MessageSearchError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum MissingSecretDto: Equatable, Hashable
+  case crossSigningMaster
+  case crossSigningSelfSigning
+  case crossSigningUserSigning
+  case encryptionBackup
+public enum OwnDeviceVerificationDto: Equatable, Hashable
+  case unknown
+  case unverified
+  case verified
 public enum OwnProfileCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -538,6 +655,13 @@ public enum RoomEncryptionStatus: Equatable, Hashable
 public enum RoomIdentityWarningError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum RoomKeyTransferPhaseDto: Equatable, Hashable
+  case idle
+  case preparing
+  case inFlight
+  case succeeded
+  case failed
+  case cancelled
 public enum RoomListOrder: Equatable, Hashable
   case recent
   case name
@@ -553,6 +677,12 @@ public enum RoomMembersSnapshotError: Swift.Error, Equatable, Hashable, Foundati
 public enum RoomMembershipCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum RoomMembershipDto: Equatable, Hashable
+  case invite
+  case join
+  case knock
+  case leave
+  case ban
 public enum RoomModerationCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -574,6 +704,19 @@ public enum RoomUnreadMembership: Equatable, Hashable
 public enum RtcTransportsCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum RtcTransportsStatusDto: Equatable, Hashable
+  case ready
+  case unsupported
+  case unavailable
+public enum SecretStorageActionDto: Equatable, Hashable
+  case bootstrapRequired
+  case unlockRequired
+  case noAction
+public enum SecretStorageStateDto: Equatable, Hashable
+  case unavailable
+  case notSetUp
+  case locked
+  case ready
 public enum SendPollError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -607,12 +750,22 @@ public enum SessionProjectionLifecycle: Equatable, Hashable
 public enum SessionRestoreError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum SessionStatusDto: Equatable, Hashable
+  case loggedOut
+  case loggedIn
 public enum SessionStatusError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
 public enum SpaceCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum SyncReadinessDto: Equatable, Hashable
+  case unconfigured
+  case idle
+  case running
+  case offline
+  case terminated
+  case failed
 public enum SyncStartError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -622,6 +775,30 @@ public enum SyncStopError: Swift.Error, Equatable, Hashable, Foundation.Localize
 public enum ThreepidCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum TimelineActionKindDto: Equatable, Hashable
+  case editText
+  case redact
+  case forwardText
+  case forwardMedia
+  case report
+  case pin
+  case unpin
+  case pollVote
+  case callDecline
+public enum TimelineActionStatusDto: Equatable, Hashable
+  case sent
+  case queued
+  case redacted
+  case reported
+  case pinned
+  case unpinned
+  case alreadyPinned
+  case alreadyUnpinned
+  case voted
+  case declined
+public enum TimelineDirectionDto: Equatable, Hashable
+  case backwards
+  case forwards
 public enum TimelineError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -634,15 +811,53 @@ public enum TimelineMediaError: Swift.Error, Equatable, Hashable, Foundation.Loc
 public enum TimelineMutateError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum TimelineOpenKindDto: Equatable, Hashable
+  case liveBottom
+  case unread
+  case focused
+  case thread
+  case normal
+public enum TimelinePageStateDto: Equatable, Hashable
+  case available
+  case exhausted
+  case loading
+  case unavailable
 public enum TimelinePinError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum TimelinePositionKindDto: Equatable, Hashable
+  case liveBottom
+  case unread
+  case focused
+  case thread
+  case restored
 public enum TimelineReactionError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum TimelineReadActionDto: Equatable, Hashable
+  case markRead
+  case markUnread
+public enum TimelineReadIntentDto: Equatable, Hashable
+  case automaticVisibility
+  case explicitUser
 public enum TimelineReadStateError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum TimelineRowKindDto: Equatable, Hashable
+  case message
+  case sticker
+  case poll
+  case membership
+  case state
+  case call
+  case redacted
+  case encrypted
+  case other
+  case dateSeparator
+  case readMarker
+  case unreadMarker
+  case timelineStart
+  case pagination
 public enum TimelineViewUpdateError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -658,9 +873,24 @@ public enum UserDirectorySearchError: Swift.Error, Equatable, Hashable, Foundati
 public enum UserStatusCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum VerificationDirectionDto: Equatable, Hashable
+  case incoming
+  case outgoing
 public enum VerificationListError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum VerificationPhaseDto: Equatable, Hashable
+  case requested
+  case ready
+  case started
+  case keysExchanging
+  case sasReady
+  case qrScanned
+  case confirmed
+  case done
+  case mismatched
+  case cancelled
+  case failed
 public enum VerificationSasError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -760,7 +990,7 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func reactionRedact(roomId: String, targetEventId: String, reactionEventId: String, key: String) async throws -> TimelineReactionMutationDto
   func recover(recoveryKey: String) async throws -> LeftoverAckDto
   func registerHttpPusher(pushKey: String, appId: String, gatewayUrl: String, appDisplayName: String, lang: String) async throws -> PusherWriteDto
-  func resolveRoomIdentityWarning(roomId: String, userId: String, action: String) async throws -> RoomIdentityWarningsDto
+  func resolveRoomIdentityWarning(roomId: String, userId: String, action: IdentityWarningActionDto) async throws -> RoomIdentityWarningsDto
   func restoreBackup(recoverySecret: String) async throws -> RestoreBackupDto
   func restorePersistedSession(userId: String, homeserverUrl: String, storeRoot: String) async throws -> SessionRestoreDto
   func restrictedJoinReparent(roomId: String, removeParentId: String?, addParentId: String) async throws -> RestrictedJoinReparentDto
@@ -842,14 +1072,14 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func timelineJumpLatest(streamId: String) async throws -> TimelineOpenDto
   func timelineMediaBytes(handleId: String) async throws -> LeftoverBytesDto
   func timelineOpen(roomId: String, position: TimelineOpenPositionDto) async throws -> TimelineOpenDto
-  func timelinePaginate(streamId: String, direction: String) async throws -> TimelineSnapshotDto
+  func timelinePaginate(streamId: String, direction: TimelineDirectionDto) async throws -> TimelineSnapshotDto
   func timelinePin(roomId: String, eventId: String) async throws -> TimelinePinDto
   func timelinePollVote(roomId: String, eventId: String, answerIds: [String]) async throws -> TimelineVoteDeclineDto
   func timelineReactionToggle(roomId: String, eventId: String, key: String) async throws -> TimelineReactionMutationDto
   func timelineRedact(roomId: String, eventId: String, reason: String?) async throws -> TimelineMutateDto
   func timelineReport(roomId: String, eventId: String, reason: String?) async throws -> TimelineMutateDto
   func timelineRetryDecryption(streamId: String) async throws -> Bool
-  func timelineSetReadState(streamId: String, action: String, intent: String, observedLiveTailEventId: String?) async throws -> TimelineReadStateDto
+  func timelineSetReadState(streamId: String, action: TimelineReadActionDto, intent: TimelineReadIntentDto, observedLiveTailEventId: String?) async throws -> TimelineReadStateDto
   func timelineSnapshot(streamId: String) async throws -> TimelineSnapshotDto
   func timelineUnpin(roomId: String, eventId: String) async throws -> TimelinePinDto
   func typingSet(roomId: String, typing: Bool) async throws
@@ -872,19 +1102,19 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
 public struct AgentApprovalDecisionDto: Equatable, Hashable
   public var roomId: String
   public var eventId: String
-  public var status: String
+  public var status: AgentApprovalDecisionStatusDto
   public var reaction: TimelineReactionMutationDto?
-  public init(roomId: String, eventId: String, status: String, reaction: TimelineReactionMutationDto?)
+  public init(roomId: String, eventId: String, status: AgentApprovalDecisionStatusDto, reaction: TimelineReactionMutationDto?)
 public struct AgentApprovalHistoryItemDto: Equatable, Hashable
   public var roomId: String
   public var eventId: String
   public var sender: String
-  public var decision: String
+  public var decision: AgentApprovalHistoryDecisionDto
   public var decidedAt: Double
   public var originServerTs: Double
   public var expiresAt: Double
   public var summary: String
-  public init(roomId: String, eventId: String, sender: String, decision: String, decidedAt: Double, originServerTs: Double, expiresAt: Double, summary: String)
+  public init(roomId: String, eventId: String, sender: String, decision: AgentApprovalHistoryDecisionDto, decidedAt: Double, originServerTs: Double, expiresAt: Double, summary: String)
 public struct AgentApprovalHistorySnapshotDto: Equatable, Hashable
   public var items: [AgentApprovalHistoryItemDto]
   public init(items: [AgentApprovalHistoryItemDto])
@@ -903,10 +1133,10 @@ public struct AgentApprovalInboxItemDto: Equatable, Hashable
   public var body: String
   public var originServerTs: UInt64
   public var expiresAt: UInt64
-  public var status: String
+  public var status: AgentApprovalInboxStatusDto
   public var canSendReaction: Bool
   public var bodyTruncated: Bool
-  public init(roomId: String, eventId: String, sender: String, body: String, originServerTs: UInt64, expiresAt: UInt64, status: String, canSendReaction: Bool, bodyTruncated: Bool)
+  public init(roomId: String, eventId: String, sender: String, body: String, originServerTs: UInt64, expiresAt: UInt64, status: AgentApprovalInboxStatusDto, canSendReaction: Bool, bodyTruncated: Bool)
 public struct AgentApprovalSendDto: Equatable, Hashable
   public var eventId: String
   public var status: String
@@ -920,12 +1150,12 @@ public struct AgentNotificationPreferencesDto: Equatable, Hashable
   public init(schemaVersion: UInt32, agentUserIds: [String], notifyToolActivity: Bool, notifyCommentary: Bool, notifyFinalResponses: Bool)
 public struct BackupStatusDto: Equatable, Hashable
   public var sessionGeneration: UInt64
-  public var availability: String
+  public var availability: BackupAvailabilityDto
   public var enabled: Bool
-  public var deviceState: String
-  public var recoveryState: String
-  public var action: String
-  public init(sessionGeneration: UInt64, availability: String, enabled: Bool, deviceState: String, recoveryState: String, action: String)
+  public var deviceState: BackupDeviceStateDto
+  public var recoveryState: BackupRecoveryStateDto
+  public var action: BackupActionDto
+  public init(sessionGeneration: UInt64, availability: BackupAvailabilityDto, enabled: Bool, deviceState: BackupDeviceStateDto, recoveryState: BackupRecoveryStateDto, action: BackupActionDto)
 public struct BadgeSummary: Equatable, Hashable
   public var appBadgeCount: UInt64
   public var inboxBadgeCount: UInt64
@@ -956,41 +1186,41 @@ public struct ComposerReplyDraftPreviewDto: Equatable, Hashable
   public init(eventId: String, senderId: String, body: String, formattedBody: String?, threadRootEventId: String?)
 public struct CrossSigningStatusDto: Equatable, Hashable
   public var sessionGeneration: UInt64
-  public var readiness: String
-  public init(sessionGeneration: UInt64, readiness: String)
+  public var readiness: CrossSigningReadinessDto
+  public init(sessionGeneration: UInt64, readiness: CrossSigningReadinessDto)
 public struct CryptoStatusDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var encryptionEnabled: Bool
-  public var crossSigningState: String
-  public init(sessionGeneration: UInt64, encryptionEnabled: Bool, crossSigningState: String)
+  public var crossSigningState: CrossSigningStateDto
+  public init(sessionGeneration: UInt64, encryptionEnabled: Bool, crossSigningState: CrossSigningStateDto)
 public struct DeviceDeleteChallengeDto: Equatable, Hashable
   public var operationId: UInt64
   public var sessionGeneration: UInt64
-  public var authentication: String
+  public var authentication: DeviceDeleteAuthenticationDto
   public var authenticationFailed: Bool
-  public init(operationId: UInt64, sessionGeneration: UInt64, authentication: String, authenticationFailed: Bool)
+  public init(operationId: UInt64, sessionGeneration: UInt64, authentication: DeviceDeleteAuthenticationDto, authenticationFailed: Bool)
 public struct DeviceDeleteDto: Equatable, Hashable
-  public var outcome: String
+  public var outcome: DeviceDeleteOutcomeDto
   public var snapshot: DeviceSnapshotDto?
   public var challenge: DeviceDeleteChallengeDto?
-  public init(outcome: String, snapshot: DeviceSnapshotDto?, challenge: DeviceDeleteChallengeDto?)
+  public init(outcome: DeviceDeleteOutcomeDto, snapshot: DeviceSnapshotDto?, challenge: DeviceDeleteChallengeDto?)
 public struct DeviceSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
-  public var ownVerification: String
+  public var ownVerification: OwnDeviceVerificationDto
   public var hasDevicesToVerifyAgainst: Bool?
   public var devices: [DeviceSummaryDto]
-  public init(sessionGeneration: UInt64, ownVerification: String, hasDevicesToVerifyAgainst: Bool?, devices: [DeviceSummaryDto])
+  public init(sessionGeneration: UInt64, ownVerification: OwnDeviceVerificationDto, hasDevicesToVerifyAgainst: Bool?, devices: [DeviceSummaryDto])
 public struct DeviceSummaryDto: Equatable, Hashable
   public var deviceId: String
   public var displayName: String?
   public var lastSeenIp: String?
   public var lastSeenTs: UInt64?
-  public var trust: String
+  public var trust: DeviceTrustDto
   public var isCurrent: Bool
   public var isCrossSignedByOwner: Bool?
   public var firstSeenTs: UInt64?
   public var ed25519Fingerprint: String?
-  public init(deviceId: String, displayName: String?, lastSeenIp: String?, lastSeenTs: UInt64?, trust: String, isCurrent: Bool, isCrossSignedByOwner: Bool?, firstSeenTs: UInt64?, ed25519Fingerprint: String?)
+  public init(deviceId: String, displayName: String?, lastSeenIp: String?, lastSeenTs: UInt64?, trust: DeviceTrustDto, isCurrent: Bool, isCrossSignedByOwner: Bool?, firstSeenTs: UInt64?, ed25519Fingerprint: String?)
 public struct EditMessageDto: Equatable, Hashable
   public var roomId: String
   public var eventId: String
@@ -1053,22 +1283,22 @@ public struct InviteSnapshotDto: Equatable, Hashable
   public init(sessionGeneration: UInt64, invites: [InviteDto])
 public struct LaterItemDto: Equatable, Hashable
   public var id: String
-  public var kind: String
+  public var kind: LaterItemKindDto
   public var roomId: String
   public var eventId: String
   public var createdAt: Double
   public var dueTs: Double?
   public var remindedAt: Double?
   public var completedAt: Double?
-  public init(id: String, kind: String, roomId: String, eventId: String, createdAt: Double, dueTs: Double?, remindedAt: Double?, completedAt: Double?)
+  public init(id: String, kind: LaterItemKindDto, roomId: String, eventId: String, createdAt: Double, dueTs: Double?, remindedAt: Double?, completedAt: Double?)
 public struct LaterSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var version: UInt32
   public var items: [LaterItemDto]
   public init(sessionGeneration: UInt64, version: UInt32, items: [LaterItemDto])
 public struct LeftoverAckDto: Equatable, Hashable
-  public var status: String
-  public init(status: String)
+  public var status: LeftoverAckStatusDto
+  public init(status: LeftoverAckStatusDto)
 public struct LeftoverBytesDto: Equatable, Hashable
   public var payload: Data
   public init(payload: Data)
@@ -1288,8 +1518,8 @@ public struct RoomDirectoryVisibilityWriteDto: Equatable, Hashable
 public struct RoomIdentityWarningDto: Equatable, Hashable
   public var userId: String
   public var displayName: String?
-  public var kind: String
-  public init(userId: String, displayName: String?, kind: String)
+  public var kind: IdentityWarningKindDto
+  public init(userId: String, displayName: String?, kind: IdentityWarningKindDto)
 public struct RoomIdentityWarningsDto: Equatable, Hashable
   public var roomId: String
   public var warnings: [RoomIdentityWarningDto]
@@ -1310,15 +1540,15 @@ public struct RoomJoinRuleWriteDto: Equatable, Hashable
   public init(status: String)
 public struct RoomKeyTransferStatusDto: Equatable, Hashable
   public var sessionGeneration: UInt64
-  public var phase: String
+  public var phase: RoomKeyTransferPhaseDto
   public var keysProcessed: UInt32
-  public init(sessionGeneration: UInt64, phase: String, keysProcessed: UInt32)
+  public init(sessionGeneration: UInt64, phase: RoomKeyTransferPhaseDto, keysProcessed: UInt32)
 public struct RoomListRoomDto: Equatable, Hashable
   public var roomId: String
   public var name: String?
   public var canonicalAlias: String?
   public var avatarUrl: String?
-  public var membership: String
+  public var membership: RoomMembershipDto
   public var isDirect: Bool
   public var directUserId: String?
   public var isSpace: Bool
@@ -1335,7 +1565,7 @@ public struct RoomListRoomDto: Equatable, Hashable
   public var isEncrypted: Bool
   public var encryptionStatus: RoomEncryptionStatus
   public var notificationMode: String?
-  public init(roomId: String, name: String?, canonicalAlias: String?, avatarUrl: String?, membership: String, isDirect: Bool, directUserId: String?, isSpace: Bool, isFavorite: Bool, isCall: Bool, hasActiveCall: Bool, activeCallParticipantCount: UInt32, unreadCount: UInt32, highlightCount: UInt32, markedUnread: Bool, lastActivityTs: UInt64?, lastMessagePreview: String?, lastMessageIsAgentApproval: Bool, isEncrypted: Bool, encryptionStatus: RoomEncryptionStatus, notificationMode: String?)
+  public init(roomId: String, name: String?, canonicalAlias: String?, avatarUrl: String?, membership: RoomMembershipDto, isDirect: Bool, directUserId: String?, isSpace: Bool, isFavorite: Bool, isCall: Bool, hasActiveCall: Bool, activeCallParticipantCount: UInt32, unreadCount: UInt32, highlightCount: UInt32, markedUnread: Bool, lastActivityTs: UInt64?, lastMessagePreview: String?, lastMessageIsAgentApproval: Bool, isEncrypted: Bool, encryptionStatus: RoomEncryptionStatus, notificationMode: String?)
 public struct RoomListSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var orderedRoomIds: [String]
@@ -1349,10 +1579,10 @@ public struct RoomMemberDto: Equatable, Hashable
   public var userId: String
   public var displayName: String?
   public var avatarUrl: String?
-  public var membership: String
+  public var membership: RoomMembershipDto
   public var powerLevel: Int32
   public var isDirectTarget: Bool?
-  public init(roomId: String, userId: String, displayName: String?, avatarUrl: String?, membership: String, powerLevel: Int32, isDirectTarget: Bool?)
+  public init(roomId: String, userId: String, displayName: String?, avatarUrl: String?, membership: RoomMembershipDto, powerLevel: Int32, isDirectTarget: Bool?)
 public struct RoomMembersSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var roomId: String
@@ -1453,24 +1683,24 @@ public struct RtcTransportDto: Equatable, Hashable
   public init(kind: String, serviceUrl: String?)
 public struct RtcTransportsSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
-  public var status: String
+  public var status: RtcTransportsStatusDto
   public var transports: [RtcTransportDto]
-  public init(sessionGeneration: UInt64, status: String, transports: [RtcTransportDto])
+  public init(sessionGeneration: UInt64, status: RtcTransportsStatusDto, transports: [RtcTransportDto])
 public struct SecretStorageSetupDto: Equatable, Hashable
   public var status: SecretStorageStatusDto
   public var recoveryKey: String?
   public init(status: SecretStorageStatusDto, recoveryKey: String?)
 public struct SecretStorageStatusDto: Equatable, Hashable
   public var sessionGeneration: UInt64
-  public var state: String
+  public var state: SecretStorageStateDto
   public var exists: Bool
   public var unlocked: Bool
   public var defaultKeySet: Bool
   public var passphraseConfigured: Bool
   public var bootstrapReady: Bool
-  public var missingSecrets: [String]
-  public var action: String
-  public init(sessionGeneration: UInt64, state: String, exists: Bool, unlocked: Bool, defaultKeySet: Bool, passphraseConfigured: Bool, bootstrapReady: Bool, missingSecrets: [String], action: String)
+  public var missingSecrets: [MissingSecretDto]
+  public var action: SecretStorageActionDto
+  public init(sessionGeneration: UInt64, state: SecretStorageStateDto, exists: Bool, unlocked: Bool, defaultKeySet: Bool, passphraseConfigured: Bool, bootstrapReady: Bool, missingSecrets: [MissingSecretDto], action: SecretStorageActionDto)
 public struct SendPollDto: Equatable, Hashable
   public var roomId: String
   public var eventId: String
@@ -1508,12 +1738,12 @@ public struct SessionRestoreDto: Equatable, Hashable
   public var homeserverUrl: String
   public init(userId: String, deviceId: String, homeserverUrl: String)
 public struct SessionSnapshotDto: Equatable, Hashable
-  public var status: String
+  public var status: SessionStatusDto
   public var userId: String?
   public var deviceId: String?
   public var homeserverUrl: String?
   public var sessionGeneration: UInt64?
-  public init(status: String, userId: String?, deviceId: String?, homeserverUrl: String?, sessionGeneration: UInt64?)
+  public init(status: SessionStatusDto, userId: String?, deviceId: String?, homeserverUrl: String?, sessionGeneration: UInt64?)
 public struct SpaceChildEdgeDto: Equatable, Hashable
   public var parentId: String
   public var childId: String
@@ -1557,25 +1787,25 @@ public struct SpaceParentsSnapshotDto: Equatable, Hashable
   public var entries: [SpaceParentEntryDto]
   public init(sessionGeneration: UInt64, entries: [SpaceParentEntryDto])
 public struct SyncStartDto: Equatable, Hashable
-  public var readiness: String
+  public var readiness: SyncReadinessDto
   public var sessionGeneration: UInt64
   public var started: Bool
   public var offlineModeEnabled: Bool
-  public init(readiness: String, sessionGeneration: UInt64, started: Bool, offlineModeEnabled: Bool)
+  public init(readiness: SyncReadinessDto, sessionGeneration: UInt64, started: Bool, offlineModeEnabled: Bool)
 public struct SyncStatusDto: Equatable, Hashable
-  public var readiness: String
+  public var readiness: SyncReadinessDto
   public var sessionGeneration: UInt64
   public var offlineModeEnabled: Bool
   public var failureDiagnosticId: String?
   public var slidingSyncCapable: Bool?
-  public var commandGate: String
-  public init(readiness: String, sessionGeneration: UInt64, offlineModeEnabled: Bool, failureDiagnosticId: String?, slidingSyncCapable: Bool?, commandGate: String)
+  public var commandGate: CommandGateDto
+  public init(readiness: SyncReadinessDto, sessionGeneration: UInt64, offlineModeEnabled: Bool, failureDiagnosticId: String?, slidingSyncCapable: Bool?, commandGate: CommandGateDto)
 public struct SyncStopDto: Equatable, Hashable
-  public var readiness: String
+  public var readiness: SyncReadinessDto
   public var sessionGeneration: UInt64
   public var stopped: Bool
   public var offlineModeEnabled: Bool
-  public init(readiness: String, sessionGeneration: UInt64, stopped: Bool, offlineModeEnabled: Bool)
+  public init(readiness: SyncReadinessDto, sessionGeneration: UInt64, stopped: Bool, offlineModeEnabled: Bool)
 public struct ThreepidAddDto: Equatable, Hashable
   public var status: String
   public init(status: String)
@@ -1608,18 +1838,18 @@ public struct TimelineEventReadbackDto: Equatable, Hashable
   public init(sessionGeneration: UInt64, roomId: String, eventId: String, item: TimelineEventItemDto)
 public struct TimelineForwardDto: Equatable, Hashable
   public var schemaVersion: UInt32
-  public var action: String
+  public var action: TimelineActionKindDto
   public var roomId: String
   public var eventId: String
-  public var status: String
-  public init(schemaVersion: UInt32, action: String, roomId: String, eventId: String, status: String)
+  public var status: TimelineActionStatusDto
+  public init(schemaVersion: UInt32, action: TimelineActionKindDto, roomId: String, eventId: String, status: TimelineActionStatusDto)
 public struct TimelineMutateDto: Equatable, Hashable
   public var schemaVersion: UInt32
-  public var action: String
+  public var action: TimelineActionKindDto
   public var roomId: String
   public var eventId: String
-  public var status: String
-  public init(schemaVersion: UInt32, action: String, roomId: String, eventId: String, status: String)
+  public var status: TimelineActionStatusDto
+  public init(schemaVersion: UInt32, action: TimelineActionKindDto, roomId: String, eventId: String, status: TimelineActionStatusDto)
 public struct TimelineOpenDto: Equatable, Hashable
   public var schemaVersion: UInt32
   public var streamId: String
@@ -1627,20 +1857,20 @@ public struct TimelineOpenDto: Equatable, Hashable
   public var snapshot: TimelineSnapshotDto
   public init(schemaVersion: UInt32, streamId: String, position: TimelineViewPositionDto, snapshot: TimelineSnapshotDto)
 public struct TimelineOpenPositionDto: Equatable, Hashable
-  public var kind: String
+  public var kind: TimelineOpenKindDto
   public var atBottom: Bool
   public var restoredAnchorEventId: String?
   public var liveTailEventId: String?
   public var updatedAtMs: UInt64?
   public var eventId: String?
-  public init(kind: String, atBottom: Bool, restoredAnchorEventId: String?, liveTailEventId: String?, updatedAtMs: UInt64?, eventId: String?)
+  public init(kind: TimelineOpenKindDto, atBottom: Bool, restoredAnchorEventId: String?, liveTailEventId: String?, updatedAtMs: UInt64?, eventId: String?)
 public struct TimelinePinDto: Equatable, Hashable
   public var schemaVersion: UInt32
-  public var action: String
+  public var action: TimelineActionKindDto
   public var roomId: String
   public var eventId: String
-  public var status: String
-  public init(schemaVersion: UInt32, action: String, roomId: String, eventId: String, status: String)
+  public var status: TimelineActionStatusDto
+  public init(schemaVersion: UInt32, action: TimelineActionKindDto, roomId: String, eventId: String, status: TimelineActionStatusDto)
 public struct TimelineReactionDto: Equatable, Hashable
   public var key: String
   public var count: UInt32
@@ -1659,19 +1889,19 @@ public struct TimelineReactionSenderDto: Equatable, Hashable
   public var reactionEventId: String?
   public init(userId: String, reactionEventId: String?)
 public struct TimelineReadStateDto: Equatable, Hashable
-  public var action: String
+  public var action: TimelineReadActionDto
   public var receiptSent: Bool?
   public var acknowledgedEventId: String?
   public var snapshot: TimelineSnapshotDto
-  public init(action: String, receiptSent: Bool?, acknowledgedEventId: String?, snapshot: TimelineSnapshotDto)
+  public init(action: TimelineReadActionDto, receiptSent: Bool?, acknowledgedEventId: String?, snapshot: TimelineSnapshotDto)
 public struct TimelineSnapshotDto: Equatable, Hashable
   public var schemaVersion: UInt32
   public var sessionGeneration: UInt64
   public var roomId: String
   public var revision: UInt64
   public var position: TimelineViewPositionDto
-  public var paginationBackward: String
-  public var paginationForward: String
+  public var paginationBackward: TimelinePageStateDto
+  public var paginationForward: TimelinePageStateDto
   public var visibleTailEventId: String?
   public var receiptTailEventId: String?
   public var ownReadEventId: String?
@@ -1686,7 +1916,7 @@ public struct TimelineSnapshotDto: Equatable, Hashable
   public var canRedactOwn: Bool
   public var canRedactOther: Bool
   public var rows: [TimelineViewRowDto]
-  public init(schemaVersion: UInt32, sessionGeneration: UInt64, roomId: String, revision: UInt64, position: TimelineViewPositionDto, paginationBackward: String, paginationForward: String, visibleTailEventId: String?, receiptTailEventId: String?, ownReadEventId: String?, unreadAnchorEventId: String?, isMarkedUnread: Bool, pinnedEventIds: [String], rowCount: UInt32, markRead: Bool, markUnread: Bool, paginateBackward: Bool, paginateForward: Bool, canRedactOwn: Bool, canRedactOther: Bool, rows: [TimelineViewRowDto])
+  public init(schemaVersion: UInt32, sessionGeneration: UInt64, roomId: String, revision: UInt64, position: TimelineViewPositionDto, paginationBackward: TimelinePageStateDto, paginationForward: TimelinePageStateDto, visibleTailEventId: String?, receiptTailEventId: String?, ownReadEventId: String?, unreadAnchorEventId: String?, isMarkedUnread: Bool, pinnedEventIds: [String], rowCount: UInt32, markRead: Bool, markUnread: Bool, paginateBackward: Bool, paginateForward: Bool, canRedactOwn: Bool, canRedactOther: Bool, rows: [TimelineViewRowDto])
 public struct TimelineViewEncryptionShieldDto: Equatable, Hashable
   public var tone: String
   public var code: String
@@ -1704,9 +1934,9 @@ public struct TimelineViewPollDto: Equatable, Hashable
   public var answers: [TimelineViewPollAnswerDto]
   public init(question: String, closed: Bool, maxSelections: UInt32, answers: [TimelineViewPollAnswerDto])
 public struct TimelineViewPositionDto: Equatable, Hashable
-  public var kind: String
+  public var kind: TimelinePositionKindDto
   public var eventId: String?
-  public init(kind: String, eventId: String?)
+  public init(kind: TimelinePositionKindDto, eventId: String?)
 public struct TimelineViewReactionDto: Equatable, Hashable
   public var key: String
   public var count: UInt32
@@ -1731,7 +1961,7 @@ public struct TimelineViewRowCapabilitiesDto: Equatable, Hashable
   public var declineCall: Bool
   public init(react: Bool, reply: Bool, edit: Bool, redact: Bool, report: Bool, pin: Bool, forward: Bool, vote: Bool, declineCall: Bool)
 public struct TimelineViewRowDto: Equatable, Hashable
-  public var kind: String
+  public var kind: TimelineRowKindDto
   public var itemId: String
   public var eventId: String
   public var sender: String
@@ -1761,7 +1991,7 @@ public struct TimelineViewRowDto: Equatable, Hashable
   public var mediaHeight: UInt32?
   public var mediaDurationMs: UInt64?
   public var encryptionShield: TimelineViewEncryptionShieldDto?
-  public init(kind: String, itemId: String, eventId: String, sender: String, senderName: String, senderAvatarUrl: String?, body: String, originServerTs: UInt64, edited: Bool, replyToEventId: String?, replyPreview: TimelineViewReplyPreviewDto?, threadRootEventId: String?, threadSummary: TimelineViewThreadSummaryDto?, poll: TimelineViewPollDto?, capabilities: TimelineViewRowCapabilitiesDto?, decryptionState: String?, messageType: String?, forwardTransport: String?, formattedBody: String?, agentCardJson: String?, isAgentApproval: Bool, mediaFilename: String?, mediaCaption: String?, reactions: [TimelineViewReactionDto], mediaHandleId: String?, mediaMimeType: String?, mediaWidth: UInt32?, mediaHeight: UInt32?, mediaDurationMs: UInt64?, encryptionShield: TimelineViewEncryptionShieldDto?)
+  public init(kind: TimelineRowKindDto, itemId: String, eventId: String, sender: String, senderName: String, senderAvatarUrl: String?, body: String, originServerTs: UInt64, edited: Bool, replyToEventId: String?, replyPreview: TimelineViewReplyPreviewDto?, threadRootEventId: String?, threadSummary: TimelineViewThreadSummaryDto?, poll: TimelineViewPollDto?, capabilities: TimelineViewRowCapabilitiesDto?, decryptionState: String?, messageType: String?, forwardTransport: String?, formattedBody: String?, agentCardJson: String?, isAgentApproval: Bool, mediaFilename: String?, mediaCaption: String?, reactions: [TimelineViewReactionDto], mediaHandleId: String?, mediaMimeType: String?, mediaWidth: UInt32?, mediaHeight: UInt32?, mediaDurationMs: UInt64?, encryptionShield: TimelineViewEncryptionShieldDto?)
 public struct TimelineViewThreadSummaryDto: Equatable, Hashable
   public var rootEventId: String
   public var replyCount: UInt32
@@ -1777,11 +2007,11 @@ public struct TimelineViewUpdateDto: Equatable, Hashable
   public init(schemaVersion: UInt32, sessionGeneration: UInt64, streamId: String, roomId: String, revision: UInt64, opCount: UInt32)
 public struct TimelineVoteDeclineDto: Equatable, Hashable
   public var schemaVersion: UInt32
-  public var action: String
+  public var action: TimelineActionKindDto
   public var roomId: String
   public var eventId: String
-  public var status: String
-  public init(schemaVersion: UInt32, action: String, roomId: String, eventId: String, status: String)
+  public var status: TimelineActionStatusDto
+  public init(schemaVersion: UInt32, action: TimelineActionKindDto, roomId: String, eventId: String, status: TimelineActionStatusDto)
 public struct TypingRoomDto: Equatable, Hashable
   public var roomId: String
   public var userIds: [String]
@@ -1835,12 +2065,12 @@ public struct VerificationRequestDto: Equatable, Hashable
   public var flowId: String
   public var otherUserId: String
   public var otherDeviceId: String?
-  public var direction: String
-  public var phase: String
+  public var direction: VerificationDirectionDto
+  public var phase: VerificationPhaseDto
   public var startedTs: UInt64?
   public var sas: VerificationSasDto?
   public var qr: VerificationQrDto?
-  public init(flowId: String, otherUserId: String, otherDeviceId: String?, direction: String, phase: String, startedTs: UInt64?, sas: VerificationSasDto?, qr: VerificationQrDto?)
+  public init(flowId: String, otherUserId: String, otherDeviceId: String?, direction: VerificationDirectionDto, phase: VerificationPhaseDto, startedTs: UInt64?, sas: VerificationSasDto?, qr: VerificationQrDto?)
 public struct VerificationSasDto: Equatable, Hashable
   public var emoji: [VerificationEmojiDto]?
   public var decimals: [UInt16]?

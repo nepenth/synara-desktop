@@ -1,4 +1,5 @@
 import Foundation
+import SynaraCore
 
 /// P4-S27/S28 map of privacy-safe SharedCore leftover/session status reads
 /// to product session and room crypto status.
@@ -11,12 +12,12 @@ import Foundation
 /// This is not iOS-on-engine and not P4 acceptance.
 enum SharedCoreSessionCrypto {
     static func status(
-        crossSigningState: String?,
+        crossSigningState: CrossSigningStateDto?,
         backupEnabled: Bool?,
-        backupAvailability: String?,
-        backupDeviceState: String?,
-        recoveryState: String?,
-        secretStorageState: String?
+        backupAvailability: BackupAvailabilityDto?,
+        backupDeviceState: BackupDeviceStateDto?,
+        recoveryState: BackupRecoveryStateDto?,
+        secretStorageState: SecretStorageStateDto?
     ) -> SessionCryptoStatus {
         SessionCryptoStatus(
             verification: verification(crossSigningState),
@@ -32,58 +33,58 @@ enum SharedCoreSessionCrypto {
         )
     }
 
-    static func verification(_ crossSigningState: String?) -> SynaraCryptoVerificationStatus {
+    static func verification(_ crossSigningState: CrossSigningStateDto?) -> SynaraCryptoVerificationStatus {
         switch crossSigningState {
-        case "ready":
+        case .ready:
             return .verified
-        case "unavailable", "not_set_up", "missing":
+        case .unavailable, .notSetUp:
             return .unverified
-        default:
+        case .partial, nil:
             return .unknown
         }
     }
 
     static func recovery(
-        recoveryState: String?,
-        secretStorageState: String?
+        recoveryState: BackupRecoveryStateDto?,
+        secretStorageState: SecretStorageStateDto?
     ) -> SynaraCryptoRecoveryStatus {
         switch recoveryState {
-        case "ready":
+        case .ready:
             return .enabled
-        case "incomplete":
+        case .incomplete:
             return .incomplete
-        case "not_set_up":
+        case .notSetUp:
             return .disabled
-        default:
+        case .unknown, nil:
             break
         }
         switch secretStorageState {
-        case "ready":
+        case .ready:
             return .enabled
-        case "locked":
+        case .locked:
             return .incomplete
-        case "not_set_up", "unavailable":
+        case .notSetUp, .unavailable:
             return .disabled
-        default:
+        case nil:
             return .unknown
         }
     }
 
     static func backup(
         enabled: Bool?,
-        availability: String?,
-        deviceState: String?
+        availability: BackupAvailabilityDto?,
+        deviceState: BackupDeviceStateDto?
     ) -> SynaraCryptoBackupStatus {
         if enabled == true {
             return .enabled
         }
         switch deviceState {
-        case "connecting", "downloading", "uploading":
+        case .connecting, .downloading, .uploading:
             return .syncing
-        default:
+        case .unavailable, .disconnected, .ready, nil:
             break
         }
-        if availability == "missing" {
+        if availability == .missing {
             return .unavailable
         }
         return .unknown

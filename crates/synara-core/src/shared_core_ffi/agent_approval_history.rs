@@ -12,12 +12,23 @@ const HISTORY_NO_SESSION_DESCRIPTION: &str = "No native Matrix session is active
 const HISTORY_FAILED_CODE: &str = "agent-approval-history-load-failed";
 const HISTORY_FAILED_DESCRIPTION: &str = "The native Matrix approval history is unavailable.";
 
+super::wire_enum::wire_enum! {
+    pub enum AgentApprovalHistoryDecisionDto {
+        ApproveOnce => "approve_once",
+        ApproveAlways => "approve_always",
+        Deny => "deny",
+    }
+}
+super::wire_enum::wire_enum_from!(SynaraAgentApprovalHistoryDecision => AgentApprovalHistoryDecisionDto {
+    ApproveOnce, ApproveAlways, Deny
+});
+
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct AgentApprovalHistoryItemDto {
     pub room_id: String,
     pub event_id: String,
     pub sender: String,
-    pub decision: String,
+    pub decision: AgentApprovalHistoryDecisionDto,
     pub decided_at: f64,
     pub origin_server_ts: f64,
     pub expires_at: f64,
@@ -65,15 +76,6 @@ fn map_history_core_error(error: MatrixIpcError) -> AgentApprovalHistoryCommandE
     }
 }
 
-fn decision_as_str(decision: SynaraAgentApprovalHistoryDecision) -> String {
-    match decision {
-        SynaraAgentApprovalHistoryDecision::ApproveOnce => "approve_once",
-        SynaraAgentApprovalHistoryDecision::ApproveAlways => "approve_always",
-        SynaraAgentApprovalHistoryDecision::Deny => "deny",
-    }
-    .to_owned()
-}
-
 fn item_dto(
     item: SynaraAgentApprovalHistoryItem,
 ) -> Result<AgentApprovalHistoryItemDto, AgentApprovalHistoryCommandError> {
@@ -90,7 +92,7 @@ fn item_dto(
         room_id: item.room_id,
         event_id: item.event_id,
         sender: item.sender,
-        decision: decision_as_str(item.decision),
+        decision: item.decision.into(),
         decided_at: item.decided_at,
         origin_server_ts: item.origin_server_ts,
         expires_at: item.expires_at,
