@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Internals: pin the generated Swift API surface in CI, generate Swift bindings in UniFFI library mode, read session/sync/crypto status through typed Core methods on desktop and iOS, generate the renderer's status types from Rust, and start moving SharedCore methods to UniFFI proc-macro exports.
+- Internals: pin the generated Swift API surface in CI, generate Swift bindings in UniFFI library mode from proc-macro exports (no UDL), call one typed Core method per matrix command from desktop and iOS instead of JSON envelopes (the envelope registry is now test-only), and generate the renderer's native wire types from Rust.
 - Performance: keep at most 16 idle live room timelines and 32 focused or thread timelines (least recently used goes first), close view streams a reloaded window left open, and scope each view's power-level watcher to its room.
 - Startup: probe sliding-sync support and the system keyring in the background so restore and the first window paint no longer wait on them.
 - Desktop: quitting stops sync within 2 seconds before exiting.
