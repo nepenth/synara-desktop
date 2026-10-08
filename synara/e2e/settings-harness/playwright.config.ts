@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: '..',
-  testMatch: ['settings-layout.spec.ts'],
+  testMatch: ['settings-layout.spec.ts', 'settings-screens.spec.ts'],
   workers: 2,
   retries: 0,
   timeout: 60000,
