@@ -15,7 +15,7 @@ use crate::app::sync::{CommandGate, SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID};
 use crate::MatrixSessionSnapshot;
 
 /// Static fail-closed vault error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum IosSecretVaultError {
     Unavailable { code: String, description: String },
 }
@@ -23,6 +23,7 @@ pub enum IosSecretVaultError {
 /// Swift-owned key/value secret store described by the existing UDL callback.
 ///
 /// UniFFI UDL mode generates glue only; the trait itself must live in Rust.
+#[uniffi::export(callback_interface)]
 pub trait IosSecretVault: Send + Sync {
     fn get(&self, key: String) -> Result<Option<Vec<u8>>, IosSecretVaultError>;
     fn put(&self, key: String, value: Vec<u8>) -> Result<(), IosSecretVaultError>;
@@ -40,7 +41,7 @@ impl std::fmt::Display for IosSecretVaultError {
 impl std::error::Error for IosSecretVaultError {}
 
 /// Privacy-safe restore outcome. Tokens never appear here.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SessionRestoreDto {
     pub user_id: String,
     pub device_id: String,
@@ -48,7 +49,7 @@ pub struct SessionRestoreDto {
 }
 
 /// Static fail-closed restore error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SessionRestoreError {
     Failed { code: String, description: String },
 }
@@ -71,7 +72,7 @@ pub(super) fn restore_failed(code: &'static str, description: &'static str) -> S
 }
 
 /// Privacy-safe login outcome. Tokens and password never appear here.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SessionLoginDto {
     pub user_id: String,
     pub device_id: String,
@@ -79,7 +80,7 @@ pub struct SessionLoginDto {
 }
 
 /// Static fail-closed login error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SessionLoginError {
     Failed { code: String, description: String },
 }
@@ -102,13 +103,13 @@ pub(super) fn login_failed(code: &'static str, description: &'static str) -> Ses
 }
 
 /// Privacy-safe attach outcome. Owner names only; no tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SessionAttachDto {
     pub owners: Vec<String>,
 }
 
 /// Static fail-closed attach error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SessionAttachError {
     Failed { code: String, description: String },
 }
@@ -131,7 +132,7 @@ pub(super) fn attach_failed(code: &'static str, description: &'static str) -> Se
 }
 
 /// Privacy-safe start outcome. No tokens, URLs, or SDK error text.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SyncStartDto {
     pub readiness: String,
     pub session_generation: u64,
@@ -140,7 +141,7 @@ pub struct SyncStartDto {
 }
 
 /// Privacy-safe stop outcome. No tokens, URLs, paths, or SDK error text.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SyncStopDto {
     pub readiness: String,
     pub session_generation: u64,
@@ -149,7 +150,7 @@ pub struct SyncStopDto {
 }
 
 /// Static fail-closed stop error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SyncStopError {
     Failed { code: String, description: String },
 }
@@ -172,7 +173,7 @@ pub(super) fn sync_stop_failed(code: &'static str, description: &'static str) ->
 }
 
 /// Static fail-closed start error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SyncStartError {
     Failed { code: String, description: String },
 }
@@ -195,7 +196,7 @@ pub(super) fn sync_start_failed(code: &'static str, description: &'static str) -
 }
 
 /// Privacy-safe live session snapshot from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SessionSnapshotDto {
     pub status: String,
     pub user_id: Option<String>,
@@ -205,7 +206,7 @@ pub struct SessionSnapshotDto {
 }
 
 /// Privacy-safe sync readiness from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SyncStatusDto {
     pub readiness: String,
     pub session_generation: u64,
@@ -217,7 +218,7 @@ pub struct SyncStatusDto {
 }
 
 /// Static fail-closed session/status error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SessionStatusError {
     Failed { code: String, description: String },
 }
@@ -233,19 +234,19 @@ impl std::fmt::Display for SessionStatusError {
 impl std::error::Error for SessionStatusError {}
 
 /// Privacy-safe leftover write ack. Status only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct LeftoverAckDto {
     pub status: String,
 }
 
 /// Privacy-safe leftover bytes readback. Callers must not log the payload.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct LeftoverBytesDto {
     pub payload: Vec<u8>,
 }
 
 /// Static fail-closed leftover error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum LeftoverCommandError {
     Failed { code: String, description: String },
 }
@@ -268,7 +269,7 @@ pub(super) fn leftover_failed(code: &str, description: &'static str) -> Leftover
 }
 
 /// Privacy-safe MSC4426 in-call field.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct UserInCallDto {
     pub call_joined_ts: Option<u64>,
 }
@@ -753,68 +754,6 @@ impl SharedCore {
         self.generations.allocate()
     }
 
-    /// Construct a real Core with the fail-closed iOS Platform.
-    pub fn new() -> Self {
-        let platform = IosFailClosedPlatform::new();
-        let secret_store = Platform::secret_store(&platform);
-        Self {
-            core: Core::new(Arc::new(platform)),
-            secret_store,
-            restored_client: Mutex::new(RestoredClientSlot::Empty),
-            owner_attach: Mutex::new(OwnerAttachSlot::Empty),
-            sync_lifecycle: tokio::sync::Mutex::new(()),
-            nse_read_only: Mutex::new(false),
-            timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
-            owner_updates: Arc::new(Mutex::new(Vec::new())),
-            room_list_updates: Arc::new(Mutex::new(Vec::new())),
-            room_list_live: Arc::new(Mutex::new(None)),
-            own_profile_live: Arc::new(Mutex::new(None)),
-            media_retention_live: Arc::new(Mutex::new(None)),
-            generations: crate::app::lifecycle::session::SessionGenerations::new(),
-            save_retry_backoff: Mutex::new(crate::app::lifecycle::session::RetryBackoff::new()),
-            rejected_session: Mutex::new(None),
-        }
-    }
-
-    /// Construct a real Core whose `Platform::secret_store` is the Swift vault.
-    pub fn new_with_secret_store(store: Box<dyn IosSecretVault>) -> Self {
-        let vault: Arc<dyn SecretVault + Send + Sync> =
-            Arc::new(CallbackSecretVault { inner: store });
-        let platform = IosFailClosedPlatform::with_secret_store(Arc::clone(&vault));
-        Self {
-            core: Core::new(Arc::new(platform)),
-            secret_store: vault,
-            restored_client: Mutex::new(RestoredClientSlot::Empty),
-            owner_attach: Mutex::new(OwnerAttachSlot::Empty),
-            sync_lifecycle: tokio::sync::Mutex::new(()),
-            nse_read_only: Mutex::new(false),
-            timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
-            owner_updates: Arc::new(Mutex::new(Vec::new())),
-            room_list_updates: Arc::new(Mutex::new(Vec::new())),
-            room_list_live: Arc::new(Mutex::new(None)),
-            own_profile_live: Arc::new(Mutex::new(None)),
-            media_retention_live: Arc::new(Mutex::new(None)),
-            generations: crate::app::lifecycle::session::SessionGenerations::new(),
-            save_retry_backoff: Mutex::new(crate::app::lifecycle::session::RetryBackoff::new()),
-            rejected_session: Mutex::new(None),
-        }
-    }
-
-    /// Restore an already-persisted session from the S3a vault. No password.
-    ///
-    /// `store_root` is the shell-owned SDK store directory. It is never echoed.
-    /// This is not `matrix_restore_session` and does not attach owners or
-    /// expose `Core.command`.
-    pub async fn restore_persisted_session(
-        &self,
-        user_id: String,
-        homeserver_url: String,
-        store_root: String,
-    ) -> Result<SessionRestoreDto, SessionRestoreError> {
-        self.restore_persisted_session_with_policy(user_id, homeserver_url, store_root, false, None)
-            .await
-    }
-
     pub(super) async fn restore_persisted_session_with_policy(
         &self,
         user_id: String,
@@ -921,23 +860,6 @@ impl SharedCore {
             device_id: outcome.meta.device_id,
             homeserver_url: outcome.meta.homeserver_url,
         })
-    }
-
-    /// Password login through Core, persisted into the S3a vault for S3b restore.
-    ///
-    /// `password` is a dedicated FFI argument. It is never stored, never copied
-    /// into the DTO, never echoed, and is zeroized when this frame returns.
-    /// This is not `matrix_login_password` and does not attach owners.
-    pub async fn login_with_password(
-        &self,
-        user_id: String,
-        homeserver_url: String,
-        store_root: String,
-        password: String,
-    ) -> Result<SessionLoginDto, SessionLoginError> {
-        let password = Zeroizing::new(password);
-        self.login_with_password_inner(&user_id, &homeserver_url, &store_root, password.as_str())
-            .await
     }
 
     pub(super) async fn login_with_password_inner(
@@ -1137,6 +1059,213 @@ impl SharedCore {
             device_id,
             homeserver_url: identity.homeserver_url().to_owned(),
         })
+    }
+
+    /// Re-save the retained client's current in-memory tokens after a failed
+    /// rotation save, at most once per backoff window. It never replays an old
+    /// refresh token, and a revoked lease (logout, forget) makes it a no-op.
+    /// Returns whether a retry ran and succeeded.
+    pub(super) fn retry_failed_session_save(&self, now: std::time::Instant) -> Option<bool> {
+        let (client, lease) = match &*self.restored_client.lock().ok()? {
+            RestoredClientSlot::Ready(client, persistence)
+                if persistence.lease().save_failed() && !persistence.lease().is_revoked() =>
+            {
+                (client.clone(), persistence.callback_lease())
+            }
+            _ => return None,
+        };
+        let mut backoff = self.save_retry_backoff.lock().ok()?;
+        if !backoff.ready(now) {
+            return None;
+        }
+        let snapshot = self.core.session_snapshot().ok().flatten()?;
+        let identity = AccountIdentity::new(&snapshot.user_id, &snapshot.homeserver_url).ok()?;
+        let vault = SecretStoreSessionVault {
+            store: Arc::clone(&self.secret_store),
+        };
+        let saved = lease
+            .save(|| {
+                persist_session_after_login(&client, &identity, &vault)
+                    .map(|_| ())
+                    .map_err(|_| SessionFault::unavailable(RotationDiagnostics::IOS.persist_failed))
+            })
+            .is_ok();
+        backoff.record(now, saved);
+        Some(saved)
+    }
+
+    /// Permanently reject further credential writes from the retained client.
+    pub(super) fn revoke_retained_persistence(&self) {
+        if let Ok(guard) = self.restored_client.lock() {
+            if let RestoredClientSlot::Ready(_, persistence) = &*guard {
+                persistence.lease().revoke();
+            }
+        }
+    }
+
+    /// Remember the current generation when its sync reported a rejected
+    /// refresh. A later generation simply never matches the latch.
+    pub(crate) fn note_authentication_rejection(&self, failure_diagnostic_id: Option<&str>) {
+        if failure_diagnostic_id != Some(SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID) {
+            return;
+        }
+        let Ok(Some(snapshot)) = self.core.session_snapshot() else {
+            return;
+        };
+        let Ok(identity) = AccountIdentity::new(&snapshot.user_id, &snapshot.homeserver_url) else {
+            return;
+        };
+        if let Ok(mut latch) = self.rejected_session.lock() {
+            *latch = Some((snapshot.session_generation, identity));
+        }
+    }
+
+    pub(super) async fn leftover_status_command(
+        &self,
+        command: &'static str,
+    ) -> Result<serde_json::Value, LeftoverCommandError> {
+        let payload = leftover_status_envelope_payload(serde_json::Value::Null)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: LEFTOVER_STATUS_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(map_leftover_status_core_error)?;
+        Ok(response.payload)
+    }
+
+    pub(super) fn has_retained_client(&self) -> bool {
+        self.restored_client
+            .lock()
+            .map(|guard| matches!(*guard, RestoredClientSlot::Ready(..)))
+            .unwrap_or(false)
+    }
+
+    pub(super) fn owners_attached(&self) -> bool {
+        self.owner_attach
+            .lock()
+            .map(|guard| matches!(*guard, OwnerAttachSlot::Ready))
+            .unwrap_or(false)
+    }
+
+    pub(super) fn retained_client(&self) -> Result<Client, NseStoreError> {
+        let guard = self
+            .restored_client
+            .lock()
+            .map_err(|_| nse_failed(NSE_FAILED_CODE, NSE_FAILED_DESCRIPTION))?;
+        match &*guard {
+            RestoredClientSlot::Ready(client, _) => Ok(client.clone()),
+            RestoredClientSlot::Empty | RestoredClientSlot::InFlight => Err(nse_failed(
+                NSE_STORE_NOT_OPEN_CODE,
+                NSE_STORE_NOT_OPEN_DESCRIPTION,
+            )),
+        }
+    }
+
+    pub(super) async fn session_status_command(
+        &self,
+        command: &'static str,
+    ) -> Result<serde_json::Value, SessionStatusError> {
+        let payload = session_status_envelope_payload(serde_json::Value::Null)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: SESSION_STATUS_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(map_session_status_core_error)?;
+        Ok(response.payload)
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl SharedCore {
+    /// Construct a real Core with the fail-closed iOS Platform.
+    #[uniffi::constructor]
+    pub fn new() -> Self {
+        let platform = IosFailClosedPlatform::new();
+        let secret_store = Platform::secret_store(&platform);
+        Self {
+            core: Core::new(Arc::new(platform)),
+            secret_store,
+            restored_client: Mutex::new(RestoredClientSlot::Empty),
+            owner_attach: Mutex::new(OwnerAttachSlot::Empty),
+            sync_lifecycle: tokio::sync::Mutex::new(()),
+            nse_read_only: Mutex::new(false),
+            timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
+            owner_updates: Arc::new(Mutex::new(Vec::new())),
+            room_list_updates: Arc::new(Mutex::new(Vec::new())),
+            room_list_live: Arc::new(Mutex::new(None)),
+            own_profile_live: Arc::new(Mutex::new(None)),
+            media_retention_live: Arc::new(Mutex::new(None)),
+            generations: crate::app::lifecycle::session::SessionGenerations::new(),
+            save_retry_backoff: Mutex::new(crate::app::lifecycle::session::RetryBackoff::new()),
+            rejected_session: Mutex::new(None),
+        }
+    }
+
+    /// Construct a real Core whose `Platform::secret_store` is the Swift vault.
+    #[uniffi::constructor]
+    pub fn new_with_secret_store(store: Box<dyn IosSecretVault>) -> Self {
+        let vault: Arc<dyn SecretVault + Send + Sync> =
+            Arc::new(CallbackSecretVault { inner: store });
+        let platform = IosFailClosedPlatform::with_secret_store(Arc::clone(&vault));
+        Self {
+            core: Core::new(Arc::new(platform)),
+            secret_store: vault,
+            restored_client: Mutex::new(RestoredClientSlot::Empty),
+            owner_attach: Mutex::new(OwnerAttachSlot::Empty),
+            sync_lifecycle: tokio::sync::Mutex::new(()),
+            nse_read_only: Mutex::new(false),
+            timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
+            owner_updates: Arc::new(Mutex::new(Vec::new())),
+            room_list_updates: Arc::new(Mutex::new(Vec::new())),
+            room_list_live: Arc::new(Mutex::new(None)),
+            own_profile_live: Arc::new(Mutex::new(None)),
+            media_retention_live: Arc::new(Mutex::new(None)),
+            generations: crate::app::lifecycle::session::SessionGenerations::new(),
+            save_retry_backoff: Mutex::new(crate::app::lifecycle::session::RetryBackoff::new()),
+            rejected_session: Mutex::new(None),
+        }
+    }
+
+    /// Restore an already-persisted session from the S3a vault. No password.
+    ///
+    /// `store_root` is the shell-owned SDK store directory. It is never echoed.
+    /// This is not `matrix_restore_session` and does not attach owners or
+    /// expose `Core.command`.
+    pub async fn restore_persisted_session(
+        &self,
+        user_id: String,
+        homeserver_url: String,
+        store_root: String,
+    ) -> Result<SessionRestoreDto, SessionRestoreError> {
+        self.restore_persisted_session_with_policy(user_id, homeserver_url, store_root, false, None)
+            .await
+    }
+
+    /// Password login through Core, persisted into the S3a vault for S3b restore.
+    ///
+    /// `password` is a dedicated FFI argument. It is never stored, never copied
+    /// into the DTO, never echoed, and is zeroized when this frame returns.
+    /// This is not `matrix_login_password` and does not attach owners.
+    pub async fn login_with_password(
+        &self,
+        user_id: String,
+        homeserver_url: String,
+        store_root: String,
+        password: String,
+    ) -> Result<SessionLoginDto, SessionLoginError> {
+        let password = Zeroizing::new(password);
+        self.login_with_password_inner(&user_id, &homeserver_url, &store_root, password.as_str())
+            .await
     }
 
     /// Attach the desktop owner set on the retained Client. No Core.command.
@@ -1550,48 +1679,6 @@ impl SharedCore {
         })
     }
 
-    /// Re-save the retained client's current in-memory tokens after a failed
-    /// rotation save, at most once per backoff window. It never replays an old
-    /// refresh token, and a revoked lease (logout, forget) makes it a no-op.
-    /// Returns whether a retry ran and succeeded.
-    pub(super) fn retry_failed_session_save(&self, now: std::time::Instant) -> Option<bool> {
-        let (client, lease) = match &*self.restored_client.lock().ok()? {
-            RestoredClientSlot::Ready(client, persistence)
-                if persistence.lease().save_failed() && !persistence.lease().is_revoked() =>
-            {
-                (client.clone(), persistence.callback_lease())
-            }
-            _ => return None,
-        };
-        let mut backoff = self.save_retry_backoff.lock().ok()?;
-        if !backoff.ready(now) {
-            return None;
-        }
-        let snapshot = self.core.session_snapshot().ok().flatten()?;
-        let identity = AccountIdentity::new(&snapshot.user_id, &snapshot.homeserver_url).ok()?;
-        let vault = SecretStoreSessionVault {
-            store: Arc::clone(&self.secret_store),
-        };
-        let saved = lease
-            .save(|| {
-                persist_session_after_login(&client, &identity, &vault)
-                    .map(|_| ())
-                    .map_err(|_| SessionFault::unavailable(RotationDiagnostics::IOS.persist_failed))
-            })
-            .is_ok();
-        backoff.record(now, saved);
-        Some(saved)
-    }
-
-    /// Permanently reject further credential writes from the retained client.
-    pub(super) fn revoke_retained_persistence(&self) {
-        if let Ok(guard) = self.restored_client.lock() {
-            if let RestoredClientSlot::Ready(_, persistence) = &*guard {
-                persistence.lease().revoke();
-            }
-        }
-    }
-
     /// Retire a generation whose refresh token the homeserver rejected.
     ///
     /// Generation-fenced: it acts only while that generation is installed and
@@ -1642,23 +1729,6 @@ impl SharedCore {
             .delete(SessionMaterialId::from_identity(&identity).account())
             .map_err(|_| failed())?;
         Ok(retired())
-    }
-
-    /// Remember the current generation when its sync reported a rejected
-    /// refresh. A later generation simply never matches the latch.
-    pub(crate) fn note_authentication_rejection(&self, failure_diagnostic_id: Option<&str>) {
-        if failure_diagnostic_id != Some(SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID) {
-            return;
-        }
-        let Ok(Some(snapshot)) = self.core.session_snapshot() else {
-            return;
-        };
-        let Ok(identity) = AccountIdentity::new(&snapshot.user_id, &snapshot.homeserver_url) else {
-            return;
-        };
-        if let Ok(mut latch) = self.rejected_session.lock() {
-            *latch = Some((snapshot.session_generation, identity));
-        }
     }
 
     pub async fn logout(&self) -> Result<LeftoverAckDto, LeftoverCommandError> {
@@ -1736,70 +1806,6 @@ impl SharedCore {
             LEFTOVER_UNAVAILABLE_CODE,
             LEFTOVER_UNAVAILABLE_DESCRIPTION,
         ))
-    }
-
-    pub(super) async fn leftover_status_command(
-        &self,
-        command: &'static str,
-    ) -> Result<serde_json::Value, LeftoverCommandError> {
-        let payload = leftover_status_envelope_payload(serde_json::Value::Null)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: LEFTOVER_STATUS_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(map_leftover_status_core_error)?;
-        Ok(response.payload)
-    }
-
-    pub(super) fn has_retained_client(&self) -> bool {
-        self.restored_client
-            .lock()
-            .map(|guard| matches!(*guard, RestoredClientSlot::Ready(..)))
-            .unwrap_or(false)
-    }
-
-    pub(super) fn owners_attached(&self) -> bool {
-        self.owner_attach
-            .lock()
-            .map(|guard| matches!(*guard, OwnerAttachSlot::Ready))
-            .unwrap_or(false)
-    }
-
-    pub(super) fn retained_client(&self) -> Result<Client, NseStoreError> {
-        let guard = self
-            .restored_client
-            .lock()
-            .map_err(|_| nse_failed(NSE_FAILED_CODE, NSE_FAILED_DESCRIPTION))?;
-        match &*guard {
-            RestoredClientSlot::Ready(client, _) => Ok(client.clone()),
-            RestoredClientSlot::Empty | RestoredClientSlot::InFlight => Err(nse_failed(
-                NSE_STORE_NOT_OPEN_CODE,
-                NSE_STORE_NOT_OPEN_DESCRIPTION,
-            )),
-        }
-    }
-
-    pub(super) async fn session_status_command(
-        &self,
-        command: &'static str,
-    ) -> Result<serde_json::Value, SessionStatusError> {
-        let payload = session_status_envelope_payload(serde_json::Value::Null)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: SESSION_STATUS_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(map_session_status_core_error)?;
-        Ok(response.payload)
     }
 }
 

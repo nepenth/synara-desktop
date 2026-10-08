@@ -55,7 +55,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn backup_restore_surface_exposes_product_and_keeps_leftover_recover() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("restore_backup"));
     assert!(udl.contains("dictionary RestoreBackupDto"));
     assert!(udl.contains("interface RestoreBackupError"));

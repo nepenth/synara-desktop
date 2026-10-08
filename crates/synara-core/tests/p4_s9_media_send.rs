@@ -65,7 +65,7 @@ fn send_error_text(error: &SendRoomAttachmentError) -> String {
 
 #[test]
 fn media_send_surface_exposes_live_owners_and_keeps_leftover_upload() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(crate::ffi_surface::declares_fn(udl, "upload_content"));
     assert!(crate::ffi_surface::declares_fn(udl, "send_room_attachment"));
     assert!(udl.contains("string? transaction_id"));

@@ -3,21 +3,21 @@
 use super::*;
 
 /// Privacy-safe space parent row. Child room id plus parent room ids only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SpaceParentEntryDto {
     pub room_id: String,
     pub parent_ids: Vec<String>,
 }
 
 /// Privacy-safe space parents snapshot. Entries only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SpaceParentsSnapshotDto {
     pub session_generation: u64,
     pub entries: Vec<SpaceParentEntryDto>,
 }
 
 /// Privacy-safe hierarchy room. Metadata only; avatar is an mxc reference.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SpaceHierarchyRoomDto {
     pub room_id: String,
     pub name: Option<String>,
@@ -33,14 +33,14 @@ pub struct SpaceHierarchyRoomDto {
 }
 
 /// Privacy-safe space hierarchy snapshot. Room metadata only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SpaceHierarchySnapshotDto {
     pub session_generation: u64,
     pub rooms: Vec<SpaceHierarchyRoomDto>,
 }
 
 /// Privacy-safe local space-child edge. Room ids, order, suggested, via only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SpaceChildEdgeDto {
     pub parent_id: String,
     pub child_id: String,
@@ -51,14 +51,14 @@ pub struct SpaceChildEdgeDto {
 }
 
 /// Privacy-safe space children snapshot. Edges only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SpaceChildrenSnapshotDto {
     pub session_generation: u64,
     pub edges: Vec<SpaceChildEdgeDto>,
 }
 
 /// Privacy-safe space-child write ack. Room ids and status only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SpaceChildMutationDto {
     pub parent_id: String,
     pub child_id: String,
@@ -66,14 +66,14 @@ pub struct SpaceChildMutationDto {
 }
 
 /// Privacy-safe restricted-join reparent ack. Room id and status only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RestrictedJoinReparentDto {
     pub room_id: String,
     pub status: String,
 }
 
 /// Static fail-closed space error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SpaceCommandError {
     Failed { code: String, description: String },
 }
@@ -347,6 +347,37 @@ pub(super) fn restricted_join_reparent_dto(
 }
 
 impl SharedCore {
+    pub(super) async fn space_null_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+    ) -> Result<serde_json::Value, SpaceCommandError> {
+        self.space_command(command, no_session, serde_json::Value::Null)
+            .await
+    }
+
+    pub(super) async fn space_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, SpaceCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: SPACE_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_space_core_error(no_session, error))?;
+        Ok(response.payload)
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl SharedCore {
     pub async fn space_parents_snapshot(
         &self,
     ) -> Result<SpaceParentsSnapshotDto, SpaceCommandError> {
@@ -451,33 +482,5 @@ impl SharedCore {
             )
             .await?;
         restricted_join_reparent_dto(response)
-    }
-
-    pub(super) async fn space_null_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-    ) -> Result<serde_json::Value, SpaceCommandError> {
-        self.space_command(command, no_session, serde_json::Value::Null)
-            .await
-    }
-
-    pub(super) async fn space_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<serde_json::Value, SpaceCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: SPACE_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_space_core_error(no_session, error))?;
-        Ok(response.payload)
     }
 }

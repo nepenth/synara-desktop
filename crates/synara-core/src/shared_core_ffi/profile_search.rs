@@ -3,19 +3,19 @@
 use super::*;
 
 /// Privacy-safe media upload-size config from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct MediaConfigDto {
     pub upload_size: u64,
 }
 
 /// Privacy-safe own-profile write ack. Status only; no display name or mxc.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct OwnProfileWriteDto {
     pub status: String,
 }
 
 /// Privacy-safe own-profile read. Avatar is an `mxc://` URI only; never bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct OwnProfileDto {
     pub user_id: String,
     pub display_name: Option<String>,
@@ -23,7 +23,7 @@ pub struct OwnProfileDto {
 }
 
 /// Static fail-closed own-profile-family error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum OwnProfileCommandError {
     Failed { code: String, description: String },
 }
@@ -102,22 +102,22 @@ pub(super) fn own_profile_dto(
     })
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct OwnProfileUploadDto {
     pub mxc: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct IgnoredUsersSnapshotDto {
     pub user_ids: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct IgnoredUsersWriteDto {
     pub status: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum IgnoredUsersCommandError {
     Failed { code: String, description: String },
 }
@@ -198,20 +198,20 @@ pub(super) fn ignored_users_write_dto(
     })
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct UserDirectoryHitDto {
     pub user_id: String,
     pub display_name: Option<String>,
     pub avatar_url: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct UserDirectorySearchDto {
     pub limited: bool,
     pub results: Vec<UserDirectoryHitDto>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum UserDirectorySearchError {
     Failed { code: String, description: String },
 }
@@ -297,7 +297,7 @@ pub(super) fn user_directory_search_dto(
     })
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct MessageSearchItemDto {
     pub rank: f64,
     pub event_id: String,
@@ -307,20 +307,20 @@ pub struct MessageSearchItemDto {
     pub room_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct MessageSearchGroupDto {
     pub room_id: String,
     pub items: Vec<MessageSearchItemDto>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct MessageSearchDto {
     pub next_token: Option<String>,
     pub highlights: Vec<String>,
     pub groups: Vec<MessageSearchGroupDto>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum MessageSearchError {
     Failed { code: String, description: String },
 }
@@ -454,32 +454,32 @@ pub(super) fn message_search_dto(
     })
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ThreepidEmailDto {
     pub address: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ThreepidSnapshotDto {
     pub emails: Vec<ThreepidEmailDto>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ThreepidWriteDto {
     pub status: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ThreepidEmailTokenDto {
     pub session_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ThreepidAddDto {
     pub status: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum ThreepidCommandError {
     Failed { code: String, description: String },
 }
@@ -599,6 +599,66 @@ pub(super) fn media_config_dto(
     })
 }
 
+impl SharedCore {
+    pub(super) async fn own_profile_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, OwnProfileCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: OWN_PROFILE_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_own_profile_core_error(no_session, error))?;
+        Ok(response.payload)
+    }
+
+    pub(super) async fn ignored_users_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, IgnoredUsersCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: IGNORED_USERS_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_ignored_users_core_error(no_session, error))?;
+        Ok(response.payload)
+    }
+
+    pub(super) async fn threepid_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, ThreepidCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: THREEPID_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_threepid_core_error(no_session, error))?;
+        Ok(response.payload)
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 impl SharedCore {
     pub async fn set_own_display_name(
         &self,
@@ -808,62 +868,5 @@ impl SharedCore {
     pub async fn media_config(&self) -> Result<MediaConfigDto, SessionStatusError> {
         let payload = self.session_status_command(MEDIA_CONFIG_COMMAND).await?;
         media_config_dto(payload)
-    }
-
-    pub(super) async fn own_profile_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<serde_json::Value, OwnProfileCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: OWN_PROFILE_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_own_profile_core_error(no_session, error))?;
-        Ok(response.payload)
-    }
-
-    pub(super) async fn ignored_users_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<serde_json::Value, IgnoredUsersCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: IGNORED_USERS_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_ignored_users_core_error(no_session, error))?;
-        Ok(response.payload)
-    }
-
-    pub(super) async fn threepid_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<serde_json::Value, ThreepidCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: THREEPID_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_threepid_core_error(no_session, error))?;
-        Ok(response.payload)
     }
 }

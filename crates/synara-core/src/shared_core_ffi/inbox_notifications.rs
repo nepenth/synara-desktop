@@ -6,7 +6,7 @@ use crate::transport::{
     CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory, MAX_ENVELOPE_PAYLOAD_JSON_BYTES,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct InboxNotificationDto {
     pub room_id: String,
     pub event_id: String,
@@ -19,13 +19,13 @@ pub struct InboxNotificationDto {
     pub read: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct InboxNotificationsPageDto {
     pub notifications: Vec<InboxNotificationDto>,
     pub next_token: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum InboxNotificationsError {
     Failed { code: String, description: String },
 }
@@ -101,6 +101,7 @@ fn page_dto(
     })
 }
 
+#[uniffi::export(async_runtime = "tokio")]
 impl SharedCore {
     pub async fn inbox_notifications(
         &self,

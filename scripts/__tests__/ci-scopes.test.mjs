@@ -149,7 +149,7 @@ test("adding an icon cannot hide a workflow or dependency edit", () => {
 test("iOS path changes on an unlabeled feature PR run the compile gate only", () => {
   for (const file of [
     "synara-ios/Synara/App/SynaraApp.swift",
-    "crates/synara-core/src/synara_core.udl",
+    "crates/synara-core/src/shared_core_ffi/session_lifecycle.rs",
     "crates/synara-core/src/ffi.rs",
     "crates/synara-core/src/core.rs",
     "crates/synara-core/src/core/notifications.rs",

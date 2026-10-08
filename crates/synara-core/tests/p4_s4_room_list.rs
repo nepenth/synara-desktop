@@ -52,7 +52,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn room_list_surface_exposes_only_the_registered_snapshot_command() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("room_list_snapshot"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("attach_typing"));

@@ -14,7 +14,7 @@ use crate::app::auth::{
 /// The fields mirror the shared auth domain exactly while preserving its public
 /// string discriminators for Swift. `get_login_token` is present only when the
 /// homeserver advertised that capability; it is metadata, not a token.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct LoginFlowDto {
     pub kind: String,
     pub matrix_type: String,
@@ -36,7 +36,7 @@ impl From<LoginFlow> for LoginFlowDto {
 /// Every field is selected from static source constants. No URL, response
 /// body, header, network-library diagnostic, credential, or token can reach
 /// this type.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum LoginFlowsError {
     ProbeFailed {
         category: String,
@@ -89,6 +89,7 @@ fn ffi_error_description(error: &AuthError) -> &'static str {
 ///
 /// This operation is read-only and accepts only a homeserver URL. It submits
 /// no password, token, credential, UIAA payload, session, or platform callback.
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn login_flows(homeserver_url: String) -> Result<Vec<LoginFlowDto>, LoginFlowsError> {
     let transport = HttpLoginFlowTransport::new().map_err(LoginFlowsError::from)?;
     let result = discover_login_flows(&homeserver_url, &transport)
@@ -101,7 +102,7 @@ pub async fn login_flows(homeserver_url: String) -> Result<Vec<LoginFlowDto>, Lo
 ///
 /// Only the ordered Matrix stage identifiers cross the boundary. The desktop
 /// domain's arbitrary JSON `params` value is deliberately omitted.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RegisterUiaFlowDto {
     pub stages: Vec<String>,
 }
@@ -115,7 +116,7 @@ impl From<RegisterUiaFlow> for RegisterUiaFlowDto {
 }
 
 /// Closed outcome status for an empty registration-flow probe.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum RegisterFlowsStatus {
     FlowRequired,
     RegistrationDisabled,
@@ -124,7 +125,7 @@ pub enum RegisterFlowsStatus {
 }
 
 /// Credential-free registration-flow discovery result exposed through UniFFI.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RegisterFlowsDto {
     pub status: RegisterFlowsStatus,
     pub session: Option<String>,
@@ -175,7 +176,7 @@ impl RegisterFlowsDto {
 /// Every field is selected from static source constants. No URL, response
 /// body, header, network-library diagnostic, credential, or token can reach
 /// this type.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum RegisterFlowsError {
     ProbeFailed {
         category: String,
@@ -228,6 +229,7 @@ fn register_ffi_error_description(error: &AuthError) -> &'static str {
 ///
 /// This operation submits only an empty JSON object. It accepts no password,
 /// token, email, credential, UIAA continuation, session, or platform callback.
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn register_flows(
     homeserver_url: String,
 ) -> Result<RegisterFlowsDto, RegisterFlowsError> {

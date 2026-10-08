@@ -54,7 +54,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn timeline_view_update_surface_is_poll_only_and_not_a_leftover() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("dictionary TimelineViewUpdateDto"));
     assert!(udl.contains("interface TimelineViewUpdateError"));
     assert!(udl.contains("sequence<TimelineViewUpdateDto> poll_timeline_view_updates()"));

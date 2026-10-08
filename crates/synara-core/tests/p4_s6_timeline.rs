@@ -63,7 +63,7 @@ fn live_bottom() -> TimelineOpenPositionDto {
 
 #[test]
 fn timeline_surface_exposes_open_close_snapshot_paginate() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("timeline_open"));
     assert!(udl.contains("timeline_close"));
     assert!(udl.contains("timeline_snapshot"));

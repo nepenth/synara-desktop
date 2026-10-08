@@ -3,7 +3,7 @@
 use super::*;
 
 /// Privacy-safe drained timeline view-delta summary. No row bodies or tokens.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineViewUpdateDto {
     pub schema_version: u32,
     pub session_generation: u64,
@@ -14,7 +14,7 @@ pub struct TimelineViewUpdateDto {
 }
 
 /// Static fail-closed timeline view-update poll error.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum TimelineViewUpdateError {
     Failed { code: String, description: String },
 }
@@ -51,7 +51,7 @@ pub(super) fn timeline_view_update_dto(batch: TimelineViewDeltaBatch) -> Timelin
 }
 
 /// Requested open placement. Kind is a closed string; no tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineOpenPositionDto {
     pub kind: String,
     pub at_bottom: bool,
@@ -62,14 +62,14 @@ pub struct TimelineOpenPositionDto {
 }
 
 /// Privacy-safe resolved view placement. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineViewPositionDto {
     pub kind: String,
     pub event_id: Option<String>,
 }
 
 /// Privacy-safe timeline snapshot. Identity/stream fields only; no token echo.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineSnapshotDto {
     pub schema_version: u32,
     pub session_generation: u64,
@@ -95,7 +95,7 @@ pub struct TimelineSnapshotDto {
 }
 
 /// Privacy-safe timeline view row. Message text only; no media bytes or tokens.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineViewRowDto {
     pub kind: String,
     pub item_id: String,
@@ -133,7 +133,7 @@ pub struct TimelineViewRowDto {
 }
 
 /// Privacy-safe reply preview projected by Core. No raw event content.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineViewReplyPreviewDto {
     pub event_id: String,
     pub sender_id: Option<String>,
@@ -142,7 +142,7 @@ pub struct TimelineViewReplyPreviewDto {
 }
 
 /// Privacy-safe thread summary projected by Core.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineViewThreadSummaryDto {
     pub root_event_id: String,
     pub reply_count: u32,
@@ -150,7 +150,7 @@ pub struct TimelineViewThreadSummaryDto {
 }
 
 /// One privacy-safe poll answer. Vote ownership is for the active account only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineViewPollAnswerDto {
     pub id: String,
     pub text: String,
@@ -159,7 +159,7 @@ pub struct TimelineViewPollAnswerDto {
 }
 
 /// Privacy-safe poll presentation projected by Core. No voter identities.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineViewPollDto {
     pub question: String,
     pub closed: bool,
@@ -168,7 +168,7 @@ pub struct TimelineViewPollDto {
 }
 
 /// Core-authoritative affordance gates for one timeline row.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineViewRowCapabilitiesDto {
     pub react: bool,
     pub reply: bool,
@@ -182,7 +182,7 @@ pub struct TimelineViewRowCapabilitiesDto {
 }
 
 /// Privacy-safe timeline open readback. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineOpenDto {
     pub schema_version: u32,
     pub stream_id: String,
@@ -191,7 +191,7 @@ pub struct TimelineOpenDto {
 }
 
 /// Privacy-safe single-event item. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineEventItemDto {
     pub item_id: String,
     pub event_id: String,
@@ -203,7 +203,7 @@ pub struct TimelineEventItemDto {
 }
 
 /// Privacy-safe single-event readback from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineEventReadbackDto {
     pub session_generation: u64,
     pub room_id: String,
@@ -212,7 +212,7 @@ pub struct TimelineEventReadbackDto {
 }
 
 /// Privacy-safe read-state write ack. Reuses the S6 snapshot.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineReadStateDto {
     pub action: String,
     pub receipt_sent: Option<bool>,
@@ -221,7 +221,7 @@ pub struct TimelineReadStateDto {
 }
 
 /// Static fail-closed timeline read-state error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum TimelineReadStateError {
     Failed { code: String, description: String },
 }
@@ -237,7 +237,7 @@ impl std::fmt::Display for TimelineReadStateError {
 impl std::error::Error for TimelineReadStateError {}
 
 /// Static fail-closed timeline error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum TimelineError {
     Failed { code: String, description: String },
 }
@@ -1019,28 +1019,6 @@ pub(super) fn timeline_event_item_dto(item: NativeTimelineItem) -> TimelineEvent
 }
 
 impl SharedCore {
-    /// Drain queued timeline view-delta summaries. Not `Core.command`.
-    ///
-    /// NSE forbids this. An empty queue returns an empty list. This is
-    /// not Platform::emit. Failed errors stay static.
-    pub async fn poll_timeline_view_updates(
-        &self,
-    ) -> Result<Vec<TimelineViewUpdateDto>, TimelineViewUpdateError> {
-        if self.is_nse_read_only() {
-            return Err(timeline_view_poll_failed(
-                NSE_FORBIDS_POLL_CODE,
-                NSE_FORBIDS_POLL_DESCRIPTION,
-            ));
-        }
-        let mut guard = self.timeline_view_updates.lock().map_err(|_| {
-            timeline_view_poll_failed(
-                TIMELINE_VIEW_POLL_FAILED_CODE,
-                TIMELINE_VIEW_POLL_FAILED_DESCRIPTION,
-            )
-        })?;
-        Ok(guard.drain(..).map(timeline_view_update_dto).collect())
-    }
-
     /// Test-only enqueue onto the attach timeline emit queue. Not on UDL.
     #[doc(hidden)]
     pub fn enqueue_timeline_view_update_for_test(
@@ -1073,6 +1051,50 @@ impl SharedCore {
             }
             guard.push(batch);
         }
+    }
+
+    pub(super) async fn timeline_read_state_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, TimelineReadStateError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: TIMELINE_READ_STATE_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_timeline_read_state_core_error(no_session, error))?;
+        Ok(response.payload)
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl SharedCore {
+    /// Drain queued timeline view-delta summaries. Not `Core.command`.
+    ///
+    /// NSE forbids this. An empty queue returns an empty list. This is
+    /// not Platform::emit. Failed errors stay static.
+    pub async fn poll_timeline_view_updates(
+        &self,
+    ) -> Result<Vec<TimelineViewUpdateDto>, TimelineViewUpdateError> {
+        if self.is_nse_read_only() {
+            return Err(timeline_view_poll_failed(
+                NSE_FORBIDS_POLL_CODE,
+                NSE_FORBIDS_POLL_DESCRIPTION,
+            ));
+        }
+        let mut guard = self.timeline_view_updates.lock().map_err(|_| {
+            timeline_view_poll_failed(
+                TIMELINE_VIEW_POLL_FAILED_CODE,
+                TIMELINE_VIEW_POLL_FAILED_DESCRIPTION,
+            )
+        })?;
+        Ok(guard.drain(..).map(timeline_view_update_dto).collect())
     }
 
     pub async fn timeline_open(
@@ -1305,24 +1327,5 @@ impl SharedCore {
             position: view_position_dto(readback.position),
             snapshot: timeline_snapshot_dto(readback.snapshot),
         })
-    }
-
-    pub(super) async fn timeline_read_state_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<serde_json::Value, TimelineReadStateError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: TIMELINE_READ_STATE_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_timeline_read_state_core_error(no_session, error))?;
-        Ok(response.payload)
     }
 }

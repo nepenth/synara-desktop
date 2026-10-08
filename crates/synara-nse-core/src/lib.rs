@@ -15,16 +15,17 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use tokio_util::sync::CancellationToken;
 
-uniffi::include_scaffolding!("synara_nse_core");
+uniffi::setup_scaffolding!("synara_nse_core");
 
 const VAULT_UNAVAILABLE_CODE: &str = "nse-secret-vault-unavailable";
 const VAULT_UNAVAILABLE_DESCRIPTION: &str = "The notification secret store is unavailable.";
 
+#[uniffi::export(callback_interface)]
 pub trait NseSecretVault: Send + Sync {
     fn get(&self, key: String) -> Result<Option<Vec<u8>>, NseSecretVaultError>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, uniffi::Error)]
 pub enum NseSecretVaultError {
     Unavailable { code: String, description: String },
 }
@@ -39,7 +40,7 @@ impl std::fmt::Display for NseSecretVaultError {
 
 impl std::error::Error for NseSecretVaultError {}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct NsePreviewDto {
     pub event_type: String,
     pub sender_id: Option<String>,
@@ -49,7 +50,7 @@ pub struct NsePreviewDto {
     pub origin_server_ts: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum NseCoreError {
     Failed { code: String, description: String },
 }
@@ -68,6 +69,7 @@ struct SecretReaderAdapter {
     inner: Box<dyn NseSecretVault>,
 }
 
+#[derive(uniffi::Object)]
 pub struct NsePreviewRequest {
     store: SecretReaderAdapter,
     user_id: String,
@@ -100,7 +102,9 @@ fn map_core_error(error: synara_core::app::nse_preview::NsePreviewError) -> NseC
     }
 }
 
+#[uniffi::export(async_runtime = "tokio")]
 impl NsePreviewRequest {
+    #[uniffi::constructor]
     pub fn new(
         store: Box<dyn NseSecretVault>,
         user_id: String,
@@ -214,19 +218,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn udl_surface_is_cancelable_and_read_only() {
-        let udl = include_str!("synara_nse_core.udl");
-        assert_eq!(udl.matches("[Async").count(), 1);
-        assert_eq!(udl.matches("bytes? get").count(), 1);
-        assert_eq!(udl.matches("void cancel()").count(), 1);
+    fn ffi_surface_is_cancelable_and_read_only() {
+        // The reviewed Swift surface, kept equal to the generated bindings by
+        // scripts/check-swift-api-snapshot.sh.
+        let api = include_str!("../../../synara-ios/SynaraCore/api/synara_nse_core.swift-api.txt");
+        assert_eq!(api.matches("open func").count(), 2);
+        assert_eq!(
+            api.matches(" async ").count(),
+            2,
+            "only resolve() is async (class + protocol)"
+        );
+        assert_eq!(
+            api.matches("func get(key: String) throws -> Data?").count(),
+            1
+        );
+        assert_eq!(api.matches("open func cancel()").count(), 1);
         for forbidden in [
-            " put(",
-            " delete(",
-            "close_read_only_store",
-            "\ninterface NseCore {",
+            "func put(",
+            "func delete(",
+            "closeReadOnlyStore",
+            "class NseCore:",
         ] {
             assert!(
-                !udl.contains(forbidden),
+                !api.contains(forbidden),
                 "forbidden NSE surface: {forbidden}"
             );
         }

@@ -92,7 +92,7 @@ fn error_text(error: &NseStoreError) -> String {
 
 #[test]
 fn nse_store_surface_is_read_only_and_cannot_start_sync() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("dictionary NseStoreDto"));
     assert!(udl.contains("dictionary NseEventPreviewDto"));
     assert!(udl.contains("interface NseStoreError"));
@@ -159,9 +159,9 @@ fn nse_store_surface_is_read_only_and_cannot_start_sync() {
     // test code is later added rather than treating its tokens as implementation.
     assert!(!nse_domain.contains("#[cfg(test)]"));
     assert!(!lifecycle.contains("#[cfg(test)]"));
-    let (_, nse) = nse_domain
-        .split_once("pub async fn nse_open_read_only_store(")
-        .expect("NSE domain methods");
+    // Exported methods live in the proc-macro block; helpers precede it.
+    assert!(nse_domain.contains("pub async fn nse_open_read_only_store("));
+    let nse = nse_domain;
     assert!(nse.contains("nse_store_status"));
     assert!(nse.contains("nse_close_read_only_store"));
     assert!(nse.contains("nse_event_preview"));

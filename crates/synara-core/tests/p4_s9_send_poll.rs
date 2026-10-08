@@ -69,7 +69,7 @@ fn error_text(error: &SendPollError) -> String {
 
 #[test]
 fn send_poll_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(crate::ffi_surface::declares_fn(udl, "send_poll"));
     assert!(udl.contains("dictionary SendPollDto"));
     assert!(udl.contains("interface SendPollError"));

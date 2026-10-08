@@ -57,7 +57,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn room_profile_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("set_room_name"));
     assert!(udl.contains("set_room_topic"));
     assert!(udl.contains("set_room_avatar"));

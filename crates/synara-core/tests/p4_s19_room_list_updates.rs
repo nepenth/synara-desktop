@@ -53,7 +53,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn room_list_update_surface_is_poll_only_and_not_a_leftover() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("dictionary RoomListUpdateDto"));
     assert!(udl.contains("interface RoomListUpdateError"));
     assert!(udl.contains("sequence<RoomListUpdateDto> poll_room_list_updates()"));

@@ -2,7 +2,7 @@
 
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PushRuleMentionsDto {
     pub user_mention: bool,
     pub display_name: bool,
@@ -11,7 +11,7 @@ pub struct PushRuleMentionsDto {
     pub at_room: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PushRulesSnapshotDto {
     pub dm: String,
     pub dm_encrypted: String,
@@ -21,12 +21,12 @@ pub struct PushRulesSnapshotDto {
     pub keywords: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PushRulesWriteDto {
     pub status: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum PushRulesCommandError {
     Failed { code: String, description: String },
 }
@@ -113,23 +113,23 @@ pub(super) fn push_rules_write_dto(
     })
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomNotificationSnapshotDto {
     pub room_id: String,
     pub mode: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomNotificationsSnapshotDto {
     pub rooms: Vec<RoomNotificationSnapshotDto>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomNotificationWriteDto {
     pub status: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum RoomNotificationCommandError {
     Failed { code: String, description: String },
 }
@@ -243,7 +243,7 @@ pub(super) fn room_notification_write_dto(
 }
 
 /// Privacy-safe HTTP pusher write ack. Status only; never push key or URL.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PusherWriteDto {
     pub status: String,
 }
@@ -251,10 +251,12 @@ pub struct PusherWriteDto {
 /// Account-bound HTTP pusher capability. It retains the exact Core owner—and
 /// therefore the exact authenticated Matrix client—captured at bind time.
 /// No account identity, token, push key, or gateway is projected back out.
+#[derive(uniffi::Object)]
 pub struct HttpPusherOwner {
     pub(super) owner: Arc<NativeHttpPusherOwner>,
 }
 
+#[uniffi::export(async_runtime = "tokio")]
 impl HttpPusherOwner {
     pub async fn register_http_pusher(
         &self,
@@ -342,7 +344,7 @@ impl HttpPusherOwner {
 }
 
 /// Static fail-closed HTTP pusher-family error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum PusherCommandError {
     Failed { code: String, description: String },
 }
@@ -389,6 +391,83 @@ pub(super) fn map_http_pusher_core_error(
     }
 }
 
+impl SharedCore {
+    /// Test-only attach of the production HTTP-pusher owner from the retained
+    /// Matrix client, without starting unrelated account/device owners.
+    /// Not exported through UniFFI.
+    #[doc(hidden)]
+    pub fn attach_http_pusher_owner_for_test(&self) -> Result<(), PusherCommandError> {
+        let client = {
+            let guard = self.restored_client.lock().map_err(|_| {
+                http_pusher_failed(
+                    BIND_HTTP_PUSHER_NO_SESSION_CODE,
+                    HTTP_PUSHER_OWNER_DESCRIPTION,
+                )
+            })?;
+            match &*guard {
+                RestoredClientSlot::Ready(client, _) => client.clone(),
+                RestoredClientSlot::Empty | RestoredClientSlot::InFlight => {
+                    return Err(http_pusher_failed(
+                        BIND_HTTP_PUSHER_NO_SESSION_CODE,
+                        HTTP_PUSHER_OWNER_DESCRIPTION,
+                    ));
+                }
+            }
+        };
+        let owner = Arc::new(NativeHttpPusherOwner::new(&client).map_err(|_| {
+            http_pusher_failed(
+                BIND_HTTP_PUSHER_NO_SESSION_CODE,
+                HTTP_PUSHER_OWNER_DESCRIPTION,
+            )
+        })?);
+        self.core.attach_http_pusher(owner).map_err(|_| {
+            http_pusher_failed(
+                BIND_HTTP_PUSHER_NO_SESSION_CODE,
+                HTTP_PUSHER_OWNER_DESCRIPTION,
+            )
+        })
+    }
+
+    pub(super) async fn push_rules_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, PushRulesCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: PUSH_RULES_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_push_rules_core_error(no_session, error))?;
+        Ok(response.payload)
+    }
+
+    pub(super) async fn room_notification_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, RoomNotificationCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: ROOM_NOTIFICATION_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_room_notification_core_error(no_session, error))?;
+        Ok(response.payload)
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 impl SharedCore {
     pub async fn register_http_pusher(
         &self,
@@ -438,42 +517,6 @@ impl SharedCore {
             ));
         }
         Ok(Arc::new(HttpPusherOwner { owner }))
-    }
-
-    /// Test-only attach of the production HTTP-pusher owner from the retained
-    /// Matrix client, without starting unrelated account/device owners.
-    /// Not exported through UniFFI.
-    #[doc(hidden)]
-    pub fn attach_http_pusher_owner_for_test(&self) -> Result<(), PusherCommandError> {
-        let client = {
-            let guard = self.restored_client.lock().map_err(|_| {
-                http_pusher_failed(
-                    BIND_HTTP_PUSHER_NO_SESSION_CODE,
-                    HTTP_PUSHER_OWNER_DESCRIPTION,
-                )
-            })?;
-            match &*guard {
-                RestoredClientSlot::Ready(client, _) => client.clone(),
-                RestoredClientSlot::Empty | RestoredClientSlot::InFlight => {
-                    return Err(http_pusher_failed(
-                        BIND_HTTP_PUSHER_NO_SESSION_CODE,
-                        HTTP_PUSHER_OWNER_DESCRIPTION,
-                    ));
-                }
-            }
-        };
-        let owner = Arc::new(NativeHttpPusherOwner::new(&client).map_err(|_| {
-            http_pusher_failed(
-                BIND_HTTP_PUSHER_NO_SESSION_CODE,
-                HTTP_PUSHER_OWNER_DESCRIPTION,
-            )
-        })?);
-        self.core.attach_http_pusher(owner).map_err(|_| {
-            http_pusher_failed(
-                BIND_HTTP_PUSHER_NO_SESSION_CODE,
-                HTTP_PUSHER_OWNER_DESCRIPTION,
-            )
-        })
     }
 
     pub async fn delete_http_pusher(
@@ -678,43 +721,5 @@ impl SharedCore {
             LEFTOVER_UNAVAILABLE_CODE,
             LEFTOVER_UNAVAILABLE_DESCRIPTION,
         ))
-    }
-
-    pub(super) async fn push_rules_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<serde_json::Value, PushRulesCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: PUSH_RULES_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_push_rules_core_error(no_session, error))?;
-        Ok(response.payload)
-    }
-
-    pub(super) async fn room_notification_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<serde_json::Value, RoomNotificationCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: ROOM_NOTIFICATION_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_room_notification_core_error(no_session, error))?;
-        Ok(response.payload)
     }
 }

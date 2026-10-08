@@ -1,7 +1,3 @@
-// Exercise the same std-only transformation used by both production build scripts.
-#[path = "../build_support/uniffi_async.rs"]
-mod uniffi_async;
-
 // Explicit domain harnesses avoid linking the SDK once per source file. Reject
 // future test files that Cargo's disabled automatic discovery would omit.
 #[test]

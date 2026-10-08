@@ -9,15 +9,16 @@
 // while laying out Core command futures (`core.rs` timeline-open and peers).
 #![recursion_limit = "256"]
 
-// Generated from `src/synara_core.udl` by build.rs. Keep this at crate root:
-// P4-3 adds only a safe Core session-projection mirror to the credential-free
-// P4-2 login-flow surface.
+// UniFFI proc-macro scaffolding. Every exported item carries its own
+// `#[uniffi::...]` attribute; the Swift surface is pinned by
+// synara-ios/SynaraCore/api/synara_core.swift-api.txt.
 #[cfg(feature = "full-uniffi")]
-uniffi::include_scaffolding!("synara_core");
+uniffi::setup_scaffolding!("synara_core");
 
 /// Identifies the project-owned UniFFI surface without exposing a product
 /// command, credential, Matrix SDK type, or platform callback prematurely.
 /// P4 migration slices grow the UDL only alongside their corresponding core API.
+#[cfg_attr(feature = "full-uniffi", uniffi::export)]
 pub fn binding_scaffold_version() -> String {
     env!("CARGO_PKG_VERSION").to_owned()
 }
@@ -26,6 +27,7 @@ pub fn binding_scaffold_version() -> String {
 /// Plain text deliberately returns `None` so clients omit a redundant
 /// `formatted_body` field.
 #[cfg(feature = "full-app")]
+#[cfg_attr(feature = "full-uniffi", uniffi::export)]
 pub fn markdown_to_html(body: String) -> Option<String> {
     use matrix_sdk::ruma::{
         events::room::message::FormattedBody,
@@ -60,22 +62,6 @@ mod markdown_tests {
             markdown_to_html("**safe** <script>alert(1)</script>".into()).expect("formatted body");
         assert!(html.contains("<strong>safe</strong>"));
         assert!(!html.contains("<script>"));
-    }
-}
-
-#[cfg(all(test, feature = "full-uniffi"))]
-mod generated_binding_tests {
-    #[test]
-    fn every_async_udl_export_uses_the_tokio_bridge() {
-        let udl = include_str!("synara_core.udl");
-        let scaffolding = include_str!(concat!(env!("OUT_DIR"), "/synara_core.uniffi.rs"));
-        let async_declarations = udl.matches("[Async").count();
-        let bridged_exports = scaffolding
-            .matches("#[::uniffi::export_for_udl(async_runtime = \"tokio\")]")
-            .count();
-
-        assert!(async_declarations > 0);
-        assert_eq!(bridged_exports, async_declarations);
     }
 }
 

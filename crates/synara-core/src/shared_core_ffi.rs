@@ -812,6 +812,7 @@ const SESSION_STATUS_FAILED_DESCRIPTION: &str =
 const SESSION_STATUS_OWNER_DESCRIPTION: &str = "The session or status request is not available.";
 
 /// Retained shared Core for the iOS UniFFI boundary.
+#[derive(uniffi::Object)]
 pub struct SharedCore {
     core: Core,
     secret_store: Arc<dyn SecretVault + Send + Sync>,

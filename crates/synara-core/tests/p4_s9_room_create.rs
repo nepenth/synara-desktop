@@ -82,7 +82,7 @@ fn create_request(
 
 #[test]
 fn room_create_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(crate::ffi_surface::declares_fn(udl, "room_create"));
     assert!(udl.contains("dictionary RoomCreateRequestDto"));
     assert!(udl.contains("dictionary RoomCreateDto"));

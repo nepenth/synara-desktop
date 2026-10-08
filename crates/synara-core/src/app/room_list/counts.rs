@@ -11,6 +11,7 @@ use super::filters::{room_matches_scope, RoomListScope};
 /// Closed membership input for the scalar room-unread projection exported to
 /// iOS. It intentionally carries no room identifier or SDK value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "full-uniffi", derive(uniffi::Enum))]
 pub enum RoomUnreadMembership {
     Joined,
     Invited,
@@ -21,6 +22,7 @@ pub enum RoomUnreadMembership {
 /// The full-width count comes directly from the authoritative platform SDK
 /// observation. This pure projection does not retain state or perform I/O.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "full-uniffi", derive(uniffi::Record))]
 pub struct RoomUnreadPresentationDto {
     pub unread_count: u64,
     pub has_highlight: bool,
@@ -31,6 +33,7 @@ pub struct RoomUnreadPresentationDto {
 /// Invites always receive the same visible attention state. Joined rooms use
 /// the larger canonical unread source, preserve marked-unread at zero, and
 /// expose a highlight only when a mention exists. No arithmetic can overflow.
+#[cfg_attr(feature = "full-uniffi", uniffi::export)]
 pub fn room_unread_presentation(
     membership: RoomUnreadMembership,
     num_unread_messages: u64,

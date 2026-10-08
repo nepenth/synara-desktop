@@ -3,14 +3,14 @@
 use super::*;
 
 /// Explicit one-time key display only; not a status DTO or generic envelope.
-#[derive(Clone)]
+#[derive(Clone, uniffi::Record)]
 pub struct SecretStorageSetupDto {
     pub status: SecretStorageStatusDto,
     pub recovery_key: Option<String>,
 }
 
 /// Privacy-safe secret-storage status from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SecretStorageStatusDto {
     pub session_generation: u64,
     pub state: String,
@@ -24,7 +24,7 @@ pub struct SecretStorageStatusDto {
 }
 
 /// Privacy-safe leftover backup status. No passphrase or recovery secret.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct BackupStatusDto {
     pub session_generation: u64,
     pub availability: String,
@@ -35,7 +35,7 @@ pub struct BackupStatusDto {
 }
 
 /// Privacy-safe leftover crypto status. No key material.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct CryptoStatusDto {
     pub session_generation: u64,
     pub encryption_enabled: bool,
@@ -43,14 +43,14 @@ pub struct CryptoStatusDto {
 }
 
 /// Privacy-safe leftover cross-signing status. No private keys.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct CrossSigningStatusDto {
     pub session_generation: u64,
     pub readiness: String,
 }
 
 /// Privacy-safe leftover room-key transfer status. No passphrase or path.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomKeyTransferStatusDto {
     pub session_generation: u64,
     pub phase: String,
@@ -58,13 +58,13 @@ pub struct RoomKeyTransferStatusDto {
 }
 
 /// Privacy-safe backup restore ack. Status only; never recovery key or passphrase.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RestoreBackupDto {
     pub status: String,
 }
 
 /// Static fail-closed backup restore error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum RestoreBackupError {
     Failed { code: String, description: String },
 }
@@ -293,6 +293,7 @@ pub(super) fn leftover_room_key_transfer_status_dto(
     })
 }
 
+#[uniffi::export(async_runtime = "tokio")]
 impl SharedCore {
     /// Restore encryption backup. Recovery secret is a dedicated FFI argument,
     /// never a Core JSON field. Leftover `recover` remains fail-closed.

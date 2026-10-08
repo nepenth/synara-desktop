@@ -32,7 +32,7 @@ const MAX_MATRIX_ID_BYTES: usize = 255;
 /// This is intentionally separate from [`SessionSnapshot`]: its display-name
 /// and avatar fields do not cross the Apple boundary, even though they are
 /// safe elsewhere in Core.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SessionProjection {
     pub generation: u64,
     pub user_id: String,
@@ -46,7 +46,7 @@ pub struct SessionProjection {
 ///
 /// A closed enum prevents a shell or an SDK diagnostic string from becoming a
 /// public lifecycle payload.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum SessionProjectionLifecycle {
     Empty,
     Opening,
@@ -99,7 +99,7 @@ impl From<SessionLifecycle> for SessionProjectionLifecycle {
 /// Every field is selected from a source constant. In particular, invalid
 /// Matrix identifiers, URLs, Core errors, and any potential shell/SDK context
 /// are never formatted into this UniFFI error.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SessionProjectionError {
     Rejected { code: String, description: String },
     Unavailable { code: String, description: String },
@@ -287,6 +287,7 @@ fn inert_platform_error() -> MatrixIpcError {
 ///
 /// It supports only open, close, and snapshot. It does not expose `Core`, a
 /// Platform, commands, callbacks, transport, or Matrix SDK types.
+#[derive(uniffi::Object)]
 pub struct SessionProjectionCore {
     core: Core,
 }
@@ -297,7 +298,9 @@ impl Default for SessionProjectionCore {
     }
 }
 
+#[uniffi::export(async_runtime = "tokio")]
 impl SessionProjectionCore {
+    #[uniffi::constructor]
     pub fn new() -> Self {
         Self {
             core: Core::with_registry(Arc::new(ProjectionOnlyPlatform), CommandRegistry::new()),

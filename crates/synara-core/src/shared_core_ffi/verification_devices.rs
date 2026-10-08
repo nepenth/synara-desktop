@@ -3,21 +3,21 @@
 use super::*;
 
 /// Privacy-safe SAS emoji. User-visible comparison only; no key material.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct VerificationEmojiDto {
     pub symbol: String,
     pub description: String,
 }
 
 /// Privacy-safe SAS comparison. Emoji/decimals only; no tokens or MACs.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct VerificationSasDto {
     pub emoji: Option<Vec<VerificationEmojiDto>>,
     pub decimals: Option<Vec<u16>>,
 }
 
 /// Privacy-safe show-QR payload. SVG data-URL only; no MAC or QR bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct VerificationQrDto {
     pub image_data_url: String,
     pub scanned: bool,
@@ -25,7 +25,7 @@ pub struct VerificationQrDto {
 
 /// Privacy-safe verification request row. Identity/flow fields and optional
 /// display-only SAS / QR values; no tokens, MACs, or key material.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct VerificationRequestDto {
     pub flow_id: String,
     pub other_user_id: String,
@@ -38,14 +38,14 @@ pub struct VerificationRequestDto {
 }
 
 /// Privacy-safe verification inbox. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct VerificationInboxDto {
     pub session_generation: u64,
     pub requests: Vec<VerificationRequestDto>,
 }
 
 /// Static fail-closed verification-list error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum VerificationListError {
     Failed { code: String, description: String },
 }
@@ -147,7 +147,7 @@ pub(super) fn verification_request_dto_with_sas(
 }
 
 /// Static fail-closed verification-SAS error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum VerificationSasError {
     Failed { code: String, description: String },
 }
@@ -205,7 +205,7 @@ pub(super) fn parse_verification_sas_request(
 /// Privacy-safe device row. Identity/presentation fields only; no keys or tokens.
 /// Additive fingerprint/first-seen/cross-sign fields are optional for older
 /// consumers.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct DeviceSummaryDto {
     pub device_id: String,
     pub display_name: Option<String>,
@@ -219,7 +219,7 @@ pub struct DeviceSummaryDto {
 }
 
 /// Privacy-safe device inbox. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct DeviceSnapshotDto {
     pub session_generation: u64,
     pub own_verification: String,
@@ -228,7 +228,7 @@ pub struct DeviceSnapshotDto {
 }
 
 /// Privacy-safe delete challenge. Authentication type only; no password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct DeviceDeleteChallengeDto {
     pub operation_id: u64,
     pub session_generation: u64,
@@ -237,7 +237,7 @@ pub struct DeviceDeleteChallengeDto {
 }
 
 /// Privacy-safe delete start result. Complete snapshot or challenge; no password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct DeviceDeleteDto {
     pub outcome: String,
     pub snapshot: Option<DeviceSnapshotDto>,
@@ -245,7 +245,7 @@ pub struct DeviceDeleteDto {
 }
 
 /// Static fail-closed device-family error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum DeviceCommandError {
     Failed { code: String, description: String },
 }
@@ -342,6 +342,46 @@ pub(super) fn device_delete_dto(result: NativeDeviceDeleteResult) -> DeviceDelet
     }
 }
 
+impl SharedCore {
+    pub(super) async fn verification_flow_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        flow_id: String,
+    ) -> Result<VerificationRequestDto, VerificationSasError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: VERIFICATION_SAS_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "flowId": flow_id }),
+            })
+            .await
+            .map_err(|error| map_verification_sas_core_error(no_session, error))?;
+        parse_verification_sas_request(response.payload)
+    }
+
+    pub(super) async fn device_null_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+    ) -> Result<serde_json::Value, DeviceCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: DEVICE_COMMAND_GENERATION,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .map_err(|error| map_device_core_error(no_session, error))?;
+        Ok(response.payload)
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 impl SharedCore {
     pub async fn verification_list(&self) -> Result<VerificationInboxDto, VerificationListError> {
         let response = self
@@ -468,25 +508,6 @@ impl SharedCore {
         Ok(())
     }
 
-    pub(super) async fn verification_flow_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        flow_id: String,
-    ) -> Result<VerificationRequestDto, VerificationSasError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: VERIFICATION_SAS_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "flowId": flow_id }),
-            })
-            .await
-            .map_err(|error| map_verification_sas_core_error(no_session, error))?;
-        parse_verification_sas_request(response.payload)
-    }
-
     pub async fn device_snapshot(&self) -> Result<DeviceSnapshotDto, DeviceCommandError> {
         let response = self
             .device_null_command(DEVICE_SNAPSHOT_COMMAND, DEVICE_SNAPSHOT_NO_SESSION_CODE)
@@ -575,23 +596,5 @@ impl SharedCore {
             })?;
         drop(password);
         Ok(device_delete_dto(result))
-    }
-
-    pub(super) async fn device_null_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-    ) -> Result<serde_json::Value, DeviceCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: DEVICE_COMMAND_GENERATION,
-                request_id: None,
-                payload: serde_json::Value::Null,
-            })
-            .await
-            .map_err(|error| map_device_core_error(no_session, error))?;
-        Ok(response.payload)
     }
 }

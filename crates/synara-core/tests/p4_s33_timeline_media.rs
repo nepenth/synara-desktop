@@ -14,7 +14,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn timeline_media_surface_is_handle_channel_not_leftover_envelope() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("timeline_media_bytes"));
     assert!(udl.contains("string? media_handle_id"));
     assert!(udl.contains("sequence<TimelineViewReactionDto> reactions"));

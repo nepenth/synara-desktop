@@ -1,16 +1,13 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { readRustModuleSources } from "../lib/rust-module-sources.mjs";
 import { inspectTypedRecoveryBoundaries } from "../lib/typed-recovery-boundaries.mjs";
+import { readUdlSurface } from "../lib/ffi-surface.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
 const inputs = {
-  udl: readFileSync(
-    path.join(root, "crates/synara-core/src/synara_core.udl"),
-    "utf8"
-  ),
+  udl: readUdlSurface(root),
   ffi: readRustModuleSources(
     path.join(root, "crates/synara-core/src/shared_core_ffi.rs")
   ).source,

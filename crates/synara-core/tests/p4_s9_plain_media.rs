@@ -58,7 +58,7 @@ fn plain_error_text(error: &PlainMediaError) -> String {
 
 #[test]
 fn plain_media_surface_exposes_live_owners_and_keeps_leftover_download() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(crate::ffi_surface::declares_fn(udl, "download_plain_media"));
     assert!(crate::ffi_surface::declares_fn(
         udl,

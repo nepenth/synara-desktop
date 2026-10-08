@@ -53,7 +53,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn sync_lifecycle_surface_is_attached_only_and_not_a_leftover() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("dictionary SyncStartDto"));
     assert!(udl.contains("interface SyncStartError"));
     assert!(udl.contains("SyncStartDto start_sync()"));

@@ -26,7 +26,7 @@ fn live_bottom() -> TimelineOpenPositionDto {
 
 #[test]
 fn timeline_snapshot_surface_includes_rows_and_not_leftovers() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("dictionary TimelineViewRowDto"));
     assert!(udl.contains("sequence<TimelineViewRowDto> rows"));
     assert!(udl.contains("sequence<TimelineViewReactionDto> reactions"));

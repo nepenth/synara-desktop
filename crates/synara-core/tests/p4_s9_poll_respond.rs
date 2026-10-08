@@ -71,7 +71,7 @@ fn error_text(error: &PollRespondError) -> String {
 
 #[test]
 fn poll_respond_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(crate::ffi_surface::declares_fn(udl, "poll_respond"));
     assert!(udl.contains("dictionary PollRespondDto"));
     assert!(udl.contains("interface PollRespondError"));

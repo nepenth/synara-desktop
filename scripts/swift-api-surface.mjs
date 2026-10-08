@@ -72,8 +72,14 @@ function logicalLines(source) {
   return out;
 }
 
+// Doc comments carry Rust `///` text, which may contain braces or parentheses.
+// Drop block comments before any structural scan.
+function stripBlockComments(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, " "));
+}
+
 export function swiftApiSurface(source) {
-  const lines = logicalLines(source);
+  const lines = logicalLines(stripBlockComments(source));
   const blocks = [];
   let depth = 0;
   let current = null;

@@ -71,7 +71,7 @@ fn error_text(error: &EditMessageError) -> String {
 
 #[test]
 fn edit_message_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(crate::ffi_surface::declares_fn(udl, "edit_message"));
     assert!(udl.contains("dictionary EditMessageDto"));
     assert!(udl.contains("interface EditMessageError"));

@@ -11,10 +11,10 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { readRustModuleSources } from "./lib/rust-module-sources.mjs";
 import { inspectTypedRecoveryBoundaries } from "./lib/typed-recovery-boundaries.mjs";
+import { readUdlSurface } from "./lib/ffi-surface.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const required = [
-  "crates/synara-core/src/synara_core.udl",
   "synara-ios/SynaraCore/api/synara_core.swift-api.txt",
   "crates/synara-core/src/ffi.rs",
   "crates/synara-core/src/session_projection_ffi.rs",
@@ -83,7 +83,9 @@ for (const path of required) {
 }
 
 const cargo = readFileSync(resolve(root, "crates/synara-core/Cargo.toml"), "utf8");
-const udl = readFileSync(resolve(root, "crates/synara-core/src/synara_core.udl"), "utf8");
+// The FFI surface in UDL vocabulary, rendered from the pinned Swift golden
+// (UniFFI proc-macros declare the boundary; there is no UDL file).
+const udl = readUdlSurface(root);
 // Generated Swift API surface, pinned by scripts/check-swift-api-snapshot.sh.
 // Items exported with UniFFI proc-macros are asserted here instead of in the UDL.
 const swiftApi = readFileSync(
@@ -321,10 +323,9 @@ const assertions = [
   [cargo, 'uniffi = { workspace = true, features = ["tokio"], optional = true }', "optional workspace Tokio-aware UniFFI runtime"],
   [readFileSync(resolve(root, "Cargo.toml"), "utf8"), 'uniffi = { version = "=0.32.2", default-features = false }', "pinned shared UniFFI runtime without Cargo metadata discovery"],
   [readFileSync(resolve(root, "crates/synara-core-bindgen/Cargo.toml"), "utf8"), 'uniffi = { workspace = true, features = ["cli", "cargo-metadata"] }', "pinned project-owned UniFFI generator with Cargo metadata discovery"],
-  [cargo, 'features = ["build"]', "UniFFI build scaffolding"],
   [udl, "namespace synara_core", "project-owned UniFFI namespace"],
   [udl, "binding_scaffold_version", "P4-1 binding bootstrap"],
-  [udl, "[Async, Throws=LoginFlowsError]", "async typed login-flow operation"],
+  [udl, "[Async, Throws] sequence<LoginFlowDto> login_flows(", "async typed login-flow operation"],
   [udl, "sequence<LoginFlowDto> login_flows(string homeserver_url)", "typed login-flow return"],
   [udl, "dictionary LoginFlowDto", "typed login-flow DTO"],
   [udl, "boolean? get_login_token", "optional token-capability metadata"],
@@ -337,7 +338,7 @@ const assertions = [
   [udl, "SessionProjection? session_snapshot()", "P4-3 projection snapshot operation"],
   [udl, "interface SessionProjectionError", "P4-3 static privacy-safe error"],
   [udl, "interface SharedCore", "P4-S2 construction-only shared Core facade"],
-  [lib, 'uniffi::include_scaffolding!("synara_core")', "Rust FFI scaffolding inclusion"],
+  [lib, 'uniffi::setup_scaffolding!("synara_core")', "Rust FFI proc-macro scaffolding"],
   [lib, "SessionProjectionCore", "P4-3 facade export"],
   [lib, "SharedCore", "P4-S2 shared Core facade export"],
   [sessionProjectionFfi, "Core::with_registry", "P4-3 Core open/close/snapshot delegation"],
@@ -1807,7 +1808,7 @@ if (!projectionObject) throw new Error("missing P4-3 SessionProjectionCore objec
 const projectionOperations = [
   ...projectionObject[1].matchAll(/(?:constructor|void|SessionProjection\?)\s+(\w+)\s*\(/g),
 ].map(([, operation]) => operation);
-if (projectionOperations.join(",") !== "open,session_snapshot,close") {
+if ([...projectionOperations].sort().join(",") !== "close,open,session_snapshot") {
   throw new Error(`P4-3 facade must expose only open/session_snapshot/close; found ${projectionOperations.join(", ")}`);
 }
 

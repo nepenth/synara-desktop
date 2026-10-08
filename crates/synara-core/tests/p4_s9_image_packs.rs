@@ -54,7 +54,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn image_pack_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("get_global_image_packs"));
     assert!(udl.contains("get_user_image_pack"));
     assert!(udl.contains("get_room_image_packs"));

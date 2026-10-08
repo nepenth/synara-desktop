@@ -4,7 +4,7 @@ use super::*;
 
 /// Privacy-safe reaction count on a view row. Senders are user ids and
 /// optional annotation ids only; no tokens or ciphertext.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineViewReactionDto {
     pub key: String,
     pub count: u32,
@@ -13,14 +13,14 @@ pub struct TimelineViewReactionDto {
 }
 
 /// Privacy-safe reaction sender. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineReactionSenderDto {
     pub user_id: String,
     pub reaction_event_id: Option<String>,
 }
 
 /// Privacy-safe aggregated reaction. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineReactionDto {
     pub key: String,
     pub count: u32,
@@ -29,7 +29,7 @@ pub struct TimelineReactionDto {
 }
 
 /// Privacy-safe reaction mutation ack from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineReactionMutationDto {
     pub room_id: String,
     pub target_event_id: String,
@@ -39,7 +39,7 @@ pub struct TimelineReactionMutationDto {
 }
 
 /// Privacy-safe result of the shared-core approval decision route.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct AgentApprovalDecisionDto {
     pub room_id: String,
     pub event_id: String,
@@ -48,7 +48,7 @@ pub struct AgentApprovalDecisionDto {
 }
 
 /// Static fail-closed timeline reaction error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum TimelineReactionError {
     Failed { code: String, description: String },
 }
@@ -64,7 +64,7 @@ impl std::fmt::Display for TimelineReactionError {
 impl std::error::Error for TimelineReactionError {}
 
 /// Privacy-safe composer reply-draft preview. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ComposerReplyDraftPreviewDto {
     pub event_id: String,
     pub sender_id: String,
@@ -74,7 +74,7 @@ pub struct ComposerReplyDraftPreviewDto {
 }
 
 /// Privacy-safe composer reply-draft readback from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ComposerReplyDraftDto {
     pub schema_version: u32,
     pub room_id: String,
@@ -83,7 +83,7 @@ pub struct ComposerReplyDraftDto {
 }
 
 /// Static fail-closed composer reply-draft error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum ComposerReplyDraftError {
     Failed { code: String, description: String },
 }
@@ -99,7 +99,7 @@ impl std::fmt::Display for ComposerReplyDraftError {
 impl std::error::Error for ComposerReplyDraftError {}
 
 /// Privacy-safe send-text write ack from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SendTextDto {
     pub room_id: String,
     pub event_id: String,
@@ -108,14 +108,14 @@ pub struct SendTextDto {
 }
 
 /// Privacy-safe agent-approval write acknowledgement.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct AgentApprovalSendDto {
     pub event_id: String,
     pub status: String,
 }
 
 /// Static fail-closed agent-approval error. Input values are never echoed.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum AgentApprovalSendError {
     Failed { code: String, description: String },
 }
@@ -131,7 +131,7 @@ impl std::fmt::Display for AgentApprovalSendError {
 impl std::error::Error for AgentApprovalSendError {}
 
 /// Static fail-closed send-text error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SendTextError {
     Failed { code: String, description: String },
 }
@@ -147,7 +147,7 @@ impl std::fmt::Display for SendTextError {
 impl std::error::Error for SendTextError {}
 
 /// Privacy-safe send-poll write ack from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SendPollDto {
     pub room_id: String,
     pub event_id: String,
@@ -155,7 +155,7 @@ pub struct SendPollDto {
 }
 
 /// Static fail-closed send-poll error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SendPollError {
     Failed { code: String, description: String },
 }
@@ -171,7 +171,7 @@ impl std::fmt::Display for SendPollError {
 impl std::error::Error for SendPollError {}
 
 /// Privacy-safe edit-message write ack from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct EditMessageDto {
     pub room_id: String,
     pub event_id: String,
@@ -180,7 +180,7 @@ pub struct EditMessageDto {
 }
 
 /// Static fail-closed edit-message error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum EditMessageError {
     Failed { code: String, description: String },
 }
@@ -196,7 +196,7 @@ impl std::fmt::Display for EditMessageError {
 impl std::error::Error for EditMessageError {}
 
 /// Privacy-safe poll-respond write ack from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PollRespondDto {
     pub room_id: String,
     pub poll_event_id: String,
@@ -205,7 +205,7 @@ pub struct PollRespondDto {
 }
 
 /// Static fail-closed poll-respond error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum PollRespondError {
     Failed { code: String, description: String },
 }
@@ -221,7 +221,7 @@ impl std::fmt::Display for PollRespondError {
 impl std::error::Error for PollRespondError {}
 
 /// Privacy-safe timeline edit/redact/report write ack from the registered Core commands.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineMutateDto {
     pub schema_version: u32,
     pub action: String,
@@ -231,7 +231,7 @@ pub struct TimelineMutateDto {
 }
 
 /// Static fail-closed timeline edit/redact/report error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum TimelineMutateError {
     Failed { code: String, description: String },
 }
@@ -247,7 +247,7 @@ impl std::fmt::Display for TimelineMutateError {
 impl std::error::Error for TimelineMutateError {}
 
 /// Privacy-safe timeline pin/unpin write ack from the registered Core commands.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelinePinDto {
     pub schema_version: u32,
     pub action: String,
@@ -257,7 +257,7 @@ pub struct TimelinePinDto {
 }
 
 /// Static fail-closed timeline pin/unpin error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum TimelinePinError {
     Failed { code: String, description: String },
 }
@@ -274,7 +274,7 @@ impl std::error::Error for TimelinePinError {}
 
 /// Privacy-safe timeline poll-vote / call-decline write ack from the
 /// registered Core commands.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineVoteDeclineDto {
     pub schema_version: u32,
     pub action: String,
@@ -285,7 +285,7 @@ pub struct TimelineVoteDeclineDto {
 
 /// Static fail-closed timeline poll-vote / call-decline error. Fields are
 /// source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum TimelineVoteDeclineError {
     Failed { code: String, description: String },
 }
@@ -301,7 +301,7 @@ impl std::fmt::Display for TimelineVoteDeclineError {
 impl std::error::Error for TimelineVoteDeclineError {}
 
 /// Privacy-safe timeline forward write ack from the registered Core commands.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineForwardDto {
     pub schema_version: u32,
     pub action: String,
@@ -311,7 +311,7 @@ pub struct TimelineForwardDto {
 }
 
 /// Static fail-closed timeline forward error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum TimelineForwardError {
     Failed { code: String, description: String },
 }
@@ -1168,6 +1168,262 @@ pub(super) fn timeline_forward_dto(
 }
 
 impl SharedCore {
+    pub(super) async fn timeline_reaction_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<TimelineReactionMutationDto, TimelineReactionError> {
+        let payload = timeline_reaction_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: TIMELINE_REACTION_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_timeline_reaction_core_error(no_session, error))?;
+        let result: NativeReactionMutationResult = serde_json::from_value(response.payload)
+            .map_err(|_| {
+                timeline_reaction_failed(
+                    TIMELINE_REACTION_FAILED_CODE,
+                    TIMELINE_REACTION_FAILED_DESCRIPTION,
+                )
+            })?;
+        Ok(timeline_reaction_mutation_dto(result))
+    }
+
+    pub(super) async fn composer_reply_draft_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<ComposerReplyDraftDto, ComposerReplyDraftError> {
+        let readback = self
+            .composer_reply_draft_command_wire(command, no_session, payload)
+            .await?;
+        Ok(composer_reply_draft_dto(readback))
+    }
+
+    pub(super) async fn composer_reply_draft_command_wire(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<ComposerReplyDraftReadbackWire, ComposerReplyDraftError> {
+        let payload = composer_reply_draft_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: COMPOSER_REPLY_DRAFT_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_composer_reply_draft_core_error(no_session, error))?;
+        serde_json::from_value(response.payload).map_err(|_| {
+            composer_reply_draft_failed(
+                COMPOSER_REPLY_DRAFT_FAILED_CODE,
+                COMPOSER_REPLY_DRAFT_FAILED_DESCRIPTION,
+            )
+        })
+    }
+
+    pub(super) async fn send_text_command(
+        &self,
+        payload: serde_json::Value,
+    ) -> Result<SendTextDto, SendTextError> {
+        let payload = send_text_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: SEND_TEXT_COMMAND.to_owned(),
+                session_generation: SEND_TEXT_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_send_text_core_error(SEND_TEXT_NO_SESSION_CODE, error))?;
+        let result: SendTextResultWire = serde_json::from_value(response.payload)
+            .map_err(|_| send_text_failed(SEND_TEXT_FAILED_CODE, SEND_TEXT_FAILED_DESCRIPTION))?;
+        Ok(send_text_dto(result))
+    }
+
+    pub(super) async fn send_poll_command(
+        &self,
+        payload: serde_json::Value,
+    ) -> Result<SendPollDto, SendPollError> {
+        let payload = send_poll_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: SEND_POLL_COMMAND.to_owned(),
+                session_generation: SEND_POLL_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_send_poll_core_error(SEND_POLL_NO_SESSION_CODE, error))?;
+        let result: SendPollResultWire = serde_json::from_value(response.payload)
+            .map_err(|_| send_poll_failed(SEND_POLL_FAILED_CODE, SEND_POLL_FAILED_DESCRIPTION))?;
+        Ok(send_poll_dto(result))
+    }
+
+    pub(super) async fn edit_message_command(
+        &self,
+        payload: serde_json::Value,
+    ) -> Result<EditMessageDto, EditMessageError> {
+        let payload = edit_message_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: EDIT_MESSAGE_COMMAND.to_owned(),
+                session_generation: EDIT_MESSAGE_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_edit_message_core_error(EDIT_MESSAGE_NO_SESSION_CODE, error))?;
+        let result: EditMessageResultWire =
+            serde_json::from_value(response.payload).map_err(|_| {
+                edit_message_failed(EDIT_MESSAGE_FAILED_CODE, EDIT_MESSAGE_FAILED_DESCRIPTION)
+            })?;
+        Ok(edit_message_dto(result))
+    }
+
+    pub(super) async fn poll_respond_command(
+        &self,
+        payload: serde_json::Value,
+    ) -> Result<PollRespondDto, PollRespondError> {
+        let payload = poll_respond_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: POLL_RESPOND_COMMAND.to_owned(),
+                session_generation: POLL_RESPOND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_poll_respond_core_error(POLL_RESPOND_NO_SESSION_CODE, error))?;
+        let result: PollRespondResultWire =
+            serde_json::from_value(response.payload).map_err(|_| {
+                poll_respond_failed(POLL_RESPOND_FAILED_CODE, POLL_RESPOND_FAILED_DESCRIPTION)
+            })?;
+        Ok(poll_respond_dto(result))
+    }
+
+    pub(super) async fn timeline_mutate_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<TimelineMutateDto, TimelineMutateError> {
+        let payload = timeline_mutate_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: TIMELINE_MUTATE_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_timeline_mutate_core_error(no_session, error))?;
+        let result: TimelineMutateResultWire =
+            serde_json::from_value(response.payload).map_err(|_| {
+                timeline_mutate_failed(
+                    TIMELINE_MUTATE_FAILED_CODE,
+                    TIMELINE_MUTATE_FAILED_DESCRIPTION,
+                )
+            })?;
+        timeline_mutate_dto(result)
+    }
+
+    pub(super) async fn timeline_pin_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<TimelinePinDto, TimelinePinError> {
+        let payload = timeline_pin_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: TIMELINE_PIN_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_timeline_pin_core_error(no_session, error))?;
+        let result: TimelinePinResultWire =
+            serde_json::from_value(response.payload).map_err(|_| {
+                timeline_pin_failed(TIMELINE_PIN_FAILED_CODE, TIMELINE_PIN_FAILED_DESCRIPTION)
+            })?;
+        timeline_pin_dto(result)
+    }
+
+    pub(super) async fn timeline_vote_decline_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<TimelineVoteDeclineDto, TimelineVoteDeclineError> {
+        let payload = timeline_vote_decline_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: TIMELINE_VOTE_DECLINE_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_timeline_vote_decline_core_error(no_session, error))?;
+        let result: TimelineVoteDeclineResultWire = serde_json::from_value(response.payload)
+            .map_err(|_| {
+                timeline_vote_decline_failed(
+                    TIMELINE_VOTE_DECLINE_FAILED_CODE,
+                    TIMELINE_VOTE_DECLINE_FAILED_DESCRIPTION,
+                )
+            })?;
+        timeline_vote_decline_dto(result)
+    }
+
+    pub(super) async fn timeline_forward_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<TimelineForwardDto, TimelineForwardError> {
+        let payload = timeline_forward_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: TIMELINE_FORWARD_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_timeline_forward_core_error(no_session, error))?;
+        let result: TimelineForwardResultWire =
+            serde_json::from_value(response.payload).map_err(|_| {
+                timeline_forward_failed(
+                    TIMELINE_FORWARD_FAILED_CODE,
+                    TIMELINE_FORWARD_FAILED_DESCRIPTION,
+                )
+            })?;
+        timeline_forward_dto(result)
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl SharedCore {
     pub async fn reaction_ensure(
         &self,
         room_id: String,
@@ -1637,258 +1893,5 @@ impl SharedCore {
             event_id: response.response.event_id.to_string(),
             status: "sent".to_owned(),
         })
-    }
-
-    pub(super) async fn timeline_reaction_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<TimelineReactionMutationDto, TimelineReactionError> {
-        let payload = timeline_reaction_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: TIMELINE_REACTION_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_timeline_reaction_core_error(no_session, error))?;
-        let result: NativeReactionMutationResult = serde_json::from_value(response.payload)
-            .map_err(|_| {
-                timeline_reaction_failed(
-                    TIMELINE_REACTION_FAILED_CODE,
-                    TIMELINE_REACTION_FAILED_DESCRIPTION,
-                )
-            })?;
-        Ok(timeline_reaction_mutation_dto(result))
-    }
-
-    pub(super) async fn composer_reply_draft_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<ComposerReplyDraftDto, ComposerReplyDraftError> {
-        let readback = self
-            .composer_reply_draft_command_wire(command, no_session, payload)
-            .await?;
-        Ok(composer_reply_draft_dto(readback))
-    }
-
-    pub(super) async fn composer_reply_draft_command_wire(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<ComposerReplyDraftReadbackWire, ComposerReplyDraftError> {
-        let payload = composer_reply_draft_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: COMPOSER_REPLY_DRAFT_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_composer_reply_draft_core_error(no_session, error))?;
-        serde_json::from_value(response.payload).map_err(|_| {
-            composer_reply_draft_failed(
-                COMPOSER_REPLY_DRAFT_FAILED_CODE,
-                COMPOSER_REPLY_DRAFT_FAILED_DESCRIPTION,
-            )
-        })
-    }
-
-    pub(super) async fn send_text_command(
-        &self,
-        payload: serde_json::Value,
-    ) -> Result<SendTextDto, SendTextError> {
-        let payload = send_text_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: SEND_TEXT_COMMAND.to_owned(),
-                session_generation: SEND_TEXT_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_send_text_core_error(SEND_TEXT_NO_SESSION_CODE, error))?;
-        let result: SendTextResultWire = serde_json::from_value(response.payload)
-            .map_err(|_| send_text_failed(SEND_TEXT_FAILED_CODE, SEND_TEXT_FAILED_DESCRIPTION))?;
-        Ok(send_text_dto(result))
-    }
-
-    pub(super) async fn send_poll_command(
-        &self,
-        payload: serde_json::Value,
-    ) -> Result<SendPollDto, SendPollError> {
-        let payload = send_poll_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: SEND_POLL_COMMAND.to_owned(),
-                session_generation: SEND_POLL_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_send_poll_core_error(SEND_POLL_NO_SESSION_CODE, error))?;
-        let result: SendPollResultWire = serde_json::from_value(response.payload)
-            .map_err(|_| send_poll_failed(SEND_POLL_FAILED_CODE, SEND_POLL_FAILED_DESCRIPTION))?;
-        Ok(send_poll_dto(result))
-    }
-
-    pub(super) async fn edit_message_command(
-        &self,
-        payload: serde_json::Value,
-    ) -> Result<EditMessageDto, EditMessageError> {
-        let payload = edit_message_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: EDIT_MESSAGE_COMMAND.to_owned(),
-                session_generation: EDIT_MESSAGE_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_edit_message_core_error(EDIT_MESSAGE_NO_SESSION_CODE, error))?;
-        let result: EditMessageResultWire =
-            serde_json::from_value(response.payload).map_err(|_| {
-                edit_message_failed(EDIT_MESSAGE_FAILED_CODE, EDIT_MESSAGE_FAILED_DESCRIPTION)
-            })?;
-        Ok(edit_message_dto(result))
-    }
-
-    pub(super) async fn poll_respond_command(
-        &self,
-        payload: serde_json::Value,
-    ) -> Result<PollRespondDto, PollRespondError> {
-        let payload = poll_respond_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: POLL_RESPOND_COMMAND.to_owned(),
-                session_generation: POLL_RESPOND_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_poll_respond_core_error(POLL_RESPOND_NO_SESSION_CODE, error))?;
-        let result: PollRespondResultWire =
-            serde_json::from_value(response.payload).map_err(|_| {
-                poll_respond_failed(POLL_RESPOND_FAILED_CODE, POLL_RESPOND_FAILED_DESCRIPTION)
-            })?;
-        Ok(poll_respond_dto(result))
-    }
-
-    pub(super) async fn timeline_mutate_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<TimelineMutateDto, TimelineMutateError> {
-        let payload = timeline_mutate_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: TIMELINE_MUTATE_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_timeline_mutate_core_error(no_session, error))?;
-        let result: TimelineMutateResultWire =
-            serde_json::from_value(response.payload).map_err(|_| {
-                timeline_mutate_failed(
-                    TIMELINE_MUTATE_FAILED_CODE,
-                    TIMELINE_MUTATE_FAILED_DESCRIPTION,
-                )
-            })?;
-        timeline_mutate_dto(result)
-    }
-
-    pub(super) async fn timeline_pin_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<TimelinePinDto, TimelinePinError> {
-        let payload = timeline_pin_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: TIMELINE_PIN_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_timeline_pin_core_error(no_session, error))?;
-        let result: TimelinePinResultWire =
-            serde_json::from_value(response.payload).map_err(|_| {
-                timeline_pin_failed(TIMELINE_PIN_FAILED_CODE, TIMELINE_PIN_FAILED_DESCRIPTION)
-            })?;
-        timeline_pin_dto(result)
-    }
-
-    pub(super) async fn timeline_vote_decline_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<TimelineVoteDeclineDto, TimelineVoteDeclineError> {
-        let payload = timeline_vote_decline_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: TIMELINE_VOTE_DECLINE_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_timeline_vote_decline_core_error(no_session, error))?;
-        let result: TimelineVoteDeclineResultWire = serde_json::from_value(response.payload)
-            .map_err(|_| {
-                timeline_vote_decline_failed(
-                    TIMELINE_VOTE_DECLINE_FAILED_CODE,
-                    TIMELINE_VOTE_DECLINE_FAILED_DESCRIPTION,
-                )
-            })?;
-        timeline_vote_decline_dto(result)
-    }
-
-    pub(super) async fn timeline_forward_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<TimelineForwardDto, TimelineForwardError> {
-        let payload = timeline_forward_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: TIMELINE_FORWARD_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_timeline_forward_core_error(no_session, error))?;
-        let result: TimelineForwardResultWire =
-            serde_json::from_value(response.payload).map_err(|_| {
-                timeline_forward_failed(
-                    TIMELINE_FORWARD_FAILED_CODE,
-                    TIMELINE_FORWARD_FAILED_DESCRIPTION,
-                )
-            })?;
-        timeline_forward_dto(result)
     }
 }

@@ -69,7 +69,7 @@ fn expected_owners() -> Vec<String> {
 
 #[test]
 fn attach_surface_does_not_register_leftovers() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("attach_session_owners"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("attach_typing"));

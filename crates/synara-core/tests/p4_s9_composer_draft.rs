@@ -56,7 +56,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn composer_reply_draft_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(crate::ffi_surface::declares_fn(
         udl,
         "composer_set_reply_draft"

@@ -17,7 +17,7 @@ pub(super) fn account_data_owner_update_family(
 }
 
 /// Privacy-safe image-pack row. Metadata/IDs/mxc URLs/JSON only; never image bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ImagePackDto {
     pub id: String,
     pub room_id: Option<String>,
@@ -26,14 +26,14 @@ pub struct ImagePackDto {
 }
 
 /// Privacy-safe user pack snapshot. No tokens or image bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct UserImagePackSnapshotDto {
     pub session_generation: u64,
     pub pack: Option<ImagePackDto>,
 }
 
 /// Privacy-safe room pack snapshot. No tokens or image bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomImagePacksSnapshotDto {
     pub session_generation: u64,
     pub room_id: String,
@@ -41,20 +41,20 @@ pub struct RoomImagePacksSnapshotDto {
 }
 
 /// Privacy-safe global pack snapshot. No tokens or image bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct GlobalImagePacksSnapshotDto {
     pub session_generation: u64,
     pub packs: Vec<ImagePackDto>,
 }
 
 /// Privacy-safe pack write ack. Status only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ImagePackWriteDto {
     pub status: String,
 }
 
 /// Static fail-closed image-pack-family error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum ImagePackCommandError {
     Failed { code: String, description: String },
 }
@@ -132,7 +132,7 @@ pub(super) fn image_pack_write_dto(
 }
 
 /// Privacy-safe later item. Room/event ids and timestamps only; no tokens.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct LaterItemDto {
     pub id: String,
     pub kind: String,
@@ -145,7 +145,7 @@ pub struct LaterItemDto {
 }
 
 /// Privacy-safe later snapshot. No tokens or secret material.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct LaterSnapshotDto {
     pub session_generation: u64,
     pub version: u32,
@@ -153,7 +153,7 @@ pub struct LaterSnapshotDto {
 }
 
 /// Static fail-closed later-family error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum LaterCommandError {
     Failed { code: String, description: String },
 }
@@ -269,7 +269,7 @@ pub(super) fn later_snapshot_dto(
 }
 
 /// Privacy-safe m.direct snapshot. User/room ids are the product map; no tokens.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct MDirectSnapshotDto {
     pub session_generation: u64,
     pub room_ids: Vec<String>,
@@ -277,14 +277,14 @@ pub struct MDirectSnapshotDto {
 }
 
 /// Privacy-safe m.direct write ack. Status and the mutated room id only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct MDirectMutationDto {
     pub room_id: String,
     pub status: String,
 }
 
 /// Static fail-closed m.direct-family error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum MDirectCommandError {
     Failed { code: String, description: String },
 }
@@ -370,7 +370,7 @@ pub(super) fn mdirect_mutation_dto(
 }
 
 /// Privacy-safe room-notes snapshot. Flattened items; no tokens.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct RoomNotesSnapshotDto {
     pub session_generation: u64,
     pub version: u32,
@@ -378,7 +378,7 @@ pub struct RoomNotesSnapshotDto {
 }
 
 /// Static fail-closed room-notes-family error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum RoomNotesCommandError {
     Failed { code: String, description: String },
 }
@@ -449,7 +449,7 @@ pub(super) fn room_notes_snapshot_dto(
 }
 
 /// Privacy-safe directory-visibility read. Visibility is public/private only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomDirectoryVisibilityDto {
     pub status: String,
     pub room_id: String,
@@ -458,7 +458,7 @@ pub struct RoomDirectoryVisibilityDto {
 }
 
 /// Privacy-safe directory-visibility write ack. Visibility is public/private only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomDirectoryVisibilityWriteDto {
     pub status: String,
     pub room_id: String,
@@ -563,7 +563,7 @@ pub(super) fn room_directory_visibility_write_dto(
 }
 
 /// Privacy-safe third-party directory protocol instance. Ids and description only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomDirectoryProtocolInstanceDto {
     pub protocol_id: String,
     pub instance_id: String,
@@ -571,14 +571,14 @@ pub struct RoomDirectoryProtocolInstanceDto {
 }
 
 /// Privacy-safe protocol list. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomDirectoryProtocolsDto {
     pub session_generation: u64,
     pub instances: Vec<RoomDirectoryProtocolInstanceDto>,
 }
 
 /// Privacy-safe public-directory room hit. Metadata only; avatar_url is mxc, never bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomDirectoryHitDto {
     pub room_id: String,
     pub name: Option<String>,
@@ -592,7 +592,7 @@ pub struct RoomDirectoryHitDto {
 }
 
 /// Privacy-safe search page. Room metadata only; no avatar bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomDirectoryPageDto {
     pub session_generation: u64,
     pub request_id: u64,
@@ -602,7 +602,7 @@ pub struct RoomDirectoryPageDto {
 }
 
 /// Privacy-safe search/cancel result. Status is ready/stale/cancelled.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomDirectorySearchDto {
     pub session_generation: u64,
     pub request_id: u64,
@@ -821,6 +821,103 @@ pub(super) fn room_directory_search_dto(
     })
 }
 
+impl SharedCore {
+    pub(super) async fn later_null_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+    ) -> Result<LaterSnapshotDto, LaterCommandError> {
+        self.later_command(command, no_session, serde_json::Value::Null)
+            .await
+    }
+
+    pub(super) async fn later_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<LaterSnapshotDto, LaterCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: LATER_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_later_core_error(no_session, error))?;
+        later_snapshot_dto(response.payload)
+    }
+
+    pub(super) async fn room_notes_null_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+    ) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
+        self.room_notes_command(command, no_session, serde_json::Value::Null)
+            .await
+    }
+
+    pub(super) async fn room_notes_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: ROOM_NOTES_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_room_notes_core_error(no_session, error))?;
+        room_notes_snapshot_dto(response.payload)
+    }
+
+    pub(super) async fn image_pack_null_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+    ) -> Result<serde_json::Value, ImagePackCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: IMAGE_PACK_COMMAND_GENERATION,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .map_err(|error| map_image_pack_core_error(no_session, error))?;
+        Ok(response.payload)
+    }
+
+    pub(super) async fn image_pack_set_content(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        content_json: String,
+    ) -> Result<ImagePackWriteDto, ImagePackCommandError> {
+        let content = parse_image_pack_content_json(&content_json)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: IMAGE_PACK_COMMAND_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "content": content }),
+            })
+            .await
+            .map_err(|error| map_image_pack_core_error(no_session, error))?;
+        image_pack_write_dto(response.payload)
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 impl SharedCore {
     pub async fn get_global_image_packs(
         &self,
@@ -1280,99 +1377,5 @@ impl SharedCore {
                 map_directory_search_core_error(ROOM_DIRECTORY_CANCEL_NO_SESSION_CODE, error)
             })?;
         room_directory_search_dto(response.payload)
-    }
-
-    pub(super) async fn later_null_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-    ) -> Result<LaterSnapshotDto, LaterCommandError> {
-        self.later_command(command, no_session, serde_json::Value::Null)
-            .await
-    }
-
-    pub(super) async fn later_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<LaterSnapshotDto, LaterCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: LATER_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_later_core_error(no_session, error))?;
-        later_snapshot_dto(response.payload)
-    }
-
-    pub(super) async fn room_notes_null_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-    ) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
-        self.room_notes_command(command, no_session, serde_json::Value::Null)
-            .await
-    }
-
-    pub(super) async fn room_notes_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: ROOM_NOTES_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_room_notes_core_error(no_session, error))?;
-        room_notes_snapshot_dto(response.payload)
-    }
-
-    pub(super) async fn image_pack_null_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-    ) -> Result<serde_json::Value, ImagePackCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: IMAGE_PACK_COMMAND_GENERATION,
-                request_id: None,
-                payload: serde_json::Value::Null,
-            })
-            .await
-            .map_err(|error| map_image_pack_core_error(no_session, error))?;
-        Ok(response.payload)
-    }
-
-    pub(super) async fn image_pack_set_content(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        content_json: String,
-    ) -> Result<ImagePackWriteDto, ImagePackCommandError> {
-        let content = parse_image_pack_content_json(&content_json)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: IMAGE_PACK_COMMAND_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "content": content }),
-            })
-            .await
-            .map_err(|error| map_image_pack_core_error(no_session, error))?;
-        image_pack_write_dto(response.payload)
     }
 }

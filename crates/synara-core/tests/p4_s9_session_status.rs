@@ -87,7 +87,7 @@ fn error_text(error: &SessionStatusError) -> String {
 
 #[test]
 fn session_status_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("dictionary SessionSnapshotDto"));
     assert!(udl.contains("dictionary SyncStatusDto"));
     assert!(udl.contains("dictionary MediaConfigDto"));

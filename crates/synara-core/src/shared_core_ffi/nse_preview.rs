@@ -3,7 +3,7 @@
 use super::*;
 
 /// Privacy-safe NSE store status. Tokens never appear here.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct NseStoreDto {
     pub read_only: bool,
     pub owners_attached: bool,
@@ -11,7 +11,7 @@ pub struct NseStoreDto {
 }
 
 /// Local-store notification preview. Tokens never appear here.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct NseEventPreviewDto {
     pub event_type: String,
     pub sender_id: Option<String>,
@@ -20,7 +20,7 @@ pub struct NseEventPreviewDto {
 }
 
 /// Static fail-closed NSE store error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum NseStoreError {
     Failed { code: String, description: String },
 }
@@ -190,19 +190,6 @@ impl StoreKeyVault for SecretStoreKeyVault {
 }
 
 impl SharedCore {
-    /// Open the persisted store for NSE preview. Never attaches owners or
-    /// starts SyncService. An already-retained planted/restored client is
-    /// adopted as read-only; otherwise this restores from the vault.
-    pub async fn nse_open_read_only_store(
-        &self,
-        user_id: String,
-        homeserver_url: String,
-        store_root: String,
-    ) -> Result<NseStoreDto, NseStoreError> {
-        self.nse_open_read_only_store_with_room(user_id, homeserver_url, store_root, None)
-            .await
-    }
-
     pub(super) async fn nse_open_read_only_store_with_room(
         &self,
         user_id: String,
@@ -234,101 +221,6 @@ impl SharedCore {
         .map_err(map_restore_to_nse)?;
         self.set_nse_read_only(true)?;
         self.nse_store_dto()
-    }
-
-    pub async fn nse_store_status(&self) -> Result<NseStoreDto, NseStoreError> {
-        if !self.is_nse_read_only() {
-            return Err(nse_failed(
-                NSE_STORE_NOT_OPEN_CODE,
-                NSE_STORE_NOT_OPEN_DESCRIPTION,
-            ));
-        }
-        self.nse_store_dto()
-    }
-
-    /// Drop the short-lived NSE client while this async call is still executing
-    /// on the Rust runtime. SQLite pool cleanup may require that runtime; leaving
-    /// the retained client for UniFFI object deallocation can abort the extension.
-    pub async fn nse_close_read_only_store(&self) -> Result<(), NseStoreError> {
-        if self.owners_attached() || !self.is_nse_read_only() {
-            return Err(nse_failed(
-                NSE_CLOSE_FAILED_CODE,
-                NSE_CLOSE_FAILED_DESCRIPTION,
-            ));
-        }
-        let retained = {
-            let mut guard = self
-                .restored_client
-                .lock()
-                .map_err(|_| nse_failed(NSE_CLOSE_FAILED_CODE, NSE_CLOSE_FAILED_DESCRIPTION))?;
-            std::mem::replace(&mut *guard, RestoredClientSlot::Empty)
-        };
-        drop(retained);
-        self.set_nse_read_only(false)
-            .map_err(|_| nse_failed(NSE_CLOSE_FAILED_CODE, NSE_CLOSE_FAILED_DESCRIPTION))?;
-        Ok(())
-    }
-
-    /// Resolve one push notification with the Matrix SDK's dedicated
-    /// multi-process notification client. This may run the SDK's bounded,
-    /// short-lived notification/decryption sync, but it never starts the
-    /// product `SyncService` or attaches product session owners.
-    pub async fn nse_resolve_event_preview(
-        &self,
-        user_id: String,
-        homeserver_url: String,
-        store_root: String,
-        room_id: String,
-        event_id: String,
-    ) -> Result<NseEventPreviewDto, NseStoreError> {
-        tokio::time::timeout(NSE_RESOLUTION_TIMEOUT, async {
-            if room_id.len() > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
-                return Err(nse_failed(
-                    NSE_PAYLOAD_OVERSIZE_CODE,
-                    NSE_PAYLOAD_OVERSIZE_DESCRIPTION,
-                ));
-            }
-            let parsed_room =
-                matrix_sdk::ruma::OwnedRoomId::try_from(room_id.trim()).map_err(|_| {
-                    nse_failed(
-                        NSE_EVENT_NOT_IN_STORE_CODE,
-                        NSE_EVENT_NOT_IN_STORE_DESCRIPTION,
-                    )
-                })?;
-            self.nse_open_read_only_store_with_room(
-                user_id,
-                homeserver_url,
-                store_root,
-                Some(parsed_room),
-            )
-            .await?;
-            self.nse_event_preview_unbounded(room_id, event_id).await
-        })
-        .await
-        .map_err(|_| {
-            nse_failed(
-                NSE_RESOLUTION_TIMEOUT_CODE,
-                NSE_RESOLUTION_TIMEOUT_DESCRIPTION,
-            )
-        })?
-    }
-
-    pub async fn nse_event_preview(
-        &self,
-        room_id: String,
-        event_id: String,
-    ) -> Result<NseEventPreviewDto, NseStoreError> {
-        tokio::time::timeout(
-            NSE_RESOLUTION_TIMEOUT,
-            self.nse_event_preview_unbounded(room_id, event_id),
-        )
-        .await
-        .map_err(|_| {
-            nse_failed(
-                NSE_RESOLUTION_TIMEOUT_CODE,
-                NSE_RESOLUTION_TIMEOUT_DESCRIPTION,
-            )
-        })?
     }
 
     pub(super) async fn nse_event_preview_unbounded(
@@ -471,5 +363,116 @@ impl SharedCore {
             owners_attached: self.owners_attached(),
             sync_started: self.core.sync_service_started(),
         })
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl SharedCore {
+    /// Open the persisted store for NSE preview. Never attaches owners or
+    /// starts SyncService. An already-retained planted/restored client is
+    /// adopted as read-only; otherwise this restores from the vault.
+    pub async fn nse_open_read_only_store(
+        &self,
+        user_id: String,
+        homeserver_url: String,
+        store_root: String,
+    ) -> Result<NseStoreDto, NseStoreError> {
+        self.nse_open_read_only_store_with_room(user_id, homeserver_url, store_root, None)
+            .await
+    }
+
+    pub async fn nse_store_status(&self) -> Result<NseStoreDto, NseStoreError> {
+        if !self.is_nse_read_only() {
+            return Err(nse_failed(
+                NSE_STORE_NOT_OPEN_CODE,
+                NSE_STORE_NOT_OPEN_DESCRIPTION,
+            ));
+        }
+        self.nse_store_dto()
+    }
+
+    /// Drop the short-lived NSE client while this async call is still executing
+    /// on the Rust runtime. SQLite pool cleanup may require that runtime; leaving
+    /// the retained client for UniFFI object deallocation can abort the extension.
+    pub async fn nse_close_read_only_store(&self) -> Result<(), NseStoreError> {
+        if self.owners_attached() || !self.is_nse_read_only() {
+            return Err(nse_failed(
+                NSE_CLOSE_FAILED_CODE,
+                NSE_CLOSE_FAILED_DESCRIPTION,
+            ));
+        }
+        let retained = {
+            let mut guard = self
+                .restored_client
+                .lock()
+                .map_err(|_| nse_failed(NSE_CLOSE_FAILED_CODE, NSE_CLOSE_FAILED_DESCRIPTION))?;
+            std::mem::replace(&mut *guard, RestoredClientSlot::Empty)
+        };
+        drop(retained);
+        self.set_nse_read_only(false)
+            .map_err(|_| nse_failed(NSE_CLOSE_FAILED_CODE, NSE_CLOSE_FAILED_DESCRIPTION))?;
+        Ok(())
+    }
+
+    /// Resolve one push notification with the Matrix SDK's dedicated
+    /// multi-process notification client. This may run the SDK's bounded,
+    /// short-lived notification/decryption sync, but it never starts the
+    /// product `SyncService` or attaches product session owners.
+    pub async fn nse_resolve_event_preview(
+        &self,
+        user_id: String,
+        homeserver_url: String,
+        store_root: String,
+        room_id: String,
+        event_id: String,
+    ) -> Result<NseEventPreviewDto, NseStoreError> {
+        tokio::time::timeout(NSE_RESOLUTION_TIMEOUT, async {
+            if room_id.len() > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+                return Err(nse_failed(
+                    NSE_PAYLOAD_OVERSIZE_CODE,
+                    NSE_PAYLOAD_OVERSIZE_DESCRIPTION,
+                ));
+            }
+            let parsed_room =
+                matrix_sdk::ruma::OwnedRoomId::try_from(room_id.trim()).map_err(|_| {
+                    nse_failed(
+                        NSE_EVENT_NOT_IN_STORE_CODE,
+                        NSE_EVENT_NOT_IN_STORE_DESCRIPTION,
+                    )
+                })?;
+            self.nse_open_read_only_store_with_room(
+                user_id,
+                homeserver_url,
+                store_root,
+                Some(parsed_room),
+            )
+            .await?;
+            self.nse_event_preview_unbounded(room_id, event_id).await
+        })
+        .await
+        .map_err(|_| {
+            nse_failed(
+                NSE_RESOLUTION_TIMEOUT_CODE,
+                NSE_RESOLUTION_TIMEOUT_DESCRIPTION,
+            )
+        })?
+    }
+
+    pub async fn nse_event_preview(
+        &self,
+        room_id: String,
+        event_id: String,
+    ) -> Result<NseEventPreviewDto, NseStoreError> {
+        tokio::time::timeout(
+            NSE_RESOLUTION_TIMEOUT,
+            self.nse_event_preview_unbounded(room_id, event_id),
+        )
+        .await
+        .map_err(|_| {
+            nse_failed(
+                NSE_RESOLUTION_TIMEOUT_CODE,
+                NSE_RESOLUTION_TIMEOUT_DESCRIPTION,
+            )
+        })?
     }
 }

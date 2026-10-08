@@ -3,7 +3,7 @@
 
 #[test]
 fn media_download_stays_off_core_command() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(!udl.contains("matrix_media_download"));
     assert!(!udl.contains("matrix_send_attachment"));
     assert!(udl.contains("timeline_media_bytes"));

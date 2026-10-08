@@ -59,7 +59,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn own_profile_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("set_own_display_name"));
     assert!(udl.contains("set_own_avatar"));
     assert!(udl.contains("get_own_profile"));

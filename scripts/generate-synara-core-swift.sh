@@ -7,7 +7,6 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-core_udl="$repo_root/crates/synara-core/src/synara_core.udl"
 package_root="$repo_root/synara-ios/SynaraCore"
 generated_dir="$package_root/Sources/SynaraCore/Generated"
 ffi_include_dir="$package_root/Sources/synara_coreFFI/include"

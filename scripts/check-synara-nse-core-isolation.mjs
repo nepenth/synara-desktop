@@ -4,13 +4,15 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { readUdlSurface } from "./lib/ffi-surface.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => readFileSync(resolve(root, path), "utf8");
 const workspace = read("Cargo.toml");
 const coreManifest = read("crates/synara-core/Cargo.toml");
 const nseManifest = read("crates/synara-nse-core/Cargo.toml");
-const nseUdl = read("crates/synara-nse-core/src/synara_nse_core.udl");
+// FFI surface in UDL vocabulary, rendered from the pinned Swift golden.
+const nseUdl = readUdlSurface(root, "synara_nse_core");
 const nseRust = read("crates/synara-nse-core/src/lib.rs");
 const generator = read("scripts/generate-synara-nse-core-swift.sh");
 const productionFeatures = read(
@@ -92,9 +94,9 @@ requireText(
   "interface NsePreviewRequest {",
   "cancelable request boundary"
 );
-requireText(nseUdl, "NsePreviewDto resolve();", "one-shot resolver");
+requireText(nseUdl, "[Async, Throws] NsePreviewDto resolve();", "one-shot resolver");
 requireText(nseUdl, "void cancel();", "prompt cancellation operation");
-requireText(nseUdl, "bytes? get(string key);", "read-only secret callback");
+requireText(nseUdl, "[Throws] bytes? get(string key);", "read-only secret callback");
 for (const forbidden of [
   " put(",
   " delete(",

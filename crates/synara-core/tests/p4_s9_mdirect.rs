@@ -55,7 +55,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn mdirect_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("mdirect_snapshot"));
     assert!(udl.contains("mdirect_add"));
     assert!(udl.contains("mdirect_remove"));

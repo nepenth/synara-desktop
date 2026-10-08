@@ -1,6 +1,0 @@
-namespace mixed {};
-interface Probe {
- constructor();
- string status();
- [Async] string fetch();
-};

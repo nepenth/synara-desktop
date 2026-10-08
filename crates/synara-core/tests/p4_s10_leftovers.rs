@@ -55,7 +55,7 @@ fn temp_root(tag: &str) -> std::path::PathBuf {
 
 #[test]
 fn leftover_surface_exposes_the_authorized_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("dictionary BackupStatusDto"));
     assert!(udl.contains("dictionary CryptoStatusDto"));
     assert!(udl.contains("dictionary CrossSigningStatusDto"));

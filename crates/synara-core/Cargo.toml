@@ -131,9 +131,6 @@ rustls = { workspace = true, features = [
   "tls12",
 ], optional = true }
 
-[build-dependencies]
-uniffi = { workspace = true, features = ["build"], optional = true }
-
 [dev-dependencies]
 # dto/tests.rs fixture + serde round-trip tests.
 serde_json = { workspace = true }
@@ -158,7 +155,7 @@ path = "tests/indexed_message_search.rs"
 required-features = ["search-index"]
 
 # Root integration sources are included by the domain harnesses. The coverage
-# guard in uniffi_async_bridge rejects orphaned or multiply registered sources.
+# guard in integration_targets rejects orphaned or multiply registered sources.
 
 [[test]]
 name = "ffi_lifecycle"
@@ -186,5 +183,5 @@ path = "tests/live_device_eligibility.rs"
 required-features = ["full-uniffi"]
 
 [[test]]
-name = "uniffi_async_bridge"
-path = "tests/uniffi_async_bridge.rs"
+name = "integration_targets"
+path = "tests/integration_targets.rs"

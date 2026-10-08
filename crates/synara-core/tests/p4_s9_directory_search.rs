@@ -59,7 +59,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn directory_search_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("room_directory_protocols"));
     assert!(udl.contains("room_directory_search"));
     assert!(udl.contains("room_directory_cancel"));

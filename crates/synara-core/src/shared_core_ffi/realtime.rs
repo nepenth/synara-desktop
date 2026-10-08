@@ -4,7 +4,7 @@ use super::*;
 
 /// Privacy-safe owner emit summary. No user id, tokens, or password.
 /// iOS re-fetches via the existing snapshot commands.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct OwnerUpdateDto {
     pub family: String,
     pub session_generation: u64,
@@ -12,7 +12,7 @@ pub struct OwnerUpdateDto {
 }
 
 /// Static fail-closed owner-update poll error.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum OwnerUpdateError {
     Failed { code: String, description: String },
 }
@@ -56,21 +56,21 @@ pub(super) fn push_owner_update(
 }
 
 /// Privacy-safe typing room row. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TypingRoomDto {
     pub room_id: String,
     pub user_ids: Vec<String>,
 }
 
 /// Privacy-safe typing snapshot. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TypingSnapshotDto {
     pub session_generation: u64,
     pub rooms: Vec<TypingRoomDto>,
 }
 
 /// Static fail-closed typing error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum TypingCommandError {
     Failed { code: String, description: String },
 }
@@ -125,7 +125,7 @@ pub(super) fn map_typing_set_core_error(error: MatrixIpcError) -> TypingCommandE
 }
 
 /// Privacy-safe presence snapshot. Identity fields only; no tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PresenceSnapshotDto {
     pub status: String,
     pub session_generation: u64,
@@ -137,7 +137,7 @@ pub struct PresenceSnapshotDto {
 }
 
 /// Privacy-safe presence subscription. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PresenceSubscriptionDto {
     pub subscription_id: String,
     pub user_id: String,
@@ -145,20 +145,20 @@ pub struct PresenceSubscriptionDto {
 }
 
 /// Privacy-safe presence SET ack. Status only; never echo state or statusMsg.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PresenceWriteDto {
     pub status: String,
 }
 
 /// Privacy-safe MatrixRTC transport. URLs only; no JWTs or tokens.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RtcTransportDto {
     pub kind: String,
     pub service_url: Option<String>,
 }
 
 /// Privacy-safe MatrixRTC discovery snapshot.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RtcTransportsSnapshotDto {
     pub session_generation: u64,
     pub status: String,
@@ -166,7 +166,7 @@ pub struct RtcTransportsSnapshotDto {
 }
 
 /// Static fail-closed RTC transport error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum RtcTransportsCommandError {
     Failed { code: String, description: String },
 }
@@ -232,14 +232,14 @@ pub(super) fn rtc_transports_snapshot_dto(
 }
 
 /// Privacy-safe MSC4426 status field. No tokens.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct UserStatusFieldDto {
     pub emoji: String,
     pub text: String,
 }
 
 /// Privacy-safe MSC4426 snapshot.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct UserStatusSnapshotDto {
     pub session_generation: u64,
     pub user_id: String,
@@ -248,13 +248,13 @@ pub struct UserStatusSnapshotDto {
 }
 
 /// Privacy-safe MSC4426 write ack. Status only; never echo emoji or text.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct UserStatusWriteDto {
     pub status: String,
 }
 
 /// Static fail-closed user-status error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum UserStatusCommandError {
     Failed { code: String, description: String },
 }
@@ -323,7 +323,7 @@ pub(super) fn user_status_snapshot_dto(
 }
 
 /// Static fail-closed presence error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum PresenceCommandError {
     Failed { code: String, description: String },
 }
@@ -458,6 +458,45 @@ pub(super) fn presence_snapshot_dto(result: NativePresenceSnapshotResult) -> Pre
 }
 
 impl SharedCore {
+    /// Test-only enqueue onto the attach owner emit queue. Not on UDL.
+    #[doc(hidden)]
+    pub fn enqueue_owner_update_for_test(
+        &self,
+        family: String,
+        session_generation: u64,
+        room_id: Option<String>,
+    ) {
+        push_owner_update(&self.owner_updates, family, session_generation, room_id);
+    }
+
+    pub(super) async fn rtc_transports_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+    ) -> Result<RtcTransportsSnapshotDto, RtcTransportsCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: TYPING_PRESENCE_GENERATION,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .map_err(|error| map_rtc_transports_core_error(no_session, error))?;
+        let snapshot: NativeRtcTransportsSnapshot = serde_json::from_value(response.payload)
+            .map_err(|_| {
+                rtc_transports_failed(
+                    RTC_TRANSPORTS_FAILED_CODE,
+                    RTC_TRANSPORTS_FAILED_DESCRIPTION,
+                )
+            })?;
+        Ok(rtc_transports_snapshot_dto(snapshot))
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl SharedCore {
     /// Drain queued owner emit summaries. Not `Core.command`.
     ///
     /// NSE forbids this. An empty queue returns an empty list. Presence
@@ -476,17 +515,6 @@ impl SharedCore {
             )
         })?;
         Ok(guard.drain(..).collect())
-    }
-
-    /// Test-only enqueue onto the attach owner emit queue. Not on UDL.
-    #[doc(hidden)]
-    pub fn enqueue_owner_update_for_test(
-        &self,
-        family: String,
-        session_generation: u64,
-        room_id: Option<String>,
-    ) {
-        push_owner_update(&self.owner_updates, family, session_generation, room_id);
     }
 
     pub async fn typing_snapshot(&self) -> Result<TypingSnapshotDto, TypingCommandError> {
@@ -647,31 +675,6 @@ impl SharedCore {
             RTC_TRANSPORTS_REFRESH_NO_SESSION_CODE,
         )
         .await
-    }
-
-    pub(super) async fn rtc_transports_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-    ) -> Result<RtcTransportsSnapshotDto, RtcTransportsCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: TYPING_PRESENCE_GENERATION,
-                request_id: None,
-                payload: serde_json::Value::Null,
-            })
-            .await
-            .map_err(|error| map_rtc_transports_core_error(no_session, error))?;
-        let snapshot: NativeRtcTransportsSnapshot = serde_json::from_value(response.payload)
-            .map_err(|_| {
-                rtc_transports_failed(
-                    RTC_TRANSPORTS_FAILED_CODE,
-                    RTC_TRANSPORTS_FAILED_DESCRIPTION,
-                )
-            })?;
-        Ok(rtc_transports_snapshot_dto(snapshot))
     }
 
     pub async fn user_status_snapshot(

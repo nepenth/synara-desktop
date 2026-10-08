@@ -56,7 +56,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn timeline_reactions_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(crate::ffi_surface::declares_fn(udl, "reaction_ensure"));
     assert!(crate::ffi_surface::declares_fn(udl, "reaction_redact"));
     assert!(crate::ffi_surface::declares_fn(

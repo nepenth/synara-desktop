@@ -3,13 +3,13 @@
 use super::*;
 
 /// Privacy-safe generic content upload result. mxc URI only; never bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct MediaUploadDto {
     pub mxc: String,
 }
 
 /// Static fail-closed content-upload error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum MediaUploadError {
     Failed { code: String, description: String },
 }
@@ -25,14 +25,14 @@ impl std::fmt::Display for MediaUploadError {
 impl std::error::Error for MediaUploadError {}
 
 /// Privacy-safe room attachment send ack. Event id and status only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SendRoomAttachmentDto {
     pub event_id: String,
     pub status: String,
 }
 
 /// Static fail-closed room-attachment error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SendRoomAttachmentError {
     Failed { code: String, description: String },
 }
@@ -48,13 +48,13 @@ impl std::fmt::Display for SendRoomAttachmentError {
 impl std::error::Error for SendRoomAttachmentError {}
 
 /// Original-file or thumbnail bytes for a plain `mxc://`. Callers must not log the payload.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct MediaBytesDto {
     pub payload: Vec<u8>,
 }
 
 /// Static fail-closed plain-media download error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum PlainMediaError {
     Failed { code: String, description: String },
 }
@@ -70,7 +70,7 @@ impl std::fmt::Display for PlainMediaError {
 impl std::error::Error for PlainMediaError {}
 
 /// Static fail-closed native media-handle error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum TimelineMediaError {
     Failed { code: String, description: String },
 }
@@ -223,6 +223,7 @@ pub(super) fn plain_media_reject_oversize(size: usize) -> Result<(), PlainMediaE
     Ok(())
 }
 
+#[uniffi::export(async_runtime = "tokio")]
 impl SharedCore {
     pub async fn upload_avatar(
         &self,

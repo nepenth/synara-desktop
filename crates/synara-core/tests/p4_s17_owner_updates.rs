@@ -54,7 +54,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn owner_update_surface_is_poll_only_and_not_a_leftover() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("dictionary OwnerUpdateDto"));
     assert!(udl.contains("interface OwnerUpdateError"));
     assert!(udl.contains("sequence<OwnerUpdateDto> poll_owner_updates()"));

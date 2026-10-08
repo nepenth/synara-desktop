@@ -55,7 +55,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn device_surface_exposes_only_the_registered_device_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("device_snapshot"));
     assert!(udl.contains("device_rename"));
     assert!(udl.contains("device_delete_start"));

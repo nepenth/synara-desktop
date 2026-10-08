@@ -4,13 +4,13 @@ use super::*;
 
 /// Privacy-safe room-list wake-up. No room ids, names, tokens, or password.
 /// iOS re-fetches via the existing snapshot command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomListUpdateDto {
     pub session_generation: u64,
 }
 
 /// Static fail-closed room-list update poll error.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum RoomListUpdateError {
     Failed { code: String, description: String },
 }
@@ -48,7 +48,7 @@ pub(super) fn push_room_list_update(
 }
 
 /// Privacy-safe room-list snapshot. Tokens and password never appear here.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomListSnapshotDto {
     pub session_generation: u64,
     pub ordered_room_ids: Vec<String>,
@@ -56,7 +56,7 @@ pub struct RoomListSnapshotDto {
 }
 
 /// One privacy-safe room-list row. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomListRoomDto {
     pub room_id: String,
     pub name: Option<String>,
@@ -82,7 +82,7 @@ pub struct RoomListRoomDto {
 }
 
 /// Static fail-closed room-list error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum RoomListSnapshotError {
     Failed { code: String, description: String },
 }
@@ -127,14 +127,14 @@ pub(super) fn map_room_list_core_error(error: MatrixIpcError) -> RoomListSnapsho
 }
 
 /// Privacy-safe invite snapshot. Tokens and password never appear here.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct InviteSnapshotDto {
     pub session_generation: u64,
     pub invites: Vec<InviteDto>,
 }
 
 /// One privacy-safe invite row. No tokens or password.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct InviteDto {
     pub room_id: String,
     pub room_name: String,
@@ -153,7 +153,7 @@ pub struct InviteDto {
 }
 
 /// Static fail-closed invite-snapshot error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum InviteSnapshotError {
     Failed { code: String, description: String },
 }
@@ -210,7 +210,7 @@ pub(super) fn invite_dto(invite: NativeInvite) -> InviteDto {
 }
 
 /// Privacy-safe join-rule snapshot. Closed vocabulary only; no allow-list or tokens.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomJoinRuleSnapshotDto {
     pub status: String,
     pub room_id: String,
@@ -219,13 +219,13 @@ pub struct RoomJoinRuleSnapshotDto {
 }
 
 /// Privacy-safe join-rule write ack. Status only; no room id, join rule, or allow-list.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomJoinRuleWriteDto {
     pub status: String,
 }
 
 /// Static fail-closed join-rule error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum JoinRuleCommandError {
     Failed { code: String, description: String },
 }
@@ -288,7 +288,7 @@ pub(super) fn join_rule_envelope_payload(
 }
 
 /// Privacy-safe room-note item. Body/ids/timestamps may cross; no tokens.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct RoomNoteItemDto {
     pub id: String,
     pub kind: String,
@@ -376,13 +376,13 @@ pub(super) fn room_note_item_dto(item: SynaraRoomNoteItem) -> RoomNoteItemDto {
 }
 
 /// Privacy-safe room-profile write ack. Status only; no room id, name, topic, or mxc.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomProfileWriteDto {
     pub status: String,
 }
 
 /// Static fail-closed room-profile-family error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum RoomProfileCommandError {
     Failed { code: String, description: String },
 }
@@ -456,13 +456,13 @@ pub(super) fn room_profile_write_dto(
 }
 
 /// Privacy-safe room leave/join write ack. Status only; no room id, alias, or via servers.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomMembershipWriteDto {
     pub status: String,
 }
 
 /// Static fail-closed room-membership-family error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum RoomMembershipCommandError {
     Failed { code: String, description: String },
 }
@@ -556,13 +556,13 @@ pub(super) fn room_membership_write_dto(
 }
 
 /// Privacy-safe room invite/kick/ban/unban write ack. Status only; no room id, user id, or reason.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomModerationWriteDto {
     pub status: String,
 }
 
 /// Static fail-closed room-moderation-family error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum RoomModerationCommandError {
     Failed { code: String, description: String },
 }
@@ -654,13 +654,13 @@ pub(super) fn room_moderation_write_dto(
 }
 
 /// Privacy-safe room power-level write ack. Status only; no room id, user id, power level, or content.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomPowerLevelWriteDto {
     pub status: String,
 }
 
 /// Static fail-closed room-power-level-family error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum RoomPowerLevelCommandError {
     Failed { code: String, description: String },
 }
@@ -770,7 +770,7 @@ pub(super) fn room_power_level_write_dto(
 }
 
 /// Typed room-create request. Core scalar fields only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomCreateRequestDto {
     pub name: Option<String>,
     pub topic: Option<String>,
@@ -787,13 +787,13 @@ pub struct RoomCreateRequestDto {
 }
 
 /// Privacy-safe room-create result. Created room id only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomCreateDto {
     pub room_id: String,
 }
 
 /// Static fail-closed room-create error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum RoomCreateCommandError {
     Failed { code: String, description: String },
 }
@@ -927,7 +927,7 @@ pub(super) fn room_create_dto(
 }
 
 /// Privacy-safe room member row. Ids, display name, mxc, membership, and power only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomMemberDto {
     pub room_id: String,
     pub user_id: String,
@@ -939,7 +939,7 @@ pub struct RoomMemberDto {
 }
 
 /// Privacy-safe members snapshot. Member rows only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomMembersSnapshotDto {
     pub session_generation: u64,
     pub room_id: String,
@@ -947,7 +947,7 @@ pub struct RoomMembersSnapshotDto {
 }
 
 /// Privacy-safe power-levels snapshot. Content is JSON text.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomPowerLevelsSnapshotDto {
     pub status: String,
     pub session_generation: u64,
@@ -958,7 +958,7 @@ pub struct RoomPowerLevelsSnapshotDto {
 }
 
 /// Privacy-safe creators snapshot. Creator user ids only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomCreatorsSnapshotDto {
     pub status: String,
     pub session_generation: u64,
@@ -969,7 +969,7 @@ pub struct RoomCreatorsSnapshotDto {
 }
 
 /// Privacy-safe power-level-tags snapshot. Content is JSON text.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomPowerLevelTagsSnapshotDto {
     pub status: String,
     pub session_generation: u64,
@@ -980,7 +980,7 @@ pub struct RoomPowerLevelTagsSnapshotDto {
 }
 
 /// Static fail-closed members-snapshot error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum RoomMembersSnapshotError {
     Failed { code: String, description: String },
 }
@@ -1393,7 +1393,7 @@ pub(super) fn room_power_level_tags_snapshot_dto(
 }
 
 /// Static fail-closed invite-action error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum InviteActionError {
     Failed { code: String, description: String },
 }
@@ -1500,6 +1500,135 @@ impl SharedCore {
         }
     }
 
+    /// Test-only enqueue onto the room-list emit queue. Not on UDL.
+    #[doc(hidden)]
+    pub fn enqueue_room_list_update_for_test(&self, session_generation: u64) {
+        push_room_list_update(&self.room_list_updates, session_generation);
+    }
+
+    pub(super) async fn invite_action_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        room_id: String,
+    ) -> Result<InviteSnapshotDto, InviteActionError> {
+        let payload = invite_action_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+        }))?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: INVITE_ACTION_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_invite_action_core_error(no_session, error))?;
+        invite_action_snapshot_dto(response.payload)
+    }
+
+    pub(super) async fn room_members_snapshot_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        room_id: String,
+    ) -> Result<serde_json::Value, RoomMembersSnapshotError> {
+        let payload = room_members_snapshot_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+        }))?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: ROOM_MEMBERS_SNAPSHOT_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_room_members_snapshot_core_error(no_session, error))?;
+        Ok(response.payload)
+    }
+
+    pub(super) async fn room_profile_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<RoomProfileWriteDto, RoomProfileCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: ROOM_PROFILE_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_room_profile_core_error(no_session, error))?;
+        room_profile_write_dto(response.payload)
+    }
+
+    pub(super) async fn room_membership_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<RoomMembershipWriteDto, RoomMembershipCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: ROOM_MEMBERSHIP_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_room_membership_core_error(no_session, error))?;
+        room_membership_write_dto(response.payload)
+    }
+
+    pub(super) async fn room_moderation_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<RoomModerationWriteDto, RoomModerationCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: ROOM_MODERATION_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_room_moderation_core_error(no_session, error))?;
+        room_moderation_write_dto(response.payload)
+    }
+
+    pub(super) async fn room_power_level_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<RoomPowerLevelWriteDto, RoomPowerLevelCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: ROOM_POWER_LEVEL_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_room_power_level_core_error(no_session, error))?;
+        room_power_level_write_dto(response.payload)
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl SharedCore {
     /// Drain queued room-list wake-ups. Not `Core.command`.
     ///
     /// NSE forbids this. An empty queue returns an empty list. Room ids
@@ -1520,12 +1649,6 @@ impl SharedCore {
             )
         })?;
         Ok(guard.drain(..).collect())
-    }
-
-    /// Test-only enqueue onto the room-list emit queue. Not on UDL.
-    #[doc(hidden)]
-    pub fn enqueue_room_list_update_for_test(&self, session_generation: u64) {
-        push_room_list_update(&self.room_list_updates, session_generation);
     }
 
     /// Typed consume of the already-registered `matrix_room_list_snapshot`.
@@ -1985,125 +2108,5 @@ impl SharedCore {
             room_id,
         )
         .await
-    }
-
-    pub(super) async fn invite_action_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        room_id: String,
-    ) -> Result<InviteSnapshotDto, InviteActionError> {
-        let payload = invite_action_envelope_payload(serde_json::json!({
-            "roomId": room_id,
-        }))?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: INVITE_ACTION_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_invite_action_core_error(no_session, error))?;
-        invite_action_snapshot_dto(response.payload)
-    }
-
-    pub(super) async fn room_members_snapshot_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        room_id: String,
-    ) -> Result<serde_json::Value, RoomMembersSnapshotError> {
-        let payload = room_members_snapshot_envelope_payload(serde_json::json!({
-            "roomId": room_id,
-        }))?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: ROOM_MEMBERS_SNAPSHOT_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_room_members_snapshot_core_error(no_session, error))?;
-        Ok(response.payload)
-    }
-
-    pub(super) async fn room_profile_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<RoomProfileWriteDto, RoomProfileCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: ROOM_PROFILE_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_room_profile_core_error(no_session, error))?;
-        room_profile_write_dto(response.payload)
-    }
-
-    pub(super) async fn room_membership_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<RoomMembershipWriteDto, RoomMembershipCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: ROOM_MEMBERSHIP_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_room_membership_core_error(no_session, error))?;
-        room_membership_write_dto(response.payload)
-    }
-
-    pub(super) async fn room_moderation_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<RoomModerationWriteDto, RoomModerationCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: ROOM_MODERATION_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_room_moderation_core_error(no_session, error))?;
-        room_moderation_write_dto(response.payload)
-    }
-
-    pub(super) async fn room_power_level_command(
-        &self,
-        command: &'static str,
-        no_session: &'static str,
-        payload: serde_json::Value,
-    ) -> Result<RoomPowerLevelWriteDto, RoomPowerLevelCommandError> {
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: command.to_owned(),
-                session_generation: ROOM_POWER_LEVEL_COMMAND_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_room_power_level_core_error(no_session, error))?;
-        room_power_level_write_dto(response.payload)
     }
 }

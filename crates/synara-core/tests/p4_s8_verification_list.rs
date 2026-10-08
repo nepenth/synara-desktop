@@ -52,7 +52,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn verification_list_surface_exposes_only_the_registered_list_command() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("verification_list"));
     assert!(!udl.contains("matrix_verification_start"));
     assert!(!udl.contains("matrix_verification_accept"));

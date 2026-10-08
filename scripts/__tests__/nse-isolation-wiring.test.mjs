@@ -29,7 +29,14 @@ function fixture(t) {
   const inputs = [...source.matchAll(/read\(\s*"([^"]+)"\s*,?\s*\)/g)].map(
     (match) => match[1]
   );
-  inputs.push(ciBuildPath, productionCheckerPath, checkerPath);
+  inputs.push(
+    ciBuildPath,
+    productionCheckerPath,
+    checkerPath,
+    // The checker renders the FFI surface from the pinned Swift golden.
+    "scripts/lib/ffi-surface.mjs",
+    "synara-ios/SynaraCore/api/synara_nse_core.swift-api.txt"
+  );
   for (const path of new Set(inputs)) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
     copyFileSync(join(repoRoot, path), join(root, path));

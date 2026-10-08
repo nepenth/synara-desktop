@@ -57,7 +57,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn directory_visibility_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("get_room_directory_visibility"));
     assert!(udl.contains("set_room_directory_visibility"));
     assert!(!udl.contains("matrix_login_password"));

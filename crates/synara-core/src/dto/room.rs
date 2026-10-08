@@ -76,6 +76,7 @@ pub struct RoomHero {
 /// failed SDK state read must never authorize a cleartext-sensitive action.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "full-uniffi", derive(uniffi::Enum))]
 pub enum RoomEncryptionStatus {
     Encrypted,
     NotEncrypted,

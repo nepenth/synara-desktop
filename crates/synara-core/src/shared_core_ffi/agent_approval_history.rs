@@ -13,7 +13,7 @@ const HISTORY_NO_SESSION_DESCRIPTION: &str = "No native Matrix session is active
 const HISTORY_FAILED_CODE: &str = "agent-approval-history-load-failed";
 const HISTORY_FAILED_DESCRIPTION: &str = "The native Matrix approval history is unavailable.";
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct AgentApprovalHistoryItemDto {
     pub room_id: String,
     pub event_id: String,
@@ -25,12 +25,12 @@ pub struct AgentApprovalHistoryItemDto {
     pub summary: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct AgentApprovalHistorySnapshotDto {
     pub items: Vec<AgentApprovalHistoryItemDto>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum AgentApprovalHistoryCommandError {
     Failed { code: String, description: String },
 }
@@ -113,6 +113,7 @@ fn snapshot_dto(
     })
 }
 
+#[uniffi::export(async_runtime = "tokio")]
 impl SharedCore {
     pub async fn agent_approval_history_snapshot(
         &self,

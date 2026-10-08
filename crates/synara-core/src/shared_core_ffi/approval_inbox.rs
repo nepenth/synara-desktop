@@ -7,7 +7,7 @@ use crate::app::timeline::{
 };
 use crate::transport::{CommandEnvelope, MatrixIpcErrorCategory};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct AgentApprovalInboxItemDto {
     pub room_id: String,
     pub event_id: String,
@@ -20,7 +20,7 @@ pub struct AgentApprovalInboxItemDto {
     pub body_truncated: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct AgentApprovalInboxDto {
     pub session_generation: u64,
     pub items: Vec<AgentApprovalInboxItemDto>,
@@ -30,7 +30,7 @@ pub struct AgentApprovalInboxDto {
     pub coverage: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum AgentApprovalInboxError {
     Failed { code: String, description: String },
 }
@@ -61,6 +61,7 @@ fn unavailable(no_session: bool) -> AgentApprovalInboxError {
     }
 }
 
+#[uniffi::export(async_runtime = "tokio")]
 impl SharedCore {
     /// Pass true only while the approvals page is visible; Core automatically
     /// expires the discovery lease if the shell stops renewing it.

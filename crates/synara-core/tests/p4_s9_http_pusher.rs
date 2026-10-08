@@ -165,7 +165,7 @@ async fn accept_account_setup_and_empty_device_cleanups(
 
 #[test]
 fn http_pusher_surface_exposes_product_and_keeps_leftovers() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("register_http_pusher"));
     assert!(udl.contains("delete_http_pusher"));
     assert!(udl.contains("dictionary PusherWriteDto"));

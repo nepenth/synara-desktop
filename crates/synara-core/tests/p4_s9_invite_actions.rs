@@ -56,7 +56,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn invite_actions_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(crate::ffi_surface::declares_fn(udl, "invites_accept"));
     assert!(crate::ffi_surface::declares_fn(udl, "invites_decline"));
     assert!(crate::ffi_surface::declares_fn(udl, "invites_report_spam"));

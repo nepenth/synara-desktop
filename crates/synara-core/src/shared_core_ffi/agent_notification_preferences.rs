@@ -2,7 +2,7 @@ use super::SharedCore;
 use crate::app::notifications::AgentNotificationPreferences;
 use crate::transport::CommandEnvelope;
 pub type AgentNotificationPreferencesDto = AgentNotificationPreferences;
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum AgentNotificationPreferencesError {
     Failed { code: String, description: String },
 }
@@ -15,22 +15,6 @@ impl std::fmt::Display for AgentNotificationPreferencesError {
 }
 impl std::error::Error for AgentNotificationPreferencesError {}
 impl SharedCore {
-    pub async fn agent_notification_event_allowed(
-        &self,
-        room_id: String,
-        event_id: String,
-    ) -> Result<bool, AgentNotificationPreferencesError> {
-        self.core
-            .agent_notification_event_allowed(&room_id, &event_id)
-            .await
-            .map_err(|e| AgentNotificationPreferencesError::Failed {
-                code: e
-                    .diagnostic_id
-                    .unwrap_or_else(|| "agent-notification-event-unavailable".into()),
-                description: "Notification policy could not be resolved.".into(),
-            })
-    }
-
     async fn agent_preferences_command(
         &self,
         name: &str,
@@ -57,6 +41,25 @@ impl SharedCore {
                 description: "Agent notification settings are invalid.".into(),
             }
         })
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl SharedCore {
+    pub async fn agent_notification_event_allowed(
+        &self,
+        room_id: String,
+        event_id: String,
+    ) -> Result<bool, AgentNotificationPreferencesError> {
+        self.core
+            .agent_notification_event_allowed(&room_id, &event_id)
+            .await
+            .map_err(|e| AgentNotificationPreferencesError::Failed {
+                code: e
+                    .diagnostic_id
+                    .unwrap_or_else(|| "agent-notification-event-unavailable".into()),
+                description: "Notification policy could not be resolved.".into(),
+            })
     }
     pub async fn agent_notification_preferences_snapshot(
         &self,

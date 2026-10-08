@@ -57,7 +57,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn room_moderation_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("room_invite"));
     assert!(udl.contains("room_kick"));
     assert!(udl.contains("room_ban"));

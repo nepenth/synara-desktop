@@ -56,7 +56,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
 
 #[test]
 fn message_search_surface_exposes_only_the_registered_family() {
-    let udl = include_str!("../src/synara_core.udl");
+    let udl = crate::ffi_surface::udl();
     assert!(udl.contains("message_search"));
     assert!(udl.contains("interface MessageSearchError"));
     assert!(!udl.contains("matrix_login_password"));
