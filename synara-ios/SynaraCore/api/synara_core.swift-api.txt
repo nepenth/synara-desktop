@@ -10,6 +10,8 @@ extension AgentApprovalSendError: Sendable
 extension AgentNotificationPreferencesDto: Sendable
 extension AgentNotificationPreferencesError: Sendable
 extension BackupStatusDto: Sendable
+extension BadgeSummary: Sendable
+extension BadgeSummaryInput: Sendable
 extension ComposerReplyDraftDto: Sendable
 extension ComposerReplyDraftError: Sendable
 extension ComposerReplyDraftPreviewDto: Sendable
@@ -86,6 +88,7 @@ extension RestoreBackupDto: Sendable
 extension RestoreBackupError: Sendable
 extension RestrictedJoinReparentDto: Sendable
 extension RoomActivityPreviousState: Sendable
+extension RoomBadgeSource: Sendable
 extension RoomCreateCommandError: Sendable
 extension RoomCreateDto: Sendable
 extension RoomCreateRequestDto: Sendable
@@ -102,6 +105,7 @@ extension RoomImagePacksSnapshotDto: Sendable
 extension RoomJoinRuleSnapshotDto: Sendable
 extension RoomJoinRuleWriteDto: Sendable
 extension RoomKeyTransferStatusDto: Sendable
+extension RoomListOrder: Sendable
 extension RoomListRoomDto: Sendable
 extension RoomListSnapshotDto: Sendable
 extension RoomListSnapshotError: Sendable
@@ -121,6 +125,7 @@ extension RoomNotificationCommandError: Sendable
 extension RoomNotificationSnapshotDto: Sendable
 extension RoomNotificationWriteDto: Sendable
 extension RoomNotificationsSnapshotDto: Sendable
+extension RoomOrderInput: Sendable
 extension RoomPowerLevelCommandError: Sendable
 extension RoomPowerLevelTagsSnapshotDto: Sendable
 extension RoomPowerLevelWriteDto: Sendable
@@ -521,6 +526,9 @@ public enum RoomEncryptionStatus: Equatable, Hashable
   case encrypted
   case notEncrypted
   case unknown
+public enum RoomListOrder: Equatable, Hashable
+  case recent
+  case name
 public enum RoomListSnapshotError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -647,9 +655,11 @@ public enum VerificationSasError: Swift.Error, Equatable, Hashable, Foundation.L
 public func bindingScaffoldVersion() -> String
 public func loginFlows(homeserverUrl: String) async throws -> [LoginFlowDto]
 public func markdownToHtml(body: String) -> String?
+public func orderRoomIds(rooms: [RoomOrderInput], order: RoomListOrder) -> [String]
 public func registerFlows(homeserverUrl: String) async throws -> RegisterFlowsDto
 public func roomActivityRecoveryRequired(latestRequiresRecovery: Bool, previousState: RoomActivityPreviousState) -> Bool
 public func roomUnreadPresentation(membership: RoomUnreadMembership, numUnreadMessages: UInt64, numUnreadNotifications: UInt64, numUnreadMentions: UInt64, isMarkedUnread: Bool) -> RoomUnreadPresentationDto
+public func summarizeBadges(input: BadgeSummaryInput) -> BadgeSummary
 public protocol HttpPusherOwnerProtocol: AnyObject, Sendable
   func deleteHttpPusher(pushKey: String, appId: String) async throws -> PusherWriteDto
   func deleteHttpPushersForDevice(appId: String, lastPushKey: String?) async throws -> PusherWriteDto
@@ -901,6 +911,21 @@ public struct BackupStatusDto: Equatable, Hashable
   public var recoveryState: String
   public var action: String
   public init(sessionGeneration: UInt64, availability: String, enabled: Bool, deviceState: String, recoveryState: String, action: String)
+public struct BadgeSummary: Equatable, Hashable
+  public var appBadgeCount: UInt64
+  public var inboxBadgeCount: UInt64
+  public var laterActiveCount: UInt64
+  public var inviteCount: UInt64
+  public var agentApprovalCount: UInt64
+  public var highlightCount: UInt64
+  public var unreadCount: UInt64
+  public init(appBadgeCount: UInt64, inboxBadgeCount: UInt64, laterActiveCount: UInt64, inviteCount: UInt64, agentApprovalCount: UInt64, highlightCount: UInt64, unreadCount: UInt64)
+public struct BadgeSummaryInput: Equatable, Hashable
+  public var unread: [RoomBadgeSource]
+  public var laterActiveCount: UInt64
+  public var inviteCount: UInt64
+  public var agentApprovalCount: UInt64
+  public init(unread: [RoomBadgeSource], laterActiveCount: UInt64, inviteCount: UInt64, agentApprovalCount: UInt64)
 public struct ComposerReplyDraftDto: Equatable, Hashable
   public var schemaVersion: UInt32
   public var roomId: String
@@ -1148,6 +1173,10 @@ public struct RestrictedJoinReparentDto: Equatable, Hashable
   public var roomId: String
   public var status: String
   public init(roomId: String, status: String)
+public struct RoomBadgeSource: Equatable, Hashable
+  public var total: UInt64
+  public var highlight: UInt64?
+  public init(total: UInt64, highlight: UInt64?)
 public struct RoomCreateDto: Equatable, Hashable
   public var roomId: String
   public init(roomId: String)
@@ -1316,6 +1345,11 @@ public struct RoomNotificationWriteDto: Equatable, Hashable
 public struct RoomNotificationsSnapshotDto: Equatable, Hashable
   public var rooms: [RoomNotificationSnapshotDto]
   public init(rooms: [RoomNotificationSnapshotDto])
+public struct RoomOrderInput: Equatable, Hashable
+  public var roomId: String
+  public var name: String?
+  public var lastActivityMs: UInt64?
+  public init(roomId: String, name: String?, lastActivityMs: UInt64?)
 public struct RoomPowerLevelTagsSnapshotDto: Equatable, Hashable
   public var status: String
   public var sessionGeneration: UInt64

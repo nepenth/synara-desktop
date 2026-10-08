@@ -1,4 +1,4 @@
-import { getBadgeCount } from '../notifications/badgeSummary';
+import { getBadgeCount, type NotificationSummaryInput } from '../notifications/badgeSummary';
 import { recordDesktopDiagnostic } from './desktopDiagnostics';
 import { getHomeRoomPath } from '../pages/pathUtils';
 import {
@@ -1094,10 +1094,8 @@ export async function dismissDesktopNotifications(keys: string[]): Promise<void>
   await invokeDesktopWithAvailability('desktop_dismiss_notifications', { keys: sanitized });
 }
 
-export const getDesktopNotificationCount = (
-  unreadCounts: Iterable<{ total?: number; highlight?: number }>,
-  laterActiveCount: number
-): number => getBadgeCount(unreadCounts, laterActiveCount);
+export const getDesktopNotificationCount = (input: NotificationSummaryInput): number =>
+  getBadgeCount(input);
 
 export const DESKTOP_TRAY_DND_TOGGLE_EVENT = 'synara-tray-dnd-toggle';
 

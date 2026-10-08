@@ -833,6 +833,24 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(partition.remaining.map(\.id), ["!room:matrix.org", "!invite:matrix.org"])
     }
 
+    func testRoomListSortUsesCoreNameRulesSharedWithDesktop() {
+        let rooms = [
+            makeActivityRoom(id: "!z:matrix.org", name: "#zeta", activity: .distantPast),
+            makeActivityRoom(id: "!b:matrix.org", name: "beta", activity: .distantPast),
+            makeActivityRoom(id: "!a:matrix.org", name: "Alpha", activity: .distantPast),
+        ]
+
+        XCTAssertEqual(
+            RoomListFavorites.sorted(rooms, order: .name).map(\.id),
+            ["!a:matrix.org", "!b:matrix.org", "!z:matrix.org"]
+        )
+        // Equal (missing) activity falls back to the same name order.
+        XCTAssertEqual(
+            RoomListFavorites.sorted(rooms, order: .recent).map(\.id),
+            ["!a:matrix.org", "!b:matrix.org", "!z:matrix.org"]
+        )
+    }
+
     func testRoomListSortOrdersByNameAndRecentActivity() {
         let rooms = [
             makeActivityRoom(id: "!b:matrix.org", name: "Zeta", activity: RoomListFixtures.now.addingTimeInterval(-60)),

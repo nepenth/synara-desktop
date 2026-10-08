@@ -321,8 +321,8 @@ export function Home() {
     readRoomListSort(sortStorage, 'rooms')
   );
   const favoriteIds = useMemo(
-    () => favoriteRoomIdSet(nativeRoomList.rooms),
-    [nativeRoomList.rooms]
+    () => favoriteRoomIdSet(nativeRoomList.presentation),
+    [nativeRoomList.presentation]
   );
   const { favoriteRoomIds, remainingRoomIds } = useMemo(
     () => partitionHomeRooms(rooms, favoriteIds),
@@ -330,19 +330,19 @@ export function Home() {
   );
 
   const sortedFavoriteRoomIds = useMemo(
-    () => sortHomeRoomIds(favoriteRoomIds, nativeRoomList.rooms, favoriteSort),
-    [favoriteRoomIds, nativeRoomList.rooms, favoriteSort]
+    () => sortHomeRoomIds(favoriteRoomIds, nativeRoomList.presentation, favoriteSort),
+    [favoriteRoomIds, nativeRoomList.presentation, favoriteSort]
   );
 
   const mainRoomIds = useMemo(() => {
-    const items = sortHomeRoomIds(remainingRoomIds, nativeRoomList.rooms, roomsSort);
+    const items = sortHomeRoomIds(remainingRoomIds, nativeRoomList.presentation, roomsSort);
     if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
     }
     return items;
   }, [
     remainingRoomIds,
-    nativeRoomList.rooms,
+    nativeRoomList.presentation,
     roomsSort,
     closedCategories,
     roomToUnread,

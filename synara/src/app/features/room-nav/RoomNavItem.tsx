@@ -22,7 +22,7 @@ import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { copyToClipboard } from '../../utils/dom';
-import { unreadFromNativeRoom } from '../../state/room/roomToUnread';
+import { unreadFromPresentation } from '../../state/room-list/roomListPresentation';
 import { setRoomReadStateWithNativeOwner } from '../../utils/nativeRoomReadStateOwner';
 import { markAsReadFromExplicitUserAction } from '../../utils/notifications';
 import { UseStateProvider } from '../../components/UseStateProvider';
@@ -63,7 +63,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
     const mx = useMatrixClient();
     const nativeRooms = useNativeRoomListSnapshot();
     const nativeRoom = nativeRooms.rooms.find((summary) => summary.roomId === room.roomId);
-    const unread = unreadFromNativeRoom(nativeRoom);
+    const unread = unreadFromPresentation(nativeRooms.presentation, room.roomId);
     const isFavorite = nativeRoom?.isFavorite === true;
     const [favoriteError, setFavoriteError] = useState<string>();
     const [favoriteBusy, setFavoriteBusy] = useState(false);
@@ -301,7 +301,7 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
   const nativeRooms = useNativeRoomListSnapshot();
   const nativeRoom = nativeRooms.rooms.find((summary) => summary.roomId === room.roomId);
-  const unread = unreadFromNativeRoom(nativeRoom);
+  const unread = unreadFromPresentation(nativeRooms.presentation, room.roomId);
   const dmPeerId =
     nativeRoom?.isDirect === true &&
     typeof nativeRoom.directUserId === 'string' &&

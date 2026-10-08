@@ -62,16 +62,16 @@ type DesktopActionCallArgs = {
 
 test('desktop badge count combines highlights and active Later items', () => {
   assert.equal(
-    getDesktopNotificationCount(
-      [{ total: 4, highlight: 2 }, { total: 3 }, { total: 0, highlight: 0 }],
-      5
-    ),
+    getDesktopNotificationCount({ highlightTotal: 2, unreadTotal: 3, laterActiveCount: 5 }),
     10
   );
 });
 
 test('desktop badge count clamps negative values', () => {
-  assert.equal(getDesktopNotificationCount([{ total: -1, highlight: -2 }], -5), 0);
+  assert.equal(
+    getDesktopNotificationCount({ highlightTotal: -2, unreadTotal: -1, laterActiveCount: -5 }),
+    0
+  );
 });
 
 test('setDesktopBadgeCount invokes the desktop bridge with a clamped count', async () => {

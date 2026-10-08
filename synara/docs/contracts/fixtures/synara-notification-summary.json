@@ -50,7 +50,8 @@
   "runtime": {
     "activeLaterAndRoomUnread": {
       "input": {
-        "unreadCounts": [{ "total": 4, "highlight": 2 }, { "total": 3 }],
+        "highlightTotal": 2,
+        "unreadTotal": 3,
         "laterActiveCount": 5,
         "inviteCount": 2,
         "agentApprovalCount": 1
@@ -67,7 +68,8 @@
     },
     "clamping": {
       "input": {
-        "unreadCounts": [{ "total": -1, "highlight": -2 }, { "total": 3.9 }],
+        "highlightTotal": -2,
+        "unreadTotal": 3.9,
         "laterActiveCount": 2.8,
         "inviteCount": -1,
         "agentApprovalCount": null
