@@ -1,22 +1,10 @@
 //! Desktop bridges for timeline edit/redact/report/pin through `Core::command`.
 
 use synara_core::app::timeline::{NativeTimelineActionReadback, PinnedEventsSnapshot};
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
-
-const TIMELINE_EDIT_TEXT_COMMAND: &str = "matrix_timeline_edit_text";
-const TIMELINE_REDACT_COMMAND: &str = "matrix_timeline_redact";
-const TIMELINE_REPORT_COMMAND: &str = "matrix_timeline_report";
-const TIMELINE_PIN_COMMAND: &str = "matrix_timeline_pin";
-const TIMELINE_UNPIN_COMMAND: &str = "matrix_timeline_unpin";
-const PINNED_EVENTS_COMMAND: &str = "matrix_pinned_events";
-const TIMELINE_POLL_VOTE_COMMAND: &str = "matrix_timeline_poll_vote";
-const TIMELINE_CALL_DECLINE_COMMAND: &str = "matrix_timeline_call_decline";
-const TIMELINE_FORWARD_TEXT_COMMAND: &str = "matrix_timeline_forward_text";
-const TIMELINE_FORWARD_MEDIA_COMMAND: &str = "matrix_timeline_forward_media";
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn timeline_edit_text(
     core: &Core,
@@ -25,24 +13,16 @@ pub(crate) async fn timeline_edit_text(
     body: String,
     formatted_body: Option<String>,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
-    let mut payload = serde_json::json!({
-        "roomId": room_id,
-        "eventId": event_id,
-        "body": body,
-    });
-    if let Some(formatted_body) = formatted_body {
-        payload["formattedBody"] = serde_json::Value::String(formatted_body);
-    }
     let response = core
-        .command(CommandEnvelope {
-            command: TIMELINE_EDIT_TEXT_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload,
+        .timeline_edit_text(synara_core::core_api::MatrixTimelineEditTextRequest {
+            room_id,
+            event_id,
+            body,
+            formatted_body,
         })
         .await
         .map_err(map_timeline_action_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| timeline_action_response_error())
+    Ok(response)
 }
 
 pub(crate) async fn timeline_redact(
@@ -51,23 +31,15 @@ pub(crate) async fn timeline_redact(
     event_id: String,
     reason: Option<String>,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
-    let mut payload = serde_json::json!({
-        "roomId": room_id,
-        "eventId": event_id,
-    });
-    if let Some(reason) = reason {
-        payload["reason"] = serde_json::Value::String(reason);
-    }
     let response = core
-        .command(CommandEnvelope {
-            command: TIMELINE_REDACT_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload,
+        .timeline_redact(synara_core::core_api::MatrixTimelineRedactRequest {
+            room_id,
+            event_id,
+            reason,
         })
         .await
         .map_err(map_timeline_action_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| timeline_action_response_error())
+    Ok(response)
 }
 
 pub(crate) async fn timeline_report(
@@ -76,23 +48,15 @@ pub(crate) async fn timeline_report(
     event_id: String,
     reason: Option<String>,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
-    let mut payload = serde_json::json!({
-        "roomId": room_id,
-        "eventId": event_id,
-    });
-    if let Some(reason) = reason {
-        payload["reason"] = serde_json::Value::String(reason);
-    }
     let response = core
-        .command(CommandEnvelope {
-            command: TIMELINE_REPORT_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload,
+        .timeline_report(synara_core::core_api::MatrixTimelineReportRequest {
+            room_id,
+            event_id,
+            reason,
         })
         .await
         .map_err(map_timeline_action_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| timeline_action_response_error())
+    Ok(response)
 }
 
 pub(crate) async fn timeline_pin(
@@ -100,7 +64,9 @@ pub(crate) async fn timeline_pin(
     room_id: String,
     event_id: String,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
-    dispatch_pin(core, TIMELINE_PIN_COMMAND, room_id, event_id).await
+    core.timeline_pin(synara_core::core_api::MatrixTimelinePinRequest { room_id, event_id })
+        .await
+        .map_err(map_timeline_action_core_error)
 }
 
 pub(crate) async fn timeline_unpin(
@@ -108,7 +74,9 @@ pub(crate) async fn timeline_unpin(
     room_id: String,
     event_id: String,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
-    dispatch_pin(core, TIMELINE_UNPIN_COMMAND, room_id, event_id).await
+    core.timeline_unpin(synara_core::core_api::MatrixTimelinePinRequest { room_id, event_id })
+        .await
+        .map_err(map_timeline_action_core_error)
 }
 
 pub(crate) async fn pinned_events(
@@ -116,38 +84,10 @@ pub(crate) async fn pinned_events(
     room_id: String,
 ) -> Result<PinnedEventsSnapshot, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: PINNED_EVENTS_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({
-                "roomId": room_id,
-            }),
-        })
+        .pinned_events(synara_core::core_api::MatrixPinnedEventsRequest { room_id })
         .await
         .map_err(map_timeline_action_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| timeline_action_response_error())
-}
-
-async fn dispatch_pin(
-    core: &Core,
-    command: &str,
-    room_id: String,
-    event_id: String,
-) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
-    let response = core
-        .command(CommandEnvelope {
-            command: command.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({
-                "roomId": room_id,
-                "eventId": event_id,
-            }),
-        })
-        .await
-        .map_err(map_timeline_action_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| timeline_action_response_error())
+    Ok(response)
 }
 
 pub(crate) async fn timeline_poll_vote(
@@ -157,19 +97,14 @@ pub(crate) async fn timeline_poll_vote(
     answer_ids: Vec<String>,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: TIMELINE_POLL_VOTE_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({
-                "roomId": room_id,
-                "eventId": event_id,
-                "answerIds": answer_ids,
-            }),
+        .timeline_poll_vote(synara_core::core_api::MatrixTimelinePollVoteRequest {
+            room_id,
+            event_id,
+            answer_ids,
         })
         .await
         .map_err(map_timeline_action_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| timeline_action_response_error())
+    Ok(response)
 }
 
 pub(crate) async fn timeline_call_decline(
@@ -178,18 +113,13 @@ pub(crate) async fn timeline_call_decline(
     event_id: String,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: TIMELINE_CALL_DECLINE_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({
-                "roomId": room_id,
-                "eventId": event_id,
-            }),
+        .timeline_call_decline(synara_core::core_api::MatrixTimelineCallDeclineRequest {
+            room_id,
+            event_id,
         })
         .await
         .map_err(map_timeline_action_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| timeline_action_response_error())
+    Ok(response)
 }
 
 pub(crate) async fn timeline_forward_text(
@@ -201,21 +131,16 @@ pub(crate) async fn timeline_forward_text(
     confirmed_encryption_downgrade: bool,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: TIMELINE_FORWARD_TEXT_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({
-                "sourceRoomId": source_room_id,
-                "eventId": event_id,
-                "targetRoomId": target_room_id,
-                "asQuote": as_quote,
-                "confirmedEncryptionDowngrade": confirmed_encryption_downgrade,
-            }),
+        .timeline_forward_text(synara_core::core_api::MatrixTimelineForwardTextRequest {
+            source_room_id,
+            event_id,
+            target_room_id,
+            as_quote,
+            confirmed_encryption_downgrade,
         })
         .await
         .map_err(map_timeline_action_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| timeline_action_response_error())
+    Ok(response)
 }
 
 pub(crate) async fn timeline_forward_media(
@@ -226,20 +151,15 @@ pub(crate) async fn timeline_forward_media(
     confirmed_encryption_downgrade: bool,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: TIMELINE_FORWARD_MEDIA_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({
-                "sourceRoomId": source_room_id,
-                "eventId": event_id,
-                "targetRoomId": target_room_id,
-                "confirmedEncryptionDowngrade": confirmed_encryption_downgrade,
-            }),
+        .timeline_forward_media(synara_core::core_api::MatrixTimelineForwardMediaRequest {
+            source_room_id,
+            event_id,
+            target_room_id,
+            confirmed_encryption_downgrade,
         })
         .await
         .map_err(map_timeline_action_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| timeline_action_response_error())
+    Ok(response)
 }
 
 fn map_timeline_action_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -305,12 +225,4 @@ fn map_timeline_action_core_error(error: MatrixIpcError) -> MatrixAuthCommandErr
             )
         }
     }
-}
-
-fn timeline_action_response_error() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "The native Matrix timeline action request is invalid.",
-        "v-timeline-edit-send-failed",
-    )
 }

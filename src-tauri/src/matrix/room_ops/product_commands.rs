@@ -33,12 +33,14 @@ pub async fn matrix_room_create(
 pub async fn matrix_set_encrypted_state_events_setting(
     core: State<'_, Arc<synara_core::Core>>,
     enabled: bool,
-) -> Result<serde_json::Value, MatrixAuthCommandError> {
-    crate::bridge::room_profile_writes::set_encrypted_state_events_setting(
-        core.inner().as_ref(),
-        enabled,
+) -> Result<synara_core::core_api::MatrixEncryptedStateEventsSettingResult, MatrixAuthCommandError>
+{
+    Ok(
+        crate::bridge::room_profile_writes::set_encrypted_state_events_setting(
+            core.inner().as_ref(),
+            enabled,
+        ),
     )
-    .await
 }
 
 /// V-ROOMS room membership: leave the selected room through the native SDK.

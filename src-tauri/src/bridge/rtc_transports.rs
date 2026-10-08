@@ -5,41 +5,25 @@
 //! widget driver.
 
 use synara_core::app::rtc_transports::NativeRtcTransportsSnapshot;
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
 
-const RTC_TRANSPORTS_SNAPSHOT_COMMAND: &str = "matrix_rtc_transports_snapshot";
-const RTC_TRANSPORTS_REFRESH_COMMAND: &str = "matrix_rtc_transports_refresh";
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
-
 pub(crate) async fn rtc_transports_snapshot(
     core: &Core,
 ) -> Result<NativeRtcTransportsSnapshot, MatrixAuthCommandError> {
-    dispatch(core, RTC_TRANSPORTS_SNAPSHOT_COMMAND).await
+    core.rtc_transports_snapshot()
+        .await
+        .map_err(map_rtc_transports_core_error)
 }
 
 pub(crate) async fn rtc_transports_refresh(
     core: &Core,
 ) -> Result<NativeRtcTransportsSnapshot, MatrixAuthCommandError> {
-    dispatch(core, RTC_TRANSPORTS_REFRESH_COMMAND).await
-}
-
-async fn dispatch(
-    core: &Core,
-    command: &'static str,
-) -> Result<NativeRtcTransportsSnapshot, MatrixAuthCommandError> {
-    let response = core
-        .command(CommandEnvelope {
-            command: command.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::Value::Null,
-        })
+    core.rtc_transports_refresh()
         .await
-        .map_err(map_rtc_transports_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| rtc_transports_response_error())
+        .map_err(map_rtc_transports_core_error)
 }
 
 fn map_rtc_transports_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -60,12 +44,4 @@ fn map_rtc_transports_core_error(error: MatrixIpcError) -> MatrixAuthCommandErro
             "p2-rtc-transports-snapshot-serialization-failed",
         ),
     }
-}
-
-fn rtc_transports_response_error() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "Native MatrixRTC transports are unavailable.",
-        "p2-rtc-transports-snapshot-serialization-failed",
-    )
 }

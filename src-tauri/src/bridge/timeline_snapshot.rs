@@ -1,28 +1,20 @@
 //! Desktop bridge for a read-only snapshot of an existing native timeline.
 
 use synara_core::app::timeline::TimelineViewSnapshot;
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
-
-const TIMELINE_SNAPSHOT_COMMAND: &str = "matrix_timeline_snapshot";
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn timeline_snapshot(
     core: &Core,
     stream_id: String,
 ) -> Result<TimelineViewSnapshot, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: TIMELINE_SNAPSHOT_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({ "streamId": stream_id }),
-        })
+        .timeline_snapshot(synara_core::core_api::MatrixTimelineSnapshotRequest { stream_id })
         .await
         .map_err(map_timeline_snapshot_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| timeline_snapshot_response_error())
+    Ok(response)
 }
 
 /// Acknowledges an SDK retry request; the live timeline reports its outcome.
@@ -31,15 +23,12 @@ pub(crate) async fn timeline_retry_decryption(
     stream_id: String,
 ) -> Result<bool, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: "matrix_timeline_retry_decryption".to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({ "streamId": stream_id }),
+        .timeline_retry_decryption(synara_core::core_api::MatrixTimelineSnapshotRequest {
+            stream_id,
         })
         .await
         .map_err(map_timeline_snapshot_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| timeline_snapshot_response_error())
+    Ok(response)
 }
 
 fn map_timeline_snapshot_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {

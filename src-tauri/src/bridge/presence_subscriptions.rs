@@ -6,40 +6,28 @@
 //! and `matrix_presence_unsubscribe`.
 
 use synara_core::app::presence::NativePresenceSubscription;
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
-
-const PRESENCE_SUBSCRIBE_COMMAND: &str = "matrix_presence_subscribe";
-const PRESENCE_UNSUBSCRIBE_COMMAND: &str = "matrix_presence_unsubscribe";
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn presence_subscribe(
     core: &Core,
     user_id: String,
 ) -> Result<NativePresenceSubscription, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: PRESENCE_SUBSCRIBE_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({ "userId": user_id }),
-        })
+        .presence_subscribe(synara_core::core_api::MatrixPresenceSubscribeRequest { user_id })
         .await
         .map_err(map_presence_subscribe_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| presence_subscribe_response_error())
+    Ok(response)
 }
 
 pub(crate) async fn presence_unsubscribe(
     core: &Core,
     subscription_id: String,
 ) -> Result<(), MatrixAuthCommandError> {
-    core.command(CommandEnvelope {
-        command: PRESENCE_UNSUBSCRIBE_COMMAND.to_owned(),
-        session_generation: READ_ONLY_SESSION_GENERATION,
-        request_id: None,
-        payload: serde_json::json!({ "subscriptionId": subscription_id }),
+    core.presence_unsubscribe(synara_core::core_api::MatrixPresenceUnsubscribeRequest {
+        subscription_id,
     })
     .await
     .map_err(map_presence_unsubscribe_core_error)?;
@@ -94,12 +82,4 @@ fn map_presence_unsubscribe_core_error(error: MatrixIpcError) -> MatrixAuthComma
             "v-presence-store-read-failed",
         ),
     }
-}
-
-fn presence_subscribe_response_error() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "Native Matrix presence is unavailable.",
-        "v-presence-store-read-failed",
-    )
 }

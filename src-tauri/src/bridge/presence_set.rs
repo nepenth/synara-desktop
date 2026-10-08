@@ -6,13 +6,10 @@
 //! to set own presence (online / unavailable / offline).
 
 use synara_core::app::presence::NativePresenceWriteResult;
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
-
-const PRESENCE_SET_COMMAND: &str = "matrix_presence_set";
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn presence_set(
     core: &Core,
@@ -20,15 +17,10 @@ pub(crate) async fn presence_set(
     status_msg: Option<String>,
 ) -> Result<NativePresenceWriteResult, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: PRESENCE_SET_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({ "state": state, "statusMsg": status_msg }),
-        })
+        .presence_set(synara_core::core_api::MatrixPresenceSetRequest { state, status_msg })
         .await
         .map_err(map_presence_set_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| presence_set_response_error())
+    Ok(response)
 }
 
 fn map_presence_set_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -67,12 +59,4 @@ fn map_presence_set_core_error(error: MatrixIpcError) -> MatrixAuthCommandError 
             ),
         },
     }
-}
-
-fn presence_set_response_error() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "Native Matrix presence is unavailable.",
-        "v-presence-store-read-failed",
-    )
 }

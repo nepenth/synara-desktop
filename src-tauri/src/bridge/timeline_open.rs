@@ -5,14 +5,10 @@
 //! `matrix_timeline_jump_latest`.
 
 use synara_core::app::timeline::{NativeTimelineOpenPosition, NativeTimelineOpenReadback};
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
-
-const TIMELINE_OPEN_COMMAND: &str = "matrix_timeline_open";
-const TIMELINE_JUMP_LATEST_COMMAND: &str = "matrix_timeline_jump_latest";
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn timeline_open(
     core: &Core,
@@ -20,18 +16,10 @@ pub(crate) async fn timeline_open(
     position: NativeTimelineOpenPosition,
 ) -> Result<NativeTimelineOpenReadback, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: TIMELINE_OPEN_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({
-                "roomId": room_id,
-                "position": position,
-            }),
-        })
+        .timeline_open(synara_core::core_api::MatrixTimelineOpenRequest { room_id, position })
         .await
         .map_err(map_timeline_open_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| timeline_open_response_error())
+    Ok(response)
 }
 
 pub(crate) async fn timeline_jump_latest(
@@ -39,15 +27,10 @@ pub(crate) async fn timeline_jump_latest(
     stream_id: String,
 ) -> Result<NativeTimelineOpenReadback, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: TIMELINE_JUMP_LATEST_COMMAND.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({ "streamId": stream_id }),
-        })
+        .timeline_jump_latest(synara_core::core_api::MatrixTimelineJumpLatestRequest { stream_id })
         .await
         .map_err(map_timeline_open_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| timeline_open_response_error())
+    Ok(response)
 }
 
 fn map_timeline_open_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -100,14 +83,6 @@ fn map_timeline_open_core_error(error: MatrixIpcError) -> MatrixAuthCommandError
             "d0.3-timeline-open-failed",
         ),
     }
-}
-
-fn timeline_open_response_error() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "The native Matrix timeline is unavailable.",
-        "d0.3-timeline-open-failed",
-    )
 }
 
 #[cfg(test)]

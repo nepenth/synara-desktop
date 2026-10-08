@@ -1,21 +1,14 @@
 //! Desktop bridges for room leave/join through `Core::command`.
 
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
 
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
-
 pub(crate) async fn room_leave(core: &Core, room_id: String) -> Result<(), MatrixAuthCommandError> {
-    core.command(CommandEnvelope {
-        command: "matrix_room_leave".to_owned(),
-        session_generation: READ_ONLY_SESSION_GENERATION,
-        request_id: None,
-        payload: serde_json::json!({ "roomId": room_id }),
-    })
-    .await
-    .map_err(map_room_leave_join_core_error)?;
+    core.room_leave(synara_core::core_api::MatrixRoomLeaveRequest { room_id })
+        .await
+        .map_err(map_room_leave_join_core_error)?;
     Ok(())
 }
 
@@ -24,14 +17,9 @@ pub(crate) async fn room_join(
     room_id_or_alias: String,
     via_servers: Option<Vec<String>>,
 ) -> Result<(), MatrixAuthCommandError> {
-    core.command(CommandEnvelope {
-        command: "matrix_room_join".to_owned(),
-        session_generation: READ_ONLY_SESSION_GENERATION,
-        request_id: None,
-        payload: serde_json::json!({
-            "roomIdOrAlias": room_id_or_alias,
-            "viaServers": via_servers,
-        }),
+    core.room_join(synara_core::core_api::MatrixRoomJoinRequest {
+        room_id_or_alias,
+        via_servers,
     })
     .await
     .map_err(map_room_leave_join_core_error)?;
@@ -43,14 +31,9 @@ pub(crate) async fn room_set_favorite(
     room_id: String,
     favorite: bool,
 ) -> Result<(), MatrixAuthCommandError> {
-    core.command(CommandEnvelope {
-        command: "matrix_room_set_favorite".to_owned(),
-        session_generation: READ_ONLY_SESSION_GENERATION,
-        request_id: None,
-        payload: serde_json::json!({
-            "roomId": room_id,
-            "favorite": favorite,
-        }),
+    core.room_set_favorite(synara_core::core_api::MatrixRoomSetFavoriteRequest {
+        room_id,
+        favorite,
     })
     .await
     .map_err(map_room_leave_join_core_error)?;

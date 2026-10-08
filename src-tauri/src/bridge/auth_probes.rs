@@ -5,20 +5,11 @@
 //! `{ homeserverUrl }`; this adapter creates the Core envelope and unwraps the
 //! known Core DTO back into the pre-existing Tauri response shape.
 
-use serde::de::DeserializeOwned;
 use synara_core::app::auth::{MatrixLoginFlowsResponse, RegisterFlowsProbe};
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
-
-/// Stateless probes have no live session. Zero is a valid JSON-safe core
-/// session generation (`CommandEnvelope::validate` verifies it), so it is the
-/// neutral envelope generation for both read-only requests.
-const STATELESS_SESSION_GENERATION: u64 = 0;
-
-const LOGIN_FLOWS_COMMAND: &str = "matrix_login_flows";
-const REGISTER_FLOWS_COMMAND: &str = "matrix_register_flows";
 
 /// Route the existing `matrix_login_flows` Tauri input through the managed
 /// Core. The payload intentionally has exactly the React-facing camel-case
@@ -27,14 +18,9 @@ pub(crate) async fn login_flows(
     core: &Core,
     homeserver_url: String,
 ) -> Result<MatrixLoginFlowsResponse, MatrixAuthCommandError> {
-    invoke_probe(
-        core,
-        LOGIN_FLOWS_COMMAND,
-        homeserver_url,
-        map_login_flows_core_error,
-        login_flows_invalid_core_response,
-    )
-    .await
+    core.login_flows(synara_core::core_api::MatrixLoginFlowsRequest { homeserver_url })
+        .await
+        .map_err(map_login_flows_core_error)
 }
 
 /// Route the existing `matrix_register_flows` Tauri input through the managed
@@ -44,37 +30,9 @@ pub(crate) async fn register_flows(
     core: &Core,
     homeserver_url: String,
 ) -> Result<RegisterFlowsProbe, MatrixAuthCommandError> {
-    invoke_probe(
-        core,
-        REGISTER_FLOWS_COMMAND,
-        homeserver_url,
-        map_register_flows_core_error,
-        register_flows_invalid_core_response,
-    )
-    .await
-}
-
-async fn invoke_probe<Response>(
-    core: &Core,
-    command: &'static str,
-    homeserver_url: String,
-    map_core_error: fn(MatrixIpcError) -> MatrixAuthCommandError,
-    invalid_response: fn() -> MatrixAuthCommandError,
-) -> Result<Response, MatrixAuthCommandError>
-where
-    Response: DeserializeOwned,
-{
-    let request = CommandEnvelope {
-        command: command.to_owned(),
-        session_generation: STATELESS_SESSION_GENERATION,
-        request_id: None,
-        payload: serde_json::json!({ "homeserverUrl": homeserver_url }),
-    };
-
-    // `Core::command` validates this envelope before dispatch. In particular,
-    // the neutral generation is within the shared JS-safe wire-counter range.
-    let response = core.command(request).await.map_err(map_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| invalid_response())
+    core.register_flows(synara_core::core_api::MatrixRegisterFlowsRequest { homeserver_url })
+        .await
+        .map_err(map_register_flows_core_error)
 }
 
 /// Map only the stable Core category. Core messages/diagnostics are never
@@ -144,183 +102,9 @@ pub(crate) fn map_register_flows_core_error(error: MatrixIpcError) -> MatrixAuth
     MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
 
-fn login_flows_invalid_core_response() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "Native login-flow discovery failed.",
-        "snc-p3-1-login-flows-response-invalid",
-    )
-}
-
-fn register_flows_invalid_core_response() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "Native registration failed.",
-        "snc-p3-1-register-flows-response-invalid",
-    )
-}
-
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
-
-    use synara_core::dto::NotificationCandidate;
-    use synara_core::platform::{Platform, PlatformStatus, SecretVault, UnavailableSecretVault};
-    use synara_core::transport::{CommandFuture, CommandRegistry, MatrixIpcEnvelope};
-
     use super::*;
-
-    struct TestPlatform;
-
-    impl Platform for TestPlatform {
-        fn emit(&self, _envelope: MatrixIpcEnvelope) -> Result<(), MatrixIpcError> {
-            Ok(())
-        }
-
-        fn secret_store(&self) -> Arc<dyn SecretVault + Send + Sync> {
-            Arc::new(UnavailableSecretVault)
-        }
-
-        fn http_user_agent(&self) -> String {
-            "Synara-Desktop-Bridge-Test/1.0".to_owned()
-        }
-
-        fn sync_status(&self) -> synara_core::platform::SyncStatusFuture<'_> {
-            Box::pin(async {
-                Ok(synara_core::platform::PlatformSyncStatus::new(
-                    synara_core::app::sync::SyncReadiness::Unconfigured,
-                    0,
-                    false,
-                    None,
-                    None,
-                )
-                .expect("unconfigured status is a valid string-free projection"))
-            })
-        }
-
-        fn crypto_status(&self) -> synara_core::platform::CryptoStatusFuture<'_> {
-            Box::pin(async {
-                Ok(synara_core::platform::PlatformCryptoStatus::new(
-                    0,
-                    false,
-                    synara_core::platform::PlatformCryptoCrossSigningState::Unavailable,
-                )
-                .expect("unavailable is a valid string-free crypto projection"))
-            })
-        }
-
-        fn cross_signing_status(&self) -> synara_core::platform::CrossSigningStatusFuture<'_> {
-            Box::pin(async {
-                Err(synara_core::platform::PlatformCrossSigningStatusError::NoSession)
-            })
-        }
-
-        fn media_config(&self) -> synara_core::platform::MediaConfigFuture<'_> {
-            Box::pin(async {
-                Ok(synara_core::platform::PlatformMediaConfig::new(0)
-                    .expect("zero is a valid closed media projection"))
-            })
-        }
-
-        fn notify(&self, _candidate: NotificationCandidate) -> Result<(), MatrixIpcError> {
-            Ok(())
-        }
-
-        fn set_badge(&self, _count: u64) -> Result<(), MatrixIpcError> {
-            Ok(())
-        }
-
-        fn status(&self, _status: PlatformStatus) -> Result<(), MatrixIpcError> {
-            Ok(())
-        }
-    }
-
-    fn core_returning(
-        command: &'static str,
-        response_payload: serde_json::Value,
-        forwarded: Arc<Mutex<Vec<CommandEnvelope>>>,
-    ) -> Core {
-        let mut registry = CommandRegistry::new();
-        registry
-            .register(command, move |_state, request| -> CommandFuture {
-                forwarded.lock().expect("test capture lock").push(request);
-                let response_payload = response_payload.clone();
-                Box::pin(async move { Ok(response_payload) })
-            })
-            .expect("test command is in the desktop census");
-        Core::with_registry(Arc::new(TestPlatform), registry)
-    }
-
-    #[test]
-    fn stateless_probe_envelope_uses_a_valid_neutral_generation() {
-        let envelope = CommandEnvelope {
-            command: LOGIN_FLOWS_COMMAND.to_owned(),
-            session_generation: STATELESS_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({ "homeserverUrl": "https://matrix.example" }),
-        };
-        assert!(envelope.validate().is_ok());
-    }
-
-    #[tokio::test]
-    async fn login_flows_forwards_the_exact_payload_and_response() {
-        let forwarded = Arc::new(Mutex::new(Vec::new()));
-        let payload = serde_json::json!({
-            "flows": [{
-                "kind": "password",
-                "matrixType": "m.login.password",
-                "getLoginToken": true
-            }]
-        });
-        let core = core_returning(LOGIN_FLOWS_COMMAND, payload.clone(), Arc::clone(&forwarded));
-
-        let response = login_flows(&core, "https://matrix.example".to_owned())
-            .await
-            .expect("known Core response is a desktop DTO");
-
-        assert_eq!(serde_json::to_value(response).unwrap(), payload);
-        assert_eq!(
-            forwarded.lock().unwrap().as_slice(),
-            &[CommandEnvelope {
-                command: LOGIN_FLOWS_COMMAND.to_owned(),
-                session_generation: STATELESS_SESSION_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "homeserverUrl": "https://matrix.example" }),
-            }]
-        );
-    }
-
-    #[tokio::test]
-    async fn register_flows_forwards_the_exact_payload_and_response() {
-        let forwarded = Arc::new(Mutex::new(Vec::new()));
-        let payload = serde_json::json!({
-            "status": "flow_required",
-            "session": "opaque-uia-session",
-            "flows": [{ "stages": ["m.login.terms"] }],
-            "completed": [],
-            "params": { "m.login.terms": { "policies": [] } }
-        });
-        let core = core_returning(
-            REGISTER_FLOWS_COMMAND,
-            payload.clone(),
-            Arc::clone(&forwarded),
-        );
-
-        let response = register_flows(&core, "https://matrix.example".to_owned())
-            .await
-            .expect("known Core response is a desktop DTO");
-
-        assert_eq!(serde_json::to_value(response).unwrap(), payload);
-        assert_eq!(
-            forwarded.lock().unwrap().as_slice(),
-            &[CommandEnvelope {
-                command: REGISTER_FLOWS_COMMAND.to_owned(),
-                session_generation: STATELESS_SESSION_GENERATION,
-                request_id: None,
-                payload: serde_json::json!({ "homeserverUrl": "https://matrix.example" }),
-            }]
-        );
-    }
 
     #[test]
     fn core_error_mapping_is_static_and_does_not_reflect_private_text() {
@@ -420,11 +204,11 @@ mod tests {
         let product_commands = include_str!("../matrix/auth/product_commands.rs");
         for (command, bridge_call) in [
             (
-                LOGIN_FLOWS_COMMAND,
+                "matrix_login_flows",
                 "crate::bridge::auth_probes::login_flows",
             ),
             (
-                REGISTER_FLOWS_COMMAND,
+                "matrix_register_flows",
                 "crate::bridge::auth_probes::register_flows",
             ),
         ] {

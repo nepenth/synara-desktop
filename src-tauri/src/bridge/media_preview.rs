@@ -1,12 +1,10 @@
 //! Desktop bridge for `matrix_media_preview` through `Core::command`.
 
 use synara_core::app::media::MatrixMediaPreviewSnapshot;
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
-
-const COMMAND: &str = "matrix_media_preview";
 
 pub(crate) async fn media_preview(
     core: &Core,
@@ -15,27 +13,14 @@ pub(crate) async fn media_preview(
     url: String,
     ts: Option<u64>,
 ) -> Result<MatrixMediaPreviewSnapshot, MatrixAuthCommandError> {
-    let mut payload = serde_json::json!({
-        "roomId": room_id,
-        "sessionGeneration": session_generation,
-        "url": url,
-    });
-    if let Some(ts) = ts {
-        payload
-            .as_object_mut()
-            .expect("preview payload is an object")
-            .insert("ts".into(), serde_json::json!(ts));
-    }
-    let response = core
-        .command(CommandEnvelope {
-            command: COMMAND.to_owned(),
-            session_generation,
-            request_id: None,
-            payload,
-        })
-        .await
-        .map_err(map_media_preview_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| preview_response_error())
+    core.media_preview(synara_core::core_api::MatrixMediaPreviewRequest {
+        room_id,
+        session_generation,
+        url,
+        ts,
+    })
+    .await
+    .map_err(map_media_preview_core_error)
 }
 
 fn map_media_preview_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -75,12 +60,4 @@ fn map_media_preview_core_error(error: MatrixIpcError) -> MatrixAuthCommandError
             diagnostic,
         ),
     }
-}
-
-fn preview_response_error() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "The native Matrix URL preview is unavailable.",
-        "v-send.r-media-preview-unavailable",
-    )
 }

@@ -1,71 +1,55 @@
 //! Desktop bridges for invite snapshot/accept/decline through `Core::command`.
 
 use synara_core::app::room_list::NativeInviteSnapshot;
-use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
-
-const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn invites_snapshot(
     core: &Core,
 ) -> Result<NativeInviteSnapshot, MatrixAuthCommandError> {
     let response = core
-        .command(CommandEnvelope {
-            command: "matrix_invites_snapshot".to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::Value::Null,
-        })
+        .invites_snapshot()
         .await
         .map_err(map_invites_snapshot_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| invites_snapshot_response_error())
+    Ok(response)
 }
 
 pub(crate) async fn invites_accept(
     core: &Core,
     room_id: String,
 ) -> Result<NativeInviteSnapshot, MatrixAuthCommandError> {
-    invite_action(core, "matrix_invites_accept", room_id).await
+    core.invites_accept(synara_core::core_api::MatrixInviteActionRequest { room_id })
+        .await
+        .map_err(map_invite_action_core_error)
 }
 
 pub(crate) async fn invites_decline(
     core: &Core,
     room_id: String,
 ) -> Result<NativeInviteSnapshot, MatrixAuthCommandError> {
-    invite_action(core, "matrix_invites_decline", room_id).await
+    core.invites_decline(synara_core::core_api::MatrixInviteActionRequest { room_id })
+        .await
+        .map_err(map_invite_action_core_error)
 }
 
 pub(crate) async fn invites_report_spam(
     core: &Core,
     room_id: String,
 ) -> Result<NativeInviteSnapshot, MatrixAuthCommandError> {
-    invite_action(core, "matrix_invites_report_spam", room_id).await
+    core.invites_report_spam(synara_core::core_api::MatrixInviteActionRequest { room_id })
+        .await
+        .map_err(map_invite_action_core_error)
 }
 
 pub(crate) async fn invites_block_sender(
     core: &Core,
     room_id: String,
 ) -> Result<NativeInviteSnapshot, MatrixAuthCommandError> {
-    invite_action(core, "matrix_invites_block_sender", room_id).await
-}
-
-async fn invite_action(
-    core: &Core,
-    command: &str,
-    room_id: String,
-) -> Result<NativeInviteSnapshot, MatrixAuthCommandError> {
-    let response = core
-        .command(CommandEnvelope {
-            command: command.to_owned(),
-            session_generation: READ_ONLY_SESSION_GENERATION,
-            request_id: None,
-            payload: serde_json::json!({ "roomId": room_id }),
-        })
+    core.invites_block_sender(synara_core::core_api::MatrixInviteActionRequest { room_id })
         .await
-        .map_err(map_invite_action_core_error)?;
-    serde_json::from_value(response.payload).map_err(|_| invites_snapshot_response_error())
+        .map_err(map_invite_action_core_error)
 }
 
 fn map_invites_snapshot_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -119,12 +103,4 @@ fn map_invite_action_core_error(error: MatrixIpcError) -> MatrixAuthCommandError
                 .unwrap_or("v-rooms.1-invite-member-read-failed"),
         ),
     }
-}
-
-fn invites_snapshot_response_error() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "The native Matrix invite inbox is unavailable.",
-        "v-rooms.1-invite-member-read-failed",
-    )
 }
