@@ -95,7 +95,7 @@ export function RoomNotificationModeSwitcher({
 
   const handleSelect = (mode: RoomNotificationMode) => {
     if (changing) return;
-    setMode(mode, value);
+    setMode(mode);
     handleClose();
   };
 
