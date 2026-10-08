@@ -689,19 +689,20 @@ fn room_list_update_payload_is_generation_and_revision_only() {
 #[test]
 fn every_session_install_path_owns_the_room_list_live_owner() {
     let commands = include_str!("../auth/product_commands.rs");
-    let installs = commands
-        .matches("*session = Some(ManagedMatrixSession {")
-        .count();
+    // Login, register and restore all build their session record through the
+    // one shared `into_session`, which owns the room-list live owner.
+    let installs = commands.matches("install.publish(managed).await;").count();
     assert_eq!(installs, 3, "login, register and restore install sessions");
+    assert_eq!(commands.matches("owners.into_session(").count(), installs);
     assert_eq!(
         commands.matches("_room_list_live: room_list_live,").count(),
-        installs
+        1
     );
     assert_eq!(
         commands
-            .matches("crate::matrix::room_list::start_room_list_live(&sync, app.clone())")
+            .matches("crate::matrix::room_list::start_room_list_live(&self.sync, app.clone())")
             .count(),
-        installs
+        1
     );
     // Widget webviews never render room lists.
     let module = include_str!("mod.rs");

@@ -35,6 +35,15 @@ impl SessionFault {
         }
     }
 
+    /// Malformed request or stored identity. Message matches the desktop copy.
+    pub const fn invalid_input(diagnostic_id: &'static str) -> Self {
+        Self::new(
+            SessionFaultKind::InvalidRequest,
+            "The native Matrix login request is invalid.",
+            diagnostic_id,
+        )
+    }
+
     /// Session storage failed. Message matches the desktop's existing copy.
     pub const fn unavailable(diagnostic_id: &'static str) -> Self {
         Self::new(

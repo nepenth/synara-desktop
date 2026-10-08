@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fs;
 
 use super::*;
 use crate::matrix::presence::{
@@ -2688,13 +2689,14 @@ fn v_auth_logout_clears_orphaned_native_identity_when_restore_never_installed_a_
         .and_then(|source| source.split("pub async fn matrix_restore_session").next())
         .expect("matrix_logout body");
 
+    // The owner runs the orphan closure when no session is installed.
     let no_active_session = logout
-        .split("let Some((active, plan)) = taken else {")
+        .split("// Even a path-resolution failure must not skip retirement of stale Core.")
         .nth(1)
-        .and_then(|source| source.split("matrix-session-expired").next())
+        .and_then(|source| source.split("|active, plan|").next())
         .expect("matrix_logout missing-session branch");
     assert!(no_active_session.contains("clear_persisted_logout_material"));
-    assert!(no_active_session.contains("record_pending_logout_cleanup"));
+    assert!(no_active_session.contains("record_pending_cleanup"));
 }
 
 #[test]
@@ -2761,10 +2763,8 @@ fn product_client_persists_rotated_sdk_tokens_in_native_vault_and_logout_is_loca
         .and_then(|source| source.split("pub async fn matrix_restore_session").next())
         .expect("matrix_logout body");
     assert!(
-        logout.contains("lock_transition().await")
-            && logout.contains("take_session_for_logout(&state.session")
-            && logout.contains("finish_taken_session_logout("),
-        "logout serializes on the transition gate and takes the session out of the slot"
+        logout.contains("state\n        .logout(") && logout.contains("finish_taken_session_logout("),
+        "logout runs through the owner, which takes the transition gate and the session out of the slot"
     );
     assert!(
         logout.contains("client.matrix_auth().logout()")
@@ -2799,13 +2799,13 @@ fn installs_and_restore_wait_on_the_session_transition_gate() {
             .nth(1)
             .and_then(|source| source.split("#[tauri::command]").next())
             .expect("command body");
-        let gate = body
-            .find("state.lock_transition().await")
-            .unwrap_or_else(|| panic!("{command} must take the transition gate"));
-        let slot = body
-            .find("state.session.lock().await")
-            .unwrap_or_else(|| panic!("{command} must take the session slot"));
-        assert!(gate < slot, "{command} takes the transition gate first");
+        // `begin_install` takes the transition gate, then the slot (Core
+        // owner tests pin that order); recovery confirm takes only the gate.
+        assert!(
+            body.contains("state.begin_install().await")
+                || body.contains("state.lock_transition().await"),
+            "{command} must take the transition gate"
+        );
     }
     let restore = AUTH_PRODUCT_COMMANDS_SOURCE
         .split("pub async fn matrix_restore_session")
@@ -2813,7 +2813,7 @@ fn installs_and_restore_wait_on_the_session_transition_gate() {
         .and_then(|source| source.split("#[tauri::command]").next())
         .expect("restore body");
     let retry = restore
-        .find("retry_pending_logout_cleanup")
+        .find("retry_pending_cleanup")
         .expect("restore finishes a failed retirement cleanup first");
     let read = restore
         .find("read_active_identity(&app_data_root)")
@@ -2825,27 +2825,18 @@ fn installs_and_restore_wait_on_the_session_transition_gate() {
 fn the_watcher_retires_through_the_tick_helper_with_its_generation() {
     let product = include_str!("product.rs");
     let watch_body = product
-        .split("if snapshot.failure_diagnostic_id")
-        .nth(1)
-        .and_then(|source| source.split("if !slept").next())
-        .expect("authentication rejection watcher");
-    assert!(watch_body.contains("handle_authentication_rejection_tick("));
-    assert!(watch_body.contains("matrix_logout(retire_app, state, core, Some(generation))"));
-    assert!(!watch_body.contains("client.matrix_auth().logout()"));
-    assert!(!watch_body.contains("wipePersistedStores"));
-    let tick = product
         .split("pub fn spawn_suspend_resume_watch")
         .nth(1)
-        .and_then(|source| {
-            source
-                .split("let snapshot = state.sync_status_snapshot()")
-                .next()
-        })
-        .expect("watcher prelude");
-    assert!(
-        tick.contains("retry_pending_logout_cleanup"),
-        "the watcher retries a failed retirement cleanup"
-    );
+        .and_then(|source| source.split("if rejected || !slept").next())
+        .expect("watcher loop");
+    // The shared Core tick owns save retry, cleanup retry and the rejection
+    // decision; the watcher only supplies the desktop adapters.
+    assert!(watch_body.contains(".maintenance_tick("));
+    assert!(watch_body.contains("retry_failed_session_save"));
+    assert!(watch_body.contains("clear_native_logout_material"));
+    assert!(watch_body.contains("matrix_logout(retire_app, retire_state, core, Some(generation))"));
+    assert!(!watch_body.contains("client.matrix_auth().logout()"));
+    assert!(!watch_body.contains("wipePersistedStores"));
 }
 
 /// Acceptance 7: drive the real take + teardown pair that `matrix_logout` runs.
@@ -3018,13 +3009,16 @@ fn v_auth_sync_recover_restarts_live_owner_without_rebuild() {
     assert!(product.contains("SyncIntent::Resume"));
     assert!(product.contains("spawn_suspend_resume_watch"));
     assert!(product.contains("suspend_detected"));
-    assert!(product.contains("recover_gate"));
-    assert!(product.contains("recover_cooldown_active"));
-    assert!(product.contains("last_success_wall"));
+    assert!(product.contains("self.recover_live("));
     assert!(product.contains("recover_sync_after_detected_suspend"));
-    assert!(product.contains("RECOVER_COOLDOWN"));
+    // The recover gate and its wall-clock cooldown live in Core.
+    let core_recover =
+        include_str!("../../../../crates/synara-core/src/app/lifecycle/session/recover.rs");
+    assert!(core_recover.contains("recover_cooldown_active"));
+    assert!(core_recover.contains("last_success_wall"));
+    assert!(core_recover.contains("RECOVER_COOLDOWN"));
     assert!(
-        !product.contains("last.elapsed()"),
+        !core_recover.contains("last.elapsed()"),
         "recover cooldown must use wall time, not Instant::elapsed"
     );
 
@@ -3165,7 +3159,7 @@ async fn media_config_desktop_owner_keeps_the_live_client_and_closed_no_session_
         .nth(1)
         .and_then(|source| {
             source
-                .split("pub(super) async fn clear_store_recovery")
+                .split("/// Resolve an opaque V-ROOMS invite-avatar capability")
                 .next()
         })
         .expect("desktop media config projection");
@@ -3750,7 +3744,7 @@ async fn session_wiring_failures_retire_tentative_live_and_core_before_returning
         fs::remove_dir_all(root).unwrap();
     }
     let rolled_back = Cell::new(false);
-    finish_session_wiring(Ok(()), || async {
+    finish_session_wiring(Ok::<(), MatrixAuthCommandError>(()), || async {
         rolled_back.set(true);
         Ok(())
     })
@@ -3777,9 +3771,11 @@ async fn session_transition_gate_blocks_new_install_during_wiring_active_and_orp
             };
             if route == "wiring" {
                 close.await.unwrap();
-                finish_session_wiring(Ok(()), || async { panic!("successful wiring rollback") })
-                    .await
-                    .unwrap();
+                finish_session_wiring(Ok::<(), MatrixAuthCommandError>(()), || async {
+                    panic!("successful wiring rollback")
+                })
+                .await
+                .unwrap();
             } else if route == "active-close" {
                 finish_active_logout(
                     || Ok(()),
@@ -3829,7 +3825,7 @@ async fn authenticated_identity_equivalence_preserves_layout_and_mismatch_revoke
         requested.account_dir_segment()
     );
     let revoked = Cell::new(false);
-    accept_authenticated_identity(Ok(equivalent), || async {
+    accept_authenticated_identity(Ok::<_, MatrixAuthCommandError>(equivalent), || async {
         revoked.set(true);
     })
     .await
@@ -4764,195 +4760,6 @@ async fn password_login_activation_failure_revokes_token_before_metadata_without
         drop(client);
         fs::remove_dir_all(root).unwrap();
     }
-}
-
-#[tokio::test]
-async fn suspend_resume_holds_session_gate_until_completion_and_selects_replacement_owner() {
-    use std::cell::Cell;
-    use std::sync::{
-        atomic::{AtomicU64, Ordering},
-        Mutex as StdMutex,
-    };
-    let session = tokio::sync::Mutex::new(Some(1_u64));
-    let recovery = tokio::sync::Mutex::new(RecoverGate::default());
-    let current = AtomicU64::new(1);
-    let events = StdMutex::new(Vec::new());
-    let (started_send, started_receive) = tokio::sync::oneshot::channel();
-    let (release_send, release_receive) = tokio::sync::oneshot::channel();
-    let resume = recover_installed_session_owner(
-        &session,
-        &recovery,
-        true,
-        |generation| *generation,
-        |active| active.copied(),
-        |generation| {
-            let current = &current;
-            let events = &events;
-            async move {
-                assert_eq!(generation, 1);
-                events.lock().unwrap().push("old-resume-start");
-                started_send.send(()).unwrap();
-                release_receive.await.unwrap();
-                assert_eq!(
-                    current.load(Ordering::Acquire),
-                    generation,
-                    "logout/replacement cannot retire a currently resuming owner"
-                );
-                events.lock().unwrap().push("old-resume-complete");
-                Ok::<_, ()>(Some(generation))
-            }
-        },
-    );
-    let replace = async {
-        started_receive.await.unwrap();
-        assert!(
-            session.try_lock().is_err(),
-            "teardown is blocked until old resume finishes"
-        );
-        // SDK work releases recovery. An observer may then wait for session
-        // while holding recovery; completion must drop session first.
-        let gate = recovery.lock().await;
-        assert!(gate.in_flight);
-        release_send.send(()).unwrap();
-        let mut active = session.lock().await;
-        events.lock().unwrap().push("old-stop-new-install");
-        current.store(2, Ordering::Release);
-        *active = Some(2);
-        drop(active);
-        drop(gate);
-    };
-    let (result, ()) = tokio::time::timeout(Duration::from_secs(5), async {
-        tokio::join!(resume, replace)
-    })
-    .await
-    .expect("resume releases session before reacquiring recovery bookkeeping");
-    assert_eq!(result.unwrap(), Some(1));
-    assert_eq!(
-        *events.lock().unwrap(),
-        [
-            "old-resume-start",
-            "old-resume-complete",
-            "old-stop-new-install"
-        ]
-    );
-    let called = Cell::new(false);
-    let observed = recover_installed_session_owner(
-        &session,
-        &recovery,
-        false,
-        |generation| *generation,
-        |active| active.copied(),
-        |_| async {
-            called.set(true);
-            Ok::<_, ()>(None)
-        },
-    )
-    .await
-    .unwrap();
-    assert_eq!(observed, Some(2));
-    assert!(
-        !called.get(),
-        "successful recovery preserves renderer wall-clock cooldown"
-    );
-    let resumed = recover_installed_session_owner(
-        &session,
-        &recovery,
-        true,
-        |generation| *generation,
-        |active| active.copied(),
-        |generation| async move {
-            assert_eq!(
-                generation, 2,
-                "after replacement only the installed owner resumes"
-            );
-            assert_eq!(current.load(Ordering::Acquire), generation);
-            Ok::<_, ()>(Some(generation))
-        },
-    )
-    .await
-    .unwrap();
-    assert_eq!(resumed, Some(2));
-    assert!(!recovery.lock().await.in_flight);
-    assert!(recovery.lock().await.last_success_wall.is_some());
-    *session.lock().await = None;
-    let logged_out = recover_installed_session_owner(
-        &session,
-        &recovery,
-        true,
-        |generation| *generation,
-        |active| active.copied(),
-        |_| async {
-            called.set(true);
-            Ok::<_, ()>(None)
-        },
-    )
-    .await
-    .unwrap();
-    assert!(
-        logged_out.is_none() && !called.get(),
-        "no retained old owner resumes after logout"
-    );
-}
-
-#[tokio::test]
-async fn suspend_resume_inflight_and_error_preserve_recovery_gate_contract() {
-    use std::cell::Cell;
-    let session = tokio::sync::Mutex::new(Some(1_u64));
-    let recovery = tokio::sync::Mutex::new(RecoverGate {
-        in_flight: true,
-        last_success_wall: None,
-    });
-    let called = Cell::new(false);
-    assert_eq!(
-        recover_installed_session_owner(
-            &session,
-            &recovery,
-            true,
-            |generation| *generation,
-            |active| active.copied(),
-            |_| async {
-                called.set(true);
-                Ok::<_, &'static str>(None)
-            },
-        )
-        .await
-        .unwrap(),
-        Some(1)
-    );
-    assert!(
-        !called.get(),
-        "concurrent recovery observes instead of issuing a second resume"
-    );
-    recovery.lock().await.in_flight = false;
-    let error = recover_installed_session_owner(
-        &session,
-        &recovery,
-        false,
-        |generation| *generation,
-        |active| active.copied(),
-        |_| async { Err("fixture-resume-failed") },
-    )
-    .await
-    .unwrap_err();
-    assert_eq!(error, "fixture-resume-failed");
-    let gate = recovery.lock().await;
-    assert!(!gate.in_flight && gate.last_success_wall.is_none());
-    drop(gate);
-    let retried = recover_installed_session_owner(
-        &session,
-        &recovery,
-        false,
-        |generation| *generation,
-        |active| active.copied(),
-        |generation| async move { Ok::<_, &'static str>(Some(generation)) },
-    )
-    .await
-    .unwrap();
-    assert_eq!(
-        retried,
-        Some(1),
-        "ordinary retry remains allowed after resume error"
-    );
 }
 
 #[test]

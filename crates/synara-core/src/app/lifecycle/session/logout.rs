@@ -150,10 +150,10 @@ where
     Close: FnOnce() -> CloseFuture,
     CloseFuture: Future<Output = Result<(), E>>,
 {
-    finish_active_logout(
-        || Ok(()),
+    run_local_logout(
+        LogoutPolicy::DESKTOP,
+        revoke,
         || async move {
-            revoke();
             let stop_result = stop_local().await;
             if let Some(remote_logout) = remote_logout {
                 let _remote_logout_succeeded =
@@ -166,6 +166,82 @@ where
         close,
     )
     .await
+}
+
+/// Where retiring the shell's live session state falls relative to Core close.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TeardownOrder {
+    /// Desktop: stop, clean up credentials, retire, then close Core. Every
+    /// step is attempted; errors are reported after all of them ran.
+    RetireBeforeClose,
+    /// iOS: stop, pause, close Core, then retire. The first failure stops the
+    /// teardown and leaves the session installed for a retry.
+    RetireAfterClose,
+}
+
+/// Whether logout deletes the vault session material itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CredentialCleanup {
+    /// Desktop deletes vault material and the locator inside logout.
+    InLogout,
+    /// iOS: the Swift host owns forgetting (`forget_session`) separately.
+    HostOwned,
+}
+
+/// Per-platform local teardown policy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LogoutPolicy {
+    pub teardown_order: TeardownOrder,
+    pub credential_cleanup: CredentialCleanup,
+}
+
+impl LogoutPolicy {
+    pub const DESKTOP: Self = Self {
+        teardown_order: TeardownOrder::RetireBeforeClose,
+        credential_cleanup: CredentialCleanup::InLogout,
+    };
+
+    pub const IOS: Self = Self {
+        teardown_order: TeardownOrder::RetireAfterClose,
+        credential_cleanup: CredentialCleanup::HostOwned,
+    };
+}
+
+/// Run the local half of a logout under `policy`. `revoke` always runs first
+/// so no token-rotation save can land during teardown. `cleanup` runs only for
+/// [`CredentialCleanup::InLogout`]. See [`TeardownOrder`] for ordering and
+/// error behavior.
+pub async fn run_local_logout<E, Stop, StopFuture, Close, CloseFuture>(
+    policy: LogoutPolicy,
+    revoke: impl FnOnce(),
+    stop_local: Stop,
+    cleanup: impl FnOnce() -> Result<(), E>,
+    retire: impl FnOnce(),
+    close: Close,
+) -> Result<(), E>
+where
+    Stop: FnOnce() -> StopFuture,
+    StopFuture: Future<Output = Result<(), E>>,
+    Close: FnOnce() -> CloseFuture,
+    CloseFuture: Future<Output = Result<(), E>>,
+{
+    revoke();
+    let cleanup = || match policy.credential_cleanup {
+        CredentialCleanup::InLogout => cleanup(),
+        CredentialCleanup::HostOwned => Ok(()),
+    };
+    match policy.teardown_order {
+        TeardownOrder::RetireBeforeClose => {
+            finish_active_logout(|| Ok(()), stop_local, cleanup, retire, close).await
+        }
+        TeardownOrder::RetireAfterClose => {
+            stop_local().await?;
+            cleanup()?;
+            close().await?;
+            retire();
+            Ok(())
+        }
+    }
 }
 
 /// Locator whose credential cleanup failed after its live session left the
@@ -375,6 +451,58 @@ mod tests {
         assert!(
             !pending.is_pending(),
             "a new install forgets the old record"
+        );
+    }
+
+    async fn run_with_policy(policy: LogoutPolicy, stop_fails: bool) -> (Vec<&'static str>, bool) {
+        let steps = std::sync::Mutex::new(Vec::new());
+        let push = |step| steps.lock().unwrap().push(step);
+        let result: Result<(), SessionFault> = run_local_logout(
+            policy,
+            || push("revoke"),
+            || async {
+                push("stop");
+                if stop_fails {
+                    Err(SessionFault::unavailable("stop"))
+                } else {
+                    Ok(())
+                }
+            },
+            || {
+                push("cleanup");
+                Ok(())
+            },
+            || push("retire"),
+            || async {
+                push("close");
+                Ok(())
+            },
+        )
+        .await;
+        (steps.into_inner().unwrap(), result.is_ok())
+    }
+
+    #[tokio::test]
+    async fn desktop_policy_attempts_every_step_and_retires_before_close() {
+        assert_eq!(
+            run_with_policy(LogoutPolicy::DESKTOP, false).await,
+            (vec!["revoke", "stop", "cleanup", "retire", "close"], true)
+        );
+        assert_eq!(
+            run_with_policy(LogoutPolicy::DESKTOP, true).await,
+            (vec!["revoke", "stop", "cleanup", "retire", "close"], false)
+        );
+    }
+
+    #[tokio::test]
+    async fn ios_policy_closes_before_retiring_and_stops_at_the_first_failure() {
+        assert_eq!(
+            run_with_policy(LogoutPolicy::IOS, false).await,
+            (vec!["revoke", "stop", "close", "retire"], true)
+        );
+        assert_eq!(
+            run_with_policy(LogoutPolicy::IOS, true).await,
+            (vec!["revoke", "stop"], false)
         );
     }
 }

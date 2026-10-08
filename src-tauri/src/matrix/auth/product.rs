@@ -3,8 +3,6 @@
 //! This is the only desktop product boundary for password login. The live
 //! `matrix_sdk::Client` and all access/refresh tokens remain in the Rust host.
 
-use std::fs;
-
 use std::path::{Path, PathBuf};
 
 use std::sync::Arc;
@@ -78,8 +76,8 @@ use crate::matrix::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, Native
 #[cfg(test)]
 use crate::matrix::lifecycle::load_session_material;
 use crate::matrix::lifecycle::{
-    clear_session_material, persist_session_after_login, restore_session_from_vault,
-    restore_session_onto_client, KeyringSessionMaterialVault, SessionMaterial,
+    persist_session_after_login, restore_session_from_vault, restore_session_onto_client,
+    KeyringSessionMaterialVault, SessionMaterial,
 };
 
 use crate::matrix::notifications::NativeNotificationObservationOwner;
@@ -118,9 +116,8 @@ use crate::matrix::store::{
 };
 
 use crate::matrix::sync::{
-    build_sync_service, recover_cooldown_active, suspend_detected, unconfigured_snapshot,
-    SyncError, SyncIntent, SyncReadinessSnapshot, SyncServiceConfig, SyncServiceOwner,
-    RECOVER_COOLDOWN, SUSPEND_WALL_SKEW,
+    build_sync_service, suspend_detected, unconfigured_snapshot, SyncError, SyncIntent,
+    SyncReadinessSnapshot, SyncServiceConfig, SyncServiceOwner, SUSPEND_WALL_SKEW,
 };
 
 use crate::matrix::timeline::{
@@ -150,11 +147,9 @@ use crate::matrix::widgets::NativeWidgetOwner;
 
 use synara_core::app::media_cache::NativeMediaRetentionOwner;
 
-const ACTIVE_SESSION_FILE: &str = "active-session.json";
-const MATRIX_DATA_DIR: &str = "matrix";
-
 /// Non-secret account locator; the wire shape is owned by Core.
 pub use synara_core::app::lifecycle::session::SessionLocator as MatrixLoginIdentity;
+use synara_core::app::lifecycle::session::{InstalledSession, SessionLifecycleOwner};
 
 // Core owns the public session, crypto and cross-signing status types; the
 // desktop returns them from Tauri commands unchanged.
@@ -231,7 +226,9 @@ impl MatrixAuthCommandError {
     }
 }
 
-struct ManagedMatrixSession {
+/// One installed desktop session: the SDK client and every live owner. Fields
+/// stay private to the auth module; only `MatrixAuthState` exposes the slot.
+pub struct ManagedMatrixSession {
     client: Client,
     session_persistence: SessionPersistenceOwner,
     identity: MatrixLoginIdentity,
@@ -261,82 +258,27 @@ struct ManagedMatrixSession {
     next_room_key_import_selection_id: u64,
 }
 
-/// A locally held recovery target is armed only by a failed native login.
-/// It never crosses IPC; the renderer receives only an opaque, one-use
-/// confirmation capability after the user opens the recovery confirmation.
-#[derive(Default)]
-enum StoreRecoveryState {
-    #[default]
-    Idle,
-    Pending {
-        identity: AccountIdentity,
-    },
-    AwaitingConfirmation {
-        identity: AccountIdentity,
-        confirmation_id: String,
-    },
-}
-
-#[derive(Default)]
-struct RecoverGate {
-    in_flight: bool,
-    last_success_wall: Option<SystemTime>,
-}
-
-/// Serialize suspend recovery with logout/replacement for the installed owner.
-/// Recovery observers acquire recovery then session; completion must release
-/// session before reacquiring recovery to avoid reversing that lock order.
-async fn recover_installed_session_owner<Session, Owner, Snapshot, Error, ResumeFuture>(
-    session: &Mutex<Option<Session>>,
-    recover_gate: &Mutex<RecoverGate>,
-    ignore_cooldown: bool,
-    owner: impl FnOnce(&Session) -> Owner,
-    observe: impl FnOnce(Option<&Session>) -> Snapshot,
-    resume: impl FnOnce(Owner) -> ResumeFuture,
-) -> Result<Snapshot, Error>
-where
-    ResumeFuture: std::future::Future<Output = Result<Snapshot, Error>>,
-{
-    let mut gate = recover_gate.lock().await;
-    if gate.in_flight
-        || (!ignore_cooldown
-            && recover_cooldown_active(gate.last_success_wall, SystemTime::now(), RECOVER_COOLDOWN))
-    {
-        drop(gate);
-        let guard = session.lock().await;
-        return Ok(observe(guard.as_ref()));
-    }
-    let guard = session.lock().await;
-    let Some(active) = guard.as_ref() else {
-        return Ok(observe(None));
-    };
-    let owner = owner(active);
-    gate.in_flight = true;
-    drop(gate);
-    let result = resume(owner).await;
-    drop(guard);
-    let mut gate = recover_gate.lock().await;
-    gate.in_flight = false;
-    if result.is_ok() {
-        gate.last_success_wall = Some(SystemTime::now());
-    }
-    result
-}
-
+/// Desktop session state. The slot, transition gate, generation counter,
+/// pending credential cleanup, store-recovery capability, recover gate and
+/// maintenance state all live in the shared Core owner; this shell adds only
+/// its Tauri/keyring adapters on top.
 #[derive(Default)]
 pub struct MatrixAuthState {
-    session: Mutex<Option<ManagedMatrixSession>>,
-    /// Session transition gate. Logout holds it through the whole teardown,
-    /// including the bounded remote `/logout` and Core close; login, register,
-    /// restore, and store recovery take it before `session`. Ordinary commands
-    /// never take it, so they fail closed on the empty slot instead of waiting.
-    transition: Mutex<()>,
-    /// Identity whose credential cleanup failed after its live session left the
-    /// slot. Restore refuses to reinstall it, and the watcher retries cleanup.
-    pending_logout_cleanup: synara_core::app::lifecycle::session::PendingLogoutCleanup,
-    store_recovery: Mutex<StoreRecoveryState>,
-    generations: synara_core::app::lifecycle::session::SessionGenerations,
-    recover_gate: Mutex<RecoverGate>,
+    lifecycle: SessionLifecycleOwner<ManagedMatrixSession>,
+}
+
+impl std::ops::Deref for MatrixAuthState {
+    type Target = SessionLifecycleOwner<ManagedMatrixSession>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.lifecycle
+    }
+}
+
+impl InstalledSession for ManagedMatrixSession {
+    fn session_generation(&self) -> u64 {
+        self.sync.session_generation()
+    }
 }
 
 impl MatrixAuthState {
@@ -368,27 +310,6 @@ impl MatrixAuthState {
 
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Accept a bound native notification only for the currently installed
-    /// generation, retaining the auth transition gate through OS acceptance.
-    /// The callback must not call back into this session gate.
-    pub(crate) async fn with_session_generation<T, Accept, AcceptFuture>(
-        &self,
-        expected_generation: u64,
-        accept: Accept,
-    ) -> Option<T>
-    where
-        Accept: FnOnce() -> AcceptFuture,
-        AcceptFuture: std::future::Future<Output = T>,
-    {
-        with_generation_bound_acceptance(
-            &self.session,
-            expected_generation,
-            |active| active.sync.session_generation(),
-            accept,
-        )
-        .await
     }
 
     /// Retry a failed save of the current in-memory tokens.
@@ -477,9 +398,7 @@ impl MatrixAuthState {
         &self,
         ignore_cooldown: bool,
     ) -> Result<SyncReadinessSnapshot, SyncError> {
-        recover_installed_session_owner(
-            &self.session,
-            &self.recover_gate,
+        self.recover_live(
             ignore_cooldown,
             |active| active.sync.clone(),
             |active| match active {
@@ -643,108 +562,6 @@ impl MatrixAuthState {
         PlatformMediaConfig::new(upload_size)
     }
 
-    /// Serialize session installs and logout teardown. Always taken before
-    /// `session`, never while holding it.
-    pub(super) async fn lock_transition(&self) -> tokio::sync::MutexGuard<'_, ()> {
-        self.transition.lock().await
-    }
-
-    pub(super) fn record_pending_logout_cleanup(&self, identity: MatrixLoginIdentity) {
-        self.pending_logout_cleanup.record(identity);
-    }
-
-    pub(super) fn has_pending_logout_cleanup(&self) -> bool {
-        self.pending_logout_cleanup.is_pending()
-    }
-
-    /// Retry credential cleanup for a session that already left the slot.
-    /// Caller holds the transition gate so a new install cannot interleave.
-    pub(super) fn retry_pending_logout_cleanup(
-        &self,
-        cleanup: impl FnOnce(&MatrixLoginIdentity) -> Result<(), MatrixAuthCommandError>,
-    ) -> Result<(), MatrixAuthCommandError> {
-        self.pending_logout_cleanup.retry(cleanup)
-    }
-
-    /// A new install replaces whatever the failed cleanup was retrying. Try
-    /// once more, then forget it so a later retry cannot erase the new session.
-    pub(super) fn settle_pending_logout_cleanup_before_install(
-        &self,
-        cleanup: impl FnOnce(&MatrixLoginIdentity) -> Result<(), MatrixAuthCommandError>,
-    ) {
-        self.pending_logout_cleanup.settle_before_install(cleanup);
-    }
-
-    /// A normal login supersedes any abandoned recovery affordance. This only
-    /// clears a process-local capability; it does not touch files or Keychain.
-    pub(super) async fn clear_store_recovery(&self) {
-        *self.store_recovery.lock().await = StoreRecoveryState::Idle;
-    }
-
-    /// Remember an account only after an allowlisted failed store-open path.
-    /// The identity remains in the host and is never returned by recovery IPC.
-    pub(super) async fn arm_store_recovery(&self, identity: AccountIdentity) {
-        *self.store_recovery.lock().await = StoreRecoveryState::Pending { identity };
-    }
-
-    pub(super) async fn prepare_store_recovery_confirmation(
-        &self,
-    ) -> Result<String, MatrixAuthCommandError> {
-        let mut recovery = self.store_recovery.lock().await;
-        let identity = match std::mem::replace(&mut *recovery, StoreRecoveryState::Idle) {
-            StoreRecoveryState::Pending { identity } => identity,
-            StoreRecoveryState::Idle | StoreRecoveryState::AwaitingConfirmation { .. } => {
-                return Err(MatrixAuthCommandError::new(
-                    "InvalidRequest",
-                    "Local Matrix store recovery must be requested from a failed login.",
-                    "p3.2-login-store-recovery-not-pending",
-                ));
-            }
-        };
-        let confirmation_id = new_store_recovery_confirmation_id()?;
-        *recovery = StoreRecoveryState::AwaitingConfirmation {
-            identity,
-            confirmation_id: confirmation_id.clone(),
-        };
-        Ok(confirmation_id)
-    }
-
-    /// Consume the CSPRNG confirmation capability before filesystem work so it
-    /// cannot be replayed after either success or failure. The fixed typed
-    /// acknowledgement is a second independent host-side requirement; neither
-    /// a renderer button state nor a valid opaque ID alone can authorize an
-    /// archive. Wrong input leaves a pending capability untouched so the user
-    /// can correct a transport/UI error without rearming recovery from a new
-    /// login failure.
-    pub(super) async fn take_confirmed_store_recovery(
-        &self,
-        confirmation_id: &str,
-        confirmation_text: &str,
-    ) -> Result<AccountIdentity, MatrixAuthCommandError> {
-        if confirmation_text != STORE_RECOVERY_TYPED_CONFIRMATION_TEXT
-            || !is_store_recovery_confirmation_id(confirmation_id)
-        {
-            return Err(store_recovery_confirmation_error());
-        }
-        let mut recovery = self.store_recovery.lock().await;
-        let valid = matches!(
-            &*recovery,
-            StoreRecoveryState::AwaitingConfirmation {
-                confirmation_id: expected,
-                ..
-            } if expected == confirmation_id
-        );
-        if !valid {
-            return Err(store_recovery_confirmation_error());
-        }
-        match std::mem::replace(&mut *recovery, StoreRecoveryState::Idle) {
-            StoreRecoveryState::AwaitingConfirmation { identity, .. } => Ok(identity),
-            StoreRecoveryState::Idle | StoreRecoveryState::Pending { .. } => {
-                Err(store_recovery_confirmation_error())
-            }
-        }
-    }
-
     /// Resolve an opaque V-ROOMS invite-avatar capability for the native URI
     /// protocol. The handle is valid only for the live session generation and
     /// never reveals its MXC source to the webview or command IPC.
@@ -790,9 +607,7 @@ impl MatrixAuthState {
 /// Upper bound for one watchdog keyring write before the tick moves on.
 const KEYRING_RETRY_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub(super) use synara_core::app::lifecycle::session::{
-    handle_authentication_rejection_tick, AuthenticationRejectionWatch, RetryBackoff,
-};
+use synara_core::app::lifecycle::session::RejectedGeneration;
 
 impl From<synara_core::app::lifecycle::session::SessionFault> for MatrixAuthCommandError {
     fn from(fault: synara_core::app::lifecycle::session::SessionFault) -> Self {
@@ -820,9 +635,6 @@ pub fn spawn_suspend_resume_watch(app: AppHandle) {
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let mut previous_wall = SystemTime::now();
         let mut previous_mono = Instant::now();
-        let mut rejection_watch = AuthenticationRejectionWatch::default();
-        let mut save_backoff = RetryBackoff::new();
-        let mut cleanup_backoff = RetryBackoff::new();
         loop {
             interval.tick().await;
             let now_wall = SystemTime::now();
@@ -839,49 +651,39 @@ pub fn spawn_suspend_resume_watch(app: AppHandle) {
             let Some(state) = app.try_state::<MatrixAuthState>() else {
                 continue;
             };
-            // A server refresh can succeed while its synchronous save callback
-            // fails. Retry only the local write of the current in-memory tokens;
-            // never replay the old refresh token or erase encryption data.
-            // A broken keyring backs off instead of blocking a worker every tick.
-            if save_backoff.ready(now_mono) {
-                if let Some(saved) = state.retry_failed_session_save(&app).await {
-                    save_backoff.record(Instant::now(), saved);
-                }
-            }
-            // A retired session whose credential delete failed must not stay
-            // restorable. Retry under the transition gate so a new login
-            // cannot interleave with the delete.
-            if state.has_pending_logout_cleanup() && cleanup_backoff.ready(now_mono) {
-                let _transition = state.lock_transition().await;
-                let cleaned = tokio::task::block_in_place(|| {
-                    state.retry_pending_logout_cleanup(|identity| {
-                        app_data_root(&app).and_then(|root| {
-                            clear_native_logout_material(
-                                &KeyringSessionMaterialVault::new(),
-                                identity,
-                                &root,
-                            )
-                        })
-                    })
-                })
-                .is_ok();
-                cleanup_backoff.record(Instant::now(), cleaned);
-            }
             let snapshot = state.sync_status_snapshot().await;
-            if snapshot.failure_diagnostic_id
-                == Some(synara_core::app::sync::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID)
-            {
-                // A terminal rejected refresh is not an offline server. Retire
-                // native work and invalid credentials through the existing
-                // fenced logout owner. This does not erase the crypto store,
-                // POST /logout, or send the rejected refresh token.
-                let core = app.try_state::<Arc<synara_core::Core>>();
-                let log_app = app.clone();
-                let retire_app = app.clone();
-                handle_authentication_rejection_tick(
-                    &mut rejection_watch,
-                    snapshot.session_generation,
-                    core.is_some(),
+            let rejected = snapshot.failure_diagnostic_id
+                == Some(synara_core::app::sync::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID);
+            let core = app.try_state::<Arc<synara_core::Core>>();
+            let log_app = app.clone();
+            let retire_app = app.clone();
+            let retire_state = state.clone();
+            let cleanup_app = app.clone();
+            // Shared maintenance: retry a failed save of the current in-memory
+            // tokens (never the old refresh token), finish a pending credential
+            // cleanup under the transition gate, and retire a rejected
+            // generation through the fenced local logout. None of these erase
+            // the crypto store, POST /logout, or send the rejected token.
+            state
+                .maintenance_tick(
+                    now_mono,
+                    || state.retry_failed_session_save(&app),
+                    |identity| {
+                        // Keyring deletes are synchronous D-Bus/Keychain work.
+                        tokio::task::block_in_place(|| {
+                            app_data_root(&cleanup_app).and_then(|root| {
+                                clear_native_logout_material(
+                                    &KeyringSessionMaterialVault::new(),
+                                    identity,
+                                    &root,
+                                )
+                            })
+                        })
+                    },
+                    rejected.then_some(RejectedGeneration {
+                        generation: snapshot.session_generation,
+                        core_present: core.is_some(),
+                    }),
                     |line| {
                         crate::desktop_logging::desktop_append_log(
                             log_app.clone(),
@@ -891,15 +693,13 @@ pub fn spawn_suspend_resume_watch(app: AppHandle) {
                     },
                     |generation| async move {
                         let core = core.expect("retire runs only when Core is present");
-                        matrix_logout(retire_app, state, core, Some(generation))
+                        matrix_logout(retire_app, retire_state, core, Some(generation))
                             .await
                             .map(|_| ())
                     },
                 )
                 .await;
-                continue;
-            }
-            if !slept {
+            if rejected || !slept {
                 continue;
             }
             if let Err(error) = state.recover_sync_after_detected_suspend().await {
@@ -1012,46 +812,8 @@ fn cross_signing_private_state(
     }
 }
 
-const STORE_RECOVERY_CONFIRMATION_ID_BYTES: usize = 32;
-/// Exact acknowledgement that the host requires in addition to the opaque
-/// CSPRNG confirmation capability. This is intentionally validated only in
-/// the native process; renderer-side button state is not an authorization
-/// boundary.
-pub(super) const STORE_RECOVERY_TYPED_CONFIRMATION_TEXT: &str = "ARCHIVE";
-
-/// Produce an opaque, CSPRNG-backed, one-use confirmation capability. It is
-/// neither a Matrix credential nor a store key, and it is never logged.
-fn new_store_recovery_confirmation_id() -> Result<String, MatrixAuthCommandError> {
-    let mut bytes = [0_u8; STORE_RECOVERY_CONFIRMATION_ID_BYTES];
-    getrandom::fill(&mut bytes).map_err(|_| {
-        MatrixAuthCommandError::new(
-            "Unknown",
-            "Local Matrix store recovery confirmation is unavailable.",
-            "p3.2-login-store-recovery-confirmation-unavailable",
-        )
-    })?;
-    let mut id = String::with_capacity(STORE_RECOVERY_CONFIRMATION_ID_BYTES * 2);
-    for byte in bytes {
-        use std::fmt::Write as _;
-        let _ = write!(id, "{byte:02x}");
-    }
-    Ok(id)
-}
-
-fn is_store_recovery_confirmation_id(value: &str) -> bool {
-    value.len() == STORE_RECOVERY_CONFIRMATION_ID_BYTES * 2
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
-fn store_recovery_confirmation_error() -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "InvalidRequest",
-        "Local Matrix store recovery confirmation is invalid or has expired.",
-        "p3.2-login-store-recovery-confirmation-required",
-    )
-}
+#[cfg(test)]
+pub(super) use synara_core::app::lifecycle::session::STORE_RECOVERY_TYPED_CONFIRMATION_TEXT;
 
 // Shared fail-closed session guards used by the domain command modules.
 fn require_session(
