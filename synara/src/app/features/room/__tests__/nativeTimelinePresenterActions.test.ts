@@ -450,17 +450,17 @@ test('native timeline message rows sit on chat chrome and highlight on hover', (
   assert.match(messageRowCss, /backgroundColor: messageHoverTint/);
   assert.match(messageRowCss, /borderRadius: config\.radii\.R400/);
   assert.match(messageRowCss, /MessageActionSurface\}:hover/);
-  // Hover must not pull the eye: a faint tint only, no lift, border or shadow.
+  // Hover must not pull the eye: a steady tint only, no lift, border, shadow or fade.
   assert.match(
     htmlCss,
-    /const messageHoverTint = `color-mix\(in srgb, \$\{color\.SurfaceVariant\.ContainerHover\} 10%, transparent\)`/
+    /const messageHoverTint = `color-mix\(in srgb, \$\{color\.SurfaceVariant\.ContainerHover\} 35%, transparent\)`/
   );
   const hoverRule = messageRowCss.slice(messageRowCss.indexOf(':hover &'));
   assert.doesNotMatch(
     hoverRule.slice(0, hoverRule.indexOf('}')),
     /boxShadow|borderColor|transform/
   );
-  assert.match(messageRowCss, /transition: 'background-color 80ms ease-out'/);
+  assert.match(messageRowCss, /transition: 'none'/);
   assert.match(messageBodyCss, /background: 'transparent'/);
   assert.match(messageBodyCss, /color: 'var\(--synara-message-foreground\)'/);
 

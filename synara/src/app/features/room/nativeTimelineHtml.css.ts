@@ -104,7 +104,7 @@ export const MessageActionDivider = style({
 
 export const TimelineAvatar = style([avatarSurface]);
 
-const messageHoverTint = `color-mix(in srgb, ${color.SurfaceVariant.ContainerHover} 10%, transparent)`;
+const messageHoverTint = `color-mix(in srgb, ${color.SurfaceVariant.ContainerHover} 35%, transparent)`;
 
 export const MessageRow = recipe({
   base: {
@@ -124,18 +124,17 @@ export const MessageRow = recipe({
         border: `${config.borderWidth.B300} solid transparent`,
         boxShadow: 'none',
         borderRadius: config.radii.R400,
-        // Reading comes first: hover is only a faint tint, about a tenth of
-        // the old surface change, with no border, lift or shadow.
+        // Reading comes first: hover is a steady, clearly visible tint (about
+        // a third of the old surface change) with no border, lift or shadow.
+        // It switches instantly: a fade on a faint tint reads as flicker as
+        // the pointer crosses rows.
         selectors: {
           [`${MessageActionSurface}:hover &, ${MessageActionSurface}:focus-within &`]: {
             backgroundColor: messageHoverTint,
           },
         },
-        transition: 'background-color 80ms ease-out',
+        transition: 'none',
         '@media': {
-          '(prefers-reduced-motion: reduce)': {
-            transition: 'none',
-          },
           '(prefers-contrast: more)': {
             boxShadow: 'none',
             borderColor: 'var(--synara-depth-contrast-edge)',

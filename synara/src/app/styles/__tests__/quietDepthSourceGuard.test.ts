@@ -42,7 +42,8 @@ test('desktop hierarchy uses semantic depth while keeping text itself flat', () 
   assert.match(timeline, /boxShadow: 'none'/);
   assert.match(timeline, /boxShadow: raisedShadow/);
   // Message hover stays a faint tint so it never pulls the eye off the text.
-  assert.match(timeline, /background-color 80ms ease-out/);
+  // Message hover switches instantly; a fade on the tint reads as flicker.
+  assert.doesNotMatch(timeline, /background-color [0-9]+ms/);
   assert.match(timeline, /messageHoverTint/);
   assert.match(timeline, /synara-depth-contrast-edge/);
   assert.match(timeline, /TimelineAvatar = style\(\[avatarSurface\]\)/);
