@@ -7,8 +7,10 @@
  */
 
 import type { DesktopInvokeResult } from '../../utils/desktop';
-import type { NativeComposerReplyDraft } from '../matrix-dto/generated';
-import type { NativeComposerReplyDraftReadback } from '../matrix-dto/generated';
+import type {
+  NativeComposerReplyDraft,
+  NativeComposerReplyDraftReadback,
+} from '../matrix-dto/generated';
 export type { NativeComposerReplyDraftReadback } from '../matrix-dto/generated';
 export type { NativeComposerReplyDraft } from '../matrix-dto/generated';
 export const NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION = 2;

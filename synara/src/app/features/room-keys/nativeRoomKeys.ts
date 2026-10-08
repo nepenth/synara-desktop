@@ -1,6 +1,8 @@
 import { invokeDesktopWithAvailability } from '../../utils/desktop';
-import type { NativeRoomKeyFileSelection } from '../matrix-dto/generated';
-import type { NativeRoomKeyTransferStatus as WireNativeRoomKeyTransferStatus } from '../matrix-dto/generated';
+import type {
+  NativeRoomKeyFileSelection,
+  NativeRoomKeyTransferStatus as WireNativeRoomKeyTransferStatus,
+} from '../matrix-dto/generated';
 import type { NullsToOptional } from '../matrix-dto/wireTypes';
 
 /** Parsed form of Core's `NativeRoomKeyTransferStatus`: absent instead of `null`. */

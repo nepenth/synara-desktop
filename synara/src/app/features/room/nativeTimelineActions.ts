@@ -8,8 +8,10 @@
  */
 
 import type { DesktopInvokeResult } from '../../utils/desktop';
-import type { NativeTimelineActionKind } from '../matrix-dto/generated';
-import type { NativeTimelineActionReadback } from '../matrix-dto/generated';
+import type {
+  NativeTimelineActionKind,
+  NativeTimelineActionReadback,
+} from '../matrix-dto/generated';
 export type { NativeTimelineActionReadback } from '../matrix-dto/generated';
 export type { NativeTimelineActionKind } from '../matrix-dto/generated';
 
