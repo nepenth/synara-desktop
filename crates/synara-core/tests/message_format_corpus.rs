@@ -4,7 +4,7 @@ use matrix_sdk::ruma::events::room::message::{MessageType, TextMessageEventConte
 use serde::Deserialize;
 use synara_core::app::{
     send::{message_content, MAX_OUTBOUND_TEXT_PAYLOAD_BYTES},
-    timeline::project_formatted_body,
+    timeline::{project_formatted_body, sanitize_incoming_html},
 };
 
 #[derive(Debug, Deserialize)]
@@ -106,10 +106,20 @@ fn shared_corpus_keeps_core_projection_protocol_faithful_and_caps_outbound_text_
             case.body.clone(),
             html.clone(),
         ));
+        // Core reduces incoming HTML to the Matrix allowlist (normalizing
+        // structure, e.g. adding <tbody>); presenters sanitize again.
+        let projected = project_formatted_body(&message);
+        let expected = sanitize_incoming_html(&html);
         assert_eq!(
-            project_formatted_body(&message).as_deref(),
-            Some(html.as_str()),
-            "Core must preserve untrusted protocol HTML for presenter-owned sanitization: {}",
+            projected.as_deref(),
+            Some(expected.trim()),
+            "Core must project its sanitized form of the protocol HTML: {}",
+            case.id
+        );
+        assert_eq!(
+            sanitize_incoming_html(projected.as_deref().unwrap_or_default()),
+            projected.clone().unwrap_or_default(),
+            "Core sanitization must be stable: {}",
             case.id
         );
 

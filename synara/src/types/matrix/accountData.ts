@@ -1,5 +1,16 @@
-import type { SynaraAgentApprovalHistoryItem, SynaraLaterItem, SynaraRoomNoteItem } from '../../app/features/matrix-dto/generated';
-export type { SynaraAgentApprovalHistoryDecision, SynaraAgentApprovalHistoryItem, SynaraLaterItem, SynaraLaterItemKind, SynaraRoomNoteItem, SynaraRoomNoteItemKind } from '../../app/features/matrix-dto/generated';
+import type {
+  SynaraAgentApprovalHistoryItem,
+  SynaraLaterItem,
+  SynaraRoomNoteItem,
+} from '../../app/features/matrix-dto/generated';
+export type {
+  SynaraAgentApprovalHistoryDecision,
+  SynaraAgentApprovalHistoryItem,
+  SynaraLaterItem,
+  SynaraLaterItemKind,
+  SynaraRoomNoteItem,
+  SynaraRoomNoteItemKind,
+} from '../../app/features/matrix-dto/generated';
 export enum AccountDataEvent {
   PushRules = 'm.push_rules',
   Direct = 'm.direct',
