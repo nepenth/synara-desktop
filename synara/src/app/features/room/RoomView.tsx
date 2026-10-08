@@ -72,8 +72,6 @@ export function RoomView({
   const { navigateRoom, navigateThread } = useRoomNavigate();
 
   const tombstoneEvent = useStateEvent(room, StateEvent.RoomTombstone);
-  const createEvent = useStateEvent(room, StateEvent.RoomCreate);
-  const roomCreatedTs = createEvent?.getTs();
   const powerLevels = usePowerLevelsContext();
 
   const permissions = useRoomPermissions(powerLevels);
@@ -107,7 +105,6 @@ export function RoomView({
           threadRootEventId={threadRootEventId}
           onOpenThreadRoute={(rootEventId) => navigateThread(roomId, rootEventId)}
           onCloseThreadRoute={() => navigateRoom(roomId)}
-          roomCreatedTs={roomCreatedTs}
         />
         <RoomViewTyping room={room} />
       </Box>

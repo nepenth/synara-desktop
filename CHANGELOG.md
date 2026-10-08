@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Timeline: a normal, always-visible scrollbar replaces the 7-day date rail, which covered the scrollbar and placed its dots by a fixed time axis instead of the scroll position; the room no longer auto-loads seven days of history on open.
 - Fix the error screen when opening the room Call menu while calls are unavailable: focus traps with only disabled controls now fall back to their own container instead of throwing.
 
 ## [2.2.0] - 2026-10-08
