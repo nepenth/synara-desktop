@@ -242,6 +242,7 @@ export function LobbyHeader({ showProfile, powerLevels }: LobbyHeaderProps) {
                 fill="None"
                 onClick={handleOpenMenu}
                 ref={triggerRef}
+                aria-label="More Options"
                 aria-pressed={!!menuAnchor}
               >
                 <Icon size="400" src={Icons.VerticalDots} filled={!!menuAnchor} />

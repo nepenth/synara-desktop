@@ -1,6 +1,4 @@
 import React from 'react';
-import { Box, Icon, IconButton, Icons, Scroll, Text } from 'folds';
-import { Page, PageContent, PageHeader } from '../../../components/page';
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
 import { useRoom } from '../../../hooks/useRoom';
 import {
@@ -12,6 +10,7 @@ import {
   RoomUpgrade,
 } from '../../common-settings/general';
 import { useRoomPermissions } from '../../../hooks/useRoomPermissions';
+import { SettingsPage, SettingsSection } from '../../../components/settings-layout';
 
 type GeneralProps = {
   requestClose: () => void;
@@ -22,48 +21,27 @@ export function General({ requestClose }: GeneralProps) {
   const permissions = useRoomPermissions(powerLevels);
 
   return (
-    <Page>
-      <PageHeader outlined={false}>
-        <Box grow="Yes" gap="200">
-          <Box grow="Yes" alignItems="Center" gap="200">
-            <Text size="H3" truncate>
-              General
-            </Text>
-          </Box>
-          <Box shrink="No">
-            <IconButton onClick={requestClose} variant="Surface">
-              <Icon src={Icons.Cross} />
-            </IconButton>
-          </Box>
-        </Box>
-      </PageHeader>
-      <Box grow="Yes">
-        <Scroll hideTrack visibility="Hover">
-          <PageContent>
-            <Box direction="Column" gap="700">
-              <RoomProfile permissions={permissions} />
-              <Box direction="Column" gap="100">
-                <Text size="L400">Options</Text>
-                <RoomJoinRules permissions={permissions} />
-                <RoomPublish
-                  permissions={permissions}
-                  roomId={room.roomId}
-                  isSpace={room.isSpaceRoom()}
-                />
-              </Box>
-              <Box direction="Column" gap="100">
-                <Text size="L400">Addresses</Text>
-                <RoomPublishedAddresses permissions={permissions} />
-                <RoomLocalAddresses permissions={permissions} />
-              </Box>
-              <Box direction="Column" gap="100">
-                <Text size="L400">Advanced Options</Text>
-                <RoomUpgrade permissions={permissions} requestClose={requestClose} />
-              </Box>
-            </Box>
-          </PageContent>
-        </Scroll>
-      </Box>
-    </Page>
+    <SettingsPage
+      title="General"
+      description="Name, access, addresses and visibility for this space."
+      requestClose={requestClose}
+    >
+      <RoomProfile permissions={permissions} />
+      <SettingsSection title="Options">
+        <RoomJoinRules permissions={permissions} />
+        <RoomPublish permissions={permissions} roomId={room.roomId} isSpace={room.isSpaceRoom()} />
+      </SettingsSection>
+      <SettingsSection title="Addresses">
+        <RoomPublishedAddresses permissions={permissions} />
+        <RoomLocalAddresses permissions={permissions} />
+      </SettingsSection>
+      <SettingsSection
+        title="Danger Zone"
+        description="Changes here cannot be undone."
+        tone="critical"
+      >
+        <RoomUpgrade permissions={permissions} requestClose={requestClose} />
+      </SettingsSection>
+    </SettingsPage>
   );
 }

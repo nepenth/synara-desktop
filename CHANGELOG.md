@@ -4,6 +4,8 @@
 
 - Threads: Settings → Appearance → Thread Display opens threads in full view (as before), in a resizable side panel beside the live room with its own composer, or inline beneath their first message with Show earlier replies and Reply in thread.
 - Settings: the app and room/space settings navigation use one compact rhythm, setting controls stay beside their descriptions instead of dropping below long text, every pair of settings keeps the same spacing, theme pickers share one dropdown style, color controls align on one edge, and segmented choices no longer shift when the selection changes.
+- Settings: App, Room and Space settings are redesigned around one layout: a larger dialog, grouped navigation with section labels and a settings search, a centred reading column with a short description per page, and each section shown as one card with divided rows. Room and space upgrade now sits in a Danger Zone section.
+- Fix opening a space: its lobby no longer crashes reading guest access.
 - Menus: room and space context menus (including the room header menu) use one flat item style, so Invite no longer looks different from the other items.
 - Timeline: a normal, always-visible scrollbar replaces the 7-day date rail, which covered the scrollbar and placed its dots by a fixed time axis instead of the scroll position; the room no longer auto-loads seven days of history on open.
 - Timeline: hovering a message is now only a faint tint (about a tenth of the old surface change) with no border, lift or shadow.

@@ -31,8 +31,9 @@ export const useLocalRoomSummary = (room: RoomReading): LocalRoomSummary => {
       ? historyContent.history_visibility === 'world_readable'
       : undefined;
 
-  const guestCanJoin =
-    (room as unknown as { getGuestAccess(): string | null }).getGuestAccess() === 'can_join';
+  // Native rooms carry no js-sdk `getGuestAccess()`; read the state event.
+  const guestContent = getStateEvent(room, StateEvent.RoomGuestAccess)?.getContent();
+  const guestCanJoin = guestContent?.guest_access === 'can_join';
 
   return {
     roomId: room.roomId,

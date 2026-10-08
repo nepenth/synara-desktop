@@ -10,7 +10,7 @@ import { useDeviceList, useSplitCurrentDevice } from '../../../hooks/useDeviceLi
 import * as css from './UnverifiedTab.css';
 import { useCrossSigning } from '../../../hooks/useCrossSigning';
 import { canOfferNativeDeviceVerification } from '../../../features/cross-signing/nativeCrossSigning';
-import { Modal500 } from '../../../components/Modal500';
+import { SettingsModal } from '../../../components/settings-layout';
 import { Settings, SettingsPages } from '../../../features/settings';
 
 function UnverifiedIndicator() {
@@ -59,9 +59,9 @@ function UnverifiedIndicator() {
         </SidebarItem>
       )}
       {settings && (
-        <Modal500 requestClose={closeSettings}>
+        <SettingsModal requestClose={closeSettings}>
           <Settings initialPage={SettingsPages.DevicesPage} requestClose={closeSettings} />
-        </Modal500>
+        </SettingsModal>
       )}
     </>
   );

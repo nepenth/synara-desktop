@@ -14,6 +14,7 @@ import {
   NativeRoomKeyTransferResult,
   selectNativeRoomKeyImport,
 } from '../../room-keys/nativeRoomKeys';
+import { SettingsSection } from '../../../components/settings-layout';
 
 function NativeExportKeys() {
   const alive = useAlive();
@@ -299,8 +300,7 @@ function NativeImportKeysTile() {
 
 export function LocalBackup() {
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Local Backup</Text>
+    <SettingsSection title="Local Backup">
       <SequenceCard
         className={SequenceCardStyle}
         variant="SurfaceVariant"
@@ -317,6 +317,6 @@ export function LocalBackup() {
       >
         <NativeImportKeysTile />
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }

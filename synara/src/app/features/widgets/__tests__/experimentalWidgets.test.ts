@@ -81,7 +81,7 @@ test('General owns the Widgets editor; Developer Tools only points at it', () =>
     'utf8'
   );
   const panel = readFileSync('src/app/features/room/RoomWidgetsPanel.tsx', 'utf8');
-  assert.match(general, /<Text size="L400">Widgets<\/Text>/);
+  assert.match(general, /<SettingsSection title="Widgets">/);
   assert.match(general, /experimentalWidgetsEnabled/);
   assert.match(general, /agentWidgetEntries/);
   assert.match(general, /Add agent widget/);

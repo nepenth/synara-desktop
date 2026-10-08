@@ -41,6 +41,7 @@ import { NativeAvatarImage } from '../../../components/NativeAvatarImage';
 import { setRoomImagePackNative } from '../../room/nativeImagePack';
 
 import { sendNativeStateEvent } from '../../../native/nativeCommands';
+import { SettingsSection } from '../../../components/settings-layout';
 type CreatePackTileProps = {
   packs: ImagePack[];
   roomId: string;
@@ -279,8 +280,7 @@ export function RoomPacks({ onViewPack }: RoomPacksProps) {
 
   return (
     <>
-      <Box direction="Column" gap="100">
-        <Text size="L400">Packs</Text>
+      <SettingsSection title="Packs">
         {canEdit && <CreatePackTile roomId={room.roomId} packs={packs} />}
         {packs.map(renderPack)}
         {packs.length === 0 && (
@@ -309,7 +309,7 @@ export function RoomPacks({ onViewPack }: RoomPacksProps) {
             </Box>
           </SequenceCard>
         )}
-      </Box>
+      </SettingsSection>
 
       {hasChanges && (
         <Menu

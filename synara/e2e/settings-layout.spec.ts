@@ -13,22 +13,53 @@ const shot = async (page: Page, name: string) => {
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` });
 };
 
-/** Vertical gaps (px) between consecutive nav menu items in a settings nav. */
+/**
+ * Vertical gaps (px) between consecutive nav entries inside one nav group.
+ * Groups are separated on purpose by their labels; entries within a group
+ * must stay compact.
+ */
 const navGaps = (page: Page) =>
   page.evaluate(() => {
-    const items = Array.from(
-      document.querySelectorAll<HTMLElement>('[data-settings-nav] button, [data-settings-nav] a')
-    ).map((el) => el.getBoundingClientRect());
-    return items.slice(1).map((rect, index) => Math.round(rect.top - items[index].bottom));
+    const groups = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-settings-nav] [role="group"]')
+    );
+    return groups.flatMap((group) => {
+      const items = Array.from(
+        group.querySelectorAll<HTMLElement>('button[data-settings-nav-item]')
+      ).map((el) => (el.parentElement ?? el).getBoundingClientRect());
+      return items.slice(1).map((rect, index) => Math.round(rect.top - items[index].bottom));
+    });
   });
 
 /** Distinct right edges (px) of setting-row controls in the open settings page. */
 const controlRightEdges = (page: Page) =>
   page.evaluate(() => {
-    const edges = Array.from(document.querySelectorAll<HTMLElement>('[data-setting-control]')).map(
-      (el) => Math.round(el.getBoundingClientRect().right)
-    );
+    const edges = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '[data-settings-section-card] > [data-sequence-card] [data-setting-control]'
+      )
+    ).map((el) => Math.round(el.getBoundingClientRect().right));
     return Array.from(new Set(edges)).sort((a, b) => a - b);
+  });
+
+/**
+ * Page column widths, sections without exactly one card, and section cards per
+ * section for the open settings page.
+ */
+const pageStructure = (page: Page) =>
+  page.evaluate(() => {
+    const column = document.querySelector<HTMLElement>('[data-settings-page]');
+    const sections = Array.from(document.querySelectorAll<HTMLElement>('[data-settings-section]'));
+    return {
+      maxWidth: column ? getComputedStyle(column).maxWidth : 'missing',
+      sections: sections.length,
+      cardsPerSection: sections.map(
+        (section) =>
+          Array.from(section.children).filter((child) =>
+            child.hasAttribute('data-settings-section-card')
+          ).length
+      ),
+    };
   });
 
 const log = (label: string, value: unknown) => console.log(`${label} ${JSON.stringify(value)}`);
@@ -47,7 +78,16 @@ for (const colorScheme of ['light', 'dark'] as const) {
       for (const name of ['General', 'Appearance', 'Notifications', 'Account', 'About']) {
         await nav.getByRole('button', { name, exact: true }).click();
         await page.waitForTimeout(300);
-        log(`settings-${name}-control-right-edges ${colorScheme}`, await controlRightEdges(page));
+        const edges = await controlRightEdges(page);
+        const structure = await pageStructure(page);
+        log(`settings-${name}-control-right-edges ${colorScheme}`, edges);
+        log(`settings-${name}-structure ${colorScheme}`, structure);
+        if (!MEASURE_ONLY) {
+          expect(structure.maxWidth).toBe('720px');
+          expect(structure.sections).toBeGreaterThan(0);
+          expect(structure.cardsPerSection.every((count) => count === 1)).toBe(true);
+          if (edges.length > 0) expect(edges[edges.length - 1] - edges[0]).toBeLessThanOrEqual(1);
+        }
         await shot(page, `settings-${name.toLowerCase()}-${colorScheme}`);
       }
     });
@@ -71,14 +111,21 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'Room Settings' }).click();
       const nav = page.locator('[data-settings-nav]').first();
       await expect(nav).toBeVisible();
-      log(`room-settings-nav-gaps ${colorScheme}`, await navGaps(page));
-      for (const name of ['General', 'Permissions']) {
+      const roomGaps = await navGaps(page);
+      log(`room-settings-nav-gaps ${colorScheme}`, roomGaps);
+      if (!MEASURE_ONLY) expect(Math.max(...roomGaps)).toBeLessThanOrEqual(8);
+      for (const name of ['General', 'Members', 'Permissions']) {
         await nav.getByRole('button', { name, exact: true }).click();
         await page.waitForTimeout(300);
-        log(
-          `room-settings-${name}-control-right-edges ${colorScheme}`,
-          await controlRightEdges(page)
-        );
+        const edges = await controlRightEdges(page);
+        const structure = await pageStructure(page);
+        log(`room-settings-${name}-control-right-edges ${colorScheme}`, edges);
+        log(`room-settings-${name}-structure ${colorScheme}`, structure);
+        if (!MEASURE_ONLY) {
+          expect(structure.maxWidth).toBe('720px');
+          expect(structure.cardsPerSection.every((count) => count === 1)).toBe(true);
+          if (edges.length > 0) expect(edges[edges.length - 1] - edges[0]).toBeLessThanOrEqual(1);
+        }
         await shot(page, `room-settings-${name.toLowerCase()}-${colorScheme}`);
       }
     });

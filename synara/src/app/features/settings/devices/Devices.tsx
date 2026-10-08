@@ -1,8 +1,7 @@
 import React from 'react';
-import { Badge, Box, Button, Text, IconButton, Icon, Icons, Scroll, Spinner } from 'folds';
-import { Page, PageContent, PageHeader } from '../../../components/page';
+import { Badge, Box, Button, Text, Spinner } from 'folds';
 import { SequenceCard } from '../../../components/sequence-card';
-import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
+import { SequenceCardStyle } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { InfoCard } from '../../../components/info-card';
 import { useDeviceList, useSplitCurrentDevice } from '../../../hooks/useDeviceList';
@@ -24,6 +23,7 @@ import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import { canOfferNativeDeviceVerification } from '../../cross-signing/nativeCrossSigning';
 import { NativeSecretStorageTile } from '../../../components/SecretStorage';
 import { X509IdentityCard } from './X509IdentityCard';
+import { SettingsPage, SettingsSection } from '../../../components/settings-layout';
 
 function DevicesPlaceholder() {
   return (
@@ -60,162 +60,136 @@ export function Devices({ requestClose }: DevicesProps) {
   const canStartCurrentVerification = canStartCurrentDeviceVerification(deviceSnapshot);
 
   return (
-    <Page>
-      <PageHeader outlined={false}>
-        <Box grow="Yes" gap="200">
-          <Box grow="Yes" alignItems="Center" gap="200">
-            <Text size="H3" truncate>
-              Devices
-            </Text>
-          </Box>
-          <Box shrink="No">
-            <IconButton
-              className={SettingsQuietControl}
-              onClick={requestClose}
-              variant="Surface"
-              fill="None"
-              aria-label="Close"
-            >
-              <Icon src={Icons.Cross} />
-            </IconButton>
-          </Box>
-        </Box>
-      </PageHeader>
-      <Box grow="Yes">
-        <Scroll hideTrack visibility="Hover">
-          <PageContent>
-            <Box direction="Column" gap="700">
-              <Box direction="Column" gap="100">
-                <Text size="L400">Security</Text>
-                <SequenceCard
-                  className={SequenceCardStyle}
-                  variant="SurfaceVariant"
-                  direction="Column"
-                  gap="400"
-                >
-                  <SettingTile
-                    title="Device Verification"
-                    description="To verify device identity and grant access to encrypted messages."
-                    after={
-                      <>
-                        <EnableVerification
-                          visible={!crossSigningActive}
-                          nativeStatus={crossSigning.nativeStatus}
-                          loading={crossSigning.loading}
-                          error={crossSigning.error}
-                        />
-                        {crossSigningActive && (
-                          <Box gap="200" alignItems="Center">
-                            <VerificationStatusBadge
-                              verificationStatus={verificationStatus}
-                              otherUnverifiedCount={unverifiedDeviceCount}
-                            />
-                          </Box>
-                        )}
-                      </>
-                    }
-                  />
-                  {nativeSession && (
-                    <SettingTile
-                      title="Message history for new sessions"
-                      description="New sessions read older encrypted messages from your key backup. Sessions don't hand room keys to each other, because a forwarded key can't prove who sent the message. Keep key backup on and verify new logins."
-                      after={
-                        <Badge variant="Secondary" fill="Soft" radii="Pill" outlined>
-                          <Text as="span" size="L400">
-                            Key backup
-                          </Text>
-                        </Badge>
-                      }
-                    />
-                  )}
-                  {snapshotFailed && (
-                    <InfoCard
-                      variant="Critical"
-                      title="Device list unavailable"
-                      description={deviceLoadState.error}
-                      after={
-                        <Button
-                          size="300"
-                          radii="300"
-                          disabled={deviceLoadState.fetching}
-                          before={
-                            deviceLoadState.fetching ? (
-                              <Spinner size="100" variant="Secondary" fill="Soft" />
-                            ) : undefined
-                          }
-                          onClick={() => void refreshDeviceList()}
-                        >
-                          <Text as="span" size="B300">
-                            Retry
-                          </Text>
-                        </Button>
-                      }
-                    />
-                  )}
-                  {offerCurrentVerification && (
-                    <VerifyCurrentDeviceTile
-                      hasDevicesToVerifyAgainst={deviceSnapshot.hasDevicesToVerifyAgainst}
-                      canStart={canStartCurrentVerification}
-                      refreshing={deviceLoadState.fetching}
-                      onRetry={() => void refreshDeviceList()}
-                      onVerified={() => void refreshDeviceList()}
-                    />
-                  )}
-                </SequenceCard>
-                {nativeSession && (
-                  <SequenceCard
-                    className={SequenceCardStyle}
-                    variant="SurfaceVariant"
-                    direction="Column"
-                    gap="400"
-                  >
-                    <X509IdentityCard />
-                  </SequenceCard>
-                )}
-                {nativeSession && (
-                  <SequenceCard
-                    className={SequenceCardStyle}
-                    variant="SurfaceVariant"
-                    direction="Column"
-                    gap="400"
-                  >
-                    <NativeSecretStorageTile />
-                    <BackupRestoreTile />
-                  </SequenceCard>
-                )}
-              </Box>
-              <Box direction="Column" gap="100">
-                <Text size="L400">Current</Text>
-                {currentDevice ? (
-                  <SequenceCard
-                    className={SequenceCardStyle}
-                    variant="SurfaceVariant"
-                    direction="Column"
-                    gap="400"
-                  >
-                    <DeviceTile
-                      device={currentDevice}
-                      refreshDeviceList={refreshDeviceList}
-                      options={<DeviceLogoutBtn />}
-                    ></DeviceTile>
-                  </SequenceCard>
-                ) : (
-                  <DeviceTilePlaceholder />
-                )}
-              </Box>
-              {snapshotPending && <DevicesPlaceholder />}
-              {otherDevices && (
-                <OtherDevices
-                  devices={otherDevices}
-                  refreshDeviceList={refreshDeviceList}
-                  showVerification={verificationStatus === 'verified'}
+    <SettingsPage
+      title="Devices"
+      description="Signed-in devices, verification and encrypted message backup."
+      requestClose={requestClose}
+    >
+      <SettingsSection title="Security">
+        <SequenceCard
+          className={SequenceCardStyle}
+          variant="SurfaceVariant"
+          direction="Column"
+          gap="400"
+        >
+          <SettingTile
+            title="Device Verification"
+            description="To verify device identity and grant access to encrypted messages."
+            after={
+              <>
+                <EnableVerification
+                  visible={!crossSigningActive}
+                  nativeStatus={crossSigning.nativeStatus}
+                  loading={crossSigning.loading}
+                  error={crossSigning.error}
                 />
-              )}
-              <LocalBackup />
-            </Box>
-          </PageContent>
-        </Scroll>
-      </Box>
-    </Page>
+                {crossSigningActive && (
+                  <Box gap="200" alignItems="Center">
+                    <VerificationStatusBadge
+                      verificationStatus={verificationStatus}
+                      otherUnverifiedCount={unverifiedDeviceCount}
+                    />
+                  </Box>
+                )}
+              </>
+            }
+          />
+          {nativeSession && (
+            <SettingTile
+              title="Message history for new sessions"
+              description="New sessions read older encrypted messages from your key backup. Sessions don't hand room keys to each other, because a forwarded key can't prove who sent the message. Keep key backup on and verify new logins."
+              after={
+                <Badge variant="Secondary" fill="Soft" radii="Pill" outlined>
+                  <Text as="span" size="L400">
+                    Key backup
+                  </Text>
+                </Badge>
+              }
+            />
+          )}
+          {snapshotFailed && (
+            <InfoCard
+              variant="Critical"
+              title="Device list unavailable"
+              description={deviceLoadState.error}
+              after={
+                <Button
+                  size="300"
+                  radii="300"
+                  disabled={deviceLoadState.fetching}
+                  before={
+                    deviceLoadState.fetching ? (
+                      <Spinner size="100" variant="Secondary" fill="Soft" />
+                    ) : undefined
+                  }
+                  onClick={() => void refreshDeviceList()}
+                >
+                  <Text as="span" size="B300">
+                    Retry
+                  </Text>
+                </Button>
+              }
+            />
+          )}
+          {offerCurrentVerification && (
+            <VerifyCurrentDeviceTile
+              hasDevicesToVerifyAgainst={deviceSnapshot.hasDevicesToVerifyAgainst}
+              canStart={canStartCurrentVerification}
+              refreshing={deviceLoadState.fetching}
+              onRetry={() => void refreshDeviceList()}
+              onVerified={() => void refreshDeviceList()}
+            />
+          )}
+        </SequenceCard>
+        {nativeSession && (
+          <SequenceCard
+            className={SequenceCardStyle}
+            variant="SurfaceVariant"
+            direction="Column"
+            gap="400"
+          >
+            <X509IdentityCard />
+          </SequenceCard>
+        )}
+        {nativeSession && (
+          <SequenceCard
+            className={SequenceCardStyle}
+            variant="SurfaceVariant"
+            direction="Column"
+            gap="400"
+          >
+            <NativeSecretStorageTile />
+            <BackupRestoreTile />
+          </SequenceCard>
+        )}
+      </SettingsSection>
+      <SettingsSection title="Current">
+        {currentDevice ? (
+          <SequenceCard
+            className={SequenceCardStyle}
+            variant="SurfaceVariant"
+            direction="Column"
+            gap="400"
+          >
+            <DeviceTile
+              device={currentDevice}
+              refreshDeviceList={refreshDeviceList}
+              options={<DeviceLogoutBtn />}
+            ></DeviceTile>
+          </SequenceCard>
+        ) : (
+          <DeviceTilePlaceholder />
+        )}
+      </SettingsSection>
+      {snapshotPending && <DevicesPlaceholder />}
+      {otherDevices && (
+        <OtherDevices
+          devices={otherDevices}
+          refreshDeviceList={refreshDeviceList}
+          showVerification={verificationStatus === 'verified'}
+        />
+      )}
+      <LocalBackup />
+    </SettingsPage>
   );
 }

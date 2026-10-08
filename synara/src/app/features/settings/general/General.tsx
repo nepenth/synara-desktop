@@ -20,13 +20,11 @@ import {
   MenuItem,
   PopOut,
   RectCords,
-  Scroll,
   Switch,
   Text,
 } from 'folds';
 import FocusTrap from '../../../components/FocusTrap';
 import { useTranslation } from 'react-i18next';
-import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { useSetting } from '../../../state/hooks/settings';
 import { DateFormat, desktopPlatformSettingsAtom, settingsAtom } from '../../../state/settings';
@@ -69,6 +67,7 @@ import {
   type NativeRtcTransportsSnapshot,
 } from '../../matrix-rtc/nativeRtcTransports';
 import { rtcCallAvailabilityCopy } from '../../matrix-rtc/liveCallChrome';
+import { SettingsPage, SettingsSection } from '../../../components/settings-layout';
 
 type DateHintProps = {
   hasChanges: boolean;
@@ -760,8 +759,7 @@ function SecretStoreTile() {
 
 function StorageSection() {
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Storage</Text>
+    <SettingsSection title="Storage">
       {isDesktopPlatform() && <SecretStoreTile />}
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
@@ -782,7 +780,7 @@ function StorageSection() {
           }
         />
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }
 
@@ -898,12 +896,11 @@ function SoftwareUpdatesSection() {
   if (!isDesktopPlatform()) return null;
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Software Updates</Text>
+    <SettingsSection title="Software Updates">
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <UpdateSettingsTile />
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }
 
@@ -922,8 +919,7 @@ function WidgetsSection() {
   if (!isSynaraDesktop()) return null;
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Widgets</Text>
+    <SettingsSection title="Widgets">
       <SequenceCard
         className={SequenceCardStyle}
         variant="SurfaceVariant"
@@ -1012,7 +1008,7 @@ function WidgetsSection() {
           </Box>
         )}
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }
 
@@ -1036,8 +1032,7 @@ function CallsSection() {
   if (!isSynaraDesktop()) return null;
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Calls</Text>
+    <SettingsSection title="Calls">
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
           title="MatrixRTC"
@@ -1047,7 +1042,7 @@ function CallsSection() {
           })}
         />
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }
 
@@ -1055,8 +1050,7 @@ function DateAndTime() {
   const [hour24Clock, setHour24Clock] = useSetting(settingsAtom, 'hour24Clock');
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Date & Time</Text>
+    <SettingsSection title="Date & Time">
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
           title="24-Hour Time Format"
@@ -1067,7 +1061,7 @@ function DateAndTime() {
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SelectDateFormat />
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }
 
@@ -1077,8 +1071,7 @@ function Editor() {
   const [hideActivity, setHideActivity] = useSetting(settingsAtom, 'hideActivity');
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Editor</Text>
+    <SettingsSection title="Editor">
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
           title="ENTER for Newline"
@@ -1101,7 +1094,7 @@ function Editor() {
           after={<Switch variant="Primary" value={hideActivity} onChange={setHideActivity} />}
         />
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }
 
@@ -1126,8 +1119,7 @@ function Messages() {
   const gifProviderAvailable = gifPickerEnabled(clientConfig.gifPicker);
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">Messages</Text>
+    <SettingsSection title="Messages">
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
           title="Hide Membership Change"
@@ -1210,7 +1202,7 @@ function Messages() {
           }
         />
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }
 
@@ -1219,44 +1211,20 @@ type GeneralProps = {
 };
 export function General({ requestClose }: GeneralProps) {
   return (
-    <Page>
-      <PageHeader outlined={false}>
-        <Box grow="Yes" gap="200">
-          <Box grow="Yes" alignItems="Center" gap="200">
-            <Text size="H3" truncate>
-              General
-            </Text>
-          </Box>
-          <Box shrink="No">
-            <IconButton
-              className={SettingsQuietControl}
-              onClick={requestClose}
-              variant="Surface"
-              fill="None"
-              aria-label="Close"
-            >
-              <Icon src={Icons.Cross} />
-            </IconButton>
-          </Box>
-        </Box>
-      </PageHeader>
-      <Box grow="Yes">
-        <Scroll hideTrack visibility="Hover">
-          <PageContent>
-            <Box direction="Column" gap="700">
-              <WidgetsSection />
-              <CallsSection />
-              <DateAndTime />
-              <Editor />
-              <Messages />
-              <DesktopShortcutsSection />
-              <StorageSection />
-              <SoftwareUpdatesSection />
-              <DesktopIntegrationSection />
-            </Box>
-          </PageContent>
-        </Scroll>
-      </Box>
-    </Page>
+    <SettingsPage
+      title="General"
+      description="Widgets, calls, date and time, editor and message display preferences."
+      requestClose={requestClose}
+    >
+      <WidgetsSection />
+      <CallsSection />
+      <DateAndTime />
+      <Editor />
+      <Messages />
+      <DesktopShortcutsSection />
+      <StorageSection />
+      <SoftwareUpdatesSection />
+      <DesktopIntegrationSection />
+    </SettingsPage>
   );
 }

@@ -41,15 +41,31 @@ const room: RoomSummary = {
   lastMessageIsAgentApproval: false,
   lastActivityTs: Date.now() - 60000,
 };
-const roomState = (eventType: string, content: unknown) => ({
+const SPACE_ID = '!studio:example.test';
+const space: RoomSummary = {
+  ...room,
+  roomId: SPACE_ID,
+  name: 'Studio',
+  canonicalAlias: '#studio:example.test',
+  isSpace: true,
+  isEncrypted: false,
+  encryptionStatus: 'not_encrypted',
+};
+type Fixture = unknown | ((args?: Record<string, unknown>) => unknown);
+// Room-scoped fixtures answer for whichever room (or space) is asked about.
+const requestedRoom = (args?: Record<string, unknown>): string => {
+  const request = (args?.request ?? args) as Record<string, unknown> | undefined;
+  const roomId = request?.roomId ?? request?.room_id;
+  return typeof roomId === 'string' ? roomId : ROOM_ID;
+};
+const roomState = (eventType: string, content: unknown) => (args?: Record<string, unknown>) => ({
   status: 'ok',
-  roomId: ROOM_ID,
+  roomId: requestedRoom(args),
   eventType,
   stateKey: '',
   sessionGeneration: 1,
   content,
 });
-type Fixture = unknown | ((args?: Record<string, unknown>) => unknown);
 const fixtures: Record<string, Fixture> = {
   matrix_room_power_levels_snapshot: roomState('m.room.power_levels', {
     users_default: 0,
@@ -59,14 +75,14 @@ const fixtures: Record<string, Fixture> = {
     invite: 0,
   }),
   matrix_room_power_level_tags_snapshot: roomState('in.synara.room.power_level_tags', {}),
-  matrix_room_creators_snapshot: {
+  matrix_room_creators_snapshot: (args?: Record<string, unknown>) => ({
     status: 'ok',
-    roomId: ROOM_ID,
+    roomId: requestedRoom(args),
     eventType: 'm.room.create',
     stateKey: '',
     sessionGeneration: 1,
     creators: ['@reviewer:example.test'],
-  },
+  }),
   matrix_restore_session: identity,
   // Core's wire shape: snake_case identity plus camelCase sessionGeneration.
   matrix_session_snapshot: {
@@ -86,9 +102,9 @@ const fixtures: Record<string, Fixture> = {
   },
   matrix_room_list_snapshot: {
     sessionGeneration: 1,
-    orderedRoomIds: [ROOM_ID],
-    rooms: [room],
-    presentation: presentationFor([room]),
+    orderedRoomIds: query.has('space') ? [ROOM_ID, SPACE_ID] : [ROOM_ID],
+    rooms: query.has('space') ? [room, space] : [room],
+    presentation: presentationFor(query.has('space') ? [room, space] : [room]),
   },
   desktop_append_log: true,
   desktop_set_badge_count: true,

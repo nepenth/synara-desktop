@@ -11,6 +11,7 @@ import {
   setNativeX509IdentityEnabled,
   type NativeX509IdentityStatus,
 } from './nativeX509Identity';
+import { SettingsSection } from '../../../components/settings-layout';
 
 const EMPTY_STATUS: NativeX509IdentityStatus = {
   enabled: false,
@@ -140,8 +141,7 @@ export function X509IdentityCard() {
           ))}
         </Box>
       )}
-      <Box direction="Column" gap="100">
-        <Text size="L400">Certificate-verified identities</Text>
+      <SettingsSection title="Certificate-verified identities">
         {status.certificateVerifiedIdentities.length === 0 ? (
           <Text size="T200" priority="300">
             None while this is off, or no CA-signed users are in joined rooms yet.
@@ -153,7 +153,7 @@ export function X509IdentityCard() {
             </Text>
           ))
         )}
-      </Box>
+      </SettingsSection>
       {status.verifierConfigured && (
         <Text size="T200" priority="300">
           This session is currently using the imported CA for identity trust.

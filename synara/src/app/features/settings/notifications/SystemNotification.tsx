@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Text, Switch, Button, color } from 'folds';
+import { Text, Switch, Button, color } from 'folds';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
@@ -12,6 +12,7 @@ import {
   supportsPlatformSystemNotifications,
 } from '../../../platform';
 import type { PlatformNotificationPermission } from '../../../platform';
+import { SettingsSection } from '../../../components/settings-layout';
 
 export function SystemNotification() {
   const browserNotifPermission = usePermissionState('notifications', getNotificationState());
@@ -70,8 +71,7 @@ export function SystemNotification() {
   };
 
   return (
-    <Box direction="Column" gap="100">
-      <Text size="L400">System</Text>
+    <SettingsSection title="System">
       <SequenceCard
         className={SequenceCardStyle}
         variant="SurfaceVariant"
@@ -153,6 +153,6 @@ export function SystemNotification() {
           after={<Switch value={isNotificationSounds} onChange={setIsNotificationSounds} />}
         />
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }
