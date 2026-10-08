@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import SynaraCore
 
 /// Privacy-safe connection/sync presentation. Mirrors desktop SyncStatus
 /// meaning (connected / syncing / disconnected / restore failed) without
@@ -88,19 +89,19 @@ enum ConnectionStatusCopy {
     }
 
     static func fromReadiness(
-        _ readiness: String?,
+        _ readiness: SyncReadinessDto?,
         previous: MatrixSyncStatus = .stopped,
-        commandGate: String? = nil
+        commandGate: CommandGateDto? = nil
     ) -> MatrixSyncStatus {
-        if let commandGate, commandGate != "open" {
+        if commandGate == .closed {
             return .disconnected
         }
         // Mirrors desktop `readinessToSyncState`; the shared case table lives in
         // ConnectionStatusCopyTests and synara syncStatusCopy.test.ts.
         switch readiness {
-        case "running":
+        case .running:
             return .connected
-        case "idle", "unconfigured":
+        case .idle, .unconfigured:
             // A stopped or not-yet-configured owner is a loss only after this
             // session had connected; before that it is still starting.
             switch previous {
@@ -109,11 +110,11 @@ enum ConnectionStatusCopy {
             case .starting, .stopped, .restoreFailed, .failed:
                 return .starting
             }
-        case "offline":
+        case .offline:
             return .reconnecting
-        case "failed", "terminated":
+        case .failed, .terminated:
             return .disconnected
-        default:
+        case nil:
             return .starting
         }
     }

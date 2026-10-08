@@ -3474,7 +3474,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
 
         do {
             let snapshot = try await SharedCoreSessionStatus.sessionSnapshot(core: core)
-            XCTAssertEqual(snapshot.status, "logged_out")
+            XCTAssertEqual(snapshot.status, .loggedOut)
             XCTAssertNil(snapshot.userId)
             XCTAssertNil(snapshot.deviceId)
             XCTAssertNil(snapshot.homeserverUrl)

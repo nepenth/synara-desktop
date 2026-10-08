@@ -12,6 +12,7 @@ extension AgentNotificationPreferencesError: Sendable
 extension BackupStatusDto: Sendable
 extension BadgeSummary: Sendable
 extension BadgeSummaryInput: Sendable
+extension CommandGateDto: Sendable
 extension ComposerReplyDraftDto: Sendable
 extension ComposerReplyDraftError: Sendable
 extension ComposerReplyDraftPreviewDto: Sendable
@@ -46,6 +47,7 @@ extension LaterCommandError: Sendable
 extension LaterItemDto: Sendable
 extension LaterSnapshotDto: Sendable
 extension LeftoverAckDto: Sendable
+extension LeftoverAckStatusDto: Sendable
 extension LeftoverBytesDto: Sendable
 extension LeftoverCommandError: Sendable
 extension LoginFlowDto: Sendable
@@ -161,6 +163,7 @@ extension SessionProjectionLifecycle: Sendable
 extension SessionRestoreDto: Sendable
 extension SessionRestoreError: Sendable
 extension SessionSnapshotDto: Sendable
+extension SessionStatusDto: Sendable
 extension SessionStatusError: Sendable
 extension SpaceChildEdgeDto: Sendable
 extension SpaceChildMutationDto: Sendable
@@ -170,6 +173,7 @@ extension SpaceHierarchyRoomDto: Sendable
 extension SpaceHierarchySnapshotDto: Sendable
 extension SpaceParentEntryDto: Sendable
 extension SpaceParentsSnapshotDto: Sendable
+extension SyncReadinessDto: Sendable
 extension SyncStartDto: Sendable
 extension SyncStartError: Sendable
 extension SyncStatusDto: Sendable
@@ -439,6 +443,9 @@ public enum AgentApprovalSendError: Swift.Error, Equatable, Hashable, Foundation
 public enum AgentNotificationPreferencesError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum CommandGateDto: Equatable, Hashable
+  case `open`
+  case closed
 public enum ComposerReplyDraftError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -478,6 +485,11 @@ public enum JoinRuleCommandError: Swift.Error, Equatable, Hashable, Foundation.L
 public enum LaterCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum LeftoverAckStatusDto: Equatable, Hashable
+  case wiped
+  case forgotten
+  case retired
+  case loggedOut
 public enum LeftoverCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -607,12 +619,22 @@ public enum SessionProjectionLifecycle: Equatable, Hashable
 public enum SessionRestoreError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum SessionStatusDto: Equatable, Hashable
+  case loggedOut
+  case loggedIn
 public enum SessionStatusError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
 public enum SpaceCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum SyncReadinessDto: Equatable, Hashable
+  case unconfigured
+  case idle
+  case running
+  case offline
+  case terminated
+  case failed
 public enum SyncStartError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -1067,8 +1089,8 @@ public struct LaterSnapshotDto: Equatable, Hashable
   public var items: [LaterItemDto]
   public init(sessionGeneration: UInt64, version: UInt32, items: [LaterItemDto])
 public struct LeftoverAckDto: Equatable, Hashable
-  public var status: String
-  public init(status: String)
+  public var status: LeftoverAckStatusDto
+  public init(status: LeftoverAckStatusDto)
 public struct LeftoverBytesDto: Equatable, Hashable
   public var payload: Data
   public init(payload: Data)
@@ -1508,12 +1530,12 @@ public struct SessionRestoreDto: Equatable, Hashable
   public var homeserverUrl: String
   public init(userId: String, deviceId: String, homeserverUrl: String)
 public struct SessionSnapshotDto: Equatable, Hashable
-  public var status: String
+  public var status: SessionStatusDto
   public var userId: String?
   public var deviceId: String?
   public var homeserverUrl: String?
   public var sessionGeneration: UInt64?
-  public init(status: String, userId: String?, deviceId: String?, homeserverUrl: String?, sessionGeneration: UInt64?)
+  public init(status: SessionStatusDto, userId: String?, deviceId: String?, homeserverUrl: String?, sessionGeneration: UInt64?)
 public struct SpaceChildEdgeDto: Equatable, Hashable
   public var parentId: String
   public var childId: String
@@ -1557,25 +1579,25 @@ public struct SpaceParentsSnapshotDto: Equatable, Hashable
   public var entries: [SpaceParentEntryDto]
   public init(sessionGeneration: UInt64, entries: [SpaceParentEntryDto])
 public struct SyncStartDto: Equatable, Hashable
-  public var readiness: String
+  public var readiness: SyncReadinessDto
   public var sessionGeneration: UInt64
   public var started: Bool
   public var offlineModeEnabled: Bool
-  public init(readiness: String, sessionGeneration: UInt64, started: Bool, offlineModeEnabled: Bool)
+  public init(readiness: SyncReadinessDto, sessionGeneration: UInt64, started: Bool, offlineModeEnabled: Bool)
 public struct SyncStatusDto: Equatable, Hashable
-  public var readiness: String
+  public var readiness: SyncReadinessDto
   public var sessionGeneration: UInt64
   public var offlineModeEnabled: Bool
   public var failureDiagnosticId: String?
   public var slidingSyncCapable: Bool?
-  public var commandGate: String
-  public init(readiness: String, sessionGeneration: UInt64, offlineModeEnabled: Bool, failureDiagnosticId: String?, slidingSyncCapable: Bool?, commandGate: String)
+  public var commandGate: CommandGateDto
+  public init(readiness: SyncReadinessDto, sessionGeneration: UInt64, offlineModeEnabled: Bool, failureDiagnosticId: String?, slidingSyncCapable: Bool?, commandGate: CommandGateDto)
 public struct SyncStopDto: Equatable, Hashable
-  public var readiness: String
+  public var readiness: SyncReadinessDto
   public var sessionGeneration: UInt64
   public var stopped: Bool
   public var offlineModeEnabled: Bool
-  public init(readiness: String, sessionGeneration: UInt64, stopped: Bool, offlineModeEnabled: Bool)
+  public init(readiness: SyncReadinessDto, sessionGeneration: UInt64, stopped: Bool, offlineModeEnabled: Bool)
 public struct ThreepidAddDto: Equatable, Hashable
   public var status: String
   public init(status: String)

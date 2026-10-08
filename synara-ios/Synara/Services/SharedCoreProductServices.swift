@@ -570,7 +570,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
 
     func coreSessionIdentity() async -> CoreSessionIdentity? {
         guard let snapshot = try? await SharedCoreSessionStatus.sessionSnapshot(core: host.core),
-              snapshot.status == "logged_in",
+              snapshot.status == .loggedIn,
               let userID = snapshot.userId,
               let deviceID = snapshot.deviceId,
               let homeserver = snapshot.homeserverUrl
@@ -768,7 +768,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         guard readyOwner(),
               await MainActor.run(body: { host.sessionStore.currentState == .signedIn(session) }),
               let before = try? await SharedCoreSessionStatus.sessionSnapshot(core: host.core),
-              before.status == "logged_in", before.userId == session.userID,
+              before.status == .loggedIn, before.userId == session.userID,
               before.deviceId == session.deviceID,
               URL(string: before.homeserverUrl ?? "") == session.homeserverURL,
               let generation = before.sessionGeneration,
@@ -779,7 +779,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
                   host.sessionStore.sessionEpoch == accountEpoch && host.sessionStore.currentState == .signedIn(session)
               }),
               let after = try? await SharedCoreSessionStatus.sessionSnapshot(core: host.core),
-              after.status == "logged_in", after.sessionGeneration == generation,
+              after.status == .loggedIn, after.sessionGeneration == generation,
               after.userId == before.userId, after.deviceId == before.deviceId,
               after.homeserverUrl == before.homeserverUrl
         else { return true }

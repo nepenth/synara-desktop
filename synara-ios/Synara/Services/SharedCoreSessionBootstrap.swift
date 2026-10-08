@@ -16,7 +16,7 @@ enum SharedCoreSessionBootstrap {
         var attached: Bool
         var skippedAttach: Bool
         var started: Bool
-        var readiness: String?
+        var readiness: SyncReadinessDto?
         var failure: Failure?
 
         var hasLiveClient: Bool {
@@ -49,7 +49,7 @@ enum SharedCoreSessionBootstrap {
 
     struct StartResult: Equatable {
         var started: Bool
-        var readiness: String
+        var readiness: SyncReadinessDto
     }
 
     static let alreadyRestoredCode = "p4-s3b-session-already-restored"
@@ -169,24 +169,24 @@ enum SharedCoreSessionBootstrap {
         return nil
     }
 
-    static func isProductLiveReadiness(_ readiness: String?) -> Bool {
+    static func isProductLiveReadiness(_ readiness: SyncReadinessDto?) -> Bool {
         switch readiness {
-        case "running", "offline":
+        case .running, .offline:
             return true
-        default:
+        case .unconfigured, .idle, .terminated, .failed, nil:
             return false
         }
     }
 
-    static func isIdleReadiness(_ readiness: String?) -> Bool {
-        readiness == "idle"
+    static func isIdleReadiness(_ readiness: SyncReadinessDto?) -> Bool {
+        readiness == .idle
     }
 
-    static func isTerminalReadiness(_ readiness: String?) -> Bool {
+    static func isTerminalReadiness(_ readiness: SyncReadinessDto?) -> Bool {
         switch readiness {
-        case "failed", "terminated", "unconfigured":
+        case .failed, .terminated, .unconfigured:
             return true
-        default:
+        case .idle, .running, .offline, nil:
             return false
         }
     }
@@ -238,7 +238,7 @@ struct SharedCoreLiveSessionEngine: LiveSessionEngine, @unchecked Sendable {
         return startResult(started: false, readiness: dto.readiness)
     }
 
-    private func startResult(started: Bool, readiness: String) -> SharedCoreSessionBootstrap.StartResult {
+    private func startResult(started: Bool, readiness: SyncReadinessDto) -> SharedCoreSessionBootstrap.StartResult {
         SharedCoreSessionBootstrap.StartResult(
             started: started || SharedCoreSessionBootstrap.isProductLiveReadiness(readiness),
             readiness: readiness

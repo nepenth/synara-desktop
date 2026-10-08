@@ -4,6 +4,8 @@
 //! Credentials use dedicated zeroizing arguments; generic command envelopes
 //! never carry recovery secrets. Narrow NSE product builds use synara-nse-core.
 
+mod wire_enum;
+
 mod agent_notification_preferences;
 pub use agent_notification_preferences::*;
 mod approval_inbox;

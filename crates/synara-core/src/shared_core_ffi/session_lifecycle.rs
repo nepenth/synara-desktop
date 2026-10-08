@@ -131,10 +131,70 @@ pub(super) fn attach_failed(code: &'static str, description: &'static str) -> Se
     }
 }
 
+super::wire_enum::wire_enum! {
+    /// Sync readiness as Swift sees it. Mirrors Core's `SyncReadiness`.
+    pub enum SyncReadinessDto {
+        Unconfigured => "unconfigured",
+        Idle => "idle",
+        Running => "running",
+        Offline => "offline",
+        Terminated => "terminated",
+        Failed => "failed",
+    }
+}
+
+impl From<SyncReadiness> for SyncReadinessDto {
+    fn from(readiness: SyncReadiness) -> Self {
+        match readiness {
+            SyncReadiness::Unconfigured => Self::Unconfigured,
+            SyncReadiness::Idle => Self::Idle,
+            SyncReadiness::Running => Self::Running,
+            SyncReadiness::Offline => Self::Offline,
+            SyncReadiness::Terminated => Self::Terminated,
+            SyncReadiness::Failed => Self::Failed,
+        }
+    }
+}
+
+super::wire_enum::wire_enum! {
+    /// Whether the installed session can serve user commands.
+    pub enum CommandGateDto {
+        Open => "open",
+        Closed => "closed",
+    }
+}
+
+impl From<CommandGate> for CommandGateDto {
+    fn from(gate: CommandGate) -> Self {
+        match gate {
+            CommandGate::Open => Self::Open,
+            CommandGate::Closed => Self::Closed,
+        }
+    }
+}
+
+super::wire_enum::wire_enum! {
+    /// Signed-in state of the live session snapshot.
+    pub enum SessionStatusDto {
+        LoggedOut => "logged_out",
+        LoggedIn => "logged_in",
+    }
+}
+
+super::wire_enum::wire_enum! {
+    /// Outcome of a local session-leftover operation.
+    pub enum LeftoverAckStatusDto {
+        Wiped => "wiped",
+        Forgotten => "forgotten",
+        Retired => "retired",
+        LoggedOut => "logged_out",
+    }
+}
+
 /// Privacy-safe start outcome. No tokens, URLs, or SDK error text.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SyncStartDto {
-    pub readiness: String,
+    pub readiness: SyncReadinessDto,
     pub session_generation: u64,
     pub started: bool,
     pub offline_mode_enabled: bool,
@@ -143,7 +203,7 @@ pub struct SyncStartDto {
 /// Privacy-safe stop outcome. No tokens, URLs, paths, or SDK error text.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SyncStopDto {
-    pub readiness: String,
+    pub readiness: SyncReadinessDto,
     pub session_generation: u64,
     pub stopped: bool,
     pub offline_mode_enabled: bool,
@@ -198,7 +258,7 @@ pub(super) fn sync_start_failed(code: &'static str, description: &'static str) -
 /// Privacy-safe live session snapshot from the registered Core command.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SessionSnapshotDto {
-    pub status: String,
+    pub status: SessionStatusDto,
     pub user_id: Option<String>,
     pub device_id: Option<String>,
     pub homeserver_url: Option<String>,
@@ -208,13 +268,12 @@ pub struct SessionSnapshotDto {
 /// Privacy-safe sync readiness from the registered Core command.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SyncStatusDto {
-    pub readiness: String,
+    pub readiness: SyncReadinessDto,
     pub session_generation: u64,
     pub offline_mode_enabled: bool,
     pub failure_diagnostic_id: Option<String>,
     pub sliding_sync_capable: Option<bool>,
-    /// `open` or `closed`. Never a free-form string.
-    pub command_gate: String,
+    pub command_gate: CommandGateDto,
 }
 
 /// Static fail-closed session/status error. Fields are source constants only.
@@ -236,7 +295,7 @@ impl std::error::Error for SessionStatusError {}
 /// Privacy-safe leftover write ack. Status only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct LeftoverAckDto {
-    pub status: String,
+    pub status: LeftoverAckStatusDto,
 }
 
 /// Privacy-safe leftover bytes readback. Callers must not log the payload.
@@ -363,7 +422,7 @@ pub(super) fn session_snapshot_dto_from_public(
 ) -> Result<SessionSnapshotDto, SessionStatusError> {
     match snapshot {
         MatrixSessionSnapshot::LoggedOut => Ok(SessionSnapshotDto {
-            status: "logged_out".to_owned(),
+            status: SessionStatusDto::LoggedOut,
             user_id: None,
             device_id: None,
             homeserver_url: None,
@@ -379,7 +438,7 @@ pub(super) fn session_snapshot_dto_from_public(
                 return Err(session_status_failure());
             }
             Ok(SessionSnapshotDto {
-                status: "logged_in".to_owned(),
+                status: SessionStatusDto::LoggedIn,
                 user_id: Some(user_id),
                 device_id: Some(device_id),
                 homeserver_url: Some(homeserver_url),
@@ -395,7 +454,7 @@ pub(super) fn product_live_readiness(readiness: SyncReadiness) -> bool {
 
 pub(super) fn sync_start_dto_from_snapshot(snapshot: SyncReadinessSnapshot) -> SyncStartDto {
     SyncStartDto {
-        readiness: snapshot.readiness.as_str().to_owned(),
+        readiness: snapshot.readiness.into(),
         session_generation: snapshot.session_generation,
         started: product_live_readiness(snapshot.readiness),
         offline_mode_enabled: snapshot.offline_mode_enabled,
@@ -404,7 +463,7 @@ pub(super) fn sync_start_dto_from_snapshot(snapshot: SyncReadinessSnapshot) -> S
 
 pub(super) fn sync_stop_dto_from_snapshot(snapshot: SyncReadinessSnapshot) -> SyncStopDto {
     SyncStopDto {
-        readiness: snapshot.readiness.as_str().to_owned(),
+        readiness: snapshot.readiness.into(),
         session_generation: snapshot.session_generation,
         stopped: matches!(
             snapshot.readiness,
@@ -439,12 +498,12 @@ pub(super) fn sync_status_from_owner_snapshot(
     let command_gate =
         CommandGate::for_installed_session(timeline_owner_attached, snapshot.failure_diagnostic_id);
     Ok(SyncStatusDto {
-        readiness: snapshot.readiness.as_str().to_owned(),
+        readiness: snapshot.readiness.into(),
         session_generation: snapshot.session_generation,
         offline_mode_enabled: snapshot.offline_mode_enabled,
         failure_diagnostic_id: snapshot.failure_diagnostic_id.map(str::to_owned),
         sliding_sync_capable: snapshot.sliding_sync_capable,
-        command_gate: command_gate.as_str().to_owned(),
+        command_gate: command_gate.into(),
     })
 }
 
@@ -457,12 +516,12 @@ pub(super) fn sync_status_dto_from_public(
         return Err(session_status_failure());
     }
     Ok(SyncStatusDto {
-        readiness: snapshot.readiness.as_str().to_owned(),
+        readiness: snapshot.readiness.into(),
         session_generation: snapshot.session_generation,
         offline_mode_enabled: snapshot.offline_mode_enabled,
         failure_diagnostic_id: snapshot.failure_diagnostic_id.map(str::to_owned),
         sliding_sync_capable: snapshot.sliding_sync_capable,
-        command_gate: snapshot.command_gate.as_str().to_owned(),
+        command_gate: snapshot.command_gate.into(),
     })
 }
 
@@ -1531,7 +1590,7 @@ impl SharedCore {
                 .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
         }
         Ok(LeftoverAckDto {
-            status: "wiped".to_owned(),
+            status: LeftoverAckStatusDto::Wiped,
         })
     }
 
@@ -1616,7 +1675,7 @@ impl SharedCore {
             .delete(SessionMaterialId::from_identity(&identity).account())
             .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
         Ok(LeftoverAckDto {
-            status: "forgotten".to_owned(),
+            status: LeftoverAckStatusDto::Forgotten,
         })
     }
 
@@ -1633,7 +1692,7 @@ impl SharedCore {
     ) -> Result<LeftoverAckDto, LeftoverCommandError> {
         let failed = || leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION);
         let retired = || LeftoverAckDto {
-            status: "retired".to_owned(),
+            status: LeftoverAckStatusDto::Retired,
         };
         // Latch a rejection the live owner reports now, before any teardown.
         if let Some(owner) = self.core.attached_sync_owner() {
@@ -1696,7 +1755,7 @@ impl SharedCore {
         )
         .await?;
         Ok(LeftoverAckDto {
-            status: "logged_out".to_owned(),
+            status: LeftoverAckStatusDto::LoggedOut,
         })
     }
 
