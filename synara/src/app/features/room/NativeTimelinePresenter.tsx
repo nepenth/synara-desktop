@@ -182,6 +182,8 @@ type NativeTimelinePresenterProps = {
    * presenter turns this off: its own composer carries the root explicitly.
    */
   publishThreadRoot?: boolean;
+  /** The thread's Back control. The side pane has its own close instead. */
+  showThreadBack?: boolean;
 };
 
 type NativeTimelineViewport = {
@@ -2403,6 +2405,7 @@ export function NativeTimelinePresenter({
   threadDisplay = 'full',
   onOpenThreadPane,
   publishThreadRoot = true,
+  showThreadBack = true,
 }: NativeTimelinePresenterProps) {
   const [focusEventId, setFocusEventId] = useState(eventId);
   const [threadRootId, setThreadRootId] = useState<string | undefined>(threadRootEventId);
@@ -3375,15 +3378,55 @@ export function NativeTimelinePresenter({
   );
 
   const inlineExpansion = useInlineThreadExpansion(roomId);
+  const inlineHoldFrameRef = useRef(0);
+  useEffect(() => () => window.cancelAnimationFrame(inlineHoldFrameRef.current), []);
+  // Expanding or collapsing an inline thread is reading, not following the
+  // live tail: stop pinning the bottom, and hold the root where it was while
+  // its replies load and measure. Any user scroll input ends the hold.
+  const toggleInlineThread = useCallback(
+    (rootEventId: string) => {
+      const scrollEl = scrollRef.current;
+      const startTop = scrollEl ? parkedNodeVisualTop(scrollEl, rootEventId) : undefined;
+      followingLiveRef.current = false;
+      inlineExpansion.toggleExpanded(rootEventId);
+      window.cancelAnimationFrame(inlineHoldFrameRef.current);
+      if (!scrollEl || startTop === undefined) return;
+      const holdUntil = performance.now() + 1200;
+      let released = false;
+      const release = () => {
+        released = true;
+      };
+      scrollEl.addEventListener('wheel', release, { once: true, passive: true });
+      scrollEl.addEventListener('touchstart', release, { once: true, passive: true });
+      scrollEl.addEventListener('keydown', release, { once: true });
+      const hold = () => {
+        if (released) return;
+        const currentTop = parkedNodeVisualTop(scrollEl, rootEventId);
+        if (currentTop !== undefined && Math.abs(currentTop - startTop) > 0.5) {
+          programmaticScrollUntilRef.current = performance.now() + 48;
+          scrollEl.scrollTop += currentTop - startTop;
+        }
+        if (performance.now() < holdUntil) {
+          inlineHoldFrameRef.current = window.requestAnimationFrame(hold);
+        } else {
+          scrollEl.removeEventListener('wheel', release);
+          scrollEl.removeEventListener('touchstart', release);
+          scrollEl.removeEventListener('keydown', release);
+        }
+      };
+      inlineHoldFrameRef.current = window.requestAnimationFrame(hold);
+    },
+    [inlineExpansion]
+  );
   const threadDisplayValue = useMemo<NativeThreadDisplay>(
     () => ({
       mode: threadDisplay,
       roomId,
       isExpanded: inlineExpansion.isExpanded,
-      toggleExpanded: inlineExpansion.toggleExpanded,
+      toggleExpanded: toggleInlineThread,
       openInPane: onOpenThreadPane,
     }),
-    [inlineExpansion, onOpenThreadPane, roomId, threadDisplay]
+    [inlineExpansion, onOpenThreadPane, roomId, threadDisplay, toggleInlineThread]
   );
 
   const closeThread = useCallback(() => {
@@ -3526,7 +3569,7 @@ export function NativeTimelinePresenter({
     <NativeThreadDisplayProvider value={threadDisplayValue}>
       <Box grow="Yes" direction="Column" style={{ minHeight: 0 }}>
         {actionError && <Text size="T300">{actionError}</Text>}
-        {threadRootId ? (
+        {threadRootId && showThreadBack ? (
           <Box style={{ padding: config.space.S200 }} alignItems="Start">
             <Button
               size="300"

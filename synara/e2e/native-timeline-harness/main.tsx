@@ -6,6 +6,8 @@ import { configClass, varsClass } from 'folds';
 import 'folds/dist/style.css';
 import { darkTheme } from '../../src/colors.css';
 import { NativeTimelinePresenter } from '../../src/app/features/room/NativeTimelinePresenter';
+import { ThreadSidePanel } from '../../src/app/features/room/ThreadSidePanel';
+import { normalizeThreadDisplay } from '../../src/app/utils/threadDisplay';
 import { setNativeIdentity } from '../../src/app/state/nativeIdentity';
 import { requestRoomLatestAfterSend } from '../../src/app/features/room/nativeTimelineNavigation';
 import {
@@ -125,6 +127,35 @@ const makeRow = (index: number) => ({
   },
 });
 let rows = Array.from({ length: sequence }, (_, index) => makeRow(index + 1));
+// `scenario=threads`: the second-to-last message owns a 7-reply thread.
+const THREAD_ROOT = `$${Math.max(1, sequence - 1)}`;
+const THREAD_REPLY_COUNT = 7;
+if (scenario === 'threads') {
+  rows = rows.map((row) =>
+    row.eventId === THREAD_ROOT
+      ? {
+          ...row,
+          thread: {
+            rootEventId: THREAD_ROOT,
+            replyCount: THREAD_REPLY_COUNT,
+            latestEventId: `$t${THREAD_REPLY_COUNT}`,
+          },
+        }
+      : row
+  );
+}
+const threadRows = () => [
+  rows.find((row) => row.eventId === THREAD_ROOT) ?? makeRow(1),
+  ...Array.from({ length: THREAD_REPLY_COUNT }, (_, index) => ({
+    ...makeRow(index + 1),
+    itemId: `$t${index + 1}`,
+    eventId: `$t${index + 1}`,
+    body: `Thread reply ${index + 1}`,
+    threadRoot: THREAD_ROOT,
+  })),
+];
+/** Thread streams the presenter has opened and not yet closed. */
+const openThreadStreams = new Set<string>();
 let position: NativeTimelinePosition =
   scenario === 'missing' || scenario === 'sparse-missing'
     ? { kind: 'unread', anchor_event_id: '$missing' }
@@ -262,6 +293,21 @@ window.__SYNARA_DESKTOP__ = {
         originServerTs: Number(args?.timestampMs) || 1_600_000_000_000,
       } as T;
     }
+    if (command === 'matrix_timeline_open' && request?.position?.kind === 'thread') {
+      const threadPosition = {
+        kind: 'thread',
+        root_event_id: (request.position as { root_event_id?: string }).root_event_id ?? '',
+      } as NativeTimelinePosition;
+      const opened = openSnapshot(threadPosition);
+      const threadSnapshot = {
+        ...opened.snapshot,
+        rows: threadRows(),
+        pagination: { backward: 'exhausted', forward: 'exhausted' } as const,
+      };
+      snapshots.set(opened.streamId, threadSnapshot);
+      openThreadStreams.add(opened.streamId);
+      return { ...opened, snapshot: threadSnapshot } as T;
+    }
     if (command === 'matrix_timeline_open') {
       let selectedPosition = position;
       let lastRead = false;
@@ -355,6 +401,7 @@ window.__SYNARA_DESKTOP__ = {
     }
     if (command === 'matrix_timeline_close') {
       snapshots.delete(request?.streamId ?? '');
+      openThreadStreams.delete(request?.streamId ?? '');
       return undefined as T;
     }
     if (command === 'matrix_timeline_paginate') return snapshots.get(request?.streamId ?? '') as T;
@@ -773,6 +820,9 @@ const api = {
   send(roomId = room) {
     requestRoomLatestAfterSend(roomId);
   },
+  openThreadStreams() {
+    return openThreadStreams.size;
+  },
 };
 Object.assign(window, { nativeTimelineFixture: api });
 setNativeIdentity({ userId: '@reader0:example.test' });
@@ -782,33 +832,50 @@ setNativeIdentity({ userId: '@reader0:example.test' });
 // Color tokens (`color.SurfaceVariant.*`) need a theme class. Await index.css
 // before paint so screenshot/polish captures are not racing the stylesheet.
 
+const threadDisplay = normalizeThreadDisplay(params.get('threadDisplay'));
+
 function App() {
   const [mounted, setMounted] = useState(true);
   const [focusedEventId, setFocusedEventId] = useState<string>();
+  const [paneRoot, setPaneRoot] = useState<string>();
+  const [paneWidth, setPaneWidth] = useState(360);
   return (
     <>
       <button onClick={() => setMounted((value) => !value)}>Toggle room</button>
       <button onClick={() => setFocusedEventId('$30')}>Focus middle</button>
-      <div
-        id="native-timeline"
-        style={{
-          height: polish ? 640 : 480,
-          width: polish ? 900 : 700,
-          display: 'flex',
-          flexDirection: 'column',
-          border: '1px solid gray',
-        }}
-      >
-        {mounted && (
-          <NativeTimelinePresenter
-            roomId={room}
-            eventId={focusedEventId}
-            roomCreatedTs={
-              params.has('roomCreated')
-                ? Number(params.get('roomCreated')) || 1_600_000_000_000
-                : undefined
-            }
-          />
+      <div style={{ display: 'flex', alignItems: 'stretch' }}>
+        <div
+          id="native-timeline"
+          style={{
+            height: polish ? 640 : 480,
+            width: polish ? 900 : 700,
+            display: 'flex',
+            flexDirection: 'column',
+            border: '1px solid gray',
+          }}
+        >
+          {mounted && (
+            <NativeTimelinePresenter
+              roomId={room}
+              eventId={focusedEventId}
+              threadDisplay={threadDisplay}
+              onOpenThreadPane={
+                threadDisplay === 'full' ? undefined : (rootEventId) => setPaneRoot(rootEventId)
+              }
+            />
+          )}
+        </div>
+        {paneRoot && (
+          <div style={{ height: polish ? 640 : 480, display: 'flex' }}>
+            <ThreadSidePanel
+              roomId={room}
+              rootEventId={paneRoot}
+              width={paneWidth}
+              availableWidth={1600}
+              onWidthChange={setPaneWidth}
+              onClose={() => setPaneRoot(undefined)}
+            />
+          </div>
         )}
       </div>
     </>
@@ -819,9 +886,14 @@ async function bootHarness() {
   document.body.classList.add(configClass, varsClass);
   if (polish || params.has('theme')) {
     await import('../../src/index.css');
-    document.body.classList.add(darkTheme, 'dark-theme');
-    document.body.style.backgroundColor = '#161719';
-    document.body.style.color = '#ededed';
+    if (params.get('theme') === 'light') {
+      document.body.style.backgroundColor = '#ffffff';
+      document.body.style.color = '#161719';
+    } else {
+      document.body.classList.add(darkTheme, 'dark-theme');
+      document.body.style.backgroundColor = '#161719';
+      document.body.style.color = '#ededed';
+    }
   }
   createRoot(document.getElementById('root')!).render(<App />);
 }

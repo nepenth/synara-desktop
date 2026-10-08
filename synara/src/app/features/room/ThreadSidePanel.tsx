@@ -129,6 +129,7 @@ export function ThreadSidePanel({
           threadRootEventId={rootEventId}
           onCloseThreadRoute={onClose}
           publishThreadRoot={false}
+          showThreadBack={false}
         />
       </Box>
       {composer && (

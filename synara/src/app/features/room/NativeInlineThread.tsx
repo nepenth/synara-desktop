@@ -87,7 +87,7 @@ function InlineThreadReplies({
   const moreOnServer = state.snapshot.pagination.backward === 'available';
 
   return (
-    <Box direction="Column" gap="200" className={htmlCss.InlineThreadReplies}>
+    <Box direction="Column" alignItems="Start" gap="200" className={htmlCss.InlineThreadReplies}>
       {(hidden > 0 || moreOnServer) && (
         <Button
           size="300"
