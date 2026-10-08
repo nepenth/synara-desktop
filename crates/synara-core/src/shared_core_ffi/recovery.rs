@@ -7,6 +7,153 @@ use crate::core_api::MatrixCrossSigningStatusResponse;
 use crate::core_api::MatrixSecretStorageStatusResponse;
 use crate::MatrixCryptoStatus;
 
+use super::wire_enum::{wire_enum, wire_enum_from};
+use crate::app::backup::{
+    NativeBackupAction, NativeBackupAvailability, NativeBackupDeviceState,
+    NativeBackupRecoveryState,
+};
+use crate::app::room_keys::NativeRoomKeyTransferPhase;
+use crate::core_api::{
+    MatrixCrossSigningReadinessResponse, MatrixMissingSecretResponse,
+    MatrixSecretStorageActionResponse, MatrixSecretStorageStateResponse,
+};
+use crate::MatrixCrossSigningState;
+
+wire_enum! {
+    pub enum SecretStorageStateDto {
+        Unavailable => "unavailable",
+        NotSetUp => "not_set_up",
+        Locked => "locked",
+        Ready => "ready",
+    }
+}
+wire_enum_from!(MatrixSecretStorageStateResponse => SecretStorageStateDto {
+    Unavailable, NotSetUp, Locked, Ready
+});
+
+wire_enum! {
+    pub enum SecretStorageActionDto {
+        BootstrapRequired => "bootstrap_required",
+        UnlockRequired => "unlock_required",
+        NoAction => "none",
+    }
+}
+
+impl From<MatrixSecretStorageActionResponse> for SecretStorageActionDto {
+    fn from(action: MatrixSecretStorageActionResponse) -> Self {
+        match action {
+            MatrixSecretStorageActionResponse::BootstrapRequired => Self::BootstrapRequired,
+            MatrixSecretStorageActionResponse::UnlockRequired => Self::UnlockRequired,
+            MatrixSecretStorageActionResponse::None => Self::NoAction,
+        }
+    }
+}
+
+wire_enum! {
+    pub enum MissingSecretDto {
+        CrossSigningMaster => "cross_signing_master",
+        CrossSigningSelfSigning => "cross_signing_self_signing",
+        CrossSigningUserSigning => "cross_signing_user_signing",
+        EncryptionBackup => "encryption_backup",
+    }
+}
+wire_enum_from!(MatrixMissingSecretResponse => MissingSecretDto {
+    CrossSigningMaster, CrossSigningSelfSigning, CrossSigningUserSigning, EncryptionBackup
+});
+
+wire_enum! {
+    pub enum BackupAvailabilityDto {
+        Missing => "missing",
+        Available => "available",
+    }
+}
+wire_enum_from!(NativeBackupAvailability => BackupAvailabilityDto { Missing, Available });
+
+wire_enum! {
+    pub enum BackupDeviceStateDto {
+        Unavailable => "unavailable",
+        Disconnected => "disconnected",
+        Connecting => "connecting",
+        Downloading => "downloading",
+        Uploading => "uploading",
+        Ready => "ready",
+    }
+}
+wire_enum_from!(NativeBackupDeviceState => BackupDeviceStateDto {
+    Unavailable, Disconnected, Connecting, Downloading, Uploading, Ready
+});
+
+wire_enum! {
+    pub enum BackupRecoveryStateDto {
+        Unknown => "unknown",
+        NotSetUp => "not_set_up",
+        Incomplete => "incomplete",
+        Ready => "ready",
+    }
+}
+wire_enum_from!(NativeBackupRecoveryState => BackupRecoveryStateDto {
+    Unknown, NotSetUp, Incomplete, Ready
+});
+
+wire_enum! {
+    pub enum BackupActionDto {
+        SetupRequired => "setup_required",
+        RestoreRequired => "restore_required",
+        RepairRequired => "repair_required",
+        NoAction => "none",
+    }
+}
+
+impl From<NativeBackupAction> for BackupActionDto {
+    fn from(action: NativeBackupAction) -> Self {
+        match action {
+            NativeBackupAction::SetupRequired => Self::SetupRequired,
+            NativeBackupAction::RestoreRequired => Self::RestoreRequired,
+            NativeBackupAction::RepairRequired => Self::RepairRequired,
+            NativeBackupAction::None => Self::NoAction,
+        }
+    }
+}
+
+wire_enum! {
+    pub enum CrossSigningStateDto {
+        Unavailable => "unavailable",
+        NotSetUp => "not_set_up",
+        Partial => "partial",
+        Ready => "ready",
+    }
+}
+wire_enum_from!(MatrixCrossSigningState => CrossSigningStateDto {
+    Unavailable, NotSetUp, Partial, Ready
+});
+
+wire_enum! {
+    pub enum CrossSigningReadinessDto {
+        Unavailable => "unavailable",
+        SetupRequired => "setup_required",
+        RecoveryRequired => "recovery_required",
+        VerificationRequired => "verification_required",
+        Ready => "ready",
+    }
+}
+wire_enum_from!(MatrixCrossSigningReadinessResponse => CrossSigningReadinessDto {
+    Unavailable, SetupRequired, RecoveryRequired, VerificationRequired, Ready
+});
+
+wire_enum! {
+    pub enum RoomKeyTransferPhaseDto {
+        Idle => "idle",
+        Preparing => "preparing",
+        InFlight => "in_flight",
+        Succeeded => "succeeded",
+        Failed => "failed",
+        Cancelled => "cancelled",
+    }
+}
+wire_enum_from!(NativeRoomKeyTransferPhase => RoomKeyTransferPhaseDto {
+    Idle, Preparing, InFlight, Succeeded, Failed, Cancelled
+});
+
 /// Explicit one-time key display only; not a status DTO or generic envelope.
 #[derive(Clone, uniffi::Record)]
 pub struct SecretStorageSetupDto {
@@ -18,25 +165,25 @@ pub struct SecretStorageSetupDto {
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SecretStorageStatusDto {
     pub session_generation: u64,
-    pub state: String,
+    pub state: SecretStorageStateDto,
     pub exists: bool,
     pub unlocked: bool,
     pub default_key_set: bool,
     pub passphrase_configured: bool,
     pub bootstrap_ready: bool,
-    pub missing_secrets: Vec<String>,
-    pub action: String,
+    pub missing_secrets: Vec<MissingSecretDto>,
+    pub action: SecretStorageActionDto,
 }
 
 /// Privacy-safe leftover backup status. No passphrase or recovery secret.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct BackupStatusDto {
     pub session_generation: u64,
-    pub availability: String,
+    pub availability: BackupAvailabilityDto,
     pub enabled: bool,
-    pub device_state: String,
-    pub recovery_state: String,
-    pub action: String,
+    pub device_state: BackupDeviceStateDto,
+    pub recovery_state: BackupRecoveryStateDto,
+    pub action: BackupActionDto,
 }
 
 /// Privacy-safe leftover crypto status. No key material.
@@ -44,21 +191,21 @@ pub struct BackupStatusDto {
 pub struct CryptoStatusDto {
     pub session_generation: u64,
     pub encryption_enabled: bool,
-    pub cross_signing_state: String,
+    pub cross_signing_state: CrossSigningStateDto,
 }
 
 /// Privacy-safe leftover cross-signing status. No private keys.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct CrossSigningStatusDto {
     pub session_generation: u64,
-    pub readiness: String,
+    pub readiness: CrossSigningReadinessDto,
 }
 
 /// Privacy-safe leftover room-key transfer status. No passphrase or path.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomKeyTransferStatusDto {
     pub session_generation: u64,
-    pub phase: String,
+    pub phase: RoomKeyTransferPhaseDto,
     pub keys_processed: u32,
 }
 
@@ -119,95 +266,23 @@ pub(super) fn map_restore_backup_core_error(
     }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct SecretStorageStatusResultWire {
-    pub(super) session_generation: u64,
-    pub(super) state: String,
-    pub(super) exists: bool,
-    pub(super) unlocked: bool,
-    pub(super) default_key_set: bool,
-    pub(super) passphrase_configured: bool,
-    pub(super) bootstrap_ready: bool,
-    pub(super) missing_secrets: Vec<String>,
-    pub(super) action: String,
-}
-
-impl From<MatrixSecretStorageStatusResponse> for SecretStorageStatusResultWire {
-    fn from(status: MatrixSecretStorageStatusResponse) -> Self {
-        Self {
-            session_generation: status.session_generation,
-            state: wire_label(&status.state),
-            exists: status.exists,
-            unlocked: status.unlocked,
-            default_key_set: status.default_key_set,
-            passphrase_configured: status.passphrase_configured,
-            bootstrap_ready: status.bootstrap_ready,
-            missing_secrets: status.missing_secrets.iter().map(wire_label).collect(),
-            action: wire_label(&status.action),
-        }
-    }
-}
-
-pub(super) fn closed_secret_storage_state(value: &str) -> Option<&'static str> {
-    match value {
-        "unavailable" => Some("unavailable"),
-        "not_set_up" => Some("not_set_up"),
-        "locked" => Some("locked"),
-        "ready" => Some("ready"),
-        _ => None,
-    }
-}
-
-pub(super) fn closed_secret_storage_action(value: &str) -> Option<&'static str> {
-    match value {
-        "bootstrap_required" => Some("bootstrap_required"),
-        "unlock_required" => Some("unlock_required"),
-        "none" => Some("none"),
-        _ => None,
-    }
-}
-
 pub(super) fn secret_storage_status_dto(
     payload: MatrixSecretStorageStatusResponse,
 ) -> Result<SecretStorageStatusDto, SessionStatusError> {
-    let result = SecretStorageStatusResultWire::from(payload);
-    let state = closed_secret_storage_state(&result.state).ok_or_else(|| {
-        session_status_failed(
-            SESSION_STATUS_FAILED_CODE,
-            SESSION_STATUS_FAILED_DESCRIPTION,
-        )
-    })?;
-    let action = closed_secret_storage_action(&result.action).ok_or_else(|| {
-        session_status_failed(
-            SESSION_STATUS_FAILED_CODE,
-            SESSION_STATUS_FAILED_DESCRIPTION,
-        )
-    })?;
-    let missing_secrets = result
-        .missing_secrets
-        .iter()
-        .map(|value| {
-            closed_missing_secret(value)
-                .map(str::to_owned)
-                .ok_or_else(|| {
-                    session_status_failed(
-                        SESSION_STATUS_FAILED_CODE,
-                        SESSION_STATUS_FAILED_DESCRIPTION,
-                    )
-                })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
     Ok(SecretStorageStatusDto {
-        session_generation: result.session_generation,
-        state: state.to_owned(),
-        exists: result.exists,
-        unlocked: result.unlocked,
-        default_key_set: result.default_key_set,
-        passphrase_configured: result.passphrase_configured,
-        bootstrap_ready: result.bootstrap_ready,
-        missing_secrets,
-        action: action.to_owned(),
+        session_generation: payload.session_generation,
+        state: payload.state.into(),
+        exists: payload.exists,
+        unlocked: payload.unlocked,
+        default_key_set: payload.default_key_set,
+        passphrase_configured: payload.passphrase_configured,
+        bootstrap_ready: payload.bootstrap_ready,
+        missing_secrets: payload
+            .missing_secrets
+            .into_iter()
+            .map(Into::into)
+            .collect(),
+        action: payload.action.into(),
     })
 }
 
@@ -223,11 +298,11 @@ pub(super) fn leftover_backup_status_dto(
 ) -> Result<BackupStatusDto, LeftoverCommandError> {
     Ok(BackupStatusDto {
         session_generation: payload.session_generation,
-        availability: wire_label(&payload.availability),
+        availability: payload.availability.into(),
         enabled: payload.enabled,
-        device_state: wire_label(&payload.device_state),
-        recovery_state: wire_label(&payload.recovery_state),
-        action: wire_label(&payload.action),
+        device_state: payload.device_state.into(),
+        recovery_state: payload.recovery_state.into(),
+        action: payload.action.into(),
     })
 }
 
@@ -237,7 +312,7 @@ pub(super) fn leftover_crypto_status_dto(
     Ok(CryptoStatusDto {
         session_generation: payload.session_generation,
         encryption_enabled: payload.encryption_enabled,
-        cross_signing_state: wire_label(&payload.cross_signing_state),
+        cross_signing_state: payload.cross_signing_state.into(),
     })
 }
 
@@ -246,7 +321,7 @@ pub(super) fn leftover_cross_signing_status_dto(
 ) -> Result<CrossSigningStatusDto, LeftoverCommandError> {
     Ok(CrossSigningStatusDto {
         session_generation: payload.session_generation,
-        readiness: wire_label(&payload.readiness),
+        readiness: payload.readiness.into(),
     })
 }
 
@@ -255,7 +330,7 @@ pub(super) fn leftover_room_key_transfer_status_dto(
 ) -> Result<RoomKeyTransferStatusDto, LeftoverCommandError> {
     Ok(RoomKeyTransferStatusDto {
         session_generation: payload.session_generation,
-        phase: wire_label(&payload.phase),
+        phase: payload.phase.into(),
         keys_processed: payload.keys_processed,
     })
 }

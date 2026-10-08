@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import SynaraCore
 import UserNotifications
 
 enum SessionState: Equatable {
@@ -637,15 +638,22 @@ struct RoomIdentityWarning: Equatable, Identifiable {
         self.kind = kind
     }
 
-    init?(userID: String, displayName: String?, kind rawKind: String) {
-        guard userID.hasPrefix("@"), let kind = Kind(rawValue: rawKind) else { return nil }
+    init?(userID: String, displayName: String?, kind coreKind: IdentityWarningKindDto) {
+        guard userID.hasPrefix("@") else { return nil }
+        let kind: Kind
+        switch coreKind {
+        case .verificationViolation:
+            kind = .verificationViolation
+        case .pinViolation:
+            kind = .pinViolation
+        }
         let trimmed = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.init(userID: userID, displayName: trimmed?.isEmpty == false ? trimmed : nil, kind: kind)
     }
 
     /// Core action for the banner's button.
-    var resolveAction: String {
-        kind == .verificationViolation ? "withdraw_verification" : "dismiss"
+    var resolveAction: IdentityWarningActionDto {
+        kind == .verificationViolation ? .withdrawVerification : .dismiss
     }
 
     var actionTitle: String {

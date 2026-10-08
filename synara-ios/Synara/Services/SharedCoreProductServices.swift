@@ -2087,11 +2087,11 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         }
         let verification: SynaraCryptoVerificationStatus
         switch deviceSnapshot?.ownVerification {
-        case "verified":
+        case .verified:
             verification = .verified
-        case "unverified":
+        case .unverified:
             verification = .unverified
-        default:
+        case .unknown, nil:
             verification = .unknown
         }
         return SessionCryptoStatus(
@@ -2299,10 +2299,10 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 core: host.core,
                 deviceIds: [deviceId]
             )
-            if started.outcome == "complete" {
+            if started.outcome == .complete {
                 return .completed("Session signed out.")
             }
-            guard started.outcome == "authentication_required",
+            guard started.outcome == .authenticationRequired,
                   let challenge = started.challenge
             else {
                 return .failed("Could not sign out that session.")
@@ -2313,7 +2313,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 sessionGeneration: challenge.sessionGeneration,
                 password: trimmedPassword
             )
-            if finished.outcome == "complete" {
+            if finished.outcome == .complete {
                 return .completed("Session signed out.")
             }
             if finished.challenge?.authenticationFailed == true {

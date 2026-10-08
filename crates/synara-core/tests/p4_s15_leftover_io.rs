@@ -108,7 +108,6 @@ fn leftover_owner_status_after_attach_is_privacy_safe_and_homeserver_io_stays_cl
         .block_on(shared.room_key_transfer_status())
         .expect("room-key status is local owner state");
     let room_keys_text = format!("{room_keys:?}");
-    assert!(!room_keys.phase.is_empty());
     assert!(!room_keys_text.contains(access));
     assert!(!room_keys_text.contains(refresh));
     assert!(!room_keys_text.contains("password"));

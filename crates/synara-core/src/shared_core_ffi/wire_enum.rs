@@ -54,4 +54,20 @@ macro_rules! wire_enum {
     };
 }
 
+/// `From<Domain>` for an FFI enum whose variants share the domain's names, so a
+/// new domain variant fails to compile instead of reaching Swift unmapped.
+macro_rules! wire_enum_from {
+    ($domain:path => $name:ident { $( $variant:ident ),+ $(,)? }) => {
+        impl From<$domain> for $name {
+            fn from(value: $domain) -> Self {
+                use $domain as Domain;
+                match value {
+                    $( Domain::$variant => $name::$variant ),+
+                }
+            }
+        }
+    };
+}
+
 pub(crate) use wire_enum;
+pub(crate) use wire_enum_from;

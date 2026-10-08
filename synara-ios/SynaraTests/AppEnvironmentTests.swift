@@ -37,20 +37,18 @@ final class AppEnvironmentTests: XCTestCase {
             deviceId: "DEVICEABC",
             displayName: "  MacBook  ",
             isCurrent: false,
-            trust: "verified",
+            trust: .verified,
             lastSeenTs: 1_700_000_000_000
         )
 
         XCTAssertEqual(device.id, "DEVICEABC")
         XCTAssertEqual(device.displayName, "MacBook")
         XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName(device.trust), "Verified")
-        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("verified_locally_only"), "Verified")
-        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("verified_by_certificate"), "Verified (certificate)")
-        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("unverified"), "Unverified")
-        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("no_encryption"), "Not encrypted")
-        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("dehydrated"), "Backup device")
-        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("unsupported"), "Not encrypted")
-        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("something_new"), "Unknown")
+        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName(.verifiedLocallyOnly), "Verified")
+        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName(.verifiedByCertificate), "Verified (certificate)")
+        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName(.unverified), "Unverified")
+        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName(.noEncryption), "Not encrypted")
+        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName(.dehydrated), "Backup device")
         XCTAssertEqual(
             RoomManagementError.directoryFailed(
                 "The room directory is rate-limited. Try again in a moment."
@@ -68,7 +66,7 @@ final class AppEnvironmentTests: XCTestCase {
             deviceId: "DEVICEABC",
             displayName: "MacBook",
             isCurrent: false,
-            trust: "verified",
+            trust: .verified,
             lastSeenTs: 1_700_000_000_000,
             isCrossSignedByOwner: true,
             firstSeenTs: 1_699_000_000_000,

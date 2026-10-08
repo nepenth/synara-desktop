@@ -512,9 +512,9 @@ final class SignOutCopyTests: XCTestCase {
     }
 
     func testDehydratedDevicesAreNotOtherSignedInDevices() {
-        XCTAssertTrue(SignOutCopy.isOtherSignedInDevice(isCurrent: false, trust: "unverified"))
-        XCTAssertTrue(SignOutCopy.isOtherSignedInDevice(isCurrent: false, trust: "verified"))
-        XCTAssertFalse(SignOutCopy.isOtherSignedInDevice(isCurrent: false, trust: "dehydrated"))
-        XCTAssertFalse(SignOutCopy.isOtherSignedInDevice(isCurrent: true, trust: "verified"))
+        XCTAssertTrue(SignOutCopy.isOtherSignedInDevice(isCurrent: false, trust: .unverified))
+        XCTAssertTrue(SignOutCopy.isOtherSignedInDevice(isCurrent: false, trust: .verified))
+        XCTAssertFalse(SignOutCopy.isOtherSignedInDevice(isCurrent: false, trust: .dehydrated))
+        XCTAssertFalse(SignOutCopy.isOtherSignedInDevice(isCurrent: true, trust: .verified))
     }
 }

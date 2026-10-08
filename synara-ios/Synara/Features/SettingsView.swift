@@ -1,5 +1,6 @@
 import PhotosUI
 import SwiftUI
+import SynaraCore
 import UIKit
 import UserNotifications
 
@@ -16,8 +17,8 @@ enum SignOutCopy {
         isLastDevice == true ? "\(lastDeviceWarning)\n\n\(standardMessage)" : standardMessage
     }
 
-    static func isOtherSignedInDevice(isCurrent: Bool, trust: String) -> Bool {
-        isCurrent == false && trust != "dehydrated"
+    static func isOtherSignedInDevice(isCurrent: Bool, trust: DeviceTrustDto) -> Bool {
+        isCurrent == false && trust != .dehydrated
     }
 }
 

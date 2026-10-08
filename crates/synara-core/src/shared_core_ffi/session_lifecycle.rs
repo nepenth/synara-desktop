@@ -398,16 +398,6 @@ pub(super) fn map_session_status_core_error(error: MatrixIpcError) -> SessionSta
     }
 }
 
-pub(super) fn closed_missing_secret(value: &str) -> Option<&'static str> {
-    match value {
-        "cross_signing_master" => Some("cross_signing_master"),
-        "cross_signing_self_signing" => Some("cross_signing_self_signing"),
-        "cross_signing_user_signing" => Some("cross_signing_user_signing"),
-        "encryption_backup" => Some("encryption_backup"),
-        _ => None,
-    }
-}
-
 fn session_status_failure() -> SessionStatusError {
     session_status_failed(
         SESSION_STATUS_FAILED_CODE,
