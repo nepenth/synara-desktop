@@ -47,6 +47,12 @@ zeroize = "1"
 mime = "0.3"
 rustls = { version = "0.23.45", default-features = false }
 
+# Dependencies (every non-workspace package) keep only line tables in dev and
+# test builds: backtraces still resolve to file:line, but target/ and link
+# times shrink. Workspace crates keep full debug info for stepping.
+[profile.dev.package."*"]
+debug = "line-tables-only"
+
 # Apple's notification service extension has a strict memory ceiling. Build
 # its complete dependency graph for size and cross-crate dead-code elimination
 # without changing the normal desktop/full-Core release profile.

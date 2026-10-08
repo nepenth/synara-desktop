@@ -13,12 +13,10 @@ import {
   getMemberDisplayName,
   getMemberSearchStr,
   getMentionContent,
-  getNotificationType,
   getRoomAvatarUrl,
   getStateEvent,
   getStateEvents,
   getThreadRootEventId,
-  getUnreadInfo,
   guessPerfectParent,
   isNotificationEvent,
   isRoom,
@@ -30,7 +28,7 @@ import {
   type EventTimelineSetReading,
   type MemberReading,
 } from '../room';
-import { MessageEvent, NotificationType, StateEvent } from '../../../types/matrix/room';
+import { MessageEvent, StateEvent } from '../../../types/matrix/room';
 import {
   clearNativeRoomStateProjections,
   publishNativeRoomCreatorsProjection,
@@ -170,11 +168,6 @@ test('isSpace/isRoom/isUnsupportedRoom classify by room create type', () => {
   assert.equal(isSpace(null), false);
   assert.equal(isRoom(null), false);
   assert.equal(isUnsupportedRoom(null), false);
-});
-
-test('getUnreadInfo reports the max of highlight and total', () => {
-  const room = makeRoom({}, { unreadTotal: 3, unreadHighlight: 5, roomId: '!r:example.org' });
-  assert.deepEqual(getUnreadInfo(room), { roomId: '!r:example.org', highlight: 5, total: 5 });
 });
 
 test('member display/avatar helpers resolve from the room member projection', () => {
@@ -334,48 +327,6 @@ test('isNotificationEvent ignores redactions, replacement relations, and member 
   );
   assert.equal(isNotificationEvent(makeEvent('m.room.member', {})), false);
   assert.equal(isNotificationEvent(makeEvent('m.room.create', {})), true);
-});
-
-test('getNotificationType maps explicit, muted, and default rules', () => {
-  assert.equal(
-    getNotificationType(
-      makeClient({ getRoomPushRule: () => ({ actions: ['notify'], rule_id: 'r' }) }),
-      '!r:example.org'
-    ),
-    NotificationType.AllMessages
-  );
-  assert.equal(
-    getNotificationType(
-      makeClient({ getRoomPushRule: () => ({ actions: ['dont_notify'], rule_id: 'r' }) }),
-      '!r:example.org'
-    ),
-    NotificationType.MentionsAndKeywords
-  );
-  const mutedOverride = () =>
-    ({
-      getContent: () => ({
-        global: {
-          override: [
-            {
-              actions: [],
-              conditions: [{ kind: 'event_match' }],
-              rule_id: '!r:example.org',
-            },
-          ],
-        },
-      }),
-    }) as MatrixEventReading;
-  assert.equal(
-    getNotificationType(
-      makeClient({ getRoomPushRule: () => undefined, getAccountData: mutedOverride }),
-      '!r:example.org'
-    ),
-    NotificationType.Mute
-  );
-  assert.equal(
-    getNotificationType(makeClient({ getRoomPushRule: () => undefined }), '!r:example.org'),
-    NotificationType.Default
-  );
 });
 
 test('avatar helpers delegate mxc conversion to the client projection', () => {

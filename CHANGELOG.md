@@ -3,6 +3,10 @@
 ## Unreleased
 
 - Internals: pin the generated Swift API surface in CI, generate Swift bindings in UniFFI library mode from proc-macro exports (no UDL), call one typed Core method per matrix command from desktop and iOS instead of JSON envelopes (the envelope registry is now test-only), and generate the renderer's native wire types from Rust.
+- iOS: agent approvals stamped slightly ahead of the device clock stay actionable in notifications as they already were in Core, four notification failure codes now record their specific diagnostics stage, and Swift no longer keeps its own Later codec or agent-card extraction; shared vectors pin the remaining Swift mirrors to Core.
+- Builds: the desktop crate builds only its rlib (no unused staticlib/cdylib link), and dependencies keep line tables only in dev/test builds, which shrinks a core test build from 6.4 GB to 5.4 GB.
+- Cleanup: remove the renderer's js-sdk read-marker engine, room-activity store and rollout flags, and iOS client policies that only tests used; Mark as Read on desktop goes only through the native Core owner.
+- Internals: pin the generated Swift API surface in CI, generate Swift bindings in UniFFI library mode, read session/sync/crypto status through typed Core methods on desktop and iOS, generate the renderer's status types from Rust, and start moving SharedCore methods to UniFFI proc-macro exports.
 - Performance: keep at most 16 idle live room timelines and 32 focused or thread timelines (least recently used goes first), close view streams a reloaded window left open, and scope each view's power-level watcher to its room.
 - Startup: probe sliding-sync support and the system keyring in the background so restore and the first window paint no longer wait on them.
 - Desktop: quitting stops sync within 2 seconds before exiting.
@@ -20,7 +24,7 @@
 - Linux: drag the borderless window from the title strip on Wayland, keep it undecorated across relaunch, and keep double-click maximize.
 - Sessions: retire a rejected session locally on desktop and iOS, bound logout when the homeserver does not answer, show a closed command gate as Connection Lost, and log static diagnostic ids for rejected commands.
 - Mark as Read: target the newest event including thread replies, always write the fully-read marker and private receipt, and report failures in the room menu.
-- Messages: show unsent messages as sending or failed with Discard and Retry, keep still-queued sends visibly queued (text, attachments, edits, polls, votes and forwards), and resend recoverable failures once sync recovers.
+- Messages: show unsent messages as sending or failed with Discard and Retry, keep still-queued sends visibly queued (text, attachments, edits, polls, votes, forwards and reactions), and resend recoverable failures once sync recovers.
 - Sync: re-apply open-room subscriptions after a sliding-sync expiry, download key backups on decryption failure, and avoid restarting a healthy sync when the window is shown again.
 - Performance: slow background polling while the window is hidden, skip unchanged timeline snapshots, back off undecryptable-message readback and keyring retries, and stop holding the session lock while loading media.
 - Room list: Core pushes a `matrix-room-list-updated` event when rooms, invites, push rules or account data change, so the desktop lists refresh on change instead of polling every second, iOS stops its 2-second refresh pulse, and room-list snapshots stop re-reading push rules and re-probing unknown encryption state for every room.

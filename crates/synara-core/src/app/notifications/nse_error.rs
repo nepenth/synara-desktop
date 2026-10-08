@@ -129,4 +129,54 @@ mod tests {
             assert!(!initialization.contains("alice"));
         }
     }
+
+    /// Diagnostic codes the shipping NSE path (`synara-nse-core` →
+    /// `app::nse_preview`) can return, read from the non-test source.
+    fn shipping_nse_codes() -> std::collections::BTreeSet<String> {
+        let sources = [
+            include_str!("../nse_preview.rs"),
+            include_str!("nse_error.rs"),
+            include_str!("../../../../synara-nse-core/src/lib.rs"),
+        ];
+        let mut codes = std::collections::BTreeSet::new();
+        for source in sources {
+            let production = source
+                .split("#[cfg(test)]\nmod tests")
+                .next()
+                .unwrap_or(source);
+            for line in production
+                .lines()
+                .filter(|line| !line.trim_start().starts_with("//"))
+            {
+                for literal in line.split('"').skip(1).step_by(2) {
+                    let is_code = (literal.starts_with("p4-") || literal.starts_with("nse-"))
+                        && literal.chars().all(|c| {
+                            c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.'
+                        });
+                    if is_code {
+                        codes.insert(literal.to_owned());
+                    }
+                }
+            }
+        }
+        codes
+    }
+
+    /// iOS maps each code to a fixed diagnostics stage in Swift
+    /// (`previewFailureStage`); its XCTest checks the same table. A new or
+    /// removed Core code fails here until the shared table is updated.
+    #[test]
+    fn every_shipping_nse_code_has_a_shared_ios_stage() {
+        let vectors: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/support/notification-policy-vectors.json"
+        ))
+        .unwrap();
+        let pinned = vectors["nsePreviewFailureStages"]["codes"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(shipping_nse_codes(), pinned);
+    }
 }

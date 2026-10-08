@@ -8,11 +8,9 @@ import {
   IRoomCreateContent,
   MessageEvent,
   NativeEventContentEvent,
-  NotificationType,
   RoomToParents,
   RoomType,
   StateEvent,
-  UnreadInfo,
 } from '../../types/matrix/room';
 import { isNativeMatrixSession } from '../features/verification/nativeVerification';
 import {
@@ -248,35 +246,6 @@ export const getOrphanParents = (roomToParents: RoomToParents, roomId: string): 
   return orphanParents;
 };
 
-const isMutedRule = (rule: PushRuleReading) =>
-  // Check for empty actions (new spec) or dont_notify (deprecated)
-  (rule.actions.length === 0 || rule.actions[0] === 'dont_notify') &&
-  rule.conditions?.[0]?.kind === 'event_match';
-
-const findMutedRule = (overrideRules: PushRuleReading[], roomId: string) =>
-  overrideRules.find((rule) => rule.rule_id === roomId && isMutedRule(rule));
-
-export const getNotificationType = (mx: MatrixClientReading, roomId: string): NotificationType => {
-  let roomPushRule: PushRuleReading | undefined;
-  try {
-    roomPushRule = mx.getRoomPushRule('global', roomId);
-  } catch {
-    roomPushRule = undefined;
-  }
-
-  if (!roomPushRule) {
-    const overrideRules = mx.getAccountData(AccountDataEvent.PushRules)?.getContent<{
-      global?: { override?: PushRuleReading[] };
-    }>()?.global?.override;
-    if (!overrideRules) return NotificationType.Default;
-
-    return findMutedRule(overrideRules, roomId) ? NotificationType.Mute : NotificationType.Default;
-  }
-
-  if (roomPushRule.actions[0] === 'notify') return NotificationType.AllMessages;
-  return NotificationType.MentionsAndKeywords;
-};
-
 const NOTIFICATION_EVENT_TYPES = [
   'm.room.create',
   'm.room.message',
@@ -308,16 +277,6 @@ export const getThreadRootEventId = (
   return relation?.rel_type === 'm.thread' && typeof relation.event_id === 'string'
     ? relation.event_id
     : undefined;
-};
-
-export const getUnreadInfo = (room: RoomReading): UnreadInfo => {
-  const total = room.getUnreadNotificationCount('total');
-  const highlight = room.getUnreadNotificationCount('highlight');
-  return {
-    roomId: room.roomId,
-    highlight,
-    total: highlight > total ? highlight : total,
-  };
 };
 
 export const getRoomIconSrc = (
