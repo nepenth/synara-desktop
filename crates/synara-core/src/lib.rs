@@ -46,7 +46,9 @@ pub const COMPOSER_PLACEHOLDER_OPEN: char = '\u{E000}';
 pub const COMPOSER_PLACEHOLDER_CLOSE: char = '\u{E001}';
 /// Stand-ins that keep typed `<` and `&` literal through markdown, in prose
 /// and in code alike. Also stripped from typed text by the composer.
+#[cfg(feature = "full-app")]
 const COMPOSER_LITERAL_LT: char = '\u{E002}';
+#[cfg(feature = "full-app")]
 const COMPOSER_LITERAL_AMP: char = '\u{E003}';
 
 /// Render composer markdown the way [`markdown_to_html`] does, with inline
