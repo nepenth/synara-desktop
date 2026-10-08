@@ -123,6 +123,18 @@ mod room_administration;
 use room_administration::*;
 mod session_crypto;
 use session_crypto::*;
+mod typed_api;
+
+/// Request and result types of the typed [`Core`] API, for shells.
+pub mod api {
+    pub use super::account_data::*;
+    pub use super::messaging::*;
+    pub use super::notifications::*;
+    pub use super::profile_media::*;
+    pub use super::realtime::*;
+    pub use super::room_administration::*;
+    pub use super::session_crypto::*;
+}
 pub use session_crypto::{MatrixCrossSigningState, MatrixCryptoStatus, MatrixSessionSnapshot};
 
 /// Internal state passed to command handlers. It never carries shell types.

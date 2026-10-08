@@ -4715,7 +4715,7 @@ async fn matrix_local_echo_discard_without_owner_fails_closed() {
 async fn matrix_local_echo_retry_calls_the_queue_owner_not_a_new_send() {
     let source = include_str!("messaging.rs");
     let start = source
-        .find("pub(super) fn matrix_local_echo_retry")
+        .find("pub(super) async fn local_echo_retry")
         .expect("retry command");
     let end = source[start..]
         .find("fn require_local_echo_transaction_id")
@@ -4726,7 +4726,7 @@ async fn matrix_local_echo_retry_calls_the_queue_owner_not_a_new_send() {
     assert!(!body.contains("send_text"));
     assert!(!body.contains("matrix_send_text"));
     let discard = &source[source
-        .find("pub(super) fn matrix_local_echo_discard")
+        .find("pub(super) async fn local_echo_discard")
         .expect("discard command")..start];
     assert!(discard.contains("abort_send"));
     assert!(!discard.contains("redact"));

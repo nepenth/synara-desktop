@@ -145,7 +145,9 @@ pub use shared_core_ffi::{
 #[cfg(feature = "full-app")]
 mod core;
 #[cfg(feature = "full-app")]
-pub use core::{Core, MatrixCrossSigningState, MatrixCryptoStatus, MatrixSessionSnapshot};
+pub use core::{
+    api as core_api, Core, MatrixCrossSigningState, MatrixCryptoStatus, MatrixSessionSnapshot,
+};
 
 pub mod app;
 #[cfg(feature = "full-app")]
