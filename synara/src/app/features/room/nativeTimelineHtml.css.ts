@@ -185,6 +185,22 @@ export const UnsentDelivery = style({
   color: 'var(--synara-message-foreground)',
 });
 
+/** Authenticity shield. Grey is informational; red flags a trust problem. */
+export const EncryptionShield = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  float: 'right',
+  marginLeft: config.space.S100,
+  color: color.Secondary.Main,
+  opacity: 0.75,
+  selectors: {
+    '&[data-native-timeline-shield="red"]': {
+      color: color.Critical.Main,
+      opacity: 1,
+    },
+  },
+});
+
 export const UnsentAction = style({
   border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
   borderRadius: config.radii.R300,

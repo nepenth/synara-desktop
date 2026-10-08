@@ -6098,7 +6098,8 @@ private struct TimelineRow: View {
                     isGrouped: isGroupedWithPrevious,
                     deliveryStatus: item.deliveryStatus,
                     statusEventID: item.eventID,
-                    onRetryFailedSend: item.deliveryStatus == .failed ? onRetryFailedSend : nil
+                    onRetryFailedSend: item.deliveryStatus == .failed ? onRetryFailedSend : nil,
+                    encryptionShield: item.encryptionShield
                 )
             case let .formattedText(body, html):
                 SynaraMessageBubble(
@@ -6109,7 +6110,8 @@ private struct TimelineRow: View {
                     showsBackground: SynaraSurfaceDepthRole.standardMessageShowsBackground,
                     deliveryStatus: item.deliveryStatus,
                     statusEventID: item.eventID,
-                    onRetryFailedSend: item.deliveryStatus == .failed ? onRetryFailedSend : nil
+                    onRetryFailedSend: item.deliveryStatus == .failed ? onRetryFailedSend : nil,
+                    encryptionShield: item.encryptionShield
                 ) {
                     MatrixFormattedMessageView(
                         fallbackBody: body,

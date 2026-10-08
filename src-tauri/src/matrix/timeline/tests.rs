@@ -1124,6 +1124,7 @@ mod view_pure {
                 origin_server_ts: 1,
                 local_echo_state: None,
                 transaction_id: None,
+                encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
                     react: true,
                     reply: false,
@@ -1177,6 +1178,7 @@ mod view_pure {
                 origin_server_ts: 1,
                 local_echo_state: None,
                 transaction_id: None,
+                encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
                     react: true,
                     reply: true,

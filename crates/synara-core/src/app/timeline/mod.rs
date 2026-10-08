@@ -27,6 +27,7 @@ mod pins;
 mod projection;
 mod reactions;
 mod registry;
+mod shield;
 mod utd;
 mod view;
 mod view_emit;
@@ -82,6 +83,10 @@ pub use pins::{
 };
 pub use projection::{reconstruct, TimelineProjection};
 pub use registry::{TimelineEntry, TimelineKey, TimelineLifecycle, TimelineRegistry};
+pub use shield::{
+    project_encryption_shield, TimelineEncryptionShield, TimelineShieldCode, TimelineShieldTone,
+    STRICT_SHIELDS,
+};
 pub use utd::{UtdEntry, UtdIndex, UtdPhase, UtdReasonCode, UtdUpdate, MAX_UTD_ENTRIES};
 pub use view::{
     project_event_row, project_event_row_base, project_formatted_body, project_forward_transport,

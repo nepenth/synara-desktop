@@ -20,6 +20,8 @@ struct SynaraMessageBubble<Content: View>: View {
     let deliveryStatus: TimelineDeliveryStatus?
     var statusEventID: String? = nil
     var onRetryFailedSend: (() -> Void)? = nil
+    /// SDK authenticity shield for a message in an encrypted room.
+    var encryptionShield: TimelineEncryptionShield? = nil
     @ViewBuilder let content: () -> Content
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
@@ -45,6 +47,24 @@ struct SynaraMessageBubble<Content: View>: View {
                     .padding(.horizontal, SynaraSpacing.xSmall)
                     .padding(.vertical, SynaraSpacing.xSmall)
             }
+            .overlay(alignment: .topTrailing) {
+                encryptionShieldBadge
+                    .padding(SynaraSpacing.xSmall)
+            }
+    }
+
+    @ViewBuilder
+    private var encryptionShieldBadge: some View {
+        if let encryptionShield {
+            Image(systemName: encryptionShield.systemImageName)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(
+                    encryptionShield.tone == .red ? SynaraColor.critical : SynaraColor.secondaryText
+                )
+                .accessibilityLabel(encryptionShield.label)
+                .accessibilityIdentifier(statusIdentifier("TimelineItemShield"))
+                .help(encryptionShield.label)
+        }
     }
 
     private var deliveryStatusOpacity: Double {
@@ -264,7 +284,8 @@ extension SynaraMessageBubble where Content == AnyView {
         showsBackground: Bool = SynaraSurfaceDepthRole.standardMessageShowsBackground,
         deliveryStatus: TimelineDeliveryStatus? = nil,
         statusEventID: String? = nil,
-        onRetryFailedSend: (() -> Void)? = nil
+        onRetryFailedSend: (() -> Void)? = nil,
+        encryptionShield: TimelineEncryptionShield? = nil
     ) {
         self.alignment = alignment
         self.variant = variant
@@ -273,6 +294,7 @@ extension SynaraMessageBubble where Content == AnyView {
         self.deliveryStatus = deliveryStatus
         self.statusEventID = statusEventID
         self.onRetryFailedSend = onRetryFailedSend
+        self.encryptionShield = encryptionShield
         self.content = {
             AnyView(
                 Text(text)

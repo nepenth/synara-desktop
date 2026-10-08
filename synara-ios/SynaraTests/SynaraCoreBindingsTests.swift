@@ -709,7 +709,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 mediaMimeType: nil,
                 mediaWidth: nil,
                 mediaHeight: nil,
-                mediaDurationMs: nil
+                mediaDurationMs: nil,
+                encryptionShield: nil
             )
         )
         XCTAssertEqual(mappedRow?.senderProfileDisplayName, "Alice Example")
@@ -869,7 +870,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 mediaMimeType: nil,
                 mediaWidth: nil,
                 mediaHeight: nil,
-                mediaDurationMs: nil
+                mediaDurationMs: nil,
+                encryptionShield: nil
             )
         }
 
@@ -3769,5 +3771,47 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertTrue(fileManager.fileExists(atPath: legacy.appendingPathComponent("legacy-store").path))
         XCTAssertTrue(fileManager.fileExists(atPath: shared.appendingPathComponent("unexpected-store").path))
         XCTAssertFalse(SynaraSharedConstants.sharedCoreStoreIsReady(at: shared, fileManager: fileManager))
+    }
+
+    func testEncryptionShieldMapsOnlyClosedToneAndCode() {
+        XCTAssertNil(SharedCoreTimelineRows.encryptionShield(from: nil))
+        XCTAssertNil(SharedCoreTimelineRows.encryptionShield(
+            from: TimelineViewEncryptionShieldDto(tone: "blue", code: "unknown_device")
+        ))
+        XCTAssertNil(SharedCoreTimelineRows.encryptionShield(
+            from: TimelineViewEncryptionShieldDto(tone: "red", code: "made_up")
+        ))
+
+        let violation = SharedCoreTimelineRows.encryptionShield(
+            from: TimelineViewEncryptionShieldDto(tone: "red", code: "verification_violation")
+        )
+        XCTAssertEqual(violation, TimelineEncryptionShield(tone: .red, code: .verificationViolation))
+        XCTAssertEqual(violation?.systemImageName, "exclamationmark.shield")
+        XCTAssertEqual(violation?.label, "The sender's verified identity has changed.")
+
+        let clear = SharedCoreTimelineRows.encryptionShield(
+            from: TimelineViewEncryptionShieldDto(tone: "grey", code: "sent_in_clear")
+        )
+        XCTAssertEqual(clear?.tone, .grey)
+        XCTAssertEqual(clear?.systemImageName, "lock.open")
+
+        let unknownDevice = TimelineEncryptionShield(tone: "grey", code: "unknown_device")
+        XCTAssertEqual(unknownDevice?.systemImageName, "shield")
+    }
+
+    func testEncryptionShieldSurvivesTimelineItemCopies() {
+        var item = TimelineItem(
+            id: "item",
+            eventID: "$event:example.org",
+            senderID: "@alice:example.org",
+            timestamp: Date(timeIntervalSince1970: 0),
+            kind: .text("hello"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+        item.encryptionShield = TimelineEncryptionShield(tone: .grey, code: .unknownDevice)
+        XCTAssertEqual(item.withDeliveryStatus(nil).encryptionShield, item.encryptionShield)
+        XCTAssertEqual(item.withSenderAvatarURL(nil).encryptionShield, item.encryptionShield)
     }
 }

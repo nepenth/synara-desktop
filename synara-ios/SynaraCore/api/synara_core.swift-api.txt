@@ -189,6 +189,7 @@ extension TimelineReactionSenderDto: Sendable
 extension TimelineReadStateDto: Sendable
 extension TimelineReadStateError: Sendable
 extension TimelineSnapshotDto: Sendable
+extension TimelineViewEncryptionShieldDto: Sendable
 extension TimelineViewPollAnswerDto: Sendable
 extension TimelineViewPollDto: Sendable
 extension TimelineViewPositionDto: Sendable
@@ -1582,6 +1583,10 @@ public struct TimelineSnapshotDto: Equatable, Hashable
   public var canRedactOther: Bool
   public var rows: [TimelineViewRowDto]
   public init(schemaVersion: UInt32, sessionGeneration: UInt64, roomId: String, revision: UInt64, position: TimelineViewPositionDto, paginationBackward: String, paginationForward: String, visibleTailEventId: String?, receiptTailEventId: String?, ownReadEventId: String?, unreadAnchorEventId: String?, isMarkedUnread: Bool, pinnedEventIds: [String], rowCount: UInt32, markRead: Bool, markUnread: Bool, paginateBackward: Bool, paginateForward: Bool, canRedactOwn: Bool, canRedactOther: Bool, rows: [TimelineViewRowDto])
+public struct TimelineViewEncryptionShieldDto: Equatable, Hashable
+  public var tone: String
+  public var code: String
+  public init(tone: String, code: String)
 public struct TimelineViewPollAnswerDto: Equatable, Hashable
   public var id: String
   public var text: String
@@ -1651,7 +1656,8 @@ public struct TimelineViewRowDto: Equatable, Hashable
   public var mediaWidth: UInt32?
   public var mediaHeight: UInt32?
   public var mediaDurationMs: UInt64?
-  public init(kind: String, itemId: String, eventId: String, sender: String, senderName: String, senderAvatarUrl: String?, body: String, originServerTs: UInt64, edited: Bool, replyToEventId: String?, replyPreview: TimelineViewReplyPreviewDto?, threadRootEventId: String?, threadSummary: TimelineViewThreadSummaryDto?, poll: TimelineViewPollDto?, capabilities: TimelineViewRowCapabilitiesDto?, decryptionState: String?, messageType: String?, forwardTransport: String?, formattedBody: String?, agentCardJson: String?, isAgentApproval: Bool, mediaFilename: String?, mediaCaption: String?, reactions: [TimelineViewReactionDto], mediaHandleId: String?, mediaMimeType: String?, mediaWidth: UInt32?, mediaHeight: UInt32?, mediaDurationMs: UInt64?)
+  public var encryptionShield: TimelineViewEncryptionShieldDto?
+  public init(kind: String, itemId: String, eventId: String, sender: String, senderName: String, senderAvatarUrl: String?, body: String, originServerTs: UInt64, edited: Bool, replyToEventId: String?, replyPreview: TimelineViewReplyPreviewDto?, threadRootEventId: String?, threadSummary: TimelineViewThreadSummaryDto?, poll: TimelineViewPollDto?, capabilities: TimelineViewRowCapabilitiesDto?, decryptionState: String?, messageType: String?, forwardTransport: String?, formattedBody: String?, agentCardJson: String?, isAgentApproval: Bool, mediaFilename: String?, mediaCaption: String?, reactions: [TimelineViewReactionDto], mediaHandleId: String?, mediaMimeType: String?, mediaWidth: UInt32?, mediaHeight: UInt32?, mediaDurationMs: UInt64?, encryptionShield: TimelineViewEncryptionShieldDto?)
 public struct TimelineViewThreadSummaryDto: Equatable, Hashable
   public var rootEventId: String
   public var replyCount: UInt32

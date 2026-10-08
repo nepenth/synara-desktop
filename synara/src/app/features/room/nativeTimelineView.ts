@@ -9,6 +9,7 @@ import {
 import { parseHermesAgentPayload, type HermesAgentPayload } from '../../utils/hermes';
 import type { RoomEncryptionStatus } from '../matrix-dto/room';
 import { devicePixelScale, nativeThumbnailContentUri } from '../../matrix/nativeThumbnail';
+import type { NativeTimelineEncryptionShield } from './nativeTimelineShield';
 
 const NATIVE_TIMELINE_VIEW_UPDATED_EVENT = 'matrix-timeline-view-updated';
 const TIMELINE_VIEW_SCHEMA_VERSION = 1;
@@ -47,6 +48,8 @@ type NativeTimelineEventRowBase = {
   localEchoState?: NativeTimelineLocalEchoState;
   /** SDK transaction id for discard and retry. Not a server event id. */
   transactionId?: string;
+  /** SDK authenticity shield in an encrypted room. Absent when trusted. */
+  encryptionShield?: NativeTimelineEncryptionShield;
   capabilities: NativeTimelineRowCapabilities;
 };
 
@@ -94,6 +97,13 @@ export const nativeTimelineEchoFields = (
     eventId: 'eventId' in row ? row.eventId : undefined,
     candidate: false,
   };
+};
+
+/** The SDK shield of a message-like row. Membership, state and call rows carry none. */
+export const nativeTimelineRowShield = (row: NativeTimelineViewRow): unknown => {
+  if (row.kind === 'message' || row.kind === 'poll') return row.encryptionShield;
+  if (row.kind === 'sticker') return row.event.encryptionShield;
+  return undefined;
 };
 
 /**
