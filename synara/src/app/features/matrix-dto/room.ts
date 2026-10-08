@@ -13,9 +13,10 @@ import {
   reqNumber,
   reqString,
 } from './parseUtil';
+import type { Membership } from './generated';
+export type { Membership } from './generated';
 
 export const MEMBERSHIPS = ['invite', 'join', 'knock', 'leave', 'ban'] as const;
-export type Membership = (typeof MEMBERSHIPS)[number];
 const MEMBERSHIP_SET = new Set<string>(MEMBERSHIPS);
 
 export function isMembership(value: unknown): value is Membership {

@@ -1,4 +1,8 @@
-import type { RoomSummary } from '../../../features/matrix-dto/room';
+import type { RoomListPresentation } from '../../../features/matrix-dto/generated';
+import {
+  favoriteRoomIdsFromPresentation,
+  orderRoomIdsByPresentation,
+} from '../../../state/room-list/roomListPresentation';
 
 /**
  * Device-local room-list sort chrome. Legacy key `synara.roomListSort` is the
@@ -33,8 +37,9 @@ export const partitionHomeRooms = (
   return { favoriteRoomIds, remainingRoomIds };
 };
 
-export const favoriteRoomIdSet = (rooms: readonly RoomSummary[]): Set<string> =>
-  new Set(rooms.filter((room) => room.isFavorite).map((room) => room.roomId));
+/** Joined `m.favourite` rooms, as Core classifies them. */
+export const favoriteRoomIdSet = (presentation: RoomListPresentation): Set<string> =>
+  favoriteRoomIdsFromPresentation(presentation);
 
 const parseRoomListSort = (value: string | null | undefined): RoomListSort | undefined =>
   value === 'name' || value === 'recent' ? value : undefined;
@@ -58,40 +63,12 @@ export const writeRoomListSort = (
   storage?.setItem(section ? roomListSortStorageKey(section) : ROOM_LIST_SORT_STORAGE_KEY, sort);
 };
 
-const compareNames = (left?: string, right?: string, leftId?: string, rightId?: string): number => {
-  const ln = (left ?? '').replace(/#/g, '').toLocaleLowerCase();
-  const rn = (right ?? '').replace(/#/g, '').toLocaleLowerCase();
-  if (ln && !rn) return -1;
-  if (!ln && rn) return 1;
-  const nameDelta = ln.localeCompare(rn, undefined, { sensitivity: 'base' });
-  return nameDelta || (leftId ?? '').localeCompare(rightId ?? '');
-};
-
 /**
- * Sort one section's room ids. Recent uses native `lastActivityTs` only —
- * missing timestamps sort last and are not invented.
+ * Sort one section's room ids by Core's order for the chosen sort. Core owns
+ * name normalization and the recent-activity rules (missing timestamps last).
  */
 export const sortHomeRoomIds = (
   roomIds: readonly string[],
-  rooms: readonly RoomSummary[],
+  presentation: RoomListPresentation,
   sort: RoomListSort
-): string[] => {
-  const byId = new Map(rooms.map((room) => [room.roomId, room]));
-  return Array.from(roomIds).sort((leftId, rightId) => {
-    const left = byId.get(leftId);
-    const right = byId.get(rightId);
-    if (sort === 'name') {
-      return compareNames(left?.name, right?.name, leftId, rightId);
-    }
-    const leftTs = left?.lastActivityTs;
-    const rightTs = right?.lastActivityTs;
-    const leftHasTs = typeof leftTs === 'number' && Number.isFinite(leftTs);
-    const rightHasTs = typeof rightTs === 'number' && Number.isFinite(rightTs);
-    if (leftHasTs && rightHasTs && leftTs !== rightTs) {
-      return (rightTs as number) - (leftTs as number);
-    }
-    if (leftHasTs && !rightHasTs) return -1;
-    if (!leftHasTs && rightHasTs) return 1;
-    return compareNames(left?.name, right?.name, leftId, rightId);
-  });
-};
+): string[] => orderRoomIdsByPresentation(roomIds, presentation, sort);

@@ -60,6 +60,7 @@ import { editMessageWithNativeDesktopOwner } from '../nativeEditMessage';
 import { getEditedEvent, getMentionContent, trimReplyFromFormattedBody } from '../../../utils/room';
 import { mobileOrTablet } from '../../../utils/user-agent';
 import { useComposingCheck } from '../../../hooks/useComposingCheck';
+import { renderComposerHtml } from '../../../components/editor/composerMarkdown';
 
 const EMPTY_IMAGE_PACK_ROOMS: string[] = [];
 
@@ -111,11 +112,9 @@ export const MessageEditor = as<'div', MessageEditorProps>(
       useCallback(async () => {
         const plainText = toPlainText(editor.children, isMarkdown).trim();
         const customHtml = trimCustomHtml(
-          toMatrixCustomHTML(editor.children, {
-            allowTextFormatting: true,
-            allowBlockMarkdown: isMarkdown,
-            allowInlineMarkdown: isMarkdown,
-          })
+          isMarkdown
+            ? await renderComposerHtml(editor.children)
+            : toMatrixCustomHTML(editor.children, { allowTextFormatting: true })
         );
 
         const [prevBody, prevCustomHtml, prevMentions] = getPrevBodyAndFormattedBody();

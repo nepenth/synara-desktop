@@ -4,11 +4,15 @@ import { parseRoomSummary, type RoomSummary } from '../../features/matrix-dto/ro
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { RoomsAction } from './utils';
 import { startRoomListUpdateDrivenPoll } from '../../utils/nativeRoomListUpdates';
+import type { RoomListPresentation } from '../../features/matrix-dto/generated';
+import { EMPTY_ROOM_LIST_PRESENTATION, parseRoomListPresentation } from './roomListPresentation';
 
 export type NativeRoomListSnapshot = {
   sessionGeneration: number;
   orderedRoomIds: string[];
   rooms: RoomSummary[];
+  /** Section orders, favorites and unread attention, derived by Core. */
+  presentation: RoomListPresentation;
 };
 
 export type NativeSessionSnapshot =
@@ -25,6 +29,7 @@ const emptyRoomListSnapshot: NativeRoomListSnapshot = {
   sessionGeneration: 0,
   orderedRoomIds: [],
   rooms: [],
+  presentation: EMPTY_ROOM_LIST_PRESENTATION,
 };
 
 export const sameStringList = (left: readonly string[], right: readonly string[]): boolean =>
@@ -72,6 +77,7 @@ export const sameNativeRoomListSnapshot = (
   if (left.sessionGeneration !== right.sessionGeneration) return false;
   if (!sameStringList(left.orderedRoomIds, right.orderedRoomIds)) return false;
   if (left.rooms.length !== right.rooms.length) return false;
+  if (JSON.stringify(left.presentation) !== JSON.stringify(right.presentation)) return false;
   return left.rooms.every((room, index) => sameRoomSummary(room, right.rooms[index]));
 };
 
@@ -123,10 +129,13 @@ const parseNativeRoomListSnapshot = (value: unknown): NativeRoomListSnapshot | n
     if (!parsed) return null;
     rooms.push(parsed);
   }
+  const presentation = parseRoomListPresentation(record.presentation);
+  if (!presentation) return null;
   return {
     sessionGeneration: record.sessionGeneration,
     orderedRoomIds,
     rooms,
+    presentation,
   };
 };
 

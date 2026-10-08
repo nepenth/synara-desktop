@@ -806,6 +806,8 @@ struct RoomPowerLevelSummary: Equatable {
     let canEditTopic: Bool
     let canEditAvatar: Bool
     let canEditPowerLevels: Bool
+    /// Room creators (room v12+) outrank every integer level.
+    var isCreator: Bool = false
 
     static let fullPower = RoomPowerLevelSummary(
         ownUserLevel: 100,

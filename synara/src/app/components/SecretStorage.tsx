@@ -5,7 +5,7 @@ import { AsyncStatus, useAsyncCallback } from '../hooks/useAsyncCallback';
 import { useNativeSecretStorage } from '../hooks/useNativeSecretStorage';
 import {
   bootstrapNativeSecretStorage,
-  NativeSecretStorageOperationResult,
+  NativeSecretStorageSetup,
   NativeSecretStorageStatus,
   resetNativeSecretStorage,
   unlockNativeSecretStorage,
@@ -14,7 +14,7 @@ import { InfoCard } from './info-card';
 
 type NativeSecretStorageActionProps = {
   status: NativeSecretStorageStatus;
-  onComplete?: (result: NativeSecretStorageOperationResult) => void;
+  onComplete?: (result: NativeSecretStorageSetup) => void;
   allowReset?: boolean;
 };
 
@@ -26,7 +26,7 @@ export function NativeSecretStorageAction({
   const [resetting, setResetting] = useState(false);
   const action = resetting ? 'reset' : status.action;
   const [operationState, runOperation] = useAsyncCallback<
-    NativeSecretStorageOperationResult,
+    NativeSecretStorageSetup,
     Error,
     [string]
   >(

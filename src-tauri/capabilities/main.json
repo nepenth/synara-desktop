@@ -21,6 +21,7 @@
     "allow-desktop-window-minimize",
     "allow-desktop-window-toggle-maximize",
     "allow-desktop-window-close",
+    "allow-desktop-render-markdown",
     "allow-desktop-navigate",
     "allow-desktop-set-badge-count",
     "allow-desktop-play-notification-sound",

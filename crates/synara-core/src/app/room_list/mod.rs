@@ -31,6 +31,7 @@ mod invite_avatars;
 mod invites;
 mod last_message;
 mod live;
+mod presentation;
 mod projection;
 mod sort;
 mod summary;
@@ -61,6 +62,11 @@ pub use last_message::{
 pub use live::{
     snapshot_from_sync_owner, NativeRoomListOwner, NativeRoomListSnapshot,
     NativeRoomListUpdateSignal, RoomListUpdateEmit,
+};
+pub use presentation::{
+    is_favorite_room, normalized_room_name, order_room_ids, room_attention, room_list_presentation,
+    summarize_badges, unread_attention_with_rollup, BadgeSummary, BadgeSummaryInput,
+    RoomBadgeSource, RoomListOrder, RoomListPresentation, RoomOrderInput, RoomUnreadAttention,
 };
 pub use projection::{reconstruct, RoomListProjection};
 pub use sort::{sort_rooms, sort_rooms_in_place, RoomListSort};

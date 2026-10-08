@@ -1,15 +1,17 @@
 import React, { useCallback, useMemo } from 'react';
 import { ImagePackContent } from './ImagePackContent';
 import { ImagePack, PackContent } from '../../plugins/custom-emoji';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { AccountDataEvent } from '../../../types/matrix/accountData';
 import { useUserImagePack } from '../../hooks/useImagePacks';
 import { setUserImagePackNative } from '../../features/room/nativeImagePack';
+import { useMyUserId } from '../../state/nativeIdentity';
+import { useMatrixClient } from '../../hooks/useMatrixClient';
 
 export function UserImagePack() {
   const mx = useMatrixClient();
+  const myUserId = useMyUserId();
 
-  const defaultPack = useMemo(() => new ImagePack(mx.getUserId() ?? '', {}, undefined), [mx]);
+  const defaultPack = useMemo(() => new ImagePack(myUserId, {}, undefined), [myUserId]);
   const imagePack = useUserImagePack();
 
   const handleUpdate = useCallback(

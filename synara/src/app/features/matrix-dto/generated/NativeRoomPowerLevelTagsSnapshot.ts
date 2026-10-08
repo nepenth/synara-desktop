@@ -4,4 +4,4 @@ import type { JsonValue } from "./serde_json/JsonValue";
 /**
  * V-ROOMS.MEMBERS-READ — live native custom power-level tag projection.
  */
-export type NativeRoomPowerLevelTagsSnapshot = { status: string, sessionGeneration: number, roomId: string, eventType: string, stateKey: string, content: JsonValue, };
+export type NativeRoomPowerLevelTagsSnapshot = { status: "ok", sessionGeneration: number, roomId: string, eventType: "in.synara.room.power_level_tags", stateKey: "", content: JsonValue, };

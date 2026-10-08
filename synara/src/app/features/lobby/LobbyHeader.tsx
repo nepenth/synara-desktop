@@ -34,7 +34,6 @@ import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../components/BackRouteHandler';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useOpenSpaceSettings } from '../../state/hooks/spaceSettings';
-import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import * as depthCss from '../../styles/Depth.css';
@@ -46,12 +45,10 @@ type LobbyMenuProps = {
 };
 const LobbyMenu = forwardRef<HTMLDivElement, LobbyMenuProps>(
   ({ powerLevels, requestClose }, ref) => {
-    const mx = useMatrixClient();
     const space = useSpace();
-    const creators = useRoomCreators(space);
 
-    const permissions = useRoomPermissions(creators, powerLevels);
-    const canInvite = permissions.action('invite', mx.getSafeUserId());
+    const permissions = useRoomPermissions(powerLevels);
+    const canInvite = permissions.action('invite');
     const openSpaceSettings = useOpenSpaceSettings();
 
     const [invitePrompt, setInvitePrompt] = useState(false);

@@ -21,7 +21,6 @@ import { PageNav, PageNavContent, PageNavHeader, PageRoot } from '../../componen
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { Account } from './account';
 import { useUserProfile } from '../../hooks/useUserProfile';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { UserAvatar } from '../../components/user-avatar';
 import { nameInitials } from '../../utils/common';
@@ -35,6 +34,7 @@ import { stopPropagation } from '../../utils/keyboard';
 import { LogoutDialog } from '../../components/LogoutDialog';
 import * as depthCss from '../../styles/Depth.css';
 import { isDesktopPlatform } from '../../platform';
+import { getSafeMyUserId } from '../../state/nativeIdentity';
 
 export enum SettingsPages {
   GeneralPage,
@@ -109,8 +109,7 @@ type SettingsProps = {
   requestClose: () => void;
 };
 export function Settings({ initialPage, requestClose }: SettingsProps) {
-  const mx = useMatrixClient();
-  const userId = mx.getUserId()!;
+  const userId = getSafeMyUserId();
   const profile = useUserProfile(userId);
   const displayName = profile.displayName ?? getMxIdLocalPart(userId) ?? userId;
   const avatarUrl = profile.avatarUrl;

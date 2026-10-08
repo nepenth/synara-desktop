@@ -11,6 +11,7 @@ import { notificationPermission, setFavicon } from '../../utils/dom';
 import { useSetting } from '../../state/hooks/settings';
 import { desktopPlatformSettingsAtom, settingsAtom } from '../../state/settings';
 import { allInvitesAtom, useNativeInviteSyncing } from '../../state/room-list/inviteList';
+import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
 import { usePreviousValue } from '../../hooks/usePreviousValue';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { getInboxInvitesPath } from '../pathUtils';
@@ -71,6 +72,7 @@ import {
   subscribeNativeNotificationObservations,
   type NativeNotificationObservation,
 } from '../../features/room/nativeNotificationObservation';
+import { getMyUserId } from '../../state/nativeIdentity';
 
 // Local submit-memory bound. Core `(room, event)` dedup is authoritative;
 // this set only guards against a duplicated observation of the same event.
@@ -148,7 +150,7 @@ function TrayDoNotDisturbSync() {
 }
 
 function PlatformBadgeAndTrayUpdater() {
-  const roomToUnread = useAtomValue(roomToUnreadAtom);
+  const { presentation } = useNativeRoomListSnapshot();
   const { pendingCount: agentApprovalCount } = useApprovalInboxSummary();
   const invites = useAtomValue(allInvitesAtom);
   const laterContent = useAtomValue(laterContentAtom);
@@ -159,7 +161,8 @@ function PlatformBadgeAndTrayUpdater() {
       (item) => !item.completedAt
     ).length;
     const summary = getPlatformNotificationSummary({
-      unreadCounts: roomToUnread.values(),
+      highlightTotal: presentation.highlightTotal,
+      unreadTotal: presentation.unreadTotal,
       laterActiveCount: activeLaterCount,
       inviteCount: invites.length,
       agentApprovalCount,
@@ -175,7 +178,7 @@ function PlatformBadgeAndTrayUpdater() {
         doNotDisturb: !showNotifications,
       }).catch(() => undefined);
     }
-  }, [invites.length, laterContent, roomToUnread, showNotifications, agentApprovalCount]);
+  }, [invites.length, laterContent, presentation, showNotifications, agentApprovalCount]);
 
   return null;
 }
@@ -501,7 +504,7 @@ function AgentApprovalNotifications() {
   const mx = useMatrixClient();
   const browserNotifications = useMemo(createObservedBrowserNotificationRegistry, []);
   useEffect(() => () => browserNotifications.clear(), [mx, browserNotifications]);
-  const accountScope = mx.getUserId();
+  const accountScope = getMyUserId();
   const nativeActionState = useMemo(
     () => ({
       inFlight: new Set<string>(),

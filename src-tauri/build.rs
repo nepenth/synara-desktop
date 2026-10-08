@@ -9,6 +9,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "desktop_window_minimize",
     "desktop_window_toggle_maximize",
     "desktop_window_close",
+    "desktop_render_markdown",
     "desktop_navigate",
     "desktop_set_badge_count",
     "desktop_play_notification_sound",

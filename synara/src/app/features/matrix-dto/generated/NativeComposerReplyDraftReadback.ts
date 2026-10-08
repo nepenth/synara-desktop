@@ -5,4 +5,4 @@ export type NativeComposerReplyDraftReadback = { schemaVersion: number, roomId: 
 /**
  * `set`, `cleared`, or `empty`.
  */
-status: string, draft?: NativeComposerReplyDraft, };
+status: "set" | "cleared" | "empty", draft?: NativeComposerReplyDraft, };

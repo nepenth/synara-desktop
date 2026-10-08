@@ -6,6 +6,7 @@ import {
 } from '../features/settings/account/nativeProfile';
 import { UserEvent } from '../utils/roomEvents';
 import { useMatrixClient } from './useMatrixClient';
+import { getMyUserId } from '../state/nativeIdentity';
 
 export type UserProfile = {
   avatarUrl?: string;
@@ -20,7 +21,7 @@ type UserEventedReading = {
 };
 
 const isOwnUser = (mx: { getUserId(): string | null }, userId: string): boolean =>
-  mx.getUserId() === userId;
+  getMyUserId() === userId;
 
 export const useUserProfile = (userId: string): UserProfile => {
   const mx = useMatrixClient();

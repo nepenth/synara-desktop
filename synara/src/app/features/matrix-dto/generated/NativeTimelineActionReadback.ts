@@ -7,4 +7,4 @@ export type NativeTimelineActionReadback = { schemaVersion: number, action: Nati
  * forward is still `queued`). For every other action: the event the
  * write targeted.
  */
-eventId: string, status: string, };
+eventId: string, status: "sent" | "redacted" | "reported" | "pinned" | "unpinned" | "already_pinned" | "already_unpinned" | "voted" | "declined" | "queued", };

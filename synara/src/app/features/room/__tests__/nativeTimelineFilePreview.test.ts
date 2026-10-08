@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   isNativeTimelineMarkdownAttachment,
-  projectNativeTimelineMarkdownPreview,
+  renderNativeTimelineMarkdownPreview,
   MAX_NATIVE_MARKDOWN_PREVIEW_BYTES,
 } from '../nativeTimelineFilePreview';
 
@@ -54,52 +54,56 @@ test('non-markdown files do not open the markdown preview route', () => {
   assert.equal(isNativeTimelineMarkdownAttachment({}), false);
 });
 
-test('markdown preview projects headings through the shared markdown parser', () => {
-  const projected = projectNativeTimelineMarkdownPreview(
-    '# Agent notes\n\nUse **bold** for emphasis.\n'
+// Markdown rendering itself is Core's (`render_composer_markdown` tests in Rust).
+
+test('markdown preview renders through Core with no fragments', async () => {
+  const calls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  const projected = await renderNativeTimelineMarkdownPreview(
+    '# Agent notes',
+    async (command, args) => {
+      calls.push({ command, args });
+      return { available: true, value: '<h1>Agent notes</h1>' };
+    }
   );
-  assert.equal(projected.tooLarge, false);
-  assert.match(projected.html, /<h1[\s>][\s\S]*Agent notes/);
-  assert.match(projected.html, /<strong[\s>][\s\S]*bold/);
-  assert.match(projected.plain, /Agent notes/);
+  assert.deepEqual(calls, [
+    { command: 'desktop_render_markdown', args: { source: '# Agent notes', fragments: [] } },
+  ]);
+  assert.deepEqual(projected, {
+    html: '<h1>Agent notes</h1>',
+    plain: '# Agent notes',
+    tooLarge: false,
+  });
 });
 
-test('dash and star bullets both produce unordered lists in preview', () => {
-  const dash = projectNativeTimelineMarkdownPreview('- dash');
-  const star = projectNativeTimelineMarkdownPreview('* star');
-  assert.match(dash.html, /<ul[\s>][\s\S]*dash/);
-  assert.doesNotMatch(dash.html, /<ol[\s>]/);
-  assert.match(star.html, /<ul[\s>][\s\S]*star/);
+test('plain text, an unavailable bridge or a failed render shows the plain text', async () => {
+  const plain = await renderNativeTimelineMarkdownPreview('just text', async () => ({
+    available: true,
+    value: null,
+  }));
+  assert.equal(plain.html, '');
+  const unavailable = await renderNativeTimelineMarkdownPreview('x', async () => ({
+    available: false,
+  }));
+  assert.equal(unavailable.html, '');
+  const failed = await renderNativeTimelineMarkdownPreview('x', async () => {
+    throw new Error('boom');
+  });
+  assert.equal(failed.html, '');
+  assert.equal(failed.plain, 'x');
 });
 
-test('ordered lists still produce ol in preview', () => {
-  const projected = projectNativeTimelineMarkdownPreview('1. ordered');
-  assert.match(projected.html, /<ol[\s>][\s\S]*ordered/);
-});
-
-test('a simple two-column table produces table markup', () => {
-  const projected = projectNativeTimelineMarkdownPreview(
-    '| Name | Role |\n| --- | --- |\n| Ada | Lead |\n'
-  );
-  assert.equal(projected.tooLarge, false);
-  assert.match(projected.html, /<table[\s\S]*<th[\s\S]*Name/);
-});
-
-test('preview projects images, strike, and inline code', () => {
-  const projected = projectNativeTimelineMarkdownPreview(
-    'See ![diagram](https://example.org/a.png) and ~~old~~ plus `code`.'
-  );
-  assert.match(projected.html, /<img data-md="image" alt="diagram"/);
-  assert.match(projected.html, /<s data-md[\s\S]*old/);
-  assert.match(projected.html, /<code data-md[\s\S]*code/);
-});
-
-test('oversized markdown preview fails closed without parsing', () => {
-  const projected = projectNativeTimelineMarkdownPreview(
-    `# ${'x'.repeat(MAX_NATIVE_MARKDOWN_PREVIEW_BYTES)}`
+test('oversized markdown preview fails closed without calling Core', async () => {
+  let called = false;
+  const projected = await renderNativeTimelineMarkdownPreview(
+    `# ${'x'.repeat(MAX_NATIVE_MARKDOWN_PREVIEW_BYTES)}`,
+    async () => {
+      called = true;
+      return { available: true, value: '<p>x</p>' };
+    }
   );
   assert.equal(projected.tooLarge, true);
   assert.equal(projected.html, '');
+  assert.equal(called, false);
 });
 
 test('preview owner keeps MIME tables out of the presenter', () => {

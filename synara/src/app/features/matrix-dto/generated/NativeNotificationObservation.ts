@@ -7,7 +7,7 @@ import type { NativeAgentApprovalObservation } from "./NativeAgentApprovalObserv
  * classification does not assert terminal reaction state; the action owner
  * revalidates current SDK reaction aggregation before sending any reaction.
  */
-export type NativeNotificationObservation = { sessionGeneration: number, roomId: string, eventId: string, sender: string, eventType: string, originServerTs: number, 
+export type NativeNotificationObservation = { sessionGeneration: number, roomId: string, eventId: string, sender: string, eventType: "m.room.message" | "m.room.encrypted" | "m.sticker", originServerTs: number, 
 /**
  * Classification from the complete SDK plaintext body, never truncated renderer input.
  */

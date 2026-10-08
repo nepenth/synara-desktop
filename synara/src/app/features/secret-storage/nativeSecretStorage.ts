@@ -1,31 +1,23 @@
 import { invokeDesktopWithAvailability } from '../../utils/desktop';
+import type {
+  NativeSecretStorageOperationResult,
+  NativeSecretStorageStatus,
+} from '../matrix-dto/generated';
+export type {
+  NativeMissingSecret,
+  NativeSecretStorageAction,
+  NativeSecretStorageOperationResult,
+  NativeSecretStorageState,
+  NativeSecretStorageStatus,
+} from '../matrix-dto/generated';
 
-export type NativeSecretStorageState = 'unavailable' | 'not_set_up' | 'locked' | 'ready';
-export type NativeSecretStorageAction = 'bootstrap_required' | 'unlock_required' | 'none';
-export type NativeMissingSecret =
-  | 'cross_signing_master'
-  | 'cross_signing_self_signing'
-  | 'cross_signing_user_signing'
-  | 'encryption_backup';
-
-export type NativeSecretStorageStatus = {
-  sessionGeneration: number;
-  state: NativeSecretStorageState;
-  exists: boolean;
-  unlocked: boolean;
-  defaultKeySet: boolean;
-  passphraseConfigured: boolean;
-  bootstrapReady: boolean;
-  missingSecrets: NativeMissingSecret[];
-  action: NativeSecretStorageAction;
-};
-
-export type NativeSecretStorageOperationResult = {
-  outcome: 'complete' | 'already_configured';
-  recoveryDocumentSaved: boolean;
-  recoveryDocumentName?: string;
+/**
+ * Bootstrap and reset return Core's operation result plus, once, the
+ * generated recovery key (the desktop shell's `DesktopSecretStorageSetup`).
+ * The key is never part of Core's wire DTO.
+ */
+export type NativeSecretStorageSetup = NativeSecretStorageOperationResult & {
   recoveryKey?: string;
-  status: NativeSecretStorageStatus;
 };
 
 export const NATIVE_SECRET_STORAGE_CHANGED = 'synara-native-secret-storage-changed';
@@ -60,8 +52,8 @@ export const getNativeSecretStorageStatus = (): Promise<NativeSecretStorageStatu
 
 export const bootstrapNativeSecretStorage = async (
   passphrase: string
-): Promise<NativeSecretStorageOperationResult> => {
-  const result = await invokeNativeSecretStorage<NativeSecretStorageOperationResult>(
+): Promise<NativeSecretStorageSetup> => {
+  const result = await invokeNativeSecretStorage<NativeSecretStorageSetup>(
     'matrix_secret_storage_bootstrap',
     { passphrase },
     'Secret storage setup failed. Check encryption backup status and try again.'
@@ -84,8 +76,8 @@ export const unlockNativeSecretStorage = async (
 
 export const resetNativeSecretStorage = async (
   passphrase: string
-): Promise<NativeSecretStorageOperationResult> => {
-  const result = await invokeNativeSecretStorage<NativeSecretStorageOperationResult>(
+): Promise<NativeSecretStorageSetup> => {
+  const result = await invokeNativeSecretStorage<NativeSecretStorageSetup>(
     'matrix_secret_storage_reset',
     { passphrase },
     'Secret storage reset failed. Unlock secret storage and try again.'

@@ -148,6 +148,32 @@ pub fn desktop_window_toggle_maximize(app: AppHandle) -> Result<bool, String> {
     }
 }
 
+/// Largest markdown source Core will render (bytes); matches the renderer's
+/// formatted-body and markdown-preview bound.
+const MAX_COMPOSER_MARKDOWN_BYTES: usize = 256 * 1024;
+/// Most inline fragments (mentions, emoji, links) in one message.
+const MAX_COMPOSER_FRAGMENTS: usize = 512;
+/// Largest single inline fragment (bytes).
+const MAX_COMPOSER_FRAGMENT_BYTES: usize = 8 * 1024;
+
+/// Render composer markdown with Core, the same renderer iOS uses. Returns
+/// `None` for plain text. Inputs are bounded before Core parses them.
+#[tauri::command]
+pub fn desktop_render_markdown(
+    source: String,
+    fragments: Vec<String>,
+) -> Result<Option<String>, String> {
+    if source.len() > MAX_COMPOSER_MARKDOWN_BYTES
+        || fragments.len() > MAX_COMPOSER_FRAGMENTS
+        || fragments
+            .iter()
+            .any(|fragment| fragment.len() > MAX_COMPOSER_FRAGMENT_BYTES)
+    {
+        return Err("The message is too large to format.".to_owned());
+    }
+    Ok(synara_core::render_composer_markdown(&source, &fragments))
+}
+
 /// Linux in-app Close must match native chrome: hide to tray.
 /// `Window::close()` can skip `CloseRequested` on some backends and quit.
 #[tauri::command]

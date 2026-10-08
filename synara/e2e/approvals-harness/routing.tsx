@@ -35,6 +35,7 @@ import {
   DIRECT_ROOM_PATH,
   SPACE_ROOM_PATH,
 } from '../../src/app/pages/paths';
+import { presentationFor } from '../room-list-harness/presentation';
 
 const query = new URLSearchParams(location.search);
 const kind = query.get('kind') ?? 'home';
@@ -98,6 +99,7 @@ window.__SYNARA_DESKTOP__ = {
         sessionGeneration: 1,
         orderedRoomIds: nativeRooms.map((item) => item.roomId),
         rooms: nativeRooms,
+        presentation: presentationFor(nativeRooms),
       } as T;
     throw new Error(`Unexpected routing fixture command ${command}`);
   },

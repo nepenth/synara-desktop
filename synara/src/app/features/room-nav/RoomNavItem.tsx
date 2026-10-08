@@ -22,7 +22,7 @@ import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { copyToClipboard } from '../../utils/dom';
-import { unreadFromNativeRoom } from '../../state/room/roomToUnread';
+import { unreadFromPresentation } from '../../state/room-list/roomListPresentation';
 import { setRoomReadStateWithNativeOwner } from '../../utils/nativeRoomReadStateOwner';
 import { markAsReadFromExplicitUserAction } from '../../utils/notifications';
 import { UseStateProvider } from '../../components/UseStateProvider';
@@ -41,7 +41,6 @@ import {
   RoomNotificationMode,
 } from '../../hooks/useRoomsNotificationPreferences';
 import { RoomNotificationModeSwitcher } from '../../components/RoomNotificationSwitcher';
-import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { useRoomName } from '../../hooks/useRoomMeta';
@@ -52,6 +51,7 @@ import { LiveCallChip } from './LiveCallChip';
 import { useNativeUserStatus } from '../matrix-presence/nativeUserStatus';
 import * as css from './styles.css';
 import * as depthCss from '../../styles/Depth.css';
+import { getMyUserId } from '../../state/nativeIdentity';
 
 type RoomNavItemMenuProps = {
   room: EventedRoomReading;
@@ -63,17 +63,16 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
     const mx = useMatrixClient();
     const nativeRooms = useNativeRoomListSnapshot();
     const nativeRoom = nativeRooms.rooms.find((summary) => summary.roomId === room.roomId);
-    const unread = unreadFromNativeRoom(nativeRoom);
+    const unread = unreadFromPresentation(nativeRooms.presentation, room.roomId);
     const isFavorite = nativeRoom?.isFavorite === true;
     const [favoriteError, setFavoriteError] = useState<string>();
     const [favoriteBusy, setFavoriteBusy] = useState(false);
     const [readError, setReadError] = useState<string>();
     const [readBusy, setReadBusy] = useState(false);
     const powerLevels = usePowerLevels(room);
-    const creators = useRoomCreators(room);
 
-    const permissions = useRoomPermissions(creators, powerLevels);
-    const canInvite = permissions.action('invite', mx.getSafeUserId());
+    const permissions = useRoomPermissions(powerLevels);
+    const canInvite = permissions.action('invite');
     const openRoomSettings = useOpenRoomSettings();
     const space = useSpaceOptionally();
 
@@ -294,14 +293,13 @@ type RoomNavItemProps = {
   notificationMode?: RoomNotificationMode;
 };
 function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNavItemProps) {
-  const mx = useMatrixClient();
   const [hover, setHover] = useState(false);
   const { hoverProps } = useHover({ onHoverChange: setHover });
   const { focusWithinProps } = useFocusWithin({ onFocusWithinChange: setHover });
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
   const nativeRooms = useNativeRoomListSnapshot();
   const nativeRoom = nativeRooms.rooms.find((summary) => summary.roomId === room.roomId);
-  const unread = unreadFromNativeRoom(nativeRoom);
+  const unread = unreadFromPresentation(nativeRooms.presentation, room.roomId);
   const dmPeerId =
     nativeRoom?.isDirect === true &&
     typeof nativeRoom.directUserId === 'string' &&
@@ -311,7 +309,7 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
   const dmPeerStatus = useNativeUserStatus(dmPeerId);
   const showDmInCall = Boolean(dmPeerId && dmPeerStatus?.inCall);
   const typingMember = useRoomTypingMember(room.roomId).filter(
-    (receipt) => receipt.userId !== mx.getUserId()
+    (receipt) => receipt.userId !== getMyUserId()
   );
 
   const roomName = useRoomName(room);

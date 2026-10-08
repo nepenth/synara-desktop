@@ -1,5 +1,4 @@
 import React, { ReactNode, useMemo } from 'react';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { makeClosedNavCategoriesAtom } from '../../state/closedNavCategories';
 import { ClosedNavCategoriesProvider } from '../../state/hooks/closedNavCategories';
 import { makeClosedLobbyCategoriesAtom } from '../../state/closedLobbyCategories';
@@ -8,13 +7,13 @@ import { makeNavToActivePathAtom } from '../../state/navToActivePath';
 import { NavToActivePathProvider } from '../../state/hooks/navToActivePath';
 import { makeOpenedSidebarFolderAtom } from '../../state/openedSidebarFolder';
 import { OpenedSidebarFolderProvider } from '../../state/hooks/openedSidebarFolder';
+import { getSafeMyUserId } from '../../state/nativeIdentity';
 
 type ClientInitStorageAtomProps = {
   children: ReactNode;
 };
 export function ClientInitStorageAtom({ children }: ClientInitStorageAtomProps) {
-  const mx = useMatrixClient();
-  const userId = mx.getUserId()!;
+  const userId = getSafeMyUserId();
 
   const closedNavCategoriesAtom = useMemo(() => makeClosedNavCategoriesAtom(userId), [userId]);
 

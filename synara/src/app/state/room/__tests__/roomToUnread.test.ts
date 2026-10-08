@@ -1,81 +1,79 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { RoomSummary } from '../../../features/matrix-dto/room';
-import { unreadFromNativeRoom, unreadInfosFromNativeRooms } from '../roomToUnread';
+import type { RoomListPresentation } from '../../../features/matrix-dto/generated';
+import {
+  EMPTY_ROOM_LIST_PRESENTATION,
+  orderRoomIdsByPresentation,
+  parseRoomListPresentation,
+  unreadFromPresentation,
+} from '../../room-list/roomListPresentation';
+import { roomToUnreadFromPresentation, unreadInfosFromPresentation } from '../roomToUnread';
 
-const room = (overrides: Partial<RoomSummary> & Pick<RoomSummary, 'roomId'>): RoomSummary => ({
-  membership: 'join',
-  isDirect: false,
-  isSpace: false,
-  isCall: false,
-  hasActiveCall: false,
-  activeCallParticipantCount: 0,
-  isFavorite: false,
-  isEncrypted: false,
-  encryptionStatus: 'not_encrypted',
-  unreadCount: 0,
-  highlightCount: 0,
-  markedUnread: false,
-  lastMessageIsAgentApproval: false,
-  ...overrides,
+// Which rooms need attention, and how much, is decided by Core and tested in
+// Rust (`room_list::presentation`). These tests cover the renderer readers.
+const presentation: RoomListPresentation = {
+  ...EMPTY_ROOM_LIST_PRESENTATION,
+  unread: [
+    { roomId: '!a:example.org', highlight: 1, total: 2 },
+    { roomId: '!b:example.org', highlight: 0, total: 1 },
+    {
+      roomId: '!space:example.org',
+      highlight: 1,
+      total: 3,
+      fromRoomIds: ['!a:example.org', '!b:example.org'],
+    },
+  ],
+};
+
+test('room unread reads Core rows, and a room without a row needs no attention', () => {
+  assert.deepEqual(unreadFromPresentation(presentation, '!a:example.org'), {
+    highlight: 1,
+    total: 2,
+    from: null,
+  });
+  assert.equal(unreadFromPresentation(presentation, '!c:example.org'), undefined);
 });
 
-test('native unread projection keeps joined rooms with counts or marked-unread', () => {
-  const infos = unreadInfosFromNativeRooms([
-    room({ roomId: '!a:example.org', unreadCount: 2, highlightCount: 1 }),
-    room({ roomId: '!b:example.org', markedUnread: true }),
-    room({ roomId: '!c:example.org' }),
-  ]);
-  assert.deepEqual(infos, [
+test('space rollup rows keep the rooms they came from', () => {
+  assert.deepEqual(unreadFromPresentation(presentation, '!space:example.org'), {
+    highlight: 1,
+    total: 3,
+    from: new Set(['!a:example.org', '!b:example.org']),
+  });
+  const map = roomToUnreadFromPresentation(presentation);
+  assert.equal(map.size, 3);
+  assert.equal(map.get('!space:example.org')?.total, 3);
+});
+
+test('unread infos exclude space rollups and honour a room filter', () => {
+  assert.deepEqual(unreadInfosFromPresentation(presentation), [
     { roomId: '!a:example.org', highlight: 1, total: 2 },
+    { roomId: '!b:example.org', highlight: 0, total: 1 },
+  ]);
+  assert.deepEqual(unreadInfosFromPresentation(presentation, new Set(['!b:example.org'])), [
     { roomId: '!b:example.org', highlight: 0, total: 1 },
   ]);
 });
 
-test('native unread projection raises total to the highlight count', () => {
-  const infos = unreadInfosFromNativeRooms([
-    room({ roomId: '!a:example.org', unreadCount: 1, highlightCount: 4 }),
-  ]);
-  assert.deepEqual(infos, [{ roomId: '!a:example.org', highlight: 4, total: 4 }]);
-});
-
-test('native unread projection skips spaces, muted rooms, and non-joined membership', () => {
-  const infos = unreadInfosFromNativeRooms([
-    room({ roomId: '!space:example.org', isSpace: true, unreadCount: 3 }),
-    room({ roomId: '!mute:example.org', notificationMode: 'mute', unreadCount: 5 }),
-    room({ roomId: '!leave:example.org', membership: 'leave', unreadCount: 2 }),
-  ]);
-  assert.deepEqual(infos, []);
-});
-
-test('native unread projection drops a room after receipts clear counts and marked-unread', () => {
-  const before = unreadInfosFromNativeRooms([
-    room({ roomId: '!a:example.org', unreadCount: 2, highlightCount: 1, markedUnread: true }),
-  ]);
-  assert.deepEqual(before, [{ roomId: '!a:example.org', highlight: 1, total: 2 }]);
-
-  const after = unreadInfosFromNativeRooms([
-    room({ roomId: '!a:example.org', unreadCount: 0, highlightCount: 0, markedUnread: false }),
-  ]);
-  assert.deepEqual(after, []);
+test('presentation parsing defaults an absent field and rejects malformed rows', () => {
+  assert.deepEqual(parseRoomListPresentation(undefined), EMPTY_ROOM_LIST_PRESENTATION);
   assert.equal(
-    unreadFromNativeRoom(
-      room({ roomId: '!a:example.org', unreadCount: 0, highlightCount: 0, markedUnread: false })
-    ),
-    undefined
+    parseRoomListPresentation({
+      ...presentation,
+      unread: [{ roomId: '!a', total: -1, highlight: 0 }],
+    }),
+    null
   );
+  assert.equal(parseRoomListPresentation({ ...presentation, nameOrder: 'nope' }), null);
+  assert.deepEqual(parseRoomListPresentation(presentation), presentation);
 });
 
-test('nav unread comes from native unreadCount, not a leftover jotai total', () => {
-  const unread = unreadFromNativeRoom(
-    room({ roomId: '!a:example.org', unreadCount: 4, highlightCount: 1 })
-  );
-  assert.deepEqual(unread, { highlight: 1, total: 4, from: null });
-});
-
-test('native unread projection badges mention and approval highlights at zero messages', () => {
-  const unread = unreadFromNativeRoom(
-    room({ roomId: '!a:example.org', unreadCount: 0, highlightCount: 1 })
-  );
-  assert.deepEqual(unread, { highlight: 1, total: 1, from: null });
+test('ordering keeps ids Core did not list at the end in their original order', () => {
+  const order = { ...EMPTY_ROOM_LIST_PRESENTATION, recentOrder: ['!b', '!a'] };
+  assert.deepEqual(orderRoomIdsByPresentation(['!x', '!a', '!y', '!b'], order, 'recent'), [
+    '!b',
+    '!a',
+    '!x',
+    '!y',
+  ]);
 });

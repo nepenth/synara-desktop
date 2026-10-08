@@ -226,26 +226,23 @@ enum RoomListFavorites {
         )
     }
 
+    /// Core owns section ordering and name normalization
+    /// (`room_list::presentation::order_room_ids`), shared with desktop.
     static func sorted(_ rooms: [RoomSummary], order: RoomListSortOrder) -> [RoomSummary] {
-        rooms.sorted { lhs, rhs in
-            switch order {
-            case .name:
-                let nameOrder = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
-                if nameOrder != .orderedSame {
-                    return nameOrder == .orderedAscending
-                }
-                return lhs.id < rhs.id
-            case .recent:
-                if lhs.lastActivityAt != rhs.lastActivityAt {
-                    return lhs.lastActivityAt > rhs.lastActivityAt
-                }
-                let nameOrder = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
-                if nameOrder != .orderedSame {
-                    return nameOrder == .orderedAscending
-                }
-                return lhs.id < rhs.id
-            }
-        }
+        let byID = Dictionary(rooms.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let ids = orderRoomIds(
+            rooms: rooms.map(Self.orderInput),
+            order: order == .name ? .name : .recent
+        )
+        return ids.compactMap { byID[$0] }
+    }
+
+    static func orderInput(_ room: RoomSummary) -> RoomOrderInput {
+        // `.distantPast` (and anything before 1970) means the SDK has no
+        // latest-event time; Core sorts those rooms last.
+        let seconds = room.lastActivityAt.timeIntervalSince1970
+        let milliseconds = seconds > 0 ? UInt64(seconds * 1000) : nil
+        return RoomOrderInput(roomId: room.id, name: room.name, lastActivityMs: milliseconds)
     }
 }
 
@@ -599,29 +596,28 @@ enum NotificationBadgeSummary {
         max(0, value)
     }
 
+    /// Core owns the badge rule (`room_list::presentation::summarize_badges`):
+    /// a room with mentions adds its mention count, any other room its total.
     static func summarizeNotifications(_ input: NotificationSummaryInput) -> SynaraNotificationSummary? {
-        let laterCount = clampCount(input.laterActiveCount)
-        let invites = clampCount(input.inviteCount)
-        let agentApprovals = clampCount(input.agentApprovalCount)
-        var highlightCount = 0
-        var unreadCount = 0
-
-        for unread in input.unreadCounts {
-            if let highlight = unread.highlight, highlight > 0 {
-                highlightCount += clampCount(highlight)
-            } else {
-                unreadCount += clampCount(unread.total)
-            }
-        }
-
+        let summary = summarizeBadges(input: BadgeSummaryInput(
+            unread: input.unreadCounts.map { source in
+                RoomBadgeSource(
+                    total: UInt64(clampCount(source.total)),
+                    highlight: source.highlight.map { UInt64(clampCount($0)) }
+                )
+            },
+            laterActiveCount: UInt64(clampCount(input.laterActiveCount)),
+            inviteCount: UInt64(clampCount(input.inviteCount)),
+            agentApprovalCount: UInt64(clampCount(input.agentApprovalCount))
+        ))
         return try? SynaraNotificationSummary(
-            appBadgeCount: laterCount + highlightCount + unreadCount,
-            inboxBadgeCount: laterCount + invites + agentApprovals,
-            laterActiveCount: laterCount,
-            inviteCount: invites,
-            agentApprovalCount: agentApprovals,
-            highlightCount: highlightCount,
-            unreadCount: unreadCount
+            appBadgeCount: Int(clamping: summary.appBadgeCount),
+            inboxBadgeCount: Int(clamping: summary.inboxBadgeCount),
+            laterActiveCount: Int(clamping: summary.laterActiveCount),
+            inviteCount: Int(clamping: summary.inviteCount),
+            agentApprovalCount: Int(clamping: summary.agentApprovalCount),
+            highlightCount: Int(clamping: summary.highlightCount),
+            unreadCount: Int(clamping: summary.unreadCount)
         )
     }
 

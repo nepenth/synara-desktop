@@ -1,18 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { ConditionKind, IPushRules, PushRuleKind, asPushRuleClient } from '../utils/pushRules';
-import type { MatrixClientReading } from '../utils/room';
 import { Icons, IconSrc } from 'folds';
-import { AccountDataEvent } from '../../types/matrix/accountData';
-import { useAccountData } from './useAccountData';
-import { isRoomId } from '../utils/matrix';
-import {
-  getNotificationMode,
-  getNotificationModeActions,
-  NotificationMode,
-} from './useNotificationMode';
 import { useAsyncCallback } from './useAsyncCallback';
-import { useMatrixClient } from './useMatrixClient';
-import { isNativeMatrixSession } from '../features/verification/nativeVerification';
 import {
   nativeRoomNotificationSet,
   nativeRoomNotificationsSnapshot,
@@ -64,65 +52,34 @@ const preferencesFromNativeRooms = (
   return pref;
 };
 
+/**
+ * Per-room notification modes as Core resolves them from the account push
+ * rules (`matrix_room_notifications_snapshot`). The renderer never re-derives
+ * a mode from raw push-rule JSON.
+ */
 export const useRoomsNotificationPreferences = (): RoomsNotificationPreferences => {
-  const nativeSession = isNativeMatrixSession();
-  const pushRules = useAccountData(AccountDataEvent.PushRules)?.getContent<IPushRules>();
-  const [nativePreferences, setNativePreferences] = useState<RoomsNotificationPreferences>(
+  const [preferences, setPreferences] = useState<RoomsNotificationPreferences>(
     EMPTY_ROOM_NOTIFICATION_PREFERENCES
   );
-  const [nativeEpoch, setNativeEpoch] = useState(0);
+  const [epoch, setEpoch] = useState(0);
+
+  useEffect(() => subscribeNativeRoomNotifications(() => setEpoch((value) => value + 1)), []);
 
   useEffect(() => {
-    if (!nativeSession) return undefined;
-    return subscribeNativeRoomNotifications(() => setNativeEpoch((value) => value + 1));
-  }, [nativeSession]);
-
-  useEffect(() => {
-    if (!nativeSession) return undefined;
     let disposed = false;
     void nativeRoomNotificationsSnapshot()
       .then((rooms) => {
-        if (!disposed) setNativePreferences(preferencesFromNativeRooms(rooms));
+        if (!disposed) setPreferences(preferencesFromNativeRooms(rooms));
       })
       .catch(() => {
-        if (!disposed) setNativePreferences(EMPTY_ROOM_NOTIFICATION_PREFERENCES);
+        if (!disposed) setPreferences(EMPTY_ROOM_NOTIFICATION_PREFERENCES);
       });
     return () => {
       disposed = true;
     };
-  }, [nativeSession, nativeEpoch]);
+  }, [epoch]);
 
-  const preferences: RoomsNotificationPreferences = useMemo(() => {
-    const global = pushRules?.global;
-    const room = global?.room ?? [];
-    const override = global?.override ?? [];
-
-    const pref: RoomsNotificationPreferences = {
-      mute: new Set(),
-      specialMessages: new Set(),
-      allMessages: new Set(),
-    };
-
-    override.forEach((rule) => {
-      if (isRoomId(rule.rule_id) && getNotificationMode(rule.actions) === NotificationMode.OFF) {
-        pref.mute.add(rule.rule_id);
-      }
-    });
-    room.forEach((rule) => {
-      if (getNotificationMode(rule.actions) === NotificationMode.OFF) {
-        pref.specialMessages.add(rule.rule_id);
-      }
-    });
-    room.forEach((rule) => {
-      if (getNotificationMode(rule.actions) !== NotificationMode.OFF) {
-        pref.allMessages.add(rule.rule_id);
-      }
-    });
-
-    return pref;
-  }, [pushRules]);
-
-  return nativeSession ? nativePreferences : preferences;
+  return preferences;
 };
 
 export enum RoomNotificationMode {
@@ -179,65 +136,21 @@ const nativeModeFromRoomNotificationMode = (
   }
 };
 
+/** Core writes the push rules for the chosen mode. */
 export const setRoomNotificationPreference = async (
-  mx: MatrixClientReading,
   roomId: string,
-  mode: RoomNotificationMode,
-  previousMode: RoomNotificationMode
+  mode: RoomNotificationMode
 ): Promise<void> => {
-  if (isNativeMatrixSession()) {
-    await nativeRoomNotificationSet(roomId, nativeModeFromRoomNotificationMode(mode));
-    return;
-  }
-
-  const pushRuleClient = asPushRuleClient(mx);
-
-  // remove the old preference
-  if (
-    previousMode === RoomNotificationMode.AllMessages ||
-    previousMode === RoomNotificationMode.SpecialMessages
-  ) {
-    await pushRuleClient.deletePushRule('global', PushRuleKind.RoomSpecific, roomId);
-  }
-  if (previousMode === RoomNotificationMode.Mute) {
-    await pushRuleClient.deletePushRule('global', PushRuleKind.Override, roomId);
-  }
-
-  // set new preference
-  if (mode === RoomNotificationMode.Unset) {
-    return;
-  }
-
-  if (mode === RoomNotificationMode.Mute) {
-    await pushRuleClient.addPushRule('global', PushRuleKind.Override, roomId, {
-      conditions: [
-        {
-          kind: ConditionKind.EventMatch,
-          key: 'room_id',
-          pattern: roomId,
-        },
-      ],
-      actions: getNotificationModeActions(NotificationMode.OFF),
-    });
-    return;
-  }
-
-  await pushRuleClient.addPushRule('global', PushRuleKind.RoomSpecific, roomId, {
-    actions:
-      mode === RoomNotificationMode.AllMessages
-        ? getNotificationModeActions(NotificationMode.NotifyLoud)
-        : getNotificationModeActions(NotificationMode.OFF),
-  });
+  await nativeRoomNotificationSet(roomId, nativeModeFromRoomNotificationMode(mode));
 };
 
 export const useSetRoomNotificationPreference = (roomId: string) => {
-  const mx = useMatrixClient();
-
   const [modeState, setMode] = useAsyncCallback(
     useCallback(
-      (mode: RoomNotificationMode, previousMode: RoomNotificationMode) =>
-        setRoomNotificationPreference(mx, roomId, mode, previousMode),
-      [mx, roomId]
+      // Core replaces the room's rule set as a whole, so callers' previous
+      // mode argument is not needed.
+      (mode: RoomNotificationMode) => setRoomNotificationPreference(roomId, mode),
+      [roomId]
     )
   );
 

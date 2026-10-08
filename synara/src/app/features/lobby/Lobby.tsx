@@ -53,12 +53,10 @@ import { SpaceHierarchy } from './SpaceHierarchy';
 import { useGetRoom } from '../../hooks/useGetRoom';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { getRoomPermissionsAPI } from '../../hooks/useRoomPermissions';
-import { useRoomsCreators } from '../../hooks/useRoomCreators';
 
 const useCanDropLobbyItem = (
   space: RoomReading,
   roomsPowerLevels: Map<string, IPowerLevels>,
-  roomCreators: Map<string, Set<string>>,
   getRoom: (roomId: string) => RoomReading | undefined
 ): CanDropCallback => {
   const mx = useMatrixClient();
@@ -75,19 +73,18 @@ const useCanDropLobbyItem = (
 
       const powerLevels = roomsPowerLevels.get(containerSpaceId);
       if (!powerLevels) return false;
-      const creators = roomCreators.get(containerSpaceId) ?? new Set<string>();
-      const permissions = getRoomPermissionsAPI(creators, powerLevels);
+      const permissions = getRoomPermissionsAPI(powerLevels);
 
       if (
         getRoom(containerSpaceId) === undefined ||
-        !permissions.stateEvent(StateEvent.SpaceChild, mx.getSafeUserId())
+        !permissions.stateEvent(StateEvent.SpaceChild)
       ) {
         return false;
       }
 
       return true;
     },
-    [space, roomsPowerLevels, roomCreators, getRoom, mx]
+    [space, roomsPowerLevels, getRoom]
   );
 
   const canDropRoom: CanDropCallback = useCallback(
@@ -103,13 +100,9 @@ const useCanDropLobbyItem = (
       if (draggingOutsideSpace && restrictedItem) {
         const itemPowerLevels = roomsPowerLevels.get(item.roomId);
         if (!itemPowerLevels) return false;
-        const itemCreators = roomCreators.get(item.roomId) ?? new Set<string>();
-        const itemPermissions = getRoomPermissionsAPI(itemCreators, itemPowerLevels);
+        const itemPermissions = getRoomPermissionsAPI(itemPowerLevels);
 
-        const canChangeJoinRuleAllow = itemPermissions.stateEvent(
-          StateEvent.RoomJoinRules,
-          mx.getSafeUserId()
-        );
+        const canChangeJoinRuleAllow = itemPermissions.stateEvent(StateEvent.RoomJoinRules);
         if (!canChangeJoinRuleAllow) {
           return false;
         }
@@ -117,17 +110,16 @@ const useCanDropLobbyItem = (
 
       const powerLevels = roomsPowerLevels.get(containerSpaceId);
       if (!powerLevels) return false;
-      const creators = roomCreators.get(containerSpaceId) ?? new Set<string>();
-      const permissions = getRoomPermissionsAPI(creators, powerLevels);
+      const permissions = getRoomPermissionsAPI(powerLevels);
       if (
         getRoom(containerSpaceId) === undefined ||
-        !permissions.stateEvent(StateEvent.SpaceChild, mx.getSafeUserId())
+        !permissions.stateEvent(StateEvent.SpaceChild)
       ) {
         return false;
       }
       return true;
     },
-    [mx, getRoom, roomsPowerLevels, roomCreators]
+    [mx, getRoom, roomsPowerLevels]
   );
 
   const canDrop: CanDropCallback = useCallback(
@@ -223,14 +215,8 @@ export function Lobby() {
     [hierarchy, getRoom]
   );
   const roomsPowerLevels = useRoomsPowerLevels(powerLevelRooms);
-  const roomCreators = useRoomsCreators(powerLevelRooms);
 
-  const canDrop: CanDropCallback = useCanDropLobbyItem(
-    space,
-    roomsPowerLevels,
-    roomCreators,
-    getRoom
-  );
+  const canDrop: CanDropCallback = useCanDropLobbyItem(space, roomsPowerLevels, getRoom);
 
   const [reorderSpaceState, reorderSpace] = useAsyncCallback(
     useCallback(
@@ -268,9 +254,8 @@ export function Lobby() {
             const parentPL = roomsPowerLevels.get(reorder.item.parentId);
             if (!parentPL) return false;
 
-            const creators = roomCreators.get(reorder.item.parentId) ?? new Set<string>();
-            const permissions = getRoomPermissionsAPI(creators, parentPL);
-            const canEdit = permissions.stateEvent(StateEvent.SpaceChild, mx.getSafeUserId());
+            const permissions = getRoomPermissionsAPI(parentPL);
+            const canEdit = permissions.stateEvent(StateEvent.SpaceChild);
             return canEdit && reorder.orderKey !== currentOrders[index];
           });
 
@@ -284,7 +269,7 @@ export function Lobby() {
           });
         }
       },
-      [mx, hierarchy, lex, roomsPowerLevels, roomCreators]
+      [hierarchy, lex, roomsPowerLevels]
     )
   );
   const reorderingSpace = reorderSpaceState.status === AsyncStatus.Loading;
@@ -472,7 +457,6 @@ export function Lobby() {
                             allJoinedRooms={allJoinedRooms}
                             mDirects={mDirects}
                             roomsPowerLevels={roomsPowerLevels}
-                            roomCreators={roomCreators}
                             categoryId={categoryId}
                             closed={
                               closedCategories.has(categoryId) ||

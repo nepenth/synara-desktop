@@ -39,6 +39,7 @@ import { useTimeoutToggle } from '../hooks/useTimeoutToggle';
 import { useIdleRender } from '../hooks/useIdleRender';
 import { isDesktopPlatform, openPlatformExternalUrl } from '../platform';
 import { MatrixColorSpan, MatrixColorSurface } from '../components/message/MatrixColorSpan';
+import { getMyUserId } from '../state/nativeIdentity';
 
 const ReactPrism = lazy(() => import('./react-prism/ReactPrism'));
 const PRISM_CHAR_LIMIT = 50_000;
@@ -109,7 +110,7 @@ export const renderMatrixMention = (
       <a
         href={href}
         {...customProps}
-        className={css.Mention({ highlight: mx.getUserId() === userId })}
+        className={css.Mention({ highlight: getMyUserId() === userId })}
         data-mention-id={userId}
       >
         {`@${

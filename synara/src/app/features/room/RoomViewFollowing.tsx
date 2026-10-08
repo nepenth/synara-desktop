@@ -17,11 +17,11 @@ import FocusTrap from 'focus-trap-react';
 import { getMemberDisplayName } from '../../utils/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import * as css from './RoomViewFollowing.css';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRoomLatestRenderedEvent } from '../../hooks/useRoomLatestRenderedEvent';
 import { useRoomEventReaders } from '../../hooks/useRoomEventReaders';
 import { EventReaders } from '../../components/event-readers';
 import { stopPropagation } from '../../utils/keyboard';
+import { getMyUserId } from '../../state/nativeIdentity';
 
 type Room = Parameters<typeof useRoomLatestRenderedEvent>[0];
 
@@ -34,12 +34,11 @@ export type RoomViewFollowingProps = {
 };
 export const RoomViewFollowing = as<'div', RoomViewFollowingProps>(
   ({ className, room, ...props }, ref) => {
-    const mx = useMatrixClient();
     const [open, setOpen] = useState(false);
     const latestEvent = useRoomLatestRenderedEvent(room);
     const latestEventReaders = useRoomEventReaders(room, latestEvent?.getId());
     const names = latestEventReaders
-      .filter((readerId) => readerId !== mx.getUserId())
+      .filter((readerId) => readerId !== getMyUserId())
       .map(
         (readerId) => getMemberDisplayName(room, readerId) ?? getMxIdLocalPart(readerId) ?? readerId
       );

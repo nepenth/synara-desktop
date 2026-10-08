@@ -14,8 +14,20 @@ import { parseRoomSummary, type RoomSummary } from '../matrix-dto/room';
 import type { MatrixClientReading, MatrixEventReading, RoomReading } from '../../utils/room';
 import type { DesktopInvokeResult } from '../../utils/desktop';
 import { RoomType } from '../../../types/matrix/room';
+import { setNativeIdentity } from '../../state/nativeIdentity';
 
 /**
+ * Residual js-sdk-shaped shim, being retired.
+ *
+ * New code must not depend on it. Read the signed-in user from
+ * `state/nativeIdentity` (this facade only publishes into it), room data from
+ * the native room-list snapshot and owners, and write through the per-domain
+ * native owners. What still goes through here: `getRoom` wrappers for legacy
+ * room components, a set of write methods that forward to native commands,
+ * and the sync/session events ClientRoot listens to.
+ *
+ * Original design notes follow.
+ *
  * F1 — renderer NativeMatrixClient facade core (emitter + lifecycle + identity).
  * Operator-authorized Option A (complete native) + D1C (renderer cedes token
  * custody): this facade is the structural replacement for the js-sdk client
@@ -708,7 +720,10 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
   }: { clearIdentity?: boolean; notifyLoggedOut?: boolean } = {}): void => {
     const hadIdentity = Boolean(cachedIdentity.userId || cachedIdentity.deviceId);
     const hadSessionState = hadIdentity || cachedSyncState !== null || cachedRooms.length > 0;
-    if (clearIdentity) cachedIdentity = {};
+    if (clearIdentity) {
+      cachedIdentity = {};
+      setNativeIdentity({});
+    }
     cachedSyncState = null;
     cachedSyncData = null;
     cachedSessionGeneration = undefined;
@@ -758,6 +773,7 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       deviceId: session.deviceId,
       homeserverUrl: session.homeserverUrl,
     };
+    setNativeIdentity(cachedIdentity);
     cachedSessionGeneration = session.sessionGeneration;
     return true;
   };

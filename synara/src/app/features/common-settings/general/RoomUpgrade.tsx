@@ -181,7 +181,6 @@ type RoomUpgradeProps = {
   requestClose: () => void;
 };
 export function RoomUpgrade({ permissions, requestClose }: RoomUpgradeProps) {
-  const mx = useMatrixClient();
   const room = useRoom();
   const { navigateRoom, navigateSpace } = useRoomNavigate();
   const createContent = useStateEvent(
@@ -197,7 +196,7 @@ export function RoomUpgrade({ permissions, requestClose }: RoomUpgradeProps) {
   )?.getContent<RoomTombstoneEventContent>();
   const replacementRoom = tombstoneContent?.replacement_room;
 
-  const canUpgrade = permissions.stateEvent(StateEvent.RoomTombstone, mx.getSafeUserId());
+  const canUpgrade = permissions.stateEvent(StateEvent.RoomTombstone);
 
   const handleOpenRoom = () => {
     if (replacementRoom) {

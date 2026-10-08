@@ -8,6 +8,10 @@
  */
 
 import type { DesktopInvokeResult } from '../../utils/desktop';
+import type { NativeTimelineActionKind } from '../matrix-dto/generated';
+import type { NativeTimelineActionReadback } from '../matrix-dto/generated';
+export type { NativeTimelineActionReadback } from '../matrix-dto/generated';
+export type { NativeTimelineActionKind } from '../matrix-dto/generated';
 
 /**
  * Choose the native forward owner for a product timeline row.
@@ -33,17 +37,6 @@ export function selectNativeTimelinePinAction(pinned: boolean): 'pin' | 'unpin' 
 
 export const NATIVE_TIMELINE_ACTION_SCHEMA_VERSION = 1;
 
-export type NativeTimelineActionKind =
-  | 'edit_text'
-  | 'redact'
-  | 'forward_text'
-  | 'forward_media'
-  | 'report'
-  | 'pin'
-  | 'unpin'
-  | 'poll_vote'
-  | 'call_decline';
-
 export type NativeTimelineActionStatus =
   | 'sent'
   | 'redacted'
@@ -60,14 +53,6 @@ export type NativeTimelineActionStatus =
    * invited to repeat it. A queued forward carries no new event id yet.
    */
   | 'queued';
-
-export type NativeTimelineActionReadback = {
-  schemaVersion: number;
-  action: NativeTimelineActionKind;
-  roomId: string;
-  eventId: string;
-  status: NativeTimelineActionStatus;
-};
 
 export type NativeTimelineEditTextInput = {
   roomId: string;

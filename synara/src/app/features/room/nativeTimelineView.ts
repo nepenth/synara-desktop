@@ -10,6 +10,8 @@ import { parseHermesAgentPayload, type HermesAgentPayload } from '../../utils/he
 import type { RoomEncryptionStatus } from '../matrix-dto/room';
 import { devicePixelScale, nativeThumbnailContentUri } from '../../matrix/nativeThumbnail';
 import type { NativeTimelineEncryptionShield } from './nativeTimelineShield';
+import type { NativeTimelineReactionSender } from '../matrix-dto/generated';
+export type { NativeTimelineReactionSender } from '../matrix-dto/generated';
 
 const NATIVE_TIMELINE_VIEW_UPDATED_EVENT = 'matrix-timeline-view-updated';
 const TIMELINE_VIEW_SCHEMA_VERSION = 1;
@@ -252,11 +254,6 @@ export type NativeTimelineThreadSummary = {
   rootEventId: string;
   replyCount: number;
   latestEventId?: string;
-};
-
-export type NativeTimelineReactionSender = {
-  userId: string;
-  reactionEventId?: string;
 };
 
 export type NativeTimelineReaction = {

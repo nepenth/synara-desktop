@@ -2674,6 +2674,7 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
                 )
             } ?? [],
             powerLevelsJSON: power?.contentJson,
+            capabilities: power?.capabilities,
             joinRule: join?.joinRule,
             topic: invite?.roomTopic,
             encryptionStatus: encryptionStatus,

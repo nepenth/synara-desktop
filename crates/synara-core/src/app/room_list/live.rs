@@ -33,6 +33,7 @@ use crate::app::room_list::last_message::{
     last_message_preview_from_event_json, last_message_preview_from_event_json_str,
     last_message_preview_from_invite,
 };
+use crate::app::room_list::presentation::{room_list_presentation, RoomListPresentation};
 use crate::app::sync::SyncServiceOwner;
 use crate::dto::{Membership, NotificationMode, RoomEncryptionStatus, RoomSummary};
 
@@ -328,6 +329,10 @@ pub struct NativeRoomListSnapshot {
     pub session_generation: u64,
     pub ordered_room_ids: Vec<String>,
     pub rooms: Vec<RoomSummary>,
+    /// Section orders, favorites and unread attention derived by Core, so the
+    /// renderer does not re-apply room rules.
+    #[serde(default)]
+    pub presentation: RoomListPresentation,
 }
 
 pub async fn snapshot_from_sync_owner(
@@ -377,10 +382,25 @@ pub async fn snapshot_from_sync_owner(
         rooms.push(project_room(&item, &settings).await);
     }
 
+    // Space rollup needs the parent graph. A failed read leaves rollup empty
+    // rather than failing the whole snapshot.
+    let parents = crate::app::spaces::snapshot_space_parents(service.client(), 0)
+        .await
+        .map(|snapshot| {
+            snapshot
+                .entries
+                .into_iter()
+                .map(|entry| (entry.room_id, entry.parent_ids))
+                .collect::<std::collections::BTreeMap<_, _>>()
+        })
+        .unwrap_or_default();
+    let presentation = room_list_presentation(&rooms, &parents);
+
     Ok(NativeRoomListSnapshot {
         session_generation: owner.session_generation(),
         ordered_room_ids,
         rooms,
+        presentation,
     })
 }
 

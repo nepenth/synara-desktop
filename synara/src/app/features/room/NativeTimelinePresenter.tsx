@@ -39,7 +39,6 @@ import {
   type NativeReactionReadback,
 } from './nativeReactionOwner';
 import { ReactionViewer } from './reaction-viewer';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { observeNativeTimelineBottom } from './nativeTimelineVisibility';
 import {
   editTextWithNativeTimelineAction,
@@ -160,6 +159,7 @@ import {
 } from '../../utils/timelinePagination';
 import * as htmlCss from './nativeTimelineHtml.css';
 import * as depthCss from '../../styles/Depth.css';
+import { getMyUserId } from '../../state/nativeIdentity';
 
 const HermesAgentCard = React.lazy(() =>
   import('../../components/hermes/HermesAgentCard').then((module) => ({
@@ -2462,8 +2462,7 @@ export function NativeTimelinePresenter({
       document.visibilityState === 'visible' &&
       document.hasFocus()
   );
-  const mx = useMatrixClient();
-  const ownUserId = mx.getUserId() ?? undefined;
+  const ownUserId = getMyUserId() ?? undefined;
   const [reactionViewer, setReactionViewer] = useState<{
     eventId: string;
     initialKey?: string;

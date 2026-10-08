@@ -12,31 +12,16 @@ import {
   sortHomeRoomIds,
   writeRoomListSort,
 } from '../homeRoomList';
-import type { RoomSummary } from '../../../../features/matrix-dto/room';
+import type { RoomListPresentation } from '../../../../features/matrix-dto/generated';
+import { EMPTY_ROOM_LIST_PRESENTATION } from '../../../../state/room-list/roomListPresentation';
 
-const room = (overrides: Partial<RoomSummary> & Pick<RoomSummary, 'roomId'>): RoomSummary =>
-  ({
-    membership: 'join',
-    isDirect: false,
-    isSpace: false,
-    isCall: false,
-    hasActiveCall: false,
-    activeCallParticipantCount: 0,
-    isFavorite: false,
-    isEncrypted: false,
-    encryptionStatus: 'not_encrypted',
-    unreadCount: 0,
-    highlightCount: 0,
-    markedUnread: false,
-    lastMessageIsAgentApproval: false,
-    ...overrides,
-  }) as RoomSummary;
+const presentation = (overrides: Partial<RoomListPresentation>): RoomListPresentation => ({
+  ...EMPTY_ROOM_LIST_PRESENTATION,
+  ...overrides,
+});
 
-test('home rooms split favorites from remaining rooms', () => {
-  const favoriteIds = favoriteRoomIdSet([
-    room({ roomId: '!fav:example.org', isFavorite: true }),
-    room({ roomId: '!plain:example.org', isFavorite: false }),
-  ]);
+test('home rooms split favorites from remaining rooms using Core favorites', () => {
+  const favoriteIds = favoriteRoomIdSet(presentation({ favoriteRoomIds: ['!fav:example.org'] }));
   const partition = partitionHomeRooms(
     ['!plain:example.org', '!fav:example.org', '!other:example.org'],
     favoriteIds
@@ -90,32 +75,37 @@ test('favorites and rooms persist independent sort orders and fall back to the l
   assert.equal(readRoomListSort(legacyStorage, 'rooms'), 'name');
 });
 
-test('home rooms sort by native lastActivityTs and leave missing timestamps last', () => {
-  const rooms = [
-    room({
-      roomId: '!encrypted:example.org',
-      name: 'Encrypted',
-      isEncrypted: true,
-      encryptionStatus: 'encrypted',
-      lastActivityTs: 40,
-    }),
-    room({ roomId: '!old:example.org', name: 'Old', lastActivityTs: 10 }),
-    room({ roomId: '!none:example.org', name: 'None' }),
-    room({ roomId: '!alpha:example.org', name: 'Alpha', lastActivityTs: 20 }),
+test('home rooms follow Core order and keep rooms Core did not list last', () => {
+  const order = presentation({
+    recentOrder: ['!encrypted:example.org', '!alpha:example.org', '!old:example.org'],
+    nameOrder: ['!alpha:example.org', '!encrypted:example.org', '!old:example.org'],
+  });
+  const ids = [
+    '!late:example.org',
+    '!old:example.org',
+    '!alpha:example.org',
+    '!encrypted:example.org',
   ];
-  const ids = rooms.map((item) => item.roomId);
-  assert.deepEqual(sortHomeRoomIds(ids, rooms, 'recent'), [
+  assert.deepEqual(sortHomeRoomIds(ids, order, 'recent'), [
     '!encrypted:example.org',
     '!alpha:example.org',
     '!old:example.org',
-    '!none:example.org',
+    '!late:example.org',
   ]);
-  assert.deepEqual(sortHomeRoomIds(ids, rooms, 'name'), [
+  assert.deepEqual(sortHomeRoomIds(ids, order, 'name'), [
     '!alpha:example.org',
     '!encrypted:example.org',
-    '!none:example.org',
     '!old:example.org',
+    '!late:example.org',
   ]);
+});
+
+test('the renderer does not re-implement room ordering rules', () => {
+  const source = readFileSync(
+    join(process.cwd(), 'src/app/pages/client/home/homeRoomList.ts'),
+    'utf8'
+  );
+  assert.doesNotMatch(source, /lastActivityTs|localeCompare|toLocaleLowerCase/);
 });
 
 test('desktop and iOS room lists no longer implement a Recent 24h partition', () => {

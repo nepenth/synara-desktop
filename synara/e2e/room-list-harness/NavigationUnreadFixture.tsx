@@ -1,5 +1,6 @@
 // Production rail tabs and snapshot bindings; only native IPC data is synthetic.
 import React, { useCallback } from 'react';
+import { presentationFor } from './presentation';
 import { Provider } from 'jotai';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { configClass, varsClass } from 'folds';
@@ -61,7 +62,12 @@ const invoke = async (command: string, args?: Record<string, unknown>) => {
   }
   if (command === 'matrix_session_snapshot') return session;
   if (command === 'matrix_room_list_snapshot') {
-    return { sessionGeneration: 1, orderedRoomIds: rooms.map((r) => r.roomId), rooms };
+    return {
+      sessionGeneration: 1,
+      orderedRoomIds: rooms.map((r) => r.roomId),
+      rooms,
+      presentation: presentationFor(rooms),
+    };
   }
   if (command === 'matrix_mdirect_snapshot') {
     return {

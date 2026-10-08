@@ -50,10 +50,10 @@ import {
   nativeIgnoredUsersSnapshot,
   nativeIgnoredUsersUnignore,
 } from '../../features/settings/account/nativeIgnoredUsers';
+import { getSafeMyUserId } from '../../state/nativeIdentity';
 
 export function ServerChip({ server }: { server: string }) {
-  const mx = useMatrixClient();
-  const myServer = getMxIdServer(mx.getSafeUserId());
+  const myServer = getMxIdServer(getSafeMyUserId());
   const navigate = useNavigate();
   const closeProfile = useCloseUserRoomProfile();
   const [copied, setCopied] = useTimeoutToggle();
@@ -287,7 +287,7 @@ export function MutualRoomsChip({ userId }: { userId: string }) {
   }, [mutualRoomsState, getRoom, directs, mx]);
 
   if (
-    userId === mx.getSafeUserId() ||
+    userId === getSafeMyUserId() ||
     !mutualRoomSupported ||
     mutualRoomsState.status === AsyncStatus.Error
   ) {

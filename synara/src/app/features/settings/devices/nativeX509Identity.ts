@@ -1,9 +1,6 @@
 import { invokeDesktopWithAvailability } from '../../../utils/desktop';
-
-export type NativeX509CaSummary = {
-  fingerprint: string;
-  label: string;
-};
+import type { NativeX509CaSummary } from '../../matrix-dto/generated';
+export type { NativeX509CaSummary } from '../../matrix-dto/generated';
 
 export type NativeX509IdentityStatus = {
   enabled: boolean;

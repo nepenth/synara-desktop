@@ -2,6 +2,25 @@ import XCTest
 @testable import Synara
 
 final class RoomMemberActionsTests: XCTestCase {
+    func testCreatorOutranksEveryIntegerLevel() {
+        var creator = RoomPowerLevelSummary.fullPower
+        creator.isCreator = true
+        let member = RoomMemberSummary(
+            userID: "@bob:matrix.org",
+            displayName: "Bob",
+            membership: "join",
+            powerLevel: 100
+        )
+        let plan = RoomMemberActionPlan.plan(
+            member: member,
+            ownUserID: "@alice:matrix.org",
+            powerLevels: creator
+        )
+        XCTAssertTrue(plan.canRemove)
+        XCTAssertTrue(plan.canBan)
+        XCTAssertEqual(plan.assignablePowerLevels, [0, 50, 100])
+    }
+
     func testJoinedModeratorCanRemoveAndBanButNotInvite() {
         let member = RoomMemberSummary(
             userID: "@bob:matrix.org",

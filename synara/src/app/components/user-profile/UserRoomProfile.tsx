@@ -30,6 +30,7 @@ import { useRoomMembers } from '../../hooks/useRoomMembers';
 import { memberActionVisibility, resolveNativeRoomMembership } from './memberActions';
 import { composerMentionInsertAtom } from '../../state/composerMentionInsert';
 import { nativeIgnoredUsersSnapshot } from '../../features/settings/account/nativeIgnoredUsers';
+import { getSafeMyUserId } from '../../state/nativeIdentity';
 
 type UserRoomProfileProps = {
   userId: string;
@@ -71,17 +72,17 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
     ? (nativeIgnoredIds ?? []).includes(userId)
     : ignoredUsers.includes(userId);
 
-  const permissions = useRoomPermissions(creators, powerLevels);
+  const permissions = useRoomPermissions(powerLevels);
   const { hasMorePower } = useMemberPowerCompare(creators, powerLevels);
 
-  const myUserId = mx.getSafeUserId();
+  const myUserId = getSafeMyUserId();
   const creator = creators.has(userId);
   const nativeMembersFailed = Boolean(nativeSession && nativeMembers === undefined);
   const permissionsReady =
     !powerLevels.nativeUnavailable && (!nativeSession || Array.isArray(nativeMembers));
-  const canKickUser = permissions.action('kick', myUserId) && hasMorePower(myUserId, userId);
-  const canBanUser = permissions.action('ban', myUserId) && hasMorePower(myUserId, userId);
-  const canInvite = permissions.action('invite', myUserId);
+  const canKickUser = permissions.action('kick') && hasMorePower(myUserId, userId);
+  const canBanUser = permissions.action('ban') && hasMorePower(myUserId, userId);
+  const canInvite = permissions.action('invite');
   const visibility = memberActionVisibility({
     isSelf: userId === myUserId,
     membership,

@@ -23,6 +23,7 @@ import {
   useNotificationModeActions,
 } from '../../../hooks/useNotificationMode';
 import { NotificationModeSwitcher } from './NotificationModeSwitcher';
+import { getSafeMyUserId } from '../../../state/nativeIdentity';
 
 const NOTIFY_MODE_OPS: NotificationModeOptions = {
   highlight: true,
@@ -118,8 +119,7 @@ function MentionModeSwitcher({ ruleId, pushRules, defaultPushRuleData }: PushRul
 }
 
 export function SpecialMessagesNotifications() {
-  const mx = useMatrixClient();
-  const userId = mx.getUserId()!;
+  const userId = getSafeMyUserId();
   const { displayName } = useUserProfile(userId);
   const pushRulesEvt = useAccountData(AccountDataEvent.PushRules);
   const pushRules = useMemo(

@@ -1,4 +1,4 @@
-import { parseBlockMD, parseInlineMD } from '../../plugins/markdown';
+import { invokeDesktopWithAvailability, type DesktopInvokeResult } from '../../utils/desktop';
 import { MAX_NATIVE_FORMATTED_BODY_BYTES } from './nativeTimelineRichText';
 
 const MARKDOWN_MIME_TYPES = new Set(['text/markdown', 'text/x-markdown']);
@@ -38,9 +38,23 @@ export const isNativeTimelineMarkdownAttachment = ({
   return filenameLooksLikeMarkdown(filename);
 };
 
-export const projectNativeTimelineMarkdownPreview = (
-  source: string
-): { html: string; plain: string; tooLarge: boolean } => {
+export type NativeMarkdownRenderInvoke = (
+  command: string,
+  args: Record<string, unknown>
+) => Promise<DesktopInvokeResult<unknown>>;
+
+const defaultMarkdownRenderInvoke: NativeMarkdownRenderInvoke = (command, args) =>
+  invokeDesktopWithAvailability(command, args);
+
+/**
+ * Render a markdown attachment with Core's markdown renderer (the one the
+ * composer and iOS use), which keeps the file's raw HTML literal and reduces
+ * the output to the Matrix allowlist. Empty `html` means show `plain`.
+ */
+export const renderNativeTimelineMarkdownPreview = async (
+  source: string,
+  invoke: NativeMarkdownRenderInvoke = defaultMarkdownRenderInvoke
+): Promise<{ html: string; plain: string; tooLarge: boolean }> => {
   const plain = source;
   if (
     source.length > MAX_NATIVE_MARKDOWN_PREVIEW_BYTES ||
@@ -49,7 +63,9 @@ export const projectNativeTimelineMarkdownPreview = (
     return { html: '', plain, tooLarge: true };
   }
   try {
-    return { html: parseBlockMD(source, parseInlineMD), plain, tooLarge: false };
+    const result = await invoke('desktop_render_markdown', { source, fragments: [] });
+    const html = result.available && typeof result.value === 'string' ? result.value : '';
+    return { html, plain, tooLarge: false };
   } catch {
     return { html: '', plain, tooLarge: false };
   }

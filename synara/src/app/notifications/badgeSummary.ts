@@ -1,10 +1,16 @@
-export type BadgeUnreadSource = {
-  total?: number;
-  highlight?: number;
-};
-
+/**
+ * App and inbox badge numbers.
+ *
+ * Core decides which rooms count and how (a room with mentions adds its
+ * mention count, any other room its unread total; space rollups never count)
+ * and ships the totals on the room-list presentation. The renderer only adds
+ * the counts it owns: active Later items, invites and pending approvals.
+ */
 export type NotificationSummaryInput = {
-  unreadCounts: Iterable<BadgeUnreadSource>;
+  /** `RoomListPresentation.highlightTotal` from Core. */
+  highlightTotal?: number;
+  /** `RoomListPresentation.unreadTotal` from Core. */
+  unreadTotal?: number;
   laterActiveCount?: number;
   inviteCount?: number;
   agentApprovalCount?: number;
@@ -20,20 +26,14 @@ export type NotificationSummary = {
   unreadCount: number;
 };
 
-export type BadgeSummary = {
-  count: number;
-  laterActiveCount: number;
-  highlightCount: number;
-  unreadCount: number;
-};
-
-const clampCount = (value: number | undefined): number => {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.floor(value ?? 0));
+const clampCount = (value: number | null | undefined): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.floor(value));
 };
 
 export const summarizeNotifications = ({
-  unreadCounts,
+  highlightTotal,
+  unreadTotal,
   laterActiveCount,
   inviteCount,
   agentApprovalCount,
@@ -41,17 +41,8 @@ export const summarizeNotifications = ({
   const laterCount = clampCount(laterActiveCount);
   const invites = clampCount(inviteCount);
   const agentApprovals = clampCount(agentApprovalCount);
-  let highlightCount = 0;
-  let unreadCount = 0;
-
-  Array.from(unreadCounts).forEach((unread) => {
-    const highlight = clampCount(unread.highlight);
-    if (unread.highlight !== undefined && highlight > 0) {
-      highlightCount += highlight;
-      return;
-    }
-    unreadCount += clampCount(unread.total);
-  });
+  const highlightCount = clampCount(highlightTotal);
+  const unreadCount = clampCount(unreadTotal);
 
   return {
     appBadgeCount: laterCount + highlightCount + unreadCount,
@@ -64,21 +55,6 @@ export const summarizeNotifications = ({
   };
 };
 
-export const summarizeBadgeCount = (
-  unreadCounts: Iterable<BadgeUnreadSource>,
-  laterActiveCount: number
-): BadgeSummary => {
-  const summary = summarizeNotifications({ unreadCounts, laterActiveCount });
-
-  return {
-    count: summary.appBadgeCount,
-    laterActiveCount: summary.laterActiveCount,
-    highlightCount: summary.highlightCount,
-    unreadCount: summary.unreadCount,
-  };
-};
-
-export const getBadgeCount = (
-  unreadCounts: Iterable<BadgeUnreadSource>,
-  laterActiveCount: number
-): number => summarizeBadgeCount(unreadCounts, laterActiveCount).count;
+/** The app-icon number alone. */
+export const getBadgeCount = (input: NotificationSummaryInput): number =>
+  summarizeNotifications(input).appBadgeCount;
