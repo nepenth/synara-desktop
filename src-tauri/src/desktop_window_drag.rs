@@ -45,7 +45,11 @@ fn drag_trace(message: impl FnOnce() -> String) {
     let Some(path) = std::env::var_os("SYNARA_DEBUG_DRAG") else {
         return;
     };
-    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
         let _ = writeln!(file, "{}", message());
     }
 }
@@ -720,7 +724,12 @@ fn begin_move(view: &webkit2gtk::WebView, start: PendingMove, time: u32) -> bool
         drag_trace(|| "begin_move: no toplevel GtkWindow".to_owned());
         return false;
     };
-    drag_trace(|| format!("begin_move: button={} root=({},{}) time={time}", start.button, start.root_x, start.root_y));
+    drag_trace(|| {
+        format!(
+            "begin_move: button={} root=({},{}) time={time}",
+            start.button, start.root_x, start.root_y
+        )
+    });
     // GTK 3's Wayland backend ignores this timestamp and sends the seat's
     // implicit-grab serial from the press that armed the move; the button is
     // still held, so the compositor accepts it. This is how GtkWindow starts

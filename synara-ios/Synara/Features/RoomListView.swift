@@ -11,9 +11,8 @@ struct RoomListView: View {
     @State private var selectedSpaceID: String?
     @State private var expandedSpaceIDs: Set<String> = []
     @State private var isRoomManagementSheetPresented = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_MANAGEMENT_SHEET"] == "1"
-    @State private var hasStartedInitialLoad = false
     @State private var loadRoomsTask: Task<Void, Never>?
-    @State private var roomUpdatesTask: Task<Void, Never>?
+    @State private var liveUpdates = RoomListLiveUpdates()
     @State private var isSearchPresented = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_SEARCH"] != nil
     @State private var roomPendingLeave: RoomSummary?
     @State private var isResettingSession = false
@@ -308,28 +307,24 @@ struct RoomListView: View {
                 Text("\(roomPendingLeave.name) will be removed from your joined room list.")
             }
         }
+        // `.task` runs on every appearance and is cancelled on disappearance.
+        // Opening a room (for example from a notification) can hide the list
+        // before its first snapshot arrives, so each appearance starts the
+        // updates again whatever `state` holds. The stream yields a cached or
+        // freshly loaded snapshot first; it never waits for a change signal.
         .task {
-            guard hasStartedInitialLoad == false else {
-                return
-            }
             guard case .signedIn(let session) = environment.session.currentState else {
                 return
             }
-            hasStartedInitialLoad = true
-            guard await environment.sessionReadiness.waitUntilPrepared(for: session) else {
-                hasStartedInitialLoad = false
+            guard await environment.sessionReadiness.waitUntilPrepared(for: session),
+                  Task.isCancelled == false else {
                 return
             }
             startRoomUpdates()
         }
-        .onAppear {
-            if hasStartedInitialLoad {
-                startRoomUpdatesIfReady(for: state)
-            }
-        }
         .onDisappear {
             loadRoomsTask?.cancel()
-            roomUpdatesTask?.cancel()
+            liveUpdates.stop()
         }
         .onChange(of: favoriteSort) { sort in
             RoomListSortOrder.persist(sort, for: .favorites)
@@ -414,17 +409,9 @@ struct RoomListView: View {
     }
 
     private func startRoomUpdates() {
-        roomUpdatesTask?.cancel()
-        roomUpdatesTask = Task {
-            for await updatedState in environment.roomList.roomUpdates() {
-                guard Task.isCancelled == false else {
-                    return
-                }
-                await MainActor.run {
-                    state = updatedState
-                    autoOpenRoomIfRequested(from: updatedState)
-                }
-            }
+        liveUpdates.start(service: environment.roomList) { updatedState in
+            state = updatedState
+            autoOpenRoomIfRequested(from: updatedState)
         }
     }
 
@@ -1574,5 +1561,34 @@ private struct RoomListTopMargin: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+/// Owns the room list's update stream across appearances. `start` replaces
+/// any running stream, so calling it on every appearance is safe, and a
+/// stream stopped before its first snapshot simply starts over.
+@MainActor
+final class RoomListLiveUpdates {
+    private var task: Task<Void, Never>?
+
+    var isRunning: Bool {
+        task != nil
+    }
+
+    func start(service: RoomListServicing, deliver: @escaping @MainActor (RoomListState) -> Void) {
+        task?.cancel()
+        task = Task { @MainActor in
+            for await updatedState in service.roomUpdates() {
+                guard Task.isCancelled == false else {
+                    return
+                }
+                deliver(updatedState)
+            }
+        }
+    }
+
+    func stop() {
+        task?.cancel()
+        task = nil
     }
 }
