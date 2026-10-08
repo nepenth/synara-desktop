@@ -1,6 +1,10 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
+  // Load the harness once before tests so a cold Vite transform cannot fail
+  // the first test's 5 s expect timeouts.
+  globalSetup: fileURLToPath(new URL('../warm-harness.ts', import.meta.url)),
+  metadata: { warmPages: ['/e2e/settings-harness/index.html'] },
   testDir: '..',
   testMatch: ['settings-layout.spec.ts', 'settings-screens.spec.ts'],
   workers: 2,
