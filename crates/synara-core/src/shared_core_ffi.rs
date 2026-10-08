@@ -667,6 +667,7 @@ mod timeline_view;
 pub use timeline_view::*;
 mod verification_devices;
 pub use verification_devices::*;
+mod identity_warnings;
 
 #[cfg(test)]
 mod tests;

@@ -149,6 +149,7 @@ const tests = [
   'src/app/features/room/__tests__/nativeTimelineViewportPolicy.test.ts',
   'src/app/features/room/__tests__/nativeTimelineViewDelta.test.ts',
   'src/app/features/room/__tests__/nativeTimelineShield.test.ts',
+  'src/app/features/room/__tests__/nativeRoomIdentityWarnings.test.ts',
   'src/app/features/room/__tests__/nativeEventReadbackPoll.test.ts',
   'src/app/features/room/__tests__/nativeThreadListPanel.test.ts',
   'src/app/features/verification/__tests__/nativeVerification.test.ts',

@@ -607,9 +607,79 @@ protocol CryptoStatusServicing {
     func sessionDeviceUpdates() -> AsyncStream<Void>
     func signOutSession(deviceId: String, password: String) async -> CryptoActionResult
     func dismissVerification(flowID: String) async -> CryptoActionResult
+    /// Members of `roomID` whose cryptographic identity changed. Empty when none or unavailable.
+    func roomIdentityWarnings(roomID: String) async -> [RoomIdentityWarning]
+    /// Acknowledge a changed identity; returns the room's remaining warnings, or nil on failure.
+    func resolveRoomIdentityWarning(
+        roomID: String,
+        warning: RoomIdentityWarning
+    ) async -> [RoomIdentityWarning]?
+}
+
+/// A room member whose cryptographic identity changed, as Core projects it.
+struct RoomIdentityWarning: Equatable, Identifiable {
+    enum Kind: String, Equatable {
+        /// A previously verified identity changed.
+        case verificationViolation = "verification_violation"
+        /// An unverified identity changed since it was first seen.
+        case pinViolation = "pin_violation"
+    }
+
+    let userID: String
+    let displayName: String?
+    let kind: Kind
+
+    var id: String { userID }
+
+    init(userID: String, displayName: String?, kind: Kind) {
+        self.userID = userID
+        self.displayName = displayName
+        self.kind = kind
+    }
+
+    init?(userID: String, displayName: String?, kind rawKind: String) {
+        guard userID.hasPrefix("@"), let kind = Kind(rawValue: rawKind) else { return nil }
+        let trimmed = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.init(userID: userID, displayName: trimmed?.isEmpty == false ? trimmed : nil, kind: kind)
+    }
+
+    /// Core action for the banner's button.
+    var resolveAction: String {
+        kind == .verificationViolation ? "withdraw_verification" : "dismiss"
+    }
+
+    var actionTitle: String {
+        kind == .verificationViolation ? "Withdraw verification" : "Dismiss"
+    }
+
+    var message: String {
+        let name = displayName ?? userID
+        return kind == .verificationViolation
+            ? "\(name)'s verified identity changed."
+            : "\(name)'s identity changed."
+    }
+
+    /// The most serious warning first: verification violations outrank pin violations.
+    static func banner(for warnings: [RoomIdentityWarning]) -> RoomIdentityWarning? {
+        warnings.first { $0.kind == .verificationViolation } ?? warnings.first
+    }
 }
 
 extension CryptoStatusServicing {
+    func roomIdentityWarnings(roomID: String) async -> [RoomIdentityWarning] {
+        _ = roomID
+        return []
+    }
+
+    func resolveRoomIdentityWarning(
+        roomID: String,
+        warning: RoomIdentityWarning
+    ) async -> [RoomIdentityWarning]? {
+        _ = roomID
+        _ = warning
+        return nil
+    }
+
     func requestDeviceVerification() async -> CryptoActionResult {
         await requestDeviceVerification(deviceId: nil)
     }

@@ -95,6 +95,8 @@ pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
     "matrix_room_directory_cancel",
     "matrix_room_directory_protocols",
     "matrix_room_directory_search",
+    "matrix_room_identity_warning_resolve",
+    "matrix_room_identity_warnings",
     "matrix_room_invite",
     "matrix_room_join",
     "matrix_room_join_rule_snapshot",

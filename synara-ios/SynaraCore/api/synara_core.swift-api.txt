@@ -98,6 +98,9 @@ extension RoomDirectorySearchDto: Sendable
 extension RoomDirectoryVisibilityDto: Sendable
 extension RoomDirectoryVisibilityWriteDto: Sendable
 extension RoomEncryptionStatus: Sendable
+extension RoomIdentityWarningDto: Sendable
+extension RoomIdentityWarningError: Sendable
+extension RoomIdentityWarningsDto: Sendable
 extension RoomImagePacksSnapshotDto: Sendable
 extension RoomJoinRuleSnapshotDto: Sendable
 extension RoomJoinRuleWriteDto: Sendable
@@ -305,6 +308,7 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func reactionRedact(roomId: String, targetEventId: String, reactionEventId: String, key: String) async throws -> TimelineReactionMutationDto
   open func recover(recoveryKey: String) async throws -> LeftoverAckDto
   open func registerHttpPusher(pushKey: String, appId: String, gatewayUrl: String, appDisplayName: String, lang: String) async throws -> PusherWriteDto
+  open func resolveRoomIdentityWarning(roomId: String, userId: String, action: String) async throws -> RoomIdentityWarningsDto
   open func restoreBackup(recoverySecret: String) async throws -> RestoreBackupDto
   open func restorePersistedSession(userId: String, homeserverUrl: String, storeRoot: String) async throws -> SessionRestoreDto
   open func restrictedJoinReparent(roomId: String, removeParentId: String?, addParentId: String) async throws -> RestrictedJoinReparentDto
@@ -317,6 +321,7 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func roomDirectoryCancel(sessionGeneration: UInt64, requestId: UInt64) async throws -> RoomDirectorySearchDto
   open func roomDirectoryProtocols() async throws -> RoomDirectoryProtocolsDto
   open func roomDirectorySearch(sessionGeneration: UInt64, requestId: UInt64, serverName: String?, term: String?, roomType: String?, thirdPartyInstanceId: String?, limit: UInt64, since: String?) async throws -> RoomDirectorySearchDto
+  open func roomIdentityWarnings(roomId: String) async throws -> RoomIdentityWarningsDto
   open func roomInvite(roomId: String, userId: String, reason: String?) async throws -> RoomModerationWriteDto
   open func roomJoin(roomIdOrAlias: String, viaServers: [String]?) async throws -> RoomMembershipWriteDto
   open func roomJoinRuleSnapshot(roomId: String, sessionGeneration: UInt64) async throws -> RoomJoinRuleSnapshotDto
@@ -522,6 +527,9 @@ public enum RoomEncryptionStatus: Equatable, Hashable
   case encrypted
   case notEncrypted
   case unknown
+public enum RoomIdentityWarningError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
+  case Failed(code: String, description: String)
+  public var errorDescription: String?
 public enum RoomListSnapshotError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -738,6 +746,7 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func reactionRedact(roomId: String, targetEventId: String, reactionEventId: String, key: String) async throws -> TimelineReactionMutationDto
   func recover(recoveryKey: String) async throws -> LeftoverAckDto
   func registerHttpPusher(pushKey: String, appId: String, gatewayUrl: String, appDisplayName: String, lang: String) async throws -> PusherWriteDto
+  func resolveRoomIdentityWarning(roomId: String, userId: String, action: String) async throws -> RoomIdentityWarningsDto
   func restoreBackup(recoverySecret: String) async throws -> RestoreBackupDto
   func restorePersistedSession(userId: String, homeserverUrl: String, storeRoot: String) async throws -> SessionRestoreDto
   func restrictedJoinReparent(roomId: String, removeParentId: String?, addParentId: String) async throws -> RestrictedJoinReparentDto
@@ -750,6 +759,7 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func roomDirectoryCancel(sessionGeneration: UInt64, requestId: UInt64) async throws -> RoomDirectorySearchDto
   func roomDirectoryProtocols() async throws -> RoomDirectoryProtocolsDto
   func roomDirectorySearch(sessionGeneration: UInt64, requestId: UInt64, serverName: String?, term: String?, roomType: String?, thirdPartyInstanceId: String?, limit: UInt64, since: String?) async throws -> RoomDirectorySearchDto
+  func roomIdentityWarnings(roomId: String) async throws -> RoomIdentityWarningsDto
   func roomInvite(roomId: String, userId: String, reason: String?) async throws -> RoomModerationWriteDto
   func roomJoin(roomIdOrAlias: String, viaServers: [String]?) async throws -> RoomMembershipWriteDto
   func roomJoinRuleSnapshot(roomId: String, sessionGeneration: UInt64) async throws -> RoomJoinRuleSnapshotDto
@@ -1219,6 +1229,15 @@ public struct RoomDirectoryVisibilityWriteDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var requestedVisibility: String
   public init(status: String, roomId: String, sessionGeneration: UInt64, requestedVisibility: String)
+public struct RoomIdentityWarningDto: Equatable, Hashable
+  public var userId: String
+  public var displayName: String?
+  public var kind: String
+  public init(userId: String, displayName: String?, kind: String)
+public struct RoomIdentityWarningsDto: Equatable, Hashable
+  public var roomId: String
+  public var warnings: [RoomIdentityWarningDto]
+  public init(roomId: String, warnings: [RoomIdentityWarningDto])
 public struct RoomImagePacksSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var roomId: String

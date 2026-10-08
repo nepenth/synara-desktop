@@ -30,6 +30,7 @@ pub(crate) mod presence_snapshot;
 pub(crate) mod presence_subscriptions;
 pub(crate) mod push_rules;
 pub(crate) mod room_create;
+pub(crate) mod room_identity_warnings;
 pub(crate) mod room_image_packs;
 pub(crate) mod room_key_status;
 pub(crate) mod room_leave_join;

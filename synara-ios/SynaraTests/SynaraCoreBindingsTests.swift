@@ -3799,6 +3799,36 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(unknownDevice?.systemImageName, "shield")
     }
 
+    func testRoomIdentityWarningsMapClosedKindsAndPickTheMostSeriousBanner() {
+        let dto = RoomIdentityWarningsDto(
+            roomId: "!room:example.org",
+            warnings: [
+                RoomIdentityWarningDto(userId: "@amy:example.org", displayName: "Amy", kind: "pin_violation"),
+                RoomIdentityWarningDto(userId: "@bob:example.org", displayName: "  ", kind: "verification_violation"),
+                RoomIdentityWarningDto(userId: "eve", displayName: nil, kind: "pin_violation"),
+                RoomIdentityWarningDto(userId: "@zed:example.org", displayName: nil, kind: "verified"),
+            ]
+        )
+        XCTAssertEqual(
+            SharedCoreCryptoStatusService.identityWarnings(from: dto, roomID: "!other:example.org"),
+            []
+        )
+        let warnings = SharedCoreCryptoStatusService.identityWarnings(from: dto, roomID: "!room:example.org")
+        XCTAssertEqual(warnings.map(\.userID), ["@amy:example.org", "@bob:example.org"])
+        XCTAssertNil(warnings[1].displayName)
+
+        let banner = try? XCTUnwrap(RoomIdentityWarning.banner(for: warnings))
+        XCTAssertEqual(banner?.userID, "@bob:example.org")
+        XCTAssertEqual(banner?.message, "@bob:example.org's verified identity changed.")
+        XCTAssertEqual(banner?.resolveAction, "withdraw_verification")
+        XCTAssertEqual(banner?.actionTitle, "Withdraw verification")
+
+        let pinned = RoomIdentityWarning.banner(for: [warnings[0]])
+        XCTAssertEqual(pinned?.message, "Amy's identity changed.")
+        XCTAssertEqual(pinned?.resolveAction, "dismiss")
+        XCTAssertNil(RoomIdentityWarning.banner(for: []))
+    }
+
     func testEncryptionShieldSurvivesTimelineItemCopies() {
         var item = TimelineItem(
             id: "item",

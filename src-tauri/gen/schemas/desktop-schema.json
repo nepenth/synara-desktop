@@ -1065,6 +1065,18 @@
           "markdownDescription": "Enables the matrix_room_directory_search command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_room_identity_warning_resolve command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-identity-warning-resolve",
+          "markdownDescription": "Enables the matrix_room_identity_warning_resolve command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_identity_warnings command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-identity-warnings",
+          "markdownDescription": "Enables the matrix_room_identity_warnings command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_room_invite command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-room-invite",
@@ -2455,6 +2467,18 @@
           "type": "string",
           "const": "deny-matrix-room-directory-search",
           "markdownDescription": "Denies the matrix_room_directory_search command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_identity_warning_resolve command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-identity-warning-resolve",
+          "markdownDescription": "Denies the matrix_room_identity_warning_resolve command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_identity_warnings command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-identity-warnings",
+          "markdownDescription": "Denies the matrix_room_identity_warnings command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_room_invite command without any pre-configured scope.",
