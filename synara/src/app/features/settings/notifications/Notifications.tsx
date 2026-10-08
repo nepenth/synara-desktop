@@ -44,7 +44,14 @@ function NativeModePicker({
           outlined
           radii="300"
           aria-pressed={mode === value}
-          before={mode === value ? <Icon size="100" src={Icons.Check} /> : undefined}
+          before={
+            <Icon
+              size="100"
+              src={Icons.Check}
+              aria-hidden
+              style={{ visibility: mode === value ? 'visible' : 'hidden' }}
+            />
+          }
           disabled={disabled}
           onClick={() => onChange(mode)}
         >
@@ -196,7 +203,12 @@ function NativePushRulesEditor() {
                     radii="300"
                     aria-pressed={snapshot.mentions[ruleId]}
                     before={
-                      snapshot.mentions[ruleId] ? <Icon size="100" src={Icons.Check} /> : undefined
+                      <Icon
+                        size="100"
+                        src={Icons.Check}
+                        aria-hidden
+                        style={{ visibility: snapshot.mentions[ruleId] ? 'visible' : 'hidden' }}
+                      />
                     }
                     disabled={busy}
                     onClick={() =>

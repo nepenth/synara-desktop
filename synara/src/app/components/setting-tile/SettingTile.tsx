@@ -28,7 +28,7 @@ export function SettingTile({ title, description, before, after, children }: Set
         {children}
       </Box>
       {after && (
-        <Box shrink="No" className={css.SettingControl}>
+        <Box shrink="No" className={css.SettingControl} data-setting-control>
           {after}
         </Box>
       )}

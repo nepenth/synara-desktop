@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Settings: the app and room/space settings navigation use one compact rhythm, setting controls stay beside their descriptions instead of dropping below long text, every pair of settings keeps the same spacing, theme pickers share one dropdown style, color controls align on one edge, and segmented choices no longer shift when the selection changes.
+- Menus: room and space context menus (including the room header menu) use one flat item style, so Invite no longer looks different from the other items.
+
 ## [2.2.0] - 2026-10-08
 
 - Sessions: desktop and iOS share one Core session lifecycle; a rejected session retires locally without contacting the homeserver, logout is bounded and race-free, waits briefly for the key backup and warns on the last device, and a closed command gate shows as Connection Lost with static diagnostic ids in the log.

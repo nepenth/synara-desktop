@@ -184,27 +184,29 @@ function SystemThemePreferences() {
   };
 
   return (
-    <Box wrap="Wrap" gap="400">
+    <>
       <SettingTile
-        title="Light Theme:"
+        title="Light Theme"
+        description={
+          themeKind === ThemeKind.Light
+            ? 'Used while your system is in light mode. Active now.'
+            : 'Used while your system is in light mode.'
+        }
         after={
-          <Chip
+          <Button
             className={SettingsQuietControl}
+            size="300"
             variant="Secondary"
-            fill={themeKind === ThemeKind.Light ? 'Soft' : 'None'}
             outlined
-            radii="Pill"
-            aria-pressed={themeKind === ThemeKind.Light}
+            fill="None"
+            radii="300"
+            after={<Icon size="300" src={Icons.ChevronBottom} />}
+            onClick={handleLightThemeMenu}
             aria-haspopup="menu"
             aria-expanded={ltCords !== undefined}
-            before={
-              themeKind === ThemeKind.Light ? <Icon size="100" src={Icons.Check} /> : undefined
-            }
-            after={<Icon size="200" src={Icons.ChevronBottom} />}
-            onClick={handleLightThemeMenu}
           >
-            <Text size="B300">{themeNames[selectedLightTheme.id] ?? selectedLightTheme.id}</Text>
-          </Chip>
+            <Text size="T300">{themeNames[selectedLightTheme.id] ?? selectedLightTheme.id}</Text>
+          </Button>
         }
       />
       <PopOut
@@ -235,25 +237,27 @@ function SystemThemePreferences() {
         }
       />
       <SettingTile
-        title="Dark Theme:"
+        title="Dark Theme"
+        description={
+          themeKind === ThemeKind.Dark
+            ? 'Used while your system is in dark mode. Active now.'
+            : 'Used while your system is in dark mode.'
+        }
         after={
-          <Chip
+          <Button
             className={SettingsQuietControl}
+            size="300"
             variant="Secondary"
-            fill={themeKind === ThemeKind.Dark ? 'Soft' : 'None'}
             outlined
-            radii="Pill"
-            aria-pressed={themeKind === ThemeKind.Dark}
+            fill="None"
+            radii="300"
+            after={<Icon size="300" src={Icons.ChevronBottom} />}
+            onClick={handleDarkThemeMenu}
             aria-haspopup="menu"
             aria-expanded={dtCords !== undefined}
-            before={
-              themeKind === ThemeKind.Dark ? <Icon size="100" src={Icons.Check} /> : undefined
-            }
-            after={<Icon size="200" src={Icons.ChevronBottom} />}
-            onClick={handleDarkThemeMenu}
           >
-            <Text size="B300">{themeNames[selectedDarkTheme.id] ?? selectedDarkTheme.id}</Text>
-          </Chip>
+            <Text size="T300">{themeNames[selectedDarkTheme.id] ?? selectedDarkTheme.id}</Text>
+          </Button>
         }
       />
       <PopOut
@@ -283,7 +287,7 @@ function SystemThemePreferences() {
           </FocusTrap>
         }
       />
-    </Box>
+    </>
   );
 }
 
@@ -411,9 +415,9 @@ function Appearance() {
             'Tint for rail, room list, and chat. Use a swatch, the color well, or paste a hex value. Lightness is mapped to stacked greys, not used as a fill.'
           )}
           after={
-            <Box direction="Column" gap="200" style={{ minWidth: toRem(220) }}>
+            <Box direction="Column" gap="200" style={{ minWidth: toRem(220) }} alignItems="End">
               <ThemeRampPreview baseColor={baseColor} kind={activeTheme.kind} />
-              <Box gap="100" wrap="Wrap" alignItems="Center">
+              <Box gap="100" wrap="Wrap" alignItems="Center" justifyContent="End">
                 {THEME_BASE_PRESETS.map((preset) => {
                   const selected = baseColor === preset.hex;
                   return (
@@ -563,7 +567,12 @@ function TextAndZoom() {
                   fill={messageTextTone === tone ? 'Soft' : 'None'}
                   aria-pressed={messageTextTone === tone}
                   before={
-                    messageTextTone === tone ? <Icon size="100" src={Icons.Check} /> : undefined
+                    <Icon
+                      size="100"
+                      src={Icons.Check}
+                      aria-hidden
+                      style={{ visibility: messageTextTone === tone ? 'visible' : 'hidden' }}
+                    />
                   }
                   onClick={() => setMessageTextTone(tone as MessageTextTone)}
                 >

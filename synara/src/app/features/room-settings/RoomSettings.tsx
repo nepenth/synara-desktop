@@ -126,7 +126,7 @@ export function RoomSettings({ initialPage, requestClose }: RoomSettingsProps) {
             <Box grow="Yes" direction="Column">
               <PageNavContent>
                 <div style={{ flexGrow: 1 }}>
-                  <Box direction="Column" gap="100">
+                  <Box direction="Column" gap="100" data-settings-nav>
                     {menuItems.map((item) => (
                       <MenuItem
                         className={depthCss.quietInteractiveSurface}

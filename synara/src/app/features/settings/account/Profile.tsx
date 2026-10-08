@@ -492,7 +492,14 @@ function ProfilePresence({ userId }: { userId: string }) {
               outlined
               radii="300"
               aria-pressed={state === current}
-              before={state === current ? <Icon size="100" src={Icons.Check} /> : undefined}
+              before={
+                <Icon
+                  size="100"
+                  src={Icons.Check}
+                  aria-hidden
+                  style={{ visibility: state === current ? 'visible' : 'hidden' }}
+                />
+              }
               disabled={busy || unavailable}
               onClick={() => {
                 if (state === current || busy || unavailable) return;
