@@ -20,7 +20,6 @@ import { TextViewerContent } from '../../../components/text-viewer';
 import { useStateEvent } from '../../../hooks/useStateEvent';
 import { useRoom } from '../../../hooks/useRoom';
 import { StateEvent } from '../../../../types/matrix/room';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useAlive } from '../../../hooks/useAlive';
 import { Cursor } from '../../../plugins/text-area';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
@@ -32,6 +31,7 @@ import { useTextAreaCodeEditor } from '../../../hooks/useTextAreaCodeEditor';
 import { useRoomPermissions } from '../../../hooks/useRoomPermissions';
 import { sendLeftoverStateEvent } from '../../../components/nativeStateEventOwner';
 
+import { sendNativeStateEvent } from '../../../native/nativeCommands';
 const EDITOR_INTENT_SPACE_COUNT = 2;
 
 type StateEventEditProps = {
@@ -41,7 +41,6 @@ type StateEventEditProps = {
   requestClose: () => void;
 };
 function StateEventEdit({ type, stateKey, content, requestClose }: StateEventEditProps) {
-  const mx = useMatrixClient();
   const room = useRoom();
   const alive = useAlive();
 
@@ -61,9 +60,9 @@ function StateEventEdit({ type, stateKey, content, requestClose }: StateEventEdi
     useCallback(
       (c) =>
         sendLeftoverStateEvent(room.roomId, type, c as Record<string, unknown>, stateKey, () =>
-          mx.sendStateEvent(room.roomId, type as any, c as Record<string, unknown>, stateKey)
+          sendNativeStateEvent(room.roomId, type as any, c as Record<string, unknown>, stateKey)
         ).then(() => ({})),
-      [mx, room, type, stateKey]
+      [room, type, stateKey]
     )
   );
   const submitting = submitState.status === AsyncStatus.Loading;

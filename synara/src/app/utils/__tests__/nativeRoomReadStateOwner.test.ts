@@ -97,7 +97,7 @@ test('room read state fails closed when the native session is unavailable or log
 test('desktop mark-as-read helpers route through the native owner, not the JS-sdk GAP', () => {
   const notifications = readFileSync('src/app/utils/notifications.ts', 'utf8');
   assert.match(notifications, /setRoomReadStateWithNativeOwner/);
-  assert.match(notifications, /typeof window !== 'undefined' && isSynaraDesktop\(\)/);
+  assert.match(notifications, /typeof window === 'undefined' \|\| !isSynaraDesktop\(\)/);
   assert.match(notifications, /mark_read/);
   assert.match(notifications, /mark_unread/);
 });

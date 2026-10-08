@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Icon, Icons, Menu, MenuItem, PopOut, RectCords, Text, config, toRem } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import { useAtomValue } from 'jotai';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useNativeNavigationScope } from '../../../state/hooks/navigationUnread';
 import { getDirectPath, joinPathComponent } from '../../pathUtils';
 import {
@@ -24,11 +23,10 @@ type DirectMenuProps = {
 };
 const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }, ref) => {
   const { roomIds, unread } = useNativeNavigationScope('direct');
-  const mx = useMatrixClient();
 
   const handleMarkAsRead = () => {
     if (!unread) return;
-    roomIds.forEach((rId) => markAsReadFromExplicitUserActionInBackground(mx, rId));
+    roomIds.forEach((rId) => markAsReadFromExplicitUserActionInBackground(rId));
     requestClose();
   };
 

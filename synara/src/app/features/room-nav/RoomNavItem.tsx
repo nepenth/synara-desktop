@@ -19,7 +19,6 @@ import { useFocusWithin, useHover } from 'react-aria';
 import FocusTrap from 'focus-trap-react';
 import { NavItem, NavItemContent, NavItemOptions, NavLink } from '../../components/nav';
 import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { copyToClipboard } from '../../utils/dom';
 import { unreadFromPresentation } from '../../state/room-list/roomListPresentation';
@@ -60,7 +59,6 @@ type RoomNavItemMenuProps = {
 };
 const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
   ({ room, requestClose, notificationMode }, ref) => {
-    const mx = useMatrixClient();
     const nativeRooms = useNativeRoomListSnapshot();
     const nativeRoom = nativeRooms.rooms.find((summary) => summary.roomId === room.roomId);
     const unread = unreadFromPresentation(nativeRooms.presentation, room.roomId);
@@ -83,7 +81,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
       setReadError(undefined);
       setReadBusy(true);
       try {
-        await markAsReadFromExplicitUserAction(mx, room.roomId);
+        await markAsReadFromExplicitUserAction(room.roomId);
         requestClose();
       } catch {
         setReadError("Couldn't mark this channel as read.");
@@ -126,7 +124,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
     };
 
     const handleCopyLink = async () => {
-      const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, room.roomId);
+      const roomIdOrAlias = getCanonicalAliasOrRoomId(room.roomId);
       const viaServers = isRoomAlias(roomIdOrAlias) ? undefined : await getViaServers(room);
       copyToClipboard(getMatrixToRoom(roomIdOrAlias, viaServers));
       requestClose();

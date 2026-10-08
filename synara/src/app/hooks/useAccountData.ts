@@ -1,25 +1,14 @@
-import { useState, useCallback } from 'react';
-import { useMatrixClient } from './useMatrixClient';
-import { useAccountDataCallback } from './useAccountDataCallback';
+import type { MatrixEventReading } from '../utils/room';
+import { getAccountData } from '../utils/room';
+import type { AccountDataEvent } from '../../types/matrix/accountData';
 
-export function useAccountData(eventType: string, enabled = true) {
-  const mx = useMatrixClient();
-  const [event, setEvent] = useState(() =>
-    enabled ? mx.getAccountData(eventType as any) : undefined
-  );
-
-  useAccountDataCallback(
-    mx,
-    useCallback(
-      (evt) => {
-        if (evt.getType() === eventType) {
-          setEvent(evt);
-        }
-      },
-      [eventType, setEvent]
-    ),
-    enabled
-  );
-
-  return enabled ? event : undefined;
+/**
+ * Global account data of one type. Native has no general account-data read
+ * (only per-feature owners), so this resolves `undefined` like `getAccountData`.
+ */
+export function useAccountData(
+  eventType: AccountDataEvent,
+  enabled = true
+): MatrixEventReading | undefined {
+  return enabled ? getAccountData(eventType) : undefined;
 }

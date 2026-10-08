@@ -3,7 +3,6 @@ import React, { MouseEventHandler, useMemo } from 'react';
 import type { useRoomEvent } from '../../hooks/useRoomEvent';
 import type { RoomReading } from '../../utils/room';
 import type { EventedRoomReading } from '../../utils/roomEvents';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { HTMLReactParserOptions } from 'html-react-parser';
 import { Avatar, Box, Chip, Header, Icon, Icons, Text, config } from 'folds';
 import * as depthCss from '../../styles/Depth.css';
@@ -103,7 +102,6 @@ export function SearchResultGroup({
   hour24Clock,
   dateFormatString,
 }: SearchResultGroupProps) {
-  const mx = useMatrixClient();
   const eventedRoom = room as unknown as EventedRoomReading;
   const roomReading = eventedRoom as unknown as RoomReading;
   const useAuthentication = useMediaAuthentication();
@@ -125,20 +123,20 @@ export function SearchResultGroup({
     () => ({
       ...LINKIFY_OPTS,
       render: factoryRenderLinkifyWithMention((href) =>
-        renderMatrixMention(mx, room.roomId, href, makeMentionCustomProps(mentionClickHandler))
+        renderMatrixMention(room.roomId, href, makeMentionCustomProps(mentionClickHandler))
       ),
     }),
-    [mx, room, mentionClickHandler]
+    [room, mentionClickHandler]
   );
   const htmlReactParserOptions = useMemo<HTMLReactParserOptions>(
     () =>
-      getReactCustomHtmlParser(mx, room.roomId, {
+      getReactCustomHtmlParser(room.roomId, {
         linkifyOpts,
         highlightRegex,
         useAuthentication,
         handleMentionClick: mentionClickHandler,
       }),
-    [mx, room, linkifyOpts, highlightRegex, mentionClickHandler, useAuthentication]
+    [room, linkifyOpts, highlightRegex, mentionClickHandler, useAuthentication]
   );
 
   const renderMatrixEvent = useMatrixEventRenderer<[SearchResultEvent, string, GetContentCallback]>(
@@ -224,7 +222,7 @@ export function SearchResultGroup({
           <Avatar size="200" radii="300">
             <RoomAvatar
               roomId={room.roomId}
-              src={getRoomAvatarUrl(mx, roomReading, 96, useAuthentication)}
+              src={getRoomAvatarUrl(roomReading, 96)}
               alt={room.name}
               renderFallback={() => (
                 <RoomIcon
@@ -266,7 +264,7 @@ export function SearchResultGroup({
             ? accessibleTagColors?.get(memberPowerTag.color)
             : undefined;
           const tagIconSrc = memberPowerTag?.icon
-            ? getPowerTagIconSrc(mx, useAuthentication, memberPowerTag.icon)
+            ? getPowerTagIconSrc(useAuthentication, memberPowerTag.icon)
             : undefined;
 
           const usernameColor = legacyUsernameColor ? colorMXID(event.sender) : tagColor;
@@ -286,7 +284,7 @@ export function SearchResultGroup({
                         userId={event.sender}
                         src={
                           senderAvatarMxc
-                            ? resolveMatrixThumbnailUrl(mx, senderAvatarMxc, 48, {
+                            ? resolveMatrixThumbnailUrl(senderAvatarMxc, 48, {
                                 useAuthentication,
                               })
                             : undefined

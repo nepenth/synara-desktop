@@ -21,7 +21,6 @@ import FocusTrap from 'focus-trap-react';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../../room-settings/styles.css';
 import { SettingTile } from '../../../components/setting-tile';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { StateEvent } from '../../../../types/matrix/room';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useRoom } from '../../../hooks/useRoom';
@@ -37,6 +36,7 @@ import {
 } from '../../../components/nativeStateEventOwner';
 import { pushEncryptedStateEventsSetting } from '../../settings/encryptedStateEvents';
 
+import { sendNativeStateEvent } from '../../../native/nativeCommands';
 const ROOM_ENC_ALGO = 'm.megolm.v1.aes-sha2';
 
 const encryptionContentRequestsState = (content?: {
@@ -51,7 +51,6 @@ type RoomEncryptionProps = {
   permissions: RoomPermissionsAPI;
 };
 export function RoomEncryption({ permissions }: RoomEncryptionProps) {
-  const mx = useMatrixClient();
   const room = useRoom();
   const [encryptedStateEventsSetting] = useSetting(settingsAtom, 'encryptedStateEvents');
   const nativeRooms = useNativeRoomListSnapshot();
@@ -77,10 +76,10 @@ export function RoomEncryption({ permissions }: RoomEncryptionProps) {
         await enableRoomEncryptedStateWithNativeOwner(room.roomId, false);
         return;
       }
-      await mx.sendStateEvent(room.roomId, StateEvent.RoomEncryption as any, {
+      await sendNativeStateEvent(room.roomId, StateEvent.RoomEncryption as any, {
         algorithm: ROOM_ENC_ALGO,
       });
-    }, [mx, room.roomId])
+    }, [room.roomId])
   );
 
   const [optInState, optIn] = useAsyncCallback(
@@ -90,12 +89,12 @@ export function RoomEncryption({ permissions }: RoomEncryptionProps) {
         await enableRoomEncryptedStateWithNativeOwner(room.roomId, true);
         return;
       }
-      await mx.sendStateEvent(room.roomId, StateEvent.RoomEncryption as any, {
+      await sendNativeStateEvent(room.roomId, StateEvent.RoomEncryption as any, {
         algorithm: ROOM_ENC_ALGO,
         encrypt_state_events: true,
         'io.element.msc4362.encrypt_state_events': true,
       });
-    }, [mx, room.roomId])
+    }, [room.roomId])
   );
 
   const enabling = enableState.status === AsyncStatus.Loading;

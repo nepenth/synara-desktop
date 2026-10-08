@@ -82,6 +82,6 @@ test('STOPPED is Connection Lost only for a signed-in session that was connected
 
 test('SyncStatus derives the signed-in flag from the client, not a constant', () => {
   const source = readFileSync('src/app/pages/client/SyncStatus.tsx', 'utf8');
-  assert.match(source, /isSignedInSessionForBanner\(mx, connectedDuringMount\)/);
+  assert.match(source, /isSignedInSessionForBanner\(session, connectedDuringMount\)/);
   assert.doesNotMatch(source, /signedInSession = true/);
 });

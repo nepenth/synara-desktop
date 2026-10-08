@@ -3,7 +3,6 @@ import React, { ReactNode, useCallback, useRef, useState } from 'react';
 import { Badge, Chip, Icon, IconButton, Icons, ProgressBar, Spinner, Text, toRem } from 'folds';
 import { EncryptedAttachmentInfo, IAudioInfo } from '../../../../types/matrix/common';
 import { Range } from 'react-range';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import {
   PlayTimeCallback,
@@ -43,17 +42,16 @@ export function AudioContent({
   encInfo,
   renderMediaControl,
 }: AudioContentProps) {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
 
   const [srcState, loadSrc] = useAsyncCallback(
     useCallback(async () => {
-      return createMatrixMediaObjectUrl(mx, url, {
+      return createMatrixMediaObjectUrl(url, {
         useAuthentication,
         mimeType,
         encryptedInfo: encInfo,
       });
-    }, [mx, url, useAuthentication, mimeType, encInfo])
+    }, [url, useAuthentication, mimeType, encInfo])
   );
 
   const audioRef = useRef<HTMLAudioElement | null>(null);

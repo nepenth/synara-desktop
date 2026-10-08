@@ -39,7 +39,6 @@ import { EmojiBoard } from '../../../components/emoji-board';
 import { useImagePackRooms } from '../../../hooks/useImagePackRooms';
 import { roomToParentsAtom } from '../../../state/room/roomToParents';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useFilePicker } from '../../../hooks/useFilePicker';
 import { CompactUploadCardRenderer } from '../../../components/upload-card';
 import { createUploadAtom, UploadSuccess } from '../../../state/upload';
@@ -60,7 +59,6 @@ type EditPowerProps = {
   onClose: () => void;
 };
 function EditPower({ maxPower, power, tag, onSave, onClose }: EditPowerProps) {
-  const mx = useMatrixClient();
   const room = useRoom();
   const roomToParents = useAtomValue(roomToParentsAtom);
   const useAuthentication = useMediaAuthentication();
@@ -74,7 +72,7 @@ function EditPower({ maxPower, power, tag, onSave, onClose }: EditPowerProps) {
   const [tagColor, setTagColor] = useState<string | undefined>(tag?.color);
   const [tagIcon, setTagIcon] = useState<MemberPowerTagIcon | undefined>(tag?.icon);
   const uploadingIcon = iconFile && !tagIcon;
-  const tagIconSrc = tagIcon && getPowerTagIconSrc(mx, useAuthentication, tagIcon);
+  const tagIconSrc = tagIcon && getPowerTagIconSrc(useAuthentication, tagIcon);
 
   const iconUploadAtom = useMemo(() => {
     if (iconFile) return createUploadAtom(iconFile);
@@ -291,7 +289,6 @@ type PowersEditorProps = {
   requestClose: () => void;
 };
 export function PowersEditor({ powerLevels, requestClose }: PowersEditorProps) {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const room = useRoom();
   const alive = useAlive();
@@ -426,8 +423,7 @@ export function PowersEditor({ powerLevels, requestClose }: PowersEditorProps) {
                 </SequenceCard>
                 {getPowers(powerTags).map((power) => {
                   const tag = powerTags[power];
-                  const tagIconSrc =
-                    tag.icon && getPowerTagIconSrc(mx, useAuthentication, tag.icon);
+                  const tagIconSrc = tag.icon && getPowerTagIconSrc(useAuthentication, tag.icon);
 
                   return (
                     <SequenceCard

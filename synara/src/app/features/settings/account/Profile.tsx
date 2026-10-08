@@ -28,7 +28,6 @@ import FocusTrap from 'focus-trap-react';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { UserProfile, useUserProfile } from '../../../hooks/useUserProfile';
 import { getMxIdLocalPart } from '../../../utils/matrix';
 import { UserAvatar } from '../../../components/user-avatar';
@@ -70,12 +69,12 @@ import { rtcTransportsDiagnosticCopy } from '../../matrix-rtc/liveCallChrome';
 import { profileWriteErrorMessage } from './nativeProfileOwner';
 import { getSafeMyUserId } from '../../../state/nativeIdentity';
 
+import { setNativeDisplayName, setNativeAvatarUrl } from '../../../native/nativeCommands';
 type ProfileProps = {
   profile: UserProfile;
   userId: string;
 };
 function ProfileAvatar({ profile, userId }: ProfileProps) {
-  const mx = useMatrixClient();
   const capabilities = useCapabilities();
   const [alertRemove, setAlertRemove] = useState(false);
   const disableSetAvatar = capabilities['m.set_avatar_url']?.enabled === false;
@@ -107,17 +106,17 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
       const { mxc } = upload;
       const result = await setOwnAvatarNative(mxc);
       if (result === 'legacy') {
-        await mx.setAvatarUrl(mxc);
+        await setNativeAvatarUrl(mxc);
       }
       notifyOwnProfileChanged();
       handleRemoveUpload();
     },
-    [mx, handleRemoveUpload]
+    [handleRemoveUpload]
   );
 
   useEffect(() => {
     if (!imageFile || !isSynaraDesktop()) return;
-    // Desktop native: fail-closed upload + set avatar without mx.uploadContent.
+    // Desktop native: fail-closed upload + set avatar without a renderer upload.
     let cancelled = false;
     (async () => {
       setNativeUploading(true);
@@ -153,13 +152,13 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
     return () => {
       cancelled = true;
     };
-  }, [imageFile, mx, handleRemoveUpload]);
+  }, [imageFile, handleRemoveUpload]);
 
   const handleRemoveAvatar = async () => {
     try {
       const result = await setOwnAvatarNative('');
       if (result === 'legacy') {
-        await mx.setAvatarUrl('');
+        await setNativeAvatarUrl('');
       }
       notifyOwnProfileChanged();
       setAlertRemove(false);
@@ -314,7 +313,6 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
 }
 
 function ProfileDisplayName({ profile, userId }: ProfileProps) {
-  const mx = useMatrixClient();
   const capabilities = useCapabilities();
   const disableSetDisplayname = capabilities['m.set_displayname']?.enabled === false;
 
@@ -322,16 +320,13 @@ function ProfileDisplayName({ profile, userId }: ProfileProps) {
   const [displayName, setDisplayName] = useState<string>(defaultDisplayName);
 
   const [changeState, changeDisplayName] = useAsyncCallback(
-    useCallback(
-      async (name: string) => {
-        const result = await setOwnDisplayNameNative(name);
-        if (result === 'legacy') {
-          await mx.setDisplayName(name);
-        }
-        notifyOwnProfileChanged();
-      },
-      [mx]
-    )
+    useCallback(async (name: string) => {
+      const result = await setOwnDisplayNameNative(name);
+      if (result === 'legacy') {
+        await setNativeDisplayName(name);
+      }
+      notifyOwnProfileChanged();
+    }, [])
   );
   const changingDisplayName = changeState.status === AsyncStatus.Loading;
   const displayNameError =

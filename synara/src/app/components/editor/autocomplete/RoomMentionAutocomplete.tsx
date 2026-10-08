@@ -1,12 +1,10 @@
 import React, { KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect } from 'react';
 import { Editor } from 'slate';
 import { Avatar, Icon, Icons, MenuItem, Text } from 'folds';
-import type { MatrixClientReading } from '../../../utils/room';
 import { useAtomValue } from 'jotai';
 
 import { createMentionElement, moveCursor, replaceWithElement } from '../utils';
 import { getDirectRoomAvatarUrl } from '../../../utils/room';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { AutocompleteQuery } from './autocompleteQuery';
 import { AutocompleteMenu } from './AutocompleteMenu';
 import { getMxIdServer, isRoomAlias } from '../../../utils/matrix';
@@ -21,9 +19,10 @@ import { getViaServers } from '../../../plugins/via-servers';
 import { normalizeRoomJoinRulePresentation } from '../../../features/matrix-dto/roomJoinRule';
 import { getMyUserId } from '../../../state/nativeIdentity';
 
+import { getNativeRoom } from '../../../native/nativeSession';
 type MentionAutoCompleteHandler = (roomAliasOrId: string, name: string) => void | Promise<void>;
 
-const roomAliasFromQueryText = (mx: MatrixClientReading, text: string) =>
+const roomAliasFromQueryText = (text: string) =>
   isRoomAlias(`#${text}`)
     ? `#${text}`
     : `#${text}${text.endsWith(':') ? '' : ':'}${getMxIdServer(getMyUserId() ?? '')}`;
@@ -35,8 +34,7 @@ function UnknownRoomMentionItem({
   query: AutocompleteQuery<string>;
   handleAutocomplete: MentionAutoCompleteHandler;
 }) {
-  const mx = useMatrixClient();
-  const roomAlias: string = roomAliasFromQueryText(mx, query.text);
+  const roomAlias: string = roomAliasFromQueryText(query.text);
 
   const handleSelect = () => handleAutocomplete(roomAlias, roomAlias);
 
@@ -78,23 +76,19 @@ export function RoomMentionAutocomplete({
   query,
   requestClose,
 }: RoomMentionAutocompleteProps) {
-  const mx = useMatrixClient();
   const mDirects = useAtomValue(mDirectAtom);
 
-  const allRooms = useAtomValue(allRoomsAtom).sort(factoryRoomIdByActivity(mx));
+  const allRooms = useAtomValue(allRoomsAtom).sort(factoryRoomIdByActivity());
 
   const [result, search, resetSearch] = useAsyncSearch(
     allRooms,
-    useCallback(
-      (rId) => {
-        const r = mx.getRoom(rId);
-        if (!r) return 'Unknown Room';
-        const alias = r.getCanonicalAlias();
-        if (alias) return [r.name, alias];
-        return r.name;
-      },
-      [mx]
-    ),
+    useCallback((rId) => {
+      const r = getNativeRoom(rId);
+      if (!r) return 'Unknown Room';
+      const alias = r.getCanonicalAlias();
+      if (alias) return [r.name, alias];
+      return r.name;
+    }, []),
     SEARCH_OPTIONS
   );
 
@@ -106,12 +100,12 @@ export function RoomMentionAutocomplete({
   }, [query.text, search, resetSearch]);
 
   const handleAutocomplete: MentionAutoCompleteHandler = async (roomAliasOrId, name) => {
-    const mentionRoom = mx.getRoom(roomAliasOrId);
+    const mentionRoom = getNativeRoom(roomAliasOrId);
     const viaServers = mentionRoom ? await getViaServers(mentionRoom) : undefined;
     const mentionEl = createMentionElement(
       roomAliasOrId,
       name.startsWith('#') ? name : `#${name}`,
-      roomId === roomAliasOrId || mx.getRoom(roomId)?.getCanonicalAlias() === roomAliasOrId,
+      roomId === roomAliasOrId || getNativeRoom(roomId)?.getCanonicalAlias() === roomAliasOrId,
       undefined,
       viaServers
     );
@@ -123,12 +117,12 @@ export function RoomMentionAutocomplete({
   useKeyDown(window, (evt: KeyboardEvent) => {
     onTabPress(evt, () => {
       if (autoCompleteRoomIds.length === 0) {
-        const alias = roomAliasFromQueryText(mx, query.text);
+        const alias = roomAliasFromQueryText(query.text);
         handleAutocomplete(alias, alias);
         return;
       }
       const rId = autoCompleteRoomIds[0];
-      const r = mx.getRoom(rId);
+      const r = getNativeRoom(rId);
       const name = r?.name ?? rId;
       handleAutocomplete(r?.getCanonicalAlias() ?? rId, name);
     });
@@ -140,7 +134,7 @@ export function RoomMentionAutocomplete({
         <UnknownRoomMentionItem query={query} handleAutocomplete={handleAutocomplete} />
       ) : (
         autoCompleteRoomIds.map((rId) => {
-          const room = mx.getRoom(rId);
+          const room = getNativeRoom(rId);
           if (!room) return null;
           const dm = mDirects.has(room.roomId);
 
@@ -165,7 +159,7 @@ export function RoomMentionAutocomplete({
                   {dm ? (
                     <RoomAvatar
                       roomId={room.roomId}
-                      src={getDirectRoomAvatarUrl(mx, room)}
+                      src={getDirectRoomAvatarUrl(room)}
                       alt={room.name}
                       renderFallback={() => (
                         <RoomIcon

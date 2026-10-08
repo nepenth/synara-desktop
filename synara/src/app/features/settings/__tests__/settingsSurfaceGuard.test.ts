@@ -120,14 +120,11 @@ test('General hosts Indexed message search with a session-reload note', () => {
 });
 
 test('native Notifications owns homeserver push rules instead of a unavailable stub', () => {
-  assert.match(notifications, /isNativeMatrixSession/);
-  assert.match(notifications, /NativePushRulesEditor/);
+  assert.match(notifications, /<NativePushRulesEditor \/>/);
   assert.equal(notifications.includes('not available in this native session'), false);
-  const nativeBranch = notifications.slice(
-    notifications.indexOf('isNativeMatrixSession()'),
-    notifications.indexOf(') : (')
-  );
-  assert.equal(nativeBranch.includes('Account > Block'), false);
+  // The native editor is the only push-rule surface; the js-sdk editors are gone.
+  assert.doesNotMatch(notifications, /AllMessagesNotifications|KeywordMessagesNotifications/);
+  assert.equal(notifications.includes('Account > Block'), false);
 });
 
 const devices = readFileSync(

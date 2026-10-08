@@ -8,7 +8,6 @@ import { getMxIdLocalPart } from '../../utils/matrix';
 import * as css from './RoomViewTyping.css';
 import { useRoomTypingMember } from '../../hooks/useRoomTypingMembers';
 import { isNativeMatrixSession } from '../verification/nativeVerification';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRoomMembers, type RoomMemberListItem } from '../../hooks/useRoomMembers';
 
 type RoomIdentity = {
@@ -34,9 +33,8 @@ export type RoomViewTypingProps = {
 };
 export const RoomViewTyping = as<'div', RoomViewTypingProps>(
   ({ className, room, ...props }, ref) => {
-    const mx = useMatrixClient();
     const nativeSession = isNativeMatrixSession();
-    const memberSnapshot = useRoomMembers(mx, room.roomId, nativeSession);
+    const memberSnapshot = useRoomMembers(room.roomId, nativeSession);
     const setTypingMembers = useSetAtom(roomIdToTypingMembersAtom);
     const typingMembers = useRoomTypingMember(room.roomId);
     const memberDisplayNames = useMemo(() => {

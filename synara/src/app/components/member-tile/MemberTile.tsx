@@ -1,6 +1,5 @@
 import React, { ReactNode } from 'react';
 import { as, Avatar, Box, Icon, Icons, Text } from 'folds';
-import type { MatrixClientReading } from '../../utils/room';
 import type { EventedRoomReading, JsRoomMemberReading } from '../../utils/roomEvents';
 import { getMemberDisplayName } from '../../utils/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
@@ -19,14 +18,13 @@ const getName = (room: EventedRoomReading, member: RoomMemberListItem) =>
   member.userId;
 
 type MemberTileProps = {
-  mx: MatrixClientReading;
   room: EventedRoomReading;
   member: RoomMemberListItem;
   useAuthentication: boolean;
   after?: ReactNode;
 };
 export const MemberTile = as<'button', MemberTileProps>(
-  ({ as: AsMemberTile = 'button', mx, room, member, useAuthentication, after, ...props }, ref) => {
+  ({ as: AsMemberTile = 'button', room, member, useAuthentication, after, ...props }, ref) => {
     const name = getName(room, member);
     const username = getMxIdLocalPart(member.userId);
 
@@ -34,7 +32,7 @@ export const MemberTile = as<'button', MemberTileProps>(
       ? member.avatarUrl
       : member.getMxcAvatarUrl();
     const avatarUrl = avatarMxcUrl
-      ? resolveMatrixThumbnailUrl(mx, avatarMxcUrl, 100, {
+      ? resolveMatrixThumbnailUrl(avatarMxcUrl, 100, {
           useAuthentication,
           allowDirectLinks: undefined,
           allowRedirects: false,

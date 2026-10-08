@@ -9,14 +9,12 @@ import React, {
 import { Box, color, Icon, Icons, Input, Spinner, Text, toRem } from 'folds';
 import { isKeyHotkey } from 'is-hotkey';
 import { getMxIdServer } from '../../utils/matrix';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { replaceSpaceWithDash } from '../../utils/common';
 import { AsyncState, AsyncStatus, useAsync } from '../../hooks/useAsyncCallback';
 import { useDebounce } from '../../hooks/useDebounce';
 import { getSafeMyUserId } from '../../state/nativeIdentity';
 
 export function CreateRoomAliasInput({ disabled }: { disabled?: boolean }) {
-  const mx = useMatrixClient();
   const aliasInputRef = useRef<HTMLInputElement>(null);
   const [aliasAvail, setAliasAvail] = useState<AsyncState<boolean, Error>>({
     status: AsyncStatus.Idle,
@@ -29,20 +27,11 @@ export function CreateRoomAliasInput({ disabled }: { disabled?: boolean }) {
   }, [aliasAvail]);
 
   const checkAliasAvail = useAsync(
-    useCallback(
-      async (aliasLocalPart: string) => {
-        const roomAlias = `#${aliasLocalPart}:${getMxIdServer(getSafeMyUserId())}`;
-        try {
-          const result = await mx.getRoomIdForAlias(roomAlias);
-          return typeof result?.room_id !== 'string';
-        } catch (e) {
-          if ((e as { httpStatus?: number } | null)?.httpStatus === 404) {
-            return true;
-          }
-          throw e;
-        }
-      },
-      [mx]
+    useCallback<(aliasLocalPart: string) => Promise<boolean>>(
+      // Native has no alias-resolution command, so every alias reads as
+      // available; room creation reports a taken alias.
+      async () => true,
+      []
     ),
     setAliasAvail
   );

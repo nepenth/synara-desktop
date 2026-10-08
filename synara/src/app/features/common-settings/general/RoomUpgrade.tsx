@@ -23,7 +23,6 @@ import { SettingTile } from '../../../components/setting-tile';
 import { useRoom } from '../../../hooks/useRoom';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { IRoomCreateContent, StateEvent } from '../../../../types/matrix/room';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useStateEvent } from '../../../hooks/useStateEvent';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { useCapabilities } from '../../../hooks/useCapabilities';
@@ -44,13 +43,7 @@ type RoomTombstoneEventContent = {
   replacement_room: string;
 };
 
-const Method = {
-  Post: 'POST',
-  Get: 'GET',
-} as const;
-
 function RoomUpgradeDialog({ requestClose }: { requestClose: () => void }) {
-  const mx = useMatrixClient();
   const room = useRoom();
   const alive = useAlive();
   const creators = useRoomCreators(room);
@@ -68,23 +61,13 @@ function RoomUpgradeDialog({ requestClose }: { requestClose: () => void }) {
     useAdditionalCreators(Array.from(creators));
 
   const [upgradeState, upgrade] = useAsyncCallback(
-    useCallback(
-      async (version: string, newAdditionalCreators?: string[]) => {
-        await (
-          mx.http as unknown as {
-            authedRequest(
-              method: string,
-              path: string,
-              queryParams?: unknown,
-              body?: unknown
-            ): Promise<unknown>;
-          }
-        ).authedRequest(Method.Post, `/rooms/${room.roomId}/upgrade`, undefined, {
-          new_version: version,
-          additional_creators: newAdditionalCreators,
-        });
+    useCallback<(version: string, additionalCreators?: string[]) => Promise<void>>(
+      // There is no native room-upgrade command. Fail instead of closing the
+      // dialog as if the upgrade had run.
+      async (): Promise<void> => {
+        throw new Error('Room upgrade is not available in the native client.');
       },
-      [mx, room]
+      []
     )
   );
 

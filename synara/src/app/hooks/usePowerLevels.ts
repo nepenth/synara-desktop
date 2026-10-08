@@ -4,8 +4,6 @@ import type { EventedRoomReading } from '../utils/roomEvents';
 import type { RoomReading, MatrixEventReading } from '../utils/room';
 import { useStateEvent } from './useStateEvent';
 import { StateEvent } from '../../types/matrix/room';
-import { useStateEventCallback } from './useStateEventCallback';
-import { useMatrixClient } from './useMatrixClient';
 import { getStateEvent } from '../utils/room';
 import { isNativeMatrixSession } from '../features/verification/nativeVerification';
 import {
@@ -157,7 +155,6 @@ export const usePowerLevelsContext = (): IPowerLevels => {
 };
 
 export const useRoomsPowerLevels = (rooms: RoomReading[]): Map<string, IPowerLevels> => {
-  const mx = useMatrixClient();
   const nativeSession = isNativeMatrixSession();
   const roomIdsKey = rooms.map((room) => room.roomId).join('\u0000');
   const getRoomsPowerLevels = useCallback(() => {
@@ -171,7 +168,7 @@ export const useRoomsPowerLevels = (rooms: RoomReading[]): Map<string, IPowerLev
     return rToPl;
   }, [rooms]);
 
-  const [roomToPowerLevels, setRoomToPowerLevels] = useState(() =>
+  const [roomToPowerLevels] = useState(() =>
     nativeSession ? new Map<string, IPowerLevels>() : getRoomsPowerLevels()
   );
   const [nativeState, setNativeState] = useState<
@@ -212,25 +209,6 @@ export const useRoomsPowerLevels = (rooms: RoomReading[]): Map<string, IPowerLev
       disposed = true;
     };
   }, [nativeSession, roomIdsKey, rooms]);
-
-  useStateEventCallback(
-    mx,
-    useCallback(
-      (event) => {
-        if (nativeSession) return;
-        const roomId = event.getRoomId();
-        if (
-          roomId &&
-          event.getType() === StateEvent.RoomPowerLevels &&
-          event.getStateKey() === '' &&
-          rooms.find((r) => r.roomId === roomId)
-        ) {
-          setRoomToPowerLevels(getRoomsPowerLevels());
-        }
-      },
-      [rooms, getRoomsPowerLevels, nativeSession]
-    )
-  );
 
   if (nativeSession) {
     if (nativeState.status === 'error') throw nativeState.error;

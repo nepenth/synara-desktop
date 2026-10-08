@@ -1,10 +1,8 @@
-import React, { useCallback, useState } from 'react';
+import React from 'react';
 import { Box, Text, Icon, Icons, Button, MenuItem } from 'folds';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { useAccountDataCallback } from '../../../hooks/useAccountDataCallback';
 import { CutoutCard } from '../../../components/cutout-card';
 
 type AccountDataProps = {
@@ -13,17 +11,8 @@ type AccountDataProps = {
   onSelect: (type: string | null) => void;
 };
 export function AccountData({ expand, onExpandToggle, onSelect }: AccountDataProps) {
-  const mx = useMatrixClient();
-  const [accountDataTypes, setAccountDataKeys] = useState(() =>
-    Array.from(mx.store.accountData.keys())
-  );
-
-  useAccountDataCallback(
-    mx,
-    useCallback(() => {
-      setAccountDataKeys(Array.from(mx.store.accountData.keys()));
-    }, [mx])
-  );
+  // Native exposes no global account-data listing.
+  const accountDataTypes: string[] = [];
 
   return (
     <Box direction="Column" gap="100">

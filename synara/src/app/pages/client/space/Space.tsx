@@ -36,7 +36,6 @@ type RoomJoinRulesEventContent = {
   }>;
 };
 import FocusTrap from 'focus-trap-react';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import {
   NavCategory,
   NavCategoryHeader,
@@ -94,12 +93,12 @@ import { BreakWord } from '../../../styles/Text.css';
 import { InviteUserPrompt } from '../../../components/invite-user-prompt';
 import * as depthCss from '../../../styles/Depth.css';
 
+import { getNativeRoom } from '../../../native/nativeSession';
 type SpaceMenuProps = {
   room: EventedRoomReading;
   requestClose: () => void;
 };
 const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClose }, ref) => {
-  const mx = useMatrixClient();
   const [developerTools] = useSetting(settingsAtom, 'developerTools');
   const roomToParents = useAtomValue(roomToParentsAtom);
   const powerLevels = usePowerLevels(room);
@@ -114,19 +113,17 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
   const allChild = useSpaceChildren(
     allRoomsAtom,
     room.roomId,
-    useRecursiveChildScopeFactory(mx, roomToParents)
+    useRecursiveChildScopeFactory(roomToParents)
   );
   const unread = useRoomsUnread(allChild, roomToUnreadAtom);
 
   const handleMarkAsRead = () => {
-    allChild.forEach((childRoomId) =>
-      markAsReadFromExplicitUserActionInBackground(mx, childRoomId)
-    );
+    allChild.forEach((childRoomId) => markAsReadFromExplicitUserActionInBackground(childRoomId));
     requestClose();
   };
 
   const handleCopyLink = async () => {
-    const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, room.roomId);
+    const roomIdOrAlias = getCanonicalAliasOrRoomId(room.roomId);
     const viaServers = isRoomAlias(roomIdOrAlias) ? undefined : await getViaServers(room);
     copyToClipboard(getMatrixToRoom(roomIdOrAlias, viaServers));
     requestClose();
@@ -317,12 +314,11 @@ function SpaceHeader() {
 
 type SpaceTombstoneProps = { roomId: string; replacementRoomId: string };
 export function SpaceTombstone({ roomId, replacementRoomId }: SpaceTombstoneProps) {
-  const mx = useMatrixClient();
   const { navigateSpace } = useRoomNavigate();
 
   const [joinState, handleJoin] = useAsyncCallback(
     useCallback(async () => {
-      const currentRoom = mx.getRoom(roomId);
+      const currentRoom = getNativeRoom(roomId);
       if (!currentRoom) throw new Error('Source room is unavailable.');
       const via = await getViaServers(currentRoom);
       return joinRoomWithNativeOwner(
@@ -331,9 +327,9 @@ export function SpaceTombstone({ roomId, replacementRoomId }: SpaceTombstoneProp
         isSynaraDesktop(),
         invokeDesktopWithAvailability
       );
-    }, [mx, roomId, replacementRoomId])
+    }, [roomId, replacementRoomId])
   );
-  const replacementRoom = mx.getRoom(replacementRoomId);
+  const replacementRoom = getNativeRoom(replacementRoomId);
 
   const handleOpen = () => {
     if (replacementRoom) navigateSpace(replacementRoom.roomId);
@@ -389,10 +385,9 @@ export function SpaceTombstone({ roomId, replacementRoomId }: SpaceTombstoneProp
 }
 
 export function Space() {
-  const mx = useMatrixClient();
   const space = useSpace();
   useNavToActivePathMapper(space.roomId);
-  const spaceIdOrAlias = getCanonicalAliasOrRoomId(mx, space.roomId);
+  const spaceIdOrAlias = getCanonicalAliasOrRoomId(space.roomId);
   const scrollRef = useRef<HTMLDivElement>(null);
   const roomToUnread = useAtomValue(roomToUnreadAtom);
   const allRooms = useAtomValue(allRoomsAtom);
@@ -409,11 +404,11 @@ export function Space() {
   const getRoom = useCallback(
     (rId: string): EventedRoomReading | undefined => {
       if (allJoinedRooms.has(rId)) {
-        return mx.getRoom(rId) ?? undefined;
+        return getNativeRoom(rId) ?? undefined;
       }
       return undefined;
     },
-    [mx, allJoinedRooms]
+    [allJoinedRooms]
   );
 
   const hierarchy = useSpaceJoinedHierarchy(
@@ -450,7 +445,7 @@ export function Space() {
   );
 
   const getToLink = (roomId: string) =>
-    getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(mx, roomId));
+    getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(roomId));
 
   return (
     <PageNav>
@@ -465,7 +460,7 @@ export function Space() {
           )}
           <NavCategory>
             <NavItem variant="Surface" radii="400" aria-selected={lobbySelected}>
-              <NavLink to={getSpaceLobbyPath(getCanonicalAliasOrRoomId(mx, space.roomId))}>
+              <NavLink to={getSpaceLobbyPath(getCanonicalAliasOrRoomId(space.roomId))}>
                 <NavItemContent>
                   <Box as="span" grow="Yes" alignItems="Center" gap="200">
                     <Avatar size="200" radii="400">
@@ -481,7 +476,7 @@ export function Space() {
               </NavLink>
             </NavItem>
             <NavItem variant="Surface" radii="400" aria-selected={searchSelected}>
-              <NavLink to={getSpaceSearchPath(getCanonicalAliasOrRoomId(mx, space.roomId))}>
+              <NavLink to={getSpaceSearchPath(getCanonicalAliasOrRoomId(space.roomId))}>
                 <NavItemContent>
                   <Box as="span" grow="Yes" alignItems="Center" gap="200">
                     <Avatar size="200" radii="400">
@@ -506,7 +501,7 @@ export function Space() {
           >
             {virtualizer.getVirtualItems().map((vItem) => {
               const { roomId } = hierarchy[vItem.index] ?? {};
-              const room = mx.getRoom(roomId);
+              const room = getNativeRoom(roomId);
               if (!room) return null;
 
               if (room.isSpaceRoom()) {

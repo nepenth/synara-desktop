@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Desktop: the renderer no longer goes through a js-sdk-shaped client object. Rooms, identity and sync state come from the native session module and writes call native commands directly. `/ignore` and `/unignore` now work, jump-to-date uses the native timestamp lookup, and room upgrade, account-data developer tools and `/delete` say native has no command instead of appearing to succeed.
 - Encryption: a banner above the composer warns when a room member's cryptographic identity changed, on desktop and iOS. Dismiss accepts a changed identity; a verified member whose identity changed offers Withdraw verification instead.
 - Encryption: messages in encrypted rooms show the SDK's authenticity shield on desktop and iOS — red when a verified sender's identity changed or the sender doesn't match the encrypting device, grey for unknown devices, unverified devices, authenticity that can't be guaranteed, or plaintext.
 - Composer: desktop markdown is rendered by Core, the same renderer iOS uses, so a message formats the same on both. Typed `<` and `&` stay literal in prose and code, mentions and custom emoji keep their links, and markdown attachment previews use the same renderer. The renderer's own markdown parser is removed.

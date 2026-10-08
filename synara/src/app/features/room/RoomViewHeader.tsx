@@ -26,7 +26,6 @@ import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/page';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { RoomTopicViewer } from '../../components/room-topic-viewer';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRoom } from '../../hooks/useRoom';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
@@ -87,7 +86,6 @@ type RoomMenuProps = {
   requestClose: () => void;
 };
 const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose }, ref) => {
-  const mx = useMatrixClient();
   const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
   const powerLevels = usePowerLevelsContext();
 
@@ -106,7 +104,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
     setReadError(undefined);
     setReadBusy(true);
     try {
-      await markAsReadFromExplicitUserAction(mx, room.roomId);
+      await markAsReadFromExplicitUserAction(room.roomId);
       requestClose();
     } catch {
       setReadError("Couldn't mark this channel as read.");
@@ -116,7 +114,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
   };
 
   const handleMarkAsUnread = () => {
-    markAsUnread(mx, room.roomId);
+    markAsUnread(room.roomId);
     requestClose();
   };
 
@@ -125,7 +123,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
   };
 
   const handleCopyLink = async () => {
-    const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, room.roomId);
+    const roomIdOrAlias = getCanonicalAliasOrRoomId(room.roomId);
     const viaServers = isRoomAlias(roomIdOrAlias) ? undefined : await getViaServers(room);
     copyToClipboard(getMatrixToRoom(roomIdOrAlias, viaServers));
     requestClose();
@@ -378,7 +376,6 @@ export function RoomViewHeader({
   onToggleMembers,
 }: RoomViewHeaderProps) {
   const navigate = useNavigate();
-  const mx = useMatrixClient();
   const screenSize = useScreenSizeContext();
   const room = useRoom();
   const space = useSpaceOptionally();
@@ -411,7 +408,7 @@ export function RoomViewHeader({
       rooms: room.roomId,
     };
     const path = space
-      ? getSpaceSearchPath(getCanonicalAliasOrRoomId(mx, space.roomId))
+      ? getSpaceSearchPath(getCanonicalAliasOrRoomId(space.roomId))
       : getHomeSearchPath();
     navigate(withSearchParam(path, searchParams));
   };

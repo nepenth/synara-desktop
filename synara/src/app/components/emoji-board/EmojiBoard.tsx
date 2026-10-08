@@ -19,7 +19,6 @@ import { useEmojiGroupLabels } from './useEmojiGroupLabels';
 import { useEmojiGroupIcons } from './useEmojiGroupIcons';
 import { preventScrollWithArrowKey, stopPropagation } from '../../utils/keyboard';
 import { useRelevantImagePacks } from '../../hooks/useImagePacks';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRecentEmoji } from '../../hooks/useRecentEmoji';
 import { isUserId } from '../../utils/matrix';
 import { editableActiveElement, targetFromEvent } from '../../utils/dom';
@@ -54,6 +53,7 @@ import { resolveOptionalMatrixMediaUrl } from '../../matrix/media';
 import { EmojiType } from './types';
 import { VirtualTile } from '../virtualizer';
 
+import { getNativeRoom } from '../../native/nativeSession';
 const RECENT_GROUP_ID = 'recent_group';
 const SEARCH_GROUP_ID = 'search_group';
 
@@ -63,9 +63,7 @@ type EmojiGroupItem = {
   items: Array<IEmoji | PackImageReader>;
 };
 const useGroups = (imagePacks: ImagePack[]): EmojiGroupItem[] => {
-  const mx = useMatrixClient();
-
-  const recentEmojis = useRecentEmoji(mx, 21);
+  const recentEmojis = useRecentEmoji(21);
   const labels = useEmojiGroupLabels();
 
   const emojiGroupItems = useMemo(() => {
@@ -78,7 +76,7 @@ const useGroups = (imagePacks: ImagePack[]): EmojiGroupItem[] => {
 
     imagePacks.forEach((pack) => {
       let label = pack.meta.name;
-      if (!label) label = isUserId(pack.id) ? 'Personal Pack' : mx.getRoom(pack.id)?.name;
+      if (!label) label = isUserId(pack.id) ? 'Personal Pack' : getNativeRoom(pack.id)?.name;
 
       g.push({
         id: pack.id,
@@ -98,13 +96,12 @@ const useGroups = (imagePacks: ImagePack[]): EmojiGroupItem[] => {
     });
 
     return g;
-  }, [mx, recentEmojis, labels, imagePacks]);
+  }, [recentEmojis, labels, imagePacks]);
 
   return emojiGroupItems;
 };
 
 const useItemRenderer = () => {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
 
   const renderItem = (emoji: IEmoji | PackImageReader, index: number) => {
@@ -114,7 +111,6 @@ const useItemRenderer = () => {
     return (
       <CustomEmojiItem
         key={emoji.shortcode + index}
-        mx={mx}
         useAuthentication={useAuthentication}
         image={emoji}
       />
@@ -136,7 +132,6 @@ function EmojiSidebar({
   searchActive,
   onScrollToGroup,
 }: EmojiSidebarProps) {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
 
   const [activeGroupId, setActiveGroupId] = useAtom(activeGroupAtom);
@@ -181,9 +176,9 @@ function EmojiSidebar({
           <SidebarDivider />
           {packs.map((pack) => {
             let label = pack.meta.name;
-            if (!label) label = isUserId(pack.id) ? 'Personal Pack' : mx.getRoom(pack.id)?.name;
+            if (!label) label = isUserId(pack.id) ? 'Personal Pack' : getNativeRoom(pack.id)?.name;
 
-            const url = resolveOptionalMatrixMediaUrl(mx, pack.getAvatarUrl(usage), {
+            const url = resolveOptionalMatrixMediaUrl(pack.getAvatarUrl(usage), {
               useAuthentication,
             });
 
@@ -310,8 +305,6 @@ export function EmojiBoard({
   allowTextCustomEmoji,
   addToRecentEmoji = true,
 }: EmojiBoardProps) {
-  const mx = useMatrixClient();
-
   const usage = ImageUsage.Emoticon;
 
   const previewAtom = useMemo(() => createPreviewDataAtom(DefaultEmojiPreview), []);
@@ -367,7 +360,7 @@ export function EmojiBoard({
     if (emojiInfo.type === EmojiType.Emoji) {
       onEmojiSelect?.(emojiInfo.data, emojiInfo.shortcode);
       if (!evt.altKey && !evt.shiftKey && addToRecentEmoji) {
-        addRecentEmoji(mx, emojiInfo.data);
+        addRecentEmoji(emojiInfo.data);
       }
     }
     if (emojiInfo.type === EmojiType.CustomEmoji) {

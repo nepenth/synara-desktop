@@ -15,14 +15,13 @@ import {
   getReactCustomHtmlParser,
   LINKIFY_OPTS,
 } from '../../src/app/plugins/react-custom-html-parser';
-import type { MatrixClientReading } from '../../src/app/utils/room';
 import { reactDomNodes } from '../../src/app/utils/reactDomNodes';
 import { RoomComposer } from '../../src/app/features/room/RoomComposer';
 import { PdfViewer } from '../../src/app/components/Pdf-viewer/PdfViewer';
 import { useEditor } from '../../src/app/components/editor/Editor';
 
-// These code-block fixtures have no Matrix mentions or media, so no client reads occur.
-const parserOptions = getReactCustomHtmlParser({} as MatrixClientReading, undefined, {
+// These code-block fixtures have no Matrix mentions or media.
+const parserOptions = getReactCustomHtmlParser(undefined, {
   linkifyOpts: LINKIFY_OPTS,
 });
 const nestedXmlNodes = new Document([

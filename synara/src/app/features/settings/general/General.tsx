@@ -37,7 +37,6 @@ import { stopPropagation } from '../../../utils/keyboard';
 import { useDateFormatItems } from '../../../hooks/useDateFormat';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { useClientConfig } from '../../../hooks/useClientConfig';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { reloadApplication } from '../../../../client/initMatrix';
 import { gifPickerEnabled } from '../../../utils/gifProvider';
 import {
@@ -760,8 +759,6 @@ function SecretStoreTile() {
 }
 
 function StorageSection() {
-  const mx = useMatrixClient();
-
   return (
     <Box direction="Column" gap="100">
       <Text size="L400">Storage</Text>
@@ -773,7 +770,7 @@ function StorageSection() {
           after={
             <Button
               className={SettingsQuietControl}
-              onClick={() => reloadApplication(mx)}
+              onClick={() => reloadApplication()}
               variant="Critical"
               fill="None"
               size="300"

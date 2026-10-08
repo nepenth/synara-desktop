@@ -20,7 +20,6 @@ import FocusTrap from 'focus-trap-react';
 import classNames from 'classnames';
 import type { RoomReading } from '../../utils/room';
 import { HierarchyItem, SpaceHierarchyRoom } from '../../hooks/useSpaceHierarchy';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { RoomAvatar } from '../../components/room-avatar';
 import { nameInitials } from '../../utils/common';
 import { LocalRoomSummaryLoader } from '../../components/RoomSummaryLoader';
@@ -427,7 +426,6 @@ export const SpaceItemCard = as<'div', SpaceItemCardProps>(
     },
     ref
   ) => {
-    const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
     const { roomId, content } = item;
     const space = getRoom(roomId);
@@ -455,7 +453,7 @@ export const SpaceItemCard = as<'div', SpaceItemCardProps>(
                     <SpaceProfile
                       roomId={roomId}
                       name={localSummary.name}
-                      avatarUrl={getRoomAvatarUrl(mx, space, 96, useAuthentication)}
+                      avatarUrl={getRoomAvatarUrl(space, 96)}
                       suggested={content.suggested}
                       closed={closed}
                       categoryId={categoryId}
@@ -488,7 +486,7 @@ export const SpaceItemCard = as<'div', SpaceItemCardProps>(
                     name={summary.name || summary.canonical_alias || roomId}
                     avatarUrl={
                       summary?.avatar_url
-                        ? resolveMatrixThumbnailUrl(mx, summary.avatar_url, 96, {
+                        ? resolveMatrixThumbnailUrl(summary.avatar_url, 96, {
                             useAuthentication,
                           })
                         : undefined

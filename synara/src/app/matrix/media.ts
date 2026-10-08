@@ -33,8 +33,6 @@ function timelineMediaHandleFromUri(contentUri: string): string | null {
   }
 }
 
-type MatrixMediaClient = Parameters<typeof mxcUrlToHttp>[0];
-
 export type MatrixMediaUrlOptions = {
   useAuthentication?: boolean;
   width?: number;
@@ -49,47 +47,38 @@ export type MatrixMediaDownloadOptions = MatrixMediaUrlOptions & {
   encryptedInfo?: EncryptedAttachmentInfo;
 };
 
-export function resolveMatrixMediaUrl(
-  mx: MatrixMediaClient,
-  mxcUrl: string,
-  options: MatrixMediaUrlOptions = {}
-): string {
+export function resolveMatrixMediaUrl(mxcUrl: string, options: MatrixMediaUrlOptions = {}): string {
   const mediaUrl = mxcUrlToHttp(
-    mx,
     mxcUrl,
     options.useAuthentication,
     options.width,
     options.height,
-    options.resizeMethod,
-    options.allowDirectLinks,
-    options.allowRedirects
+    options.resizeMethod
   );
   if (!mediaUrl) throw new Error('Invalid Matrix media URL');
   return mediaUrl;
 }
 
 export function resolveOptionalMatrixMediaUrl(
-  mx: MatrixMediaClient,
   mxcUrl: string | undefined,
   options: MatrixMediaUrlOptions = {}
 ): string | undefined {
   if (!mxcUrl) return undefined;
 
   try {
-    return resolveMatrixMediaUrl(mx, mxcUrl, options);
+    return resolveMatrixMediaUrl(mxcUrl, options);
   } catch {
     return undefined;
   }
 }
 
 export function resolveMatrixThumbnailUrl(
-  mx: MatrixMediaClient,
   mxcUrl: string,
   size: number,
   options: Omit<MatrixMediaUrlOptions, 'width' | 'height' | 'resizeMethod'> = {}
 ): string | undefined {
   try {
-    return resolveMatrixMediaUrl(mx, mxcUrl, {
+    return resolveMatrixMediaUrl(mxcUrl, {
       ...options,
       width: size,
       height: size,
@@ -194,11 +183,9 @@ export function isNativeMediaContentUri(contentUri: string | undefined): boolean
 }
 
 export async function createMatrixMediaObjectUrl(
-  mx: MatrixMediaClient,
   mxcUrl: string,
   options: MatrixMediaDownloadOptions
 ): Promise<string> {
-  void mx;
   const resolved = assertDisplayableMedia(mxcUrl, options.encryptedInfo);
   const displayUrl = convertDesktopFileSrc(resolved, 'synara-media');
   if (!displayUrl) throw new Error('Native media display is unavailable');

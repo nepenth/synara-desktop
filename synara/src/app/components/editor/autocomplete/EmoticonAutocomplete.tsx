@@ -4,7 +4,6 @@ import { Box, MenuItem, Text, toRem } from 'folds';
 
 import { AutocompleteQuery } from './autocompleteQuery';
 import { AutocompleteMenu } from './AutocompleteMenu';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { UseAsyncSearchOptions, useAsyncSearch } from '../../../hooks/useAsyncSearch';
 import { onTabPress } from '../../../utils/keyboard';
 import { createEmoticonElement, moveCursor, replaceWithElement } from '../utils';
@@ -40,11 +39,10 @@ export function EmoticonAutocomplete({
   query,
   requestClose,
 }: EmoticonAutocompleteProps) {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
 
   const imagePacks = useRelevantImagePacks(ImageUsage.Emoticon, imagePackRooms);
-  const recentEmoji = useRecentEmoji(mx, 20);
+  const recentEmoji = useRecentEmoji(20);
 
   const searchList = useMemo(() => {
     const list: Array<EmoticonSearchItem> = [];
@@ -87,7 +85,7 @@ export function EmoticonAutocomplete({
       {autoCompleteEmoticon.map((emoticon) => {
         const isCustomEmoji = 'url' in emoticon;
         const key = isCustomEmoji ? emoticon.url : emoticon.unicode;
-        const customEmojiUrl = resolveOptionalMatrixMediaUrl(mx, key, { useAuthentication });
+        const customEmojiUrl = resolveOptionalMatrixMediaUrl(key, { useAuthentication });
 
         return (
           <MenuItem

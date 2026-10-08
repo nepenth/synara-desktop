@@ -44,7 +44,6 @@ import {
   useRecursiveChildScopeFactory,
   useSpaceChildren,
 } from '../../../state/hooks/roomList';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { roomToParentsAtom } from '../../../state/room/roomToParents';
 import { allRoomsAtom } from '../../../state/room-list/roomList';
 import { getSpaceLobbyPath, getSpacePath, joinPathComponent } from '../../pathUtils';
@@ -73,7 +72,6 @@ import {
   sidebarItemWithout,
   useSidebarItems,
 } from '../../../hooks/useSidebarItems';
-import { AccountDataEvent } from '../../../../types/matrix/accountData';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { useNavToActivePathAtom } from '../../../state/hooks/navToActivePath';
 import { useOpenedSidebarFolderAtom } from '../../../state/hooks/openedSidebarFolder';
@@ -86,12 +84,12 @@ import { stopPropagation } from '../../../utils/keyboard';
 import { getMatrixToRoom } from '../../../plugins/matrix-to';
 import { getViaServers } from '../../../plugins/via-servers';
 import { getRoomAvatarUrl } from '../../../utils/room';
-import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { useOpenSpaceSettings } from '../../../state/hooks/spaceSettings';
 import { useRoomPermissions } from '../../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../../components/invite-user-prompt';
 import * as depthCss from '../../../styles/Depth.css';
 
+import { getNativeRoom } from '../../../native/nativeSession';
 type SpaceMenuProps = {
   room: EventedRoomReading;
   requestClose: () => void;
@@ -99,7 +97,6 @@ type SpaceMenuProps = {
 };
 const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(
   ({ room, requestClose, onUnpin }, ref) => {
-    const mx = useMatrixClient();
     const roomToParents = useAtomValue(roomToParentsAtom);
     const powerLevels = usePowerLevels(room);
 
@@ -112,14 +109,12 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(
     const allChild = useSpaceChildren(
       allRoomsAtom,
       room.roomId,
-      useRecursiveChildScopeFactory(mx, roomToParents)
+      useRecursiveChildScopeFactory(roomToParents)
     );
     const unread = useRoomsUnread(allChild, roomToUnreadAtom);
 
     const handleMarkAsRead = () => {
-      allChild.forEach((childRoomId) =>
-        markAsReadFromExplicitUserActionInBackground(mx, childRoomId)
-      );
+      allChild.forEach((childRoomId) => markAsReadFromExplicitUserActionInBackground(childRoomId));
       requestClose();
     };
 
@@ -129,7 +124,7 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(
     };
 
     const handleCopyLink = async () => {
-      const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, room.roomId);
+      const roomIdOrAlias = getCanonicalAliasOrRoomId(room.roomId);
       const viaServers = isRoomAlias(roomIdOrAlias) ? undefined : await getViaServers(room);
       copyToClipboard(getMatrixToRoom(roomIdOrAlias, viaServers));
       requestClose();
@@ -398,8 +393,6 @@ function SpaceTab({
   disabled,
   onUnpin,
 }: SpaceTabProps) {
-  const mx = useMatrixClient();
-  const useAuthentication = useMediaAuthentication();
   const targetRef = useRef<HTMLDivElement>(null);
 
   const spaceDraggable: SidebarDraggable = useMemo(
@@ -452,7 +445,7 @@ function SpaceTab({
               >
                 <RoomAvatar
                   roomId={space.roomId}
-                  src={getRoomAvatarUrl(mx, space, 96, useAuthentication) ?? undefined}
+                  src={getRoomAvatarUrl(space, 96) ?? undefined}
                   alt={space.name}
                   renderFallback={() => (
                     <Text size={folder ? 'H6' : 'H4'}>{nameInitials(space.name, 2)}</Text>
@@ -544,8 +537,6 @@ function ClosedSpaceFolder({
   onDragging,
   disabled,
 }: ClosedSpaceFolderProps) {
-  const mx = useMatrixClient();
-  const useAuthentication = useMediaAuthentication();
   const handlerRef = useRef<HTMLDivElement>(null);
 
   const spaceDraggable: FolderDraggable = useMemo(() => ({ folder }), [folder]);
@@ -554,7 +545,7 @@ function ClosedSpaceFolder({
   const dropType = dropState?.type;
 
   const tooltipName =
-    folder.name ?? folder.content.map((i) => mx.getRoom(i)?.name ?? '').join(', ') ?? 'Unnamed';
+    folder.name ?? folder.content.map((i) => getNativeRoom(i)?.name ?? '').join(', ') ?? 'Unnamed';
 
   return (
     <RoomsUnreadProvider rooms={folder.content}>
@@ -571,14 +562,14 @@ function ClosedSpaceFolder({
             {(tooltipRef) => (
               <SidebarFolder data-id={folder.id} as="button" ref={tooltipRef} onClick={onOpen}>
                 {folder.content.map((sId) => {
-                  const space = mx.getRoom(sId);
+                  const space = getNativeRoom(sId);
                   if (!space) return null;
 
                   return (
                     <SidebarAvatar key={sId} size="200" radii="300">
                       <RoomAvatar
                         roomId={space.roomId}
-                        src={getRoomAvatarUrl(mx, space, 96, useAuthentication) ?? undefined}
+                        src={getRoomAvatarUrl(space, 96) ?? undefined}
                         alt={space.name}
                         renderFallback={() => (
                           <Text size="Inherit">
@@ -608,10 +599,9 @@ type SpaceTabsProps = {
 };
 export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
   const navigate = useNavigate();
-  const mx = useMatrixClient();
   const screenSize = useScreenSizeContext();
   const roomToParents = useAtomValue(roomToParentsAtom);
-  const orphanSpaces = useOrphanSpaces(mx, allRoomsAtom, roomToParents);
+  const orphanSpaces = useOrphanSpaces(allRoomsAtom, roomToParents);
   const [sidebarItems, localEchoSidebarItem] = useSidebarItems(orphanSpaces);
   const navToActivePath = useAtomValue(useNavToActivePathAtom());
   const [openedFolder, setOpenedFolder] = useAtom(useOpenedSidebarFolderAtom());
@@ -742,11 +732,12 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
           newItems.push(i);
         });
 
-        const newSpacesContent = makeSynaraSpacesContent(mx, newItems);
-        localEchoSidebarItem(parseSidebar(mx, orphanSpaces, newSpacesContent));
-        mx.setAccountData(AccountDataEvent.SynaraSpaces as any, newSpacesContent as any);
+        const newSpacesContent = makeSynaraSpacesContent(newItems);
+        // Sidebar layout is account data (`in.synara.spaces`), which has no native
+        // write command yet: the change shows through the local echo only.
+        localEchoSidebarItem(parseSidebar(orphanSpaces, newSpacesContent));
       },
-      [mx, sidebarItems, setOpenedFolder, localEchoSidebarItem, orphanSpaces]
+      [sidebarItems, setOpenedFolder, localEchoSidebarItem, orphanSpaces]
     )
   );
 
@@ -757,7 +748,7 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
     const targetSpaceId = target.getAttribute('data-id');
     if (!targetSpaceId) return;
 
-    const spacePath = getSpacePath(getCanonicalAliasOrRoomId(mx, targetSpaceId));
+    const spacePath = getSpacePath(getCanonicalAliasOrRoomId(targetSpaceId));
     if (screenSize === ScreenSize.Mobile) {
       navigate(spacePath);
       return;
@@ -769,7 +760,7 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
       return;
     }
 
-    navigate(getSpaceLobbyPath(getCanonicalAliasOrRoomId(mx, targetSpaceId)));
+    navigate(getSpaceLobbyPath(getCanonicalAliasOrRoomId(targetSpaceId)));
   };
 
   const handleFolderToggle: MouseEventHandler<HTMLButtonElement> = (evt) => {
@@ -788,11 +779,11 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
       if (orphanSpaces.includes(roomId)) return;
       const newItems = sidebarItemWithout(sidebarItems, roomId);
 
-      const newSpacesContent = makeSynaraSpacesContent(mx, newItems);
-      localEchoSidebarItem(parseSidebar(mx, orphanSpaces, newSpacesContent));
-      mx.setAccountData(AccountDataEvent.SynaraSpaces as any, newSpacesContent as any);
+      const newSpacesContent = makeSynaraSpacesContent(newItems);
+      // No native account-data write yet; see the reorder handler above.
+      localEchoSidebarItem(parseSidebar(orphanSpaces, newSpacesContent));
     },
-    [mx, sidebarItems, orphanSpaces, localEchoSidebarItem]
+    [sidebarItems, orphanSpaces, localEchoSidebarItem]
   );
 
   if (sidebarItems.length === 0) return null;
@@ -806,7 +797,7 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
               return (
                 <OpenedSpaceFolder key={item.id} folder={item} onClose={handleFolderToggle}>
                   {item.content.map((sId) => {
-                    const space = mx.getRoom(sId);
+                    const space = getNativeRoom(sId);
                     if (!space) return null;
                     return (
                       <SpaceTab
@@ -843,7 +834,7 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
             );
           }
 
-          const space = mx.getRoom(item);
+          const space = getNativeRoom(item);
           if (!space) return null;
 
           return (

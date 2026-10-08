@@ -10,7 +10,6 @@ import {
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../../room-settings/styles.css';
 import { SettingTile } from '../../../components/setting-tile';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useRoom } from '../../../hooks/useRoom';
 import { StateEvent } from '../../../../types/matrix/room';
 import { useStateEvent } from '../../../hooks/useStateEvent';
@@ -33,6 +32,7 @@ import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
 import { invokeDesktopWithAvailability } from '../../../utils/desktop';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
 
+import { sendNativeStateEvent } from '../../../native/nativeCommands';
 type JoinRule = 'public' | 'invite' | 'private' | 'knock' | 'restricted';
 
 type RestrictedAllowType = 'm.room_membership' | 'restricted' | 'world_readable';
@@ -70,7 +70,6 @@ type RoomJoinRulesProps = {
   permissions: RoomPermissionsAPI;
 };
 export function RoomJoinRules({ permissions }: RoomJoinRulesProps) {
-  const mx = useMatrixClient();
   const room = useRoom();
   const allowKnockRestricted = knockRestrictedSupported(room.getVersion());
   const allowRestricted = restrictedSupported(room.getVersion());
@@ -78,7 +77,7 @@ export function RoomJoinRules({ permissions }: RoomJoinRulesProps) {
 
   const roomIdToParents = useAtomValue(roomToParentsAtom);
   const space = useSpaceOptionally();
-  const subspacesScope = useRecursiveChildSpaceScopeFactory(mx, roomIdToParents);
+  const subspacesScope = useRecursiveChildSpaceScopeFactory(roomIdToParents);
   const subspaces = useSpaceChildren(allRoomsAtom, space?.roomId ?? '', subspacesScope);
 
   const canEdit = permissions.stateEvent(StateEvent.RoomHistoryVisibility);
@@ -156,9 +155,9 @@ export function RoomJoinRules({ permissions }: RoomJoinRulesProps) {
           join_rule: joinRule as JoinRule,
         };
         if (allow.length > 0) c.allow = allow;
-        await mx.sendStateEvent(room.roomId, StateEvent.RoomJoinRules as any, c);
+        await sendNativeStateEvent(room.roomId, StateEvent.RoomJoinRules as any, c);
       },
-      [mx, room, space, subspaces, roomIdToParents]
+      [room, space, subspaces, roomIdToParents]
     )
   );
 

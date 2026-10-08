@@ -8,12 +8,10 @@ import { useRecursiveChildRoomScopeFactory, useSpaceChildren } from '../../../st
 import { allRoomsAtom } from '../../../state/room-list/roomList';
 import { mDirectAtom } from '../../../state/mDirectList';
 import { roomToParentsAtom } from '../../../state/room/roomToParents';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../../components/BackRouteHandler';
 
 export function SpaceSearch() {
-  const mx = useMatrixClient();
   const scrollRef = useRef<HTMLDivElement>(null);
   const space = useSpace();
   const screenSize = useScreenSizeContext();
@@ -23,7 +21,7 @@ export function SpaceSearch() {
   const rooms = useSpaceChildren(
     allRoomsAtom,
     space.roomId,
-    useRecursiveChildRoomScopeFactory(mx, mDirects, roomToParents)
+    useRecursiveChildRoomScopeFactory(mDirects, roomToParents)
   );
 
   return (

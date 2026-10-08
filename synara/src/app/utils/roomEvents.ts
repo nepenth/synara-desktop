@@ -1,4 +1,4 @@
-import type { MatrixClientReading, MatrixEventReading, RoomReading } from './room';
+import type { MatrixEventReading, RoomReading } from './room';
 
 /** SDK-neutral literal event names (mirror of the js-sdk RoomEvent subset used by Synara hooks). */
 export const RoomEvent = {
@@ -59,12 +59,11 @@ export type JsRoomMemberReading = {
 };
 
 /**
- * Structural projection of a room that also supports event subscription and a
- * client accessor — js-sdk Room satisfies this at runtime, so consumers can
- * keep passing real rooms.
+ * Structural projection of a room that also supports event subscription.
+ * Native rooms (`native/nativeSession`) satisfy it; they emit no per-room
+ * events, so subscriptions register nothing.
  */
 export type EventedRoomReading = RoomReading & {
-  client: MatrixClientReading;
   on(event: string, listener: Listener): void;
   removeListener(event: string, listener: Listener): void;
   getUsersReadUpTo(event: MatrixEventReading): string[];

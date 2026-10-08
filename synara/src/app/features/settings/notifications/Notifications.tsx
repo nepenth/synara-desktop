@@ -3,13 +3,9 @@ import { Box, Text, IconButton, Icon, Icons, Scroll, Button, Input, Spinner } fr
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SystemNotification } from './SystemNotification';
 import { AgentNotifications } from './AgentNotifications';
-import { AllMessagesNotifications } from './AllMessages';
-import { SpecialMessagesNotifications } from './SpecialMessages';
-import { KeywordMessagesNotifications } from './KeywordMessages';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
-import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import {
   nativePushRulesAddKeyword,
@@ -329,31 +325,8 @@ export function Notifications({ requestClose }: NotificationsProps) {
           <PageContent>
             <Box direction="Column" gap="700">
               <SystemNotification />
-              {isNativeMatrixSession() && <AgentNotifications />}
-              {isNativeMatrixSession() ? (
-                <NativePushRulesEditor />
-              ) : (
-                <>
-                  <AllMessagesNotifications />
-                  <SpecialMessagesNotifications />
-                  <KeywordMessagesNotifications />
-                  <Box direction="Column" gap="100">
-                    <Text size="L400">Block Messages</Text>
-                    <SequenceCard
-                      className={SequenceCardStyle}
-                      variant="SurfaceVariant"
-                      direction="Column"
-                      gap="400"
-                    >
-                      <SettingTile
-                        description={
-                          'This option has been moved to "Account > Blocked Users" section.'
-                        }
-                      />
-                    </SequenceCard>
-                  </Box>
-                </>
-              )}
+              <AgentNotifications />
+              <NativePushRulesEditor />
             </Box>
           </PageContent>
         </Scroll>

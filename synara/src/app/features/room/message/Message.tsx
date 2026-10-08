@@ -56,7 +56,6 @@ import type { EventTimelineSetReading, MatrixEventReading } from '../../../utils
 import type { EventedRoomReading } from '../../../utils/roomEvents';
 import { getMxIdLocalPart } from '../../../utils/matrix';
 import { MessageLayout, MessageSpacing } from '../../../state/settings';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useRecentEmoji } from '../../../hooks/useRecentEmoji';
 import * as css from './styles.css';
 import * as depthCss from '../../../styles/Depth.css';
@@ -126,8 +125,7 @@ type MessageQuickReactionsProps = {
 };
 export const MessageQuickReactions = as<'div', MessageQuickReactionsProps>(
   ({ onReaction, onAddReaction, ...props }, ref) => {
-    const mx = useMatrixClient();
-    const recentEmojis = useRecentEmoji(mx, 4);
+    const recentEmojis = useRecentEmoji(4);
 
     if (recentEmojis.length === 0 && !onAddReaction) return <span />;
     return (
@@ -951,7 +949,6 @@ export const Message = as<'div', MessageProps>(
     },
     ref
   ) => {
-    const mx = useMatrixClient();
     const { t } = useTranslation();
     const useAuthentication = useMediaAuthentication();
     const senderId = mEvent.getSender() ?? '';
@@ -971,7 +968,7 @@ export const Message = as<'div', MessageProps>(
       ? accessibleTagColors?.get(memberPowerTag.color)
       : undefined;
     const tagIconSrc = memberPowerTag?.icon
-      ? getPowerTagIconSrc(mx, useAuthentication, memberPowerTag.icon)
+      ? getPowerTagIconSrc(useAuthentication, memberPowerTag.icon)
       : undefined;
 
     const usernameColor = legacyUsernameColor ? colorMXID(senderId) : tagColor;
@@ -1038,7 +1035,7 @@ export const Message = as<'div', MessageProps>(
             userId={senderId}
             src={
               senderAvatarMxc
-                ? resolveMatrixThumbnailUrl(mx, senderAvatarMxc, 48, { useAuthentication })
+                ? resolveMatrixThumbnailUrl(senderAvatarMxc, 48, { useAuthentication })
                 : undefined
             }
             alt={senderDisplayName}
@@ -1214,7 +1211,7 @@ export const Message = as<'div', MessageProps>(
                     <Icon src={Icons.ThreadPlus} size="100" />
                   </IconButton>
                 )}
-                {canEditEvent(mx, mEvent) && onEditId && (
+                {canEditEvent(mEvent) && onEditId && (
                   <IconButton
                     onClick={() => onEditId(mEvent.getId())}
                     variant="SurfaceVariant"
@@ -1304,7 +1301,7 @@ export const Message = as<'div', MessageProps>(
                               </Text>
                             </MenuItem>
                           )}
-                          {canEditEvent(mx, mEvent) && onEditId && (
+                          {canEditEvent(mEvent) && onEditId && (
                             <MenuItem
                               className={depthCss.quietInteractiveSurface}
                               variant="Surface"

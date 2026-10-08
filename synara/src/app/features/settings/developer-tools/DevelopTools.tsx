@@ -6,7 +6,6 @@ import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import { isSynaraDesktop } from '../../../utils/desktop';
 import { pushEncryptedStateEventsSetting } from '../encryptedStateEvents';
@@ -71,7 +70,6 @@ type DeveloperToolsProps = {
   requestClose: () => void;
 };
 export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
-  const mx = useMatrixClient();
   const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
   const [encryptedStateEvents, setEncryptedStateEventsSetting] = useSetting(
     settingsAtom,
@@ -88,20 +86,17 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
     setEncryptedStateEventsSetting(value);
   };
 
-  const submitAccountData: AccountDataSubmitCallback = useCallback(
-    async (type, content) => {
-      await mx.setAccountData(type as any, content as any);
-    },
-    [mx]
-  );
+  // Global account data has no native read or write command, so the editor
+  // starts empty and reports failure instead of appearing to save.
+  const submitAccountData: AccountDataSubmitCallback = useCallback(async () => {
+    throw new Error('Account data writes are not available in the native client.');
+  }, []);
 
   if (accountDataType !== undefined) {
     return (
       <AccountDataEditor
         type={accountDataType ?? undefined}
-        content={
-          accountDataType ? mx.getAccountData(accountDataType as any)?.getContent() : undefined
-        }
+        content={undefined}
         submitChange={submitAccountData}
         requestClose={() => setAccountDataType(undefined)}
       />

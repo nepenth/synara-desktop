@@ -1,5 +1,4 @@
 import { useCallback } from 'react';
-import { useMatrixClient } from './useMatrixClient';
 import { AsyncState, useAsyncCallbackValue } from './useAsyncCallback';
 import { useSpecVersions } from './useSpecVersions';
 
@@ -14,16 +13,13 @@ export const useMutualRoomsSupport = (): boolean => {
   return !!supported;
 };
 
-export const useMutualRooms = (userId: string): AsyncState<string[], unknown> => {
-  const mx = useMatrixClient();
-
-  const supported = useMutualRoomsSupport();
-
+/**
+ * Rooms shared with another user. Native has no mutual-rooms (MSC2666)
+ * command, so the list is always empty.
+ */
+export const useMutualRooms = (): AsyncState<string[], unknown> => {
   const [mutualRoomsState] = useAsyncCallbackValue(
-    useCallback(
-      () => (supported ? mx._unstable_getSharedRooms(userId) : Promise.resolve([])),
-      [mx, userId, supported]
-    )
+    useCallback(async (): Promise<string[]> => [], [])
   );
 
   return mutualRoomsState;

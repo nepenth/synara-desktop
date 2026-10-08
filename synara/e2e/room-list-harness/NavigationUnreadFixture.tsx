@@ -5,11 +5,10 @@ import { Provider } from 'jotai';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { configClass, varsClass } from 'folds';
 import { darkTheme } from '../../src/colors.css';
-import { MatrixClientProvider } from '../../src/app/hooks/useMatrixClient';
 import { ScreenSize, ScreenSizeProvider } from '../../src/app/hooks/useScreenSize';
 import { NavToActivePathProvider } from '../../src/app/state/hooks/navToActivePath';
 import { makeNavToActivePathAtom } from '../../src/app/state/navToActivePath';
-import { createNativeMatrixClient } from '../../src/app/features/native-client/nativeClientFacade';
+import { createNativeSession, setNativeSessionForTests } from '../../src/app/native/nativeSession';
 import { useBindAllRoomsAtom } from '../../src/app/state/room-list/roomList';
 import { useBindMDirectAtom } from '../../src/app/state/mDirectList';
 import { useBindRoomToUnreadAtom } from '../../src/app/state/room/roomToUnread';
@@ -84,10 +83,11 @@ window.__SYNARA_DESKTOP__ = {
   invoke: async <T,>(cmd: string, args?: Record<string, unknown>) =>
     invoke(cmd, args) as Promise<T>,
 };
-const mx = createNativeMatrixClient(async (command) => ({
+const fixtureSession = createNativeSession(async (command) => ({
   available: true,
   value: await invoke(command),
 }));
+setNativeSessionForTests(fixtureSession);
 const nav = makeNavToActivePathAtom('@reader:example.test');
 const update = (roomId: string, change: Partial<RoomSummary>) => {
   rooms = rooms.map((r) => (r.roomId === roomId ? { ...r, ...change } : r));
@@ -122,8 +122,8 @@ function DestinationMembership() {
 
 function BoundRail() {
   useBindAllRoomsAtom(
-    useCallback((snapshot) => mx.applyRoomListSnapshot(snapshot), []),
-    useCallback((snapshot) => mx.applyNativeSessionSnapshot(snapshot), [])
+    useCallback((snapshot) => fixtureSession.applyRoomListSnapshot(snapshot), []),
+    useCallback((snapshot) => fixtureSession.applySessionSnapshot(snapshot), [])
   );
   useBindMDirectAtom();
   useBindRoomToParentsAtom();
@@ -183,13 +183,11 @@ export function NavigationUnreadFixture() {
   return (
     <Provider>
       <MemoryRouter initialEntries={[params.has('directSelected') ? '/direct/' : '/home/']}>
-        <MatrixClientProvider value={mx}>
-          <ScreenSizeProvider value={ScreenSize.Desktop}>
-            <NavToActivePathProvider value={nav}>
-              <BoundRail />
-            </NavToActivePathProvider>
-          </ScreenSizeProvider>
-        </MatrixClientProvider>
+        <ScreenSizeProvider value={ScreenSize.Desktop}>
+          <NavToActivePathProvider value={nav}>
+            <BoundRail />
+          </NavToActivePathProvider>
+        </ScreenSizeProvider>
       </MemoryRouter>
     </Provider>
   );

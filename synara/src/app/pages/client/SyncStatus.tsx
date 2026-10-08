@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Box, config, Line, Text } from 'folds';
-import type { ClientEventedReading } from '../../hooks/useSyncState';
+import type { NativeSession } from '../../native/nativeSession';
 import { useSyncState } from '../../hooks/useSyncState';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import {
@@ -20,9 +20,9 @@ type StateData = {
 };
 
 type SyncStatusProps = {
-  mx: ClientEventedReading;
+  session: NativeSession;
 };
-export function SyncStatus({ mx }: SyncStatusProps) {
+export function SyncStatus({ session }: SyncStatusProps) {
   const [stateData, setStateData] = useState<StateData>({
     current: null,
     previous: undefined,
@@ -40,7 +40,7 @@ export function SyncStatus({ mx }: SyncStatusProps) {
   const [recoveredFromVisibleDisconnect, setRecoveredFromVisibleDisconnect] = useState(false);
 
   useSyncState(
-    mx,
+    session,
     useCallback((current, previous, data) => {
       setStateData((s) => {
         if (s.current === current && s.previous === previous) {
@@ -97,9 +97,9 @@ export function SyncStatus({ mx }: SyncStatusProps) {
       setRecoveredFromVisibleDisconnect(false);
     }, CONNECTED_STATUS_BANNER_DURATION_MS);
     return () => clearTimeout(timer);
-  }, [mx, currentSyncState, recoveredFromVisibleDisconnect]);
+  }, [session, currentSyncState, recoveredFromVisibleDisconnect]);
 
-  const signedInSession = isSignedInSessionForBanner(mx, connectedDuringMount);
+  const signedInSession = isSignedInSessionForBanner(session, connectedDuringMount);
   const bannerCopy = getTransientSyncStatusBannerCopy(
     currentSyncState,
     connectedTransitionVisible,

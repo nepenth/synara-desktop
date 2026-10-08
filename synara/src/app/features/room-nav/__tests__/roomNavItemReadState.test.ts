@@ -6,7 +6,7 @@ const source = readFileSync('src/app/features/room-nav/RoomNavItem.tsx', 'utf8')
 
 test('RoomNavItem mark-as-read hits the native owner instead of the JS-sdk no-op', () => {
   assert.match(source, /setRoomReadStateWithNativeOwner/);
-  assert.match(source, /await markAsReadFromExplicitUserAction\(mx, room\.roomId\)/);
+  assert.match(source, /await markAsReadFromExplicitUserAction\(room\.roomId\)/);
   assert.match(source, /Couldn't mark this channel as read\./);
   assert.doesNotMatch(source, /markAsReadFromExplicitUserActionInBackground/);
   const markAsRead = source.slice(

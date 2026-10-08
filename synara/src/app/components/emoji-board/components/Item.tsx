@@ -1,6 +1,5 @@
 import React from 'react';
 import { Box } from 'folds';
-import type { MatrixClientReading } from '../../../utils/room';
 import { EmojiItemInfo, EmojiType } from '../types';
 import * as css from './styles.css';
 import { PackImageReader } from '../../../plugins/custom-emoji';
@@ -46,11 +45,10 @@ export function EmojiItem({ emoji }: EmojiItemProps) {
 }
 
 type CustomEmojiItemProps = {
-  mx: MatrixClientReading;
   useAuthentication?: boolean;
   image: PackImageReader;
 };
-export function CustomEmojiItem({ mx, useAuthentication, image }: CustomEmojiItemProps) {
+export function CustomEmojiItem({ useAuthentication, image }: CustomEmojiItemProps) {
   return (
     <Box
       as="button"
@@ -68,7 +66,7 @@ export function CustomEmojiItem({ mx, useAuthentication, image }: CustomEmojiIte
         loading="lazy"
         className={css.CustomEmojiImg}
         alt={image.body || image.shortcode}
-        src={resolveOptionalMatrixMediaUrl(mx, image.url, { useAuthentication }) ?? ''}
+        src={resolveOptionalMatrixMediaUrl(image.url, { useAuthentication }) ?? ''}
       />
     </Box>
   );

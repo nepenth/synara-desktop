@@ -3,7 +3,6 @@ import { Box, Button, Icon, Icons, Scroll, Spinner, Text, config } from 'folds';
 import { Page, PageHeader } from '../../components/page';
 import { AgentApprovalCard } from '../../components/agent-approval/AgentApprovalCard';
 import { formatCoreAgentApprovalPrompt } from '../../utils/agentApprovals';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { BackRouteHandler } from '../../components/BackRouteHandler';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
@@ -12,6 +11,7 @@ import { approvalIdentity, type ApprovalInboxItem } from './nativeApprovalInbox'
 import { compareRecentApprovals, historyDecisionLabel } from './approvalHistoryProjection';
 import * as css from './Approvals.css';
 
+import { getNativeRoom } from '../../native/nativeSession';
 type Filter = 'pending' | 'recent';
 
 function remainingTime(expiresAt: number, now: number): string {
@@ -52,7 +52,6 @@ export function ApprovalsView({
     refresh,
     decided,
   } = useApprovalInbox();
-  const mx = useMatrixClient();
   const [filter, setFilter] = useState<Filter>('pending');
   const [search, setSearch] = useState('');
   const [announcement, setAnnouncement] = useState('');
@@ -60,7 +59,7 @@ export function ApprovalsView({
     setAnnouncement('');
     setSearch('');
     setFilter('pending');
-  }, [mx, sessionGeneration]);
+  }, [sessionGeneration]);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const recentCount = recentItems.length;
   const visible = useMemo(() => {
@@ -332,7 +331,6 @@ export function ApprovalsView({
 }
 
 export function Approvals() {
-  const mx = useMatrixClient();
   const { navigateRoom } = useRoomNavigate();
   const screenSize = useScreenSizeContext();
   return (
@@ -360,13 +358,13 @@ export function Approvals() {
       </PageHeader>
       <Scroll variant="Background" size="300" hideTrack>
         <ApprovalsView
-          roomName={(id) => mx.getRoom(id)?.name || id}
+          roomName={(id) => getNativeRoom(id)?.name || id}
           senderName={(item) =>
-            mx.getRoom(item.roomId)?.getMember(item.sender)?.name ||
+            getNativeRoom(item.roomId)?.getMember(item.sender)?.name ||
             item.sender.split(':')[0].replace(/^@/, '')
           }
           openMessage={(item) => navigateRoom(item.roomId, item.eventId)}
-          roomAvailable={(id) => Boolean(mx.getRoom(id))}
+          roomAvailable={(id) => Boolean(getNativeRoom(id))}
         />
       </Scroll>
     </Page>

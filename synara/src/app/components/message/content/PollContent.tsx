@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge, Box, Button, Icon, Icons, ProgressBar, Text, config } from 'folds';
 import { useTranslation } from 'react-i18next';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { respondPollWithNativeDesktopOwner } from '../../../features/room/nativePoll';
-import { ParsedPoll, parsePollResponseContent, summarizePollResponses } from '../../../utils/polls';
+import { ParsedPoll, summarizePollResponses } from '../../../utils/polls';
 import { getMyUserId } from '../../../state/nativeIdentity';
 
 export type PollContentProps = {
@@ -13,7 +12,6 @@ export type PollContentProps = {
 };
 
 export function PollContent({ roomId, eventId, poll }: PollContentProps) {
-  const mx = useMatrixClient();
   const { t } = useTranslation();
   const [isSending, setIsSending] = useState(false);
   const [responses, setResponses] = useState<
@@ -45,29 +43,11 @@ export function PollContent({ roomId, eventId, poll }: PollContentProps) {
     return uniqueAnswers;
   }, [answerIds, myUserId, responses]);
 
+  // Poll responses are `m.reference` relations; native has no relations read,
+  // so this legacy view has no responses to show.
   const loadResponses = useCallback(async () => {
-    try {
-      const relationResult = await mx.relations(roomId, eventId, 'm.reference', undefined);
-      const nextResponses: Array<{ sender?: string; ts?: number; answers: string[] } | undefined> =
-        relationResult.events.map((event) => {
-          const answers = parsePollResponseContent(event.getContent<Record<string, unknown>>());
-          if (!answers) return undefined;
-          return {
-            sender: event.getSender() ?? undefined,
-            ts: event.getTs(),
-            answers,
-          };
-        });
-      setResponses(
-        nextResponses.filter(
-          (response): response is { sender?: string; ts?: number; answers: string[] } =>
-            Boolean(response)
-        )
-      );
-    } catch {
-      setError(t('modernization.poll.load_failed', 'Could not load poll responses.'));
-    }
-  }, [mx, roomId, eventId, t]);
+    setResponses([]);
+  }, []);
 
   useEffect(() => {
     loadResponses();

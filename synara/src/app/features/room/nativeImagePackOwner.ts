@@ -169,7 +169,7 @@ export async function setGlobalImagePacksWithNativeOwner(
 /**
  * V-SEND.R-PACK-WRITE: sole room-pack write owner when a native Matrix
  * session is live. Empty `{}` content deletes the state event. Fail-closed —
- * never falls through to mx.sendStateEvent(PoniesRoomEmotes).
+ * never falls through to sendNativeStateEvent(PoniesRoomEmotes).
  */
 export async function setRoomImagePackWithNativeOwner(
   roomId: string,

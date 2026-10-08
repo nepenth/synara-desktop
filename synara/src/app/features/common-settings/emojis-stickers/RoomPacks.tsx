@@ -29,7 +29,6 @@ import { useRoomImagePacks } from '../../../hooks/useImagePacks';
 import { LineClamp2 } from '../../../styles/Text.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { SequenceCardStyle } from '../styles.css';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
 import { StateEvent } from '../../../../types/matrix/room';
@@ -41,12 +40,12 @@ import { resolveOptionalMatrixMediaUrl } from '../../../matrix/media';
 import { NativeAvatarImage } from '../../../components/NativeAvatarImage';
 import { setRoomImagePackNative } from '../../room/nativeImagePack';
 
+import { sendNativeStateEvent } from '../../../native/nativeCommands';
 type CreatePackTileProps = {
   packs: ImagePack[];
   roomId: string;
 };
 function CreatePackTile({ packs, roomId }: CreatePackTileProps) {
-  const mx = useMatrixClient();
   const alive = useAlive();
 
   const [addState, addPack] = useAsyncCallback<void, MatrixError, [string, string]>(
@@ -59,14 +58,14 @@ function CreatePackTile({ packs, roomId }: CreatePackTileProps) {
           },
         };
         // V-SEND.R-PACK-WRITE: native room-pack create is fail-closed on
-        // desktop. The JS mx.sendStateEvent(PoniesRoomEmotes) path is only for
+        // desktop. The JS sendNativeStateEvent(PoniesRoomEmotes) path is only for
         // non-native web.
         const result = await setRoomImagePackNative(roomId, stateKey, content);
         if (result === 'legacy') {
-          await mx.sendStateEvent(roomId, StateEvent.PoniesRoomEmotes as any, content, stateKey);
+          await sendNativeStateEvent(roomId, StateEvent.PoniesRoomEmotes as any, content, stateKey);
         }
       },
-      [mx, roomId]
+      [roomId]
     )
   );
 
@@ -146,7 +145,6 @@ type RoomPacksProps = {
   onViewPack: (imagePack: ImagePack) => void;
 };
 export function RoomPacks({ onViewPack }: RoomPacksProps) {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const room = useRoom();
   const alive = useAlive();
@@ -167,13 +165,13 @@ export function RoomPacks({ onViewPack }: RoomPacksProps) {
       for (let i = 0; i < removedPacks.length; i += 1) {
         const addr = removedPacks[i];
         // V-SEND.R-PACK-WRITE: native room-pack delete (empty content) is
-        // fail-closed on desktop. The JS mx.sendStateEvent(PoniesRoomEmotes)
+        // fail-closed on desktop. The JS sendNativeStateEvent(PoniesRoomEmotes)
         // path is only for non-native web.
         // eslint-disable-next-line no-await-in-loop
         const result = await setRoomImagePackNative(room.roomId, addr.stateKey, {});
         if (result === 'legacy') {
           // eslint-disable-next-line no-await-in-loop
-          await mx.sendStateEvent(
+          await sendNativeStateEvent(
             room.roomId,
             StateEvent.PoniesRoomEmotes as any,
             {},
@@ -181,7 +179,7 @@ export function RoomPacks({ onViewPack }: RoomPacksProps) {
           );
         }
       }
-    }, [mx, room, removedPacks])
+    }, [room, removedPacks])
   );
   const applyingChanges = applyState.status === AsyncStatus.Loading;
 
@@ -205,7 +203,7 @@ export function RoomPacks({ onViewPack }: RoomPacksProps) {
 
   const renderPack = (pack: ImagePack) => {
     const avatarMxc = pack.getAvatarUrl(ImageUsage.Emoticon);
-    const avatarUrl = resolveOptionalMatrixMediaUrl(mx, avatarMxc, { useAuthentication });
+    const avatarUrl = resolveOptionalMatrixMediaUrl(avatarMxc, { useAuthentication });
     const { address } = pack;
     if (!address) return null;
     const removed = !!removedPacks.find((addr) => packAddressEqual(addr, address));

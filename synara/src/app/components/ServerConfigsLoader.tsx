@@ -8,10 +8,9 @@ export type ValidatedAuthMetadata = {
   homeserver_url?: string;
 };
 import { AsyncStatus, useAsyncCallbackValue } from '../hooks/useAsyncCallback';
-import { useMatrixClient } from '../hooks/useMatrixClient';
 import { MediaConfig } from '../hooks/useMediaConfig';
-import { promiseFulfilledResult } from '../utils/common';
 
+import { getNativeMediaConfig } from '../native/nativeCommands';
 export type ServerConfigs = {
   capabilities?: Capabilities;
   mediaConfig?: MediaConfig;
@@ -22,27 +21,19 @@ type ServerConfigsLoaderProps = {
   children: (configs: ServerConfigs) => ReactNode;
 };
 export function ServerConfigsLoader({ children }: ServerConfigsLoaderProps) {
-  const mx = useMatrixClient();
   const fallbackConfigs = useMemo(() => ({}), []);
 
   const [configsState] = useAsyncCallbackValue<ServerConfigs, unknown>(
+    // Native reports the media upload limit. Server capabilities and OIDC auth
+    // metadata have no native read, so their providers receive empty values.
     useCallback(async () => {
-      const result = await Promise.allSettled([
-        mx.getCapabilities(),
-        mx.getMediaConfig(),
-        mx.getAuthMetadata(),
-      ]);
-
-      const capabilities = promiseFulfilledResult(result[0]);
-      const mediaConfig = promiseFulfilledResult(result[1]);
-      const authMetadata = promiseFulfilledResult(result[2]);
-
+      const [mediaConfig] = await Promise.allSettled([getNativeMediaConfig()]);
       return {
-        capabilities,
-        mediaConfig,
-        authMetadata,
+        capabilities: {},
+        mediaConfig: mediaConfig.status === 'fulfilled' ? mediaConfig.value : undefined,
+        authMetadata: undefined,
       };
-    }, [mx])
+    }, [])
   );
 
   const configs: ServerConfigs =

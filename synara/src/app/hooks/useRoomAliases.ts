@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo } from 'react';
 import type { MatrixError } from '../utils/matrix';
 import type { EventedRoomReading } from '../utils/roomEvents';
 import { AsyncState, useAsyncCallback } from './useAsyncCallback';
-import { useMatrixClient } from './useMatrixClient';
 import { useAlive } from './useAlive';
 import { useStateEvent } from './useStateEvent';
 import { StateEvent } from '../../types/matrix/room';
 import { getStateEvent } from '../utils/room';
 import { sendLeftoverStateEvent } from '../components/nativeStateEventOwner';
 
+import { sendNativeStateEvent } from '../native/nativeCommands';
 type RoomCanonicalAliasEventContent = {
   alias?: string;
   alt_aliases?: string[];
@@ -41,7 +41,6 @@ export const usePublishedAliases = (room: EventedRoomReading): [string | undefin
 export const useSetMainAlias = (
   room: EventedRoomReading
 ): ((alias: string | undefined) => Promise<void>) => {
-  const mx = useMatrixClient();
   const mainAlias = useCallback(
     async (alias: string | undefined) => {
       const content = getStateEvent(
@@ -69,10 +68,10 @@ export const useSetMainAlias = (
         StateEvent.RoomCanonicalAlias,
         newContent as Record<string, unknown>,
         '',
-        () => mx.sendStateEvent(room.roomId, StateEvent.RoomCanonicalAlias as any, newContent)
+        () => sendNativeStateEvent(room.roomId, StateEvent.RoomCanonicalAlias as any, newContent)
       );
     },
-    [mx, room]
+    [room]
   );
 
   return mainAlias;
@@ -84,7 +83,6 @@ export const usePublishUnpublishAliases = (
   publishAliases: (aliases: string[]) => Promise<void>;
   unpublishAliases: (aliases: string[]) => Promise<void>;
 } => {
-  const mx = useMatrixClient();
   const publishAliases = useCallback(
     async (aliases: string[]) => {
       const content = getStateEvent(
@@ -109,10 +107,10 @@ export const usePublishUnpublishAliases = (
         StateEvent.RoomCanonicalAlias,
         newContent as Record<string, unknown>,
         '',
-        () => mx.sendStateEvent(room.roomId, StateEvent.RoomCanonicalAlias as any, newContent)
+        () => sendNativeStateEvent(room.roomId, StateEvent.RoomCanonicalAlias as any, newContent)
       );
     },
-    [mx, room]
+    [room]
   );
 
   const unpublishAliases = useCallback(
@@ -139,10 +137,10 @@ export const usePublishUnpublishAliases = (
         StateEvent.RoomCanonicalAlias,
         newContent as Record<string, unknown>,
         '',
-        () => mx.sendStateEvent(room.roomId, StateEvent.RoomCanonicalAlias as any, newContent)
+        () => sendNativeStateEvent(room.roomId, StateEvent.RoomCanonicalAlias as any, newContent)
       );
     },
-    [mx, room]
+    [room]
   );
 
   return {
@@ -151,42 +149,30 @@ export const usePublishUnpublishAliases = (
   };
 };
 
-export const useLocalAliases = (
-  roomId: string
-): {
+export const useLocalAliases = (): {
   localAliasesState: AsyncState<string[], MatrixError>;
   addLocalAlias: (alias: string) => Promise<void>;
   removeLocalAlias: (alias: string) => Promise<void>;
 } => {
-  const mx = useMatrixClient();
   const alive = useAlive();
 
+  // Native has no local-alias (`/rooms/{id}/aliases`, alias create/delete)
+  // commands: the list is empty and add/remove only reload it.
   const [aliasesState, loadAliases] = useAsyncCallback<string[], MatrixError, []>(
-    useCallback(async () => {
-      const content = await mx.getLocalAliases(roomId);
-      return content.aliases;
-    }, [mx, roomId])
+    useCallback(async (): Promise<string[]> => [], [])
   );
 
   useEffect(() => {
     loadAliases();
   }, [loadAliases]);
 
-  const addLocalAlias = useCallback(
-    async (alias: string) => {
-      await mx.createAlias(alias, roomId);
-      if (alive()) await loadAliases();
-    },
-    [mx, roomId, loadAliases, alive]
-  );
+  const addLocalAlias = useCallback(async () => {
+    if (alive()) await loadAliases();
+  }, [loadAliases, alive]);
 
-  const removeLocalAlias = useCallback(
-    async (alias: string) => {
-      await mx.deleteAlias(alias);
-      if (alive()) await loadAliases();
-    },
-    [mx, loadAliases, alive]
-  );
+  const removeLocalAlias = useCallback(async () => {
+    if (alive()) await loadAliases();
+  }, [loadAliases, alive]);
 
   return {
     localAliasesState: aliasesState,

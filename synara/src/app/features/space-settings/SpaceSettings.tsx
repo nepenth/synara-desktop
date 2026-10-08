@@ -3,7 +3,6 @@ import { useAtomValue } from 'jotai';
 import { Avatar, Box, config, Icon, IconButton, Icons, IconSrc, MenuItem, Text } from 'folds';
 import { PageNav, PageNavContent, PageNavHeader, PageRoot } from '../../components/page';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useRoomAvatar, useRoomJoinRule, useRoomName } from '../../hooks/useRoomMeta';
@@ -63,7 +62,6 @@ type SpaceSettingsProps = {
 };
 export function SpaceSettings({ initialPage, requestClose }: SpaceSettingsProps) {
   const room = useRoom();
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const mDirects = useAtomValue(mDirectAtom);
 
@@ -73,7 +71,7 @@ export function SpaceSettings({ initialPage, requestClose }: SpaceSettingsProps)
   const rawJoinRule = joinRuleContent?.join_rule;
 
   const avatarUrl = roomAvatar
-    ? resolveMatrixThumbnailUrl(mx, roomAvatar, 96, { useAuthentication })
+    ? resolveMatrixThumbnailUrl(roomAvatar, 96, { useAuthentication })
     : undefined;
 
   const screenSize = useScreenSizeContext();

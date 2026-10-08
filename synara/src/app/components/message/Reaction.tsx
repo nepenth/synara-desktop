@@ -7,19 +7,17 @@ import { getMemberDisplayName } from '../../utils/room';
 import { eventWithShortcode, getMxIdLocalPart } from '../../utils/matrix';
 import { resolveOptionalMatrixMediaUrl } from '../../matrix/media';
 
-type ReactionMediaClient = Parameters<typeof resolveOptionalMatrixMediaUrl>[0];
 type ReactionRoom = Parameters<typeof getMemberDisplayName>[0];
 type ReactionEvent = Parameters<typeof eventWithShortcode>[0];
 
 export const Reaction = as<
   'button',
   {
-    mx: ReactionMediaClient;
     count: number;
     reaction: string;
     useAuthentication?: boolean;
   }
->(({ className, mx, count, reaction, useAuthentication, ...props }, ref) => (
+>(({ className, count, reaction, useAuthentication, ...props }, ref) => (
   <Box
     as="button"
     className={classNames(css.Reaction, className)}
@@ -33,7 +31,7 @@ export const Reaction = as<
       {reaction.startsWith('mxc://') ? (
         <img
           className={css.ReactionImg}
-          src={resolveOptionalMatrixMediaUrl(mx, reaction, { useAuthentication }) ?? reaction}
+          src={resolveOptionalMatrixMediaUrl(reaction, { useAuthentication }) ?? reaction}
           alt={reaction}
         />
       ) : (

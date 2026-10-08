@@ -5,7 +5,6 @@ import { useSetAtom } from 'jotai';
 import { UserHero, UserHeroName } from './UserHero';
 import { getMxIdLocalPart, getMxIdServer } from '../../utils/matrix';
 import { getMemberAvatarMxc, getMemberDisplayName } from '../../utils/room';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { useRoom } from '../../hooks/useRoom';
@@ -36,7 +35,6 @@ type UserRoomProfileProps = {
   userId: string;
 };
 export function UserRoomProfile({ userId }: UserRoomProfileProps) {
-  const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const navigate = useNavigate();
   const closeUserRoomProfile = useCloseUserRoomProfile();
@@ -48,7 +46,7 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
   const powerLevels = usePowerLevels(room);
   const creators = useRoomCreators(room);
   const nativeSession = isNativeMatrixSession();
-  const nativeMembers = useRoomMembers(mx, room.roomId, nativeSession);
+  const nativeMembers = useRoomMembers(room.roomId, nativeSession);
   const jsMembership = useMembership(room, userId);
   const membership = nativeSession
     ? resolveNativeRoomMembership(nativeMembers ?? null, userId)
@@ -113,7 +111,7 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
       ? nativeMember.avatarUrl
       : getMemberAvatarMxc(room, userId);
   const avatarUrl = avatarMxc
-    ? resolveMatrixThumbnailUrl(mx, avatarMxc, 96, { useAuthentication })
+    ? resolveMatrixThumbnailUrl(avatarMxc, 96, { useAuthentication })
     : undefined;
 
   const presence = useNativeUserPresence(userId);

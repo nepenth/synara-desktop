@@ -2,7 +2,6 @@ import React, { useCallback } from 'react';
 import { Box, Button, Spinner, Text, color } from 'folds';
 
 import * as css from './RoomTombstone.css';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { Membership } from '../../../types/matrix/room';
 import { RoomInputPlaceholder } from './RoomInputPlaceholder';
@@ -11,14 +10,14 @@ import { getViaServers } from '../../plugins/via-servers';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { joinRoomWithNativeOwner } from '../../components/nativeRoomJoinOwner';
 
+import { getNativeRoom } from '../../native/nativeSession';
 type RoomTombstoneProps = { roomId: string; body?: string; replacementRoomId: string };
 export function RoomTombstone({ roomId, body, replacementRoomId }: RoomTombstoneProps) {
-  const mx = useMatrixClient();
   const { navigateRoom } = useRoomNavigate();
 
   const [joinState, handleJoin] = useAsyncCallback(
     useCallback(async () => {
-      const currentRoom = mx.getRoom(roomId);
+      const currentRoom = getNativeRoom(roomId);
       if (!currentRoom) throw new Error('Source room is unavailable.');
       const via = await getViaServers(currentRoom);
       return joinRoomWithNativeOwner(
@@ -27,9 +26,9 @@ export function RoomTombstone({ roomId, body, replacementRoomId }: RoomTombstone
         isSynaraDesktop(),
         invokeDesktopWithAvailability
       );
-    }, [mx, roomId, replacementRoomId])
+    }, [roomId, replacementRoomId])
   );
-  const replacementRoom = mx.getRoom(replacementRoomId);
+  const replacementRoom = getNativeRoom(replacementRoomId);
 
   const handleOpen = () => {
     if (replacementRoom) navigateRoom(replacementRoom.roomId);

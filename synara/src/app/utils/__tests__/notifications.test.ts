@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { AccountDataEvent } from '../../../types/matrix/accountData';
 import {
-  clearUnreadAnchor,
   markAsRead,
   markAsReadFromExplicitUserAction,
   markAsReadFromExplicitUserActionInBackground,
@@ -17,94 +15,17 @@ import {
   shouldRestoreRoomTimelineViewport,
 } from '../timelineLifecycle';
 
-test('clearUnreadAnchor skips account-data writes when the room has no anchor', async () => {
-  let writes = 0;
-  const mx = {
-    getAccountData: () => ({
-      getContent: () => ({
-        version: 1,
-        anchors: {
-          '!other:example.org': {
-            eventId: '$other',
-            ts: 1,
-          },
-        },
-      }),
-    }),
-    setAccountData: async () => {
-      writes += 1;
-    },
-  } as any;
-
-  await clearUnreadAnchor(mx, '!room:example.org');
-
-  assert.equal(writes, 0);
-});
-
-test('clearUnreadAnchor removes existing anchors with one account-data write', async () => {
-  let writtenContent: unknown;
-  const mx = {
-    getAccountData: () => ({
-      getContent: () => ({
-        version: 1,
-        anchors: {
-          '!room:example.org': {
-            eventId: '$event',
-            ts: 1,
-          },
-          '!other:example.org': {
-            eventId: '$other',
-            ts: 2,
-          },
-        },
-      }),
-    }),
-    setAccountData: async (eventType: string, content: unknown) => {
-      assert.equal(eventType, AccountDataEvent.SynaraUnreadAnchor);
-      writtenContent = content;
-    },
-  } as any;
-
-  await clearUnreadAnchor(mx, '!room:example.org');
-
-  assert.deepEqual(writtenContent, {
-    version: 1,
-    anchors: {
-      '!other:example.org': {
-        eventId: '$other',
-        ts: 2,
-      },
-    },
-  });
-});
-
 test('markAsRead fails closed outside the desktop shell instead of writing receipts', async () => {
-  const writes: string[] = [];
-  const mx = {
-    getRoom: () => {
-      writes.push('getRoom');
-      return null;
-    },
-    sendReadReceipt: async () => {
-      writes.push('sendReadReceipt');
-    },
-    setRoomReadMarkers: async () => {
-      writes.push('setRoomReadMarkers');
-    },
-  } as any;
-
-  await assert.rejects(markAsRead(mx, '!r:example.org'), /requires the Synara desktop app/);
+  await assert.rejects(markAsRead('!r:example.org'), /requires the Synara desktop app/);
   await assert.rejects(
-    markAsReadFromExplicitUserAction(mx, '!r:example.org'),
+    markAsReadFromExplicitUserAction('!r:example.org'),
     /requires the Synara desktop app/
   );
-  assert.deepEqual(writes, []);
 });
 
 test('background Mark Read wrappers consume failures and return void', async () => {
-  const mx = {} as any;
-  assert.equal(markAsReadInBackground(mx, '!r:example.org'), undefined);
-  assert.equal(markAsReadFromExplicitUserActionInBackground(mx, '!r:example.org'), undefined);
+  assert.equal(markAsReadInBackground('!r:example.org'), undefined);
+  assert.equal(markAsReadFromExplicitUserActionInBackground('!r:example.org'), undefined);
   await new Promise<void>((resolve) => {
     setImmediate(resolve);
   });
