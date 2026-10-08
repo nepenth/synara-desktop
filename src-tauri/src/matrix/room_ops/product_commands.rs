@@ -386,3 +386,116 @@ pub(super) fn parse_room_join_via_servers(
         })
         .collect()
 }
+
+/// Account-data types seen in this session (global, or for one room).
+#[tauri::command]
+pub async fn matrix_account_data_types(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: Option<String>,
+) -> Result<synara_core::core_api::NativeAccountDataTypes, MatrixAuthCommandError> {
+    crate::bridge::native_extras::account_data_types(core.inner().as_ref(), room_id).await
+}
+
+/// Read one global or room account-data object.
+#[tauri::command]
+pub async fn matrix_account_data_get(
+    core: State<'_, Arc<synara_core::Core>>,
+    event_type: String,
+    room_id: Option<String>,
+) -> Result<synara_core::core_api::NativeAccountDataContent, MatrixAuthCommandError> {
+    crate::bridge::native_extras::account_data_get(core.inner().as_ref(), event_type, room_id).await
+}
+
+/// Replace one global or room account-data object.
+#[tauri::command]
+pub async fn matrix_account_data_set(
+    core: State<'_, Arc<synara_core::Core>>,
+    event_type: String,
+    room_id: Option<String>,
+    content: serde_json::Value,
+) -> Result<synara_core::core_api::NativeAccountDataContent, MatrixAuthCommandError> {
+    crate::bridge::native_extras::account_data_set(
+        core.inner().as_ref(),
+        event_type,
+        room_id,
+        content,
+    )
+    .await
+}
+
+/// The homeserver's local aliases for a room.
+#[tauri::command]
+pub async fn matrix_room_local_aliases(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+) -> Result<synara_core::core_api::NativeRoomLocalAliases, MatrixAuthCommandError> {
+    crate::bridge::native_extras::room_local_aliases(core.inner().as_ref(), room_id).await
+}
+
+#[tauri::command]
+pub async fn matrix_room_alias_create(
+    core: State<'_, Arc<synara_core::Core>>,
+    alias: String,
+    room_id: String,
+) -> Result<(), MatrixAuthCommandError> {
+    crate::bridge::native_extras::room_alias_create(core.inner().as_ref(), alias, room_id).await
+}
+
+#[tauri::command]
+pub async fn matrix_room_alias_delete(
+    core: State<'_, Arc<synara_core::Core>>,
+    alias: String,
+) -> Result<(), MatrixAuthCommandError> {
+    crate::bridge::native_extras::room_alias_delete(core.inner().as_ref(), alias).await
+}
+
+/// Whether an alias is free: available only when the homeserver says not found.
+#[tauri::command]
+pub async fn matrix_room_alias_check(
+    core: State<'_, Arc<synara_core::Core>>,
+    alias: String,
+) -> Result<synara_core::core_api::NativeRoomAliasCheck, MatrixAuthCommandError> {
+    crate::bridge::native_extras::room_alias_check(core.inner().as_ref(), alias).await
+}
+
+/// Joined rooms shared with another user.
+#[tauri::command]
+pub async fn matrix_user_mutual_rooms(
+    core: State<'_, Arc<synara_core::Core>>,
+    user_id: String,
+) -> Result<synara_core::core_api::NativeMutualRooms, MatrixAuthCommandError> {
+    crate::bridge::native_extras::user_mutual_rooms(core.inner().as_ref(), user_id).await
+}
+
+/// Upgrade a room to a new room version.
+#[tauri::command]
+pub async fn matrix_room_upgrade(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    new_version: String,
+) -> Result<synara_core::core_api::NativeRoomUpgradeResult, MatrixAuthCommandError> {
+    crate::bridge::native_extras::room_upgrade(core.inner().as_ref(), room_id, new_version).await
+}
+
+/// Redact recent events from the given users (`/delete`).
+#[tauri::command]
+pub async fn matrix_room_bulk_redact(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    user_ids: Vec<String>,
+    since_ts: u64,
+    event_types: Option<Vec<String>>,
+    reason: Option<String>,
+) -> Result<synara_core::core_api::NativeBulkRedactResult, MatrixAuthCommandError> {
+    crate::bridge::native_extras::room_bulk_redact(
+        core.inner().as_ref(),
+        synara_core::core_api::NativeBulkRedactRequest {
+            room_id,
+            user_ids,
+            since_ts,
+            event_types: event_types.unwrap_or_default(),
+            reason,
+        },
+    )
+    .await
+}

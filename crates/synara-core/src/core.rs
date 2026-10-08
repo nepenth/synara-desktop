@@ -112,6 +112,7 @@ mod account_data;
 use account_data::*;
 mod messaging;
 use messaging::*;
+mod native_extras;
 mod notifications;
 use notifications::*;
 mod profile_media;
@@ -130,6 +131,7 @@ mod typed_api;
 pub mod api {
     pub use super::account_data::*;
     pub use super::messaging::*;
+    pub use super::native_extras::*;
     pub use super::notifications::*;
     pub use super::profile_media::*;
     pub use super::realtime::*;
@@ -1082,6 +1084,7 @@ fn built_in_registry() -> CommandRegistry {
     messaging::register_commands(&mut registry);
     profile_media::register_commands(&mut registry);
     realtime::register_commands(&mut registry);
+    native_extras::register_commands(&mut registry);
     registry
 }
 

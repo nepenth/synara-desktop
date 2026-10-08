@@ -19,6 +19,8 @@ mod messaging_core_pins;
 mod messaging_core_reactions;
 #[path = "../messaging_core_send_queue.rs"]
 mod messaging_core_send_queue;
+#[path = "../native_extras.rs"]
+mod native_extras;
 #[path = "../offline_timeline_cold_restart.rs"]
 mod offline_timeline_cold_restart;
 #[path = "../p4_s30_room_list_encryption.rs"]

@@ -555,6 +555,24 @@
           "markdownDescription": "Enables the desktop_window_toggle_maximize command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_account_data_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-account-data-get",
+          "markdownDescription": "Enables the matrix_account_data_get command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_account_data_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-account-data-set",
+          "markdownDescription": "Enables the matrix_account_data_set command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_account_data_types command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-account-data-types",
+          "markdownDescription": "Enables the matrix_account_data_types command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_agent_approval_decide command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-agent-approval-decide",
@@ -1035,10 +1053,34 @@
           "markdownDescription": "Enables the matrix_restricted_join_reparent command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_room_alias_check command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-alias-check",
+          "markdownDescription": "Enables the matrix_room_alias_check command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_alias_create command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-alias-create",
+          "markdownDescription": "Enables the matrix_room_alias_create command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_alias_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-alias-delete",
+          "markdownDescription": "Enables the matrix_room_alias_delete command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_room_ban command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-room-ban",
           "markdownDescription": "Enables the matrix_room_ban command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_bulk_redact command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-bulk-redact",
+          "markdownDescription": "Enables the matrix_room_bulk_redact command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_room_create command without any pre-configured scope.",
@@ -1141,6 +1183,12 @@
           "type": "string",
           "const": "allow-matrix-room-list-snapshot",
           "markdownDescription": "Enables the matrix_room_list_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_local_aliases command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-local-aliases",
+          "markdownDescription": "Enables the matrix_room_local_aliases command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_room_members_snapshot command without any pre-configured scope.",
@@ -1255,6 +1303,12 @@
           "type": "string",
           "const": "allow-matrix-room-unban",
           "markdownDescription": "Enables the matrix_room_unban command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_upgrade command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-upgrade",
+          "markdownDescription": "Enables the matrix_room_upgrade command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_rtc_transports_refresh command without any pre-configured scope.",
@@ -1623,6 +1677,12 @@
           "markdownDescription": "Enables the matrix_user_directory_search command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_user_mutual_rooms command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-user-mutual-rooms",
+          "markdownDescription": "Enables the matrix_user_mutual_rooms command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_user_status_clear command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-user-status-clear",
@@ -1963,6 +2023,24 @@
           "type": "string",
           "const": "deny-desktop-window-toggle-maximize",
           "markdownDescription": "Denies the desktop_window_toggle_maximize command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_account_data_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-account-data-get",
+          "markdownDescription": "Denies the matrix_account_data_get command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_account_data_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-account-data-set",
+          "markdownDescription": "Denies the matrix_account_data_set command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_account_data_types command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-account-data-types",
+          "markdownDescription": "Denies the matrix_account_data_types command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_agent_approval_decide command without any pre-configured scope.",
@@ -2445,10 +2523,34 @@
           "markdownDescription": "Denies the matrix_restricted_join_reparent command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_room_alias_check command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-alias-check",
+          "markdownDescription": "Denies the matrix_room_alias_check command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_alias_create command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-alias-create",
+          "markdownDescription": "Denies the matrix_room_alias_create command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_alias_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-alias-delete",
+          "markdownDescription": "Denies the matrix_room_alias_delete command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_room_ban command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-room-ban",
           "markdownDescription": "Denies the matrix_room_ban command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_bulk_redact command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-bulk-redact",
+          "markdownDescription": "Denies the matrix_room_bulk_redact command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_room_create command without any pre-configured scope.",
@@ -2551,6 +2653,12 @@
           "type": "string",
           "const": "deny-matrix-room-list-snapshot",
           "markdownDescription": "Denies the matrix_room_list_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_local_aliases command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-local-aliases",
+          "markdownDescription": "Denies the matrix_room_local_aliases command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_room_members_snapshot command without any pre-configured scope.",
@@ -2665,6 +2773,12 @@
           "type": "string",
           "const": "deny-matrix-room-unban",
           "markdownDescription": "Denies the matrix_room_unban command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_upgrade command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-upgrade",
+          "markdownDescription": "Denies the matrix_room_upgrade command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_rtc_transports_refresh command without any pre-configured scope.",
@@ -3031,6 +3145,12 @@
           "type": "string",
           "const": "deny-matrix-user-directory-search",
           "markdownDescription": "Denies the matrix_user_directory_search command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_user_mutual_rooms command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-user-mutual-rooms",
+          "markdownDescription": "Denies the matrix_user_mutual_rooms command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_user_status_clear command without any pre-configured scope.",
