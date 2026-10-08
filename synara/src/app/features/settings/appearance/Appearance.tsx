@@ -49,6 +49,7 @@ import { SequenceCardStyle, SettingsQuietControl, SettingsThemeSwatch } from '..
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import { normalizeAccentColor, themeDefaultAccentColor } from '../../../utils/themeAccent';
 import { MESSAGE_TEXT_TONES, type MessageTextTone } from '../../../utils/messageTextTone';
+import { THREAD_DISPLAY_LABELS, THREAD_DISPLAY_MODES } from '../../../utils/threadDisplay';
 import {
   chromeColorsForRamp,
   DEFAULT_THEME_BASE_COLOR,
@@ -545,6 +546,43 @@ function Appearance() {
   );
 }
 
+function ThreadDisplaySetting() {
+  const [threadDisplay, setThreadDisplay] = useSetting(settingsAtom, 'threadDisplay');
+
+  return (
+    <SettingTile
+      title="Thread Display"
+      description="Open threads in place of the room, in a side panel beside it, or inline beneath their first message."
+      after={
+        <Box gap="100" role="group" aria-label="Thread display">
+          {THREAD_DISPLAY_MODES.map((mode) => (
+            <Button
+              key={mode}
+              className={SettingsQuietControl}
+              size="300"
+              radii="300"
+              variant="Secondary"
+              fill={threadDisplay === mode ? 'Soft' : 'None'}
+              aria-pressed={threadDisplay === mode}
+              before={
+                <Icon
+                  size="100"
+                  src={Icons.Check}
+                  aria-hidden
+                  style={{ visibility: threadDisplay === mode ? 'visible' : 'hidden' }}
+                />
+              }
+              onClick={() => setThreadDisplay(mode)}
+            >
+              <Text size="B300">{THREAD_DISPLAY_LABELS[mode]}</Text>
+            </Button>
+          ))}
+        </Box>
+      }
+    />
+  );
+}
+
 function TextAndZoom() {
   const [messageTextTone, setMessageTextTone] = useSetting(settingsAtom, 'messageTextTone');
 
@@ -584,6 +622,10 @@ function TextAndZoom() {
             </Box>
           }
         />
+      </SequenceCard>
+
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <ThreadDisplaySetting />
       </SequenceCard>
 
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">

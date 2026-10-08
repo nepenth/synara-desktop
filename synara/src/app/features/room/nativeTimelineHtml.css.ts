@@ -342,6 +342,21 @@ globalStyle(`${FilePreviewBody} ${FormattedBody}`, {
   lineHeight: 1.65,
 });
 
+/** Inline thread replies sit under their root, indented behind a thread rule. */
+export const InlineThreadReplies = style({
+  marginTop: config.space.S100,
+  paddingLeft: config.space.S300,
+  borderLeft: `2px solid var(--synara-content-separator)`,
+});
+
+export const InlineThreadReply = style({
+  color: 'var(--synara-message-foreground)',
+});
+
+export const InlineThreadStatus = style({
+  paddingLeft: config.space.S300,
+});
+
 export const ReplySurface = style({
   width: '100%',
   maxWidth: '100%',

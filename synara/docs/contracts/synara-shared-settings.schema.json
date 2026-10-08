@@ -76,6 +76,15 @@
       "type": "string",
       "enum": ["soft", "balanced", "bright"]
     },
+    "threadDisplay": {
+      "type": "string",
+      "enum": ["full", "side", "inline"]
+    },
+    "threadPaneWidth": {
+      "type": "number",
+      "minimum": 320,
+      "maximum": 720
+    },
     "hideMembershipEvents": { "type": "boolean" },
     "hideNickAvatarEvents": { "type": "boolean" },
     "mediaAutoLoad": { "type": "boolean" },

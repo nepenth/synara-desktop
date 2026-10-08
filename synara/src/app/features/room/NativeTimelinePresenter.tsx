@@ -145,6 +145,14 @@ import {
 } from '../../utils/timelinePagination';
 import * as htmlCss from './nativeTimelineHtml.css';
 import * as depthCss from '../../styles/Depth.css';
+import {
+  NativeInlineThread,
+  NativeThreadDisplayProvider,
+  useInlineThreadExpansion,
+  useNativeThreadDisplay,
+  type NativeThreadDisplay,
+} from './NativeInlineThread';
+import type { ThreadDisplayMode } from '../../utils/threadDisplay';
 import { getMyUserId } from '../../state/nativeIdentity';
 
 const HermesAgentCard = React.lazy(() =>
@@ -159,6 +167,21 @@ type NativeTimelinePresenterProps = {
   threadRootEventId?: string;
   onOpenThreadRoute?: (rootEventId: string) => void;
   onCloseThreadRoute?: () => void;
+  /**
+   * Thread presentation for the room timeline. `full` (the default) swaps
+   * this presenter into the thread; `side` and `inline` keep the room here.
+   */
+  threadDisplay?: ThreadDisplayMode;
+  /**
+   * Opens a thread outside this presenter (the side pane). When set, a room
+   * presenter never switches itself into a thread.
+   */
+  onOpenThreadPane?: (rootEventId: string, latestEventId?: string) => void;
+  /**
+   * Publish the open thread root for the room composer. A side-pane
+   * presenter turns this off: its own composer carries the root explicitly.
+   */
+  publishThreadRoot?: boolean;
 };
 
 type NativeTimelineViewport = {
@@ -1488,9 +1511,13 @@ const NativeTimelineThreadSurface = ({
   activeThreadRoot?: string;
   onOpenThread: (rootEventId: string, latestEventId?: string) => void;
 }) => {
+  const display = useNativeThreadDisplay();
   const rootEventId = thread?.rootEventId ?? threadRoot;
   if (!rootEventId) return null;
   if (activeThreadRoot === rootEventId) return null;
+  if (display?.mode === 'inline' && thread && !activeThreadRoot) {
+    return <NativeInlineThread display={display} thread={thread} />;
+  }
   const latestEventId = nativeThreadFocusEventId(thread);
   return (
     <Button size="300" fill="Soft" onClick={() => onOpenThread(rootEventId, latestEventId)}>
@@ -2373,6 +2400,9 @@ export function NativeTimelinePresenter({
   threadRootEventId,
   onOpenThreadRoute,
   onCloseThreadRoute,
+  threadDisplay = 'full',
+  onOpenThreadPane,
+  publishThreadRoot = true,
 }: NativeTimelinePresenterProps) {
   const [focusEventId, setFocusEventId] = useState(eventId);
   const [threadRootId, setThreadRootId] = useState<string | undefined>(threadRootEventId);
@@ -2389,13 +2419,13 @@ export function NativeTimelinePresenter({
     setThreadScrollEventId(undefined);
   }, [roomId]);
   useEffect(() => {
-    publishNativeThreadRoot(roomId, threadRootId);
-  }, [roomId, threadRootId]);
+    if (publishThreadRoot) publishNativeThreadRoot(roomId, threadRootId);
+  }, [publishThreadRoot, roomId, threadRootId]);
   useEffect(
     () => () => {
-      publishNativeThreadRoot(roomId, undefined);
+      if (publishThreadRoot) publishNativeThreadRoot(roomId, undefined);
     },
-    [roomId]
+    [publishThreadRoot, roomId]
   );
 
   const openingViewport = useMemo(
@@ -3329,6 +3359,11 @@ export function NativeTimelinePresenter({
   const openThread = useCallback(
     (rootEventId: string, latestEventId?: string) => {
       if (!rootEventId.startsWith('$') || rootEventId.length <= 1) return;
+      // Side pane: the room stays here and the pane owns the thread.
+      if (onOpenThreadPane && !threadRootId) {
+        onOpenThreadPane(rootEventId, latestEventId);
+        return;
+      }
       if (!threadRootId) saveViewport();
       setPreferLiveBottom(false);
       setFocusEventId(undefined);
@@ -3336,7 +3371,19 @@ export function NativeTimelinePresenter({
       setThreadScrollEventId(latestEventId);
       onOpenThreadRoute?.(rootEventId);
     },
-    [onOpenThreadRoute, saveViewport, threadRootId]
+    [onOpenThreadPane, onOpenThreadRoute, saveViewport, threadRootId]
+  );
+
+  const inlineExpansion = useInlineThreadExpansion(roomId);
+  const threadDisplayValue = useMemo<NativeThreadDisplay>(
+    () => ({
+      mode: threadDisplay,
+      roomId,
+      isExpanded: inlineExpansion.isExpanded,
+      toggleExpanded: inlineExpansion.toggleExpanded,
+      openInPane: onOpenThreadPane,
+    }),
+    [inlineExpansion, onOpenThreadPane, roomId, threadDisplay]
   );
 
   const closeThread = useCallback(() => {
@@ -3476,218 +3523,224 @@ export function NativeTimelinePresenter({
       : undefined;
 
   return (
-    <Box grow="Yes" direction="Column" style={{ minHeight: 0 }}>
-      {actionError && <Text size="T300">{actionError}</Text>}
-      {threadRootId ? (
-        <Box style={{ padding: config.space.S200 }} alignItems="Start">
-          <Button
-            size="300"
-            fill="Soft"
-            before={<Icon src={Icons.ArrowLeft} size="100" />}
-            onClick={closeThread}
-            aria-label="Back to room"
-          >
-            Back
-          </Button>
-        </Box>
-      ) : null}
-      {hasSparseLoadButton ? (
-        <Box shrink="No" style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
-          <Button onClick={() => requestPagination('backwards')}>
-            <Text>Load older messages</Text>
-          </Button>
-        </Box>
-      ) : null}
-      <Box grow="Yes" style={{ minHeight: 0, position: 'relative' }}>
-        <Scroll
-          id="native-timeline-history"
-          data-native-timeline-scrolling={virtualizer.isScrolling}
-          ref={scrollRef}
-          visibility="Always"
-          style={{ height: '100%', overscrollBehavior: 'contain' }}
-        >
-          {rows.length === 0 ? (
-            <Box
-              alignItems="Center"
-              justifyContent="Center"
-              style={{ minHeight: '100%', padding: config.space.S400 }}
+    <NativeThreadDisplayProvider value={threadDisplayValue}>
+      <Box grow="Yes" direction="Column" style={{ minHeight: 0 }}>
+        {actionError && <Text size="T300">{actionError}</Text>}
+        {threadRootId ? (
+          <Box style={{ padding: config.space.S200 }} alignItems="Start">
+            <Button
+              size="300"
+              fill="Soft"
+              before={<Icon src={Icons.ArrowLeft} size="100" />}
+              onClick={closeThread}
+              aria-label="Back to room"
             >
-              <Text size="T300">No messages in this view yet.</Text>
-            </Box>
-          ) : null}
-          <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
-            {virtualizer.getVirtualItems().map((virtualItem) => {
-              const row = rows[virtualItem.index];
-              if (!row) return null;
-              const groupsNext = isGroupedWithPrevious(
-                row,
-                virtualItem.index + 1 < rows.length ? rows[virtualItem.index + 1] : undefined
-              );
-              const spacingToken =
-                row.kind === 'message' && !groupsNext && messageSpacing !== '0'
-                  ? config.space[`S${messageSpacing}` as 'S100' | 'S200' | 'S300' | 'S400' | 'S500']
-                  : undefined;
-              return (
-                <div
-                  key={virtualItem.key}
-                  ref={virtualizer.measureElement}
-                  data-index={virtualItem.index}
-                  data-native-timeline-row-key={rowKey(row)}
-                  data-native-timeline-row-kind={row.kind}
-                  data-native-timeline-event-id={rowEventId(row)}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    transform: `translateY(${virtualItem.start}px)`,
-                    width: '100%',
-                    overflowAnchor: 'none',
-                    // This padding is part of the measured row box. A margin
-                    // on a descendant can escape the box and make adjacent
-                    // absolutely positioned rows overlap after measurement.
-                    paddingBottom: spacingToken,
-                  }}
-                >
-                  <NativeTimelineRow
-                    row={row}
-                    sessionGeneration={snapshot.sessionGeneration}
-                    grouped={isGroupedWithPrevious(
-                      virtualItem.index > 0 ? rows[virtualItem.index - 1] : undefined,
-                      row
-                    )}
-                    groupsNext={groupsNext}
-                    roomId={roomId}
-                    pinnedEventIds={snapshot.pinnedEventIds}
-                    sourceEncryptionStatus={sourceEncryptionStatus}
-                    onActionError={setActionError}
-                    onFocusEvent={onFocusEvent}
-                    onViewReactions={(request) => {
-                      setReactionViewer(request);
-                      void nativeReactionViewFromEventReadback({
-                        roomId,
-                        eventId: request.eventId,
-                      }).then((refreshed) => {
-                        if (!refreshed) return;
-                        setReactionViewer((current) =>
-                          current?.eventId === request.eventId
-                            ? { ...current, reactions: refreshed }
-                            : current
-                        );
-                      });
-                    }}
-                    onOpenThread={openThread}
-                    activeThreadRoot={threadRootId}
-                    onOpenMarkdownPreview={setFilePreview}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </Scroll>
-        <NativeTimelineHistoryStatus
-          edge="backward"
-          kind={backwardOverlay.kind}
-          errorMessage={backwardOverlay.message}
-          visibleDateLabel={visibleDateLabel}
-          onRetry={() => requestPagination('backwards')}
-          onLoadMore={() => requestPagination('backwards')}
-        />
-        <NativeTimelineHistoryStatus
-          edge="forward"
-          kind={forwardOverlay.kind}
-          errorMessage={forwardOverlay.message}
-          onRetry={() => requestPagination('forwards')}
-          onLoadMore={() => requestPagination('forwards')}
-        />
-        {(showJumpToLastRead || showJumpToLatest) && (
-          <Box
-            direction="Column"
-            gap="200"
-            alignItems="End"
-            style={{ position: 'absolute', right: config.space.S400, bottom: config.space.S300 }}
-          >
-            {showJumpToLastRead && (
-              <Button
-                variant="Secondary"
-                fill="Soft"
-                radii="Pill"
-                outlined
-                size="300"
-                className={depthCss.quietInteractiveSurface}
-                before={<Icon src={Icons.MessageUnread} size="100" />}
-                onClick={jumpToLastRead}
-              >
-                <Text size="B300">Jump to Last Read</Text>
-              </Button>
-            )}
-            {showJumpToLatest && (
-              <TooltipProvider
-                position="Top"
-                offset={4}
-                tooltip={
-                  <Tooltip>
-                    <Text>Jump to latest</Text>
-                  </Tooltip>
-                }
-              >
-                {(triggerRef) => (
-                  <IconButton
-                    ref={triggerRef}
-                    variant="SurfaceVariant"
-                    radii="Pill"
-                    outlined
-                    size="300"
-                    className={depthCss.quietInteractiveSurface}
-                    aria-label="Jump to latest"
-                    onClick={jumpToLatest}
-                  >
-                    <Icon src={Icons.ChevronBottom} size="300" />
-                  </IconButton>
-                )}
-              </TooltipProvider>
-            )}
+              Back
+            </Button>
           </Box>
-        )}
-      </Box>
-      <Overlay
-        open={Boolean(reactionViewer)}
-        backdrop={<OverlayBackdrop />}
-        onContextMenu={(event: React.MouseEvent) => event.stopPropagation()}
-      >
-        <OverlayCenter>
-          <FocusTrap
-            focusTrapOptions={{
-              initialFocus: false,
-              returnFocusOnDeactivate: false,
-              onDeactivate: () => setReactionViewer(null),
-              clickOutsideDeactivates: true,
-              escapeDeactivates: stopPropagation,
-            }}
+        ) : null}
+        {hasSparseLoadButton ? (
+          <Box shrink="No" style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
+            <Button onClick={() => requestPagination('backwards')}>
+              <Text>Load older messages</Text>
+            </Button>
+          </Box>
+        ) : null}
+        <Box grow="Yes" style={{ minHeight: 0, position: 'relative' }}>
+          <Scroll
+            id="native-timeline-history"
+            data-native-timeline-scrolling={virtualizer.isScrolling}
+            ref={scrollRef}
+            visibility="Always"
+            style={{ height: '100%', overscrollBehavior: 'contain' }}
           >
-            <Modal variant="Surface" size="300">
-              {reactionViewer ? (
-                <ReactionViewer
-                  roomId={roomId}
-                  targetEventId={reactionViewer.eventId}
-                  reactions={reactionViewer.reactions}
-                  initialKey={reactionViewer.initialKey}
-                  ownUserId={ownUserId}
-                  canRedactOwn={Boolean(snapshot.capabilities.canRedactOwn)}
-                  canRedactOther={Boolean(snapshot.capabilities.canRedactOther)}
-                  requestClose={() => setReactionViewer(null)}
-                />
-              ) : null}
-            </Modal>
-          </FocusTrap>
-        </OverlayCenter>
-      </Overlay>
-      {filePreview ? (
-        <NativeTimelineMarkdownPreview
-          target={filePreview}
-          onClose={() => setFilePreview(undefined)}
-          onActionError={setActionError}
-        />
-      ) : null}
-    </Box>
+            {rows.length === 0 ? (
+              <Box
+                alignItems="Center"
+                justifyContent="Center"
+                style={{ minHeight: '100%', padding: config.space.S400 }}
+              >
+                <Text size="T300">No messages in this view yet.</Text>
+              </Box>
+            ) : null}
+            <div
+              style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}
+            >
+              {virtualizer.getVirtualItems().map((virtualItem) => {
+                const row = rows[virtualItem.index];
+                if (!row) return null;
+                const groupsNext = isGroupedWithPrevious(
+                  row,
+                  virtualItem.index + 1 < rows.length ? rows[virtualItem.index + 1] : undefined
+                );
+                const spacingToken =
+                  row.kind === 'message' && !groupsNext && messageSpacing !== '0'
+                    ? config.space[
+                        `S${messageSpacing}` as 'S100' | 'S200' | 'S300' | 'S400' | 'S500'
+                      ]
+                    : undefined;
+                return (
+                  <div
+                    key={virtualItem.key}
+                    ref={virtualizer.measureElement}
+                    data-index={virtualItem.index}
+                    data-native-timeline-row-key={rowKey(row)}
+                    data-native-timeline-row-kind={row.kind}
+                    data-native-timeline-event-id={rowEventId(row)}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      transform: `translateY(${virtualItem.start}px)`,
+                      width: '100%',
+                      overflowAnchor: 'none',
+                      // This padding is part of the measured row box. A margin
+                      // on a descendant can escape the box and make adjacent
+                      // absolutely positioned rows overlap after measurement.
+                      paddingBottom: spacingToken,
+                    }}
+                  >
+                    <NativeTimelineRow
+                      row={row}
+                      sessionGeneration={snapshot.sessionGeneration}
+                      grouped={isGroupedWithPrevious(
+                        virtualItem.index > 0 ? rows[virtualItem.index - 1] : undefined,
+                        row
+                      )}
+                      groupsNext={groupsNext}
+                      roomId={roomId}
+                      pinnedEventIds={snapshot.pinnedEventIds}
+                      sourceEncryptionStatus={sourceEncryptionStatus}
+                      onActionError={setActionError}
+                      onFocusEvent={onFocusEvent}
+                      onViewReactions={(request) => {
+                        setReactionViewer(request);
+                        void nativeReactionViewFromEventReadback({
+                          roomId,
+                          eventId: request.eventId,
+                        }).then((refreshed) => {
+                          if (!refreshed) return;
+                          setReactionViewer((current) =>
+                            current?.eventId === request.eventId
+                              ? { ...current, reactions: refreshed }
+                              : current
+                          );
+                        });
+                      }}
+                      onOpenThread={openThread}
+                      activeThreadRoot={threadRootId}
+                      onOpenMarkdownPreview={setFilePreview}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </Scroll>
+          <NativeTimelineHistoryStatus
+            edge="backward"
+            kind={backwardOverlay.kind}
+            errorMessage={backwardOverlay.message}
+            visibleDateLabel={visibleDateLabel}
+            onRetry={() => requestPagination('backwards')}
+            onLoadMore={() => requestPagination('backwards')}
+          />
+          <NativeTimelineHistoryStatus
+            edge="forward"
+            kind={forwardOverlay.kind}
+            errorMessage={forwardOverlay.message}
+            onRetry={() => requestPagination('forwards')}
+            onLoadMore={() => requestPagination('forwards')}
+          />
+          {(showJumpToLastRead || showJumpToLatest) && (
+            <Box
+              direction="Column"
+              gap="200"
+              alignItems="End"
+              style={{ position: 'absolute', right: config.space.S400, bottom: config.space.S300 }}
+            >
+              {showJumpToLastRead && (
+                <Button
+                  variant="Secondary"
+                  fill="Soft"
+                  radii="Pill"
+                  outlined
+                  size="300"
+                  className={depthCss.quietInteractiveSurface}
+                  before={<Icon src={Icons.MessageUnread} size="100" />}
+                  onClick={jumpToLastRead}
+                >
+                  <Text size="B300">Jump to Last Read</Text>
+                </Button>
+              )}
+              {showJumpToLatest && (
+                <TooltipProvider
+                  position="Top"
+                  offset={4}
+                  tooltip={
+                    <Tooltip>
+                      <Text>Jump to latest</Text>
+                    </Tooltip>
+                  }
+                >
+                  {(triggerRef) => (
+                    <IconButton
+                      ref={triggerRef}
+                      variant="SurfaceVariant"
+                      radii="Pill"
+                      outlined
+                      size="300"
+                      className={depthCss.quietInteractiveSurface}
+                      aria-label="Jump to latest"
+                      onClick={jumpToLatest}
+                    >
+                      <Icon src={Icons.ChevronBottom} size="300" />
+                    </IconButton>
+                  )}
+                </TooltipProvider>
+              )}
+            </Box>
+          )}
+        </Box>
+        <Overlay
+          open={Boolean(reactionViewer)}
+          backdrop={<OverlayBackdrop />}
+          onContextMenu={(event: React.MouseEvent) => event.stopPropagation()}
+        >
+          <OverlayCenter>
+            <FocusTrap
+              focusTrapOptions={{
+                initialFocus: false,
+                returnFocusOnDeactivate: false,
+                onDeactivate: () => setReactionViewer(null),
+                clickOutsideDeactivates: true,
+                escapeDeactivates: stopPropagation,
+              }}
+            >
+              <Modal variant="Surface" size="300">
+                {reactionViewer ? (
+                  <ReactionViewer
+                    roomId={roomId}
+                    targetEventId={reactionViewer.eventId}
+                    reactions={reactionViewer.reactions}
+                    initialKey={reactionViewer.initialKey}
+                    ownUserId={ownUserId}
+                    canRedactOwn={Boolean(snapshot.capabilities.canRedactOwn)}
+                    canRedactOther={Boolean(snapshot.capabilities.canRedactOther)}
+                    requestClose={() => setReactionViewer(null)}
+                  />
+                ) : null}
+              </Modal>
+            </FocusTrap>
+          </OverlayCenter>
+        </Overlay>
+        {filePreview ? (
+          <NativeTimelineMarkdownPreview
+            target={filePreview}
+            onClose={() => setFilePreview(undefined)}
+            onActionError={setActionError}
+          />
+        ) : null}
+      </Box>
+    </NativeThreadDisplayProvider>
   );
 }

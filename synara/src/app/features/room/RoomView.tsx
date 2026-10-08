@@ -22,6 +22,7 @@ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { VoiceRoom } from './VoiceRoom';
 import { useRoom } from '../../hooks/useRoom';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
+import type { ThreadDisplayMode } from '../../utils/threadDisplay';
 
 const FN_KEYS_REGEX = /^F\d+$/;
 const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
@@ -57,9 +58,13 @@ const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
 export function RoomView({
   eventId,
   threadRootEventId,
+  threadDisplay = 'full',
+  onOpenThreadPane,
 }: {
   eventId?: string;
   threadRootEventId?: string;
+  threadDisplay?: ThreadDisplayMode;
+  onOpenThreadPane?: (rootEventId: string, latestEventId?: string) => void;
 }) {
   const roomInputRef = useRef<HTMLDivElement>(null);
   const roomViewRef = useRef<HTMLDivElement>(null);
@@ -105,6 +110,8 @@ export function RoomView({
           threadRootEventId={threadRootEventId}
           onOpenThreadRoute={(rootEventId) => navigateThread(roomId, rootEventId)}
           onCloseThreadRoute={() => navigateRoom(roomId)}
+          threadDisplay={threadDisplay}
+          onOpenThreadPane={onOpenThreadPane}
         />
         <RoomViewTyping room={room} />
       </Box>
