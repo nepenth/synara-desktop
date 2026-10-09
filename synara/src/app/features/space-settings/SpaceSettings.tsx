@@ -3,6 +3,7 @@ import { useAtomValue } from 'jotai';
 import { Avatar, Icon, IconButton, Icons, IconSrc, Text } from 'folds';
 import { PageRoot } from '../../components/page';
 import { SettingsNav, SettingsNavGroup } from '../../components/settings-layout';
+import { commonSettingsSearchIndex } from '../common-settings/settingsSearchIndex';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
@@ -106,6 +107,17 @@ export function SpaceSettings({ initialPage, requestClose }: SpaceSettingsProps)
     ];
   }, [menuItems]);
 
+  const searchIndex = useMemo(
+    () =>
+      commonSettingsSearchIndex('space', {
+        general: SpaceSettingsPage.GeneralPage,
+        permissions: SpaceSettingsPage.PermissionsPage,
+        emojis: SpaceSettingsPage.EmojisStickersPage,
+        developer: SpaceSettingsPage.DeveloperToolsPage,
+      }),
+    []
+  );
+
   const handlePageRequestClose = () => {
     if (screenSize === ScreenSize.Mobile) {
       setActivePage(undefined);
@@ -155,6 +167,7 @@ export function SpaceSettings({ initialPage, requestClose }: SpaceSettingsProps)
               ) : undefined
             }
             groups={navGroups}
+            searchIndex={searchIndex}
             active={activePage}
             onSelect={setActivePage}
           />

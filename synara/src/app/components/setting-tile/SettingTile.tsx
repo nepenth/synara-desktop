@@ -12,7 +12,12 @@ type SettingTileProps = {
 };
 export function SettingTile({ title, description, before, after, children }: SettingTileProps) {
   return (
-    <Box alignItems="Center" gap="300" className={css.SettingTile}>
+    <Box
+      alignItems="Center"
+      gap="300"
+      className={css.SettingTile}
+      data-setting-title={typeof title === 'string' ? title : undefined}
+    >
       {before && <Box shrink="No">{before}</Box>}
       <Box grow="Yes" direction="Column" gap="100" className={css.SettingCopy}>
         {title && (

@@ -46,7 +46,11 @@ import { SequenceCardStyle, SettingsQuietControl, SettingsThemeSwatch } from '..
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import { normalizeAccentColor, themeDefaultAccentColor } from '../../../utils/themeAccent';
 import { MESSAGE_TEXT_TONES, type MessageTextTone } from '../../../utils/messageTextTone';
-import { THREAD_DISPLAY_LABELS, THREAD_DISPLAY_MODES } from '../../../utils/threadDisplay';
+import {
+  THREAD_DISPLAY_LABELS,
+  THREAD_DISPLAY_MODES,
+  ThreadDisplayMode,
+} from '../../../utils/threadDisplay';
 import {
   chromeColorsForRamp,
   DEFAULT_THEME_BASE_COLOR,
@@ -545,11 +549,16 @@ function Appearance() {
 
 function ThreadDisplaySetting() {
   const [threadDisplay, setThreadDisplay] = useSetting(settingsAtom, 'threadDisplay');
+  const [, setThreadDisplayChosen] = useSetting(settingsAtom, 'threadDisplayChosen');
+  const chooseThreadDisplay = (mode: ThreadDisplayMode) => {
+    setThreadDisplayChosen(true);
+    setThreadDisplay(mode);
+  };
 
   return (
     <SettingTile
       title="Thread Display"
-      description="Open threads in place of the room, in a side panel beside it, or inline beneath their first message."
+      description="Open threads inline beneath their first message, in a side panel beside the room, or in place of the room."
       after={
         <Box gap="100" role="group" aria-label="Thread display">
           {THREAD_DISPLAY_MODES.map((mode) => (
@@ -569,7 +578,7 @@ function ThreadDisplaySetting() {
                   style={{ visibility: threadDisplay === mode ? 'visible' : 'hidden' }}
                 />
               }
-              onClick={() => setThreadDisplay(mode)}
+              onClick={() => chooseThreadDisplay(mode)}
             >
               <Text size="B300">{THREAD_DISPLAY_LABELS[mode]}</Text>
             </Button>

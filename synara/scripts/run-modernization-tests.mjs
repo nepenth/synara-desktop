@@ -95,6 +95,7 @@ const tests = [
   'src/app/pages/client/explore/__tests__/roomDirectorySourceGuard.test.ts',
   'src/app/features/lobby/__tests__/nativeSpaceHierarchyOwner.test.ts',
   'src/app/features/room/__tests__/threadDisplay.test.ts',
+  'src/app/features/settings/__tests__/settingsSearchIndex.test.ts',
   'src/app/features/room/__tests__/nativeSendText.test.ts',
   'src/app/features/room/__tests__/nativeComposerDraftOwner.test.ts',
   'src/app/features/room/__tests__/nativeComposerReplyRoute.test.ts',

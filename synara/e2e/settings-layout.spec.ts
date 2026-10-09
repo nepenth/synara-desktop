@@ -131,3 +131,45 @@ for (const colorScheme of ['light', 'dark'] as const) {
     });
   });
 }
+
+test('settings search finds individual settings and opens them', async ({ page }) => {
+  await page.goto(`${HARNESS}#/settings/`);
+  const search = page.getByRole('textbox', { name: 'Search settings' });
+  await expect(search).toBeVisible();
+
+  await search.fill('thread');
+  const results = page.locator('[data-settings-search-results]');
+  await expect(results.locator('[data-settings-search-result="Thread Display"]')).toBeVisible();
+  await expect(results.getByRole('group', { name: 'Appearance' })).toBeVisible();
+
+  // Enter opens the first result: Appearance, scrolled to the Thread Display row.
+  await search.press('Enter');
+  await expect(page.locator('[data-setting-title="Thread Display"]').first()).toBeInViewport();
+  await shot(page, 'settings-search-thread');
+
+  // Arrow keys reach the results.
+  await search.fill('notification sound');
+  await search.press('ArrowDown');
+  const sound = results.locator('[data-settings-search-result="Notification Sound"]');
+  await expect(sound).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('[data-setting-title="Notification Sound"]').first()).toBeInViewport();
+
+  // No match keeps the empty state; Escape clears the search and restores the nav.
+  await search.fill('zzzz no such setting');
+  await expect(page.getByText('No settings match “zzzz no such setting”.')).toBeVisible();
+  await search.press('Escape');
+  await expect(search).toHaveValue('');
+  await expect(page.locator('nav[aria-label="Settings sections"]')).toBeVisible();
+});
+
+test('room settings search finds room rows', async ({ page }) => {
+  await page.goto(`${HARNESS}#/home/${ROOM}/`);
+  await page.getByRole('button', { name: 'More Options' }).click();
+  await page.getByRole('button', { name: 'Room Settings' }).click();
+  const search = page.getByRole('textbox', { name: 'Search settings' });
+  await search.fill('history');
+  await expect(
+    page.locator('[data-settings-search-result="Message History Visibility"]')
+  ).toBeVisible();
+});

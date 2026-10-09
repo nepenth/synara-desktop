@@ -1,4 +1,4 @@
-import { globalStyle, style } from '@vanilla-extract/css';
+import { globalStyle, keyframes, style } from '@vanilla-extract/css';
 import { recipe, RecipeVariants } from '@vanilla-extract/recipes';
 import { color, config, toRem } from 'folds';
 
@@ -47,6 +47,52 @@ export const NavItemButton = style({
   minHeight: toRem(36),
   padding: `0 ${config.space.S300}`,
   textAlign: 'start',
+});
+
+/** A search result: the setting's title over a muted description snippet. */
+export const SearchResultButton = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: config.space.S200,
+  width: '100%',
+  minHeight: toRem(44),
+  padding: `${config.space.S100} ${config.space.S300}`,
+  textAlign: 'start',
+});
+
+export const SearchResultCopy = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: toRem(2),
+  minWidth: 0,
+});
+
+export const SearchMatch = style({
+  backgroundColor: 'transparent',
+  color: 'inherit',
+  fontWeight: config.fontWeight.W600,
+  textDecoration: 'underline',
+  textDecorationColor: color.Primary.Main,
+  textDecorationThickness: toRem(2),
+  textUnderlineOffset: toRem(2),
+});
+
+const revealFade = keyframes({
+  from: { backgroundColor: color.Primary.Container },
+  to: { backgroundColor: 'transparent' },
+});
+
+/** Calm marker on the row a search result opened. */
+export const RevealedSetting = style({
+  borderRadius: config.radii.R300,
+  animation: `${revealFade} 1400ms ease-out`,
+  '@media': {
+    '(prefers-reduced-motion: reduce)': {
+      animation: 'none',
+      outline: `${config.borderWidth.B600} solid ${color.Primary.Main}`,
+      outlineOffset: toRem(2),
+    },
+  },
 });
 
 export const NavEmpty = style({

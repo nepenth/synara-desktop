@@ -80,6 +80,7 @@
       "type": "string",
       "enum": ["full", "side", "inline"]
     },
+    "threadDisplayChosen": { "type": "boolean" },
     "threadPaneWidth": {
       "type": "number",
       "minimum": 320,
