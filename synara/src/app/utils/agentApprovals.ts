@@ -427,6 +427,30 @@ export const formatCoreAgentApprovalPrompt = (body: string): AgentApprovalPrompt
   };
 };
 
+/**
+ * OS notification text for a Core-classified prompt. Core supplies the bounded
+ * reason/command summary; with details hidden, only the room is disclosed.
+ */
+export const buildAgentApprovalNotificationText = (options: {
+  roomName: string;
+  summary?: { reason?: string; command?: string };
+  showDetails: boolean;
+}): { title: string; body: string } => {
+  const { roomName, summary, showDetails } = options;
+  const reason = showDetails ? summary?.reason?.trim() : undefined;
+  const command = showDetails ? summary?.command?.trim() : undefined;
+  if (!reason && !command) {
+    return {
+      title: 'Approval Required: Dangerous Command',
+      body: `${roomName}: Review a request in Synara.`,
+    };
+  }
+  return {
+    title: `${roomName}: ${reason || 'Approval required'}`,
+    body: command || 'Review the command in Synara.',
+  };
+};
+
 /** In-flight clicks are volatile; durable memory records successful Core actions only. */
 export async function executeAgentApprovalNativeActionOnce(options: {
   key: string;

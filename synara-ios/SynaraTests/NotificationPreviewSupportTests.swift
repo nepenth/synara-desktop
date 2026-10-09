@@ -95,6 +95,63 @@ final class NotificationPreviewSupportTests: XCTestCase {
         XCTAssertEqual(fallback.badge, 3)
     }
 
+    func testFreshApprovalShowsCoreSummaryEvenWithPreviewsOff() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let summary = SynaraAgentApprovalSummary(
+            sender: "Forge",
+            reason: "find -delete",
+            command: "find /tmp/forge-approval-test-dir -delete"
+        )
+        for showPreview in [false, true] {
+            let content = SynaraNotificationPresentationPolicy.fallback(from: UNMutableNotificationContent())
+            let stage = SynaraNotificationPresentationPolicy.applyResolvedEvent(
+                to: content, preview: .init(title: "Forge", body: "⚠️ **Dangerous command"),
+                showPreview: showPreview, approvalAlertsEnabled: true, isAgentApproval: true,
+                originServerTimestampMS: 2_000_000_000, criticalAlertsAuthorized: false,
+                approvalSummary: summary, now: now
+            )
+            XCTAssertEqual(stage, .resolvedApproval)
+            XCTAssertEqual(content.title, "Forge: find -delete")
+            XCTAssertEqual(content.body, "find /tmp/forge-approval-test-dir -delete")
+            XCTAssertEqual(content.categoryIdentifier, "synara.agent-approval")
+        }
+    }
+
+    func testApprovalSummaryIsIgnoredWhenExpiredOrEmpty() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let expired = SynaraNotificationPresentationPolicy.fallback(from: UNMutableNotificationContent())
+        _ = SynaraNotificationPresentationPolicy.applyResolvedEvent(
+            to: expired, preview: nil, showPreview: false,
+            approvalAlertsEnabled: true, isAgentApproval: true,
+            originServerTimestampMS: 1_000, criticalAlertsAuthorized: false,
+            approvalSummary: .init(sender: "Forge", reason: "find -delete", command: "rm x"), now: now
+        )
+        XCTAssertEqual(expired.title, "Synara")
+        XCTAssertEqual(expired.body, "New activity")
+
+        let empty = SynaraNotificationPresentationPolicy.fallback(from: UNMutableNotificationContent())
+        _ = SynaraNotificationPresentationPolicy.applyResolvedEvent(
+            to: empty, preview: nil, showPreview: false,
+            approvalAlertsEnabled: true, isAgentApproval: true,
+            originServerTimestampMS: 2_000_000_000, criticalAlertsAuthorized: false,
+            approvalSummary: .init(sender: "Forge", reason: " ", command: nil), now: now
+        )
+        XCTAssertEqual(empty.title, "Agent approval needed")
+
+        let partial = SynaraAgentApprovalSummary(sender: nil, reason: nil, command: "rm -rf build")
+        XCTAssertEqual(partial.title, "Agent: Approval required")
+        XCTAssertEqual(partial.body, "rm -rf build")
+    }
+
+    func testApprovalDetailsPreferenceDefaultsOn() throws {
+        let suite = "synara.tests.approval-details.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertTrue(SynaraApprovalNotificationDetailsPreference.isEnabled(defaults: defaults))
+        defaults.set(false, forKey: SynaraSharedConstants.approvalNotificationDetailsKey)
+        XCTAssertFalse(SynaraApprovalNotificationDetailsPreference.isEnabled(defaults: defaults))
+    }
+
     func testVerifiedFreshApprovalUsesCriticalOnlyWithOSAuthorization() {
         let now = Date(timeIntervalSince1970: 2_000_000)
         for authorized in [false, true] {

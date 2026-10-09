@@ -79,6 +79,8 @@ pub struct NativeNotificationObservation {
 pub struct NativeAgentApprovalObservation {
     pub expires_at: u64,
     pub expired: bool,
+    /// Bounded, display-safe text for the OS notification.
+    pub summary: crate::app::agent_approvals::AgentApprovalNotificationSummary,
 }
 
 /// Shell-supplied sink. Desktop maps this to a Tauri event; iOS can map it
@@ -680,6 +682,9 @@ pub fn project_observation(
             .map(|classification| NativeAgentApprovalObservation {
                 expires_at: classification.expires_at,
                 expired: classification.expired,
+                summary: crate::app::agent_approvals::agent_approval_notification_summary(
+                    message.content.body(),
+                ),
             })
         }
         AnySyncMessageLikeEvent::RoomEncrypted(SyncMessageLikeEvent::Original(encrypted)) => {
@@ -758,14 +763,18 @@ mod tests {
                 .agent_approval
                 .is_none()
         );
-        let body = "Approval Required: Dangerous Command\necho hello";
+        let body = "Approval Required: Dangerous Command\nReason: greet\n```\necho hello\n```";
         let observation =
             project_observation(&text(bot, NOW - 1_000, body), ROOM, me, NOW, 7).unwrap();
         assert_eq!(
             observation.agent_approval,
             Some(NativeAgentApprovalObservation {
                 expires_at: NOW - 1_000 + crate::app::agent_approvals::AGENT_APPROVAL_TTL_MS,
-                expired: false
+                expired: false,
+                summary: crate::app::agent_approvals::AgentApprovalNotificationSummary {
+                    reason: Some("greet".to_owned()),
+                    command: Some("echo hello".to_owned()),
+                },
             })
         );
         let wire = serde_json::to_value(observation).unwrap();

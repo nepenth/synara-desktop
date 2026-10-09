@@ -67,6 +67,8 @@ export interface SharedSettings {
 
   showNotifications: boolean;
   isNotificationSounds: boolean;
+  /** Show the agent approval reason and command in OS notifications. */
+  showApprovalNotificationDetails: boolean;
 
   hour24Clock: boolean;
   dateFormatString: string;
@@ -149,6 +151,7 @@ export const defaultSharedSettings: SharedSettings = {
 
   showNotifications: true,
   isNotificationSounds: true,
+  showApprovalNotificationDetails: true,
 
   hour24Clock: false,
   dateFormatString: 'D MMM YYYY',

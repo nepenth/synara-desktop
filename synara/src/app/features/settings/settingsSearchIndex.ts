@@ -267,6 +267,12 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
   },
   {
     page: SettingsPages.NotificationPage,
+    title: 'Show Approval Details',
+    description: 'Show the reason and requested command in agent approval notifications.',
+    synonyms: ['approval', 'agent', 'hermes', 'command', 'privacy', 'preview'],
+  },
+  {
+    page: SettingsPages.NotificationPage,
     title: 'All Messages',
     synonyms: ['rooms', 'direct messages', 'dm'],
   },

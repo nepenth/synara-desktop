@@ -96,6 +96,7 @@
     "legacyUsernameColor": { "type": "boolean" },
     "showNotifications": { "type": "boolean" },
     "isNotificationSounds": { "type": "boolean" },
+    "showApprovalNotificationDetails": { "type": "boolean" },
     "hour24Clock": { "type": "boolean" },
     "dateFormatString": { "type": "string" },
     "developerTools": { "type": "boolean" },

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Approvals: agent approval notifications on macOS, Linux and iOS show what is being approved, for example "forge: find -delete" with the requested command below it, alongside Approve once and Deny. Secret-like values are redacted. Turn off Show Approval Details in notification settings to show only the room or agent name. This setting is separate from message previews.
+
 ## [2.2.2] - 2026-10-09
 
 - Settings: search finds individual settings, not just page names. Results show the setting and its description grouped by page; choosing one opens the page and scrolls to that row. Room and Space settings search their own rows too.
