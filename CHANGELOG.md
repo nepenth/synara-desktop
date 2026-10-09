@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Settings: search finds individual settings, not just page names. Results show the setting and its description grouped by page; choosing one opens the page and scrolls to that row. Room and Space settings search their own rows too.
+- Threads: Inline is now the default thread display. A choice made in Settings → Appearance is kept; until you choose, the default applies.
+
 ## [2.2.1] - 2026-10-08
 
 - Linux: the title strip with Minimize, Maximize and Close renders and drags again, and the three controls share one size.

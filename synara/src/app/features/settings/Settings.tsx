@@ -32,17 +32,10 @@ import { LogoutDialog } from '../../components/LogoutDialog';
 import * as depthCss from '../../styles/Depth.css';
 import { isDesktopPlatform } from '../../platform';
 import { getSafeMyUserId } from '../../state/nativeIdentity';
+import { SettingsPages } from './settingsPages';
+import { APP_SETTINGS_SEARCH_INDEX } from './settingsSearchIndex';
 
-export enum SettingsPages {
-  GeneralPage,
-  AppearancePage,
-  AccountPage,
-  NotificationPage,
-  DevicesPage,
-  DiagnosticsPage,
-  DeveloperToolsPage,
-  AboutPage,
-}
+export { SettingsPages };
 
 const useSettingsNavGroups = (): SettingsNavGroup<SettingsPages>[] =>
   useMemo(
@@ -204,6 +197,7 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
               ) : undefined
             }
             groups={navGroups}
+            searchIndex={APP_SETTINGS_SEARCH_INDEX}
             active={activePage}
             onSelect={setActivePage}
             footer={
