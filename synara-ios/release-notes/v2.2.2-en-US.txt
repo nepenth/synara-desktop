@@ -1,0 +1,1 @@
+This update brings desktop improvements to Settings search and inline threads, and keeps the iOS app in step with the desktop release.
