@@ -3,7 +3,7 @@
 [package]
 publish.workspace = true
 name = "synara"
-version = "2.2.2"
+version = "2.2.3"
 description = "A modern Matrix client"
 authors.workspace = true
 license.workspace = true
