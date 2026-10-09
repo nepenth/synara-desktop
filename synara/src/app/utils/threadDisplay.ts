@@ -1,16 +1,16 @@
 /**
  * How the desktop room opens a thread.
  *
- * - `full`: the thread replaces the room timeline, with a back control.
+ * - `inline` (default): replies expand beneath their root message in the room
+ *   timeline; replying opens the side pane.
  * - `side`: the thread opens in a resizable pane beside the live room timeline.
- * - `inline`: replies expand beneath their root message in the room timeline;
- *   replying opens the side pane.
+ * - `full`: the thread replaces the room timeline, with a back control.
  */
-export const THREAD_DISPLAY_MODES = ['full', 'side', 'inline'] as const;
+export const THREAD_DISPLAY_MODES = ['inline', 'side', 'full'] as const;
 
 export type ThreadDisplayMode = (typeof THREAD_DISPLAY_MODES)[number];
 
-export const DEFAULT_THREAD_DISPLAY: ThreadDisplayMode = 'full';
+export const DEFAULT_THREAD_DISPLAY: ThreadDisplayMode = 'inline';
 
 export const THREAD_DISPLAY_LABELS: Record<ThreadDisplayMode, string> = {
   full: 'Full view',

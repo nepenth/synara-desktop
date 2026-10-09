@@ -36,6 +36,12 @@ export interface SharedSettings {
   messageTextTone: MessageTextTone;
   /** How a desktop room opens threads. */
   threadDisplay: ThreadDisplayMode;
+  /**
+   * True once the user picks a thread display. Every save writes the whole
+   * snapshot, so without this a stored value could be an old default rather
+   * than a choice; until it is set the current default applies.
+   */
+  threadDisplayChosen: boolean;
   /** Side-pane thread width in CSS px. */
   threadPaneWidth: number;
   isMarkdown: boolean;
@@ -118,6 +124,7 @@ export const defaultSharedSettings: SharedSettings = {
   themeBaseColor: undefined,
   messageTextTone: DEFAULT_MESSAGE_TEXT_TONE,
   threadDisplay: DEFAULT_THREAD_DISPLAY,
+  threadDisplayChosen: false,
   threadPaneWidth: DEFAULT_THREAD_PANE_WIDTH,
   isMarkdown: true,
   editorToolbar: false,
@@ -252,7 +259,11 @@ const sanitizeSharedSettings = (settings: SharedSettings): SharedSettings => ({
     typeof settings.themeBaseColor === 'string' ? settings.themeBaseColor : undefined
   ),
   messageTextTone: normalizeMessageTextTone(settings.messageTextTone),
-  threadDisplay: normalizeThreadDisplay(settings.threadDisplay),
+  threadDisplay:
+    settings.threadDisplayChosen === true
+      ? normalizeThreadDisplay(settings.threadDisplay)
+      : DEFAULT_THREAD_DISPLAY,
+  threadDisplayChosen: settings.threadDisplayChosen === true,
   threadPaneWidth: clampThreadPaneWidth(settings.threadPaneWidth),
 });
 
