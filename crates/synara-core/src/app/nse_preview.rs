@@ -38,6 +38,9 @@ pub struct NseEventPreview {
     pub body: Option<String>,
     pub message_type: Option<String>,
     pub is_agent_approval: bool,
+    /// Bounded display text, present only for approval prompts.
+    pub approval_reason: Option<String>,
+    pub approval_command: Option<String>,
     pub origin_server_ts: u64,
 }
 
@@ -320,6 +323,13 @@ fn preview_from_status_with_preferences(
             "The notification was excluded by agent notification settings.",
         ));
     }
+    let is_agent_approval =
+        crate::app::agent_approvals::is_agent_approval_prompt(original.content.body());
+    let approval_summary = if is_agent_approval {
+        crate::app::agent_approvals::agent_approval_notification_summary(original.content.body())
+    } else {
+        Default::default()
+    };
     Ok(NseEventPreview {
         event_type: "m.room.message".to_owned(),
         sender_id: Some(bounded(
@@ -330,9 +340,9 @@ fn preview_from_status_with_preferences(
         )),
         body: Some(bounded(original.content.body(), 240)),
         message_type: message_type(&original.content.msgtype).map(|value| bounded(value, 64)),
-        is_agent_approval: crate::app::agent_approvals::is_agent_approval_prompt(
-            original.content.body(),
-        ),
+        is_agent_approval,
+        approval_reason: approval_summary.reason,
+        approval_command: approval_summary.command,
         origin_server_ts: original.origin_server_ts.get().into(),
     })
 }
@@ -435,12 +445,21 @@ mod tests {
         let approval = preview_from_status_with_preferences(
             policy_status(
                 "@forge:example.org",
-                "Approval Required: Dangerous Command\nrm file",
+                "Approval Required: Dangerous Command\nReason: cleanup\n```\nrm file\n```",
             ),
             &p,
         )
         .unwrap();
         assert!(approval.is_agent_approval);
+        assert_eq!(approval.approval_reason.as_deref(), Some("cleanup"));
+        assert_eq!(approval.approval_command.as_deref(), Some("rm file"));
+        let ordinary = preview_from_status_with_preferences(
+            policy_status("@human:example.org", "Reason: not a prompt\n```\nls\n```"),
+            &p,
+        )
+        .unwrap();
+        assert_eq!(ordinary.approval_reason, None);
+        assert_eq!(ordinary.approval_command, None);
     }
 
     #[test]

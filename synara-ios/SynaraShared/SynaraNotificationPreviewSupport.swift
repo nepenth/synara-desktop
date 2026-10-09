@@ -60,6 +60,7 @@ enum SynaraNotificationPresentationPolicy {
         isAgentApproval: Bool,
         originServerTimestampMS: UInt64,
         criticalAlertsAuthorized: Bool,
+        approvalSummary: SynaraAgentApprovalSummary? = nil,
         now: Date = Date()
     ) -> SynaraNotificationDiagnostics.Stage {
         var stage = SynaraNotificationDiagnostics.Stage.resolvedWithoutPreview
@@ -73,7 +74,10 @@ enum SynaraNotificationPresentationPolicy {
                 originServerTimestampMS: originServerTimestampMS, now: now
               ) else { return stage }
 
-        if !showPreview || preview == nil {
+        if let approvalSummary, approvalSummary.hasDetails {
+            content.title = approvalSummary.title
+            content.body = approvalSummary.body
+        } else if !showPreview || preview == nil {
             content.title = "Agent approval needed"
             content.body = "Review a time-sensitive request in Synara."
         }
@@ -105,6 +109,8 @@ enum SynaraSharedConstants {
     static let defaultLockScreenMessagePreviews = false
     static let timeSensitiveAgentApprovalsKey = "synara.settings.timeSensitiveAgentApprovals"
     static let defaultTimeSensitiveAgentApprovals = true
+    static let approvalNotificationDetailsKey = "synara.settings.showApprovalNotificationDetails"
+    static let defaultApprovalNotificationDetails = true
     static let themeBaseColorKey = "themeBaseColor"
     static let hour24ClockKey = "synara.settings.hour24Clock"
     static let hideActivityKey = "synara.settings.hideActivity"
@@ -114,6 +120,7 @@ enum SynaraSharedConstants {
         [
             lockScreenMessagePreviewsKey: defaultLockScreenMessagePreviews,
             timeSensitiveAgentApprovalsKey: defaultTimeSensitiveAgentApprovals,
+            approvalNotificationDetailsKey: defaultApprovalNotificationDetails,
             hour24ClockKey: false,
             hideActivityKey: false
         ]
@@ -525,6 +532,48 @@ enum SynaraTimeSensitiveAgentApprovalPreference {
             return SynaraSharedConstants.defaultTimeSensitiveAgentApprovals
         }
         return defaults.bool(forKey: SynaraSharedConstants.timeSensitiveAgentApprovalsKey)
+    }
+}
+
+/// Independent of message previews: approval prompts may show their reason
+/// and command even when ordinary message text stays hidden.
+enum SynaraApprovalNotificationDetailsPreference {
+    static func isEnabled(defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()) -> Bool {
+        guard let defaults,
+              defaults.object(forKey: SynaraSharedConstants.approvalNotificationDetailsKey) != nil else {
+            return SynaraSharedConstants.defaultApprovalNotificationDetails
+        }
+        return defaults.bool(forKey: SynaraSharedConstants.approvalNotificationDetailsKey)
+    }
+}
+
+/// Core's bounded `agent_approval_notification_summary` for one prompt.
+struct SynaraAgentApprovalSummary: Equatable {
+    let sender: String?
+    let reason: String?
+    let command: String?
+
+    var hasDetails: Bool {
+        Self.nonEmpty(reason) != nil || Self.nonEmpty(command) != nil
+    }
+
+    var title: String {
+        let name = Self.nonEmpty(sender) ?? "Agent"
+        let reason = Self.nonEmpty(reason) ?? "Approval required"
+        return SynaraMatrixEventPreviewComposer.clamp("\(name): \(reason)", limit: 120)
+    }
+
+    var body: String {
+        SynaraMatrixEventPreviewComposer.clamp(
+            Self.nonEmpty(command) ?? "Review the command in Synara.",
+            limit: 240
+        )
+    }
+
+    private static func nonEmpty(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              trimmed.isEmpty == false else { return nil }
+        return trimmed
     }
 }
 

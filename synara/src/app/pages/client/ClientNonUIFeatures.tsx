@@ -40,6 +40,7 @@ import {
 } from '../../platform';
 import {
   buildAgentApprovalNativeActionDedupeKey,
+  buildAgentApprovalNotificationText,
   createAgentApprovalNativeActionDedupeStore,
   executeAgentApprovalNativeActionOnce,
   planAgentApprovalNativeNotificationAction,
@@ -515,6 +516,7 @@ function AgentApprovalNotifications() {
   const nativeActionDedupe = nativeActionState.completed;
   const { navigateRoom } = useRoomNavigate();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
+  const [showApprovalDetails] = useSetting(settingsAtom, 'showApprovalNotificationDetails');
 
   const notify = useCallback(
     async ({
@@ -689,8 +691,11 @@ function AgentApprovalNotifications() {
           roomId: observation.roomId,
           eventId,
           kind: 'agent_approval',
-          title: 'Approval Required: Dangerous Command',
-          body: `${room?.name ?? 'Unknown'}: Review a request in Synara.`,
+          ...buildAgentApprovalNotificationText({
+            roomName: room?.name ?? 'Unknown',
+            summary: agentApproval.summary,
+            showDetails: showApprovalDetails,
+          }),
           route: buildDesktopNotificationRoomRoute(observation.roomId, eventId),
           suppressIfFocusedRoom: false,
         });
@@ -730,7 +735,7 @@ function AgentApprovalNotifications() {
         },
       });
     },
-    [browserNotifications, notify, playSound, showNotifications]
+    [browserNotifications, notify, playSound, showApprovalDetails, showNotifications]
   );
 
   // Approval prompts ride the same Core observation stream as messages; the

@@ -924,6 +924,7 @@ private struct NotificationSettingsView: View {
     @State private var isRegisteringPush = false
     @State private var showLockScreenMessagePreviews = SynaraSharedConstants.defaultLockScreenMessagePreviews
     @State private var timeSensitiveAgentApprovals = SynaraSharedConstants.defaultTimeSensitiveAgentApprovals
+    @State private var approvalNotificationDetails = SynaraSharedConstants.defaultApprovalNotificationDetails
     @State private var pushRules: SynaraPushRulesSnapshot?
     @State private var keywordDraft = ""
     @State private var pushRulesMessage: String?
@@ -985,10 +986,18 @@ private struct NotificationSettingsView: View {
                             for: SynaraSharedConstants.timeSensitiveAgentApprovalsKey
                         )
                     }
+                Toggle("Show approval details", isOn: $approvalNotificationDetails)
+                    .accessibilityIdentifier("ApprovalNotificationDetailsToggle")
+                    .onChange(of: approvalNotificationDetails) { value in
+                        environment.settings.set(
+                            value,
+                            for: SynaraSharedConstants.approvalNotificationDetailsKey
+                        )
+                    }
             } header: {
                 Text("Agent Approvals")
             } footer: {
-                Text("Fresh, locally verified approval prompts use Critical Alerts when this build supports them and you allow them in iOS; otherwise they use Time Sensitive alerts. Use Request Notification Permission to allow Critical Alerts in a supported build. Approve once and Deny require authentication. Always approval remains in-app only.")
+                Text("Fresh, locally verified approval prompts use Critical Alerts when this build supports them and you allow them in iOS; otherwise they use Time Sensitive alerts. Use Request Notification Permission to allow Critical Alerts in a supported build. Show approval details puts the reason and requested command on the notification, including the Lock Screen and Apple Watch, independent of message previews. Approve once and Deny require authentication. Always approval remains in-app only.")
             }
 
             Section {
@@ -1125,6 +1134,9 @@ private struct NotificationSettingsView: View {
             )
             timeSensitiveAgentApprovals = environment.settings.bool(
                 for: SynaraSharedConstants.timeSensitiveAgentApprovalsKey
+            )
+            approvalNotificationDetails = environment.settings.bool(
+                for: SynaraSharedConstants.approvalNotificationDetailsKey
             )
             notificationStatus = await environment.notificationPermission.currentStatus()
             pushRules = await environment.matrix.pushRulesSnapshot()

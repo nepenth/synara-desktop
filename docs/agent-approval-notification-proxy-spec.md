@@ -80,6 +80,15 @@ only if a future remote-push path is designed.
   critical path. A callback received before dependency binding is retained and
   replayed after binding. A superseded identity or absent restored session
   fails closed and navigates to review rather than reporting success.
+- Notification text comes from Core's `agent_approval_notification_summary`:
+  the Reason line as the title (prefixed by the room or agent name) and the
+  requested command as the body, with leading `NAME=value` environment
+  assignments dropped, secret-like values redacted, and both fields bounded
+  (120/240 chars). Paths are kept because the text stays on the device. The
+  separate Show Approval Details setting (default on, independent of message
+  previews) controls whether this text appears. When it is off, the
+  notification shows only the generic room-level text. The proxy never
+  supplies this text.
 - In-app approval cards show bounded full prompt context (reason, multi-line
   command including heredocs, and reply/reaction instructions).
 - In-app UI maps the three reactions on the approval prompt event:
