@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Sign-in: the Synara mark is centered over the name, the "y" in Synara is no longer clipped, and the background grid no longer moves.
+
 ## [2.2.3] - 2026-10-09
 
 - Sign-in: redesigned login, registration and password reset with an animated Synara mark, a brand panel and a glass card that follow your light or dark system theme and stack on narrow windows. Changing the homeserver no longer makes the username and password fields blink or clears what you typed: the form stays in place, a status line under the server field shows Connecting, Connected or a short error with Retry, and Sign in stays disabled until the new server is ready.

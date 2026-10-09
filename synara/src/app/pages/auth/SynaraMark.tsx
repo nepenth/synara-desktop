@@ -36,7 +36,9 @@ export function SynaraMark({ size, animated = true }: { size?: number; animated?
       className={animated ? css.MarkAnimated : undefined}
       width={size ?? '100%'}
       height={size ?? '100%'}
-      viewBox="0 0 256 256"
+      // Square box centered on the drawn geometry (x 5–240, y 27–232), so the
+      // mark and its halo sit visually centered.
+      viewBox="-3 4 250 250"
       role="img"
       aria-label="Synara"
     >

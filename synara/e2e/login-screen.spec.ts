@@ -77,3 +77,27 @@ test('reduced motion stops the logo and background animation', async ({ page }) 
   );
   expect(running).toBe(0);
 });
+
+test('the background grid stays still and the mark sits centered over the wordmark', async ({
+  page,
+}) => {
+  await open(page);
+  const backgroundMotion = await page.evaluate(
+    () =>
+      document
+        .getAnimations()
+        .filter((animation) =>
+          (animation.effect as KeyframeEffect | null)
+            ?.getKeyframes()
+            .some((frame) => 'backgroundPosition' in frame)
+        ).length
+  );
+  expect(backgroundMotion).toBe(0);
+
+  const mark = await page.getByRole('img', { name: 'Synara' }).boundingBox();
+  const word = await page.getByRole('heading', { name: 'Synara' }).boundingBox();
+  expect(mark && word).toBeTruthy();
+  const markCenter = mark!.x + mark!.width / 2;
+  const wordCenter = word!.x + word!.width / 2;
+  expect(Math.abs(markCenter - wordCenter)).toBeLessThan(2);
+});
