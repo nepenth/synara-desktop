@@ -90,10 +90,12 @@ function ServerStatusLine({ status, onRetry }: { status: AuthServerStatus; onRet
 function AuthBrand() {
   return (
     <section className={css.AuthBrand} aria-label="Synara">
-      <div className={css.AuthBrandMark}>
-        <SynaraMark />
+      <div className={css.AuthLockup}>
+        <div className={css.AuthBrandMark}>
+          <SynaraMark />
+        </div>
+        <h1 className={css.AuthWordmark}>Synara</h1>
       </div>
-      <h1 className={css.AuthWordmark}>Synara</h1>
       <p className={css.AuthTagline}>Secure Matrix messaging for you and your agents.</p>
       <ul className={css.AuthFeatures}>
         <li className={css.AuthFeature}>

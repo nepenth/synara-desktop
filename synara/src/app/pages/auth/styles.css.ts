@@ -23,11 +23,6 @@ export const AuthLayout = style({
   alignItems: 'center',
 });
 
-const drift = keyframes({
-  from: { backgroundPosition: '0 0, 0 0' },
-  to: { backgroundPosition: `0 ${toRem(56)}, 0 ${toRem(56)}` },
-});
-
 const breathe = keyframes({
   '0%, 100%': { opacity: 0.75, transform: 'scale(1)' },
   '50%': { opacity: 1, transform: 'scale(1.06)' },
@@ -65,9 +60,7 @@ export const AuthGrid = style({
   transformOrigin: 'center top',
   maskImage: 'linear-gradient(to bottom, transparent, black 30%, black 55%, transparent)',
   WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 30%, black 55%, transparent)',
-  animation: `${drift} 9s linear infinite`,
   '@media': {
-    [reducedMotion]: { animation: 'none' },
     '(prefers-contrast: more)': { display: 'none' },
   },
 });
@@ -106,6 +99,14 @@ export const AuthBrand = style({
 
 const spin = keyframes({ to: { transform: 'rotate(360deg)' } });
 
+/** Mark centered over the wordmark, whatever the column alignment. */
+export const AuthLockup = style({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: config.space.S300,
+});
+
 export const AuthBrandMark = style({
   position: 'relative',
   width: toRem(92),
@@ -138,7 +139,9 @@ export const AuthBrandMark = style({
 export const AuthWordmark = style({
   margin: 0,
   fontSize: toRem(34),
-  lineHeight: 1.05,
+  // Room for the descender: background-clip text clips to the line box.
+  lineHeight: 1.25,
+  paddingBottom: '0.04em',
   fontWeight: 650,
   letterSpacing: '-0.02em',
   backgroundImage: `linear-gradient(100deg, ${color.Background.OnContainer} 30%, color-mix(in srgb, ${color.Primary.Main} 70%, ${color.Background.OnContainer}))`,
