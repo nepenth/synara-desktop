@@ -188,6 +188,7 @@ const tests = [
   'src/app/pages/auth/login/__tests__/loginUiaStageAbsence.test.ts',
   'src/app/pages/auth/login/__tests__/desktopPasswordLoginNativeOnly.test.ts',
   'src/app/pages/auth/login/__tests__/nativeLoginBootstrap.test.ts',
+  'src/app/pages/auth/__tests__/authServerResolution.test.ts',
 ];
 
 const outdir = await mkdtemp(join(tmpdir(), 'synara-modernization-tests-'));

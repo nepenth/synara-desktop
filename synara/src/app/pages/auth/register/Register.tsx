@@ -8,6 +8,7 @@ import { PasswordRegisterForm, SUPPORTED_REGISTER_STAGES } from './PasswordRegis
 import { SupportedUIAFlowsLoader } from '../../../components/SupportedUIAFlowsLoader';
 import { getLoginPath } from '../../pathUtils';
 import { RegisterPathSearchParams } from '../../paths';
+import * as css from '../styles.css';
 import {
   probeRegisterFlows,
   uiaAuthDataFromProbe,
@@ -60,7 +61,7 @@ export function Register() {
           {flowsState.error.message || 'Failed to load registration options.'}
         </Text>
         <Text align="Center">
-          Already have an account? <Link to={getLoginPath(server)}>Login</Link>
+          Already have an account? <Link to={getLoginPath(server)}>Sign in</Link>
         </Text>
       </Box>
     );
@@ -70,9 +71,14 @@ export function Register() {
 
   return (
     <Box direction="Column" gap="500">
-      <Text size="H2" priority="400">
-        Register
-      </Text>
+      <div className={css.AuthHeading}>
+        <Text as="h2" size="H3" priority="400">
+          Create your account
+        </Text>
+        <Text size="T300" priority="300">
+          Join {server} to start messaging.
+        </Text>
+      </div>
       {registerFlows.status === 'registration_disabled' && (
         <Text style={{ color: color.Critical.Main }} size="T300">
           Registration has been disabled on this homeserver.
@@ -114,7 +120,7 @@ export function Register() {
         </>
       )}
       <Text align="Center">
-        Already have an account? <Link to={getLoginPath(server)}>Login</Link>
+        Already have an account? <Link to={getLoginPath(server)}>Sign in</Link>
       </Text>
     </Box>
   );
