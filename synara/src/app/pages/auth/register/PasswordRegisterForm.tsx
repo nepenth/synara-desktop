@@ -45,6 +45,7 @@ import {
   getAfterLoginRedirectPath,
 } from '../../afterLoginRedirectPath';
 import { getHomePath } from '../../pathUtils';
+import { useAuthServerReady } from '../authServerResolution';
 import {
   generateRegisterClientSecret,
   NativeRegisterError,
@@ -219,6 +220,7 @@ export function PasswordRegisterForm({
   defaultRegisterToken,
 }: PasswordRegisterFormProps) {
   const navigate = useNavigate();
+  const serverReady = useAuthServerReady();
   const serverDiscovery = useAutoDiscoveryInfo();
   const baseUrl = serverDiscovery['m.homeserver'].base_url;
   const params = useUIAParams(authData);
@@ -284,6 +286,7 @@ export function PasswordRegisterForm({
 
   const handleSubmit: ChangeEventHandler<HTMLFormElement> = (evt) => {
     evt.preventDefault();
+    if (!serverReady) return;
     const {
       usernameInput,
       passwordInput,
@@ -484,7 +487,7 @@ export function PasswordRegisterForm({
           <FieldError message={registerError.message || 'Failed to register. Unknown Reason.'} />
         )}
         <span data-spacing-node />
-        <Button variant="Primary" size="500" type="submit">
+        <Button variant="Primary" size="500" type="submit" disabled={!serverReady}>
           <Text as="span" size="B500">
             Register
           </Text>

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect } from 'react';
 import { hasSessionExpiryNotice } from '../../utils/sessionExpiry';
-import { Box, Header, Scroll, Spinner, Text, color } from 'folds';
+import { Icon, Icons, Scroll, Spinner, Text } from 'folds';
 import {
   Outlet,
   generatePath,
@@ -13,25 +13,25 @@ import classNames from 'classnames';
 
 import { AuthFooter } from './AuthFooter';
 import * as css from './styles.css';
-import * as PatternsCss from '../../styles/Patterns.css';
 import {
   clientAllowedServer,
   clientDefaultServer,
   useClientConfig,
 } from '../../hooks/useClientConfig';
-import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { LOGIN_PATH, REGISTER_PATH, RESET_PASSWORD_PATH } from '../paths';
-import SynaraPNG from '../../../../public/res/png/synara.png';
 import { ServerPicker } from './ServerPicker';
-import { AutoDiscoveryAction, autoDiscovery } from '../../cs-api';
-import { SpecVersionsLoader } from '../../components/SpecVersionsLoader';
 import { SpecVersionsProvider } from '../../hooks/useSpecVersions';
 import { AutoDiscoveryInfoProvider } from '../../hooks/useAutoDiscoveryInfo';
-import { AuthFlowsLoader } from '../../components/AuthFlowsLoader';
 import { AuthFlowsProvider } from '../../hooks/useAuthFlows';
 import { AuthServerProvider } from '../../hooks/useAuthServer';
 import { tryDecodeURIComponent } from '../../utils/dom';
 import { normalizeAuthServerInput } from './authServerInput';
+import {
+  AuthServerStatus,
+  AuthServerStatusProvider,
+  useAuthServerResolution,
+} from './authServerResolution';
+import { SynaraMark } from './SynaraMark';
 
 const currentAuthPath = (pathname: string): string => {
   if (matchPath(LOGIN_PATH, pathname)) {
@@ -46,24 +46,76 @@ const currentAuthPath = (pathname: string): string => {
   return LOGIN_PATH;
 };
 
-function AuthLayoutLoading({ message }: { message: string }) {
+const highestSpecVersion = (versions: string[]): string | undefined =>
+  versions
+    .filter((version) => /^v\d+\.\d+$/.test(version))
+    .sort((a, b) => {
+      const [aMajor, aMinor] = a.slice(1).split('.').map(Number);
+      const [bMajor, bMinor] = b.slice(1).split('.').map(Number);
+      return aMajor - bMajor || aMinor - bMinor;
+    })
+    .pop();
+
+function ServerStatusLine({ status, onRetry }: { status: AuthServerStatus; onRetry: () => void }) {
+  if (status.pending) {
+    return (
+      <div className={css.ServerStatus} role="status">
+        <Spinner size="50" variant="Secondary" />
+        <span className={css.ServerStatusText}>Connecting to {status.serverName}…</span>
+      </div>
+    );
+  }
+  if (status.error) {
+    return (
+      <div className={classNames(css.ServerStatus, css.ServerStatusError)} role="alert">
+        <Icon size="50" src={Icons.Warning} />
+        <span className={css.ServerStatusText} title={status.error}>
+          {status.error}
+        </span>
+        <button className={css.ServerStatusRetry} type="button" onClick={onRetry}>
+          Retry
+        </button>
+      </div>
+    );
+  }
+  const version = status.resolved && highestSpecVersion(status.resolved.specVersions.versions);
   return (
-    <Box justifyContent="Center" alignItems="Center" gap="200">
-      <Spinner size="100" variant="Secondary" />
-      <Text align="Center" size="T300">
-        {message}
-      </Text>
-    </Box>
+    <div className={css.ServerStatus} role="status">
+      <span className={css.ServerStatusDot} />
+      <span className={css.ServerStatusText}>Connected{version ? ` · Matrix ${version}` : ''}</span>
+    </div>
   );
 }
 
-function AuthLayoutError({ message }: { message: string }) {
+function AuthBrand() {
   return (
-    <Box justifyContent="Center" alignItems="Center" gap="200">
-      <Text align="Center" style={{ color: color.Critical.Main }} size="T300">
-        {message}
-      </Text>
-    </Box>
+    <section className={css.AuthBrand} aria-label="Synara">
+      <div className={css.AuthBrandMark}>
+        <SynaraMark />
+      </div>
+      <h1 className={css.AuthWordmark}>Synara</h1>
+      <p className={css.AuthTagline}>Secure Matrix messaging for you and your agents.</p>
+      <ul className={css.AuthFeatures}>
+        <li className={css.AuthFeature}>
+          <span className={css.AuthFeatureIcon}>
+            <Icon size="100" src={Icons.ShieldLock} />
+          </span>
+          End-to-end encrypted rooms and direct messages
+        </li>
+        <li className={css.AuthFeature}>
+          <span className={css.AuthFeatureIcon}>
+            <Icon size="100" src={Icons.Terminal} />
+          </span>
+          Agent approvals you can act on from anywhere
+        </li>
+        <li className={css.AuthFeature}>
+          <span className={css.AuthFeatureIcon}>
+            <Icon size="100" src={Icons.Monitor} />
+          </span>
+          Native on macOS, Linux and iOS
+        </li>
+      </ul>
+    </section>
   );
 }
 
@@ -83,19 +135,7 @@ export function AuthLayout() {
     server = defaultServer;
   }
 
-  const [discoveryState, discoverServer] = useAsyncCallback(
-    useCallback(async (serverName: string) => {
-      const response = await autoDiscovery(fetch, serverName);
-      return {
-        serverName,
-        response,
-      };
-    }, [])
-  );
-
-  useEffect(() => {
-    if (server) discoverServer(server);
-  }, [discoverServer, server]);
+  const [status, retry] = useAuthServerResolution(server);
 
   // if server is mismatches with path server, update path
   useEffect(() => {
@@ -114,107 +154,82 @@ export function AuthLayout() {
       const normalizedServer = normalizeAuthServerInput(newServer);
       if (!normalizedServer) return;
       if (normalizedServer === server) {
-        if (discoveryState.status === AsyncStatus.Loading) return;
-        discoverServer(server);
+        if (!status.pending) retry();
         return;
       }
       navigate(
         generatePath(currentAuthPath(location.pathname), {
           server: normalizedServer,
-        })
+        }),
+        { replace: true }
       );
     },
-    [navigate, location, discoveryState, server, discoverServer]
+    [navigate, location, server, status.pending, retry]
   );
 
-  const [autoDiscoveryError, autoDiscoveryInfo] =
-    discoveryState.status === AsyncStatus.Success ? discoveryState.data.response : [];
+  const { resolved } = status;
 
   return (
     <Scroll variant="Background" visibility="Hover" size="300" hideTrack>
-      <Box
-        className={classNames(css.AuthLayout, PatternsCss.BackgroundDotPattern)}
-        direction="Column"
-        alignItems="Center"
-        justifyContent="SpaceBetween"
-        gap="400"
-      >
-        <Box direction="Column" className={css.AuthCard}>
-          {hasSessionExpiryNotice() && (
-            <Text role="alert">Your session expired. Sign in again to reconnect.</Text>
-          )}
-          <Header className={css.AuthHeader} size="600" variant="Surface">
-            <Box grow="Yes" direction="Row" gap="300" alignItems="Center">
-              <img className={css.AuthLogo} src={SynaraPNG} alt="Synara Logo" />
-              <Text size="H3">Synara</Text>
-            </Box>
-          </Header>
-          <Box className={css.AuthCardContent} direction="Column">
-            <Box direction="Column" gap="100">
-              <Text as="label" size="L400" priority="300">
-                Homeserver
-              </Text>
-              <ServerPicker
-                server={server}
-                serverList={clientConfig.homeserverList ?? []}
-                allowCustomServer={clientConfig.allowCustomHomeservers}
-                onServerChange={selectServer}
-              />
-            </Box>
-            {discoveryState.status === AsyncStatus.Loading && (
-              <AuthLayoutLoading message="Looking for homeserver..." />
-            )}
-            {discoveryState.status === AsyncStatus.Error && (
-              <AuthLayoutError message="Failed to find homeserver." />
-            )}
-            {autoDiscoveryError?.action === AutoDiscoveryAction.FAIL_PROMPT && (
-              <AuthLayoutError
-                message={`Failed to connect. Homeserver configuration found with ${autoDiscoveryError.host} appears unusable.`}
-              />
-            )}
-            {autoDiscoveryError?.action === AutoDiscoveryAction.FAIL_ERROR && (
-              <AuthLayoutError message="Failed to connect. Homeserver configuration base_url appears invalid." />
-            )}
-            {discoveryState.status === AsyncStatus.Success && autoDiscoveryInfo && (
-              <AuthServerProvider value={discoveryState.data.serverName}>
-                <AutoDiscoveryInfoProvider value={autoDiscoveryInfo}>
-                  <SpecVersionsLoader
-                    baseUrl={autoDiscoveryInfo['m.homeserver'].base_url}
-                    fallback={() => (
-                      <AuthLayoutLoading
-                        message={`Connecting to ${autoDiscoveryInfo['m.homeserver'].base_url}`}
-                      />
-                    )}
-                    error={() => (
-                      <AuthLayoutError message="Failed to connect. Either homeserver is unavailable at this moment or does not exist." />
-                    )}
-                  >
-                    {(specVersions) => (
-                      <SpecVersionsProvider value={specVersions}>
-                        <AuthFlowsLoader
-                          fallback={() => (
-                            <AuthLayoutLoading message="Loading authentication flow..." />
-                          )}
-                          error={() => (
-                            <AuthLayoutError message="Failed to get authentication flow information." />
-                          )}
-                        >
-                          {(authFlows) => (
-                            <AuthFlowsProvider value={authFlows}>
-                              <Outlet />
-                            </AuthFlowsProvider>
-                          )}
-                        </AuthFlowsLoader>
+      <div className={css.AuthLayout}>
+        <div className={css.AuthAurora} aria-hidden />
+        <div className={css.AuthGrid} aria-hidden />
+        <main className={css.AuthStage}>
+          <AuthBrand />
+          <div className={css.AuthCard}>
+            <div className={css.AuthCardContent}>
+              {hasSessionExpiryNotice() && (
+                <Text className={css.AuthNotice} size="T300" role="alert">
+                  Your session expired. Sign in again to reconnect.
+                </Text>
+              )}
+              <div>
+                <Text as="label" htmlFor="synara-homeserver" size="L400" priority="300">
+                  Homeserver
+                </Text>
+                <div style={{ marginTop: 6, marginBottom: 6 }}>
+                  <ServerPicker
+                    id="synara-homeserver"
+                    server={server}
+                    serverList={clientConfig.homeserverList ?? []}
+                    allowCustomServer={clientConfig.allowCustomHomeservers}
+                    onServerChange={selectServer}
+                  />
+                </div>
+                <ServerStatusLine status={status} onRetry={retry} />
+              </div>
+              <hr className={css.AuthDivider} />
+              {resolved ? (
+                <AuthServerStatusProvider value={status}>
+                  <AuthServerProvider value={resolved.serverName}>
+                    <AutoDiscoveryInfoProvider value={resolved.autoDiscoveryInfo}>
+                      <SpecVersionsProvider value={resolved.specVersions}>
+                        <AuthFlowsProvider value={resolved.authFlows}>
+                          <Outlet />
+                        </AuthFlowsProvider>
                       </SpecVersionsProvider>
-                    )}
-                  </SpecVersionsLoader>
-                </AutoDiscoveryInfoProvider>
-              </AuthServerProvider>
-            )}
-          </Box>
-        </Box>
+                    </AutoDiscoveryInfoProvider>
+                  </AuthServerProvider>
+                </AuthServerStatusProvider>
+              ) : (
+                <div className={css.AuthLoading}>
+                  {status.pending ? (
+                    <>
+                      <Spinner size="200" variant="Secondary" />
+                      <Text size="T300">Preparing sign-in…</Text>
+                    </>
+                  ) : (
+                    <Text size="T300" align="Center">
+                      Choose a homeserver to continue.
+                    </Text>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </main>
         <AuthFooter />
-      </Box>
+      </div>
     </Scroll>
   );
 }

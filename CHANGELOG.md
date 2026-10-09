@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Sign-in: redesigned login, registration and password reset with an animated Synara mark, a brand panel and a glass card that follow your light or dark system theme and stack on narrow windows. Changing the homeserver no longer makes the username and password fields blink or clears what you typed: the form stays in place, a status line under the server field shows Connecting, Connected or a short error with Retry, and Sign in stays disabled until the new server is ready.
 - Approvals: agent approval notifications on macOS, Linux and iOS show what is being approved, for example "forge: find -delete" with the requested command below it, alongside Approve once and Deny. Secret-like values are redacted. Turn off Show Approval Details in notification settings to show only the room or agent name. This setting is separate from message previews.
 
 ## [2.2.2] - 2026-10-09

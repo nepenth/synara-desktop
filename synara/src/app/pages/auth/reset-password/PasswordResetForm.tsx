@@ -17,6 +17,7 @@ import FocusTrap from '../../../components/FocusTrap';
 import { useAutoDiscoveryInfo } from '../../../hooks/useAutoDiscoveryInfo';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useAuthServer } from '../../../hooks/useAuthServer';
+import { useAuthServerReady } from '../authServerResolution';
 import { PasswordInput } from '../../../components/password-input';
 import { ConfirmPasswordMatch } from '../../../components/ConfirmPasswordMatch';
 import { FieldError } from '../FiledError';
@@ -130,6 +131,7 @@ type PasswordResetFormProps = {
 
 export function PasswordResetForm({ defaultEmail }: PasswordResetFormProps) {
   const server = useAuthServer();
+  const serverReady = useAuthServerReady();
   const serverDiscovery = useAutoDiscoveryInfo();
   const baseUrl = serverDiscovery['m.homeserver'].base_url;
 
@@ -191,6 +193,7 @@ export function PasswordResetForm({ defaultEmail }: PasswordResetFormProps) {
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = (evt) => {
     evt.preventDefault();
+    if (!serverReady) return;
     const { emailInput, passwordInput, confirmPasswordInput } = evt.target as HTMLFormElement & {
       emailInput: HTMLInputElement;
       passwordInput: HTMLInputElement;
@@ -299,7 +302,7 @@ export function PasswordResetForm({ defaultEmail }: PasswordResetFormProps) {
         <FieldError message={resetPasswordError.message || 'Failed to reset password.'} />
       )}
       <span data-spacing-node />
-      <Button type="submit" variant="Primary" size="500">
+      <Button type="submit" variant="Primary" size="500" disabled={!serverReady}>
         <Text as="span" size="B500">
           Reset Password
         </Text>
