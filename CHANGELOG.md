@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [2.2.4] - 2026-10-09
+
 - Sign-in: the Synara mark is centered over the name, the "y" in Synara is no longer clipped, and the background grid no longer moves.
 
 ## [2.2.3] - 2026-10-09
