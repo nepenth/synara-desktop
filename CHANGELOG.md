@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- iOS: threads work. Opening a thread loads its replies from the thread itself instead of showing only the first message, earlier replies load on request, and sent replies stay visible. Messages have Reply in Thread. Settings → Appearance → Thread Display matches desktop: Inline (the default) expands the latest replies beneath the first message, Sheet opens the thread over the room, and Full Screen opens it on its own screen. Opening a thread no longer resets the room's timeline.
+
 ## [2.2.4] - 2026-10-09
 
 - Sign-in: the Synara mark is centered over the name, the "y" in Synara is no longer clipped, and the background grid no longer moves.

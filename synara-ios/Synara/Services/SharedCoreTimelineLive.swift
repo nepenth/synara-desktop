@@ -30,6 +30,47 @@ enum SharedCoreTimelineUpdateBootstrap {
     static func shouldRefreshOpenStream(focusedEventID: String?) -> Bool {
         focusedEventID == nil
     }
+
+    /// A thread stream is live at its tail, like the room's live stream.
+    static let shouldRefreshThreadStream = true
+}
+
+/// Stream identity and open position for a room's own timeline and for each
+/// thread in it. Thread streams use `TimelineOpenKindDto.thread`, which Core
+/// maps to an SDK thread-focused timeline holding the root and its replies.
+/// The room's live and focused streams hide in-thread events.
+enum SharedCoreTimelineStreamKey {
+    private static let separator = "\u{1F}"
+
+    static func room(_ roomID: String) -> String {
+        roomID
+    }
+
+    static func thread(roomID: String, rootEventID: String) -> String {
+        roomID + separator + "thread" + separator + rootEventID
+    }
+
+    static func roomPosition(focusedEventID: String?) -> TimelineOpenPositionDto {
+        TimelineOpenPositionDto(
+            kind: focusedEventID == nil ? .liveBottom : .focused,
+            atBottom: focusedEventID == nil,
+            restoredAnchorEventId: nil,
+            liveTailEventId: nil,
+            updatedAtMs: nil,
+            eventId: focusedEventID
+        )
+    }
+
+    static func threadPosition(rootEventID: String) -> TimelineOpenPositionDto {
+        TimelineOpenPositionDto(
+            kind: .thread,
+            atBottom: true,
+            restoredAnchorEventId: nil,
+            liveTailEventId: nil,
+            updatedAtMs: nil,
+            eventId: rootEventID
+        )
+    }
 }
 
 /// Core timeline updates are invalidations, not a sequence Swift must replay.

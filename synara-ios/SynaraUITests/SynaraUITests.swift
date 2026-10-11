@@ -965,7 +965,7 @@ final class SynaraUITests: XCTestCase {
     }
 
     func testThreadViewOpensAndRepliesFromTimeline() {
-        let app = launchRoomApp()
+        let app = launchRoomApp(environment: ["SYNARA_UI_TEST_THREAD_DISPLAY": "full"])
         let threadButton = app.buttons["ThreadButton-$security:!project:matrix.org"]
 
         XCTAssertTrue(threadButton.waitForExistence(timeout: 5))
@@ -980,6 +980,37 @@ final class SynaraUITests: XCTestCase {
         tap(app.buttons["ComposerSendButton"])
 
         XCTAssertTrue(app.staticTexts["replying in thread"].waitForExistence(timeout: 5))
+    }
+
+    func testInlineThreadExpandsBeneathRootAndOpensSheet() {
+        let app = launchRoomApp()
+        let root = "$security:!project:matrix.org"
+        let threadButton = app.buttons["ThreadButton-\(root)"]
+
+        XCTAssertTrue(threadButton.waitForExistence(timeout: 5))
+        tap(threadButton)
+        XCTAssertTrue(app.buttons["InlineThreadOpen-\(root)"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["InlineThreadReply-\(root)"].exists)
+        XCTAssertFalse(app.staticTexts["ThreadTimelineTitle"].exists)
+
+        tap(app.buttons["InlineThreadReply-\(root)"])
+        XCTAssertTrue(app.staticTexts["ThreadTimelineTitle"].waitForExistence(timeout: 5))
+        let composer = composerField(in: app)
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        composer.tap()
+        composer.typeText("inline thread reply")
+        tap(app.buttons["ComposerSendButton"])
+        XCTAssertTrue(app.staticTexts["inline thread reply"].waitForExistence(timeout: 5))
+    }
+
+    func testSheetThreadDisplayPresentsThreadOverRoom() {
+        let app = launchRoomApp(environment: ["SYNARA_UI_TEST_THREAD_DISPLAY": "sheet"])
+        let threadButton = app.buttons["ThreadButton-$security:!project:matrix.org"]
+
+        XCTAssertTrue(threadButton.waitForExistence(timeout: 5))
+        tap(threadButton)
+        XCTAssertTrue(app.staticTexts["ThreadTimelineTitle"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.scrollViews["ThreadTimelineList"].exists)
     }
 
     func testEncryptedTimelineShowsCryptoStatusRecoveryBannerAndSafePlaceholder() {
@@ -2717,12 +2748,16 @@ final class SynaraUITests: XCTestCase {
         roomNotes: Bool = false,
         viewportScenario: String? = nil,
         timestampGestureRegression: Bool = false,
-        uploadFails: Bool = false
+        uploadFails: Bool = false,
+        environment: [String: String] = [:]
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!project:matrix.org"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Project"
+        for (key, value) in environment {
+            app.launchEnvironment[key] = value
+        }
         if uploadFails {
             app.launchEnvironment["SYNARA_UI_TEST_UPLOAD_FAIL"] = "1"
         }

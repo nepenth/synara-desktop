@@ -793,8 +793,17 @@ private extension AppEnvironment {
             agentApprovalDecisions: agentApprovalDecisions,
             readMarkers: readMarkers,
             mediaUploader: MockMediaUploadService(shouldFail: processEnvironment["SYNARA_UI_TEST_UPLOAD_FAIL"] == "1"),
-            crypto: crypto
+            crypto: crypto,
+            settings: uiTestSettings(processEnvironment)
         )
+    }
+
+    static func uiTestSettings(_ processEnvironment: [String: String]) -> SettingsStoring {
+        let settings = InMemorySettingsStore()
+        if let threadDisplay = processEnvironment["SYNARA_UI_TEST_THREAD_DISPLAY"] {
+            settings.setString(threadDisplay, for: ThreadDisplayMode.settingsKey)
+        }
+        return settings
     }
 
     static func uiTestLaterItems() -> [SynaraLaterListItem] {

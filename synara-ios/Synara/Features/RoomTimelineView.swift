@@ -388,6 +388,9 @@ struct RoomTimelineView: View {
     @State private var reportTarget: TimelineItem?
     @State private var reportReason = ""
     @State private var forwardTarget: TimelineItem?
+    @State private var threadDisplay: ThreadDisplayMode = ThreadDisplayMode.defaultMode
+    @State private var expandedThreadRoots: Set<String> = []
+    @State private var threadSheet: ThreadSheetTarget?
     @State private var inFlightTimelineActionKeys: Set<String> = []
     @State private var cryptoStatus: RoomCryptoStatus = .unknown
     @State private var cryptoActionMessage: String?
@@ -686,6 +689,20 @@ struct RoomTimelineView: View {
         }
         .onAppear {
             isReadSceneActive = scenePhase == .active
+            threadDisplay = ThreadDisplayMode.resolve(
+                environment.settings.string(for: ThreadDisplayMode.settingsKey)
+            )
+        }
+        .sheet(item: $threadSheet) { target in
+            ThreadTimelineView(
+                roomID: roomID,
+                rootEventID: target.rootEventID,
+                roomTitle: displayRoomTitle,
+                rootTitle: target.rootTitle
+            )
+            .environment(\.appEnvironment, environment)
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .onDisappear {
             isReadSceneActive = false
@@ -820,7 +837,17 @@ struct RoomTimelineView: View {
                                         roomID: roomID
                                     ),
                                     onReply: { beginReply(item) },
+                                    onReplyInThread: { replyInThread(item) },
                                     onOpenThread: { openThread(root: item) },
+                                    isInlineThreadMode: threadDisplay == .inline,
+                                    isThreadExpanded: isThreadExpanded(item),
+                                    inlineThread: inlineThread(
+                                        for: item,
+                                        replyCount: TimelineRelationPresentation.replyCount(
+                                            for: item,
+                                            locallyCountedByRootID: threadReplyCounts
+                                        )
+                                    ),
                                     onEdit: { beginEdit(item) },
                                     onRedact: { applyAction(.redact, to: item) },
                                     onReact: { applyAction(.react("👍"), to: item) },
@@ -1123,7 +1150,11 @@ struct RoomTimelineView: View {
                 replyCount: eventRow.replyCount,
                 availability: eventRow.availability,
                 onReply: { beginReply(eventRow.item) },
+                onReplyInThread: { replyInThread(eventRow.item) },
                 onOpenThread: { openThread(root: eventRow.item) },
+                isInlineThreadMode: eventRow.isInlineThreadMode,
+                isThreadExpanded: eventRow.isThreadExpanded,
+                inlineThread: inlineThread(for: eventRow.item, replyCount: eventRow.replyCount),
                 onEdit: { beginEdit(eventRow.item) },
                 onRedact: { applyAction(.redact, to: eventRow.item) },
                 onReact: { applyAction(.react("👍"), to: eventRow.item) },
@@ -1197,7 +1228,9 @@ struct RoomTimelineView: View {
                                 for: item,
                                 currentUserID: currentUserID,
                                 roomID: roomID
-                            )
+                            ),
+                            isInlineThreadMode: threadDisplay == .inline,
+                            isThreadExpanded: isThreadExpanded(item)
                         )
                     )
                 )
@@ -1718,13 +1751,62 @@ struct RoomTimelineView: View {
         )
     }
 
+    /// The thread chip and "Open Thread": inline mode expands or collapses the
+    /// replies beneath the root; the other modes present the thread.
     private func openThread(root item: TimelineItem) {
-        environment.router.route(
-            to: .thread(
+        if threadDisplay == .inline {
+            if expandedThreadRoots.contains(item.eventID) {
+                expandedThreadRoots.remove(item.eventID)
+            } else {
+                expandedThreadRoots.insert(item.eventID)
+            }
+            return
+        }
+        presentThread(rootEventID: item.eventID, rootTitle: item.threadTitle)
+    }
+
+    /// Opens the full thread with its composer. Inline mode uses a sheet, the
+    /// way desktop inline threads reply in the side panel.
+    private func presentThread(rootEventID: String, rootTitle: String?) {
+        switch threadDisplay {
+        case .inline, .sheet:
+            threadSheet = ThreadSheetTarget(rootEventID: rootEventID, rootTitle: rootTitle)
+        case .full:
+            environment.router.route(
+                to: .thread(
+                    roomID: roomID,
+                    rootEventID: rootEventID,
+                    roomTitle: displayRoomTitle,
+                    rootTitle: rootTitle
+                )
+            )
+        }
+    }
+
+    private func replyInThread(_ item: TimelineItem) {
+        let rootEventID = item.threadRootEventID ?? item.eventID
+        ThreadComposerFocusRequests.shared.request(roomID: roomID, rootEventID: rootEventID)
+        presentThread(
+            rootEventID: rootEventID,
+            rootTitle: rootEventID == item.eventID ? item.threadTitle : nil
+        )
+    }
+
+    private func isThreadExpanded(_ item: TimelineItem) -> Bool {
+        threadDisplay == .inline && expandedThreadRoots.contains(item.eventID)
+    }
+
+    private func inlineThread(for item: TimelineItem, replyCount: Int) -> AnyView? {
+        guard isThreadExpanded(item), replyCount > 0 else {
+            return nil
+        }
+        return AnyView(
+            InlineThreadReplies(
                 roomID: roomID,
                 rootEventID: item.eventID,
-                roomTitle: displayRoomTitle,
-                rootTitle: item.threadTitle
+                replyCount: replyCount,
+                onReplyInThread: { replyInThread(item) },
+                onOpenThread: { presentThread(rootEventID: item.eventID, rootTitle: item.threadTitle) }
             )
         )
     }
@@ -3667,6 +3749,10 @@ struct ThreadTimelineView: View {
     @State private var isSendingMessage = false
     @State private var isComposerFocused = false
     @State private var threadUpdatesTask: Task<Void, Never>?
+    @State private var snapshotItems: [TimelineItem] = []
+    @State private var pendingReplies: [TimelineItem] = []
+    @State private var isLoadingEarlier = false
+    @State private var reachedThreadStart = false
     @State private var notesActionMessage: String?
     @State private var timelineActionMessage: String?
     @State private var reportTarget: TimelineItem?
@@ -3717,6 +3803,9 @@ struct ThreadTimelineView: View {
         .toolbar(canvasLayout.hidesTabBarInConversation ? .hidden : .automatic, for: .tabBar)
         .task(id: roomID + rootEventID) {
             async let status = environment.crypto.roomStatus(roomID: roomID)
+            if ThreadComposerFocusRequests.shared.consume(roomID: roomID, rootEventID: rootEventID) {
+                isComposerFocused = true
+            }
             await loadThread()
             cryptoStatus = await status
             startThreadUpdates()
@@ -3724,6 +3813,7 @@ struct ThreadTimelineView: View {
         .onDisappear {
             threadUpdatesTask?.cancel()
             threadUpdatesTask = nil
+            environment.timeline.closeThreadTimeline(roomID: roomID, rootEventID: rootEventID)
         }
         .onChange(of: selectedPhotos) { items in
             draftThreadPickedPhotos(items)
@@ -3812,6 +3902,21 @@ struct ThreadTimelineView: View {
             let visibleItems = threadItems(from: items)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: SynaraSpacing.medium) {
+                    if canLoadEarlier(visibleItems) {
+                        Button(action: loadEarlierReplies) {
+                            if isLoadingEarlier {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Label("Load earlier replies", systemImage: "arrow.up")
+                            }
+                        }
+                        .font(SynaraTypography.chipLabel)
+                        .foregroundStyle(SynaraColor.accent)
+                        .buttonStyle(.plain)
+                        .disabled(isLoadingEarlier)
+                        .frame(maxWidth: .infinity)
+                        .accessibilityIdentifier("ThreadLoadEarlier")
+                    }
                     ForEach(visibleItems) { item in
                         ThreadMessageRow(
                             item: item,
@@ -3892,11 +3997,48 @@ struct ThreadTimelineView: View {
     private func applyThreadOutcome(_ outcome: TimelineLoadOutcome) {
         switch outcome {
         case let .loaded(items):
-            state = items.isEmpty ? .empty : .loaded(items, isPaginating: false)
+            snapshotItems = items
+            pendingReplies = ThreadTimelineMerge.unresolved(pending: pendingReplies, snapshot: items)
+            if items.contains(where: { $0.eventID == rootEventID }) {
+                reachedThreadStart = true
+            }
+            showMergedItems()
         case .empty:
-            state = .empty
+            state = pendingReplies.isEmpty ? .empty : .loaded(pendingReplies, isPaginating: false)
         case let .failed(failure):
             state = .failed(failure.userMessage)
+        }
+    }
+
+    private func showMergedItems() {
+        let merged = ThreadTimelineMerge.merged(snapshot: snapshotItems, pending: pendingReplies)
+        state = merged.isEmpty ? .empty : .loaded(merged, isPaginating: false)
+    }
+
+    /// The thread stream reaches its start when the root is loaded.
+    private func canLoadEarlier(_ items: [TimelineItem]) -> Bool {
+        reachedThreadStart == false && items.contains(where: { $0.eventID == rootEventID }) == false
+    }
+
+    private func loadEarlierReplies() {
+        guard isLoadingEarlier == false else { return }
+        isLoadingEarlier = true
+        Task {
+            let outcome = await environment.timeline.loadOlderThreadTimeline(
+                roomID: roomID,
+                rootEventID: rootEventID
+            )
+            await MainActor.run {
+                switch outcome {
+                case .loaded:
+                    applyThreadOutcome(outcome)
+                case .empty:
+                    reachedThreadStart = true
+                case let .failed(failure):
+                    timelineActionMessage = failure.userMessage
+                }
+                isLoadingEarlier = false
+            }
         }
     }
 
@@ -4238,12 +4380,8 @@ struct ThreadTimelineView: View {
     #endif
 
     private func append(_ item: TimelineItem) {
-        switch state {
-        case let .loaded(items, isPaginating):
-            state = .loaded(items + [item], isPaginating: isPaginating)
-        default:
-            state = .loaded([item], isPaginating: false)
-        }
+        pendingReplies.append(item)
+        showMergedItems()
     }
 }
 
@@ -5888,7 +6026,11 @@ private struct TimelineRow: View {
     let replyCount: Int
     let availability: EventActionAvailability
     let onReply: () -> Void
+    let onReplyInThread: () -> Void
     let onOpenThread: () -> Void
+    let isInlineThreadMode: Bool
+    let isThreadExpanded: Bool
+    let inlineThread: AnyView?
     let onEdit: () -> Void
     let onRedact: () -> Void
     let onReact: () -> Void
@@ -6025,6 +6167,8 @@ private struct TimelineRow: View {
         }
         if availability.canReply {
             Button("Reply", systemImage: "arrowshape.turn.up.left", action: onReply)
+            Button("Reply in Thread", systemImage: "text.bubble", action: onReplyInThread)
+                .accessibilityIdentifier("TimelineItemReplyInThread-\(item.eventID)")
         }
         if replyCount > 0 {
             Button("Open Thread", systemImage: "bubble.left.and.bubble.right", action: onOpenThread)
@@ -6062,6 +6206,13 @@ private struct TimelineRow: View {
         if availability.canRedact {
             Button("Redact", systemImage: "trash", role: .destructive, action: onRedact)
         }
+    }
+
+    private var threadChipHint: String {
+        guard isInlineThreadMode else {
+            return "Opens the thread."
+        }
+        return isThreadExpanded ? "Collapses the replies." : "Shows the replies."
     }
 
     private var failedMessageEditButton: some View {
@@ -6122,12 +6273,20 @@ private struct TimelineRow: View {
                     HStack(spacing: SynaraSpacing.xSmall) {
                         Image(systemName: "bubble.left.and.bubble.right.fill")
                         Text(replyCount == 1 ? "1 reply" : "\(replyCount) replies")
+                        if isInlineThreadMode {
+                            Image(systemName: isThreadExpanded ? "chevron.up" : "chevron.down")
+                        }
                     }
                     .font(SynaraTypography.chipLabel)
                     .foregroundStyle(SynaraColor.accent)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("ThreadButton-\(item.eventID)")
+                .accessibilityHint(threadChipHint)
+            }
+
+            if let inlineThread {
+                inlineThread
             }
         }
 
@@ -8395,6 +8554,177 @@ private struct ZoomableMediaImage: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+}
+
+/// The inline thread beneath a root message: the latest replies from the
+/// thread's own stream, a way to reveal earlier ones, and entry points to
+/// reply or open the full thread.
+private struct InlineThreadReplies: View {
+    let roomID: String
+    let rootEventID: String
+    let replyCount: Int
+    let onReplyInThread: () -> Void
+    let onOpenThread: () -> Void
+    @Environment(\.appEnvironment) private var environment
+    @State private var replies: [TimelineItem] = []
+    @State private var limit = InlineThreadWindow.initialReplies
+    @State private var isLoading = true
+    @State private var isLoadingEarlier = false
+    @State private var reachedStart = false
+    @State private var failed = false
+    @State private var updatesTask: Task<Void, Never>?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+            if isLoading && replies.isEmpty {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityLabel("Loading replies")
+            } else if failed && replies.isEmpty {
+                Text("Replies could not be loaded.")
+                    .font(SynaraTypography.messageMeta)
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
+
+            if hasEarlier {
+                Button(action: showEarlier) {
+                    if isLoadingEarlier {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text("Show earlier replies")
+                    }
+                }
+                .font(SynaraTypography.chipLabel)
+                .foregroundStyle(SynaraColor.accent)
+                .buttonStyle(.plain)
+                .disabled(isLoadingEarlier)
+                .accessibilityIdentifier("InlineThreadEarlier-\(rootEventID)")
+            }
+
+            ForEach(InlineThreadWindow.visible(replies, limit: limit)) { reply in
+                InlineThreadReplyRow(item: reply)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onOpenThread)
+            }
+
+            HStack(spacing: SynaraSpacing.medium) {
+                Button(action: onReplyInThread) {
+                    Label("Reply in thread", systemImage: "arrowshape.turn.up.left")
+                }
+                .accessibilityIdentifier("InlineThreadReply-\(rootEventID)")
+                Button(action: onOpenThread) {
+                    Label("Open thread", systemImage: "arrow.up.left.and.arrow.down.right")
+                }
+                .accessibilityIdentifier("InlineThreadOpen-\(rootEventID)")
+            }
+            .font(SynaraTypography.chipLabel)
+            .foregroundStyle(SynaraColor.accent)
+            .buttonStyle(.plain)
+        }
+        .padding(.leading, SynaraSpacing.medium)
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(SynaraColor.accent.opacity(0.35))
+                .frame(width: 2)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("InlineThread-\(rootEventID)")
+        .task(id: roomID + rootEventID) {
+            await load()
+            startUpdates()
+        }
+        .onDisappear {
+            updatesTask?.cancel()
+            updatesTask = nil
+            environment.timeline.closeThreadTimeline(roomID: roomID, rootEventID: rootEventID)
+        }
+    }
+
+    private var hasEarlier: Bool {
+        replies.count > limit || (reachedStart == false && replies.count < replyCount)
+    }
+
+    private func load() async {
+        let outcome = await environment.timeline.loadThreadTimeline(roomID: roomID, rootEventID: rootEventID)
+        apply(outcome)
+        isLoading = false
+    }
+
+    private func startUpdates() {
+        updatesTask?.cancel()
+        updatesTask = Task {
+            for await outcome in environment.timeline.threadTimelineUpdates(
+                roomID: roomID,
+                rootEventID: rootEventID
+            ) {
+                guard Task.isCancelled == false else { return }
+                await MainActor.run { apply(outcome) }
+            }
+        }
+    }
+
+    @MainActor
+    private func apply(_ outcome: TimelineLoadOutcome) {
+        switch outcome {
+        case let .loaded(items):
+            replies = InlineThreadWindow.replies(in: items, rootEventID: rootEventID)
+            reachedStart = reachedStart || items.contains { $0.eventID == rootEventID }
+            failed = false
+        case .empty:
+            break
+        case .failed:
+            failed = true
+        }
+    }
+
+    private func showEarlier() {
+        if replies.count > limit {
+            limit += InlineThreadWindow.revealStep
+            return
+        }
+        isLoadingEarlier = true
+        Task {
+            let outcome = await environment.timeline.loadOlderThreadTimeline(
+                roomID: roomID,
+                rootEventID: rootEventID
+            )
+            await MainActor.run {
+                if case .empty = outcome {
+                    reachedStart = true
+                }
+                apply(outcome)
+                limit += InlineThreadWindow.revealStep
+                isLoadingEarlier = false
+            }
+        }
+    }
+}
+
+private struct InlineThreadReplyRow: View {
+    let item: TimelineItem
+
+    var body: some View {
+        HStack(alignment: .top, spacing: SynaraSpacing.small) {
+            TimelineAvatar(senderID: item.senderID, avatarURL: item.senderAvatarURL, size: 22)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
+                    Text(item.senderDisplayName)
+                        .font(SynaraTypography.emphasis)
+                        .foregroundStyle(SynaraColor.headingText)
+                        .lineLimit(1)
+                    Text(item.timestamp.timelineTime)
+                        .font(SynaraTypography.messageMeta)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                }
+                Text(item.threadTitle)
+                    .font(SynaraTypography.body)
+                    .foregroundStyle(SynaraColor.primaryText)
+                    .lineLimit(4)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("InlineThreadItem-\(item.eventID)")
     }
 }
 

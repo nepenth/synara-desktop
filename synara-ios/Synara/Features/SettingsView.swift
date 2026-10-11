@@ -1230,6 +1230,7 @@ private struct AppearanceSettingsView: View {
     @State private var persistTask: Task<Void, Never>?
     @State private var hour24Clock = false
     @State private var hideActivity = false
+    @State private var threadDisplay = ThreadDisplayMode.defaultMode
 
     var body: some View {
         Form {
@@ -1290,6 +1291,26 @@ private struct AppearanceSettingsView: View {
             }
 
             Section {
+                Picker("Thread Display", selection: $threadDisplay) {
+                    ForEach(ThreadDisplayMode.allCases) { mode in
+                        Text(mode.title)
+                            .tag(mode)
+                            .accessibilityIdentifier("AppearanceThreadDisplay-\(mode.rawValue)")
+                    }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+                .accessibilityIdentifier("AppearanceThreadDisplayPicker")
+                .onChange(of: threadDisplay) { value in
+                    environment.settings.setString(value.rawValue, for: ThreadDisplayMode.settingsKey)
+                }
+            } header: {
+                Text("Thread Display")
+            } footer: {
+                Text(threadDisplay.detail + " Matches desktop Settings → Appearance → Thread Display.")
+            }
+
+            Section {
                 Toggle("Hide Typing & Read Receipts", isOn: $hideActivity)
                     .accessibilityIdentifier("AppearanceHideActivityToggle")
                     .onChange(of: hideActivity) { value in
@@ -1321,6 +1342,9 @@ private struct AppearanceSettingsView: View {
             baseColor = Color(synaraHex: SynaraThemeRamp.resolve(stored))
             hour24Clock = environment.settings.bool(for: SynaraSharedConstants.hour24ClockKey)
             hideActivity = environment.settings.bool(for: SynaraSharedConstants.hideActivityKey)
+            threadDisplay = ThreadDisplayMode.resolve(
+                environment.settings.string(for: ThreadDisplayMode.settingsKey)
+            )
             DispatchQueue.main.async {
                 didLoadBaseColor = true
             }
