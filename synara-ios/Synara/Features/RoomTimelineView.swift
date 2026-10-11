@@ -1152,8 +1152,8 @@ struct RoomTimelineView: View {
                 onReply: { beginReply(eventRow.item) },
                 onReplyInThread: { replyInThread(eventRow.item) },
                 onOpenThread: { openThread(root: eventRow.item) },
-                isInlineThreadMode: threadDisplay == .inline,
-                isThreadExpanded: isThreadExpanded(eventRow.item),
+                isInlineThreadMode: eventRow.isInlineThreadMode,
+                isThreadExpanded: eventRow.isThreadExpanded,
                 inlineThread: inlineThread(for: eventRow.item, replyCount: eventRow.replyCount),
                 onEdit: { beginEdit(eventRow.item) },
                 onRedact: { applyAction(.redact, to: eventRow.item) },
@@ -1228,7 +1228,9 @@ struct RoomTimelineView: View {
                                 for: item,
                                 currentUserID: currentUserID,
                                 roomID: roomID
-                            )
+                            ),
+                            isInlineThreadMode: threadDisplay == .inline,
+                            isThreadExpanded: isThreadExpanded(item)
                         )
                     )
                 )
