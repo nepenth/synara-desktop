@@ -6,13 +6,18 @@ import UserNotifications
 struct SynaraApp: App {
     @UIApplicationDelegateAdaptor(SynaraAppDelegate.self) private var appDelegate
 
-    private let environment: AppEnvironment = {
+    /// Process-wide so a notification action delivered to a background
+    /// launch (no connected scene, so no `SynaraRootHost.onAppear`) can bind
+    /// the delegate to the same services the UI later uses.
+    static let sharedEnvironment: AppEnvironment = {
         PerformanceTrace.event("AppEnvironmentCreate")
         if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" {
             return .uiTest()
         }
         return .live()
     }()
+
+    private var environment: AppEnvironment { Self.sharedEnvironment }
 
     init() {
         PerformanceTrace.event("AppInit")
@@ -85,6 +90,36 @@ protocol SynaraBackgroundTaskManaging: AnyObject {
 }
 
 extension UIApplication: SynaraBackgroundTaskManaging {}
+
+/// One UIKit background-task assertion that is ended exactly once, from
+/// either completion or the system expiration handler (both on main).
+final class SynaraBackgroundAssertion: @unchecked Sendable {
+    var identifier: UIBackgroundTaskIdentifier = .invalid
+
+    @MainActor
+    func end(application: UIApplication) {
+        guard identifier != .invalid else {
+            return
+        }
+        let ending = identifier
+        identifier = .invalid
+        application.endBackgroundTask(ending)
+    }
+}
+
+/// Approve once and Deny are background notification actions so they work
+/// from a locked iPhone and from mirrored Apple Watch alerts. Every other
+/// response (body tap, Review, Approve always) still foregrounds the app.
+enum SynaraBackgroundApprovalActionPolicy {
+    static func runsInBackground(actionIdentifier: String) -> Bool {
+        switch SynaraAgentApprovalNotificationActionID(rawValue: actionIdentifier) {
+        case .approveOnce, .deny:
+            return true
+        case .review, .approveAlways, .none:
+            return false
+        }
+    }
+}
 
 enum SynaraForegroundMatrixMutationPolicy {
     static func hasAuthority(
@@ -239,10 +274,17 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     /// shared environment is bound. Retain foreground authority independently
     /// so a callback is never lost merely because Matrix is not attached yet.
     private var foregroundActive = false
+    private var isBound = false
     private let agentApprovalActionDedupe = SynaraAgentApprovalNotificationActionDedupeStore()
     private let backgroundSyncCoordinator = SynaraBackgroundSyncCoordinator()
 
     func bind(to environment: AppEnvironment) {
+        // The scene host and a background notification action can both bind;
+        // both use `SynaraApp.sharedEnvironment`, so the first bind wins.
+        guard isBound == false else {
+            return
+        }
+        isBound = true
         push = environment.push
         matrix = environment.matrix
         session = environment.session
@@ -327,6 +369,17 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
+        if foregroundActive == false,
+           SynaraBackgroundApprovalActionPolicy.runsInBackground(actionIdentifier: response.actionIdentifier) {
+            // Approve once / Deny from the lock screen or a mirrored Apple
+            // Watch alert. iOS does not foreground the app for these, so the
+            // decision must complete here before this callback returns.
+            if isBound == false {
+                bind(to: SynaraApp.sharedEnvironment)
+            }
+            await handleBackgroundAgentApprovalAction(response)
+            return
+        }
         guard push != nil, foregroundActive else {
             pendingNotificationResponse = response
             return
@@ -560,6 +613,98 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
                 await resolveNotificationRoute(from: userInfo)
             }
         }
+    }
+
+    /// Sends one approval decision without foregrounding the app. Matrix
+    /// stores are opened in a single serialized transaction under a UIKit
+    /// background-task assertion and closed again before suspension. Failures
+    /// post a local notice so a Watch user learns the decision was not sent.
+    private func handleBackgroundAgentApprovalAction(_ response: UNNotificationResponse) async {
+        let userInfo = response.notification.request.content.userInfo
+        let actionIdentifier = response.actionIdentifier
+        SynaraNotificationDiagnostics.record(.responseReceived, runID: UUID())
+        let plan = SynaraNotificationActionContract.planAgentApprovalNotificationAction(
+            actionIdentifier: actionIdentifier,
+            userInfo: userInfo
+        )
+        guard case .submitDecision(let request) = plan else {
+            logger?.info("Background agent approval action not submitted", category: .push)
+            await postAgentApprovalNotSentNotice(userInfo: userInfo)
+            return
+        }
+        let dedupeKey = SynaraAgentApprovalNotificationActionDedupeStore.key(
+            roomID: request.roomID,
+            eventID: request.sourceEventID,
+            actionIdentifier: actionIdentifier
+        )
+        guard agentApprovalActionDedupe.contains(dedupeKey) == false else {
+            logger?.info("Background agent approval action ignored: already-acted", category: .push)
+            return
+        }
+        guard let matrix,
+              let agentApprovalDecisions,
+              let session,
+              case let .signedIn(authenticatedSession) = session.currentState
+        else {
+            logger?.error("Background agent approval action failed: no signed-in session", category: .push)
+            await postAgentApprovalNotSentNotice(userInfo: userInfo)
+            return
+        }
+
+        let application = UIApplication.shared
+        let assertion = SynaraBackgroundAssertion()
+        await MainActor.run {
+            assertion.identifier = application.beginBackgroundTask(
+                withName: "Send agent approval decision"
+            ) {
+                // Ending on expiry avoids a watchdog termination; the
+                // transaction's own pause still runs if time remains.
+                PerformanceTrace.event("AgentApprovalBackgroundAssertionExpired")
+                MainActor.assumeIsolated {
+                    assertion.end(application: application)
+                }
+            }
+        }
+        defer {
+            Task { @MainActor in assertion.end(application: application) }
+        }
+
+        agentApprovalActionDedupe.insert(dedupeKey)
+        let logger = logger
+        let sent = await matrix.performBackgroundMutation(session: authenticatedSession) {
+            do {
+                _ = try await agentApprovalDecisions.submitDecision(request)
+                return true
+            } catch {
+                logger?.error(
+                    "Background agent approval decision failed: \(error.localizedDescription)",
+                    category: .push
+                )
+                return false
+            }
+        }
+        if sent {
+            logger?.info("Background agent approval decision sent", category: .push)
+        } else {
+            agentApprovalActionDedupe.remove(dedupeKey)
+            await postAgentApprovalNotSentNotice(userInfo: userInfo)
+        }
+    }
+
+    private func postAgentApprovalNotSentNotice(userInfo: [AnyHashable: Any]) async {
+        let content = UNMutableNotificationContent()
+        content.title = "Approval not sent"
+        content.body = "Open Synara to review the command. It may have expired."
+        content.sound = .default
+        if let target = SynaraForegroundNotificationPolicy.target(from: userInfo) {
+            content.userInfo = ["room_id": target.roomID, "event_id": target.eventID]
+        }
+        let request = UNNotificationRequest(
+            identifier: "synara.agent-approval.not-sent.\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        try? await UNUserNotificationCenter.current().add(request)
     }
 
     private func prepareForegroundApprovalSessionIfNeeded() async -> Bool {

@@ -37,15 +37,19 @@ enum SynaraNotificationActionContract {
             UNNotificationAction(
                 identifier: approveOnceIdentifier,
                 title: "Approve once",
-                // Native Matrix approval is an authenticated store mutation.
-                // Bring the app to foreground first so UIKit foreground
-                // authority—not a notification wake—owns store open/use.
-                options: [.authenticationRequired, .foreground]
+                // Background actions so the decision can be made from a locked
+                // iPhone or a mirrored Apple Watch alert. Foreground actions do
+                // not run from the Watch, and `.authenticationRequired` would
+                // demand an iPhone unlock. The app delegate opens the stores in
+                // a bounded background transaction; Core still enforces the
+                // five-minute expiry, sender eligibility and one decision per
+                // prompt. Approve always remains in-app only.
+                options: []
             ),
             UNNotificationAction(
                 identifier: denyIdentifier,
                 title: "Deny",
-                options: [.authenticationRequired, .destructive, .foreground]
+                options: [.destructive]
             ),
             UNNotificationAction(
                 identifier: reviewIdentifier,

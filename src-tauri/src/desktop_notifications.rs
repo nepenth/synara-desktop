@@ -483,6 +483,23 @@ async fn dismiss_linux_notifications(keys: &[String]) {
     }
 }
 
+/// The server's advertised `actions` capability, read once per process.
+/// An unreachable server is treated as supporting actions so the existing
+/// delivery error path, not this hint, reports the failure.
+#[cfg(target_os = "linux")]
+fn linux_server_supports_actions() -> bool {
+    static SUPPORTS_ACTIONS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *SUPPORTS_ACTIONS.get_or_init(|| {
+        notify_rust::get_capabilities()
+            .map(|capabilities| {
+                capabilities
+                    .iter()
+                    .any(|capability| capability == "actions")
+            })
+            .unwrap_or(true)
+    })
+}
+
 #[cfg(target_os = "linux")]
 fn show_notification_with_route_click_handler<R: Runtime>(
     app: &AppHandle<R>,
@@ -503,9 +520,21 @@ fn show_notification_with_route_click_handler<R: Runtime>(
     use notify_rust::{Notification, NotificationResponse, Urgency};
     let notification_payload_sound = notification.sound;
 
+    // Some notification servers (for example mako, or dunst without a
+    // context menu) do not render action buttons. Say where the decision can
+    // be made instead of showing an approval that silently cannot be acted on.
+    let body = if !actions.is_empty() && !linux_server_supports_actions() {
+        Some(match body {
+            Some(body) => format!("{body}\n\nOpen Synara to approve or deny."),
+            None => "Open Synara to approve or deny.".to_owned(),
+        })
+    } else {
+        body.map(str::to_owned)
+    };
+
     let mut notification = Notification::new();
     notification.summary(title);
-    if let Some(body) = body {
+    if let Some(body) = body.as_deref() {
         notification.body(body);
     }
     notification.auto_icon();

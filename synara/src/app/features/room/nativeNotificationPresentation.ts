@@ -27,11 +27,13 @@ export function buildNativeObservedNotificationPresentation(
     sessionGeneration: source.sessionGeneration,
     sound: approval ? 'default' : 'silent',
     route: candidate.route ?? buildDesktopNotificationRoomRoute(source.roomId, source.eventId),
-    dismissKeys: [
-      `room:${source.roomId}`,
-      `event:${source.eventId}`,
-      `candidate:${candidate.candidateId}`,
-    ],
+    // Focusing a room clears its `room:` notifications. An approval is a
+    // pending decision rather than an unread hint, so only its own event or
+    // candidate may withdraw it; otherwise a window focus change while the
+    // agent room is selected would remove the Approve/Deny alert at once.
+    dismissKeys: approval
+      ? [`event:${source.eventId}`, `candidate:${candidate.candidateId}`]
+      : [`room:${source.roomId}`, `event:${source.eventId}`, `candidate:${candidate.candidateId}`],
     ...(approval
       ? {
           actions: AGENT_APPROVAL_NATIVE_NOTIFICATION_ACTIONS,

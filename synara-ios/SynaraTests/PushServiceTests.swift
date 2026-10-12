@@ -1,10 +1,11 @@
+import UserNotifications
 import XCTest
 @testable import Synara
 import SynaraCore
 
 @MainActor
 final class PushServiceTests: XCTestCase {
-    func testAgentApprovalMutationsRequireForegroundStoreAuthority() throws {
+    func testAgentApprovalDecisionsRunInBackgroundForWatchAndLockScreen() throws {
         let actions = SynaraNotificationActionContract.agentApprovalActions()
         let approve = try XCTUnwrap(
             actions.first { $0.identifier == SynaraNotificationActionContract.approveOnceIdentifier }
@@ -12,12 +13,29 @@ final class PushServiceTests: XCTestCase {
         let deny = try XCTUnwrap(
             actions.first { $0.identifier == SynaraNotificationActionContract.denyIdentifier }
         )
+        let review = try XCTUnwrap(
+            actions.first { $0.identifier == SynaraNotificationActionContract.reviewIdentifier }
+        )
 
-        XCTAssertTrue(approve.options.contains(.authenticationRequired))
-        XCTAssertTrue(approve.options.contains(.foreground))
-        XCTAssertTrue(deny.options.contains(.authenticationRequired))
+        // Foreground or authentication-required actions cannot complete from
+        // a mirrored Apple Watch alert while the iPhone is locked.
+        XCTAssertFalse(approve.options.contains(.foreground))
+        XCTAssertFalse(approve.options.contains(.authenticationRequired))
+        XCTAssertFalse(deny.options.contains(.foreground))
+        XCTAssertFalse(deny.options.contains(.authenticationRequired))
         XCTAssertTrue(deny.options.contains(.destructive))
-        XCTAssertTrue(deny.options.contains(.foreground))
+        XCTAssertTrue(review.options.contains(.foreground))
+        XCTAssertFalse(
+            actions.contains { $0.identifier == SynaraAgentApprovalNotificationActionID.approveAlways.rawValue }
+        )
+    }
+
+    func testOnlyOneShotDecisionsRunAsBackgroundActions() {
+        XCTAssertTrue(SynaraBackgroundApprovalActionPolicy.runsInBackground(actionIdentifier: "agent-approval.approve-once"))
+        XCTAssertTrue(SynaraBackgroundApprovalActionPolicy.runsInBackground(actionIdentifier: "agent-approval.deny"))
+        XCTAssertFalse(SynaraBackgroundApprovalActionPolicy.runsInBackground(actionIdentifier: "agent-approval.approve-always"))
+        XCTAssertFalse(SynaraBackgroundApprovalActionPolicy.runsInBackground(actionIdentifier: "agent-approval.review"))
+        XCTAssertFalse(SynaraBackgroundApprovalActionPolicy.runsInBackground(actionIdentifier: UNNotificationDefaultActionIdentifier))
     }
 
     func testForegroundApprovalPolicyRequiresActiveProcessAndLiveMatrixOwner() {
