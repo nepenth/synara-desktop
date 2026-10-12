@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [2.2.6] - 2026-10-12
+
+- Approvals: Approve once and Deny on agent approval notifications work from the iPhone lock screen and from Apple Watch. They run in the background without unlocking or opening Synara; Synara opens its stores for one bounded decision and closes them before suspension, and shows "Approval not sent" if the decision could not be sent. Approve always remains in-app only.
+- macOS: the first approval after launch no longer arrives without Approve and Deny buttons; Synara waits for the notification category to register before posting.
+- Desktop: approval alerts are no longer withdrawn when the agent room is selected and the window gains focus.
+- Linux: approval alerts say to open Synara when the notification server cannot show action buttons.
+
 ## [2.2.5] - 2026-10-11
 
 - iOS: threads work. Opening a thread loads its replies from the thread itself instead of showing only the first message, earlier replies load on request, and sent replies stay visible. Messages have Reply in Thread. Settings → Appearance → Thread Display matches desktop: Inline (the default) expands the latest replies beneath the first message, Sheet opens the thread over the room, and Full Screen opens it on its own screen. Opening a thread no longer resets the room's timeline.
