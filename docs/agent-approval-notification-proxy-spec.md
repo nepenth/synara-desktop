@@ -55,7 +55,13 @@ only if a future remote-push path is designed.
   separate time-sensitive approval setting enabled, the notification extension
   can then decrypt and classify a Hermes prompt locally even when the proxy has
   no trusted approval metadata. Tapping the notification body reviews the exact
-  prompt. Approve once and Deny require authentication and foreground the app.
+  prompt. Approve once and Deny are background actions (no iPhone unlock, no
+  foregrounding) so they work from the lock screen and from alerts mirrored to
+  a paired Apple Watch. The app opens the Matrix stores in one bounded
+  background transaction, sends the reaction through the shared decision
+  owner, and re-quiesces the stores; a failure posts a local "Approval not
+  sent" notice. Apple Watch mirrors iPhone alerts only while the iPhone is
+  locked or asleep and the Watch is worn.
 - The extension's generic and deadline fallbacks remove all provisional
   approval presentation and gateway-supplied message text. Locally resolved,
   fresh approval prompts use Critical level and a critical sound only when OS

@@ -82,6 +82,13 @@ protocol MatrixClientServicing: AnyObject {
     func pauseForBackground() async
     func resumeFromForeground(session: AuthenticatedSession) async
     func syncForBackgroundNotification(session: AuthenticatedSession) async -> Bool
+    /// Runs one Matrix mutation while the app is not foreground, then returns
+    /// the native stores to their suspended state. Returns false when the
+    /// session could not be opened or `operation` failed.
+    func performBackgroundMutation(
+        session: AuthenticatedSession,
+        _ operation: @escaping () async -> Bool
+    ) async -> Bool
     func resetLocalState(for session: AuthenticatedSession?) async
     /// Optional, display-only readback. It must not affect SDK lifecycle or
     /// session/credential ownership.
@@ -1070,6 +1077,15 @@ final class PlaceholderMatrixClientService: MatrixClientServicing {
         return false
     }
 
+    func performBackgroundMutation(
+        session: AuthenticatedSession,
+        _ operation: @escaping () async -> Bool
+    ) async -> Bool {
+        _ = session
+        _ = operation
+        return false
+    }
+
     func resetLocalState(for session: AuthenticatedSession?) async {
         _ = session
         syncStatus = .stopped
@@ -1669,6 +1685,21 @@ final class MockMatrixClientService: MatrixClientServicing {
         backgroundSyncCallCount += 1
         _ = session
         return backgroundSyncResult
+    }
+
+    private(set) var backgroundMutationSessions: [AuthenticatedSession] = []
+    var backgroundMutationOpensSession = true
+
+    func performBackgroundMutation(
+        session: AuthenticatedSession,
+        _ operation: @escaping () async -> Bool
+    ) async -> Bool {
+        onOperation?("matrix-background-mutation")
+        backgroundMutationSessions.append(session)
+        guard backgroundMutationOpensSession else {
+            return false
+        }
+        return await operation()
     }
 
     private(set) var resetSessions: [AuthenticatedSession?] = []

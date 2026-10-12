@@ -560,6 +560,53 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         return false
     }
 
+    /// One bounded store transaction for a background notification action
+    /// (for example Approve once tapped on a mirrored Apple Watch alert). It
+    /// joins the same serialized chain as foreground resume and background
+    /// pause, opens the session only for `operation`, and re-quiesces every
+    /// SQLite owner before returning unless UIKit became foreground meanwhile.
+    /// The caller must hold a UIKit background-task assertion throughout.
+    func performBackgroundMutation(
+        session: AuthenticatedSession,
+        _ operation: @escaping () async -> Bool
+    ) async -> Bool {
+        let queued: Task<Bool, Never> = applyLock.withLock {
+            let previous = applyChain
+            let next = Task<Bool, Never> { [weak self] in
+                await previous.value
+                guard let self else {
+                    return false
+                }
+                PerformanceTrace.event("MatrixBackgroundMutationBegin")
+                let alreadyLive = self.applyLock.withLock { self.foregroundActive }
+                    && Self.isLive(self.syncStatus)
+                if alreadyLive == false {
+                    await self.applyLiveSession(session)
+                }
+                let succeeded = Self.isLive(self.syncStatus) ? await operation() : false
+                if self.applyLock.withLock({ self.foregroundActive }) == false {
+                    self.stopStatusWatch()
+                    self.stopPathMonitor()
+                    await self.applyBackgroundPause(clearLastSession: false)
+                }
+                PerformanceTrace.event("MatrixBackgroundMutationComplete")
+                return succeeded
+            }
+            applyChain = Task { _ = await next.value }
+            return next
+        }
+        return await queued.value
+    }
+
+    private static func isLive(_ status: MatrixSyncStatus) -> Bool {
+        switch status {
+        case .starting, .syncing, .connected, .reconnecting:
+            return true
+        case .stopped, .disconnected, .restoreFailed, .failed:
+            return false
+        }
+    }
+
     func resetLocalState(for session: AuthenticatedSession?) async {
         _ = session
         // Keep the per-account crypto store so the next password login can

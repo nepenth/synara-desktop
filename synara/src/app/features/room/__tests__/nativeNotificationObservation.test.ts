@@ -209,8 +209,8 @@ test('late approval promotion uses the shared actionable presentation and exact 
   const presentation = buildNativeObservedNotificationPresentation(candidate, source);
   assert.equal(presentation.title, candidate.title);
   assert.equal(presentation.body, candidate.body);
+  // Room focus must not withdraw a pending approval decision.
   assert.deepEqual(presentation.dismissKeys, [
-    `room:${source.roomId}`,
     `event:${source.eventId}`,
     `candidate:${candidate.candidateId}`,
   ]);
@@ -240,7 +240,11 @@ test('late approval promotion uses the shared actionable presentation and exact 
   );
   assert.equal(ordinary.actions, undefined);
   assert.equal(ordinary.actionContext, undefined);
-  assert.deepEqual(ordinary.dismissKeys, presentation.dismissKeys);
+  assert.deepEqual(ordinary.dismissKeys, [
+    `room:${source.roomId}`,
+    `event:${source.eventId}`,
+    `candidate:${candidate.candidateId}`,
+  ]);
   assert.equal(ordinary.sound, 'silent');
 
   // Both mounted delivery paths use this tested adapter. A late promotion
