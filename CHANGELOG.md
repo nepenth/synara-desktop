@@ -8,6 +8,7 @@
 - macOS: the first approval after launch no longer arrives without Approve and Deny buttons; Synara waits for the notification category to register before posting.
 - Desktop: approval alerts are no longer withdrawn when the agent room is selected and the window gains focus.
 - Linux: approval alerts say to open Synara when the notification server cannot show action buttons.
+- Dependencies: update quinn-proto to 0.11.19 for RUSTSEC-2026-0338 through RUSTSEC-2026-0342.
 
 ## [2.2.5] - 2026-10-11
 
