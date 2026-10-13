@@ -1,0 +1,1 @@
+Approve once and Deny on agent approval notifications now work from the lock screen and from Apple Watch, without unlocking your iPhone. If a decision cannot be sent, Synara tells you with an "Approval not sent" notification.
