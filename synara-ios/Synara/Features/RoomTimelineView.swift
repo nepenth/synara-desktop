@@ -52,6 +52,27 @@ enum RoomTimelineFocusPolicy {
         }
         return .unread(markerEventID: markerEventID)
     }
+
+    /// Notification routes name an event, but the event-focused SDK timeline is
+    /// a small `/context` window with no live growth whose back-pagination can
+    /// report the start early (thread focus, no back gap). When the target is
+    /// already inside the live window, present the live provider instead so
+    /// history and new messages load exactly as they do from the room list.
+    /// Returns nil when the event is outside the live window and only the
+    /// event-focused provider can reach it.
+    static func liveModeForEventRoute(
+        focusedEventID: String,
+        liveItems: [TimelineItem]
+    ) -> RoomTimelineMode? {
+        guard liveItems.contains(where: { $0.serverEventID == focusedEventID }) else {
+            return nil
+        }
+        let liveTailEventID = liveItems.last(where: { $0.serverEventID != nil })?.serverEventID
+        if liveTailEventID == focusedEventID {
+            return .live
+        }
+        return .focused(eventID: focusedEventID)
+    }
 }
 
 enum RoomTimelineTitlePolicy {
@@ -1851,10 +1872,21 @@ struct RoomTimelineView: View {
 
         let feed: RoomTimelineSessionFeed
         if let focusedEventID, focusedEventID.isEmpty == false {
-            guard let focusedFeed = await session.open(mode: .focused(eventID: focusedEventID)) else {
+            guard let liveFeed = await session.open(mode: .live) else {
                 return
             }
-            feed = focusedFeed
+            if let liveMode = RoomTimelineFocusPolicy.liveModeForEventRoute(
+                focusedEventID: focusedEventID,
+                liveItems: timelineItems(from: liveFeed.initialOutcome)
+            ) {
+                logTimelineEvent("event-route-provider", fields: ["provider": "live"])
+                feed = liveFeed.presenting(mode: liveMode)
+            } else {
+                guard let focusedFeed = await session.open(mode: .focused(eventID: focusedEventID)) else {
+                    return
+                }
+                feed = focusedFeed
+            }
         } else {
             guard let liveFeed = await session.open(mode: .live) else {
                 return
