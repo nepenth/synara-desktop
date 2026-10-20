@@ -50,14 +50,21 @@ export const isNativeVerificationTerminal = (phase: NativeVerificationPhase): bo
 
 export const selectNativeVerificationRequest = (
   requests: NativeVerificationRequest[],
-  currentFlowId?: string
+  currentFlowId?: string,
+  /** Flows the user closed locally after Core could not cancel or dismiss them. */
+  hiddenFlowIds: ReadonlySet<string> = new Set()
 ): NativeVerificationRequest | undefined => {
   if (currentFlowId) {
     const current = requests.find((item) => item.flowId === currentFlowId);
     if (current) return current;
   }
-  return requests.find((item) => !isNativeVerificationTerminal(item.phase)) ?? requests[0];
+  const visible = requests.filter((item) => !hiddenFlowIds.has(item.flowId));
+  return visible.find((item) => !isNativeVerificationTerminal(item.phase)) ?? visible[0];
 };
+
+/** Shown when closing the verification dialog could not cancel the flow. */
+export const VERIFICATION_CLOSE_FAILED_COPY =
+  "Couldn't cancel this verification. You can close it here anyway; the other device may keep waiting until it times out.";
 
 export const verificationRequestHasSasCodes = (request: NativeVerificationRequest): boolean => {
   const emoji = request.sas?.emoji;

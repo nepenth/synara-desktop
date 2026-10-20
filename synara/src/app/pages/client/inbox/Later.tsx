@@ -1,5 +1,17 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { Box, Button, Chip, Icon, IconButton, Icons, Scroll, Text, config, toRem } from 'folds';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  Box,
+  Button,
+  Chip,
+  Icon,
+  IconButton,
+  Icons,
+  Scroll,
+  Text,
+  color,
+  config,
+  toRem,
+} from 'folds';
 import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAtomValue } from 'jotai';
@@ -19,6 +31,7 @@ import { SequenceCard } from '../../../components/sequence-card';
 import { getMemberDisplayName, getThreadRootEventId } from '../../../utils/room';
 import { getMxIdLocalPart } from '../../../utils/matrix';
 import { VirtualTile } from '../../../components/virtualizer';
+import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 
 import { getNativeRoom } from '../../../native/nativeSession';
 const formatDue = (dueTs?: number, now = Date.now()): string | undefined => {
@@ -75,6 +88,8 @@ function LaterItemCard({ item }: LaterItemCardProps) {
   const { navigateRoom } = useRoomNavigate();
   const [editingDue, setEditingDue] = useState(false);
   const [customDue, setCustomDue] = useState(() => toDateTimeLocal(item.dueTs));
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string>();
   const room = getNativeRoom(item.roomId);
   const event = room?.findEventById(item.eventId);
   const sender = event?.getSender() ?? undefined;
@@ -95,18 +110,38 @@ function LaterItemCard({ item }: LaterItemCardProps) {
 
   const openEventId = getThreadRootEventId(event) ?? item.eventId;
   const handleOpen = () => navigateRoom(item.roomId, openEventId);
-  const handleDone = () => {
-    void completeLaterWithNativeOwner(item.id).catch(() => undefined);
-  };
-  const handleSnooze = (dueTs: number) => {
-    void snoozeLaterWithNativeOwner(item.id, dueTs).catch(() => undefined);
-  };
-  const handleSaveCustomDue = () => {
-    const dueTs = fromDateTimeLocal(customDue);
-    if (dueTs) {
-      handleSnooze(dueTs);
-      setEditingDue(false);
+  /** Run one card action; resolves false and keeps the error on the card when it fails. */
+  const runAction = async (failure: string, action: () => Promise<unknown>): Promise<boolean> => {
+    if (busy) return false;
+    setBusy(true);
+    setActionError(undefined);
+    try {
+      await action();
+      return true;
+    } catch {
+      setActionError(failure);
+      return false;
+    } finally {
+      setBusy(false);
     }
+  };
+  const handleDone = () => {
+    void runAction("Couldn't mark this item done. Try again.", () =>
+      completeLaterWithNativeOwner(item.id)
+    );
+  };
+  const handleSnooze = (dueTs: number) =>
+    runAction("Couldn't snooze this item. Try again.", () =>
+      snoozeLaterWithNativeOwner(item.id, dueTs)
+    );
+  const handleSaveCustomDue = async () => {
+    const dueTs = fromDateTimeLocal(customDue);
+    if (!dueTs) {
+      setActionError('Choose a valid date and time.');
+      return;
+    }
+    // The editor and the chosen date stay open when saving fails.
+    if (await handleSnooze(dueTs)) setEditingDue(false);
   };
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -168,7 +203,7 @@ function LaterItemCard({ item }: LaterItemCardProps) {
             <Text size="B300">{t('modernization.later.open', 'Open')}</Text>
           </Button>
           {!item.completedAt && (
-            <Button size="300" variant="Success" fill="None" onClick={handleDone}>
+            <Button size="300" variant="Success" fill="None" disabled={busy} onClick={handleDone}>
               <Text size="B300">{t('modernization.later.done', 'Done')}</Text>
             </Button>
           )}
@@ -183,7 +218,8 @@ function LaterItemCard({ item }: LaterItemCardProps) {
             size="300"
             variant="Secondary"
             fill="None"
-            onClick={() => handleSnooze(Date.now() + 20 * 60_000)}
+            disabled={busy}
+            onClick={() => void handleSnooze(Date.now() + 20 * 60_000)}
           >
             <Text size="B300">{t('modernization.later.snooze_20m', 'Snooze 20 min')}</Text>
           </Button>
@@ -191,7 +227,8 @@ function LaterItemCard({ item }: LaterItemCardProps) {
             size="300"
             variant="Secondary"
             fill="None"
-            onClick={() => handleSnooze(Date.now() + 60 * 60_000)}
+            disabled={busy}
+            onClick={() => void handleSnooze(Date.now() + 60 * 60_000)}
           >
             <Text size="B300">{t('modernization.later.snooze_1h', 'Snooze 1 hour')}</Text>
           </Button>
@@ -199,7 +236,8 @@ function LaterItemCard({ item }: LaterItemCardProps) {
             size="300"
             variant="Secondary"
             fill="None"
-            onClick={() => handleSnooze(tomorrow.getTime())}
+            disabled={busy}
+            onClick={() => void handleSnooze(tomorrow.getTime())}
           >
             <Text size="B300">{t('modernization.later.snooze_tomorrow', 'Tomorrow')}</Text>
           </Button>
@@ -220,7 +258,7 @@ function LaterItemCard({ item }: LaterItemCardProps) {
           alignItems="Center"
           onSubmit={(evt: React.FormEvent<HTMLFormElement>) => {
             evt.preventDefault();
-            handleSaveCustomDue();
+            void handleSaveCustomDue();
           }}
         >
           <input
@@ -229,10 +267,15 @@ function LaterItemCard({ item }: LaterItemCardProps) {
             aria-label={t('modernization.later.custom_due_aria_label', 'Custom reminder due date')}
             onChange={(evt) => setCustomDue(evt.currentTarget.value)}
           />
-          <Button type="submit" size="300" variant="Primary">
+          <Button type="submit" size="300" variant="Primary" disabled={busy}>
             <Text size="B300">{t('modernization.later.save_due', 'Save due date')}</Text>
           </Button>
         </Box>
+      )}
+      {actionError && (
+        <Text size="T200" role="alert" style={{ color: color.Critical.Main }}>
+          {actionError}
+        </Text>
       )}
     </SequenceCard>
   );
@@ -256,8 +299,12 @@ export function Later() {
   });
   const virtualItems = virtualizer.getVirtualItems();
 
+  const [clearDoneState, clearDone] = useAsyncCallback(
+    useCallback(() => clearCompletedLaterWithNativeOwner(), [])
+  );
   const handleClearDone = () => {
-    void clearCompletedLaterWithNativeOwner().catch(() => undefined);
+    // The failure is rendered from `clearDoneState`.
+    clearDone().catch(() => {});
   };
 
   return (
@@ -297,7 +344,13 @@ export function Later() {
               </Text>
             </Button>
             {doneItems.length > 0 && (
-              <Button size="300" variant="Secondary" fill="None" onClick={handleClearDone}>
+              <Button
+                size="300"
+                variant="Secondary"
+                fill="None"
+                disabled={clearDoneState.status === AsyncStatus.Loading}
+                onClick={handleClearDone}
+              >
                 <Text size="B300">
                   {t('modernization.later.clear_completed', 'Clear completed')}
                 </Text>
@@ -311,6 +364,11 @@ export function Later() {
           <PageContentCenter>
             <Box direction="Column" gap="300">
               <span data-spacing-node />
+              {clearDoneState.status === AsyncStatus.Error && (
+                <Text size="T200" role="alert" style={{ color: color.Critical.Main }}>
+                  Couldn&apos;t clear completed items. Try again.
+                </Text>
+              )}
               {items.length > 0 && (
                 <div
                   style={{

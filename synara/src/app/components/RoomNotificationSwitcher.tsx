@@ -1,4 +1,4 @@
-import { Box, config, Icon, Menu, MenuItem, PopOut, RectCords, Text } from 'folds';
+import { Box, color, config, Icon, Menu, MenuItem, PopOut, RectCords, Text } from 'folds';
 import React, { MouseEventHandler, ReactNode, useMemo, useState } from 'react';
 import FocusTrap from './FocusTrap';
 import { useTranslation } from 'react-i18next';
@@ -6,6 +6,7 @@ import { stopPropagation } from '../utils/keyboard';
 import {
   getRoomNotificationModeIcon,
   RoomNotificationMode,
+  useRoomsNotificationPreferencesLoadFailed,
   useSetRoomNotificationPreference,
 } from '../hooks/useRoomsNotificationPreferences';
 import { AsyncStatus } from '../hooks/useAsyncCallback';
@@ -82,10 +83,13 @@ export function RoomNotificationModeSwitcher({
 
   const { modeState, setMode } = useSetRoomNotificationPreference(roomId);
   const changing = modeState.status === AsyncStatus.Loading;
+  const loadFailed = useRoomsNotificationPreferencesLoadFailed();
+  const [failedMode, setFailedMode] = useState<RoomNotificationMode>();
 
   const [menuCords, setMenuCords] = useState<RectCords>();
 
   const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
+    setFailedMode(undefined);
     setMenuCords(evt.currentTarget.getBoundingClientRect());
   };
 
@@ -95,8 +99,9 @@ export function RoomNotificationModeSwitcher({
 
   const handleSelect = (mode: RoomNotificationMode) => {
     if (changing) return;
-    setMode(mode);
-    handleClose();
+    setFailedMode(undefined);
+    // Close only once the mode is saved; a failure stays visible in the menu.
+    setMode(mode).then(handleClose, () => setFailedMode(mode));
   };
 
   return (
@@ -144,6 +149,22 @@ export function RoomNotificationModeSwitcher({
                   </Text>
                 </MenuItem>
               ))}
+              {failedMode && (
+                <Text
+                  as="p"
+                  size="T200"
+                  role="alert"
+                  style={{ padding: config.space.S200, color: color.Critical.Main }}
+                >
+                  {`Couldn't switch this room to "${modeToStr[failedMode].title}". Try again.`}
+                </Text>
+              )}
+              {!failedMode && loadFailed && (
+                <Text as="p" size="T200" priority="300" style={{ padding: config.space.S200 }}>
+                  Couldn&apos;t load this room&apos;s notification setting, so the one marked here
+                  may be out of date.
+                </Text>
+              )}
             </Box>
           </Menu>
         </FocusTrap>

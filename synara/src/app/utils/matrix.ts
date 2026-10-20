@@ -1,4 +1,3 @@
-import to from 'await-to-js';
 import { type MatrixEventReading, type RoomReading } from './room';
 import { IImageInfo, IVideoInfo } from '../../types/matrix/common';
 import { getStateEvent } from './room';
@@ -6,6 +5,7 @@ import { Membership, StateEvent } from '../../types/matrix/room';
 
 import { getNativeRoom, getNativeRooms } from '../native/nativeSession';
 import { mxcUrlToNative, uploadNativeMedia } from '../native/nativeCommands';
+import type { BulkActionFailure } from './bulkActions';
 export type UploadProgress = {
   loaded: number;
   total?: number;
@@ -216,14 +216,20 @@ export const downloadMedia = async (src: string): Promise<Blob> => {
   return blob;
 };
 
+/**
+ * Run `callback` for each item in order, waiting out 429 rate limits. Other
+ * failures do not stop the run; they are returned so callers can report which
+ * items did not complete instead of claiming success.
+ */
 export const rateLimitedActions = async <T, R = void>(
   data: T[],
   callback: (item: T, index: number) => Promise<R>,
   maxRetryCount?: number
-) => {
+): Promise<BulkActionFailure<T>[]> => {
   let retryCount = 0;
 
   let actionInterval = 0;
+  const failures: BulkActionFailure<T>[] = [];
 
   const sleepForMs = (ms: number) =>
     new Promise((resolve) => {
@@ -231,20 +237,27 @@ export const rateLimitedActions = async <T, R = void>(
     });
 
   const performAction = async (dataItem: T, index: number) => {
-    const [err] = await to<R, MatrixError>(callback(dataItem, index));
+    // A rejection may not be an object at all (`undefined`, a string).
+    let err: MatrixError | undefined;
+    try {
+      await callback(dataItem, index);
+      return;
+    } catch (error) {
+      err = error as MatrixError | undefined;
+    }
 
-    if (err?.httpStatus === 429) {
-      if (retryCount === maxRetryCount) {
-        return;
-      }
-
-      const waitMS = err.getRetryAfterMs() ?? 3000;
+    if (err?.httpStatus === 429 && retryCount !== maxRetryCount) {
+      const waitMS =
+        (typeof err.getRetryAfterMs === 'function' ? err.getRetryAfterMs() : undefined) ?? 3000;
       actionInterval = waitMS * 1.5;
       await sleepForMs(waitMS);
       retryCount += 1;
 
       await performAction(dataItem, index);
+      return;
     }
+
+    failures.push({ item: dataItem, error: err });
   };
 
   for (let i = 0; i < data.length; i += 1) {
@@ -257,6 +270,8 @@ export const rateLimitedActions = async <T, R = void>(
       await sleepForMs(actionInterval);
     }
   }
+
+  return failures;
 };
 
 export const knockSupported = (version: string): boolean => {

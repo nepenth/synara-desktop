@@ -12,6 +12,8 @@
 - Desktop: opening a notification or link for a recent message keeps the room live, so newer messages appear without Jump to latest.
 - A notification or link to a message that was deleted, or that you can no longer see, now says so and opens the room at its latest messages instead of showing "Messages are temporarily unavailable".
 - iOS: room and direct-message invites now appear in Rooms, first in their section, and in Notifications, where you can accept or decline them. One invite whose details can't be read no longer hides the others, on desktop and iOS; desktop shows it as "Sender unknown".
+- Desktop: actions that fail now say so where you acted, keep what you typed, and never report success they didn't achieve. This covers moving rooms between spaces, adding existing rooms, blocking and unblocking users, bulk invite actions (which now continue past a failure and list what didn't work), notification settings, space reordering, marking rooms read or unread, room notes, Later items, and cancelling verification. The identity-change banner says when it couldn't check a room instead of showing nothing.
+- Desktop: logging out clears unsent drafts and per-account sidebar layout. The login and registration fields work with password managers, and a session that signs in but can't open offers Retry instead of an endless spinner.
 
 ## [2.2.6] - 2026-10-12
 

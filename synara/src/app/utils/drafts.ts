@@ -1,4 +1,5 @@
 import { Descendant } from 'slate';
+import { ROOM_DRAFT_STORAGE_PREFIX } from '../state/sessions';
 
 const DRAFT_VERSION = 1;
 const MAX_DRAFT_BYTES = 64 * 1024;
@@ -10,7 +11,7 @@ export type StoredRoomDraft = {
 };
 
 export const getRoomDraftStorageKey = (userId: string, roomId: string): string =>
-  `in.synara.room_draft.${encodeURIComponent(userId)}.${encodeURIComponent(roomId)}`;
+  `${ROOM_DRAFT_STORAGE_PREFIX}${encodeURIComponent(userId)}.${encodeURIComponent(roomId)}`;
 
 export const normalizeStoredRoomDraft = (value: unknown): StoredRoomDraft | undefined => {
   if (!value || typeof value !== 'object') return undefined;

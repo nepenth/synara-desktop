@@ -5,8 +5,9 @@ import {
   getLocalStorageItem,
   setLocalStorageItem,
 } from './utils/atomWithLocalStorage';
+import { SPACE_ROOMS_STORAGE_KEY } from './sessions';
 
-const SPACE_ROOMS = 'spaceRooms';
+const SPACE_ROOMS = SPACE_ROOMS_STORAGE_KEY;
 
 const baseSpaceRoomsAtom = atomWithLocalStorage<Set<string>>(
   SPACE_ROOMS,

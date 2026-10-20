@@ -113,9 +113,18 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
     }
   };
 
-  const handleMarkAsUnread = () => {
-    markAsUnread(room.roomId);
-    requestClose();
+  const handleMarkAsUnread = async () => {
+    if (readBusy) return;
+    setReadError(undefined);
+    setReadBusy(true);
+    try {
+      await markAsUnread(room.roomId);
+      requestClose();
+    } catch {
+      setReadError("Couldn't mark this channel as unread.");
+    } finally {
+      setReadBusy(false);
+    }
   };
 
   const handleInvite = () => {
@@ -157,9 +166,9 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
           fill="None"
           onClick={() => {
             if (unread) void handleMarkAsRead();
-            else handleMarkAsUnread();
+            else void handleMarkAsUnread();
           }}
-          disabled={unread && readBusy}
+          disabled={readBusy}
           size="300"
           after={<Icon size="100" src={unread ? Icons.CheckTwice : Icons.MessageUnread} />}
           radii="300"
@@ -170,7 +179,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
           </Text>
         </MenuItem>
         {readError && (
-          <Text as="p" size="T200" style={{ paddingInline: config.space.S200 }}>
+          <Text as="p" size="T200" role="alert" style={{ paddingInline: config.space.S200 }}>
             {readError}
           </Text>
         )}

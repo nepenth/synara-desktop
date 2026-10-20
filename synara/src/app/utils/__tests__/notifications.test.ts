@@ -5,6 +5,7 @@ import {
   markAsReadFromExplicitUserAction,
   markAsReadFromExplicitUserActionInBackground,
   markAsReadInBackground,
+  markRoomsAsReadFromExplicitUserAction,
 } from '../notifications';
 import { getThreadRootEventId } from '../room';
 import {
@@ -14,6 +15,28 @@ import {
   isTimelineViewportAtBottom,
   shouldRestoreRoomTimelineViewport,
 } from '../timelineLifecycle';
+
+test('Mark as Read for a group tries every room and names the ones still unread', async () => {
+  const marked: string[] = [];
+  const message = await markRoomsAsReadFromExplicitUserAction(
+    ['!a:x', '!b:x', '!c:x'],
+    (roomId) => (roomId === '!b:x' ? 'Bravo' : roomId),
+    async (roomId) => {
+      if (roomId === '!b:x') throw { code: 'read_failed', message: 'Read marker failed.' };
+      marked.push(roomId);
+    }
+  );
+  assert.deepEqual(marked, ['!a:x', '!c:x']);
+  assert.equal(message, "Marked 2 of 3 rooms as read. Couldn't mark Bravo. Try again.");
+  assert.equal(
+    await markRoomsAsReadFromExplicitUserAction(
+      ['!a:x'],
+      (id) => id,
+      async () => undefined
+    ),
+    undefined
+  );
+});
 
 test('markAsRead fails closed outside the desktop shell instead of writing receipts', async () => {
   await assert.rejects(markAsRead('!r:example.org'), /requires the Synara desktop app/);

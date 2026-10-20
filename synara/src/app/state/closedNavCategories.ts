@@ -5,8 +5,9 @@ import {
   getLocalStorageItem,
   setLocalStorageItem,
 } from './utils/atomWithLocalStorage';
+import { CLOSED_NAV_CATEGORIES_PREFIX } from './sessions';
 
-const CLOSED_NAV_CATEGORY = 'closedNavCategories';
+const CLOSED_NAV_CATEGORY = CLOSED_NAV_CATEGORIES_PREFIX;
 
 type ClosedNavCategoriesAction =
   | {

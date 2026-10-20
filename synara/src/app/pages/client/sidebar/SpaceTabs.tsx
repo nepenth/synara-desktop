@@ -21,6 +21,7 @@ import {
   PopOut,
   RectCords,
   Text,
+  color,
   config,
   toRem,
 } from 'folds';
@@ -79,7 +80,7 @@ import { useOpenedSidebarFolderAtom } from '../../../state/hooks/openedSidebarFo
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
 import { useRoomsUnread } from '../../../state/hooks/unread';
 import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
-import { markAsReadFromExplicitUserActionInBackground } from '../../../utils/notifications';
+import { useMarkRoomsAsRead } from '../../../hooks/useMarkRoomsAsRead';
 import { copyToClipboard } from '../../../utils/dom';
 import { stopPropagation } from '../../../utils/keyboard';
 import { getMatrixToRoom } from '../../../plugins/matrix-to';
@@ -114,9 +115,11 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(
     );
     const unread = useRoomsUnread(allChild, roomToUnreadAtom);
 
-    const handleMarkAsRead = () => {
-      allChild.forEach((childRoomId) => markAsReadFromExplicitUserActionInBackground(childRoomId));
-      requestClose();
+    const { markRead, markingRead, markReadError } = useMarkRoomsAsRead();
+
+    const handleMarkAsRead = async () => {
+      if (markingRead) return;
+      if (await markRead(allChild)) requestClose();
     };
 
     const handleUnpin = () => {
@@ -165,6 +168,11 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(
               Mark as Read
             </Text>
           </MenuItem>
+          {markReadError && (
+            <Text as="p" size="T200" role="alert" style={{ paddingInline: config.space.S200 }}>
+              {markReadError}
+            </Text>
+          )}
           {onUnpin && (
             <MenuItem
               variant="Surface"
@@ -615,6 +623,30 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
   const navToActivePath = useAtomValue(useNavToActivePathAtom());
   const [openedFolder, setOpenedFolder] = useAtom(useOpenedSidebarFolderAtom());
   const [draggingItem, setDraggingItem] = useState<SidebarDraggable>();
+  const [saveError, setSaveError] = useState<string>();
+  const saveSequence = useRef(0);
+
+  /**
+   * Show the new layout at once and persist it. If the write fails, put the
+   * previous layout back right away and say so, instead of showing success
+   * until the next Core refresh silently reverts it.
+   */
+  const saveSidebarItems = useCallback(
+    (previous: SidebarItems, next: SidebarItems, failure: string) => {
+      const newSpacesContent = makeSynaraSpacesContent(next);
+      localEchoSidebarItem(parseSidebar(orphanSpaces, newSpacesContent));
+      setSaveError(undefined);
+      saveSequence.current += 1;
+      const sequence = saveSequence.current;
+      saveSynaraSpacesContent(newSpacesContent).catch(() => {
+        // A newer layout supersedes this one; never revert over it.
+        if (sequence !== saveSequence.current) return;
+        localEchoSidebarItem(previous);
+        setSaveError(failure);
+      });
+    },
+    [localEchoSidebarItem, orphanSpaces]
+  );
 
   useDnDMonitor(
     scrollRef,
@@ -741,11 +773,13 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
           newItems.push(i);
         });
 
-        const newSpacesContent = makeSynaraSpacesContent(newItems);
-        localEchoSidebarItem(parseSidebar(orphanSpaces, newSpacesContent));
-        void saveSynaraSpacesContent(newSpacesContent).catch(() => undefined);
+        saveSidebarItems(
+          sidebarItems,
+          newItems,
+          "Couldn't save the new order of your spaces. Try again."
+        );
       },
-      [sidebarItems, setOpenedFolder, localEchoSidebarItem, orphanSpaces]
+      [sidebarItems, setOpenedFolder, saveSidebarItems]
     )
   );
 
@@ -786,12 +820,10 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
     (roomId: string) => {
       if (orphanSpaces.includes(roomId)) return;
       const newItems = sidebarItemWithout(sidebarItems, roomId);
-
-      const newSpacesContent = makeSynaraSpacesContent(newItems);
-      localEchoSidebarItem(parseSidebar(orphanSpaces, newSpacesContent));
-      void saveSynaraSpacesContent(newSpacesContent).catch(() => undefined);
+      const name = getNativeRoom(roomId)?.name ?? 'this space';
+      saveSidebarItems(sidebarItems, newItems, `Couldn't unpin ${name}. Try again.`);
     },
-    [sidebarItems, orphanSpaces, localEchoSidebarItem]
+    [sidebarItems, orphanSpaces, saveSidebarItems]
   );
 
   if (sidebarItems.length === 0) return null;
@@ -857,6 +889,23 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
             />
           );
         })}
+        {saveError && (
+          <SidebarItem role="alert">
+            <SidebarItemTooltip tooltip={saveError}>
+              {(triggerRef) => (
+                <SidebarAvatar
+                  as="button"
+                  ref={triggerRef}
+                  outlined
+                  aria-label={`${saveError} Dismiss.`}
+                  onClick={() => setSaveError(undefined)}
+                >
+                  <Icon style={{ color: color.Critical.Main }} src={Icons.Warning} />
+                </SidebarAvatar>
+              )}
+            </SidebarItemTooltip>
+          </SidebarItem>
+        )}
       </SidebarStack>
     </>
   );

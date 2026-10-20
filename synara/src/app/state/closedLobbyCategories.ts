@@ -5,8 +5,9 @@ import {
   getLocalStorageItem,
   setLocalStorageItem,
 } from './utils/atomWithLocalStorage';
+import { CLOSED_LOBBY_CATEGORIES_PREFIX } from './sessions';
 
-const CLOSED_LOBBY_CATEGORY = 'closedLobbyCategories';
+const CLOSED_LOBBY_CATEGORY = CLOSED_LOBBY_CATEGORIES_PREFIX;
 
 type ClosedLobbyCategoriesAction =
   | {

@@ -52,6 +52,7 @@ import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { getViaServers } from '../../plugins/via-servers';
 import { setSpaceChild } from '../lobby/nativeSpaceChild';
 import { rateLimitedActions } from '../../utils/matrix';
+import { BulkActionError, bulkFailureMessage } from '../../utils/bulkActions';
 import { useAlive } from '../../hooks/useAlive';
 import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 
@@ -132,12 +133,23 @@ export function AddExistingModal({ parentId, space, requestClose }: AddExistingM
         const roomsWithVia = await Promise.all(
           selectedRooms.map(async (room) => ({ room, via: await getViaServers(room) }))
         );
-        await rateLimitedActions(roomsWithVia, async ({ room, via }) => {
+        const failures = await rateLimitedActions(roomsWithVia, async ({ room, via }) => {
           await setSpaceChild(parentId, room.roomId, {
             suggested: false,
             via,
           });
         });
+        if (failures.length > 0) {
+          // Keep only the rooms that still need adding selected for a retry.
+          throw new BulkActionError(
+            bulkFailureMessage(
+              roomsWithVia.length,
+              failures.map(({ item }) => item.room.name || item.room.roomId),
+              { done: 'Added', verb: 'add', noun: 'rooms' }
+            ),
+            failures.map(({ item, error }) => ({ item: item.room.roomId, error }))
+          );
+        }
       },
       [parentId]
     )
@@ -158,12 +170,22 @@ export function AddExistingModal({ parentId, space, requestClose }: AddExistingM
 
   const handleApplyChanges = () => {
     const selectedRooms = selected.map((rId) => getRoom(rId)).filter((room) => room !== undefined);
-    applyChanges(selectedRooms).then(() => {
-      if (alive()) {
-        setSelected([]);
-        requestClose();
+    applyChanges(selectedRooms).then(
+      () => {
+        if (alive()) {
+          setSelected([]);
+          requestClose();
+        }
+      },
+      (error: unknown) => {
+        // The dialog stays open with the error; rooms that were added drop out
+        // of the selection so Apply retries only the failed ones.
+        if (alive() && error instanceof BulkActionError) {
+          const failedIds = new Set(error.failures.map(({ item }) => item));
+          setSelected((current) => current.filter((rId) => failedIds.has(rId)));
+        }
       }
-    });
+    );
   };
 
   const resetChanges = () => {
@@ -324,8 +346,12 @@ export function AddExistingModal({ parentId, space, requestClose }: AddExistingM
                         <Box alignItems="Center" gap="400">
                           <Box grow="Yes" direction="Column">
                             {applyState.status === AsyncStatus.Error ? (
-                              <Text size="T200">
-                                <b>Failed to apply changes! Please try again.</b>
+                              <Text size="T200" role="alert">
+                                <b>
+                                  {applyState.error instanceof BulkActionError
+                                    ? applyState.error.message
+                                    : "Couldn't add the selected rooms. Try again."}
+                                </b>
                               </Text>
                             ) : (
                               <Text size="T200">

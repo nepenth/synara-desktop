@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Box,
   Button,
+  color,
   config,
   Dialog,
   Header,
@@ -36,6 +37,7 @@ import {
   verificationRequestHasQr,
   verificationRequestHasSasCodes,
   verificationRequestNeedsSasStart,
+  VERIFICATION_CLOSE_FAILED_COPY,
 } from './nativeVerification';
 
 const POLL_INTERVAL_MS = 500;
@@ -249,12 +251,16 @@ function NativeSas({
 export function NativeDeviceVerification({
   initialRequest,
   onExit,
+  onCloseAnyway,
 }: {
   initialRequest: NativeVerificationRequest;
   onExit: () => void;
+  /** Close locally when Core cannot cancel or dismiss the flow. */
+  onCloseAnyway?: (flowId: string) => void;
 }) {
   const [request, setRequest] = useState(initialRequest);
   const [error, setError] = useState(false);
+  const [closeFailed, setCloseFailed] = useState(false);
   const [working, setWorking] = useState(false);
   const [sasAttempt, setSasAttempt] = useState(0);
   const shouldBeginSas = verificationRequestNeedsSasStart(request);
@@ -325,6 +331,7 @@ export function NativeDeviceVerification({
 
   const close = useCallback(async () => {
     setWorking(true);
+    setCloseFailed(false);
     try {
       if (
         request.phase === 'done' ||
@@ -338,11 +345,17 @@ export function NativeDeviceVerification({
       }
       onExit();
     } catch {
-      setError(true);
+      // Never trap the user in the dialog: offer a local close instead.
+      setCloseFailed(true);
     } finally {
       setWorking(false);
     }
   }, [onExit, request]);
+
+  const closeAnyway = () => {
+    if (onCloseAnyway) onCloseAnyway(request.flowId);
+    else onExit();
+  };
 
   return (
     <Overlay open backdrop={<OverlayBackdrop />}>
@@ -366,7 +379,13 @@ export function NativeDeviceVerification({
               <Box grow="Yes">
                 <Text size="H4">Device Verification</Text>
               </Box>
-              <IconButton size="300" radii="300" disabled={working} onClick={() => void close()}>
+              <IconButton
+                size="300"
+                radii="300"
+                disabled={working}
+                aria-label="Close verification"
+                onClick={() => void close()}
+              >
                 <Icon src={Icons.Cross} />
               </IconButton>
             </Header>
@@ -448,6 +467,16 @@ export function NativeDeviceVerification({
                   </Button>
                 </>
               )}
+              {closeFailed && (
+                <>
+                  <Text size="T200" role="alert" style={{ color: color.Critical.Main }}>
+                    {VERIFICATION_CLOSE_FAILED_COPY}
+                  </Text>
+                  <Button variant="Secondary" fill="Soft" disabled={working} onClick={closeAnyway}>
+                    <Text size="B400">Close Anyway</Text>
+                  </Button>
+                </>
+              )}
               {error && (
                 <>
                   <Text size="T200">{nativeVerificationErrorMessage()}</Text>
@@ -477,7 +506,13 @@ export function NativeDeviceVerification({
 export function NativeVerificationInboxRenderer() {
   const [request, setRequest] = useState<NativeVerificationRequest>();
   const [unavailable, setUnavailable] = useState(false);
+  // Flows closed locally after a failed cancel; the poll must not reopen them.
+  const hiddenFlowIds = useRef(new Set<string>());
   const handleExit = useCallback(() => setRequest(undefined), []);
+  const handleCloseAnyway = useCallback((flowId: string) => {
+    hiddenFlowIds.current.add(flowId);
+    setRequest(undefined);
+  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -485,7 +520,9 @@ export function NativeVerificationInboxRenderer() {
       try {
         const inbox = await listNativeVerificationRequests();
         if (disposed) return;
-        setRequest((current) => selectNativeVerificationRequest(inbox.requests, current?.flowId));
+        setRequest((current) =>
+          selectNativeVerificationRequest(inbox.requests, current?.flowId, hiddenFlowIds.current)
+        );
         setUnavailable(false);
       } catch {
         if (!disposed) setUnavailable(true);
@@ -505,7 +542,13 @@ export function NativeVerificationInboxRenderer() {
 
   if (unavailable) return null;
   if (!request) return null;
-  return <NativeDeviceVerification initialRequest={request} onExit={handleExit} />;
+  return (
+    <NativeDeviceVerification
+      initialRequest={request}
+      onExit={handleExit}
+      onCloseAnyway={handleCloseAnyway}
+    />
+  );
 }
 
 export function NativeStartVerification({

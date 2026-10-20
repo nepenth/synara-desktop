@@ -90,14 +90,23 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
       }
     };
 
-    const handleMarkAsUnread = () => {
-      void setRoomReadStateWithNativeOwner(
-        room.roomId,
-        'mark_unread',
-        isSynaraDesktop(),
-        invokeDesktopWithAvailability
-      ).catch(() => undefined);
-      requestClose();
+    const handleMarkAsUnread = async () => {
+      if (readBusy) return;
+      setReadError(undefined);
+      setReadBusy(true);
+      try {
+        await setRoomReadStateWithNativeOwner(
+          room.roomId,
+          'mark_unread',
+          isSynaraDesktop(),
+          invokeDesktopWithAvailability
+        );
+        requestClose();
+      } catch {
+        setReadError("Couldn't mark this channel as unread.");
+      } finally {
+        setReadBusy(false);
+      }
     };
 
     const handleToggleFavorite = async () => {
@@ -152,9 +161,9 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
             fill="None"
             onClick={() => {
               if (unread) void handleMarkAsRead();
-              else handleMarkAsUnread();
+              else void handleMarkAsUnread();
             }}
-            disabled={unread && readBusy}
+            disabled={readBusy}
             size="300"
             after={<Icon size="100" src={unread ? Icons.CheckTwice : Icons.MessageUnread} />}
             radii="300"
@@ -164,7 +173,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
             </Text>
           </MenuItem>
           {readError && (
-            <Text as="p" size="T200" style={{ paddingInline: config.space.S200 }}>
+            <Text as="p" size="T200" role="alert" style={{ paddingInline: config.space.S200 }}>
               {readError}
             </Text>
           )}
