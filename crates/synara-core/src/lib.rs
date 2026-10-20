@@ -340,6 +340,7 @@ pub use core::{
 };
 
 pub mod app;
+pub mod ffi_runtime;
 #[cfg(feature = "full-app")]
 pub use app::room_list::{
     room_activity_recovery_required, room_unread_presentation, RoomActivityPreviousState,

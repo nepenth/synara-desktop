@@ -300,6 +300,7 @@ impl Default for SessionProjectionCore {
 impl SessionProjectionCore {
     #[uniffi::constructor]
     pub fn new() -> Self {
+        crate::ffi_runtime::install_app_ffi_runtime();
         Self {
             core: Core::new(Arc::new(ProjectionOnlyPlatform)),
         }

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Timeline: a room that is slow to open, jump to a message or load older messages no longer holds up images, reactions, snapshots or opening other rooms, on desktop and iOS. Opening a room no longer waits up to 10 seconds for background history loading, loading older messages gives up after 20 seconds instead of retrying for minutes, and after a laptop sleep or a long background a busy room offers its earlier messages again instead of claiming it has reached the beginning.
+- iOS: Synara's core runs on several threads instead of one, so a large sync, a decryption burst or a slow Keychain call no longer stalls message updates, sends and the notification extension's shared key-store lock.
 - iOS: opening a room from a notification loads its earlier messages and keeps receiving new ones, the same as opening it from the room list. You no longer need to leave the room or relaunch Synara to see its history.
 - iOS: notification previews and approval Approve/Deny keep working when Synara has been in the background for a while. Signing in on iPhone no longer requests a refresh token, so the access token the notification extension uses does not expire after a few minutes (Synapse's default is 5). Sessions signed in with an earlier version keep refreshing in the app; if previews still show generic text after an update, sign out and sign in again. The notification diagnostic report counts previews that failed because the server rejected the session. Desktop is unchanged.
 - Media: photos, videos and files you send to an encrypted room load on the device that sent them, on desktop and iOS. Ones that stayed broken after an earlier send load again too.

@@ -600,15 +600,15 @@ impl MatrixAuthState {
         &self,
         handle: &str,
     ) -> Option<(Client, TimelineMediaSource)> {
-        // Clone the owners and release the session mutex before awaiting the
-        // timeline registry. A registry operation can be on the network, and
-        // holding the session here would stall every status poll behind it.
+        // Clone the owners and release the session mutex before resolving.
+        // Handles resolve without the timeline registry lock, so a room that
+        // is opening or paging on a slow network does not stall media.
         let (client, timelines) = {
             let session = self.session.lock().await;
             let active = session.as_ref()?;
             (active.client.clone(), Arc::clone(&active.timelines))
         };
-        let source = timelines.lock().await.resolve_media(handle).await?;
+        let source = timelines.resolve_media(handle).await?;
         Some((client, source))
     }
 

@@ -30,7 +30,8 @@ use matrix_sdk::{
             AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncTimelineEvent, Mentions,
             StateEventType,
         },
-        MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UInt, UserId,
+        EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UInt,
+        UserId,
     },
     Client, EncryptionState, Room,
 };
@@ -110,6 +111,8 @@ mod focused_route_tests;
 #[cfg(test)]
 mod room_read_state_tests;
 #[cfg(test)]
+mod registry_lock_tests;
+#[cfg(test)]
 mod thread_list_tests;
 #[cfg(test)]
 mod thread_open_tests;
@@ -141,6 +144,11 @@ const MAX_LIVE_TIMELINES: usize = 16;
 /// past this cap the least recently used stream is closed.
 const MAX_VIEW_STREAMS: usize = 32;
 const FOCUSED_CONTEXT_EVENT_COUNT: u16 = 25;
+/// Bound on building an event-focused timeline. matrix-sdk 0.19 holds its
+/// event-cache-wide state lock while it fetches `/context`, which stalls sync
+/// processing and every other room's first timeline build until it ends, so
+/// a slow request must not run for the full product retry budget.
+const FOCUSED_BUILD_TIMEOUT: Duration = Duration::from_secs(10);
 /// Live and permalink Event timelines hide in-thread replies now that
 /// `NativeTimelineOpenPosition::Thread` owns the threaded stream.
 const HIDE_THREADED_EVENTS: bool = true;
@@ -589,7 +597,6 @@ fn approval_reaction_readback(
 struct LiveTimelineEntry {
     timeline: Arc<Timeline>,
     is_encrypted: bool,
-    hit_start: bool,
     last_used: UseStamp,
 }
 
@@ -603,8 +610,54 @@ struct ViewStreamEntry {
     last_access: UseStamp,
 }
 
+/// Media registries of the open view streams, by stream id.
+///
+/// Media handles resolve from here, without the timeline registry lock, so a
+/// slow open or page in one room never stalls image loads anywhere else.
+#[derive(Default)]
+struct StreamMediaIndex {
+    streams: Mutex<HashMap<String, Arc<AsyncMutex<TimelineMediaRegistry>>>>,
+}
+
+impl StreamMediaIndex {
+    fn streams(
+        &self,
+    ) -> std::sync::MutexGuard<'_, HashMap<String, Arc<AsyncMutex<TimelineMediaRegistry>>>> {
+        self.streams
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn insert(&self, stream_id: String, media: Arc<AsyncMutex<TimelineMediaRegistry>>) {
+        self.streams().insert(stream_id, media);
+    }
+
+    fn remove(&self, stream_id: &str) {
+        self.streams().remove(stream_id);
+    }
+
+    async fn resolve(
+        &self,
+        session_generation: u64,
+        handle_id: &str,
+    ) -> Option<TimelineMediaSource> {
+        let streams = self.streams().values().cloned().collect::<Vec<_>>();
+        for media in streams {
+            let registry = media.lock().await;
+            if registry.session_generation() != session_generation {
+                continue;
+            }
+            if let Some(source) = registry.resolve(handle_id) {
+                return Some(source.clone());
+            }
+        }
+        None
+    }
+}
+
 pub struct NativeTimelineRegistry {
     approval_history: Arc<ApprovalHistory>,
+    media_index: Arc<StreamMediaIndex>,
     session_generation: u64,
     entries: HashMap<String, LiveTimelineEntry>,
     focused_entries: RecencyMap<(String, String), Arc<Timeline>>,
@@ -702,7 +755,16 @@ fn push_overlay_history_item(
 pub struct NativeTimelineOwner {
     client: Client,
     emit: TimelineViewUpdateEmit,
+    session_generation: u64,
+    /// Held only to look up, install or publish entries. SDK builds, network
+    /// pages and sends run between lock scopes (see [`Slots`]).
     registry: tokio::sync::Mutex<NativeTimelineRegistry>,
+    approval_history: Arc<ApprovalHistory>,
+    media_index: Arc<StreamMediaIndex>,
+    /// One live-timeline build per room at a time; a concurrent open of the
+    /// same room waits here and then reuses the entry instead of building a
+    /// second SDK timeline.
+    live_builds: Mutex<HashMap<String, Weak<AsyncMutex<()>>>>,
     /// Serializes duplicate decisions per exact event without monopolizing the
     /// global timeline registry or blocking unrelated approval prompts.
     approval_decisions: Arc<std::sync::Mutex<ApprovalDecisionRegistry>>,
@@ -725,10 +787,15 @@ impl NativeTimelineOwner {
         let _ = client.event_cache().subscribe();
         let registry = NativeTimelineRegistry::new(session_generation);
         let approval_history = registry.approval_history.clone();
+        let media_index = registry.media_index.clone();
         Self {
             client: client.clone(),
             emit,
+            session_generation,
             registry: tokio::sync::Mutex::new(registry),
+            approval_history: approval_history.clone(),
+            media_index,
+            live_builds: Mutex::new(HashMap::new()),
             approval_decisions: Arc::new(
                 std::sync::Mutex::new(ApprovalDecisionRegistry::default()),
             ),
@@ -865,9 +932,6 @@ impl NativeTimelineOwner {
     /// static. The product cap is 32 MiB.
     pub async fn media_bytes(&self, handle_id: &str) -> Result<Vec<u8>, &'static str> {
         let source = self
-            .registry
-            .lock()
-            .await
             .resolve_media(handle_id)
             .await
             .ok_or("p4-s33-media-unknown-handle")?;
@@ -883,16 +947,20 @@ impl NativeTimelineOwner {
             })
     }
 
+    /// Resolve an opaque media handle of any open view stream. Never waits
+    /// for the timeline registry.
+    pub async fn resolve_media(&self, handle_id: &str) -> Option<TimelineMediaSource> {
+        self.media_index
+            .resolve(self.session_generation, handle_id)
+            .await
+    }
+
     pub async fn event_readback(
         &self,
         room_id: &str,
         event_id: &str,
     ) -> Result<NativeTimelineEventReadback, &'static str> {
-        self.registry
-            .lock()
-            .await
-            .event_readback(&self.client, room_id, event_id)
-            .await
+        event_readback_in(&mut Slots::Shared(self), &self.client, room_id, event_id).await
     }
 
     /// Resolve the closest event at or after `timestamp_ms` (SDK 0.18 Forward /
@@ -924,21 +992,19 @@ impl NativeTimelineOwner {
         })
     }
 
+    /// Page a view stream. The registry lock covers only the stream lookup
+    /// and the final snapshot source; the SDK page runs without it.
     pub async fn paginate(
         &self,
         request: NativeTimelineViewPaginationRequest,
     ) -> Result<TimelineViewSnapshot, &'static str> {
-        self.registry
-            .lock()
-            .await
-            .paginate(&self.client, request)
-            .await
+        paginate_view(&mut Slots::Shared(self), &self.client, request).await
     }
 
     /// Mark a view stream read or unread.
     ///
-    /// The registry lock is held only to validate the stream and to build the
-    /// snapshot. Receipt writes and any explicit-read pagination run without
+    /// The registry lock is held only to validate the stream and to read the
+    /// snapshot source. Receipt writes and any explicit-read pagination run without
     /// it, so a slow homeserver does not stall every other timeline command.
     pub async fn set_read_state(
         &self,
@@ -951,8 +1017,9 @@ impl NativeTimelineOwner {
             .registry
             .lock()
             .await
-            .view_snapshot_for_stream(&self.client, &request.stream_id)
-            .await?;
+            .view_snapshot_source(&self.client, &request.stream_id)?
+            .snapshot()
+            .await;
         Ok(NativeTimelineReadStateReadback {
             action: request.action,
             receipt_sent,
@@ -977,9 +1044,9 @@ impl NativeTimelineOwner {
     /// Mark a room read or unread without requiring an already-open view stream.
     /// Context-menu Mark as Read uses this while the room is not mounted.
     ///
-    /// The registry lock covers opening the live timeline only. Target
-    /// resolution (which may paginate) and the receipt write run after the
-    /// lock is released.
+    /// The registry lock covers only looking up or installing the live
+    /// timeline. Building it, target resolution (which may paginate) and the
+    /// receipt write run without the lock.
     pub async fn set_room_read_state(
         &self,
         room_id: &str,
@@ -992,12 +1059,12 @@ impl NativeTimelineOwner {
             .ok_or("v-rooms-room-read-state-room-not-found")?;
         match action {
             NativeTimelineReadAction::MarkRead => {
-                let timeline = self
-                    .registry
-                    .lock()
-                    .await
-                    .open_room_read_timeline(&self.client, room_id.as_str())
-                    .await?;
+                let timeline = open_room_read_timeline_in(
+                    &mut Slots::Shared(self),
+                    &self.client,
+                    room_id.as_str(),
+                )
+                .await?;
                 let mark = mark_live_timeline_read(
                     &timeline,
                     NativeTimelineReadIntent::ExplicitUser,
@@ -1026,24 +1093,18 @@ impl NativeTimelineOwner {
         event_id: &str,
         key: &str,
     ) -> Result<NativeReactionMutationResult, &'static str> {
-        self.registry
-            .lock()
-            .await
-            .toggle_reaction(&self.client, room_id, event_id, key)
-            .await
+        toggle_reaction_in(&mut Slots::Shared(self), &self.client, room_id, event_id, key).await
     }
 
+    /// Waits up to the queued-send bound for the server's acknowledgement,
+    /// without holding the registry lock.
     pub async fn ensure_reaction(
         &self,
         room_id: &str,
         event_id: &str,
         key: &str,
     ) -> Result<NativeReactionMutationResult, &'static str> {
-        self.registry
-            .lock()
-            .await
-            .ensure_reaction(&self.client, room_id, event_id, key)
-            .await
+        ensure_reaction_in(&mut Slots::Shared(self), &self.client, room_id, event_id, key).await
     }
 
     pub async fn decide_agent_approval(
@@ -1271,17 +1332,15 @@ impl NativeTimelineOwner {
         reaction_event_id: &str,
         key: &str,
     ) -> Result<NativeReactionMutationResult, &'static str> {
-        self.registry
-            .lock()
-            .await
-            .redact_reaction(
-                &self.client,
-                room_id,
-                target_event_id,
-                reaction_event_id,
-                key,
-            )
-            .await
+        redact_reaction_in(
+            &mut Slots::Shared(self),
+            &self.client,
+            room_id,
+            target_event_id,
+            reaction_event_id,
+            key,
+        )
+        .await
     }
 
     pub async fn open_at(
@@ -1296,11 +1355,33 @@ impl NativeTimelineOwner {
             }
             _ => None,
         };
-        self.registry
+        // Builds, the sparse-history probe and `/context` run between short
+        // registry lock scopes, so opening one room never stalls another
+        // room, a snapshot or a media load.
+        open_view(
+            &mut Slots::Shared(self),
+            &self.approval_history,
+            self.emit.clone(),
+            &self.client,
+            request,
+            focus_route,
+        )
+        .await
+    }
+
+    /// The build gate for one room's live timeline.
+    fn live_build_gate(&self, room_id: &str) -> Arc<AsyncMutex<()>> {
+        let mut builds = self
+            .live_builds
             .lock()
-            .await
-            .open_at(self.emit.clone(), &self.client, request, focus_route)
-            .await
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        builds.retain(|_, gate| gate.strong_count() > 0);
+        if let Some(gate) = builds.get(room_id).and_then(Weak::upgrade) {
+            return gate;
+        }
+        let gate = Arc::new(AsyncMutex::new(()));
+        builds.insert(room_id.to_owned(), Arc::downgrade(&gate));
+        gate
     }
 
     /// Where a routed event lives: the room timeline, a thread, or nowhere
@@ -1347,19 +1428,23 @@ impl NativeTimelineOwner {
         &self,
         request: NativeTimelineJumpLatestRequest,
     ) -> Result<NativeTimelineOpenReadback, &'static str> {
-        self.registry
-            .lock()
-            .await
-            .jump_latest(self.emit.clone(), &self.client, request)
-            .await
+        let room_id = self.registry.lock().await.close_for_jump_latest(request)?;
+        self.open_at(NativeTimelineOpenRequest {
+            room_id,
+            position: NativeTimelineOpenPosition::LiveBottom,
+        })
+        .await
     }
 
+    /// The registry lock covers reading the stream's handles; rows are
+    /// projected after it is released.
     pub async fn snapshot(&self, stream_id: &str) -> Result<TimelineViewSnapshot, &'static str> {
-        self.registry
+        let source = self
+            .registry
             .lock()
             .await
-            .view_snapshot_for_stream(&self.client, stream_id)
-            .await
+            .view_snapshot_source(&self.client, stream_id)?;
+        Ok(source.snapshot().await)
     }
 
     /// Request SDK-owned decryption on this exact open view. Completion only
@@ -2231,6 +2316,7 @@ impl NativeTimelineRegistry {
     pub fn new(session_generation: u64) -> Self {
         Self {
             approval_history: Arc::new(ApprovalHistory::default()),
+            media_index: Arc::new(StreamMediaIndex::default()),
             session_generation,
             entries: HashMap::new(),
             focused_entries: RecencyMap::new(MAX_FOCUSED_TIMELINES),
@@ -2290,62 +2376,62 @@ impl NativeTimelineRegistry {
         client: &Client,
         room_id: &str,
     ) -> Result<NativeTimelineSnapshot, &'static str> {
-        let room_id = parse_room_id(room_id)?;
-        let room_id_string = room_id.to_string();
-        if !self.entries.contains_key(&room_id_string) {
-            let room = client
-                .get_room(&room_id)
-                .ok_or("d0.3-timeline-room-not-found")?;
-            // Timeline open is a persisted read path. `latest_encryption_state`
-            // deliberately performs a homeserver request when the state has not
-            // been marked synchronized, which prevents cached messages from
-            // opening after a cold offline restart. The SDK room store is the
-            // authoritative readback here; send owners independently refresh
-            // encryption state before performing network writes.
-            let is_encrypted = room.encryption_state().is_encrypted();
-            let timeline = TimelineBuilder::new(&room)
-                .with_focus(TimelineFocus::Live {
-                    hide_threaded_events: HIDE_THREADED_EVENTS,
-                })
-                .track_read_marker_and_receipts(TimelineReadReceiptTracking::AllEvents)
-                .build()
-                .await
-                .map_err(|_| "d0.3-timeline-open-failed")?;
-            // A sparse restored cache must not require a scrollable viewport
-            // to fetch history. One bounded SDK page serves both native clients;
-            // a network failure retains the cached row and explicit pagination.
-            let sparse = timeline
-                .items()
-                .await
-                .iter()
-                .filter(|item| item.as_event().is_some())
-                .take(2)
-                .count()
-                <= 1;
-            let hit_start = if sparse {
-                tokio::time::timeout(
-                    std::time::Duration::from_secs(5),
-                    timeline.paginate_backwards(PAGINATION_BATCH_SIZE),
-                )
-                .await
-                .ok()
-                .and_then(Result::ok)
-                .unwrap_or(false)
-            } else {
-                false
-            };
-            self.entries.insert(
-                room_id_string.clone(),
-                LiveTimelineEntry {
-                    timeline: Arc::new(timeline),
-                    is_encrypted,
-                    hit_start,
-                    last_used: UseStamp::now(),
-                },
-            );
-            self.evict_idle_live_entries(&room_id_string);
+        let room_id = parse_room_id(room_id)?.to_string();
+        Slots::Owned(self).live(client, &room_id).await?;
+        self.snapshot(client, &room_id).await
+    }
+
+    /// The room's cached live timeline, marked as used.
+    fn cached_live(&self, room_id: &str) -> Option<Arc<Timeline>> {
+        self.entries
+            .get(room_id)
+            .inspect(|entry| entry.last_used.touch())
+            .map(|entry| entry.timeline.clone())
+    }
+
+    /// Install a live timeline built without the registry lock. If another
+    /// open installed one first, keep that one so every stream of the room
+    /// shares one provider. Returns the installed timeline and whether it is
+    /// the one passed in.
+    fn adopt_live(&mut self, room_id: &str, entry: LiveTimelineEntry) -> (Arc<Timeline>, bool) {
+        if let Some(existing) = self.cached_live(room_id) {
+            return (existing, false);
         }
-        self.snapshot(client, &room_id_string).await
+        let timeline = entry.timeline.clone();
+        self.entries.insert(room_id.to_owned(), entry);
+        self.evict_idle_live_entries(room_id);
+        (timeline, true)
+    }
+
+    fn demote_live(&self, room_id: &str) {
+        if let Some(entry) = self.entries.get(room_id) {
+            entry.last_used.demote();
+        }
+    }
+
+    /// Install an event-focused timeline, keeping one a concurrent open
+    /// installed first.
+    fn adopt_focused(&mut self, key: (String, String), timeline: Arc<Timeline>) -> Arc<Timeline> {
+        if let Some(existing) = self.focused_entries.get(&key) {
+            return existing.clone();
+        }
+        self.focused_entries.insert(key, timeline.clone());
+        timeline
+    }
+
+    /// Install a thread timeline, keeping one a concurrent open installed
+    /// first.
+    fn adopt_thread(&mut self, key: (String, String), timeline: Arc<Timeline>) -> Arc<Timeline> {
+        if let Some(existing) = self.thread_entries.get(&key) {
+            return existing.clone();
+        }
+        self.thread_entries.insert(key, timeline.clone());
+        timeline
+    }
+
+    fn next_stream_number(&mut self) -> u64 {
+        self.next_view_stream_id = self.next_view_stream_id.saturating_add(1);
+        self.next_view_stream_id
     }
 
     /// Open the requested view from the native timeline owner without
@@ -2357,300 +2443,84 @@ impl NativeTimelineRegistry {
         request: NativeTimelineOpenRequest,
         resolved_focus_route: Option<NativeTimelineEventRoute>,
     ) -> Result<NativeTimelineOpenReadback, &'static str> {
-        let room_id = parse_room_id(&request.room_id)?;
-        let room_id_string = room_id.to_string();
-        let protected_room = client
-            .get_room(&room_id)
-            .ok_or("d0.3-timeline-room-not-found")?;
-        let approval_history = self
-            .approval_history
-            .room(&room_id_string)?
-            .protect(&protected_room)
-            .await;
-        let requested_position = request.position;
-        let mut focus_route = None;
-        let (timeline, view_position, pagination) = match &requested_position {
-            NativeTimelineOpenPosition::Normal { viewport } => {
-                let room = client
-                    .get_room(&room_id)
-                    .ok_or("v-timeline-normal-room-not-found")?;
-                let has_unread = room.is_marked_unread()
-                    || room.num_unread_messages() > 0
-                    || room.num_unread_notifications() > 0
-                    || room.num_unread_mentions() > 0;
-                self.open(client, &room_id_string).await?;
-                let current_live_tail = self.live_tail_event_id(&room_id_string).await;
-                let unread_plan = self.unread_open_plan(client, &room, &room_id_string).await;
-                let unread_frontier = match &unread_plan {
-                    LastReadOpenPlan::InLive { event_id }
-                    | LastReadOpenPlan::Unavailable { event_id } => Some(event_id.clone()),
-                    LastReadOpenPlan::LiveBottom => None,
-                };
-                let has_unread = has_unread
-                    || unread_frontier
-                        .as_deref()
-                        .is_some_and(|anchor| Some(anchor) != current_live_tail.as_deref());
-                let now_ms = unix_time_ms();
-                let selected_position = resolve_normal_open_position(
-                    has_unread,
-                    unread_frontier,
-                    current_live_tail.as_deref(),
-                    now_ms,
-                    viewport,
-                )?;
-                match selected_position {
-                    TimelineViewPosition::LiveBottom => {
-                        self.open(client, &room_id_string).await?;
-                        let entry = self
-                            .entries
-                            .get(&room_id_string)
-                            .inspect(|entry| entry.last_used.touch())
-                            .expect("live timeline inserted by open");
-                        (
-                            entry.timeline.clone(),
-                            TimelineViewPosition::LiveBottom,
-                            TimelinePaginationState {
-                                backward: if entry.hit_start {
-                                    TimelinePageState::Exhausted
-                                } else {
-                                    TimelinePageState::Available
-                                },
-                                forward: TimelinePageState::Available,
-                            },
-                        )
-                    }
-                    TimelineViewPosition::Unread { .. } => {
-                        // Both available and unavailable markers keep this live
-                        // provider. The presenter restores only an available row;
-                        // an unavailable target remains an explicit user action.
-                        self.open(client, &room_id_string).await?;
-                        let entry = self
-                            .entries
-                            .get(&room_id_string)
-                            .inspect(|entry| entry.last_used.touch())
-                            .expect("live timeline inserted by open");
-                        (
-                            entry.timeline.clone(),
-                            selected_position,
-                            live_pagination_state(entry),
-                        )
-                    }
-                    TimelineViewPosition::Restored {
-                        anchor_event_id: Some(ref anchor_event_id),
-                    } => {
-                        self.open_focused_unread(
-                            &room,
-                            &room_id_string,
-                            anchor_event_id,
-                            "v-timeline-normal-anchor-invalid",
-                            "v-timeline-normal-open-failed",
-                        )
-                        .await?
-                    }
-                    TimelineViewPosition::Focused { .. }
-                    | TimelineViewPosition::Thread { .. }
-                    | TimelineViewPosition::Restored {
-                        anchor_event_id: None,
-                    } => unreachable!("normal open only selects live, unread, or anchored restore"),
-                }
-            }
-            NativeTimelineOpenPosition::LiveBottom => {
-                self.open(client, &room_id_string).await?;
-                let entry = self
-                    .entries
-                    .get(&room_id_string)
-                    .inspect(|entry| entry.last_used.touch())
-                    .expect("live timeline inserted by open");
-                (
-                    entry.timeline.clone(),
-                    TimelineViewPosition::LiveBottom,
-                    TimelinePaginationState {
-                        backward: if entry.hit_start {
-                            TimelinePageState::Exhausted
-                        } else {
-                            TimelinePageState::Available
-                        },
-                        forward: TimelinePageState::Available,
-                    },
-                )
-            }
-            NativeTimelineOpenPosition::Focused { event_id } => {
-                let event_id = parse_event_id(event_id)?;
-                let room = client
-                    .get_room(&room_id)
-                    .ok_or("v-timeline-focused-room-not-found")?;
-                let (timeline, position, pagination, route) = self
-                    .open_focused(
-                        client,
-                        &room,
-                        &room_id_string,
-                        &event_id,
-                        resolved_focus_route,
-                    )
-                    .await?;
-                focus_route = Some(route);
-                (timeline, position, pagination)
-            }
-            NativeTimelineOpenPosition::Thread { root_event_id } => {
-                let room = client
-                    .get_room(&room_id)
-                    .ok_or("v-timeline-thread-room-not-found")?;
-                self.open_thread(&room, &room_id_string, root_event_id)
-                    .await?
-            }
-            NativeTimelineOpenPosition::Unread => {
-                let room = client
-                    .get_room(&room_id)
-                    .ok_or("v-timeline-unread-room-not-found")?;
-                let has_unread = room.is_marked_unread()
-                    || room.num_unread_messages() > 0
-                    || room.num_unread_notifications() > 0
-                    || room.num_unread_mentions() > 0;
-                if !has_unread {
-                    return Err("v-timeline-unread-open-no-unread");
-                }
-                self.open(client, &room_id_string).await?;
-                match self.unread_open_plan(client, &room, &room_id_string).await {
-                    LastReadOpenPlan::InLive { event_id } => {
-                        let entry = self
-                            .entries
-                            .get(&room_id_string)
-                            .inspect(|entry| entry.last_used.touch())
-                            .expect("live timeline inserted by open");
-                        (
-                            entry.timeline.clone(),
-                            TimelineViewPosition::Unread {
-                                anchor_event_id: event_id,
-                            },
-                            live_pagination_state(entry),
-                        )
-                    }
-                    LastReadOpenPlan::Unavailable { event_id } => {
-                        self.open_focused_unread(
-                            &room,
-                            &room_id_string,
-                            &event_id,
-                            "v-timeline-unread-frontier-unavailable",
-                            "v-timeline-unread-open-failed",
-                        )
-                        .await?
-                    }
-                    LastReadOpenPlan::LiveBottom => {
-                        let entry = self
-                            .entries
-                            .get(&room_id_string)
-                            .inspect(|entry| entry.last_used.touch())
-                            .expect("live timeline inserted by open");
-                        (
-                            entry.timeline.clone(),
-                            TimelineViewPosition::LiveBottom,
-                            live_pagination_state(entry),
-                        )
-                    }
-                }
-            }
-        };
-        let own_user_id = client.user_id().map(ToOwned::to_owned);
-        let action_authority = room_action_authority(timeline.room(), own_user_id.as_deref()).await;
-        self.next_view_stream_id = self.next_view_stream_id.saturating_add(1);
-        let subscription_key = format!(
-            "{}:{}",
-            view_subscription_key(&room_id_string, &view_position),
-            self.next_view_stream_id
-        );
-        let revision = Arc::new(AtomicU64::new(0));
-        let hit_start = Arc::new(AtomicBool::new(matches!(
-            pagination.backward,
-            TimelinePageState::Exhausted
-        )));
-        let media = Arc::new(AsyncMutex::new(TimelineMediaRegistry::new(
-            self.session_generation,
-            subscription_key.clone(),
-        )));
-        // Subscribe before materializing the initial rows so no SDK update can
-        // fall into a snapshot-to-stream gap. Every open owns a distinct
-        // stream, revision counter, update task, and media registry.
-        let (items, updates) = timeline.subscribe().await;
-        let item_ids: Vec<String> = items
-            .iter()
-            .map(|item| item.unique_id().0.clone())
-            .collect();
-        let hydrate_sender_profiles = items
-            .iter()
-            .filter_map(|item| item.as_event())
-            .any(|event| !matches!(event.sender_profile(), TimelineDetails::Ready(_)));
-        let rows = {
-            let mut registry = media.lock().await;
-            items
-                .iter()
-                .map(|item| {
-                    project_timeline_item_with_media(
-                        item,
-                        own_user_id.as_deref(),
-                        action_authority,
-                        &mut registry,
-                    )
-                })
-                .collect()
-        };
-        let snapshot = view_snapshot_from_items(
-            TimelineViewSnapshotInput {
-                session_generation: self.session_generation,
-                room_id: room_id_string.clone(),
-                position: view_position.clone(),
-                pagination,
-                own_user_id: own_user_id.clone(),
-                revision: revision.load(Ordering::Acquire),
-            },
-            &timeline,
-            rows,
-            action_authority,
+        let approval_history = self.approval_history.clone();
+        open_view(
+            &mut Slots::Owned(self),
+            &approval_history,
+            emit,
+            client,
+            request,
+            resolved_focus_route,
         )
-        .await;
-        // Publish ownership only after all awaited initialization succeeds.
-        // Cancellation before this point drops the local history protection.
+        .await
+    }
+
+    /// Publish an opened view. Deliberately synchronous: once the stream is
+    /// inserted there is no cancellation point before the readback returns.
+    fn publish_view(
+        &mut self,
+        emit: TimelineViewUpdateEmit,
+        view: PreparedView,
+    ) -> NativeTimelineOpenReadback {
+        let PreparedView {
+            approval_history,
+            stream_id,
+            room_id,
+            timeline,
+            position,
+            focus_route,
+            own_user_id,
+            revision,
+            hit_start,
+            media,
+            item_ids,
+            hydrate_sender_profiles,
+            updates,
+            snapshot,
+        } = view;
         self.evict_least_recent_view_streams();
         self.view_revisions
-            .insert(subscription_key.clone(), revision.clone());
+            .insert(stream_id.clone(), revision.clone());
+        self.media_index.insert(stream_id.clone(), media.clone());
         self.view_streams.insert(
-            subscription_key.clone(),
+            stream_id.clone(),
             ViewStreamEntry {
                 _approval_history: approval_history,
-                room_id: room_id_string.clone(),
+                room_id: room_id.clone(),
                 timeline: timeline.clone(),
-                position: view_position.clone(),
+                position: position.clone(),
                 hit_start: hit_start.clone(),
                 media: media.clone(),
                 last_access: UseStamp::now(),
             },
         );
         self.view_update_tasks.insert(
-            subscription_key.clone(),
+            stream_id.clone(),
             spawn_view_update_owner(
                 ViewUpdateOwnerInput {
                     emit,
                     session_generation: self.session_generation,
-                    stream_id: subscription_key.clone(),
-                    room_id: room_id_string.clone(),
+                    stream_id: stream_id.clone(),
+                    room_id,
                     own_user_id,
                     revision,
                     media,
                     item_ids,
-                    timeline: timeline.clone(),
-                    position: view_position.clone(),
+                    timeline,
+                    position: position.clone(),
                     hit_start,
                     hydrate_sender_profiles,
                 },
                 updates,
             ),
         );
-        Ok(NativeTimelineOpenReadback {
+        NativeTimelineOpenReadback {
             schema_version: NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
-            stream_id: subscription_key,
-            position: view_position,
+            stream_id,
+            position,
             snapshot,
             focus_route,
-        })
+        }
     }
 
     pub async fn snapshot(
@@ -2659,17 +2529,19 @@ impl NativeTimelineRegistry {
         room_id: &str,
     ) -> Result<NativeTimelineSnapshot, &'static str> {
         let room_id = parse_room_id(room_id)?.to_string();
-        let entry = self
+        let (timeline, is_encrypted) = self
             .entries
             .get(&room_id)
             .inspect(|entry| entry.last_used.touch())
+            .map(|entry| (entry.timeline.clone(), entry.is_encrypted))
             .ok_or("d0.3-timeline-not-open")?;
+        let hit_start = live_hit_start(&timeline).await;
         let mut snapshot = snapshot_from_timeline(
             self.session_generation,
             room_id.clone(),
-            &entry.timeline,
-            entry.is_encrypted,
-            entry.hit_start,
+            &timeline,
+            is_encrypted,
+            hit_start,
             client.user_id(),
         )
         .await?;
@@ -2682,60 +2554,20 @@ impl NativeTimelineRegistry {
         client: &Client,
         request: NativeTimelineViewPaginationRequest,
     ) -> Result<TimelineViewSnapshot, &'static str> {
-        let (room_id, timeline, position, pagination, media) = {
-            let stream = self
-                .view_streams
-                .get_mut(&request.stream_id)
-                .inspect(|stream| stream.last_access.touch())
-                .ok_or("v-timeline-view-not-open")?;
-            let reached_end = match request.direction {
-                NativeTimelineDirection::Backwards => stream
-                    .timeline
-                    .paginate_backwards(PAGINATION_BATCH_SIZE)
-                    .await
-                    .map_err(|_| "v-timeline-view-paginate-backwards-failed")?,
-                NativeTimelineDirection::Forwards => stream
-                    .timeline
-                    .paginate_forwards(PAGINATION_BATCH_SIZE)
-                    .await
-                    .map_err(|_| "v-timeline-view-paginate-forwards-failed")?,
-            };
-            if request.direction == NativeTimelineDirection::Backwards {
-                stream.hit_start.store(reached_end, Ordering::Release);
-            }
-            (
-                stream.room_id.clone(),
-                stream.timeline.clone(),
-                stream.position.clone(),
-                TimelinePaginationState {
-                    backward: if stream.hit_start.load(Ordering::Acquire) {
-                        TimelinePageState::Exhausted
-                    } else {
-                        TimelinePageState::Available
-                    },
-                    forward: TimelinePageState::Available,
-                },
-                stream.media.clone(),
-            )
-        };
-        let revision = self
-            .view_revisions
-            .get(&request.stream_id)
-            .ok_or("v-timeline-view-revision-missing")?
-            .load(Ordering::Acquire);
-        Ok(view_snapshot_from_timeline(
-            TimelineViewSnapshotInput {
-                session_generation: self.session_generation,
-                room_id,
-                position,
-                pagination,
-                own_user_id: client.user_id().map(ToOwned::to_owned),
-                revision,
-            },
-            &timeline,
-            media,
-        )
-        .await)
+        paginate_view(&mut Slots::Owned(self), client, request).await
+    }
+
+    /// The timeline and backward latch of the stream a page request targets.
+    fn pagination_target(
+        &self,
+        stream_id: &str,
+    ) -> Result<(Arc<Timeline>, Arc<AtomicBool>), &'static str> {
+        let stream = self
+            .view_streams
+            .get(stream_id)
+            .inspect(|stream| stream.last_access.touch())
+            .ok_or("v-timeline-view-not-open")?;
+        Ok((stream.timeline.clone(), stream.hit_start.clone()))
     }
 
     /// Validate a stream read-state request and return the stream's timeline.
@@ -2822,28 +2654,16 @@ impl NativeTimelineRegistry {
         client: &Client,
         room_id_string: &str,
     ) -> Result<Arc<Timeline>, &'static str> {
-        let room_id_string = room_id_string.to_owned();
-        let was_open = self.entries.contains_key(&room_id_string);
-        self.open(client, &room_id_string)
-            .await
-            .map_err(|_| "v-rooms-room-read-state-mark-read-failed")?;
-        let entry = self
-            .entries
-            .get(&room_id_string)
-            .ok_or("v-rooms-room-read-state-mark-read-failed")?;
-        if !was_open {
-            // Room-list Mark as Read does not mount the room. Keep its
-            // timeline only as the first candidate for eviction.
-            entry.last_used.demote();
-        }
-        Ok(entry.timeline.clone())
+        open_room_read_timeline_in(&mut Slots::Owned(self), client, room_id_string).await
     }
 
-    pub async fn view_snapshot_for_stream(
+    /// What a view snapshot reads from the registry. Rows are projected from
+    /// the returned source, after a shared caller has released the lock.
+    fn view_snapshot_source(
         &self,
         client: &Client,
         stream_id: &str,
-    ) -> Result<TimelineViewSnapshot, &'static str> {
+    ) -> Result<ViewSnapshotSource, &'static str> {
         let stream = self
             .view_streams
             .get(stream_id)
@@ -2854,35 +2674,59 @@ impl NativeTimelineRegistry {
             .get(stream_id)
             .ok_or("v-timeline-view-revision-missing")?
             .load(Ordering::Acquire);
-        Ok(view_snapshot_from_timeline(
-            TimelineViewSnapshotInput {
+        Ok(ViewSnapshotSource {
+            input: TimelineViewSnapshotInput {
                 session_generation: self.session_generation,
                 room_id: stream.room_id.clone(),
                 position: stream.position.clone(),
-                pagination: TimelinePaginationState {
-                    backward: if stream.hit_start.load(Ordering::Acquire) {
-                        TimelinePageState::Exhausted
-                    } else {
-                        TimelinePageState::Available
-                    },
-                    forward: TimelinePageState::Available,
-                },
+                pagination: pagination_state_from_hit_start(
+                    stream.hit_start.load(Ordering::Acquire),
+                ),
                 own_user_id: client.user_id().map(ToOwned::to_owned),
                 revision,
             },
-            &stream.timeline,
-            stream.media.clone(),
-        )
-        .await)
+            timeline: stream.timeline.clone(),
+            media: stream.media.clone(),
+        })
+    }
+
+    pub async fn view_snapshot_for_stream(
+        &self,
+        client: &Client,
+        stream_id: &str,
+    ) -> Result<TimelineViewSnapshot, &'static str> {
+        Ok(self
+            .view_snapshot_source(client, stream_id)?
+            .snapshot()
+            .await)
     }
 
     pub fn close_view(&mut self, request: NativeTimelineCloseRequest) -> bool {
         let removed = self.view_streams.remove(&request.stream_id).is_some();
         self.view_revisions.remove(&request.stream_id);
+        self.media_index.remove(&request.stream_id);
         if let Some(task) = self.view_update_tasks.remove(&request.stream_id) {
             task.abort();
         }
         removed
+    }
+
+    /// Close the stream Jump to latest replaces and return its room.
+    fn close_for_jump_latest(
+        &mut self,
+        request: NativeTimelineJumpLatestRequest,
+    ) -> Result<String, &'static str> {
+        let room_id = self
+            .view_streams
+            .get(&request.stream_id)
+            .inspect(|stream| stream.last_access.touch())
+            .ok_or("v-timeline-view-not-open")?
+            .room_id
+            .clone();
+        self.close_view(NativeTimelineCloseRequest {
+            stream_id: request.stream_id,
+        });
+        Ok(room_id)
     }
 
     /// Rebind an opened stream to the live bottom and return a fresh stream
@@ -2894,16 +2738,7 @@ impl NativeTimelineRegistry {
         client: &Client,
         request: NativeTimelineJumpLatestRequest,
     ) -> Result<NativeTimelineOpenReadback, &'static str> {
-        let room_id = self
-            .view_streams
-            .get(&request.stream_id)
-            .inspect(|stream| stream.last_access.touch())
-            .ok_or("v-timeline-view-not-open")?
-            .room_id
-            .clone();
-        self.close_view(NativeTimelineCloseRequest {
-            stream_id: request.stream_id,
-        });
+        let room_id = self.close_for_jump_latest(request)?;
         self.open_at(
             emit,
             client,
@@ -2916,304 +2751,10 @@ impl NativeTimelineRegistry {
         .await
     }
 
-    async fn live_tail_event_id(&self, room_id: &str) -> Option<String> {
-        let entry = self
-            .entries
-            .get(room_id)
-            .inspect(|entry| entry.last_used.touch())?;
-        let items = entry.timeline.items().await;
-        items.iter().rev().find_map(|item| {
-            item.as_event()
-                .and_then(|event| event.event_id().map(|event_id| event_id.to_string()))
-        })
-    }
-
-    async fn live_event_ids(&self, room_id: &str) -> Vec<String> {
-        let Some(entry) = self
-            .entries
-            .get(room_id)
-            .inspect(|entry| entry.last_used.touch())
-        else {
-            return Vec::new();
-        };
-        let items = entry.timeline.items().await;
-        items
-            .iter()
-            .filter_map(|item| {
-                item.as_event()
-                    .and_then(|event| event.event_id().map(|event_id| event_id.to_string()))
-            })
-            .collect()
-    }
-
-    async fn unread_open_plan(
-        &self,
-        client: &Client,
-        _room: &Room,
-        room_id: &str,
-    ) -> LastReadOpenPlan {
-        let live_ids = self.live_event_ids(room_id).await;
-        let Some(entry) = self
-            .entries
-            .get(room_id)
-            .inspect(|entry| entry.last_used.touch())
-        else {
-            return LastReadOpenPlan::LiveBottom;
-        };
-        let (raw, anchor) = navigation_read_state(&entry.timeline, client.user_id()).await;
-        let target = anchor.or(raw);
-        plan_unread_open(&live_ids, target.as_deref())
-    }
-
-    /// Event ids the live provider's view stream renders now. A view
-    /// subscription sees only the SDK skip window (the newest items until it
-    /// paginates back), not every item the timeline holds, so a target can be
-    /// placed on the live provider only when it is in this window.
-    async fn live_window_event_ids(&self, room_id: &str) -> Vec<String> {
-        let Some(entry) = self
-            .entries
-            .get(room_id)
-            .inspect(|entry| entry.last_used.touch())
-        else {
-            return Vec::new();
-        };
-        let (items, _updates) = entry.timeline.subscribe().await;
-        items
-            .iter()
-            .filter_map(|item| {
-                item.as_event()
-                    .and_then(|event| event.event_id().map(|event_id| event_id.to_string()))
-            })
-            .collect()
-    }
-
-    /// The room's live provider and its pagination state. `open` must have
-    /// inserted it.
-    fn live_provider(
-        &self,
-        room_id: &str,
-    ) -> Result<(Arc<Timeline>, TimelinePaginationState), &'static str> {
-        let entry = self
-            .entries
-            .get(room_id)
-            .inspect(|entry| entry.last_used.touch())
-            .ok_or("d0.3-timeline-not-open")?;
-        Ok((entry.timeline.clone(), live_pagination_state(entry)))
-    }
-
-    /// Place a `Focused` open: a notification, permalink, search hit or reply
-    /// jump. The live provider opens first, so the room is behind whatever
-    /// the target turns out to be.
-    ///
-    /// - In the live window: present the live provider at the target. It keeps
-    ///   growing with sync and can follow the live tail.
-    /// - Elsewhere in the room: build an event-focused timeline.
-    /// - An in-thread reply: the room timeline never shows it. Present the
-    ///   live provider at the thread root when the live window has it, else at
-    ///   the bottom, and report the thread so shells open it at the reply.
-    /// - Missing, or an event-focused build that fails: present the live
-    ///   bottom and report why instead of failing the open.
-    async fn open_focused(
-        &mut self,
-        client: &Client,
-        room: &Room,
-        room_id: &str,
-        event_id: &OwnedEventId,
-        resolved_route: Option<NativeTimelineEventRoute>,
-    ) -> Result<
-        (
-            Arc<Timeline>,
-            TimelineViewPosition,
-            TimelinePaginationState,
-            NativeTimelineEventRoute,
-        ),
-        &'static str,
-    > {
-        let route = match resolved_route {
-            Some(route) => route,
-            None => resolve_event_route(room, event_id).await,
-        };
-        self.open(client, room_id).await?;
-        let live_ids = self.live_window_event_ids(room_id).await;
-        match plan_focused_open(event_id.as_str(), route, &live_ids) {
-            FocusedOpenPlan::Live {
-                anchor_event_id,
-                route,
-            } => {
-                let (timeline, pagination) = self.live_provider(room_id)?;
-                let position = match anchor_event_id {
-                    Some(target_event_id) => TimelineViewPosition::Focused { target_event_id },
-                    None => TimelineViewPosition::LiveBottom,
-                };
-                return Ok((timeline, position, pagination, route));
-            }
-            FocusedOpenPlan::EventFocused => {}
-        }
-        let key = (room_id.to_owned(), event_id.to_string());
-        if !self.focused_entries.contains_key(&key) {
-            let Ok(timeline) = TimelineBuilder::new(room)
-                .with_focus(TimelineFocus::Event {
-                    target: event_id.clone(),
-                    num_context_events: FOCUSED_CONTEXT_EVENT_COUNT,
-                    thread_mode: permalink_event_thread_mode(),
-                })
-                .build()
-                .await
-            else {
-                // `/context` failed. Keep the room usable at its live bottom
-                // rather than failing the whole open.
-                let (timeline, pagination) = self.live_provider(room_id)?;
-                return Ok((
-                    timeline,
-                    TimelineViewPosition::LiveBottom,
-                    pagination,
-                    NativeTimelineEventRoute::Unreachable,
-                ));
-            };
-            self.focused_entries.insert(key.clone(), Arc::new(timeline));
-        }
-        let timeline = self
-            .focused_entries
-            .get(&key)
-            .expect("focused timeline present")
-            .clone();
-        if timeline.is_threaded() {
-            // `Automatic` thread mode filtered the window to the target's
-            // thread, with no back gap when it holds the root. That is the
-            // thread, not the room: never present it as a room position.
-            self.focused_entries.remove(&key);
-            let root = threaded_focus_root(&timeline, event_id)
-                .await
-                .map(|root| root.to_string());
-            let (timeline, pagination) = self.live_provider(room_id)?;
-            let position = match root.clone().filter(|root| live_ids.contains(root)) {
-                Some(target_event_id) => TimelineViewPosition::Focused { target_event_id },
-                None => TimelineViewPosition::LiveBottom,
-            };
-            let route = match root {
-                Some(root_event_id) => NativeTimelineEventRoute::Thread { root_event_id },
-                None => NativeTimelineEventRoute::Unreachable,
-            };
-            return Ok((timeline, position, pagination, route));
-        }
-        let target_event_id = resolve_rendered_focus_target(room, &timeline, event_id).await;
-        Ok((
-            timeline,
-            TimelineViewPosition::Focused { target_event_id },
-            TimelinePaginationState {
-                backward: TimelinePageState::Available,
-                forward: TimelinePageState::Available,
-            },
-            NativeTimelineEventRoute::Room,
-        ))
-    }
-
-    async fn open_focused_unread(
-        &mut self,
-        room: &Room,
-        room_id: &str,
-        anchor_event_id: &str,
-        invalid_id: &'static str,
-        open_failed: &'static str,
-    ) -> Result<(Arc<Timeline>, TimelineViewPosition, TimelinePaginationState), &'static str> {
-        let event_id = parse_event_id(anchor_event_id).map_err(|_| invalid_id)?;
-        let key = (room_id.to_owned(), event_id.to_string());
-        if !self.focused_entries.contains_key(&key) {
-            let timeline = TimelineBuilder::new(room)
-                .with_focus(TimelineFocus::Event {
-                    target: event_id.clone(),
-                    num_context_events: FOCUSED_CONTEXT_EVENT_COUNT,
-                    thread_mode: permalink_event_thread_mode(),
-                })
-                .build()
-                .await
-                .map_err(|_| open_failed)?;
-            self.focused_entries.insert(key.clone(), Arc::new(timeline));
-        }
-        let timeline = self
-            .focused_entries
-            .get(&key)
-            .expect("unread frontier timeline present")
-            .clone();
-        if timeline.is_threaded() {
-            // A read marker or restored anchor on an in-thread reply (another
-            // client wrote it). The thread-only window is not the room. The
-            // reply's room position is its thread root: place the live
-            // provider there when the live window has it, else at the bottom.
-            self.focused_entries.remove(&key);
-            let root = threaded_focus_root(&timeline, &event_id)
-                .await
-                .map(|root| root.to_string());
-            let live_ids = self.live_window_event_ids(room_id).await;
-            let (timeline, pagination) = self.live_provider(room_id)?;
-            let position = match root.filter(|root| live_ids.contains(root)) {
-                Some(anchor_event_id) => TimelineViewPosition::Unread { anchor_event_id },
-                None => TimelineViewPosition::LiveBottom,
-            };
-            return Ok((timeline, position, pagination));
-        }
-        let anchor_event_id = resolve_rendered_focus_target(room, &timeline, &event_id).await;
-        Ok((
-            timeline,
-            TimelineViewPosition::Unread { anchor_event_id },
-            TimelinePaginationState {
-                backward: TimelinePageState::Available,
-                forward: TimelinePageState::Available,
-            },
-        ))
-    }
-
-    async fn open_thread(
-        &mut self,
-        room: &Room,
-        room_id: &str,
-        root_event_id: &str,
-    ) -> Result<(Arc<Timeline>, TimelineViewPosition, TimelinePaginationState), &'static str> {
-        let root_event_id = parse_thread_root_event_id_for_open(root_event_id)?;
-        let key = (room_id.to_owned(), root_event_id.to_string());
-        if !self.thread_entries.contains_key(&key) {
-            let timeline = TimelineBuilder::new(room)
-                .with_focus(TimelineFocus::Thread {
-                    root_event_id: root_event_id.clone(),
-                })
-                .track_read_marker_and_receipts(TimelineReadReceiptTracking::AllEvents)
-                .build()
-                .await
-                .map_err(|_| "v-timeline-thread-open-failed")?;
-            debug_assert!(
-                timeline.is_threaded(),
-                "TimelineFocus::Thread must report is_threaded"
-            );
-            self.thread_entries.insert(key.clone(), Arc::new(timeline));
-        }
-        let timeline = self
-            .thread_entries
-            .get(&key)
-            .expect("thread timeline present")
-            .clone();
-        Ok((
-            timeline,
-            TimelineViewPosition::Thread {
-                root_event_id: root_event_id.to_string(),
-            },
-            TimelinePaginationState {
-                backward: TimelinePageState::Available,
-                forward: TimelinePageState::Available,
-            },
-        ))
-    }
-
     pub async fn resolve_media(&self, handle_id: &str) -> Option<TimelineMediaSource> {
-        for stream in self.view_streams.values() {
-            let registry = stream.media.lock().await;
-            if registry.session_generation() != self.session_generation {
-                continue;
-            }
-            if let Some(source) = registry.resolve(handle_id) {
-                return Some(source.clone());
-            }
-        }
-        None
+        self.media_index
+            .resolve(self.session_generation, handle_id)
+            .await
     }
 
     pub async fn paginate_legacy(
@@ -3223,32 +2764,31 @@ impl NativeTimelineRegistry {
         direction: NativeTimelineDirection,
     ) -> Result<NativeTimelineSnapshot, &'static str> {
         let room_id = parse_room_id(room_id)?.to_string();
-        let entry = self
+        let (timeline, is_encrypted) = self
             .entries
-            .get_mut(&room_id)
+            .get(&room_id)
             .inspect(|entry| entry.last_used.touch())
+            .map(|entry| (entry.timeline.clone(), entry.is_encrypted))
             .ok_or("d0.3-timeline-not-open")?;
-        let reached_end = match direction {
-            NativeTimelineDirection::Backwards => entry
-                .timeline
+        let hit_start = match direction {
+            NativeTimelineDirection::Backwards => timeline
                 .paginate_backwards(PAGINATION_BATCH_SIZE)
                 .await
                 .map_err(|_| "d0.3-timeline-paginate-backwards-failed")?,
-            NativeTimelineDirection::Forwards => entry
-                .timeline
-                .paginate_forwards(PAGINATION_BATCH_SIZE)
-                .await
-                .map_err(|_| "d0.3-timeline-paginate-forwards-failed")?,
+            NativeTimelineDirection::Forwards => {
+                timeline
+                    .paginate_forwards(PAGINATION_BATCH_SIZE)
+                    .await
+                    .map_err(|_| "d0.3-timeline-paginate-forwards-failed")?;
+                live_hit_start(&timeline).await
+            }
         };
-        if direction == NativeTimelineDirection::Backwards {
-            entry.hit_start = reached_end;
-        }
         let mut snapshot = snapshot_from_timeline(
             self.session_generation,
             room_id.clone(),
-            &entry.timeline,
-            entry.is_encrypted,
-            entry.hit_start,
+            &timeline,
+            is_encrypted,
+            hit_start,
             client.user_id(),
         )
         .await?;
@@ -3262,43 +2802,7 @@ impl NativeTimelineRegistry {
         room_id: &str,
         event_id: &str,
     ) -> Result<NativeTimelineEventReadback, &'static str> {
-        let room_id = parse_room_id(room_id)?.to_string();
-        let event_id = parse_event_id(event_id)?;
-        let key = (room_id.clone(), event_id.to_string());
-        if !self.focused_entries.contains_key(&key) {
-            let room = client
-                .get_room(parse_room_id(&room_id)?.as_ref())
-                .ok_or("v-crypto.6-event-room-not-found")?;
-            let timeline = TimelineBuilder::new(&room)
-                .with_focus(TimelineFocus::Event {
-                    target: event_id.clone(),
-                    num_context_events: 0,
-                    thread_mode: permalink_event_thread_mode(),
-                })
-                .build()
-                .await
-                .map_err(|_| "v-crypto.6-event-open-failed")?;
-            self.focused_entries.insert(key.clone(), Arc::new(timeline));
-        }
-        let timeline = self
-            .focused_entries
-            .get(&key)
-            .expect("focused timeline inserted");
-        let (items, _updates) = timeline.subscribe().await;
-        let mut item = items
-            .iter()
-            .filter_map(|item| project_item(item, client.user_id()))
-            .find(|item| item.event_id == event_id.as_str())
-            .ok_or("v-crypto.6-event-not-found")?;
-        if let Some(room) = client.get_room(parse_room_id(&room_id)?.as_ref()) {
-            enrich_native_reactions(&room, event_id.as_str(), &mut item.reactions, true).await;
-        }
-        Ok(NativeTimelineEventReadback {
-            session_generation: self.session_generation,
-            room_id,
-            event_id: event_id.to_string(),
-            item,
-        })
+        event_readback_in(&mut Slots::Owned(self), client, room_id, event_id).await
     }
 
     /// The only self-reaction toggle owner. `matrix-sdk-ui` owns the decision
@@ -3310,50 +2814,23 @@ impl NativeTimelineRegistry {
         target_event_id: &str,
         key: &str,
     ) -> Result<NativeReactionMutationResult, &'static str> {
-        let room_id = parse_room_id(room_id)?.to_string();
-        let target_event_id = parse_event_id(target_event_id)?;
-        validate_reaction_key(key)?;
-        self.open(client, &room_id).await?;
-        let timeline = self.reaction_timeline(&room_id, &target_event_id).await?;
-        let added = timeline
-            .toggle_reaction(&TimelineEventItemId::EventId(target_event_id.clone()), key)
-            .await
-            .map_err(|_| "v-send.2-reaction-toggle-failed")?;
-        let readback = self
-            .reaction_readback(client, &room_id, &target_event_id, key, false)
-            .await?;
-        Ok(NativeReactionMutationResult {
+        toggle_reaction_in(
+            &mut Slots::Owned(self),
+            client,
             room_id,
-            target_event_id: target_event_id.to_string(),
-            key: key.to_owned(),
-            mutation: if added {
-                NativeReactionMutation::Added
-            } else {
-                NativeReactionMutation::Removed
-            },
-            readback,
-        })
+            target_event_id,
+            key,
+        )
+        .await
     }
 
-    /// The open timeline that renders `target_event_id`.
-    ///
-    /// The live timeline hides thread replies and only covers the recent tail,
-    /// so a reaction on a thread reply or a permalinked event must go through
-    /// the thread, view or focused timeline that holds that row. Falls back to
-    /// the live timeline, whose error then reports the missing row.
-    async fn reaction_timeline(
-        &self,
-        room_id: &str,
-        target_event_id: &matrix_sdk::ruma::EventId,
-    ) -> Result<Arc<Timeline>, &'static str> {
+    /// Every timeline of a room that may render a reaction target: the live
+    /// provider first, then view streams, threads and focused windows.
+    fn reaction_candidates(&self, room_id: &str) -> Result<Vec<Arc<Timeline>>, &'static str> {
         let live = self
-            .entries
-            .get(room_id)
-            .inspect(|entry| entry.last_used.touch())
-            .ok_or("v-send.2-reaction-timeline-not-open")?
-            .timeline
-            .clone();
-        let candidates = std::iter::once(live.clone())
+            .cached_live(room_id)
+            .ok_or("v-send.2-reaction-timeline-not-open")?;
+        Ok(std::iter::once(live)
             .chain(
                 self.view_streams
                     .values()
@@ -3366,17 +2843,11 @@ impl NativeTimelineRegistry {
                     .chain(self.focused_entries.iter())
                     .filter(|((entry_room_id, _), _)| entry_room_id == room_id)
                     .map(|(_, timeline)| timeline.clone()),
-            );
-        for timeline in candidates {
-            if timeline.item_by_event_id(target_event_id).await.is_some() {
-                return Ok(timeline);
-            }
-        }
-        Ok(live)
+            )
+            .collect())
     }
 
-    /// Idempotently ensure an approval annotation exists. This intentionally
-    /// does *not* call `toggle_reaction`: an existing reaction remains present.
+    /// See [`ensure_reaction_in`].
     pub async fn ensure_reaction(
         &mut self,
         client: &Client,
@@ -3384,56 +2855,17 @@ impl NativeTimelineRegistry {
         target_event_id: &str,
         key: &str,
     ) -> Result<NativeReactionMutationResult, &'static str> {
-        let room_id = parse_room_id(room_id)?.to_string();
-        let target_event_id = parse_event_id(target_event_id)?;
-        validate_reaction_key(key)?;
-        let before = self
-            .reaction_readback(client, &room_id, &target_event_id, key, false)
-            .await?;
-        if before.as_ref().is_some_and(|reaction| reaction.me) {
-            return Ok(NativeReactionMutationResult {
-                room_id,
-                target_event_id: target_event_id.to_string(),
-                key: key.to_owned(),
-                mutation: NativeReactionMutation::AlreadyPresent,
-                readback: before,
-            });
-        }
-
-        let room = client
-            .get_room(parse_room_id(&room_id)?.as_ref())
-            .ok_or("v-send.2-reaction-room-not-found")?;
-        // A reaction the SDK still holds after a recoverable error is already
-        // shown as the user's local echo and will retry; reporting it failed
-        // would invite a second, duplicate annotation. Same rule as redaction.
-        accept_still_queued(
-            send_event_via_room_queue(
-                &room,
-                ReactionEventContent::from(Annotation::new(
-                    target_event_id.clone(),
-                    key.to_owned(),
-                ))
-                .into(),
-            )
-            .await,
-            "v-send.2-reaction-ensure-failed",
-        )?;
-
-        let readback = self
-            .reaction_readback(client, &room_id, &target_event_id, key, false)
-            .await?;
-        Ok(NativeReactionMutationResult {
+        ensure_reaction_in(
+            &mut Slots::Owned(self),
+            client,
             room_id,
-            target_event_id: target_event_id.to_string(),
-            key: key.to_owned(),
-            mutation: NativeReactionMutation::Added,
-            readback,
-        })
+            target_event_id,
+            key,
+        )
+        .await
     }
 
-    /// Redact any reaction annotation selected in the viewer. Aggregated
-    /// annotations are not timeline rows, so this queues the redaction on the
-    /// room send queue rather than calling `Timeline::redact`.
+    /// See [`redact_reaction_in`].
     pub async fn redact_reaction(
         &mut self,
         client: &Client,
@@ -3442,132 +2874,15 @@ impl NativeTimelineRegistry {
         reaction_event_id: &str,
         key: &str,
     ) -> Result<NativeReactionMutationResult, &'static str> {
-        let room_id = parse_room_id(room_id)?.to_string();
-        let target_event_id = parse_event_id(target_event_id)?;
-        let reaction_event_id = parse_event_id(reaction_event_id)?;
-        validate_reaction_key(key)?;
-        let selected_reaction = self
-            .reaction_readback(client, &room_id, &target_event_id, key, true)
-            .await?
-            .ok_or("v-send.2-reaction-redact-annotation-not-found")?;
-        if !reaction_contains_event_id(&selected_reaction, &reaction_event_id) {
-            return Err("v-send.2-reaction-redact-annotation-not-found");
-        }
-        let room = client
-            .get_room(parse_room_id(&room_id)?.as_ref())
-            .ok_or("v-send.2-reaction-room-not-found")?;
-        accept_still_queued(
-            redact_via_room_queue(&room, &reaction_event_id, Some("Removed reaction")).await,
-            "v-send.2-reaction-redact-failed",
-        )?;
-        let readback = self
-            .reaction_readback(client, &room_id, &target_event_id, key, true)
-            .await?;
-        Ok(NativeReactionMutationResult {
+        redact_reaction_in(
+            &mut Slots::Owned(self),
+            client,
             room_id,
-            target_event_id: target_event_id.to_string(),
-            key: key.to_owned(),
-            mutation: NativeReactionMutation::Redacted,
-            readback,
-        })
-    }
-
-    async fn reaction_readback(
-        &mut self,
-        client: &Client,
-        room_id: &str,
-        target_event_id: &OwnedEventId,
-        key: &str,
-        network: bool,
-    ) -> Result<Option<NativeTimelineReaction>, &'static str> {
-        self.open(client, room_id).await?;
-        let entry = self
-            .entries
-            .get(room_id)
-            .inspect(|entry| entry.last_used.touch())
-            .ok_or("v-send.2-reaction-timeline-not-open")?;
-        let (items, _updates) = entry.timeline.subscribe().await;
-        if let Some(item) = items
-            .iter()
-            .filter_map(|item| project_item(item, client.user_id()))
-            .find(|item| item.event_id == target_event_id.as_str())
-        {
-            // Live viewport owns this event. After toggle-remove the live item
-            // can correctly omit the key while a focused Event timeline still
-            // projects the previous aggregation (event-cache / local Sent echo).
-            // Falling through made `ensure_reaction` report AlreadyPresent and
-            // skip the re-add. Keep the focused timeline; dropping it here
-            // desyncs the live room timeline's local annotation echo.
-            let mut reaction = item
-                .reactions
-                .into_iter()
-                .find(|reaction| reaction.key == key);
-            if let (Some(reaction), Some(room)) = (
-                reaction.as_mut(),
-                client.get_room(parse_room_id(room_id)?.as_ref()),
-            ) {
-                enrich_native_reactions(
-                    &room,
-                    target_event_id.as_str(),
-                    std::slice::from_mut(reaction),
-                    network,
-                )
-                .await;
-            }
-            return Ok(reaction);
-        }
-
-        // Notifications may target a message outside the currently open
-        // viewport. A focused native timeline is the same authoritative owner
-        // used for event readback; no JS relation inspection is involved.
-        let focus_key = (room_id.to_owned(), target_event_id.to_string());
-        if !self.focused_entries.contains_key(&focus_key) {
-            let room = client
-                .get_room(parse_room_id(room_id)?.as_ref())
-                .ok_or("v-send.2-reaction-room-not-found")?;
-            let Ok(timeline) = TimelineBuilder::new(&room)
-                .with_focus(TimelineFocus::Event {
-                    target: target_event_id.clone(),
-                    num_context_events: 0,
-                    thread_mode: permalink_event_thread_mode(),
-                })
-                .build()
-                .await
-            else {
-                // Toggle/ensure already applied. Missing focused history must
-                // not fail the mutation; viewer open uses event_readback.
-                return Ok(None);
-            };
-            self.focused_entries
-                .insert(focus_key.clone(), Arc::new(timeline));
-        }
-        let timeline = self
-            .focused_entries
-            .get(&focus_key)
-            .ok_or("v-send.2-reaction-readback-open-failed")?;
-        let (items, _updates) = timeline.subscribe().await;
-        let mut reaction = items
-            .iter()
-            .filter_map(|item| project_item(item, client.user_id()))
-            .find(|item| item.event_id == target_event_id.as_str())
-            .and_then(|item| {
-                item.reactions
-                    .into_iter()
-                    .find(|reaction| reaction.key == key)
-            });
-        if let (Some(reaction), Some(room)) = (
-            reaction.as_mut(),
-            client.get_room(parse_room_id(room_id)?.as_ref()),
-        ) {
-            enrich_native_reactions(
-                &room,
-                target_event_id.as_str(),
-                std::slice::from_mut(reaction),
-                network,
-            )
-            .await;
-        }
-        Ok(reaction)
+            target_event_id,
+            reaction_event_id,
+            key,
+        )
+        .await
     }
 
     fn reconcile_utd(
@@ -3718,6 +3033,988 @@ impl Drop for NativeTimelineRegistry {
             task.abort();
         }
     }
+}
+
+/// Where a timeline operation finds and installs cached SDK timelines.
+///
+/// `Shared` is the owner's registry. Its lock is held for one lookup,
+/// install or publish at a time and never across an SDK build, a network
+/// page or a send, so one slow room cannot stall every other timeline
+/// command and media load. `Owned` is a registry its caller holds
+/// exclusively (unit tests and the single-owner live proofs).
+enum Slots<'a> {
+    Owned(&'a mut NativeTimelineRegistry),
+    Shared(&'a NativeTimelineOwner),
+}
+
+impl Slots<'_> {
+    /// Run `f` on the registry, under the owner's lock when shared.
+    async fn with<R>(&mut self, f: impl FnOnce(&mut NativeTimelineRegistry) -> R) -> R {
+        match self {
+            Slots::Owned(registry) => f(registry),
+            Slots::Shared(owner) => f(&mut *owner.registry.lock().await),
+        }
+    }
+
+    fn session_generation(&self) -> u64 {
+        match self {
+            Slots::Owned(registry) => registry.session_generation,
+            Slots::Shared(owner) => owner.session_generation,
+        }
+    }
+
+    /// The room's live timeline. A miss builds it, with its sparse-history
+    /// probe, outside the registry lock and one build per room at a time.
+    /// Returns whether this call built the installed timeline.
+    async fn live(
+        &mut self,
+        client: &Client,
+        room_id: &str,
+    ) -> Result<(Arc<Timeline>, bool), &'static str> {
+        if let Some(timeline) = self.with(|registry| registry.cached_live(room_id)).await {
+            return Ok((timeline, false));
+        }
+        let gate = match self {
+            Slots::Shared(owner) => Some(owner.live_build_gate(room_id)),
+            Slots::Owned(_) => None,
+        };
+        let _building = match &gate {
+            Some(gate) => Some(gate.lock().await),
+            None => None,
+        };
+        if let Some(timeline) = self.with(|registry| registry.cached_live(room_id)).await {
+            return Ok((timeline, false));
+        }
+        let entry = build_live_entry(client, room_id).await?;
+        Ok(self
+            .with(|registry| registry.adopt_live(room_id, entry))
+            .await)
+    }
+
+    async fn cached_focused(&mut self, room_id: &str, event_id: &EventId) -> Option<Arc<Timeline>> {
+        let key = (room_id.to_owned(), event_id.to_string());
+        self.with(|registry| registry.focused_entries.get(&key).cloned())
+            .await
+    }
+
+    /// Build an event-focused timeline (`/context`) outside the registry lock
+    /// and install it. `None` when the SDK cannot build it in time.
+    async fn build_focused(
+        &mut self,
+        room: &Room,
+        room_id: &str,
+        event_id: &OwnedEventId,
+        num_context_events: u16,
+    ) -> Option<Arc<Timeline>> {
+        let build = TimelineBuilder::new(room)
+            .with_focus(TimelineFocus::Event {
+                target: event_id.clone(),
+                num_context_events,
+                thread_mode: permalink_event_thread_mode(),
+            })
+            .build();
+        let timeline = timeout(FOCUSED_BUILD_TIMEOUT, build).await.ok()?.ok()?;
+        let key = (room_id.to_owned(), event_id.to_string());
+        Some(
+            self.with(|registry| registry.adopt_focused(key, Arc::new(timeline)))
+                .await,
+        )
+    }
+
+    async fn focused(
+        &mut self,
+        room: &Room,
+        room_id: &str,
+        event_id: &OwnedEventId,
+        num_context_events: u16,
+    ) -> Option<Arc<Timeline>> {
+        match self.cached_focused(room_id, event_id).await {
+            Some(timeline) => Some(timeline),
+            None => {
+                self.build_focused(room, room_id, event_id, num_context_events)
+                    .await
+            }
+        }
+    }
+
+    async fn forget_focused(&mut self, room_id: &str, event_id: &EventId) {
+        let key = (room_id.to_owned(), event_id.to_string());
+        self.with(|registry| {
+            registry.focused_entries.remove(&key);
+        })
+        .await;
+    }
+
+    /// The thread timeline for `root_event_id`, built outside the registry
+    /// lock on a miss. `None` when the SDK cannot build it.
+    async fn thread(
+        &mut self,
+        room: &Room,
+        room_id: &str,
+        root_event_id: &OwnedEventId,
+    ) -> Option<Arc<Timeline>> {
+        let key = (room_id.to_owned(), root_event_id.to_string());
+        if let Some(timeline) = self
+            .with(|registry| registry.thread_entries.get(&key).cloned())
+            .await
+        {
+            return Some(timeline);
+        }
+        let timeline = TimelineBuilder::new(room)
+            .with_focus(TimelineFocus::Thread {
+                root_event_id: root_event_id.clone(),
+            })
+            .track_read_marker_and_receipts(TimelineReadReceiptTracking::AllEvents)
+            .build()
+            .await
+            .ok()?;
+        debug_assert!(
+            timeline.is_threaded(),
+            "TimelineFocus::Thread must report is_threaded"
+        );
+        Some(
+            self.with(|registry| registry.adopt_thread(key, Arc::new(timeline)))
+                .await,
+        )
+    }
+}
+
+/// Build a room's live timeline. Network-bound when the restored cache is
+/// sparse, so it never runs under the shared registry lock.
+async fn build_live_entry(
+    client: &Client,
+    room_id: &str,
+) -> Result<LiveTimelineEntry, &'static str> {
+    let room_id = parse_room_id(room_id)?;
+    let room = client
+        .get_room(&room_id)
+        .ok_or("d0.3-timeline-room-not-found")?;
+    // Timeline open is a persisted read path. `latest_encryption_state`
+    // deliberately performs a homeserver request when the state has not
+    // been marked synchronized, which prevents cached messages from
+    // opening after a cold offline restart. The SDK room store is the
+    // authoritative readback here; send owners independently refresh
+    // encryption state before performing network writes.
+    let is_encrypted = room.encryption_state().is_encrypted();
+    let timeline = TimelineBuilder::new(&room)
+        .with_focus(TimelineFocus::Live {
+            hide_threaded_events: HIDE_THREADED_EVENTS,
+        })
+        .track_read_marker_and_receipts(TimelineReadReceiptTracking::AllEvents)
+        .build()
+        .await
+        .map_err(|_| "d0.3-timeline-open-failed")?;
+    // A sparse restored cache must not require a scrollable viewport
+    // to fetch history. One bounded SDK page serves both native clients;
+    // a network failure retains the cached row and explicit pagination.
+    // Whether it reached the room start is read back from the SDK's live
+    // pagination status when a view stream opens.
+    let sparse = timeline
+        .items()
+        .await
+        .iter()
+        .filter(|item| item.as_event().is_some())
+        .take(2)
+        .count()
+        <= 1;
+    if sparse {
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            timeline.paginate_backwards(PAGINATION_BATCH_SIZE),
+        )
+        .await;
+    }
+    Ok(LiveTimelineEntry {
+        timeline: Arc::new(timeline),
+        is_encrypted,
+        last_used: UseStamp::now(),
+    })
+}
+
+type TimelineUpdates =
+    std::pin::Pin<Box<dyn futures_util::Stream<Item = Vec<VectorDiff<Arc<SdkTimelineItem>>>> + Send>>;
+
+/// An opened view whose initial rows are ready, waiting to be published.
+struct PreparedView {
+    approval_history: HistoryProtection,
+    stream_id: String,
+    room_id: String,
+    timeline: Arc<Timeline>,
+    position: TimelineViewPosition,
+    focus_route: Option<NativeTimelineEventRoute>,
+    own_user_id: Option<OwnedUserId>,
+    revision: Arc<AtomicU64>,
+    hit_start: Arc<AtomicBool>,
+    media: Arc<AsyncMutex<TimelineMediaRegistry>>,
+    item_ids: Vec<String>,
+    hydrate_sender_profiles: bool,
+    updates: TimelineUpdates,
+    snapshot: TimelineViewSnapshot,
+}
+
+/// Open a view stream. Lookups and installs go through `slots`; SDK builds,
+/// `/context`, the sparse-history probe and row projection run between its
+/// lock scopes. Publication is the last, synchronous step.
+async fn open_view(
+    slots: &mut Slots<'_>,
+    approval_history: &ApprovalHistory,
+    emit: TimelineViewUpdateEmit,
+    client: &Client,
+    request: NativeTimelineOpenRequest,
+    resolved_focus_route: Option<NativeTimelineEventRoute>,
+) -> Result<NativeTimelineOpenReadback, &'static str> {
+    let session_generation = slots.session_generation();
+    let room_id = parse_room_id(&request.room_id)?;
+    let room_id_string = room_id.to_string();
+    client
+        .get_room(&room_id)
+        .ok_or("d0.3-timeline-room-not-found")?;
+    // Inbox history pages stop as soon as a view protects the room. The open
+    // does not wait for an SDK page that is already in flight: that page
+    // only adds older events the view would load anyway.
+    let approval_history = approval_history.room(&room_id_string)?.protect();
+    let requested_position = request.position;
+    let mut focus_route = None;
+    let (timeline, view_position, pagination) = match &requested_position {
+        NativeTimelineOpenPosition::Normal { viewport } => {
+            let room = client
+                .get_room(&room_id)
+                .ok_or("v-timeline-normal-room-not-found")?;
+            let has_unread = room.is_marked_unread()
+                || room.num_unread_messages() > 0
+                || room.num_unread_notifications() > 0
+                || room.num_unread_mentions() > 0;
+            let (live, _) = slots.live(client, &room_id_string).await?;
+            let current_live_tail = live_tail_event_id(&live).await;
+            let unread_plan = unread_open_plan(client, &live).await;
+            let unread_frontier = match &unread_plan {
+                LastReadOpenPlan::InLive { event_id }
+                | LastReadOpenPlan::Unavailable { event_id } => Some(event_id.clone()),
+                LastReadOpenPlan::LiveBottom => None,
+            };
+            let has_unread = has_unread
+                || unread_frontier
+                    .as_deref()
+                    .is_some_and(|anchor| Some(anchor) != current_live_tail.as_deref());
+            let now_ms = unix_time_ms();
+            let selected_position = resolve_normal_open_position(
+                has_unread,
+                unread_frontier,
+                current_live_tail.as_deref(),
+                now_ms,
+                viewport,
+            )?;
+            match selected_position {
+                TimelineViewPosition::LiveBottom => {
+                    let pagination = live_pagination_state(&live).await;
+                    (live, TimelineViewPosition::LiveBottom, pagination)
+                }
+                TimelineViewPosition::Unread { .. } => {
+                    // Both available and unavailable markers keep this live
+                    // provider. The presenter restores only an available row;
+                    // an unavailable target remains an explicit user action.
+                    let pagination = live_pagination_state(&live).await;
+                    (live, selected_position, pagination)
+                }
+                TimelineViewPosition::Restored {
+                    anchor_event_id: Some(ref anchor_event_id),
+                } => {
+                    open_focused_unread(
+                        slots,
+                        &room,
+                        &room_id_string,
+                        &live,
+                        anchor_event_id,
+                        "v-timeline-normal-anchor-invalid",
+                        "v-timeline-normal-open-failed",
+                    )
+                    .await?
+                }
+                TimelineViewPosition::Focused { .. }
+                | TimelineViewPosition::Thread { .. }
+                | TimelineViewPosition::Restored {
+                    anchor_event_id: None,
+                } => unreachable!("normal open only selects live, unread, or anchored restore"),
+            }
+        }
+        NativeTimelineOpenPosition::LiveBottom => {
+            let (live, _) = slots.live(client, &room_id_string).await?;
+            let pagination = live_pagination_state(&live).await;
+            (live, TimelineViewPosition::LiveBottom, pagination)
+        }
+        NativeTimelineOpenPosition::Focused { event_id } => {
+            let event_id = parse_event_id(event_id)?;
+            let room = client
+                .get_room(&room_id)
+                .ok_or("v-timeline-focused-room-not-found")?;
+            let (timeline, position, pagination, route) = open_focused(
+                slots,
+                client,
+                &room,
+                &room_id_string,
+                &event_id,
+                resolved_focus_route,
+            )
+            .await?;
+            focus_route = Some(route);
+            (timeline, position, pagination)
+        }
+        NativeTimelineOpenPosition::Thread { root_event_id } => {
+            let room = client
+                .get_room(&room_id)
+                .ok_or("v-timeline-thread-room-not-found")?;
+            open_thread(slots, &room, &room_id_string, root_event_id).await?
+        }
+        NativeTimelineOpenPosition::Unread => {
+            let room = client
+                .get_room(&room_id)
+                .ok_or("v-timeline-unread-room-not-found")?;
+            let has_unread = room.is_marked_unread()
+                || room.num_unread_messages() > 0
+                || room.num_unread_notifications() > 0
+                || room.num_unread_mentions() > 0;
+            if !has_unread {
+                return Err("v-timeline-unread-open-no-unread");
+            }
+            let (live, _) = slots.live(client, &room_id_string).await?;
+            match unread_open_plan(client, &live).await {
+                LastReadOpenPlan::InLive { event_id } => {
+                    let pagination = live_pagination_state(&live).await;
+                    (
+                        live,
+                        TimelineViewPosition::Unread {
+                            anchor_event_id: event_id,
+                        },
+                        pagination,
+                    )
+                }
+                LastReadOpenPlan::Unavailable { event_id } => {
+                    open_focused_unread(
+                        slots,
+                        &room,
+                        &room_id_string,
+                        &live,
+                        &event_id,
+                        "v-timeline-unread-frontier-unavailable",
+                        "v-timeline-unread-open-failed",
+                    )
+                    .await?
+                }
+                LastReadOpenPlan::LiveBottom => {
+                    let pagination = live_pagination_state(&live).await;
+                    (live, TimelineViewPosition::LiveBottom, pagination)
+                }
+            }
+        }
+    };
+    let own_user_id = client.user_id().map(ToOwned::to_owned);
+    let action_authority = room_action_authority(timeline.room(), own_user_id.as_deref()).await;
+    let stream_number = slots
+        .with(NativeTimelineRegistry::next_stream_number)
+        .await;
+    let subscription_key = format!(
+        "{}:{}",
+        view_subscription_key(&room_id_string, &view_position),
+        stream_number
+    );
+    let revision = Arc::new(AtomicU64::new(0));
+    let hit_start = Arc::new(AtomicBool::new(matches!(
+        pagination.backward,
+        TimelinePageState::Exhausted
+    )));
+    let media = Arc::new(AsyncMutex::new(TimelineMediaRegistry::new(
+        session_generation,
+        subscription_key.clone(),
+    )));
+    // Subscribe before materializing the initial rows so no SDK update can
+    // fall into a snapshot-to-stream gap. Every open owns a distinct
+    // stream, revision counter, update task, and media registry.
+    let (items, updates) = timeline.subscribe().await;
+    let item_ids: Vec<String> = items
+        .iter()
+        .map(|item| item.unique_id().0.clone())
+        .collect();
+    let hydrate_sender_profiles = items
+        .iter()
+        .filter_map(|item| item.as_event())
+        .any(|event| !matches!(event.sender_profile(), TimelineDetails::Ready(_)));
+    let rows = {
+        let mut registry = media.lock().await;
+        items
+            .iter()
+            .map(|item| {
+                project_timeline_item_with_media(
+                    item,
+                    own_user_id.as_deref(),
+                    action_authority,
+                    &mut registry,
+                )
+            })
+            .collect()
+    };
+    let snapshot = view_snapshot_from_items(
+        TimelineViewSnapshotInput {
+            session_generation,
+            room_id: room_id_string.clone(),
+            position: view_position.clone(),
+            pagination,
+            own_user_id: own_user_id.clone(),
+            revision: revision.load(Ordering::Acquire),
+        },
+        &timeline,
+        rows,
+        action_authority,
+    )
+    .await;
+    // Publish ownership only after all awaited initialization succeeds.
+    // Cancellation before this point drops the local history protection.
+    let view = PreparedView {
+        approval_history,
+        stream_id: subscription_key,
+        room_id: room_id_string,
+        timeline,
+        position: view_position,
+        focus_route,
+        own_user_id,
+        revision,
+        hit_start,
+        media,
+        item_ids,
+        hydrate_sender_profiles,
+        updates: Box::pin(updates),
+        snapshot,
+    };
+    Ok(slots
+        .with(move |registry| registry.publish_view(emit, view))
+        .await)
+}
+
+/// Place a `Focused` open: a notification, permalink, search hit or reply
+/// jump. The live provider opens first, so the room is behind whatever
+/// the target turns out to be.
+///
+/// - In the live window: present the live provider at the target. It keeps
+///   growing with sync and can follow the live tail.
+/// - Elsewhere in the room: build an event-focused timeline.
+/// - An in-thread reply: the room timeline never shows it. Present the
+///   live provider at the thread root when the live window has it, else at
+///   the bottom, and report the thread so shells open it at the reply.
+/// - Missing, or an event-focused build that fails: present the live
+///   bottom and report why instead of failing the open.
+async fn open_focused(
+    slots: &mut Slots<'_>,
+    client: &Client,
+    room: &Room,
+    room_id: &str,
+    event_id: &OwnedEventId,
+    resolved_route: Option<NativeTimelineEventRoute>,
+) -> Result<
+    (
+        Arc<Timeline>,
+        TimelineViewPosition,
+        TimelinePaginationState,
+        NativeTimelineEventRoute,
+    ),
+    &'static str,
+> {
+    let route = match resolved_route {
+        Some(route) => route,
+        None => resolve_event_route(room, event_id).await,
+    };
+    let (live, _) = slots.live(client, room_id).await?;
+    let live_ids = live_window_event_ids(&live).await;
+    match plan_focused_open(event_id.as_str(), route, &live_ids) {
+        FocusedOpenPlan::Live {
+            anchor_event_id,
+            route,
+        } => {
+            let position = match anchor_event_id {
+                Some(target_event_id) => TimelineViewPosition::Focused { target_event_id },
+                None => TimelineViewPosition::LiveBottom,
+            };
+            let pagination = live_pagination_state(&live).await;
+            return Ok((live, position, pagination, route));
+        }
+        FocusedOpenPlan::EventFocused => {}
+    }
+    let Some(timeline) = slots
+        .focused(room, room_id, event_id, FOCUSED_CONTEXT_EVENT_COUNT)
+        .await
+    else {
+        // `/context` failed. Keep the room usable at its live bottom
+        // rather than failing the whole open.
+        let pagination = live_pagination_state(&live).await;
+        return Ok((
+            live,
+            TimelineViewPosition::LiveBottom,
+            pagination,
+            NativeTimelineEventRoute::Unreachable,
+        ));
+    };
+    if timeline.is_threaded() {
+        // `Automatic` thread mode filtered the window to the target's
+        // thread, with no back gap when it holds the root. That is the
+        // thread, not the room: never present it as a room position.
+        slots.forget_focused(room_id, event_id).await;
+        let root = threaded_focus_root(&timeline, event_id)
+            .await
+            .map(|root| root.to_string());
+        let position = match root.clone().filter(|root| live_ids.contains(root)) {
+            Some(target_event_id) => TimelineViewPosition::Focused { target_event_id },
+            None => TimelineViewPosition::LiveBottom,
+        };
+        let route = match root {
+            Some(root_event_id) => NativeTimelineEventRoute::Thread { root_event_id },
+            None => NativeTimelineEventRoute::Unreachable,
+        };
+        let pagination = live_pagination_state(&live).await;
+        return Ok((live, position, pagination, route));
+    }
+    let target_event_id = resolve_rendered_focus_target(room, &timeline, event_id).await;
+    Ok((
+        timeline,
+        TimelineViewPosition::Focused { target_event_id },
+        TimelinePaginationState {
+            backward: TimelinePageState::Available,
+            forward: TimelinePageState::Available,
+        },
+        NativeTimelineEventRoute::Room,
+    ))
+}
+
+async fn open_focused_unread(
+    slots: &mut Slots<'_>,
+    room: &Room,
+    room_id: &str,
+    live: &Arc<Timeline>,
+    anchor_event_id: &str,
+    invalid_id: &'static str,
+    open_failed: &'static str,
+) -> Result<(Arc<Timeline>, TimelineViewPosition, TimelinePaginationState), &'static str> {
+    let event_id = parse_event_id(anchor_event_id).map_err(|_| invalid_id)?;
+    let timeline = slots
+        .focused(room, room_id, &event_id, FOCUSED_CONTEXT_EVENT_COUNT)
+        .await
+        .ok_or(open_failed)?;
+    if timeline.is_threaded() {
+        // A read marker or restored anchor on an in-thread reply (another
+        // client wrote it). The thread-only window is not the room. The
+        // reply's room position is its thread root: place the live
+        // provider there when the live window has it, else at the bottom.
+        slots.forget_focused(room_id, &event_id).await;
+        let root = threaded_focus_root(&timeline, &event_id)
+            .await
+            .map(|root| root.to_string());
+        let live_ids = live_window_event_ids(live).await;
+        let position = match root.filter(|root| live_ids.contains(root)) {
+            Some(anchor_event_id) => TimelineViewPosition::Unread { anchor_event_id },
+            None => TimelineViewPosition::LiveBottom,
+        };
+        return Ok((live.clone(), position, live_pagination_state(live).await));
+    }
+    let anchor_event_id = resolve_rendered_focus_target(room, &timeline, &event_id).await;
+    Ok((
+        timeline,
+        TimelineViewPosition::Unread { anchor_event_id },
+        TimelinePaginationState {
+            backward: TimelinePageState::Available,
+            forward: TimelinePageState::Available,
+        },
+    ))
+}
+
+async fn open_thread(
+    slots: &mut Slots<'_>,
+    room: &Room,
+    room_id: &str,
+    root_event_id: &str,
+) -> Result<(Arc<Timeline>, TimelineViewPosition, TimelinePaginationState), &'static str> {
+    let root_event_id = parse_thread_root_event_id_for_open(root_event_id)?;
+    let timeline = slots
+        .thread(room, room_id, &root_event_id)
+        .await
+        .ok_or("v-timeline-thread-open-failed")?;
+    Ok((
+        timeline,
+        TimelineViewPosition::Thread {
+            root_event_id: root_event_id.to_string(),
+        },
+        TimelinePaginationState {
+            backward: TimelinePageState::Available,
+            forward: TimelinePageState::Available,
+        },
+    ))
+}
+
+async fn live_tail_event_id(live: &Timeline) -> Option<String> {
+    let items = live.items().await;
+    items.iter().rev().find_map(|item| {
+        item.as_event()
+            .and_then(|event| event.event_id().map(|event_id| event_id.to_string()))
+    })
+}
+
+async fn live_event_ids(live: &Timeline) -> Vec<String> {
+    let items = live.items().await;
+    items
+        .iter()
+        .filter_map(|item| {
+            item.as_event()
+                .and_then(|event| event.event_id().map(|event_id| event_id.to_string()))
+        })
+        .collect()
+}
+
+async fn unread_open_plan(client: &Client, live: &Timeline) -> LastReadOpenPlan {
+    let live_ids = live_event_ids(live).await;
+    let (raw, anchor) = navigation_read_state(live, client.user_id()).await;
+    let target = anchor.or(raw);
+    plan_unread_open(&live_ids, target.as_deref())
+}
+
+/// Event ids the live provider's view stream renders now. A view
+/// subscription sees only the SDK skip window (the newest items until it
+/// paginates back), not every item the timeline holds, so a target can be
+/// placed on the live provider only when it is in this window.
+async fn live_window_event_ids(live: &Timeline) -> Vec<String> {
+    let (items, _updates) = live.subscribe().await;
+    items
+        .iter()
+        .filter_map(|item| {
+            item.as_event()
+                .and_then(|event| event.event_id().map(|event_id| event_id.to_string()))
+        })
+        .collect()
+}
+
+/// Bound on one user-initiated page. Product requests retry three times at
+/// 30 s each; a page someone is waiting on fails sooner and can be retried.
+const USER_PAGINATION_TIMEOUT: Duration = Duration::from_secs(20);
+
+async fn paginate_view(
+    slots: &mut Slots<'_>,
+    client: &Client,
+    request: NativeTimelineViewPaginationRequest,
+) -> Result<TimelineViewSnapshot, &'static str> {
+    let (timeline, hit_start) = slots
+        .with(|registry| registry.pagination_target(&request.stream_id))
+        .await?;
+    let reached_end = match request.direction {
+        NativeTimelineDirection::Backwards => timeout(
+            USER_PAGINATION_TIMEOUT,
+            timeline.paginate_backwards(PAGINATION_BATCH_SIZE),
+        )
+        .await
+        .map_err(|_| "v-timeline-view-paginate-timeout")?
+        .map_err(|_| "v-timeline-view-paginate-backwards-failed")?,
+        NativeTimelineDirection::Forwards => timeout(
+            USER_PAGINATION_TIMEOUT,
+            timeline.paginate_forwards(PAGINATION_BATCH_SIZE),
+        )
+        .await
+        .map_err(|_| "v-timeline-view-paginate-timeout")?
+        .map_err(|_| "v-timeline-view-paginate-forwards-failed")?,
+    };
+    if request.direction == NativeTimelineDirection::Backwards {
+        hit_start.store(reached_end, Ordering::Release);
+    }
+    let source = slots
+        .with(|registry| registry.view_snapshot_source(client, &request.stream_id))
+        .await?;
+    Ok(source.snapshot().await)
+}
+
+/// What a view snapshot needs, read from the registry under its lock.
+struct ViewSnapshotSource {
+    input: TimelineViewSnapshotInput,
+    timeline: Arc<Timeline>,
+    media: Arc<AsyncMutex<TimelineMediaRegistry>>,
+}
+
+impl ViewSnapshotSource {
+    async fn snapshot(self) -> TimelineViewSnapshot {
+        view_snapshot_from_timeline(self.input, &self.timeline, self.media).await
+    }
+}
+
+/// Open (or reuse) the live timeline a room-level Mark as Read acts on.
+async fn open_room_read_timeline_in(
+    slots: &mut Slots<'_>,
+    client: &Client,
+    room_id: &str,
+) -> Result<Arc<Timeline>, &'static str> {
+    let (timeline, built) = slots
+        .live(client, room_id)
+        .await
+        .map_err(|_| "v-rooms-room-read-state-mark-read-failed")?;
+    if built {
+        // Room-list Mark as Read does not mount the room. Keep its
+        // timeline only as the first candidate for eviction.
+        slots.with(|registry| registry.demote_live(room_id)).await;
+    }
+    Ok(timeline)
+}
+
+async fn event_readback_in(
+    slots: &mut Slots<'_>,
+    client: &Client,
+    room_id: &str,
+    event_id: &str,
+) -> Result<NativeTimelineEventReadback, &'static str> {
+    let room_id = parse_room_id(room_id)?.to_string();
+    let event_id = parse_event_id(event_id)?;
+    let timeline = match slots.cached_focused(&room_id, &event_id).await {
+        Some(timeline) => timeline,
+        None => {
+            let room = client
+                .get_room(parse_room_id(&room_id)?.as_ref())
+                .ok_or("v-crypto.6-event-room-not-found")?;
+            slots
+                .build_focused(&room, &room_id, &event_id, 0)
+                .await
+                .ok_or("v-crypto.6-event-open-failed")?
+        }
+    };
+    let (items, _updates) = timeline.subscribe().await;
+    let mut item = items
+        .iter()
+        .filter_map(|item| project_item(item, client.user_id()))
+        .find(|item| item.event_id == event_id.as_str())
+        .ok_or("v-crypto.6-event-not-found")?;
+    if let Some(room) = client.get_room(parse_room_id(&room_id)?.as_ref()) {
+        enrich_native_reactions(&room, event_id.as_str(), &mut item.reactions, true).await;
+    }
+    Ok(NativeTimelineEventReadback {
+        session_generation: slots.session_generation(),
+        room_id,
+        event_id: event_id.to_string(),
+        item,
+    })
+}
+
+async fn toggle_reaction_in(
+    slots: &mut Slots<'_>,
+    client: &Client,
+    room_id: &str,
+    target_event_id: &str,
+    key: &str,
+) -> Result<NativeReactionMutationResult, &'static str> {
+    let room_id = parse_room_id(room_id)?.to_string();
+    let target_event_id = parse_event_id(target_event_id)?;
+    validate_reaction_key(key)?;
+    slots.live(client, &room_id).await?;
+    let timeline = reaction_timeline(slots, &room_id, &target_event_id).await?;
+    let added = timeline
+        .toggle_reaction(&TimelineEventItemId::EventId(target_event_id.clone()), key)
+        .await
+        .map_err(|_| "v-send.2-reaction-toggle-failed")?;
+    let readback = reaction_readback(slots, client, &room_id, &target_event_id, key, false).await?;
+    Ok(NativeReactionMutationResult {
+        room_id,
+        target_event_id: target_event_id.to_string(),
+        key: key.to_owned(),
+        mutation: if added {
+            NativeReactionMutation::Added
+        } else {
+            NativeReactionMutation::Removed
+        },
+        readback,
+    })
+}
+
+/// The open timeline that renders `target_event_id`.
+///
+/// The live timeline hides thread replies and only covers the recent tail,
+/// so a reaction on a thread reply or a permalinked event must go through
+/// the thread, view or focused timeline that holds that row. Falls back to
+/// the live timeline, whose error then reports the missing row.
+async fn reaction_timeline(
+    slots: &mut Slots<'_>,
+    room_id: &str,
+    target_event_id: &EventId,
+) -> Result<Arc<Timeline>, &'static str> {
+    let candidates = slots
+        .with(|registry| registry.reaction_candidates(room_id))
+        .await?;
+    let live = candidates[0].clone();
+    for timeline in candidates {
+        if timeline.item_by_event_id(target_event_id).await.is_some() {
+            return Ok(timeline);
+        }
+    }
+    Ok(live)
+}
+
+/// Idempotently ensure an approval annotation exists. This intentionally
+/// does *not* call `toggle_reaction`: an existing reaction remains present.
+async fn ensure_reaction_in(
+    slots: &mut Slots<'_>,
+    client: &Client,
+    room_id: &str,
+    target_event_id: &str,
+    key: &str,
+) -> Result<NativeReactionMutationResult, &'static str> {
+    let room_id = parse_room_id(room_id)?.to_string();
+    let target_event_id = parse_event_id(target_event_id)?;
+    validate_reaction_key(key)?;
+    let before = reaction_readback(slots, client, &room_id, &target_event_id, key, false).await?;
+    if before.as_ref().is_some_and(|reaction| reaction.me) {
+        return Ok(NativeReactionMutationResult {
+            room_id,
+            target_event_id: target_event_id.to_string(),
+            key: key.to_owned(),
+            mutation: NativeReactionMutation::AlreadyPresent,
+            readback: before,
+        });
+    }
+
+    let room = client
+        .get_room(parse_room_id(&room_id)?.as_ref())
+        .ok_or("v-send.2-reaction-room-not-found")?;
+    // A reaction the SDK still holds after a recoverable error is already
+    // shown as the user's local echo and will retry; reporting it failed
+    // would invite a second, duplicate annotation. Same rule as redaction.
+    accept_still_queued(
+        send_event_via_room_queue(
+            &room,
+            ReactionEventContent::from(Annotation::new(target_event_id.clone(), key.to_owned()))
+                .into(),
+        )
+        .await,
+        "v-send.2-reaction-ensure-failed",
+    )?;
+
+    let readback = reaction_readback(slots, client, &room_id, &target_event_id, key, false).await?;
+    Ok(NativeReactionMutationResult {
+        room_id,
+        target_event_id: target_event_id.to_string(),
+        key: key.to_owned(),
+        mutation: NativeReactionMutation::Added,
+        readback,
+    })
+}
+
+/// Redact any reaction annotation selected in the viewer. Aggregated
+/// annotations are not timeline rows, so this queues the redaction on the
+/// room send queue rather than calling `Timeline::redact`.
+async fn redact_reaction_in(
+    slots: &mut Slots<'_>,
+    client: &Client,
+    room_id: &str,
+    target_event_id: &str,
+    reaction_event_id: &str,
+    key: &str,
+) -> Result<NativeReactionMutationResult, &'static str> {
+    let room_id = parse_room_id(room_id)?.to_string();
+    let target_event_id = parse_event_id(target_event_id)?;
+    let reaction_event_id = parse_event_id(reaction_event_id)?;
+    validate_reaction_key(key)?;
+    let selected_reaction = reaction_readback(slots, client, &room_id, &target_event_id, key, true)
+        .await?
+        .ok_or("v-send.2-reaction-redact-annotation-not-found")?;
+    if !reaction_contains_event_id(&selected_reaction, &reaction_event_id) {
+        return Err("v-send.2-reaction-redact-annotation-not-found");
+    }
+    let room = client
+        .get_room(parse_room_id(&room_id)?.as_ref())
+        .ok_or("v-send.2-reaction-room-not-found")?;
+    accept_still_queued(
+        redact_via_room_queue(&room, &reaction_event_id, Some("Removed reaction")).await,
+        "v-send.2-reaction-redact-failed",
+    )?;
+    let readback = reaction_readback(slots, client, &room_id, &target_event_id, key, true).await?;
+    Ok(NativeReactionMutationResult {
+        room_id,
+        target_event_id: target_event_id.to_string(),
+        key: key.to_owned(),
+        mutation: NativeReactionMutation::Redacted,
+        readback,
+    })
+}
+
+async fn reaction_readback(
+    slots: &mut Slots<'_>,
+    client: &Client,
+    room_id: &str,
+    target_event_id: &OwnedEventId,
+    key: &str,
+    network: bool,
+) -> Result<Option<NativeTimelineReaction>, &'static str> {
+    let (live, _) = slots.live(client, room_id).await?;
+    let (items, _updates) = live.subscribe().await;
+    if let Some(item) = items
+        .iter()
+        .filter_map(|item| project_item(item, client.user_id()))
+        .find(|item| item.event_id == target_event_id.as_str())
+    {
+        // Live viewport owns this event. After toggle-remove the live item
+        // can correctly omit the key while a focused Event timeline still
+        // projects the previous aggregation (event-cache / local Sent echo).
+        // Falling through made `ensure_reaction` report AlreadyPresent and
+        // skip the re-add. Keep the focused timeline; dropping it here
+        // desyncs the live room timeline's local annotation echo.
+        let mut reaction = item
+            .reactions
+            .into_iter()
+            .find(|reaction| reaction.key == key);
+        if let (Some(reaction), Some(room)) = (
+            reaction.as_mut(),
+            client.get_room(parse_room_id(room_id)?.as_ref()),
+        ) {
+            enrich_native_reactions(
+                &room,
+                target_event_id.as_str(),
+                std::slice::from_mut(reaction),
+                network,
+            )
+            .await;
+        }
+        return Ok(reaction);
+    }
+
+    // Notifications may target a message outside the currently open
+    // viewport. A focused native timeline is the same authoritative owner
+    // used for event readback; no JS relation inspection is involved.
+    let timeline = match slots.cached_focused(room_id, target_event_id).await {
+        Some(timeline) => timeline,
+        None => {
+            let room = client
+                .get_room(parse_room_id(room_id)?.as_ref())
+                .ok_or("v-send.2-reaction-room-not-found")?;
+            let Some(timeline) = slots
+                .build_focused(&room, room_id, target_event_id, 0)
+                .await
+            else {
+                // Toggle/ensure already applied. Missing focused history must
+                // not fail the mutation; viewer open uses event_readback.
+                return Ok(None);
+            };
+            timeline
+        }
+    };
+    let (items, _updates) = timeline.subscribe().await;
+    let mut reaction = items
+        .iter()
+        .filter_map(|item| project_item(item, client.user_id()))
+        .find(|item| item.event_id == target_event_id.as_str())
+        .and_then(|item| {
+            item.reactions
+                .into_iter()
+                .find(|reaction| reaction.key == key)
+        });
+    if let (Some(reaction), Some(room)) = (
+        reaction.as_mut(),
+        client.get_room(parse_room_id(room_id)?.as_ref()),
+    ) {
+        enrich_native_reactions(
+            &room,
+            target_event_id.as_str(),
+            std::slice::from_mut(reaction),
+            network,
+        )
+        .await;
+    }
+    Ok(reaction)
 }
 
 fn unix_time_ms() -> u64 {
@@ -4042,15 +4339,24 @@ async fn navigation_read_state(
     (raw, anchor)
 }
 
-fn live_pagination_state(entry: &LiveTimelineEntry) -> TimelinePaginationState {
-    TimelinePaginationState {
-        backward: if entry.hit_start {
-            TimelinePageState::Exhausted
-        } else {
-            TimelinePageState::Available
-        },
-        forward: TimelinePageState::Available,
-    }
+/// Whether the SDK reports a live provider at the start of the room now. It
+/// is the only authority: a gappy sync, a cross-process reload or an
+/// auto-shrink reopens history the provider once reached.
+async fn live_hit_start(live: &Timeline) -> bool {
+    matches!(
+        live.live_back_pagination_status().await,
+        Some((
+            PaginationStatus::Idle {
+                hit_timeline_start: true
+            },
+            _
+        ))
+    )
+}
+
+/// Backward pagination a new stream on a live provider starts from.
+async fn live_pagination_state(live: &Timeline) -> TimelinePaginationState {
+    pagination_state_from_hit_start(live_hit_start(live).await)
 }
 
 fn should_restore_viewport(
@@ -4197,14 +4503,19 @@ fn spawn_view_update_owner(
 
         let mut room_info = timeline.room().subscribe_info();
         let mut read_receipts = timeline.subscribe_own_user_read_receipts_changed().await;
+        let live_focus;
         let mut pagination_updates: std::pin::Pin<
             Box<dyn futures_util::Stream<Item = PaginationStatus> + Send>,
         > = match timeline.live_back_pagination_status().await {
             Some((current, stream)) => {
+                live_focus = true;
                 last_pagination = pagination_state_from_status(current, &hit_start);
                 Box::pin(stream)
             }
-            None => Box::pin(stream::pending()),
+            None => {
+                live_focus = false;
+                Box::pin(stream::pending())
+            }
         };
 
         // The SDK intentionally leaves sender profiles unresolved until the
@@ -4233,6 +4544,20 @@ fn spawn_view_update_owner(
                         own_user_id.as_deref(),
                     ).await;
                     apply_item_id_diffs(&mut item_ids, &diffs);
+                    // The SDK clears a live room's linked chunk after a gappy
+                    // sync, which reopens history this stream may have
+                    // reached. Its status stream is deduplicated, so a stream
+                    // latched by its own page may never see that `Idle`.
+                    let pagination = (live_focus
+                        && diffs
+                            .iter()
+                            .any(|diff| matches!(diff, VectorDiff::Clear | VectorDiff::Reset { .. }))
+                        && hit_start.swap(false, Ordering::AcqRel))
+                    .then(|| pagination_state_from_hit_start(false))
+                    .filter(|pagination| *pagination != last_pagination);
+                    if let Some(pagination) = &pagination {
+                        last_pagination = pagination.clone();
+                    }
                     let mut ops = {
                         let mut registry = media.lock().await;
                         registry.retain_items(item_ids.iter().map(String::as_str));
@@ -4244,13 +4569,13 @@ fn spawn_view_update_owner(
                         )
                     };
                     enrich_view_delta_ops(timeline.room(), &mut ops).await;
-                    if ops.is_empty() {
+                    if ops.is_empty() && pagination.is_none() {
                         continue;
                     }
                     let read_state =
                         project_live_read_state(&timeline, &position, own_user_id.as_deref()).await;
                     last_read_state = read_state.clone();
-                    emitter.emit(ops, Some(read_state), None, None);
+                    emitter.emit(ops, Some(read_state), pagination, None);
                 }
                 Some(_) = room_info.next() => {
                     let read_state =
@@ -4373,22 +4698,18 @@ fn pagination_state_from_hit_start(hit_start: bool) -> TimelinePaginationState {
     }
 }
 
+/// Map a live provider's SDK pagination status. Every `Idle` is
+/// authoritative, so `Idle { hit_timeline_start: false }` un-latches a stream
+/// whose history the SDK reopened.
 fn pagination_state_from_status(
     status: PaginationStatus,
     hit_start: &AtomicBool,
 ) -> TimelinePaginationState {
     let backward = match status {
         PaginationStatus::Paginating => TimelinePageState::Loading,
-        PaginationStatus::Idle {
-            hit_timeline_start: true,
-        } => {
-            hit_start.store(true, Ordering::Release);
-            TimelinePageState::Exhausted
-        }
-        PaginationStatus::Idle {
-            hit_timeline_start: false,
-        } => {
-            if hit_start.load(Ordering::Acquire) {
+        PaginationStatus::Idle { hit_timeline_start } => {
+            hit_start.store(hit_timeline_start, Ordering::Release);
+            if hit_timeline_start {
                 TimelinePageState::Exhausted
             } else {
                 TimelinePageState::Available
@@ -5647,6 +5968,18 @@ mod tests {
             pagination_state_from_status(PaginationStatus::Paginating, &hit_start).backward,
             TimelinePageState::Loading
         );
+        // The SDK un-latches after shrinking the room to its newest chunk.
+        assert_eq!(
+            pagination_state_from_status(
+                PaginationStatus::Idle {
+                    hit_timeline_start: false
+                },
+                &hit_start
+            )
+            .backward,
+            TimelinePageState::Available
+        );
+        assert!(!hit_start.load(Ordering::Acquire));
     }
 
     #[test]

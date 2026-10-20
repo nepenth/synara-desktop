@@ -97,6 +97,20 @@ impl synara_core::app::nse_preview::NseSecretReader for SecretReaderAdapter {
     }
 }
 
+/// Make async-compat's fallback runtime multi-threaded before `resolve` is
+/// first polled, as the app does (see `synara_core::ffi_runtime`). The
+/// constructor is the extension's only synchronous entry point.
+fn install_nse_ffi_runtime() {
+    static INSTALL: std::sync::Once = std::sync::Once::new();
+    INSTALL.call_once(|| {
+        uniffi::deps::async_compat::set_runtime_builder(Box::new(|| {
+            synara_core::ffi_runtime::ffi_runtime_builder(
+                synara_core::ffi_runtime::NSE_WORKER_THREADS,
+            )
+        }));
+    });
+}
+
 fn map_core_error(error: synara_core::app::nse_preview::NsePreviewError) -> NseCoreError {
     NseCoreError::Failed {
         code: error.code().to_owned(),
@@ -115,6 +129,7 @@ impl NsePreviewRequest {
         room_id: String,
         event_id: String,
     ) -> Self {
+        install_nse_ffi_runtime();
         Self {
             store: SecretReaderAdapter { inner: store },
             user_id,
