@@ -5,8 +5,9 @@ import {
   getLocalStorageItem,
   setLocalStorageItem,
 } from './utils/atomWithLocalStorage';
+import { OPENED_SIDEBAR_FOLDER_PREFIX } from './sessions';
 
-const OPENED_SIDEBAR_FOLDER = 'openedSidebarFolder';
+const OPENED_SIDEBAR_FOLDER = OPENED_SIDEBAR_FOLDER_PREFIX;
 
 type OpenedSidebarFolderAction =
   | {

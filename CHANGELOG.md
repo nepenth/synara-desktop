@@ -3,6 +3,8 @@
 ## Unreleased
 
 - iOS: opening a room from a notification loads its earlier messages and keeps receiving new ones, the same as opening it from the room list. You no longer need to leave the room or relaunch Synara to see its history.
+- Desktop: actions that fail now say so where you acted, keep what you typed, and never report success they didn't achieve. This covers moving rooms between spaces, adding existing rooms, blocking and unblocking users, bulk invite actions (which now continue past a failure and list what didn't work), notification settings, space reordering, marking rooms read or unread, room notes, Later items, and cancelling verification. The identity-change banner says when it couldn't check a room instead of showing nothing.
+- Desktop: logging out clears unsent drafts and per-account sidebar layout. The login and registration fields work with password managers, and a session that signs in but can't open offers Retry instead of an endless spinner.
 
 ## [2.2.6] - 2026-10-12
 

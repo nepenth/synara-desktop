@@ -11,6 +11,7 @@ import {
   Icons,
   Scroll,
   Text,
+  color,
   config,
   toRem,
 } from 'folds';
@@ -81,10 +82,7 @@ import * as customHtmlCss from '../../../styles/CustomHtml.css';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { useRoomUnread } from '../../../state/hooks/unread';
 import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
-import {
-  markAsReadFromExplicitUserAction,
-  markAsReadFromExplicitUserActionInBackground,
-} from '../../../utils/notifications';
+import { markAsReadFromExplicitUserAction } from '../../../utils/notifications';
 import { ContainerColor } from '../../../styles/ContainerColor.css';
 import { VirtualTile } from '../../../components/virtualizer';
 import { UserAvatar } from '../../../components/user-avatar';
@@ -438,8 +436,12 @@ function RoomNotificationsGroupComp({
     if (!eventId) return;
     onOpen(room.roomId, eventId);
   };
+  const [markReadState, markRead] = useAsyncCallback(
+    useCallback(() => markAsReadFromExplicitUserAction(room.roomId), [room.roomId])
+  );
   const handleMarkAsRead = () => {
-    markAsReadFromExplicitUserActionInBackground(room.roomId);
+    // The failure is rendered from `markReadState`.
+    markRead().catch(() => {});
   };
 
   return (
@@ -484,6 +486,7 @@ function RoomNotificationsGroupComp({
               variant="Primary"
               radii="Pill"
               onClick={handleMarkAsRead}
+              disabled={markReadState.status === AsyncStatus.Loading}
               before={<Icon size="100" src={Icons.CheckTwice} />}
             >
               <Text size="T200">Mark as Read</Text>
@@ -491,6 +494,11 @@ function RoomNotificationsGroupComp({
           )}
         </Box>
       </Header>
+      {markReadState.status === AsyncStatus.Error && (
+        <Text size="T200" role="alert" style={{ color: color.Critical.Main }}>
+          Couldn&apos;t mark {room.name} as read. Try again.
+        </Text>
+      )}
       <Box direction="Column" gap="100">
         {notifications.map((notification) => {
           const { event } = notification;

@@ -19,10 +19,15 @@ const loggedIn: DesktopInvokeResult<unknown> = {
 test('profile rate limits have actionable copy without exposing server text', () => {
   assert.match(
     profileWriteErrorMessage({
-      diagnostic_id: 'v-send.r-avatar-profile-rate-limited',
+      diagnosticId: 'v-send.r-avatar-profile-rate-limited',
       message: 'sensitive server response',
     }),
     /limiting profile changes.*try again/i
+  );
+  // The snake_case spelling never appears on the wire (serde camelCase).
+  assert.doesNotMatch(
+    profileWriteErrorMessage({ diagnostic_id: 'v-send.r-avatar-profile-rate-limited' }),
+    /limiting profile changes/i
   );
   assert.doesNotMatch(
     profileWriteErrorMessage({ message: 'sensitive server response' }),

@@ -7,6 +7,7 @@ import {
   SESSION_LOCAL_STORAGE_EXACT_KEYS,
   type SessionLocalStorage,
 } from '../sessions';
+import { getRoomDraftStorageKey } from '../../utils/drafts';
 
 const createMemoryStorage = (initialValues: Record<string, string> = {}): SessionLocalStorage => {
   const values = new Map(Object.entries(initialValues));
@@ -55,4 +56,28 @@ test('logout cleanup removes documented session keys and navigation only', () =>
   assert.equal(storage.getItem('navToActivePath@alice:example.org'), null);
   assert.equal(storage.getItem('settings'), '{"themeId":"aurora"}');
   assert.equal(storage.getItem('platformSettings'), '{"desktopShortcutShow":"CmdOrCtrl+1"}');
+});
+
+test('logout cleanup removes unsent drafts and per-user layout state', () => {
+  const draftKey = getRoomDraftStorageKey('@alice:example.org', '!room:example.org');
+  const storage = createMemoryStorage({
+    [draftKey]: '{"version":1,"updatedAt":1,"value":[]}',
+    'openedSidebarFolder@alice:example.org': '["folder"]',
+    'closedNavCategories@alice:example.org': '["home"]',
+    'closedLobbyCategories@alice:example.org': '["!space:example.org"]',
+    spaceRooms: '["!room:example.org"]',
+    settings: '{"themeId":"aurora"}',
+    'synara.navigationPaneWidth': '320',
+  });
+
+  clearSessionLocalStorage(storage);
+
+  assert.equal(storage.getItem(draftKey), null);
+  assert.equal(storage.getItem('openedSidebarFolder@alice:example.org'), null);
+  assert.equal(storage.getItem('closedNavCategories@alice:example.org'), null);
+  assert.equal(storage.getItem('closedLobbyCategories@alice:example.org'), null);
+  assert.equal(storage.getItem('spaceRooms'), null);
+  // Device-level preferences stay.
+  assert.equal(storage.getItem('settings'), '{"themeId":"aurora"}');
+  assert.equal(storage.getItem('synara.navigationPaneWidth'), '320');
 });

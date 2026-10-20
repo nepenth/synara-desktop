@@ -13,6 +13,11 @@ export type RoomsNotificationPreferences = {
   mute: Set<string>;
   specialMessages: Set<string>;
   allMessages: Set<string>;
+  /**
+   * The latest load failed. The sets hold the last known modes (empty if
+   * none ever loaded), so "Default" may not be the room's real mode.
+   */
+  loadFailed?: boolean;
 };
 
 const RoomsNotificationPreferencesContext = createContext<RoomsNotificationPreferences | null>(
@@ -52,6 +57,20 @@ const preferencesFromNativeRooms = (
   return pref;
 };
 
+/** Retry delay after a failed load, so a transient error does not stick. */
+export const ROOM_NOTIFICATION_PREFERENCES_RETRY_MS = 15_000;
+
+/**
+ * Fold one load outcome into the preferences. A failed load keeps the last
+ * known modes instead of resetting every room to "Default", which would make
+ * muted rooms look unmuted.
+ */
+export const nextRoomsNotificationPreferences = (
+  current: RoomsNotificationPreferences,
+  outcome: { ok: true; rooms: NativeRoomNotificationSnapshot[] } | { ok: false }
+): RoomsNotificationPreferences =>
+  outcome.ok ? preferencesFromNativeRooms(outcome.rooms) : { ...current, loadFailed: true };
+
 /**
  * Per-room notification modes as Core resolves them from the account push
  * rules (`matrix_room_notifications_snapshot`). The renderer never re-derives
@@ -67,20 +86,34 @@ export const useRoomsNotificationPreferences = (): RoomsNotificationPreferences 
 
   useEffect(() => {
     let disposed = false;
+    let retry: ReturnType<typeof setTimeout> | undefined;
     void nativeRoomNotificationsSnapshot()
       .then((rooms) => {
-        if (!disposed) setPreferences(preferencesFromNativeRooms(rooms));
+        if (!disposed)
+          setPreferences((current) =>
+            nextRoomsNotificationPreferences(current, { ok: true, rooms })
+          );
       })
       .catch(() => {
-        if (!disposed) setPreferences(EMPTY_ROOM_NOTIFICATION_PREFERENCES);
+        if (disposed) return;
+        setPreferences((current) => nextRoomsNotificationPreferences(current, { ok: false }));
+        retry = setTimeout(
+          () => setEpoch((value) => value + 1),
+          ROOM_NOTIFICATION_PREFERENCES_RETRY_MS
+        );
       });
     return () => {
       disposed = true;
+      if (retry !== undefined) clearTimeout(retry);
     };
   }, [epoch]);
 
   return preferences;
 };
+
+/** Whether the per-room modes failed to load; false outside the provider. */
+export const useRoomsNotificationPreferencesLoadFailed = (): boolean =>
+  useContext(RoomsNotificationPreferencesContext)?.loadFailed === true;
 
 export enum RoomNotificationMode {
   Unset = 'Unset',

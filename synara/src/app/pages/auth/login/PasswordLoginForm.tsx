@@ -1,4 +1,4 @@
-import React, { FormEventHandler, MouseEventHandler, useCallback, useState } from 'react';
+import React, { FormEventHandler, MouseEventHandler, useCallback, useId, useState } from 'react';
 import {
   Box,
   Button,
@@ -37,6 +37,7 @@ import {
   factoryGetBaseUrl,
   loginPassword,
   useLoginComplete,
+  NATIVE_SESSION_HANDOFF_FAILED_COPY,
 } from './loginUtil';
 import { PasswordInput } from '../../../components/password-input';
 import { FieldError } from '../FiledError';
@@ -132,7 +133,11 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
     Parameters<typeof loginPassword>
   >(useCallback(loginPassword, []));
 
-  useLoginComplete(loginState.status === AsyncStatus.Success ? loginState.data : undefined);
+  const { handoffFailed, retryHandoff } = useLoginComplete(
+    loginState.status === AsyncStatus.Success ? loginState.data : undefined
+  );
+  const usernameInputId = useId();
+  const passwordInputId = useId();
 
   const [storeRecoveryOpen, setStoreRecoveryOpen] = useState(false);
   const [storeRecoveryConfirmation, setStoreRecoveryConfirmation] = useState('');
@@ -251,13 +256,15 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
   return (
     <Box as="form" onSubmit={handleSubmit} direction="Inherit" gap="400">
       <Box direction="Column" gap="100">
-        <Text as="label" size="L400" priority="300">
+        <Text as="label" htmlFor={usernameInputId} size="L400" priority="300">
           Username
         </Text>
         <Input
+          id={usernameInputId}
           defaultValue={defaultUsername ?? defaultEmail}
           style={{ paddingRight: config.space.S300 }}
           name="usernameInput"
+          autoComplete="username"
           variant="Background"
           size="500"
           required
@@ -276,10 +283,18 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
         )}
       </Box>
       <Box direction="Column" gap="100">
-        <Text as="label" size="L400" priority="300">
+        <Text as="label" htmlFor={passwordInputId} size="L400" priority="300">
           Password
         </Text>
-        <PasswordInput name="passwordInput" variant="Background" size="500" outlined required />
+        <PasswordInput
+          id={passwordInputId}
+          name="passwordInput"
+          autoComplete="current-password"
+          variant="Background"
+          size="500"
+          outlined
+          required
+        />
         <Box alignItems="Start" justifyContent="SpaceBetween" gap="200">
           {loginState.status === AsyncStatus.Error && (
             <>
@@ -333,6 +348,16 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
           </Box>
         </Box>
       </Box>
+      {loginState.status === AsyncStatus.Success && handoffFailed && (
+        <Box role="alert" direction="Column" gap="200">
+          <FieldError message={NATIVE_SESSION_HANDOFF_FAILED_COPY} />
+          <Button type="button" variant="Secondary" fill="Soft" onClick={retryHandoff}>
+            <Text as="span" size="B400">
+              Retry
+            </Text>
+          </Button>
+        </Box>
+      )}
       <Button type="submit" variant="Primary" size="500" disabled={!serverReady}>
         <Text as="span" size="B500">
           {serverPending ? 'Connecting…' : 'Sign in'}
@@ -411,7 +436,8 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
 
       <Overlay
         open={
-          loginState.status === AsyncStatus.Loading || loginState.status === AsyncStatus.Success
+          loginState.status === AsyncStatus.Loading ||
+          (loginState.status === AsyncStatus.Success && !handoffFailed)
         }
         backdrop={<OverlayBackdrop />}
       >

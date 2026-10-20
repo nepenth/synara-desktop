@@ -74,6 +74,16 @@ export const roomIdentityBanner = (
   };
 };
 
+/** Shown when Synara cannot tell whether anyone's identity changed. */
+export const ROOM_IDENTITY_CHECK_FAILED_COPY =
+  "Couldn't check this room for identity changes. Synara will keep trying.";
+
+const isRoomIdentityReadback = (roomId: string, value: unknown): boolean =>
+  typeof value === 'object' &&
+  value !== null &&
+  (value as Partial<NativeRoomIdentityWarnings>).roomId === roomId &&
+  Array.isArray((value as Partial<NativeRoomIdentityWarnings>).warnings);
+
 export const loadRoomIdentityWarnings = async (
   roomId: string
 ): Promise<NativeRoomIdentityWarning[] | undefined> => {
@@ -81,8 +91,37 @@ export const loadRoomIdentityWarnings = async (
     roomId,
   });
   if (!result.available) return undefined;
+  // A readback for another room or without a warnings list is a failed check,
+  // not "no warnings": treating it as empty would hide a real warning.
+  if (!isRoomIdentityReadback(roomId, result.value)) {
+    throw new Error('Room identity warnings readback was malformed.');
+  }
   return parseRoomIdentityWarnings(roomId, result.value);
 };
+
+export type RoomIdentityWarningsState = {
+  warnings: NativeRoomIdentityWarning[];
+  /** The latest check failed; `warnings` is the last known result. */
+  checkFailed: boolean;
+};
+
+export const INITIAL_ROOM_IDENTITY_WARNINGS_STATE: RoomIdentityWarningsState = {
+  warnings: [],
+  checkFailed: false,
+};
+
+/**
+ * Fold one load outcome into the banner state. Security UI fails closed: a
+ * failed load keeps the last known warnings and flags the check as failed
+ * instead of clearing what the user was being warned about.
+ */
+export const applyRoomIdentityWarningsLoad = (
+  state: RoomIdentityWarningsState,
+  outcome: { ok: true; warnings: NativeRoomIdentityWarning[] } | { ok: false }
+): RoomIdentityWarningsState =>
+  outcome.ok
+    ? { warnings: outcome.warnings, checkFailed: false }
+    : { warnings: state.warnings, checkFailed: true };
 
 export const resolveRoomIdentityWarning = async (
   roomId: string,

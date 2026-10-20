@@ -5,7 +5,7 @@ import React, {
   useEffect,
   useState,
 } from 'react';
-import { Box, Button, Chip, Icon, Icons, Input, Spinner, Text } from 'folds';
+import { Box, Button, Chip, Icon, Icons, Input, Spinner, Text, color } from 'folds';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
@@ -22,8 +22,17 @@ export function IgnoredUserList() {
   return <NativeIgnoredUserList />;
 }
 
+function InlineError({ message }: { message: string }) {
+  return (
+    <Text size="T200" role="alert" style={{ color: color.Critical.Main }}>
+      {message}
+    </Text>
+  );
+}
+
 function NativeIgnoreUserInput({ onIgnore }: { onIgnore: (userId: string) => Promise<void> }) {
   const [userId, setUserId] = useState('');
+  const [error, setError] = useState<string>();
   const alive = useAlive();
   const [ignoreState, ignore] = useAsyncCallback(onIgnore);
   const ignoring = ignoreState.status === AsyncStatus.Loading;
@@ -36,38 +45,52 @@ function NativeIgnoreUserInput({ onIgnore }: { onIgnore: (userId: string) => Pro
     evt.preventDefault();
     if (ignoring) return;
     const uId = userId.trim();
-    if (!uId || !isUserId(uId)) return;
-    ignore(uId).then(() => {
-      if (alive()) setUserId('');
-    });
+    if (!uId) return;
+    if (!isUserId(uId)) {
+      setError('Enter a full user ID, like @name:example.org.');
+      return;
+    }
+    setError(undefined);
+    // The typed ID stays in the field when blocking fails, ready for a retry.
+    ignore(uId).then(
+      () => {
+        if (alive()) setUserId('');
+      },
+      () => {
+        if (alive()) setError(`Couldn't block ${uId}. Try again.`);
+      }
+    );
   };
 
   return (
-    <Box as="form" onSubmit={handleSubmit} gap="200" aria-disabled={ignoring}>
-      <Box grow="Yes" direction="Column">
-        <Input
-          required
-          name="userIdInput"
-          value={userId}
-          onChange={handleChange}
+    <Box direction="Column" gap="100">
+      <Box as="form" onSubmit={handleSubmit} gap="200" aria-disabled={ignoring}>
+        <Box grow="Yes" direction="Column">
+          <Input
+            required
+            name="userIdInput"
+            value={userId}
+            onChange={handleChange}
+            variant="Secondary"
+            radii="300"
+            readOnly={ignoring}
+          />
+        </Box>
+        <Button
+          className={SettingsQuietControl}
+          size="400"
           variant="Secondary"
+          fill="Soft"
+          outlined
           radii="300"
-          readOnly={ignoring}
-        />
+          type="submit"
+          disabled={ignoring}
+        >
+          {ignoring && <Spinner variant="Secondary" size="300" />}
+          <Text size="B400">Block</Text>
+        </Button>
       </Box>
-      <Button
-        className={SettingsQuietControl}
-        size="400"
-        variant="Secondary"
-        fill="Soft"
-        outlined
-        radii="300"
-        type="submit"
-        disabled={ignoring}
-      >
-        {ignoring && <Spinner variant="Secondary" size="300" />}
-        <Text size="B400">Block</Text>
-      </Button>
+      {error && <InlineError message={error} />}
     </Box>
   );
 }
@@ -75,22 +98,35 @@ function NativeIgnoreUserInput({ onIgnore }: { onIgnore: (userId: string) => Pro
 function NativeIgnoredUserList() {
   const [userList, setUserList] = useState<string[]>([]);
   const [loadState, load] = useAsyncCallback(useCallback(() => nativeIgnoredUsersSnapshot(), []));
+  const loadFailed = loadState.status === AsyncStatus.Error;
 
-  useEffect(() => {
-    load().then((ids) => {
-      if (ids) setUserList(ids);
-    });
+  const reload = useCallback(() => {
+    // A failed load is rendered from `loadState`; it must not look like an empty list.
+    load().then(setUserList, () => {});
   }, [load]);
 
-  const handleIgnore = useCallback(async (userId: string) => {
-    await nativeIgnoredUsersIgnore(userId);
-    setUserList(await nativeIgnoredUsersSnapshot());
-  }, []);
+  useEffect(() => {
+    reload();
+  }, [reload]);
 
-  const handleUnignore = useCallback(async (userId: string) => {
-    await nativeIgnoredUsersUnignore(userId);
-    setUserList(await nativeIgnoredUsersSnapshot());
-  }, []);
+  const handleIgnore = useCallback(
+    async (userId: string) => {
+      await nativeIgnoredUsersIgnore(userId);
+      // The block succeeded; a failed refresh only shows the list error.
+      setUserList((current) => (current.includes(userId) ? current : [...current, userId]));
+      reload();
+    },
+    [reload]
+  );
+
+  const handleUnignore = useCallback(
+    async (userId: string) => {
+      await nativeIgnoredUsersUnignore(userId);
+      setUserList((current) => current.filter((id) => id !== userId));
+      reload();
+    },
+    [reload]
+  );
 
   return (
     <Box direction="Column" gap="100">
@@ -111,6 +147,24 @@ function NativeIgnoredUserList() {
             <NativeIgnoreUserInput onIgnore={handleIgnore} />
             {loadState.status === AsyncStatus.Loading && userList.length === 0 && (
               <Spinner variant="Secondary" size="300" />
+            )}
+            {loadFailed && (
+              <Box alignItems="Center" gap="200">
+                <Box grow="Yes">
+                  <InlineError message="Couldn't load your blocked users. The list below may be incomplete." />
+                </Box>
+                <Button
+                  className={SettingsQuietControl}
+                  size="300"
+                  variant="Secondary"
+                  fill="Soft"
+                  outlined
+                  radii="300"
+                  onClick={reload}
+                >
+                  <Text size="B300">Retry</Text>
+                </Button>
+              </Box>
             )}
             {userList.length > 0 && (
               <Box direction="Inherit" gap="100">
@@ -145,24 +199,33 @@ function NativeIgnoredUserChip({
   );
   const unIgnoring = unignoreState.status === AsyncStatus.Loading;
   return (
-    <Chip
-      className={SettingsQuietControl}
-      variant="Secondary"
-      fill="None"
-      radii="Pill"
-      after={
-        unIgnoring ? (
-          <Spinner variant="Secondary" size="100" />
-        ) : (
-          <Icon src={Icons.Cross} size="100" />
-        )
-      }
-      onClick={() => unignore()}
-      disabled={unIgnoring}
-    >
-      <Text size="T200" truncate>
-        {userId}
-      </Text>
-    </Chip>
+    <Box direction="Column" gap="100">
+      <Chip
+        className={SettingsQuietControl}
+        variant="Secondary"
+        fill="None"
+        radii="Pill"
+        after={
+          unIgnoring ? (
+            <Spinner variant="Secondary" size="100" />
+          ) : (
+            <Icon src={Icons.Cross} size="100" />
+          )
+        }
+        onClick={() => {
+          // The failure is rendered from `unignoreState`.
+          unignore().catch(() => {});
+        }}
+        disabled={unIgnoring}
+        aria-label={`Unblock ${userId}`}
+      >
+        <Text size="T200" truncate>
+          {userId}
+        </Text>
+      </Chip>
+      {unignoreState.status === AsyncStatus.Error && (
+        <InlineError message={`Couldn't unblock ${userId}. Try again.`} />
+      )}
+    </Box>
   );
 }

@@ -2,9 +2,81 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { parseRoomIdentityWarnings, roomIdentityBanner } from '../nativeRoomIdentityWarnings';
+import {
+  INITIAL_ROOM_IDENTITY_WARNINGS_STATE,
+  applyRoomIdentityWarningsLoad,
+  loadRoomIdentityWarnings,
+  parseRoomIdentityWarnings,
+  roomIdentityBanner,
+} from '../nativeRoomIdentityWarnings';
 
 const ROOM = '!room:example.org';
+
+const withDesktopInvoke = async (
+  invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>,
+  run: () => Promise<void>
+) => {
+  const originalWindow = globalThis.window;
+  (globalThis as { window: unknown }).window = {
+    __SYNARA_DESKTOP__: { platform: 'tauri', invoke },
+  };
+  try {
+    await run();
+  } finally {
+    (globalThis as { window: unknown }).window = originalWindow;
+  }
+};
+
+test('a failed check keeps the last known warning and flags the failure', () => {
+  const warning = { userId: '@bob:example.org', kind: 'verification_violation' as const };
+  const loaded = applyRoomIdentityWarningsLoad(INITIAL_ROOM_IDENTITY_WARNINGS_STATE, {
+    ok: true,
+    warnings: [warning],
+  });
+  const failed = applyRoomIdentityWarningsLoad(loaded, { ok: false });
+  assert.deepEqual(failed, { warnings: [warning], checkFailed: true });
+  assert.equal(roomIdentityBanner(failed.warnings)?.kind, 'verification_violation');
+
+  const recovered = applyRoomIdentityWarningsLoad(failed, { ok: true, warnings: [] });
+  assert.deepEqual(recovered, { warnings: [], checkFailed: false });
+
+  // First load failing: nothing known, but the failure is still visible.
+  assert.deepEqual(
+    applyRoomIdentityWarningsLoad(INITIAL_ROOM_IDENTITY_WARNINGS_STATE, { ok: false }),
+    {
+      warnings: [],
+      checkFailed: true,
+    }
+  );
+});
+
+test('a malformed or wrong-room readback is a failed check, not "no warnings"', async () => {
+  await withDesktopInvoke(
+    async () => ({ roomId: '!other:example.org', warnings: [] }),
+    async () => {
+      await assert.rejects(() => loadRoomIdentityWarnings(ROOM));
+    }
+  );
+  await withDesktopInvoke(
+    async () => null,
+    async () => {
+      await assert.rejects(() => loadRoomIdentityWarnings(ROOM));
+    }
+  );
+  await withDesktopInvoke(
+    async () => ({ roomId: ROOM, warnings: [] }),
+    async () => {
+      assert.deepEqual(await loadRoomIdentityWarnings(ROOM), []);
+    }
+  );
+});
+
+test('the banner fails closed with a visible, retryable check failure', () => {
+  const banner = readFileSync('src/app/features/room/RoomIdentityWarningBanner.tsx', 'utf8');
+  assert.doesNotMatch(banner, /\.catch\(\(\) => undefined\)/);
+  assert.match(banner, /ROOM_IDENTITY_CHECK_FAILED_COPY/);
+  assert.match(banner, /applyRoomIdentityWarningsLoad\(current, \{ ok: false \}\)/);
+});
 
 test('readbacks for another room or with malformed rows are ignored', () => {
   assert.deepEqual(parseRoomIdentityWarnings(ROOM, undefined), []);
