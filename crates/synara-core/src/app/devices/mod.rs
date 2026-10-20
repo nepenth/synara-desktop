@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 mod live;
 pub use live::{
     snapshot, supported_delete_authentication, DeviceListUpdateEmit, NativeDeviceOwner,
-    NativeDeviceUpdateSignal, PendingDeviceDeletion,
+    NativeDeviceUpdateSignal, OwnKeysQueryGate, PendingDeviceDeletion,
 };
 
 /// Tauri event: device list may have changed; UI re-snapshots via matrix_get_* commands.
@@ -282,7 +282,12 @@ mod tests {
             .expect("device snapshot owner");
         assert!(snapshot.contains("has_devices_to_verify_against()"));
         assert!(snapshot.contains("Duration::from_secs(8)"));
-        assert!(snapshot.contains("Ok(Err(_)) | Err(_) => match crypto_devices.as_ref()"));
+        assert!(snapshot
+            .contains("Some(Ok(Err(_))) | Some(Err(_)) | None => match crypto_devices.as_ref()"));
+        assert!(
+            snapshot.contains("authority_gate.is_none_or(OwnKeysQueryGate::try_begin)"),
+            "owner reads must not repeat the authority /keys/query on every call"
+        );
         assert!(snapshot.contains("eligible_local_authority(Some(devices))"));
         assert!(snapshot.contains("Err(matrix_sdk::Error::NoOlmMachine) | Err(_) => None"));
         assert!(!snapshot.contains("device-verification-state-failed"));

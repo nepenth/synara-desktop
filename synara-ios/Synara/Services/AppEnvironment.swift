@@ -61,6 +61,8 @@ struct AppEnvironment {
     let mediaLoader: MediaLoading
     let mediaUploader: MediaUploading
     let crypto: CryptoStatusServicing
+    /// Shared, read-coalescing session crypto status over `crypto`.
+    let sessionCrypto: SessionCryptoStore
     let roomManagement: RoomManagementServicing
     let sessionReadiness: SignedInSessionReadinessServicing
     let connectionStatus: ConnectionStatusStore
@@ -157,6 +159,7 @@ struct AppEnvironment {
             mediaLoader: SharedCoreMediaLoader(host: host),
             mediaUploader: SharedCoreMediaUploadService(host: host),
             crypto: crypto,
+            sessionCrypto: SessionCryptoStore(crypto: crypto),
             roomManagement: roomManagement,
             sessionReadiness: sessionReadiness,
             connectionStatus: connectionStatus,
@@ -238,6 +241,7 @@ struct AppEnvironment {
             mediaLoader: mediaLoader,
             mediaUploader: mediaUploader,
             crypto: crypto,
+            sessionCrypto: SessionCryptoStore(crypto: crypto),
             roomManagement: roomManagement,
             sessionReadiness: sessionReadiness,
             connectionStatus: connectionStatus,

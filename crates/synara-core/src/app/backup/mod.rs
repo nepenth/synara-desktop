@@ -12,7 +12,10 @@ mod status;
 
 pub use error::BackupError;
 pub use flow::{BackupFlowKind, BackupFlowPhase, BackupRecoveryFlow};
-pub use live::{repair, restore, restore_operation, setup, status, MatrixRestoreBackupResult};
+pub use live::{
+    cached_status, repair, restore, restore_operation, setup, status, MatrixRestoreBackupResult,
+    ServerBackupCache,
+};
 pub use status::{
     project_backup_status, NativeBackupAction, NativeBackupAvailability, NativeBackupDeviceState,
     NativeBackupEnginePhase, NativeBackupOperationOutcome, NativeBackupOperationResult,

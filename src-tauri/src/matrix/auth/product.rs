@@ -455,16 +455,23 @@ impl MatrixAuthState {
     /// (`/keys/query`) stalled Settings → Devices on a spinner because sync
     /// could not progress. Prefer the local crypto-store identity so the page
     /// can render without a network round trip; bound the homeserver fetch.
+    /// That fetch shares the device owner's once-per-generation own-user
+    /// query gate: its answer re-sets the SDK verification state, and this
+    /// projection runs on every device/security wakeup.
     pub(crate) async fn cross_signing_status_projection(
         &self,
     ) -> Result<PlatformCrossSigningStatus, synara_core::platform::PlatformCrossSigningStatusError>
     {
-        let (client, session_generation) = {
+        let (client, devices, session_generation) = {
             let session = self.session.lock().await;
             let active = session
                 .as_ref()
                 .ok_or(synara_core::platform::PlatformCrossSigningStatusError::NoSession)?;
-            (active.client.clone(), active.sync.session_generation())
+            (
+                active.client.clone(),
+                Arc::clone(&active.devices),
+                active.sync.session_generation(),
+            )
         };
 
         let encryption = client.encryption();
@@ -477,20 +484,28 @@ impl MatrixAuthState {
         })?;
         let own_identity = match local_identity {
             Some(identity) => Some(identity),
-            None => match tokio::time::timeout(
-                Duration::from_secs(8),
-                encryption.request_user_identity(user_id),
-            )
-            .await
-            {
-                Ok(Ok(identity)) => identity,
-                Ok(Err(_)) => {
-                    return Err(
-                        synara_core::platform::PlatformCrossSigningStatusError::IdentityQueryFailed,
-                    );
+            // Once the own-user query has run this generation, the SDK keeps
+            // the local identity current from sync; a missing one is missing.
+            None if !devices.own_keys_query().try_begin() => None,
+            None => {
+                let fetched = tokio::time::timeout(
+                    Duration::from_secs(8),
+                    encryption.request_user_identity(user_id),
+                )
+                .await;
+                devices
+                    .own_keys_query()
+                    .finish(matches!(fetched, Ok(Ok(_))));
+                match fetched {
+                    Ok(Ok(identity)) => identity,
+                    Ok(Err(_)) => {
+                        return Err(
+                            synara_core::platform::PlatformCrossSigningStatusError::IdentityQueryFailed,
+                        );
+                    }
+                    Err(_) => None,
                 }
-                Err(_) => None,
-            },
+            }
         };
 
         let private_state = match private_status.as_ref() {

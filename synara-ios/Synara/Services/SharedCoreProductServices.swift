@@ -2155,7 +2155,10 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     }
 
     func roomStatus(roomID: String) async -> RoomCryptoStatus {
-        let session = await sessionStatus()
+        await roomStatus(roomID: roomID, session: await sessionStatus())
+    }
+
+    func roomStatus(roomID: String, session: SessionCryptoStatus) async -> RoomCryptoStatus {
         // Timeline actions address joined rooms. Their encryption authority is
         // the joined-room Core snapshot only; an invite Bool is not a valid
         // fallback when that snapshot is missing or failed.

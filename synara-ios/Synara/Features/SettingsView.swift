@@ -109,7 +109,7 @@ struct SettingsView: View {
                 Button(role: .destructive) {
                     isLogoutConfirmationPresented = true
                     // Read the device list for the last-device warning.
-                    Task { await logoutCrypto.refresh(crypto: environment.crypto) }
+                    Task { await logoutCrypto.refresh(store: environment.sessionCrypto) }
                 } label: {
                     if state.isLoading {
                         ProgressView()
@@ -498,7 +498,7 @@ private struct AccountSettingsView: View {
                     if sessionCrypto.status.hasDevicesToVerifyAgainst == nil {
                         Button("Retry Availability Check") {
                             Task {
-                                await sessionCrypto.refresh(crypto: environment.crypto)
+                                await sessionCrypto.refresh(store: environment.sessionCrypto)
                             }
                         }
                         .disabled(isRequestingVerification)
@@ -573,13 +573,12 @@ private struct AccountSettingsView: View {
             Text("Enter your account password to revoke \(signOutDevice?.displayName ?? "this session").")
         }
         .task {
-            await sessionCrypto.start(crypto: environment.crypto)
+            await sessionCrypto.start(store: environment.sessionCrypto)
         }
-        .task {
-            for await _ in environment.crypto.sessionDeviceUpdates() {
-                guard Task.isCancelled == false else { break }
-                await refreshSessionDevices()
-            }
+        // The session list follows the store's coalesced device wakeups
+        // instead of a second subscription of its own.
+        .onReceive(environment.sessionCrypto.$wakeupRevision.dropFirst()) { _ in
+            Task { await refreshSessionDevices() }
         }
         .onChange(of: selectedAvatarPhoto) { item in
             if let item {
@@ -1434,20 +1433,23 @@ final class SessionCryptoStatusObserver: ObservableObject {
         SecuritySettingsVerificationPolicy.availabilityMessage(status)
     }
 
-    func start(crypto: CryptoStatusServicing) async {
+    /// Mirror the shared store while the calling view is on screen. Every
+    /// screen shares the store's one wakeup subscription and its reads.
+    func start(store: SessionCryptoStore) async {
         // Device authority can change without any SAS flow in the inbox.
         // Subscribe before the initial read so an in-flight key query's update
         // is retained while that read is being projected.
-        let updates = crypto.sessionDeviceUpdates()
-        await refresh(crypto: crypto)
-        for await _ in updates {
+        let updates = store.updates()
+        status = store.status
+        status = await store.refresh()
+        for await update in updates {
             guard Task.isCancelled == false else { break }
-            await refresh(crypto: crypto)
+            status = update
         }
     }
 
-    func refresh(crypto: CryptoStatusServicing) async {
-        status = await crypto.sessionStatus()
+    func refresh(store: SessionCryptoStore) async {
+        status = await store.refresh()
     }
 
     func apply(_ status: SessionCryptoStatus) {
@@ -1494,7 +1496,7 @@ private struct SecuritySettingsView: View {
                     if sessionCrypto.status.hasDevicesToVerifyAgainst == nil {
                         Button("Retry Availability Check") {
                             Task {
-                                await sessionCrypto.refresh(crypto: environment.crypto)
+                                await sessionCrypto.refresh(store: environment.sessionCrypto)
                             }
                         }
                         .disabled(isRunningCryptoAction)
@@ -1540,7 +1542,7 @@ private struct SecuritySettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("SecuritySettingsScreen")
         .task {
-            await sessionCrypto.start(crypto: environment.crypto)
+            await sessionCrypto.start(store: environment.sessionCrypto)
         }
     }
 
@@ -1561,7 +1563,7 @@ private struct SecuritySettingsView: View {
         cryptoActionMessage = nil
         Task {
             let result = await action()
-            let status = await environment.crypto.sessionStatus()
+            let status = await environment.sessionCrypto.refresh()
             await MainActor.run {
                 sessionCrypto.apply(status)
                 cryptoActionMessage = result.message
