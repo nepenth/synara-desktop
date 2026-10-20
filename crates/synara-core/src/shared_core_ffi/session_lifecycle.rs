@@ -1239,6 +1239,7 @@ impl SharedCore {
     /// Construct a real Core with the fail-closed iOS Platform.
     #[uniffi::constructor]
     pub fn new() -> Self {
+        crate::ffi_runtime::install_app_ffi_runtime();
         let platform = IosFailClosedPlatform::new();
         let secret_store = Platform::secret_store(&platform);
         Self {
@@ -1262,6 +1263,7 @@ impl SharedCore {
     /// Construct a real Core whose `Platform::secret_store` is the Swift vault.
     #[uniffi::constructor]
     pub fn new_with_secret_store(store: Box<dyn IosSecretVault>) -> Self {
+        crate::ffi_runtime::install_app_ffi_runtime();
         let vault: Arc<dyn SecretVault + Send + Sync> =
             Arc::new(CallbackSecretVault { inner: store });
         let platform = IosFailClosedPlatform::with_secret_store(Arc::clone(&vault));

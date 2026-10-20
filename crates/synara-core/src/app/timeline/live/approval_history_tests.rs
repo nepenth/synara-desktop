@@ -120,16 +120,26 @@ fn approval_history_stream_publication_has_no_cancellation_point_before_readback
     // external test latch. Enforce the critical final publication invariant
     // alongside the real cancellation test above.
     let source = include_str!("../live.rs");
+    let publish = source
+        .split_once("    fn publish_view(")
+        .expect("views are published in one place")
+        .1
+        .split("\n    }\n")
+        .next()
+        .unwrap();
+    assert!(publish.contains("self.view_streams.insert("));
+    assert!(!publish.contains(".await"), "publication must stay synchronous");
     let open = source
-        .split("    pub async fn open_at(")
-        .nth(2)
-        .expect("registry open_at")
-        .split("    pub async fn snapshot(")
+        .split_once("\nasync fn open_view(")
+        .expect("view open")
+        .1
+        .split("\n}\n")
         .next()
         .unwrap();
     let (_, published) = open
-        .split_once("self.view_streams.insert(")
-        .expect("the ready view is published");
-    assert!(!published.contains(".await"));
-    assert!(published.contains("Ok(NativeTimelineOpenReadback"));
+        .rsplit_once("registry.publish_view(")
+        .expect("the ready view is published last");
+    // The only await left takes the registry lock; the closure that
+    // publishes runs synchronously once it is held.
+    assert_eq!(published.matches(".await").count(), 1);
 }

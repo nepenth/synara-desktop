@@ -47,6 +47,15 @@ zeroize = "1"
 mime = "0.3"
 rustls = { version = "0.23.45", default-features = false }
 
+# UniFFI polls Apple async exports through async-compat, whose fallback runtime
+# is single-threaded, so the whole SDK would share one OS thread. This is the
+# fork and revision matrix-rust-sdk pins for the same reason: it adds
+# `set_runtime_builder`, which `synara_core::ffi_runtime` uses to make that
+# runtime multi-threaded. Desktop runs inside Tauri's runtime and never
+# reaches the fallback.
+[patch.crates-io]
+async-compat = { git = "https://github.com/element-hq/async-compat", rev = "5a27c8b290f1f1dcfc0c4ec22c464e38528aa591" }
+
 # Dependencies (every non-workspace package) keep only line tables in dev and
 # test builds: backtraces still resolve to file:line, but target/ and link
 # times shrink. Workspace crates keep full debug info for stepping.

@@ -324,7 +324,10 @@ fn pin_and_pagination_source_uses_sdk_owners() {
         env!("CARGO_MANIFEST_DIR"),
         "/src/app/timeline/live/approval_history.rs"
     ));
-    assert!(history.contains("back_pagination_queue()"));
+    // A view open stops inbox pages but never waits on the SDK's shared
+    // back-pagination status, which background backfill also drives.
+    assert!(history.contains("fn protect(self: &Arc<Self>) -> HistoryProtection"));
+    assert!(!history.contains("pagination().status()"));
 }
 
 async fn wait_for_pins(
