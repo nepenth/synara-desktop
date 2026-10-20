@@ -308,6 +308,23 @@ window.__SYNARA_DESKTOP__ = {
       openThreadStreams.add(opened.streamId);
       return { ...opened, snapshot: threadSnapshot } as T;
     }
+    if (
+      command === 'matrix_timeline_open' &&
+      request?.position?.kind === 'focused' &&
+      (request.position.event_id === '$gone' ||
+        (scenario === 'threads' && request.position.event_id?.startsWith('$t')))
+    ) {
+      // Core resolves a routed event before choosing a provider: a thread
+      // reply opens the live room at its root, a deleted one the live bottom.
+      const reply = request.position.event_id !== '$gone';
+      const opened = openSnapshot(
+        reply ? { kind: 'focused', target_event_id: THREAD_ROOT } : { kind: 'live_bottom' }
+      );
+      return {
+        ...opened,
+        focusRoute: reply ? { kind: 'thread', root_event_id: THREAD_ROOT } : { kind: 'missing' },
+      } as T;
+    }
     if (command === 'matrix_timeline_open') {
       let selectedPosition = position;
       let lastRead = false;
@@ -838,11 +855,14 @@ function App() {
   const [mounted, setMounted] = useState(true);
   const [focusedEventId, setFocusedEventId] = useState<string>();
   const [paneRoot, setPaneRoot] = useState<string>();
+  const [paneFocus, setPaneFocus] = useState<string>();
   const [paneWidth, setPaneWidth] = useState(360);
   return (
     <>
       <button onClick={() => setMounted((value) => !value)}>Toggle room</button>
       <button onClick={() => setFocusedEventId('$30')}>Focus middle</button>
+      <button onClick={() => setFocusedEventId('$t3')}>Focus thread reply</button>
+      <button onClick={() => setFocusedEventId('$gone')}>Focus deleted</button>
       <div style={{ display: 'flex', alignItems: 'stretch' }}>
         <div
           id="native-timeline"
@@ -860,7 +880,12 @@ function App() {
               eventId={focusedEventId}
               threadDisplay={threadDisplay}
               onOpenThreadPane={
-                threadDisplay === 'full' ? undefined : (rootEventId) => setPaneRoot(rootEventId)
+                threadDisplay === 'full'
+                  ? undefined
+                  : (rootEventId, _latestEventId, focusEventId) => {
+                      setPaneRoot(rootEventId);
+                      setPaneFocus(focusEventId);
+                    }
               }
             />
           )}
@@ -870,6 +895,7 @@ function App() {
             <ThreadSidePanel
               roomId={room}
               rootEventId={paneRoot}
+              focusEventId={paneFocus}
               width={paneWidth}
               availableWidth={1600}
               onWidthChange={setPaneWidth}

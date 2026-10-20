@@ -3,6 +3,9 @@
 ## Unreleased
 
 - iOS: opening a room from a notification loads its earlier messages and keeps receiving new ones, the same as opening it from the room list. You no longer need to leave the room or relaunch Synara to see its history.
+- Threads: a notification or link to a reply in a thread opens that thread at the reply, with the room behind it, and new replies keep arriving. Previously the room showed only that thread's replies, out of order, as if they were the room's messages.
+- Desktop: opening a notification or link for a recent message keeps the room live, so newer messages appear without Jump to latest.
+- A notification or link to a message that was deleted, or that you can no longer see, now says so and opens the room at its latest messages instead of showing "Messages are temporarily unavailable".
 
 ## [2.2.6] - 2026-10-12
 

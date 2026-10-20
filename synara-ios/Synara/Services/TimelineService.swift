@@ -788,6 +788,27 @@ struct RoomTimelineAvailabilityState: Equatable {
     }
 }
 
+/// Where a routed event (notification, link) lives, resolved by Core from the
+/// event itself before the room opens. Mirrors `TimelineEventRouteKindDto`.
+enum TimelineEventRoute: Equatable {
+    /// A room-timeline event, including a thread root.
+    case room
+    /// An in-thread reply. The room timeline never shows it.
+    case thread(rootEventID: String)
+    /// The homeserver has no such event for this account: deleted, or no access.
+    case missing
+    /// The event could not be loaded right now.
+    case unreachable
+}
+
+/// Says why a routed message is not on screen, in place of the generic
+/// "temporarily unavailable" failure. The room stays open at its latest
+/// messages.
+enum TimelineEventRouteNotice {
+    static let missing = "That message isn't available. It may have been deleted, or you may not have access to it."
+    static let notShown = "That message couldn't be shown. Showing the latest messages instead."
+}
+
 protocol TimelineServicing: AnyObject {
     func loadInitialTimeline(roomID: String) async -> TimelineLoadOutcome
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome
@@ -802,11 +823,18 @@ protocol TimelineServicing: AnyObject {
     func loadOlderThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome
     /// Releases a thread stream opened by `loadThreadTimeline`.
     func closeThreadTimeline(roomID: String, rootEventID: String)
+    /// Where a routed event lives, without opening a timeline for it.
+    func resolveEventRoute(roomID: String, eventID: String) async -> TimelineEventRoute
     func clearSessionCaches()
 }
 
 extension TimelineServicing {
     func clearSessionCaches() {}
+
+    /// Services without a Core route lookup keep the room placement.
+    func resolveEventRoute(roomID _: String, eventID _: String) async -> TimelineEventRoute {
+        .room
+    }
 
     func loadOlderThreadTimeline(roomID _: String, rootEventID _: String) async -> TimelineLoadOutcome {
         .empty

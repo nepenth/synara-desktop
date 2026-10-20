@@ -154,6 +154,7 @@ import {
 } from './NativeInlineThread';
 import type { ThreadDisplayMode } from '../../utils/threadDisplay';
 import { getMyUserId } from '../../state/nativeIdentity';
+import { resolveNativeFocusRouteAction } from './nativeFocusRoute';
 
 const HermesAgentCard = React.lazy(() =>
   import('../../components/hermes/HermesAgentCard').then((module) => ({
@@ -174,9 +175,12 @@ type NativeTimelinePresenterProps = {
   threadDisplay?: ThreadDisplayMode;
   /**
    * Opens a thread outside this presenter (the side pane). When set, a room
-   * presenter never switches itself into a thread.
+   * presenter never switches itself into a thread. `focusEventId` is a routed
+   * reply (notification or link) the pane scrolls to.
    */
-  onOpenThreadPane?: (rootEventId: string, latestEventId?: string) => void;
+  onOpenThreadPane?: (rootEventId: string, latestEventId?: string, focusEventId?: string) => void;
+  /** A thread presenter's routed reply to scroll to when it opens. */
+  threadFocusEventId?: string;
   /**
    * Publish the open thread root for the room composer. A side-pane
    * presenter turns this off: its own composer carries the root explicitly.
@@ -2404,12 +2408,15 @@ export function NativeTimelinePresenter({
   onCloseThreadRoute,
   threadDisplay = 'full',
   onOpenThreadPane,
+  threadFocusEventId,
   publishThreadRoot = true,
   showThreadBack = true,
 }: NativeTimelinePresenterProps) {
   const [focusEventId, setFocusEventId] = useState(eventId);
   const [threadRootId, setThreadRootId] = useState<string | undefined>(threadRootEventId);
-  const [threadScrollEventId, setThreadScrollEventId] = useState<string | undefined>();
+  const [threadScrollEventId, setThreadScrollEventId] = useState<string | undefined>(
+    threadFocusEventId
+  );
   const [preferLiveBottom, setPreferLiveBottom] = useState(false);
   useEffect(() => {
     setFocusEventId(eventId);
@@ -2419,8 +2426,8 @@ export function NativeTimelinePresenter({
     }
   }, [eventId, roomId, threadRootEventId]);
   useEffect(() => {
-    setThreadScrollEventId(undefined);
-  }, [roomId]);
+    setThreadScrollEventId(threadFocusEventId);
+  }, [roomId, threadFocusEventId]);
   useEffect(() => {
     if (publishThreadRoot) publishNativeThreadRoot(roomId, threadRootId);
   }, [publishThreadRoot, roomId, threadRootId]);
@@ -3360,22 +3367,40 @@ export function NativeTimelinePresenter({
   );
 
   const openThread = useCallback(
-    (rootEventId: string, latestEventId?: string) => {
+    (rootEventId: string, latestEventId?: string, focusEventIdInThread?: string) => {
       if (!rootEventId.startsWith('$') || rootEventId.length <= 1) return;
       // Side pane: the room stays here and the pane owns the thread.
       if (onOpenThreadPane && !threadRootId) {
-        onOpenThreadPane(rootEventId, latestEventId);
+        onOpenThreadPane(rootEventId, latestEventId, focusEventIdInThread);
         return;
       }
       if (!threadRootId) saveViewport();
       setPreferLiveBottom(false);
       setFocusEventId(undefined);
       setThreadRootId(rootEventId);
-      setThreadScrollEventId(latestEventId);
+      setThreadScrollEventId(focusEventIdInThread ?? latestEventId);
       onOpenThreadRoute?.(rootEventId);
     },
     [onOpenThreadPane, onOpenThreadRoute, saveViewport, threadRootId]
   );
+
+  // Core resolved the routed event of a `focused` open. A thread reply is
+  // never in the room stream: open its thread at the reply with the room
+  // behind it. A target that cannot be shown leaves the live room usable and
+  // says why instead of a generic failure.
+  const { focusRoute } = controller;
+  const appliedFocusRouteRef = useRef<typeof focusRoute>(undefined);
+  useEffect(() => {
+    if (!focusRoute || appliedFocusRouteRef.current === focusRoute) return;
+    if (focusRoute.eventId !== focusEventId) return;
+    appliedFocusRouteRef.current = focusRoute;
+    const action = resolveNativeFocusRouteAction(focusRoute.eventId, focusRoute.route);
+    if (action.kind === 'open_thread') {
+      openThread(action.rootEventId, undefined, action.replyEventId);
+    } else if (action.kind === 'notice') {
+      setActionError(action.message);
+    }
+  }, [focusEventId, focusRoute, openThread]);
 
   const inlineExpansion = useInlineThreadExpansion(roomId);
   const inlineHoldFrameRef = useRef(0);

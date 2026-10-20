@@ -78,6 +78,29 @@ pub struct NativeTimelineOpenReadback {
     /// a normal open can select unread, restored, or live-bottom placement.
     pub position: TimelineViewPosition,
     pub snapshot: TimelineViewSnapshot,
+    /// How a `Focused` open resolved its target event. Absent for every other
+    /// open. A `thread` or unavailable target never yields a thread-only or
+    /// event-focused stream: the stream is the room's live timeline, and the
+    /// shell routes to the thread UI or says why the message is not shown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub focus_route: Option<NativeTimelineEventRoute>,
+}
+
+/// Where a routed event (notification, permalink, search hit, reply jump)
+/// lives, resolved from the event itself without building a timeline.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum NativeTimelineEventRoute {
+    /// A main-timeline event, including a thread root.
+    Room,
+    /// An in-thread reply. The room timeline never shows it; shells open the
+    /// thread for `root_event_id` scrolled to the reply, with the room behind.
+    Thread { root_event_id: String },
+    /// The homeserver reports no such event for this account: it was deleted
+    /// with its room history, or the account cannot see it.
+    Missing,
+    /// The event could not be loaded right now (offline or timed out).
+    Unreachable,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -535,6 +558,7 @@ mod tests {
                     can_redact_other: false,
                 },
             },
+            focus_route: None,
         };
         let json = serde_json::to_value(readback).unwrap();
         let snapshot = &json["snapshot"];
@@ -545,5 +569,22 @@ mod tests {
         assert_eq!(snapshot["readState"]["isMarkedUnread"], false);
         assert_eq!(snapshot["pinnedEventIds"][0], "$pinned:example.org");
         assert_eq!(json["position"]["kind"], "live_bottom");
+        assert!(json.get("focusRoute").is_none());
+    }
+
+    #[test]
+    fn focus_route_serializes_as_a_tagged_thread_target() {
+        let json = serde_json::to_value(NativeTimelineEventRoute::Thread {
+            root_event_id: "$root:example.org".into(),
+        })
+        .unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({ "kind": "thread", "root_event_id": "$root:example.org" })
+        );
+        assert_eq!(
+            serde_json::to_value(NativeTimelineEventRoute::Missing).unwrap(),
+            serde_json::json!({ "kind": "missing" })
+        );
     }
 }

@@ -67,10 +67,13 @@ export function Room() {
   // members drawer returns when it closes without changing its setting.
   const activeSidePanel = pane ? undefined : isDrawer ? 'members' : roomSidePanel;
 
-  const handleOpenThreadPane = useCallback((rootEventId: string, latestEventId?: string) => {
-    setRoomSidePanel(undefined);
-    setOpenedPane({ rootEventId, latestEventId });
-  }, []);
+  const handleOpenThreadPane = useCallback(
+    (rootEventId: string, latestEventId?: string, focusEventId?: string) => {
+      setRoomSidePanel(undefined);
+      setOpenedPane({ rootEventId, latestEventId, focusEventId });
+    },
+    []
+  );
   const handleCloseThreadPane = useCallback(() => {
     setOpenedPane(undefined);
     if (threadRootId) navigateRoom(room.roomId);
@@ -142,6 +145,7 @@ export function Room() {
           <ThreadSidePanel
             roomId={room.roomId}
             rootEventId={pane.rootEventId}
+            focusEventId={pane.focusEventId}
             width={threadPaneWidth}
             availableWidth={roomAreaWidth}
             onWidthChange={setThreadPaneWidth}

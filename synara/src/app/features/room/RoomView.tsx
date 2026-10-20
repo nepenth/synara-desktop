@@ -64,7 +64,7 @@ export function RoomView({
   eventId?: string;
   threadRootEventId?: string;
   threadDisplay?: ThreadDisplayMode;
-  onOpenThreadPane?: (rootEventId: string, latestEventId?: string) => void;
+  onOpenThreadPane?: (rootEventId: string, latestEventId?: string, focusEventId?: string) => void;
 }) {
   const roomInputRef = useRef<HTMLDivElement>(null);
   const roomViewRef = useRef<HTMLDivElement>(null);

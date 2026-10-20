@@ -625,6 +625,79 @@ final class TimelineServiceTests: XCTestCase {
         )
     }
 
+    func testThreadReplyRouteOpensItsThreadOverTheLiveRoomAtTheRoot() {
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.eventRouteDecision(
+                focusedEventID: "$reply",
+                route: .thread(rootEventID: "$synthetic-1:matrix.org"),
+                liveItems: focusPolicyItems(receiptIndex: nil)
+            ),
+            .thread(rootEventID: "$synthetic-1:matrix.org", roomMode: .focused(eventID: "$synthetic-1:matrix.org"))
+        )
+    }
+
+    func testThreadReplyRouteWithAnOldRootKeepsTheRoomAtItsLiveBottom() {
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.eventRouteDecision(
+                focusedEventID: "$reply",
+                route: .thread(rootEventID: "$prior-day-root"),
+                liveItems: focusPolicyItems(receiptIndex: nil)
+            ),
+            .thread(rootEventID: "$prior-day-root", roomMode: .live)
+        )
+    }
+
+    func testThreadRootRouteStaysInTheRoom() {
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.eventRouteDecision(
+                focusedEventID: "$synthetic-1:matrix.org",
+                route: .thread(rootEventID: "$synthetic-1:matrix.org"),
+                liveItems: focusPolicyItems(receiptIndex: nil)
+            ),
+            .room(liveMode: .focused(eventID: "$synthetic-1:matrix.org"))
+        )
+    }
+
+    func testRoomEventRoutesKeepTheLiveFirstOpen() {
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.eventRouteDecision(
+                focusedEventID: "$synthetic-3:matrix.org",
+                route: .room,
+                liveItems: focusPolicyItems(receiptIndex: nil)
+            ),
+            .room(liveMode: .live)
+        )
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.eventRouteDecision(
+                focusedEventID: "$prior-day",
+                route: .room,
+                liveItems: focusPolicyItems(receiptIndex: nil)
+            ),
+            .room(liveMode: nil)
+        )
+        // `/event` failing does not rule out `/context`; Core falls back to
+        // the live room when that fails too.
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.eventRouteDecision(
+                focusedEventID: "$prior-day",
+                route: .unreachable,
+                liveItems: focusPolicyItems(receiptIndex: nil)
+            ),
+            .room(liveMode: nil)
+        )
+    }
+
+    func testMissingRouteSaysWhyInsteadOfTemporarilyUnavailable() {
+        let decision = RoomTimelineFocusPolicy.eventRouteDecision(
+            focusedEventID: "$gone",
+            route: .missing,
+            liveItems: focusPolicyItems(receiptIndex: nil)
+        )
+        XCTAssertEqual(decision, .unavailable(notice: TimelineEventRouteNotice.missing))
+        XCTAssertFalse(TimelineEventRouteNotice.missing.contains("temporarily unavailable"))
+        XCTAssertFalse(TimelineEventRouteNotice.notShown.contains("temporarily unavailable"))
+    }
+
     func testRoomTimelineFocusPolicyOpensCaughtUpRoomsLive() {
         XCTAssertEqual(
             RoomTimelineFocusPolicy.initialMode(

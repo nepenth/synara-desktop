@@ -445,12 +445,26 @@ export type NativeTimelineViewDeltaBatch = {
   pinnedEventIds?: string[];
 };
 
+/**
+ * Where a routed event lives, as Core resolved it for a `focused` open. A
+ * `thread` reply is never shown in the room stream: Core returns the live room
+ * (at the root when it is in the live window) and the shell opens the thread.
+ * `missing` and `unreachable` also return the live room, so the shell says why.
+ */
+export type NativeTimelineEventRoute =
+  | { kind: 'room' }
+  | { kind: 'thread'; root_event_id: string }
+  | { kind: 'missing' }
+  | { kind: 'unreachable' };
+
 export type NativeTimelineOpenReadback = {
   schemaVersion: number;
   streamId: string;
   /** The placement selected by the native owner for this open. */
   position: NativeTimelinePosition;
   snapshot: NativeTimelineViewSnapshot;
+  /** Present only for `focused` opens. */
+  focusRoute?: NativeTimelineEventRoute;
 };
 
 export type NativeTimelineViewState =
@@ -489,6 +503,8 @@ export type NativeTimelineViewController = {
    * the request was superseded and nothing was adopted.
    */
   restoreLastRead: (eventId: string) => Promise<string | undefined>;
+  /** How the current `focused` open resolved its event, once it is ready. */
+  focusRoute?: { eventId: string; route: NativeTimelineEventRoute };
 };
 
 type NativeTimelineReadStateReadback = {
@@ -955,6 +971,7 @@ export const useNativeTimelineView = (
     roomId,
   ]);
   const [state, setState] = useState<NativeTimelineViewState>({ status: 'unavailable' });
+  const [focusRoute, setFocusRoute] = useState<NativeTimelineViewController['focusRoute']>();
   const streamIdRef = useRef<string | undefined>(undefined);
   const snapshotRef = useRef<NativeTimelineViewSnapshot | undefined>(undefined);
   const selectedPositionRef = useRef<NativeTimelinePosition | undefined>(undefined);
@@ -1289,6 +1306,7 @@ export const useNativeTimelineView = (
     streamIdRef.current = undefined;
     snapshotRef.current = undefined;
     selectedPositionRef.current = undefined;
+    setFocusRoute(undefined);
     pendingOpenRef.current?.cancel();
     pendingOpenRef.current = undefined;
     if (!nativeRequest || !isSynaraDesktop()) {
@@ -1448,6 +1466,12 @@ export const useNativeTimelineView = (
         snapshotRef.current = snapshot;
         selectedPositionRef.current = readback.position;
         setState({ status: 'ready', snapshot, selectedPosition: readback.position });
+        const requested = nativeRequest.position;
+        setFocusRoute(
+          requested.kind === 'focused' && readback.focusRoute
+            ? { eventId: requested.event_id, route: readback.focusRoute }
+            : undefined
+        );
         if (!disposed) {
           const schedulePoll = (firstPoll: boolean) => {
             pollTimer = window.setTimeout(
@@ -1492,7 +1516,7 @@ export const useNativeTimelineView = (
     };
   }, [acceptSnapshot, beginOpen, finishOpen, nativeRequest]);
 
-  return { state, paginate, setReadState, followLive, jumpLatest, restoreLastRead };
+  return { state, paginate, setReadState, followLive, jumpLatest, restoreLastRead, focusRoute };
 };
 
 export const nativeTimelineMediaSrc = (handle: NativeTimelineMediaHandle): string | undefined =>

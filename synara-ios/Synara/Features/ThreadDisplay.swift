@@ -39,8 +39,41 @@ enum ThreadDisplayMode: String, CaseIterable, Identifiable, Sendable {
 struct ThreadSheetTarget: Identifiable, Equatable {
     let rootEventID: String
     let rootTitle: String?
+    /// A routed reply (notification or link) the thread scrolls to.
+    var focusedEventID: String? = nil
 
     var id: String { rootEventID }
+}
+
+/// Scrolls a thread opened from a notification or link to the routed reply.
+/// The thread stream starts with its newest replies, so an older reply needs
+/// a few "Load earlier replies" pages first.
+enum ThreadFocusAnchorPolicy {
+    enum Step: Equatable {
+        case scroll(itemID: String)
+        case loadEarlier
+        /// The reply is not reachable: leave the thread at its newest replies.
+        case settle
+    }
+
+    static let maximumEarlierPages = 5
+
+    static func nextStep(
+        focusedEventID: String,
+        items: [TimelineItem],
+        canLoadEarlier: Bool,
+        earlierPagesLoaded: Int
+    ) -> Step {
+        if let target = items.first(where: {
+            $0.eventID == focusedEventID || $0.serverEventID == focusedEventID
+        }) {
+            return .scroll(itemID: target.id)
+        }
+        if canLoadEarlier, earlierPagesLoaded < maximumEarlierPages {
+            return .loadEarlier
+        }
+        return .settle
+    }
 }
 
 /// "Reply in thread" asks the thread screen to focus its composer when it

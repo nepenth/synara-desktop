@@ -93,6 +93,14 @@ impl<K: Eq + Hash + Clone, V> RecencyMap<K, V> {
         evicted
     }
 
+    pub(super) fn remove<Q>(&mut self, key: &Q) -> Option<V>
+    where
+        K: Borrow<Q>,
+        Q: Eq + Hash + ?Sized,
+    {
+        self.entries.remove(key).map(|(value, _)| value)
+    }
+
     /// Iterate without changing recency.
     pub(super) fn iter(&self) -> impl Iterator<Item = (&K, &V)> {
         self.entries.iter().map(|(key, (value, _))| (key, value))
