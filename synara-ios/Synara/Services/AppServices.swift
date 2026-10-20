@@ -476,6 +476,15 @@ struct RoomCryptoStatus: Equatable {
     }
 }
 
+/// When an open room needs session crypto updates. They exist to retry
+/// decryption once this device is verified and to refresh the crypto banner,
+/// so a verified session without undecryptable rows needs none.
+enum RoomCryptoObservationPolicy {
+    static func needsSessionUpdates(_ status: RoomCryptoStatus) -> Bool {
+        status.unableToDecryptCount > 0 || status.verification != .verified
+    }
+}
+
 struct SessionCryptoStatus: Equatable {
     let verification: SynaraCryptoVerificationStatus
     let recovery: SynaraCryptoRecoveryStatus
@@ -601,6 +610,9 @@ enum CryptoActionResult: Equatable {
 
 protocol CryptoStatusServicing {
     func roomStatus(roomID: String) async -> RoomCryptoStatus
+    /// Room status over a session status the caller already has (from
+    /// `SessionCryptoStore`), so a room read does not repeat the session read.
+    func roomStatus(roomID: String, session: SessionCryptoStatus) async -> RoomCryptoStatus
     func sessionStatus() async -> SessionCryptoStatus
     func verificationUpdates() -> AsyncStream<CryptoVerificationSnapshot?>
     func retryDecryption(roomID: String) async -> CryptoActionResult
@@ -681,6 +693,11 @@ struct RoomIdentityWarning: Equatable, Identifiable {
 }
 
 extension CryptoStatusServicing {
+    func roomStatus(roomID: String, session: SessionCryptoStatus) async -> RoomCryptoStatus {
+        _ = session
+        return await roomStatus(roomID: roomID)
+    }
+
     func roomIdentityWarnings(roomID: String) async -> [RoomIdentityWarning] {
         _ = roomID
         return []

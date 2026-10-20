@@ -6,6 +6,7 @@
 - iOS: notification previews and approval Approve/Deny keep working when Synara has been in the background for a while. Signing in on iPhone no longer requests a refresh token, so the access token the notification extension uses does not expire after a few minutes (Synapse's default is 5). Sessions signed in with an earlier version keep refreshing in the app; if previews still show generic text after an update, sign out and sign in again. The notification diagnostic report counts previews that failed because the server rejected the session. Desktop is unchanged.
 - Media: photos, videos and files you send to an encrypted room load on the device that sent them, on desktop and iOS. Ones that stayed broken after an earlier send load again too.
 - Media: large images, videos and file downloads no longer fail after 30 seconds on a slow connection. A download now fails only when the server stops sending for 30 seconds.
+- Opening a room or the security settings no longer starts a loop of encryption-status requests, on desktop and iOS. Accounts without cross-signing saw about 60 requests a second and 20-27% CPU while a room was open; status is now read again only when it changes.
 
 ## [2.2.6] - 2026-10-12
 

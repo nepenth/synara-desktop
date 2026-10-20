@@ -267,7 +267,7 @@ final class MatrixLifecycleTests: XCTestCase {
 
         let crypto = SequencingCryptoStatusService(statuses: [unverified, verified])
         let observer = SessionCryptoStatusObserver()
-        await observer.start(crypto: crypto)
+        await observer.start(store: SessionCryptoStore(crypto: crypto))
         XCTAssertEqual(observer.status.verification, .verified)
         XCTAssertFalse(observer.showsVerifyThisDevice)
     }
@@ -285,7 +285,7 @@ final class MatrixLifecycleTests: XCTestCase {
         let crypto = SequencingCryptoStatusService(statuses: [.unknown, eligible])
         let observer = SessionCryptoStatusObserver()
 
-        await observer.start(crypto: crypto)
+        await observer.start(store: SessionCryptoStore(crypto: crypto))
 
         XCTAssertEqual(observer.status, eligible)
         XCTAssertTrue(observer.enablesVerifyThisDevice)
@@ -303,7 +303,7 @@ final class MatrixLifecycleTests: XCTestCase {
         )
         let crypto = SequencingCryptoStatusService(statuses: [.unknown, eligible], suspendInitialRead: true)
         let observer = SessionCryptoStatusObserver()
-        let observing = Task { await observer.start(crypto: crypto) }
+        let observing = Task { await observer.start(store: SessionCryptoStore(crypto: crypto)) }
         try await waitUntil { crypto.initialReadIsSuspended }
         // Exercise the production forwarding boundary while the initial
         // authority read remains in flight. The inbox is deliberately empty.

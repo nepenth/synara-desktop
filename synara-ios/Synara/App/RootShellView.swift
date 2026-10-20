@@ -68,6 +68,10 @@ struct RootShellView: View {
                     RoutePlaceholderView(route: route)
                 }
         }
+        .onAppear {
+            // Session crypto status belongs to the account that signed out.
+            environment.sessionCrypto.reset()
+        }
     }
 
     private func signedInShell(session authenticatedSession: AuthenticatedSession) -> some View {
@@ -120,7 +124,7 @@ struct RootShellView: View {
         .sheet(isPresented: cryptoVerificationSheetBinding) {
             CryptoVerificationSheetHost(
                 presentation: cryptoVerification,
-                crypto: environment.crypto,
+                cryptoStore: environment.sessionCrypto,
                 onAccept: { runCryptoVerificationAction { await environment.crypto.acceptVerificationRequest() } },
                 onStartSas: { runCryptoVerificationAction { await environment.crypto.startSasVerification() } },
                 onApprove: { runCryptoVerificationAction { await environment.crypto.approveVerification() } },
@@ -415,7 +419,7 @@ struct RootShellView_Previews: PreviewProvider {
 /// each protocol update invalidate the hierarchy without dismissing the sheet.
 private struct CryptoVerificationSheetHost: View {
     @ObservedObject var presentation: CryptoVerificationPresentation
-    let crypto: CryptoStatusServicing
+    let cryptoStore: SessionCryptoStore
     let onAccept: () -> Void
     let onStartSas: () -> Void
     let onApprove: () -> Void
@@ -427,7 +431,7 @@ private struct CryptoVerificationSheetHost: View {
         if let snapshot = presentation.snapshot {
             CryptoVerificationSheet(
                 state: snapshot.state,
-                crypto: crypto,
+                cryptoStore: cryptoStore,
                 isDismissing: presentation.isDismissing,
                 dismissalError: presentation.error,
                 onAccept: onAccept,
@@ -446,7 +450,7 @@ private struct CryptoVerificationSheetHost: View {
 
 private struct CryptoVerificationSheet: View {
     let state: CryptoVerificationState
-    let crypto: CryptoStatusServicing
+    let cryptoStore: SessionCryptoStore
     let isDismissing: Bool
     let dismissalError: String?
     @StateObject private var sessionCrypto = SessionCryptoStatusObserver()
@@ -495,7 +499,7 @@ private struct CryptoVerificationSheet: View {
         .presentationDetents([.height(contentHeight)])
         .presentationDragIndicator(.visible)
         .task(id: state == .finished) {
-            if state == .finished { await sessionCrypto.start(crypto: crypto) }
+            if state == .finished { await sessionCrypto.start(store: cryptoStore) }
         }
         .accessibilityIdentifier("DeviceVerificationSheet")
     }

@@ -706,7 +706,14 @@ struct RoomTimelineView: View {
             flushOutgoingSendsIfReady(environment.connectionStatus.status)
             _ = await initialCryptoStatus
             await ownAvatarLoad
-            _ = await loadCryptoStatus()
+            let openedStatus = await loadCryptoStatus()
+            guard !Task.isCancelled, expectedTimelineTaskID == timelineTaskID else { return }
+            // A verified session without undecryptable rows has nothing to
+            // retry, so the room does not keep the session subscription.
+            if !RoomCryptoObservationPolicy.needsSessionUpdates(openedStatus.observing(loadedTimelineItems)) {
+                cryptoUpdatesTask?.cancel()
+                cryptoUpdatesTask = nil
+            }
         }
         .onAppear {
             isReadSceneActive = scenePhase == .active
@@ -2024,11 +2031,19 @@ struct RoomTimelineView: View {
         typingUserIDs = []
     }
 
-    private func loadCryptoStatus() async -> RoomCryptoStatus {
+    /// Room status over the shared session status: `session` from a store
+    /// update, or the store's (recent or single-flight) read.
+    private func loadCryptoStatus(session: SessionCryptoStatus? = nil) async -> RoomCryptoStatus {
         let traceID = PerformanceTrace.begin("LoadCryptoStatus")
         defer { PerformanceTrace.end("LoadCryptoStatus", id: traceID) }
         let expectedTimelineTaskID = timelineTaskID
-        let status = await environment.crypto.roomStatus(roomID: roomID)
+        let sessionStatus: SessionCryptoStatus
+        if let session {
+            sessionStatus = session
+        } else {
+            sessionStatus = await environment.sessionCrypto.read()
+        }
+        let status = await environment.crypto.roomStatus(roomID: roomID, session: sessionStatus)
         await MainActor.run {
             guard !Task.isCancelled, expectedTimelineTaskID == timelineTaskID else { return }
             cryptoStatus = status
@@ -2069,20 +2084,29 @@ struct RoomTimelineView: View {
 
     private func startVerificationAutoRetry() {
         cryptoUpdatesTask?.cancel()
+        cryptoUpdatesTask = nil
+        guard RoomCryptoObservationPolicy.needsSessionUpdates(cryptoStatus.observing(loadedTimelineItems)) else {
+            return
+        }
         let expectedTimelineTaskID = timelineTaskID
         cryptoUpdatesTask = Task {
-            // Device-owner updates include verification and peer changes.
-            // Subscribe before reading so completion cannot be lost during a read.
-            let updates = environment.crypto.sessionDeviceUpdates()
-            for await _ in updates {
+            // The shared store's updates carry verification and recovery
+            // changes. Subscribe before reading so completion cannot be lost
+            // during a read; the store publishes only real changes.
+            let updates = environment.sessionCrypto.updates()
+            for await session in updates {
                 guard !Task.isCancelled, expectedTimelineTaskID == timelineTaskID else { return }
                 let previousStatus = cryptoStatus
-                let status = await loadCryptoStatus()
+                let status = await loadCryptoStatus(session: session)
                 guard !Task.isCancelled, expectedTimelineTaskID == timelineTaskID else { return }
                 if status != previousStatus { isCryptoBannerDismissed = false }
-                if status.observing(loadedTimelineItems).shouldRetryAfterVerification(previous: previousStatus) {
+                let observed = status.observing(loadedTimelineItems)
+                if observed.shouldRetryAfterVerification(previous: previousStatus) {
                     _ = await environment.crypto.retryDecryption(roomID: roomID)
                 }
+                // Retrying after verification is the purpose; once verified,
+                // stop holding the session-wide subscription for this room.
+                guard RoomCryptoObservationPolicy.needsSessionUpdates(observed) else { return }
             }
         }
     }
