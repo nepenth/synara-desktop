@@ -228,13 +228,17 @@ enum RoomListFavorites {
 
     /// Core owns section ordering and name normalization
     /// (`room_list::presentation::order_room_ids`), shared with desktop.
+    /// Pending invites lead their section, as in `RoomListScopeFilter`:
+    /// stripped invite state usually has no timestamp, so recency order
+    /// would otherwise bury them at the end.
     static func sorted(_ rooms: [RoomSummary], order: RoomListSortOrder) -> [RoomSummary] {
         let byID = Dictionary(rooms.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let ids = orderRoomIds(
             rooms: rooms.map(Self.orderInput),
             order: order == .name ? .name : .recent
         )
-        return ids.compactMap { byID[$0] }
+        let ordered = ids.compactMap { byID[$0] }
+        return ordered.filter { $0.membership == .invited } + ordered.filter { $0.membership != .invited }
     }
 
     static func orderInput(_ room: RoomSummary) -> RoomOrderInput {

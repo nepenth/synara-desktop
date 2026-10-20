@@ -176,7 +176,8 @@ impl NativeRoomJoinRuleOwner {
         room.join()
             .await
             .map_err(|_| "v-rooms.1-invite-accept-failed")?;
-        if invite.is_direct {
+        // A degraded invite row has no known sender to record as the DM peer.
+        if invite.is_direct && !invite.sender_id.is_empty() {
             let sender_id = OwnedUserId::try_from(invite.sender_id.as_str())
                 .map_err(|_| "v-rooms.1-invite-invalid-sender")?;
             self.client

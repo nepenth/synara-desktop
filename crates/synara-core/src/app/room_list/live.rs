@@ -306,7 +306,7 @@ fn record_encryption_probe(room_id: &RoomId, resolved: bool, now: Instant) {
 
 /// Cached encryption state, probing the homeserver at most once per
 /// [`ENCRYPTION_PROBE_RETRY`] while it stays unknown.
-async fn room_encryption_state(room: &Room) -> matrix_sdk::Result<EncryptionState> {
+pub(super) async fn room_encryption_state(room: &Room) -> matrix_sdk::Result<EncryptionState> {
     let cached = room.encryption_state();
     if !cached.is_unknown() {
         return Ok(cached);

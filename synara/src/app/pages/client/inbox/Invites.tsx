@@ -218,7 +218,14 @@ function InviteCard({
         <Box gap="200" alignItems="Baseline">
           <Box grow="Yes">
             <Text size="T200" priority="300">
-              From: <b>{invite.senderId}</b>
+              {/* Core sends an empty sender when the invite's own member event was unreadable. */}
+              {invite.senderId ? (
+                <>
+                  From: <b>{invite.senderId}</b>
+                </>
+              ) : (
+                'Sender unknown'
+              )}
             </Text>
           </Box>
           {typeof invite.inviteTs === 'number' && invite.inviteTs !== 0 && (
@@ -481,7 +488,12 @@ function SpamInvites({
     useCallback(async () => {
       const firstInviteForSender = new Map<string, NativeInvite>();
       invites.forEach((invite) => {
-        if (!invite.senderIgnored && !firstInviteForSender.has(invite.senderId)) {
+        // An empty sender (unreadable invite) cannot be blocked; skip it.
+        if (
+          invite.senderId &&
+          !invite.senderIgnored &&
+          !firstInviteForSender.has(invite.senderId)
+        ) {
           firstInviteForSender.set(invite.senderId, invite);
         }
       });
@@ -545,7 +557,7 @@ function SpamInvites({
                       </Text>
                     </Button>
                   )}
-                  {invites.some((invite) => !invite.senderIgnored) && (
+                  {invites.some((invite) => invite.senderId && !invite.senderIgnored) && (
                     <Button
                       size="300"
                       variant="Secondary"

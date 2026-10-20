@@ -52,6 +52,12 @@ pub(super) fn push_room_list_update(
 }
 
 /// Privacy-safe room-list snapshot. Tokens and password never appear here.
+///
+/// Contract: `rooms` holds joined rooms only (the SDK joined filter), so no
+/// row here has `membership: Invite`. Pending invites come only from
+/// [`InviteSnapshotDto`]; a shell that shows invites in its room list appends
+/// one invited row per invite whose `room_id` is not already in `rooms`
+/// (iOS: `SharedCoreRoomListRows.rooms`).
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomListSnapshotDto {
     pub session_generation: u64,
@@ -145,6 +151,11 @@ pub(super) fn map_room_list_core_error(error: MatrixIpcError) -> RoomListSnapsho
 }
 
 /// Privacy-safe invite snapshot. Tokens and password never appear here.
+///
+/// The only source of pending invites; [`RoomListSnapshotDto`] is
+/// joined-only. One invite that cannot be fully projected (for example no own
+/// member event in its stripped state) appears with an empty `sender_id`
+/// instead of failing the whole snapshot.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct InviteSnapshotDto {
     pub session_generation: u64,

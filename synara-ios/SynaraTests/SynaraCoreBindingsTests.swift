@@ -1432,6 +1432,141 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreRoomListRowsAppendsInvitesMissingFromJoinedSnapshot() {
+        let joined = SharedCoreRoomListRows.RoomRow(
+            roomId: "!joined:example.org",
+            name: "Ops",
+            avatarUrl: nil,
+            membership: .join,
+            isDirect: false,
+            unreadCount: 2,
+            highlightCount: 0,
+            markedUnread: false,
+            lastActivityTs: 1_700_000_000_000,
+            lastMessagePreview: "Hello",
+            lastMessageIsAgentApproval: false,
+            isFavorite: false,
+            isCall: false,
+            hasActiveCall: false,
+            activeCallParticipantCount: 0,
+            directUserId: nil,
+            encryptionStatus: .encrypted
+        )
+        let rooms = SharedCoreRoomListRows.rooms(
+            rooms: [joined],
+            invites: [
+                SharedCoreRoomListRows.InviteRow(
+                    roomId: "!party:example.org",
+                    roomName: "Launch Party",
+                    roomTopic: nil,
+                    senderName: "Eve",
+                    reason: nil,
+                    isDirect: false,
+                    isEncrypted: false,
+                    inviteTs: 1_700_000_100_000
+                ),
+                SharedCoreRoomListRows.InviteRow(
+                    roomId: "!dm:example.org",
+                    roomName: "Eve",
+                    roomTopic: nil,
+                    senderName: "Eve",
+                    reason: "Quick question",
+                    isDirect: true,
+                    isEncrypted: true,
+                    inviteTs: nil
+                ),
+                // Core degrades an invite it cannot fully read to an empty
+                // sender instead of failing the whole invite snapshot.
+                SharedCoreRoomListRows.InviteRow(
+                    roomId: "!orphan:example.org",
+                    roomName: "Orphan",
+                    roomTopic: "Topic only",
+                    senderName: "",
+                    reason: nil
+                ),
+                // Already a list row: decorates it, never duplicates it.
+                SharedCoreRoomListRows.InviteRow(
+                    roomId: "!joined:example.org",
+                    roomName: "Ops",
+                    roomTopic: nil,
+                    senderName: "Eve",
+                    reason: nil
+                ),
+            ],
+            spaceParents: [
+                SharedCoreRoomListRows.SpaceParentRow(
+                    roomId: "!party:example.org",
+                    parentIds: ["!joined:example.org"]
+                ),
+            ]
+        )
+
+        XCTAssertEqual(rooms.map(\.id), [
+            "!joined:example.org",
+            "!party:example.org",
+            "!dm:example.org",
+            "!orphan:example.org",
+        ])
+        XCTAssertEqual(rooms[0].membership, .joined)
+        XCTAssertEqual(rooms[0].lastMessagePreview, "Hello")
+
+        let party = rooms[1]
+        XCTAssertEqual(party.membership, .invited)
+        XCTAssertEqual(party.name, "Launch Party")
+        XCTAssertEqual(party.lastMessagePreview, "Invited by Eve")
+        XCTAssertEqual(party.kind, .room)
+        XCTAssertEqual(party.unreadCount, 0)
+        XCTAssertEqual(party.encryptionStatus, .unknown)
+        XCTAssertEqual(party.lastActivityAt, Date(timeIntervalSince1970: 1_700_000_100))
+        XCTAssertEqual(party.parentSpaces, [SpaceSummary(id: "!joined:example.org", name: "Ops")])
+
+        let direct = rooms[2]
+        XCTAssertEqual(direct.kind, .directMessage)
+        XCTAssertEqual(direct.lastMessagePreview, "Quick question")
+        XCTAssertEqual(direct.encryptionStatus, .encrypted)
+        XCTAssertEqual(direct.lastActivityAt, .distantPast)
+
+        let orphan = rooms[3]
+        XCTAssertEqual(orphan.membership, .invited)
+        XCTAssertEqual(orphan.lastMessagePreview, "Topic only")
+
+        let sections = NotificationsInboxSections.make(from: rooms)
+        XCTAssertEqual(sections.invites.map(\.id), [
+            "!party:example.org",
+            "!dm:example.org",
+            "!orphan:example.org",
+        ])
+        XCTAssertEqual(NotificationBadgeSummary.inviteCount(from: rooms), 3)
+        let listed = RoomListScopeFilter.filteredRooms(
+            from: rooms,
+            filter: .all,
+            selectedSpaceID: nil,
+            searchQuery: ""
+        )
+        XCTAssertEqual(Set(listed.map(\.id)), Set(rooms.map(\.id)))
+        XCTAssertEqual(listed.first?.membership, .invited)
+    }
+
+    func testSharedCoreRoomListRowsInvitesOnlyStillLoad() {
+        let rooms = SharedCoreRoomListRows.rooms(
+            rooms: [],
+            invites: [
+                SharedCoreRoomListRows.InviteRow(
+                    roomId: "!party:example.org",
+                    roomName: "",
+                    roomTopic: nil,
+                    senderName: "",
+                    reason: nil
+                ),
+            ],
+            spaceParents: []
+        )
+        XCTAssertEqual(rooms.count, 1)
+        XCTAssertEqual(rooms.first?.name, "!party:example.org")
+        XCTAssertEqual(rooms.first?.membership, .invited)
+        XCTAssertEqual(rooms.first?.lastMessagePreview, "")
+    }
+
     func testSharedCoreRoomListWithoutSessionIsEmptyWithoutEcho() async {
         let host = SharedCoreProductHost(
             core: SharedCore(),

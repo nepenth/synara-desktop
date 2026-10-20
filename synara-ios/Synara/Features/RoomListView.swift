@@ -1427,7 +1427,9 @@ private struct RoomListSyncBanner: View {
     }
 }
 
-private struct InviteRoomListRow: View {
+/// Invite card with Accept / Decline, shared by Rooms and the Notifications
+/// invites section.
+struct InviteRoomListRow: View {
     let room: RoomSummary
     let onAccept: () -> Void
     let onReject: () -> Void
