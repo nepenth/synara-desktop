@@ -13,6 +13,7 @@ use std::sync::{
 use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
+use matrix_sdk::ruma::api::error::ErrorKind;
 use matrix_sdk::Client;
 use matrix_sdk_ui::room_list_service::State as RoomListState;
 use matrix_sdk_ui::sync_service::{State as SdkSyncState, SyncService};
@@ -181,6 +182,12 @@ impl SyncServiceOwner {
             snapshot.readiness = SyncReadiness::Failed;
             snapshot.failure_diagnostic_id =
                 Some(super::readiness::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID);
+        } else if matches!(&current, SdkSyncState::Error(error) if is_sliding_sync_unsupported_error(error.as_ref()))
+        {
+            // The server has no MSC4186 endpoint. Recovery does not restart
+            // it, so report the failed service with the verdict the shells'
+            // capability banners read instead of an offline blip.
+            snapshot.sliding_sync_capable = Some(false);
         } else if self.offline_mode_enabled
             && snapshot.failure_diagnostic_id
                 == Some(super::readiness::SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID)
@@ -573,38 +580,49 @@ pub(crate) fn is_terminal_auth_error(error: &(dyn std::error::Error + 'static)) 
 /// expired the session (and cleared room subscriptions) before reporting it,
 /// so a restart can begin immediately instead of waiting out a network delay.
 pub(crate) fn is_expired_sync_session_error(error: &(dyn std::error::Error + 'static)) -> bool {
-    use matrix_sdk::ruma::api::error::ErrorKind;
+    sliding_sync_error_kind(error) == Some(&ErrorKind::UnknownPos)
+}
+
+/// True for a typed `M_UNRECOGNIZED` from the sliding-sync endpoint: the server
+/// has no MSC4186 endpoint, so restarting would only repeat the 404.
+pub(crate) fn is_sliding_sync_unsupported_error(error: &(dyn std::error::Error + 'static)) -> bool {
+    sliding_sync_error_kind(error) == Some(&ErrorKind::Unrecognized)
+}
+
+/// The typed Matrix error kind of a sliding-sync request failure, seen through
+/// the SDK's sync-service, room-list and encryption-sync wrappers.
+fn sliding_sync_error_kind<'a>(
+    error: &'a (dyn std::error::Error + 'static),
+) -> Option<&'a ErrorKind> {
     if let Some(error) = error.downcast_ref::<matrix_sdk_ui::sync_service::Error>() {
         return match error {
-            matrix_sdk_ui::sync_service::Error::RoomList(inner) => {
-                is_expired_sync_session_error(inner)
-            }
+            matrix_sdk_ui::sync_service::Error::RoomList(inner) => sliding_sync_error_kind(inner),
             matrix_sdk_ui::sync_service::Error::EncryptionSync(inner) => {
-                is_expired_sync_session_error(inner)
+                sliding_sync_error_kind(inner)
             }
-            _ => false,
+            _ => None,
         };
     }
     if let Some(error) = error.downcast_ref::<matrix_sdk_ui::room_list_service::Error>() {
         return match error {
             matrix_sdk_ui::room_list_service::Error::SlidingSync(inner) => {
-                is_expired_sync_session_error(inner)
+                sliding_sync_error_kind(inner)
             }
-            _ => false,
+            _ => None,
         };
     }
     if let Some(error) = error.downcast_ref::<matrix_sdk_ui::encryption_sync_service::Error>() {
         return match error {
             matrix_sdk_ui::encryption_sync_service::Error::SlidingSync(inner) => {
-                is_expired_sync_session_error(inner)
+                sliding_sync_error_kind(inner)
             }
-            _ => false,
+            _ => None,
         };
     }
     if let Some(error) = error.downcast_ref::<matrix_sdk::Error>() {
-        return error.client_api_error_kind() == Some(&ErrorKind::UnknownPos);
+        return error.client_api_error_kind();
     }
-    error.source().is_some_and(is_expired_sync_session_error)
+    error.source().and_then(sliding_sync_error_kind)
 }
 
 /// Delay before restarting after a non-terminal sync error.
@@ -781,6 +799,10 @@ fn spawn_network_recovery(
                         .authentication_rejected
                         .store(true, Ordering::Release);
                 }
+                SdkSyncState::Error(error) if is_sliding_sync_unsupported_error(error.as_ref()) => {
+                    // Terminal until an explicit start: retrying a server without
+                    // MSC4186 repeats the same 404 every few seconds forever.
+                }
                 SdkSyncState::Error(error) if context.may_restart() => {
                     let delay = restart_delay_for_error(error.as_ref());
                     tokio::select! {
@@ -788,7 +810,8 @@ fn spawn_network_recovery(
                         _ = tokio::time::sleep(delay) => {
                             context
                                 .restart_if(false, |state| {
-                                    matches!(state, SdkSyncState::Error(error) if !is_terminal_auth_error(error.as_ref()))
+                                    matches!(state, SdkSyncState::Error(error) if !is_terminal_auth_error(error.as_ref())
+                                        && !is_sliding_sync_unsupported_error(error.as_ref()))
                                 })
                                 .await;
                         }
@@ -1070,6 +1093,122 @@ mod auth_recovery_tests {
                 .count()
                 <= 2
         );
+    }
+
+    #[tokio::test]
+    async fn unrecognized_sync_endpoint_is_terminal_and_reports_no_sliding_sync() {
+        let server = MatrixMockServer::new().await;
+        let client = refreshing_client(&server).await;
+        let unrecognized = || {
+            ResponseTemplate::new(404).set_body_json(
+                serde_json::json!({"errcode":"M_UNRECOGNIZED","error":"Unrecognized request"}),
+            )
+        };
+        server
+            .mock_sliding_sync()
+            .respond_with(unrecognized())
+            .mount()
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/_matrix/client/versions"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"versions":["v1.12"]})),
+            )
+            .mount(server.server())
+            .await;
+        let sync_requests = || async {
+            server
+                .server()
+                .received_requests()
+                .await
+                .unwrap()
+                .iter()
+                .filter(|request| request.url.path().ends_with("/sync"))
+                .count()
+        };
+        let owner = build_sync_service(&client, 11, SyncServiceConfig::default())
+            .await
+            .unwrap();
+        owner.start().await.unwrap();
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while owner.observe().sliding_sync_capable != Some(false) {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("typed M_UNRECOGNIZED must reach the owner");
+        let snapshot = owner.observe();
+        assert_eq!(snapshot.readiness, SyncReadiness::Failed);
+        assert_eq!(
+            snapshot.failure_diagnostic_id,
+            Some(super::super::SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID),
+            "not the offline mapping, and not an authentication failure"
+        );
+        assert!(snapshot.is_valid_public_sync_status());
+        let count = sync_requests().await;
+        tokio::time::sleep(TRANSIENT_ERROR_RESTART_DELAY + Duration::from_millis(300)).await;
+        assert_eq!(
+            sync_requests().await,
+            count,
+            "no automatic restart against a server without MSC4186"
+        );
+        assert_eq!(owner.observe().sliding_sync_capable, Some(false));
+
+        // An explicit start tries once more, then settles on the same verdict.
+        owner.start().await.unwrap();
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while sync_requests().await == count
+                || owner.observe().sliding_sync_capable != Some(false)
+            {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("explicit start probes the endpoint again");
+    }
+
+    #[tokio::test]
+    async fn sliding_sync_error_kinds_are_read_through_every_sdk_wrapper() {
+        let server = MatrixMockServer::new().await;
+        let client = refreshing_client(&server).await;
+        for (errcode, unsupported, expired) in [
+            ("M_UNRECOGNIZED", true, false),
+            ("M_UNKNOWN_POS", false, true),
+            ("M_UNKNOWN", false, false),
+        ] {
+            server.server().reset().await;
+            Mock::given(method("GET"))
+                .and(path("/_matrix/client/versions"))
+                .respond_with(
+                    ResponseTemplate::new(if errcode == "M_UNKNOWN_POS" { 400 } else { 404 })
+                        .set_body_json(serde_json::json!({"errcode":errcode,"error":"fixture"})),
+                )
+                .mount(server.server())
+                .await;
+            let http = client
+                .fetch_server_versions(Some(matrix_sdk::config::RequestConfig::new().skip_auth()))
+                .await
+                .unwrap_err();
+            let room_list = matrix_sdk_ui::sync_service::Error::RoomList(
+                matrix_sdk_ui::room_list_service::Error::SlidingSync(matrix_sdk::Error::Http(
+                    Box::new(http),
+                )),
+            );
+            assert_eq!(is_sliding_sync_unsupported_error(&room_list), unsupported);
+            assert_eq!(is_expired_sync_session_error(&room_list), expired);
+            assert!(!is_terminal_auth_error(&room_list));
+            let http = client
+                .fetch_server_versions(Some(matrix_sdk::config::RequestConfig::new().skip_auth()))
+                .await
+                .unwrap_err();
+            let encryption = matrix_sdk_ui::sync_service::Error::EncryptionSync(
+                matrix_sdk_ui::encryption_sync_service::Error::SlidingSync(
+                    matrix_sdk::Error::Http(Box::new(http)),
+                ),
+            );
+            assert_eq!(is_sliding_sync_unsupported_error(&encryption), unsupported);
+            assert_eq!(is_expired_sync_session_error(&encryption), expired);
+        }
     }
 
     #[tokio::test]

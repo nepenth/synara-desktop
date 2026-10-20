@@ -5,8 +5,9 @@
 //! credentials and deliberately reduces all failures to fixed public values.
 
 use crate::app::auth::{
-    discover_login_flows, probe_register_flows, AuthError, HttpLoginFlowTransport,
-    HttpRegisterFlowTransport, LoginFlow, RegisterFlowsProbe, RegisterUiaFlow,
+    discover_login_flows, probe_register_flows, resolve_homeserver as core_resolve_homeserver,
+    AuthError, HttpLoginFlowTransport, HttpRegisterFlowTransport, LoginFlow, RegisterFlowsProbe,
+    RegisterUiaFlow, ResolvedHomeserver,
 };
 
 /// One Matrix login flow exposed through UniFFI.
@@ -31,7 +32,8 @@ impl From<LoginFlow> for LoginFlowDto {
     }
 }
 
-/// Fixed, privacy-safe failure returned by [`login_flows`].
+/// Fixed, privacy-safe failure returned by [`login_flows`] and
+/// [`resolve_homeserver`].
 ///
 /// Every field is selected from static source constants. No URL, response
 /// body, header, network-library diagnostic, credential, or token can reach
@@ -96,6 +98,49 @@ pub async fn login_flows(homeserver_url: String) -> Result<Vec<LoginFlowDto>, Lo
         .await
         .map_err(LoginFlowsError::from)?;
     Ok(result.flows.into_iter().map(LoginFlowDto::from).collect())
+}
+
+/// A homeserver resolved for sign-in, exposed through UniFFI.
+///
+/// `homeserver_url` is the client-API base URL to sign in against, which can
+/// differ from what the user typed when the server name delegates through
+/// `.well-known/matrix/client`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ResolvedHomeserverDto {
+    pub homeserver_url: String,
+    pub login_flows: Vec<LoginFlowDto>,
+    /// Native simplified sliding sync (MSC4186), which Synara needs to sync.
+    pub native_sliding_sync: bool,
+}
+
+impl From<ResolvedHomeserver> for ResolvedHomeserverDto {
+    fn from(resolved: ResolvedHomeserver) -> Self {
+        Self {
+            homeserver_url: resolved.homeserver_url,
+            login_flows: resolved
+                .login_flows
+                .into_iter()
+                .map(LoginFlowDto::from)
+                .collect(),
+            native_sliding_sync: resolved.native_sliding_sync,
+        }
+    }
+}
+
+/// Resolve a typed server name or homeserver URL with the SDK: well-known
+/// delegation, else the input itself as a homeserver URL, validated with
+/// `/versions`. Reports login flows and native sliding-sync support.
+///
+/// Read-only and credential-free, on a memory-only client. Failures use the
+/// same fixed values as [`login_flows`].
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn resolve_homeserver(
+    server_name_or_url: String,
+) -> Result<ResolvedHomeserverDto, LoginFlowsError> {
+    core_resolve_homeserver(&server_name_or_url)
+        .await
+        .map(ResolvedHomeserverDto::from)
+        .map_err(LoginFlowsError::from)
 }
 
 /// One registration UIAA flow exposed through UniFFI.

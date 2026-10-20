@@ -128,6 +128,8 @@ enum SharedCoreLoginErrorMapping {
             return .sessionPersistenceFailed
         case "p4-s3c-identity-invalid":
             return .unsupported
+        case "p4-s3c-sliding-sync-unsupported":
+            return .slidingSyncUnsupported
         default:
             return .invalidCredentials
         }
@@ -145,9 +147,7 @@ struct SharedCoreAuthService: AuthServicing {
         guard request.password.isEmpty == false else {
             throw LoginError.missingPassword
         }
-        let userID = username.hasPrefix("@")
-            ? username
-            : "@\(username):\(request.homeserverURL.host ?? "localhost")"
+        let userID = request.userID
         do {
             let dto = try await SharedCoreSessionLogin.loginWithPassword(
                 userID: userID,
@@ -440,6 +440,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
             beginRejectedAuthenticationRetirement(generation: dto.sessionGeneration)
             return
         }
+        connectionStatus.updateSlidingSyncCapability(dto.slidingSyncCapable)
         switch syncStatus {
         case .restoreFailed, .stopped:
             return

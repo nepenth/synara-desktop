@@ -8,32 +8,31 @@ struct ConnectionStatusBanner: View {
     var onSignOut: (() -> Void)?
 
     var body: some View {
-        if store.isBannerVisible {
+        if store.presentsBanner {
             banner
         }
     }
 
     @ViewBuilder
     private var banner: some View {
-        let status = store.status
-        let variant = ConnectionStatusCopy.variant(status)
+        let variant = store.bannerVariant
         HStack(spacing: SynaraSpacing.small) {
-            Image(systemName: ConnectionStatusCopy.systemImage(status))
+            Image(systemName: store.bannerSystemImage)
                 .font(.system(size: 13, weight: .semibold))
                 .accessibilityHidden(true)
-            Text(ConnectionStatusCopy.banner(status))
+            Text(store.bannerText)
                 .font(SynaraTypography.fineMetaBold)
-                .lineLimit(2)
+                .lineLimit(store.slidingSyncUnsupported ? 4 : 2)
                 .minimumScaleFactor(0.85)
             Spacer(minLength: SynaraSpacing.small)
-            if ConnectionStatusCopy.showsRetryAction(status), let onRetry {
+            if store.showsRetryAction, let onRetry {
                 Button("Retry", action: onRetry)
                     .font(SynaraTypography.fineMetaBold)
                     .buttonStyle(.bordered)
                     .controlSize(.mini)
                     .accessibilityIdentifier("ConnectionStatusRetryButton")
             }
-            if ConnectionStatusCopy.showsSignOutAction(status), let onSignOut {
+            if store.showsSignOutAction, let onSignOut {
                 Button("Sign Out", action: onSignOut)
                     .font(SynaraTypography.fineMetaBold)
                     .buttonStyle(.bordered)
@@ -48,7 +47,7 @@ struct ConnectionStatusBanner: View {
         .background(background(variant))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ConnectionStatusBanner")
-        .accessibilityLabel(ConnectionStatusCopy.banner(status))
+        .accessibilityLabel(store.bannerText)
     }
 
     private func foreground(_ variant: ConnectionStatusCopy.Variant) -> Color {

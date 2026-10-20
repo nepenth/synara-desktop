@@ -65,6 +65,7 @@ export enum LoginError {
   UserDeactivated = 'UserDeactivated',
   InvalidRequest = 'InvalidRequest',
   RateLimited = 'RateLimited',
+  SlidingSyncUnsupported = 'SlidingSyncUnsupported',
   Unknown = 'Unknown',
 }
 
@@ -173,6 +174,7 @@ const SAFE_NATIVE_LOGIN_DIAGNOSTIC_IDS = new Set([
   'p3.2-login-rejected',
   'p3.2-login-response-decode',
   'p3.2-login-sdk-timeout',
+  'p3.2-login-sliding-sync-unsupported',
   'p3.2-login-store-locked',
   'p3.2-login-store-migration-failed',
   'p3.2-login-store-migration-required',

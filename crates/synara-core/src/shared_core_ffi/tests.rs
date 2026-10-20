@@ -1338,7 +1338,12 @@ async fn ios_password_login_requests_no_refresh_token_and_restores_without_one()
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, ResponseTemplate};
     let server = MatrixMockServer::new().await;
-    server.mock_versions().ok().mount().await;
+    server
+        .mock_versions()
+        .with_simplified_sliding_sync()
+        .ok()
+        .mount()
+        .await;
     Mock::given(method("POST"))
         .and(path("/_matrix/client/v3/login"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
@@ -1501,4 +1506,107 @@ fn ios_password_login_never_opts_into_refresh_tokens() {
         .expect("login body");
     assert!(login.contains("request_refresh_token: false"));
     assert!(!login.contains("request_refresh_token: true"));
+}
+
+#[tokio::test]
+async fn ios_password_login_refuses_a_server_without_simplified_sliding_sync() {
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, ResponseTemplate};
+    let server = MatrixMockServer::new().await;
+    server.mock_versions().ok().mount().await;
+    Mock::given(method("POST"))
+        .and(path("/_matrix/client/v3/login"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "user_id": "@alice:example.org",
+            "access_token": "syt_never_issued",
+            "device_id": "NEVER",
+        })))
+        .expect(0)
+        .mount(server.server())
+        .await;
+    let identity = AccountIdentity::new("@alice:example.org", &server.uri()).unwrap();
+    let entries = Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries.clone())));
+    let root = temp_root("ios-login-no-sliding-sync");
+    let error = shared
+        .login_with_password_inner(
+            identity.user_id(),
+            identity.homeserver_url(),
+            &root.to_string_lossy(),
+            "fixture-password",
+        )
+        .await
+        .expect_err("no device is created on a server Synara cannot sync with");
+    assert_eq!(
+        error,
+        login_failed(
+            LOGIN_SLIDING_SYNC_UNSUPPORTED_CODE,
+            LOGIN_SLIDING_SYNC_UNSUPPORTED_DESCRIPTION
+        )
+    );
+    assert!(
+        vault_session_entries_are_empty(&entries, &identity),
+        "no session saved"
+    );
+    assert!(!shared.has_retained_client());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn ios_password_login_ignores_a_login_response_well_known() {
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, ResponseTemplate};
+    let server = MatrixMockServer::new().await;
+    server
+        .mock_versions()
+        .with_simplified_sliding_sync()
+        .ok()
+        .mount()
+        .await;
+    // Synapse with `serve_client_wellknown` names its public base URL here,
+    // which can differ from the client-API URL discovery already resolved.
+    Mock::given(method("POST"))
+        .and(path("/_matrix/client/v3/login"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "user_id": "@alice:example.org",
+            "access_token": "syt_ios_well_known_access",
+            "device_id": "IOSWELLKNOWN",
+            "well_known": {"m.homeserver": {"base_url": "https://matrix-client.example.org/"}},
+        })))
+        .expect(1)
+        .mount(server.server())
+        .await;
+    let identity = AccountIdentity::new("@alice:example.org", &server.uri()).unwrap();
+    let entries = Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries.clone())));
+    let root = temp_root("ios-login-well-known");
+    let dto = shared
+        .login_with_password_inner(
+            identity.user_id(),
+            identity.homeserver_url(),
+            &root.to_string_lossy(),
+            "fixture-password",
+        )
+        .await
+        .expect("a login-response well_known does not trip the identity check");
+    assert_eq!(dto.homeserver_url, identity.homeserver_url());
+    assert_eq!(dto.device_id, "IOSWELLKNOWN");
+    assert_eq!(
+        shared.retained_client().unwrap().homeserver().as_str(),
+        format!("{}/", server.uri())
+    );
+    drop(shared);
+    let _ = fs::remove_dir_all(root);
+}
+
+fn vault_session_entries_are_empty(
+    entries: &Mutex<HashMap<String, Vec<u8>>>,
+    identity: &AccountIdentity,
+) -> bool {
+    let key = SessionMaterialId::from_identity(identity)
+        .account()
+        .to_owned();
+    !entries.lock().expect("vault").contains_key(&key)
 }

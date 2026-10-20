@@ -127,6 +127,31 @@ pub async fn login_with_password(
     })
 }
 
+/// Static diagnostic for a homeserver without native simplified sliding sync.
+pub const LOGIN_SLIDING_SYNC_UNSUPPORTED_DIAGNOSTIC_ID: &str =
+    "p3.2-login-sliding-sync-unsupported";
+
+/// Refuse sign-in, before any device is created, on a homeserver that does
+/// not advertise native simplified sliding sync (MSC4186).
+///
+/// Synara syncs only through the SDK `SyncService`, which needs it; without
+/// this check the login succeeds and the new device then never syncs. Shells
+/// call this on the unauthenticated client right before
+/// [`login_with_password`]. A `/versions` failure maps like a login error.
+pub async fn require_native_sliding_sync(client: &Client) -> Result<(), AuthError> {
+    let supported = client
+        .supported_versions()
+        .await
+        .map_err(|error| map_login_sdk_error(error.into()))?;
+    if crate::app::sync::supports_native_sliding_sync(&supported) {
+        Ok(())
+    } else {
+        Err(AuthError::UnsupportedCapability {
+            diagnostic_id: LOGIN_SLIDING_SYNC_UNSUPPORTED_DIAGNOSTIC_ID,
+        })
+    }
+}
+
 fn validate_user_id_or_localpart(raw: &str) -> Result<String, AuthError> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {

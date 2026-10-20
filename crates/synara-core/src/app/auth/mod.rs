@@ -13,6 +13,7 @@ mod crypto_device;
 mod device_name;
 mod discovery;
 mod error;
+mod homeserver_resolution;
 mod http_transport;
 mod input;
 mod login;
@@ -34,6 +35,9 @@ pub use discovery::{
     DiscoveryResult, DiscoveryTransport, MockDiscoveryTransport, WellKnownClientConfig,
 };
 pub use error::AuthError;
+pub use homeserver_resolution::{
+    resolve_homeserver, resolve_homeserver_with_user_agent, ResolvedHomeserver,
+};
 pub use http_transport::{
     parse_login_types_json, HttpDiscoveryTransport, HttpLoginFlowTransport,
     HttpRegisterFlowTransport, AUTH_HTTP_MAX_RESPONSE_BYTES, AUTH_HTTP_TIMEOUT_SECS,
@@ -42,7 +46,10 @@ pub use input::{
     normalize_homeserver_url, normalize_server_name, parse_discovery_input, DiscoveryInput,
     DiscoveryInputKind, NormalizedHomeserverUrl, NormalizedServerName,
 };
-pub use login::{login_with_password, LoginMethodKind, LoginOptions, LoginResult};
+pub use login::{
+    login_with_password, require_native_sliding_sync, LoginMethodKind, LoginOptions, LoginResult,
+    LOGIN_SLIDING_SYNC_UNSUPPORTED_DIAGNOSTIC_ID,
+};
 pub use login_flow::{
     discover_login_flows, login_flows_response, map_matrix_login_types, LoginFlow,
     LoginFlowDiscoveryResult, LoginFlowKind, LoginFlowTransport, MatrixLoginFlowDto,

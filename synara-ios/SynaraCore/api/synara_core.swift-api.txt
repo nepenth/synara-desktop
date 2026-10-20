@@ -108,6 +108,7 @@ extension RegisterFlowsDto: Sendable
 extension RegisterFlowsError: Sendable
 extension RegisterFlowsStatus: Sendable
 extension RegisterUiaFlowDto: Sendable
+extension ResolvedHomeserverDto: Sendable
 extension RestoreBackupDto: Sendable
 extension RestoreBackupError: Sendable
 extension RestrictedJoinReparentDto: Sendable
@@ -934,6 +935,7 @@ public func markdownToHtml(body: String) -> String?
 public func orderRoomIds(rooms: [RoomOrderInput], order: RoomListOrder) -> [String]
 public func planMemberActions(context: MemberActionContext) -> MemberActionPlan
 public func registerFlows(homeserverUrl: String) async throws -> RegisterFlowsDto
+public func resolveHomeserver(serverNameOrUrl: String) async throws -> ResolvedHomeserverDto
 public func roomActivityRecoveryRequired(latestRequiresRecovery: Bool, previousState: RoomActivityPreviousState) -> Bool
 public func roomUnreadPresentation(membership: RoomUnreadMembership, numUnreadMessages: UInt64, numUnreadNotifications: UInt64, numUnreadMentions: UInt64, isMarkedUnread: Bool) -> RoomUnreadPresentationDto
 public func summarizeBadges(input: BadgeSummaryInput) -> BadgeSummary
@@ -1469,6 +1471,11 @@ public struct RegisterFlowsDto: Equatable, Hashable
 public struct RegisterUiaFlowDto: Equatable, Hashable
   public var stages: [String]
   public init(stages: [String])
+public struct ResolvedHomeserverDto: Equatable, Hashable
+  public var homeserverUrl: String
+  public var loginFlows: [LoginFlowDto]
+  public var nativeSlidingSync: Bool
+  public init(homeserverUrl: String, loginFlows: [LoginFlowDto], nativeSlidingSync: Bool)
 public struct RestoreBackupDto: Equatable, Hashable
   public var status: WriteAckDto
   public init(status: WriteAckDto)

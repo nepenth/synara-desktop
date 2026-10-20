@@ -279,6 +279,9 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
             {loginState.error.errcode === LoginError.InvalidServer && (
               <FieldError message="Failed to find your Matrix ID server." />
             )}
+            {loginState.error.errcode === LoginError.SlidingSyncUnsupported && (
+              <FieldError message="This server doesn't support the sync protocol Synara needs (simplified sliding sync, MSC4186). Ask the server's admin." />
+            )}
           </>
         )}
       </Box>

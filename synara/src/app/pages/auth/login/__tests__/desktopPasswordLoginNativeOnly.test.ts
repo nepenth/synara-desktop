@@ -248,6 +248,35 @@ test('loginPassword maps native Forbidden code', async () => {
   );
 });
 
+test('loginPassword maps a server without simplified sliding sync to its own code', async () => {
+  const invoke: PasswordLoginInvoke = async () => {
+    throw {
+      code: 'SlidingSyncUnsupported',
+      message: 'unsupported',
+      diagnosticId: 'p3.2-login-sliding-sync-unsupported',
+    };
+  };
+
+  await assert.rejects(
+    () =>
+      loginPassword(
+        'https://matrix.example.org',
+        {
+          type: 'm.login.password',
+          identifier: { type: 'm.id.user', user: '@alice:example.org' },
+          password: 'secret',
+        },
+        { isDesktop: () => true, invoke }
+      ),
+    (err: unknown) => {
+      assert.ok(err instanceof PasswordLoginError);
+      assert.equal(err.errcode, LoginError.SlidingSyncUnsupported);
+      assert.equal(err.diagnosticId, 'p3.2-login-sliding-sync-unsupported');
+      return true;
+    }
+  );
+});
+
 test('loginPassword default bridge logs only a mapped static diagnostic', async () => {
   const originalWindow = globalThis.window;
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];

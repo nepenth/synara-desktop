@@ -23,7 +23,9 @@ mod service;
 mod sync_phase;
 mod wake;
 
-pub use capability::{probe_sliding_sync, server_supports_sliding_sync};
+pub use capability::{
+    probe_sliding_sync, server_supports_sliding_sync, supports_native_sliding_sync,
+};
 pub use error::SyncError;
 pub use readiness::{
     failure_diagnostic_from_sdk_state, readiness_from_sdk_state, snapshot_from_sdk_state,

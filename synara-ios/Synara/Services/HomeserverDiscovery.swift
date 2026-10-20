@@ -14,9 +14,21 @@ struct HomeserverSuggestion: Identifiable, Equatable {
 }
 
 struct HomeserverDiscoveryResult: Equatable {
+    /// What the user typed, normalized. Shown on the sign-in screen.
     let requestedURL: URL
+    /// Client-API URL to sign in against. Differs from `requestedURL` when the
+    /// server name delegates through `.well-known/matrix/client`.
     let homeserverBaseURL: URL
     let supportsPasswordLogin: Bool
+}
+
+/// Server-compatibility copy shared by discovery, sign-in and the
+/// connection banner.
+enum ServerCompatibilityCopy {
+    static let slidingSyncUnsupported =
+        "This server doesn't support the sync protocol Synara needs (simplified sliding sync, MSC4186). Contact the server's administrator."
+    static let singleSignOnOnly =
+        "This server signs in with single sign-on, which Synara for iPhone doesn't support yet."
 }
 
 enum HomeserverDiscoveryError: LocalizedError, Equatable {
@@ -25,6 +37,8 @@ enum HomeserverDiscoveryError: LocalizedError, Equatable {
     case unsupportedScheme
     case missingHost
     case discoveryFailed
+    case slidingSyncUnsupported
+    case singleSignOnOnly
     case unsupportedServer
 
     var errorDescription: String? {
@@ -39,8 +53,12 @@ enum HomeserverDiscoveryError: LocalizedError, Equatable {
             return "Enter a homeserver host, such as matrix.org."
         case .discoveryFailed:
             return "Could not discover this homeserver. Check the address and try again."
+        case .slidingSyncUnsupported:
+            return ServerCompatibilityCopy.slidingSyncUnsupported
+        case .singleSignOnOnly:
+            return ServerCompatibilityCopy.singleSignOnOnly
         case .unsupportedServer:
-            return "This homeserver is not supported yet."
+            return "This server doesn't offer password sign-in, which Synara for iPhone needs."
         }
     }
 }
@@ -89,47 +107,62 @@ protocol HomeserverDiscovering {
     func discover(rawAddress: String) async throws -> HomeserverDiscoveryResult
 }
 
-protocol LoginFlowProbing {
-    func loginFlows(homeserverURL: URL) async throws -> [LoginFlowDto]
+protocol HomeserverResolving {
+    func resolve(serverNameOrURL: String) async throws -> ResolvedHomeserverDto
 }
 
-struct CoreLoginFlowProbe: LoginFlowProbing {
-    func loginFlows(homeserverURL: URL) async throws -> [LoginFlowDto] {
-        try await SynaraCore.loginFlows(homeserverUrl: homeserverURL.absoluteString)
+/// Core resolves with the SDK: `.well-known/matrix/client` delegation, else
+/// the address itself as a homeserver URL, validated with `/versions`.
+struct CoreHomeserverResolver: HomeserverResolving {
+    func resolve(serverNameOrURL: String) async throws -> ResolvedHomeserverDto {
+        try await SynaraCore.resolveHomeserver(serverNameOrUrl: serverNameOrURL)
     }
 }
 
 struct CoreHomeserverDiscoveryService: HomeserverDiscovering {
     let suggestions: [HomeserverSuggestion]
-    private let loginFlowProbe: any LoginFlowProbing
+    private let resolver: any HomeserverResolving
 
     init(
         suggestions: [HomeserverSuggestion] = [
             HomeserverSuggestion(name: "Matrix.org", address: "matrix.org")
         ],
-        loginFlowProbe: any LoginFlowProbing = CoreLoginFlowProbe()
+        resolver: any HomeserverResolving = CoreHomeserverResolver()
     ) {
         self.suggestions = suggestions
-        self.loginFlowProbe = loginFlowProbe
+        self.resolver = resolver
     }
 
     func discover(rawAddress: String) async throws -> HomeserverDiscoveryResult {
-        let normalizedURL = try HomeserverAddressNormalizer.normalize(rawAddress)
-        let flows: [LoginFlowDto]
+        let requestedURL = try HomeserverAddressNormalizer.normalize(rawAddress)
+        let resolved: ResolvedHomeserverDto
 
         do {
-            flows = try await loginFlowProbe.loginFlows(homeserverURL: normalizedURL)
+            resolved = try await resolver.resolve(serverNameOrURL: requestedURL.absoluteString)
         } catch {
             throw HomeserverDiscoveryError.discoveryFailed
         }
 
-        guard flows.contains(where: { $0.kind == "password" }) else {
+        guard let homeserverURL = URL(string: resolved.homeserverUrl), homeserverURL.host != nil else {
+            throw HomeserverDiscoveryError.discoveryFailed
+        }
+        // A well-known document may delegate to any URL; keep the HTTPS rule.
+        guard homeserverURL.scheme?.lowercased() == "https" else {
+            throw HomeserverDiscoveryError.unsupportedScheme
+        }
+        guard resolved.nativeSlidingSync else {
+            throw HomeserverDiscoveryError.slidingSyncUnsupported
+        }
+        guard resolved.loginFlows.contains(where: { $0.kind == "password" }) else {
+            if resolved.loginFlows.contains(where: { $0.matrixType == "m.login.sso" }) {
+                throw HomeserverDiscoveryError.singleSignOnOnly
+            }
             throw HomeserverDiscoveryError.unsupportedServer
         }
 
         return HomeserverDiscoveryResult(
-            requestedURL: normalizedURL,
-            homeserverBaseURL: normalizedURL,
+            requestedURL: requestedURL,
+            homeserverBaseURL: homeserverURL,
             supportsPasswordLogin: true
         )
     }
