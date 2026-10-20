@@ -12,7 +12,7 @@ use matrix_sdk::Client;
 use matrix_sdk_crypto::CollectStrategy;
 
 use super::ClientBuilderError;
-use super::{ClientBuildConfig, HomeserverMode};
+use super::{ClientBuildConfig, HomeserverMode, TimeoutPolicy};
 use crate::transport::MatrixIpcErrorCategory;
 
 /// Which devices receive this client's room keys.
@@ -46,6 +46,34 @@ pub async fn build_memory_only_client(
     config: &ClientBuildConfig,
 ) -> Result<Client, ClientBuilderError> {
     build_client(config, ClientStoreMode::Memory).await
+}
+
+/// Build a memory-only, unauthenticated client whose homeserver the SDK
+/// resolves from what the user typed: a `.well-known/matrix/client` lookup on
+/// a server name, falling back to `/versions` on the input as a homeserver URL.
+/// Used only for sign-in discovery; it has no account, store layout, search
+/// index, session callback or vault entry.
+pub async fn build_discovery_client(
+    server_name_or_url: &str,
+    user_agent: &str,
+    timeouts: TimeoutPolicy,
+) -> Result<Client, ClientBuilderError> {
+    timeouts.validate()?;
+    #[cfg(feature = "x509-identity")]
+    crate::app::x509::ensure_aws_lc_rustls_provider();
+    Client::builder()
+        .request_config(
+            RequestConfig::new()
+                .timeout(timeouts.request_timeout)
+                .retry_limit(timeouts.retry_limit),
+        )
+        .user_agent(user_agent)
+        .server_name_or_homeserver_url(server_name_or_url)
+        .store_config(StoreConfig::new(CrossProcessLockConfig::SingleProcess))
+        .respect_login_well_known(false)
+        .build()
+        .await
+        .map_err(map_build_error)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -88,7 +116,12 @@ async fn build_client(
         .user_agent(&config.user_agent)
         .with_encryption_settings(encryption_settings)
         .with_room_key_recipient_strategy(ROOM_KEY_RECIPIENT_STRATEGY)
-        .cross_process_store_config(cross_process.clone());
+        .cross_process_store_config(cross_process.clone())
+        // Sign-in resolves the homeserver before login, and both shells key the
+        // account identity (store path, vault entry) by that URL. A login
+        // response `well_known` would otherwise switch `client.homeserver()`
+        // after the identity was built and fail the identity check.
+        .respect_login_well_known(false);
 
     match config.homeserver_mode {
         HomeserverMode::ExplicitUrl => {

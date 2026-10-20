@@ -188,6 +188,35 @@ final class ConnectionStatusCopyTests: XCTestCase {
         XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.disconnected)
     }
 
+    func testServerWithoutSlidingSyncNamesTheProblemInsteadOfConnecting() {
+        let store = ConnectionStatusStore(reconnectingHold: 4)
+        store.update(.starting)
+        store.updateSlidingSyncCapability(nil)
+        XCTAssertFalse(store.slidingSyncUnsupported)
+        XCTAssertEqual(store.bannerText, ConnectionStatusCopy.starting)
+
+        store.update(.disconnected)
+        store.updateSlidingSyncCapability(false)
+        XCTAssertTrue(store.slidingSyncUnsupported)
+        XCTAssertTrue(store.presentsBanner)
+        XCTAssertEqual(store.bannerText, ServerCompatibilityCopy.slidingSyncUnsupported)
+        XCTAssertEqual(store.emptyStateMessage, ServerCompatibilityCopy.slidingSyncUnsupported)
+        XCTAssertEqual(store.bannerVariant, .critical)
+        XCTAssertFalse(store.showsRetryAction, "retrying cannot fix the server")
+        XCTAssertTrue(store.showsSignOutAction)
+
+        // Shown even while the connection banner itself would be held.
+        store.update(.starting)
+        XCTAssertTrue(store.presentsBanner)
+
+        store.updateSlidingSyncCapability(true)
+        XCTAssertFalse(store.slidingSyncUnsupported)
+        store.updateSlidingSyncCapability(false)
+        store.update(.stopped)
+        XCTAssertFalse(store.slidingSyncUnsupported, "a stopped session drops the verdict")
+        XCTAssertFalse(store.presentsBanner)
+    }
+
     func testFailedPresentsImmediatelyWithoutSdkText() {
         let store = ConnectionStatusStore(reconnectingHold: 4)
         store.update(.connected)

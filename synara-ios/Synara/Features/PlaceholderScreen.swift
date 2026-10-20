@@ -29,8 +29,8 @@ struct RoutePlaceholderView: View {
 
     var body: some View {
         switch route {
-        case .login(let homeserverURL):
-            LoginView(homeserverURLString: homeserverURL)
+        case .login(let homeserverURL, let requestedAddress):
+            LoginView(homeserverURLString: homeserverURL, requestedAddress: requestedAddress)
         case .room(let id, let eventID, let title):
             RoomTimelineView(
                 roomID: id,

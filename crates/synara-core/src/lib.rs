@@ -252,8 +252,9 @@ mod markdown_tests {
 mod ffi;
 #[cfg(feature = "full-uniffi")]
 pub use ffi::{
-    login_flows, register_flows, LoginFlowDto, LoginFlowsError, RegisterFlowsDto,
-    RegisterFlowsError, RegisterFlowsStatus, RegisterUiaFlowDto,
+    login_flows, register_flows, resolve_homeserver, LoginFlowDto, LoginFlowsError,
+    RegisterFlowsDto, RegisterFlowsError, RegisterFlowsStatus, RegisterUiaFlowDto,
+    ResolvedHomeserverDto,
 };
 
 #[cfg(feature = "full-uniffi")]

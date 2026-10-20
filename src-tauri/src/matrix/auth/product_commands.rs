@@ -1,5 +1,8 @@
 use super::*;
 use crate::matrix::user_profile::NativeOwnProfileOwner;
+use synara_core::app::auth::{
+    require_native_sliding_sync, LOGIN_SLIDING_SYNC_UNSUPPORTED_DIAGNOSTIC_ID,
+};
 use synara_core::app::media_cache::NativeMediaRetentionOwner;
 
 /// V-AUTH.3 desktop compatibility re-exports for the shared command response.
@@ -77,6 +80,11 @@ pub async fn matrix_login_password(
             return Err(error);
         }
     };
+    // Before any device exists: a server without MSC4186 would accept the
+    // login and then never sync.
+    require_native_sliding_sync(&client)
+        .await
+        .map_err(map_auth_error)?;
 
     let result = match finish_password_login_attempt(
         login_with_password(
@@ -1818,6 +1826,11 @@ pub(super) fn remove_active_identity(app_data_root: &Path) -> Result<(), MatrixA
 
 pub(super) fn map_auth_error(error: AuthError) -> MatrixAuthCommandError {
     let code = match error {
+        AuthError::UnsupportedCapability { diagnostic_id }
+            if diagnostic_id == LOGIN_SLIDING_SYNC_UNSUPPORTED_DIAGNOSTIC_ID =>
+        {
+            "SlidingSyncUnsupported"
+        }
         AuthError::AuthenticationRejected { .. } => "Forbidden",
         AuthError::UserDeactivated { .. } => "UserDeactivated",
         AuthError::RateLimited { .. } => "RateLimited",
@@ -1833,6 +1846,9 @@ pub(super) fn map_auth_error(error: AuthError) -> MatrixAuthCommandError {
         "RateLimited" => "The Matrix login request was rate limited.",
         "InvalidRequest" => "The native Matrix login request is invalid.",
         "InvalidServer" => "The Matrix homeserver is unavailable.",
+        "SlidingSyncUnsupported" => {
+            "The Matrix homeserver does not support simplified sliding sync (MSC4186)."
+        }
         _ => "Native Matrix login failed.",
     };
     MatrixAuthCommandError::new(code, message, error.diagnostic_id())
@@ -1862,6 +1878,76 @@ pub(super) fn record_session_rotation_outcome(
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn sliding_sync_gate_maps_to_its_own_login_code() {
+        let error = map_auth_error(AuthError::UnsupportedCapability {
+            diagnostic_id: LOGIN_SLIDING_SYNC_UNSUPPORTED_DIAGNOSTIC_ID,
+        });
+        assert_eq!(error.code, "SlidingSyncUnsupported");
+        assert_eq!(error.diagnostic_id, "p3.2-login-sliding-sync-unsupported");
+        let other = map_auth_error(AuthError::UnsupportedCapability {
+            diagnostic_id: "p3.2-login-unrecognized",
+        });
+        assert_eq!(other.code, "Unknown");
+    }
+
+    #[tokio::test]
+    async fn desktop_login_client_ignores_a_login_response_well_known() {
+        use matrix_sdk::{
+            ruma::{device_id, user_id},
+            test_utils::mocks::{LoginResponseTemplate200, MatrixMockServer},
+        };
+        use synara_core::app::client_builder::ClientBuildConfig;
+        let server = MatrixMockServer::new().await;
+        server
+            .mock_versions()
+            .with_simplified_sliding_sync()
+            .ok()
+            .mount()
+            .await;
+        // Synapse with `serve_client_wellknown` names its public base URL here,
+        // which can differ from the client-API URL the renderer resolved.
+        server
+            .mock_login()
+            .ok_with(
+                LoginResponseTemplate200::new(
+                    "syt_desktop_well_known_access",
+                    device_id!("DESKTOPWK"),
+                    user_id!("@alice:example.org"),
+                )
+                .well_known("https://matrix-client.example.org/".to_owned(), None),
+            )
+            .mock_once()
+            .mount()
+            .await;
+        let root = std::env::temp_dir().join(format!(
+            "synara-desktop-login-well-known-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        let requested = AccountIdentity::new("@alice:example.org", &server.uri()).unwrap();
+        let config = ClientBuildConfig::product_default(&root, requested.clone(), None)
+            .unwrap()
+            .with_indexed_message_search(false);
+        let client = build_unauthenticated_client(&config).await.unwrap();
+        require_native_sliding_sync(&client).await.unwrap();
+        let result = login_with_password(
+            &client,
+            requested.user_id(),
+            "unit-fixture-password",
+            &LoginOptions::default(),
+        )
+        .await
+        .unwrap();
+        // The identity check that precedes the remote-logout path now passes.
+        let live =
+            authenticated_login_identity(&result.user_id, &result.homeserver_url, &requested)
+                .expect("no identity mismatch, so no remote logout");
+        assert_eq!(live, requested);
+        drop(client);
+        let _ = fs::remove_dir_all(&root);
+    }
 
     #[tokio::test]
     async fn store_recovery_requires_exact_typed_confirmation_and_one_use_csprng_id() {

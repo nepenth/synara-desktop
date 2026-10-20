@@ -2,6 +2,9 @@ import SwiftUI
 
 struct LoginView: View {
     let homeserverURLString: String
+    /// What the user typed on the server screen; shown instead of a delegated
+    /// client-API URL, and names the server for a bare username.
+    var requestedAddress: String? = nil
     @Environment(\.appEnvironment) private var environment
     @State private var username: String = ""
     @State private var password: String = ""
@@ -20,7 +23,7 @@ struct LoginView: View {
             .listRowBackground(Color.clear)
 
             Section {
-                Text(homeserverURLString)
+                Text(requestedAddress ?? homeserverURLString)
                     .font(SynaraTypography.supporting)
                     .foregroundStyle(SynaraColor.secondaryText)
                     .accessibilityIdentifier("LoginHomeserverText")
@@ -76,7 +79,8 @@ struct LoginView: View {
         let request = LoginRequest(
             homeserverURL: homeserverURL,
             username: username,
-            password: password
+            password: password,
+            accountServerName: requestedAddress.flatMap { URL(string: $0)?.host }
         )
 
         Task {

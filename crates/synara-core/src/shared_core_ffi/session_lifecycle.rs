@@ -939,6 +939,18 @@ impl SharedCore {
             persistence.callback_lease(),
         )
         .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        require_native_sliding_sync(&client)
+            .await
+            .map_err(|error| {
+                if error.diagnostic_id() == LOGIN_SLIDING_SYNC_UNSUPPORTED_DIAGNOSTIC_ID {
+                    login_failed(
+                        LOGIN_SLIDING_SYNC_UNSUPPORTED_CODE,
+                        LOGIN_SLIDING_SYNC_UNSUPPORTED_DESCRIPTION,
+                    )
+                } else {
+                    login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION)
+                }
+            })?;
         let outcome = core_login_with_password(
             &client,
             identity.user_id(),

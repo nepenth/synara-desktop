@@ -20,7 +20,7 @@ pub const AUTH_HTTP_TIMEOUT_SECS: u64 = 15;
 /// Ceiling for a single login-types JSON response.
 pub const AUTH_HTTP_MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 
-fn core_user_agent() -> String {
+pub(super) fn core_user_agent() -> String {
     format!(
         "Synara-Core/{} (matrix-sdk/{MATRIX_SDK_PIN_VERSION})",
         env!("CARGO_PKG_VERSION")

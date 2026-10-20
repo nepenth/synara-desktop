@@ -180,6 +180,17 @@ final class AppEnvironmentTests: XCTestCase {
         )
     }
 
+    func testSharedCoreLoginErrorMappingNamesAServerWithoutSlidingSync() {
+        let error = SharedCoreLoginErrorMapping.loginError(for: SessionLoginError.Failed(
+            code: "p4-s3c-sliding-sync-unsupported",
+            description: "The homeserver does not support simplified sliding sync (MSC4186)."
+        ))
+        XCTAssertEqual(error, .slidingSyncUnsupported)
+        XCTAssertEqual(error.errorDescription, ServerCompatibilityCopy.slidingSyncUnsupported)
+        XCTAssertTrue(error.errorDescription?.contains("MSC4186") == true)
+        XCTAssertNotEqual(error.errorDescription, LoginError.invalidCredentials.errorDescription)
+    }
+
     @MainActor
     func testLiveEnvironmentUsesSharedCoreServices() {
         let environment = AppEnvironment.live()

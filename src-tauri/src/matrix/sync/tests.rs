@@ -283,27 +283,27 @@ mod capability_mirror {
     }
 
     #[test]
-    fn unstable_feature_marker_enables_support() {
-        assert!(server_supports_sliding_sync(
-            &versions(&["v1.11"]),
-            &unstable(&[("org.matrix.msc3575", true)])
-        ));
-        assert!(server_supports_sliding_sync(
-            &versions(&["v1.11"]),
-            &unstable(&[("org.matrix.msc4186", true)])
-        ));
+    fn only_the_sdk_native_marker_enables_support() {
         // matrix-sdk 0.19's native SyncService uses
         // /unstable/org.matrix.simplified_msc3575/sync (MSC4186).
         assert!(server_supports_sliding_sync(
             &versions(&["v1.11"]),
             &unstable(&[("org.matrix.simplified_msc3575", true)])
         ));
+        // The SDK never syncs with proxy or alias markers, so they must not
+        // hide the capability banner.
+        for marker in ["org.matrix.msc3575", "org.matrix.msc4186"] {
+            assert!(!server_supports_sliding_sync(
+                &versions(&["v1.11"]),
+                &unstable(&[(marker, true)])
+            ));
+        }
     }
 
     #[test]
-    fn versions_list_marker_enables_support() {
-        assert!(server_supports_sliding_sync(
-            &versions(&["v1.11", "org.matrix.msc3575"]),
+    fn versions_list_entries_are_not_features() {
+        assert!(!server_supports_sliding_sync(
+            &versions(&["v1.11", "org.matrix.simplified_msc3575"]),
             &BTreeMap::new()
         ));
     }

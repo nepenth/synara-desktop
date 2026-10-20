@@ -41,7 +41,8 @@ use crate::app::account_data::{
 };
 use crate::app::auth::{
     existing_sqlite_crypto_device_id, login_with_password as core_login_with_password,
-    DevicePlatform, LoginOptions,
+    require_native_sliding_sync, DevicePlatform, LoginOptions,
+    LOGIN_SLIDING_SYNC_UNSUPPORTED_DIAGNOSTIC_ID,
 };
 use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig};
 use crate::app::dehydrated_devices::NativeDehydratedDevicesOwner;
@@ -131,6 +132,9 @@ const LOGIN_STORE_ROOT_INVALID_CODE: &str = "p4-s3c-store-root-invalid";
 const LOGIN_STORE_ROOT_INVALID_DESCRIPTION: &str = "The session store root is invalid.";
 const LOGIN_FAILED_CODE: &str = "p4-s3c-login-failed";
 const LOGIN_FAILED_DESCRIPTION: &str = "The session could not be authenticated.";
+const LOGIN_SLIDING_SYNC_UNSUPPORTED_CODE: &str = "p4-s3c-sliding-sync-unsupported";
+const LOGIN_SLIDING_SYNC_UNSUPPORTED_DESCRIPTION: &str =
+    "The homeserver does not support simplified sliding sync (MSC4186).";
 const ATTACH_SESSION_MISSING_CODE: &str = "p4-s3d-session-missing";
 const ATTACH_SESSION_MISSING_DESCRIPTION: &str = "No retained session is available.";
 const ATTACH_ALREADY_CODE: &str = "p4-s3d-already-attached";

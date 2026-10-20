@@ -92,7 +92,12 @@ struct HomeserverSelectionView: View {
                 await MainActor.run {
                     state = .ready(result)
                     environment.logger.info("Homeserver discovery succeeded", category: .auth)
-                    environment.router.route(to: .login(homeserverURL: result.homeserverBaseURL.absoluteString))
+                    environment.router.route(
+                        to: .login(
+                            homeserverURL: result.homeserverBaseURL.absoluteString,
+                            requestedAddress: result.requestedURL.absoluteString
+                        )
+                    )
                 }
             } catch let error as HomeserverDiscoveryError {
                 await MainActor.run {

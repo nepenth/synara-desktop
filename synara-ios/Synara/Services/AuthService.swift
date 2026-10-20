@@ -4,6 +4,18 @@ struct LoginRequest: Equatable {
     let homeserverURL: URL
     let username: String
     let password: String
+    /// Server name for a bare username. With `.well-known` delegation this is
+    /// the typed server, not the client-API host.
+    var accountServerName: String? = nil
+
+    /// Full Matrix ID for `username`, completing a bare localpart.
+    var userID: String {
+        let username = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        if username.hasPrefix("@") {
+            return username
+        }
+        return "@\(username):\(accountServerName ?? homeserverURL.host ?? "localhost")"
+    }
 }
 
 enum LoginError: LocalizedError, Equatable {
@@ -13,6 +25,7 @@ enum LoginError: LocalizedError, Equatable {
     case networkFailure
     case cancelled
     case unsupported
+    case slidingSyncUnsupported
     case sessionPersistenceFailed
 
     var errorDescription: String? {
@@ -29,6 +42,8 @@ enum LoginError: LocalizedError, Equatable {
             return "Login was cancelled."
         case .unsupported:
             return "Password login is not supported for this homeserver yet."
+        case .slidingSyncUnsupported:
+            return ServerCompatibilityCopy.slidingSyncUnsupported
         case .sessionPersistenceFailed:
             return "Could not save the session securely."
         }

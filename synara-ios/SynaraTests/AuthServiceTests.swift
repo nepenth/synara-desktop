@@ -50,6 +50,31 @@ final class AuthServiceTests: XCTestCase {
         XCTAssertEqual(session.homeserverURL, homeserverURL)
     }
 
+    func testBareUsernameUsesTheTypedServerNotTheDelegatedHost() throws {
+        let delegated = LoginRequest(
+            homeserverURL: try XCTUnwrap(URL(string: "https://matrix-client.example.org")),
+            username: " alice ",
+            password: "password",
+            accountServerName: "example.org"
+        )
+        XCTAssertEqual(delegated.userID, "@alice:example.org")
+
+        let direct = LoginRequest(
+            homeserverURL: try XCTUnwrap(URL(string: "https://matrix.example.org:8448")),
+            username: "alice",
+            password: "password"
+        )
+        XCTAssertEqual(direct.userID, "@alice:matrix.example.org")
+
+        let fullID = LoginRequest(
+            homeserverURL: try XCTUnwrap(URL(string: "https://matrix-client.example.org")),
+            username: "@ada:127.0.0.1",
+            password: "password",
+            accountServerName: "example.org"
+        )
+        XCTAssertEqual(fullID.userID, "@ada:127.0.0.1")
+    }
+
     func testMockAuthRecordsRequestsAndReturnsFixture() async throws {
         let homeserverURL = try XCTUnwrap(URL(string: "https://example.org"))
         let fixture = AuthenticatedSession(
