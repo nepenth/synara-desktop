@@ -973,7 +973,10 @@ final class SharedCoreRoomListService: RoomListServicing {
                         roomName: $0.roomName,
                         roomTopic: $0.roomTopic,
                         senderName: $0.senderName,
-                        reason: $0.reason
+                        reason: $0.reason,
+                        isDirect: $0.isDirect,
+                        isEncrypted: $0.isEncrypted,
+                        inviteTs: $0.inviteTs
                     )
                 },
                 spaceParents: spaceParents.map {

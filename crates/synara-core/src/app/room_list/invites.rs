@@ -19,7 +19,7 @@ use matrix_sdk::{
 };
 use serde::{Deserialize, Serialize};
 
-use super::{dm_avatar_source, InviteAvatarHandles};
+use super::{dm_avatar_source, live::room_encryption_state, InviteAvatarHandles};
 
 const BAD_WORDS_JSON: &str = include_str!("invite_bad_words.json");
 const SYNARA_BAD_WORD_ADDITIONS: &[&str] = &["torture", "t0rture"];
@@ -111,16 +111,22 @@ pub async fn snapshot_invites(
         .into_iter()
         .filter(|room| room.state() == RoomState::Invited)
     {
-        invites.push(
-            project_invite(
-                &room,
-                current_user,
-                &joined_rooms,
-                &ignored_senders,
-                avatar_handles,
-            )
-            .await?,
-        );
+        // One unreadable invite must not hide the others: the shells turn a
+        // failed snapshot into "no invites", so a room whose stripped state
+        // lacks our own member event still gets a minimal, actionable row.
+        let invite = match project_invite(
+            &room,
+            current_user,
+            &joined_rooms,
+            &ignored_senders,
+            avatar_handles,
+        )
+        .await
+        {
+            Ok(invite) => invite,
+            Err(_) => degraded_invite(&room).await,
+        };
+        invites.push(invite);
     }
     invites.sort_by(|left, right| left.room_id.cmp(&right.room_id));
     Ok(NativeInviteSnapshot {
@@ -147,14 +153,11 @@ async fn project_invite(
     let sender_name = room
         .get_member_no_sync(member_event.sender())
         .await
-        .map_err(|_| "v-rooms.1-invite-sender-read-failed")?
+        .ok()
+        .flatten()
         .map(|member| member.name().to_owned())
         .unwrap_or_else(|| member_event.sender().localpart().to_owned());
-    let room_name = room
-        .cached_display_name()
-        .map(|name| name.to_string())
-        .or_else(|| room.canonical_alias().map(|alias| alias.to_string()))
-        .unwrap_or_else(|| room.room_id().to_string());
+    let room_name = invite_room_name(room);
     let room_topic = room_topic(room).await;
     let is_spam = contains_bad_word(&room_name)
         || room_topic.as_deref().is_some_and(contains_bad_word)
@@ -173,8 +176,7 @@ async fn project_invite(
     let is_direct = room.is_direct().await.unwrap_or(false);
     let avatar_handle_id = dm_avatar_source(room, current_user, is_direct)
         .await
-        .map(|mxc_uri| avatar_handles.issue(room.room_id().as_str(), mxc_uri))
-        .transpose()?;
+        .and_then(|mxc_uri| avatar_handles.issue(room.room_id().as_str(), mxc_uri).ok());
 
     Ok(NativeInvite {
         room_id: room.room_id().to_string(),
@@ -189,13 +191,57 @@ async fn project_invite(
         reason: member_event.reason().map(ToOwned::to_owned),
         is_space: room.is_space(),
         is_direct,
-        is_encrypted: room
-            .latest_encryption_state()
-            .await
-            .map(|state| state.is_encrypted())
-            .unwrap_or(false),
+        is_encrypted: invite_is_encrypted(room).await,
         triage,
     })
+}
+
+/// Minimal row for an invite whose own member event cannot be read. The
+/// sender is unknown, so `sender_id` and `sender_name` are empty: accept and
+/// decline still work, blocking the sender fails closed, and triage never
+/// claims a known sender.
+async fn degraded_invite(room: &Room) -> NativeInvite {
+    let room_name = invite_room_name(room);
+    let room_topic = room_topic(room).await;
+    let triage =
+        if contains_bad_word(&room_name) || room_topic.as_deref().is_some_and(contains_bad_word) {
+            NativeInviteTriage::Spam
+        } else {
+            NativeInviteTriage::Public
+        };
+    NativeInvite {
+        room_id: room.room_id().to_string(),
+        room_name,
+        avatar_handle_id: None,
+        room_topic,
+        room_alias: room.canonical_alias().map(|alias| alias.to_string()),
+        sender_id: String::new(),
+        sender_name: String::new(),
+        sender_ignored: false,
+        invite_ts: None,
+        reason: None,
+        is_space: room.is_space(),
+        is_direct: room.is_direct().await.unwrap_or(false),
+        is_encrypted: invite_is_encrypted(room).await,
+        triage,
+    }
+}
+
+fn invite_room_name(room: &Room) -> String {
+    room.cached_display_name()
+        .map(|name| name.to_string())
+        .or_else(|| room.canonical_alias().map(|alias| alias.to_string()))
+        .unwrap_or_else(|| room.room_id().to_string())
+}
+
+/// Uses the room list's throttled probe: an invite whose stripped state has
+/// no `m.room.encryption` event would otherwise cost one
+/// `GET /state/m.room.encryption` per invite on every room-list refresh.
+async fn invite_is_encrypted(room: &Room) -> bool {
+    room_encryption_state(room)
+        .await
+        .map(|state| state.is_encrypted())
+        .unwrap_or(false)
 }
 
 async fn room_topic(room: &Room) -> Option<String> {
@@ -295,5 +341,94 @@ mod tests {
         assert!(contains_bad_word("a_bitch_b"));
         assert!(contains_bad_word("T0RTURE in an invite reason"));
         assert!(!contains_bad_word("ambitious"));
+    }
+}
+
+#[cfg(test)]
+mod live_tests {
+    use super::*;
+    use matrix_sdk::ruma::{events::AnyStrippedStateEvent, room_id, serde::Raw};
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use matrix_sdk_test::InvitedRoomBuilder;
+
+    fn stripped(event: serde_json::Value) -> Raw<AnyStrippedStateEvent> {
+        serde_json::from_value(event).expect("stripped state event")
+    }
+
+    fn room_name(name: &str) -> Raw<AnyStrippedStateEvent> {
+        stripped(serde_json::json!({
+            "type": "m.room.name",
+            "state_key": "",
+            "sender": "@eve:example.org",
+            "content": { "name": name }
+        }))
+    }
+
+    #[tokio::test]
+    async fn an_invite_without_own_member_event_degrades_instead_of_failing_the_list() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        let own_user = client.user_id().expect("logged in").to_owned();
+        let complete = room_id!("!invites-complete:example.org");
+        let missing_member = room_id!("!invites-missing-member:example.org");
+        server
+            .sync_room(
+                &client,
+                InvitedRoomBuilder::new(complete)
+                    .add_state_event(room_name("Launch Party"))
+                    .add_state_event(stripped(serde_json::json!({
+                        "type": "m.room.member",
+                        "state_key": own_user,
+                        "sender": "@eve:example.org",
+                        "content": { "membership": "invite", "reason": "Come along" }
+                    }))),
+            )
+            .await;
+        server
+            .sync_room(
+                &client,
+                InvitedRoomBuilder::new(missing_member).add_state_event(room_name("Orphan")),
+            )
+            .await;
+
+        let mut handles = InviteAvatarHandles::new(7);
+        let snapshot = snapshot_invites(&client, 7, &mut handles)
+            .await
+            .expect("one unreadable invite must not fail the snapshot");
+        assert_eq!(snapshot.invites.len(), 2);
+
+        let complete = snapshot
+            .invites
+            .iter()
+            .find(|invite| invite.room_id == complete.as_str())
+            .expect("complete invite");
+        assert_eq!(complete.room_name, "Launch Party");
+        assert_eq!(complete.sender_id, "@eve:example.org");
+        assert_eq!(complete.reason.as_deref(), Some("Come along"));
+
+        let degraded = snapshot
+            .invites
+            .iter()
+            .find(|invite| invite.room_id == missing_member.as_str())
+            .expect("degraded invite stays visible");
+        assert_eq!(degraded.room_name, "Orphan");
+        assert!(degraded.sender_id.is_empty());
+        assert!(degraded.sender_name.is_empty());
+        assert_eq!(degraded.triage, NativeInviteTriage::Public);
+
+        // Unknown encryption state is probed at most once per room across
+        // refreshes, not once per invite per snapshot.
+        snapshot_invites(&client, 7, &mut handles)
+            .await
+            .expect("second snapshot");
+        let probes = server
+            .server()
+            .received_requests()
+            .await
+            .unwrap_or_default()
+            .iter()
+            .filter(|request| request.url.path().contains("/state/m.room.encryption"))
+            .count();
+        assert!(probes <= 2, "encryption probes are throttled, saw {probes}");
     }
 }

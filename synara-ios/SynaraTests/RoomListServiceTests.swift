@@ -851,6 +851,33 @@ final class RoomListServiceTests: XCTestCase {
         )
     }
 
+    func testRoomListSortLeadsWithInvitesWithoutTimestamps() {
+        let invite = RoomSummary(
+            id: "!invite:matrix.org",
+            name: "Zulu invite",
+            lastMessagePreview: "Invited by Eve",
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: .room,
+            membership: .invited,
+            lastActivityAt: .distantPast
+        )
+        let rooms = [
+            makeActivityRoom(id: "!b:matrix.org", name: "Beta", activity: RoomListFixtures.now),
+            invite,
+            makeActivityRoom(id: "!a:matrix.org", name: "Alpha", activity: RoomListFixtures.now.addingTimeInterval(-60)),
+        ]
+
+        XCTAssertEqual(
+            RoomListFavorites.sorted(rooms, order: .recent).map(\.id),
+            ["!invite:matrix.org", "!b:matrix.org", "!a:matrix.org"]
+        )
+        XCTAssertEqual(
+            RoomListFavorites.sorted(rooms, order: .name).map(\.id),
+            ["!invite:matrix.org", "!a:matrix.org", "!b:matrix.org"]
+        )
+    }
+
     func testRoomListSortOrdersByNameAndRecentActivity() {
         let rooms = [
             makeActivityRoom(id: "!b:matrix.org", name: "Zeta", activity: RoomListFixtures.now.addingTimeInterval(-60)),

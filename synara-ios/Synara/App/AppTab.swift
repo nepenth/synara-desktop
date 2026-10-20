@@ -5,6 +5,7 @@ private struct NotificationsTabView: View {
     @State private var state: RoomListState = .idle
     @State private var isUnreadRoomsExpanded = false
     @State private var roomUpdatesTask: Task<Void, Never>?
+    @State private var membershipError: String?
 
     var body: some View {
         Group {
@@ -31,6 +32,17 @@ private struct NotificationsTabView: View {
         }
         .refreshable {
             await reloadInbox()
+        }
+        .safeAreaInset(edge: .bottom) {
+            if let membershipError {
+                Text(membershipError)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(.red)
+                    .padding(SynaraSpacing.medium)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(SynaraColor.secondarySurface)
+                    .accessibilityIdentifier("NotificationsMembershipErrorText")
+            }
         }
         .navigationTitle("Notifications")
         .toolbar {
@@ -77,7 +89,7 @@ private struct NotificationsTabView: View {
                 if sections.invites.isEmpty == false {
                     Section {
                         ForEach(sections.invites) { room in
-                            notificationsRow(room)
+                            inviteRow(room)
                         }
                     } header: {
                         notificationsSectionHeader("Invites", count: sections.invites.count)
@@ -160,6 +172,41 @@ private struct NotificationsTabView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityIdentifier("NotificationsRow-\(room.id)")
+    }
+
+    /// An invited room has no timeline to open yet, so the invites section
+    /// acts on the invite in place, like the Rooms list.
+    private func inviteRow(_ room: RoomSummary) -> some View {
+        InviteRoomListRow(
+            room: room,
+            onAccept: { updateInvite(roomID: room.id, accept: true) },
+            onReject: { updateInvite(roomID: room.id, accept: false) }
+        )
+        .listRowSeparator(.hidden)
+    }
+
+    private func updateInvite(roomID: String, accept: Bool) {
+        membershipError = nil
+
+        Task {
+            do {
+                if accept {
+                    try await environment.roomMembership.acceptInvite(roomID: roomID)
+                } else {
+                    try await environment.roomMembership.rejectInvite(roomID: roomID)
+                }
+                if accept {
+                    await MainActor.run {
+                        SynaraHaptics.trigger(.success)
+                    }
+                }
+                await reloadInbox()
+            } catch {
+                await MainActor.run {
+                    membershipError = RoomMembershipError.failed.localizedDescription
+                }
+            }
+        }
     }
 
     private func agentPendingRow(_ item: AgentPendingApprovalItem) -> some View {
