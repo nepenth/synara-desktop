@@ -3,6 +3,7 @@
 ## Unreleased
 
 - iOS: opening a room from a notification loads its earlier messages and keeps receiving new ones, the same as opening it from the room list. You no longer need to leave the room or relaunch Synara to see its history.
+- iOS: room and direct-message invites now appear in Rooms, first in their section, and in Notifications, where you can accept or decline them. One invite whose details can't be read no longer hides the others, on desktop and iOS; desktop shows it as "Sender unknown".
 
 ## [2.2.6] - 2026-10-12
 
