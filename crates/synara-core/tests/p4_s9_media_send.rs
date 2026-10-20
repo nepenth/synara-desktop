@@ -73,6 +73,13 @@ fn media_send_surface_exposes_live_owners_and_keeps_leftover_upload() {
     assert!(udl.contains("boolean? mention_room"));
     assert!(udl.contains("dictionary MediaUploadDto"));
     assert!(udl.contains("dictionary SendRoomAttachmentDto"));
+    let attachment_ack = udl
+        .split("dictionary SendRoomAttachmentDto {")
+        .nth(1)
+        .and_then(|rest| rest.split("};").next())
+        .expect("SendRoomAttachmentDto");
+    // A queued ack has no event id; the transaction id names its pending row.
+    assert!(attachment_ack.contains("string local_txn_id"));
     assert!(udl.contains("interface MediaUploadError"));
     assert!(udl.contains("interface SendRoomAttachmentError"));
     assert!(!udl.contains("matrix_login_password"));

@@ -327,6 +327,15 @@ impl QueuedSendOutcome {
             Self::Queued { .. } => String::new(),
         }
     }
+
+    /// The SDK transaction id of this request, sent or still queued. Callers
+    /// that show their own pending row match the SDK local echo by this id.
+    pub fn transaction_id(&self) -> String {
+        match self {
+            Self::Sent(ack) => ack.transaction_id.clone(),
+            Self::Queued { transaction_id } => transaction_id.clone(),
+        }
+    }
 }
 
 /// Fold a still-queued wait result into [`QueuedSendOutcome::Queued`];

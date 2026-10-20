@@ -2895,6 +2895,11 @@ final class SharedCoreMediaLoader: MediaLoading {
         if SharedCoreTimelineMedia.handleId(from: resource.authenticatedURL) != nil {
             return .thumbnail(resource)
         }
+        if LocalUploadPreviewStore.isLocalPreview(resource.authenticatedURL) {
+            return LocalUploadPreviewStore.shared.data(for: resource.authenticatedURL) == nil
+                ? .failed("Media is unavailable.")
+                : .thumbnail(resource)
+        }
         guard let url = resource.authenticatedURL, url.scheme == "mxc" else {
             return .failed("Media is unavailable.")
         }
@@ -2918,6 +2923,9 @@ final class SharedCoreMediaLoader: MediaLoading {
         guard resource.isEncrypted == false else {
             return nil
         }
+        if LocalUploadPreviewStore.isLocalPreview(resource.authenticatedURL) {
+            return LocalUploadPreviewStore.shared.data(for: resource.authenticatedURL)
+        }
         if let handle = SharedCoreTimelineMedia.handleId(from: resource.authenticatedURL) {
             return try? await SharedCoreTimelineMedia.mediaBytes(core: host.core, handleId: handle)
         }
@@ -2935,6 +2943,9 @@ final class SharedCoreMediaLoader: MediaLoading {
     func loadMediaData(for resource: MediaResource) async -> Data? {
         guard resource.isEncrypted == false else {
             return nil
+        }
+        if LocalUploadPreviewStore.isLocalPreview(resource.authenticatedURL) {
+            return LocalUploadPreviewStore.shared.data(for: resource.authenticatedURL)
         }
         if let handle = SharedCoreTimelineMedia.handleId(from: resource.authenticatedURL) {
             return try? await SharedCoreTimelineMedia.mediaBytes(core: host.core, handleId: handle)
@@ -2978,29 +2989,15 @@ final class SharedCoreMediaUploadService: MediaUploading {
                 mentionUserIds: request.mentionUserIDs,
                 mentionRoom: request.mentionRoom
             )
-            let safeName = URL(fileURLWithPath: request.displayName).lastPathComponent
-            let resource = MediaResource(
-                id: result.eventId,
-                filename: safeName.isEmpty ? "Attachment" : safeName,
-                caption: request.caption,
-                formattedCaption: request.formattedCaption,
-                authenticatedURL: URL(string: "mxc://local/upload"),
-                requiresAuthentication: true,
-                mimeType: request.mimeType,
-                byteSize: UInt64(request.data.count)
-            )
             let senderID = await coreSessionUserID() ?? ""
-            let item = TimelineItem(
-                id: result.eventId,
+            // A queued result is still in the SDK send queue with no event id
+            // yet; the builder keeps it pending under its transaction id.
+            let item = MediaUploadAcknowledgement.item(
                 eventID: result.eventId,
-                serverEventID: result.eventId,
-                senderID: senderID,
-                timestamp: Date(),
-                kind: .mediaPlaceholder(resource),
-                replyToEventID: request.replyToEventID,
-                threadRootEventID: request.threadRootEventID,
-                isEdited: false,
-                reactions: [:]
+                transactionID: result.localTxnId,
+                isQueued: result.status == .queued,
+                request: request,
+                senderID: senderID
             )
             return .uploaded(item)
         } catch {

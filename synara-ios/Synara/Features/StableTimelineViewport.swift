@@ -148,6 +148,17 @@ import SwiftUI
             targetsLatest ? isConfirmedPinned : isTargetVisible
         }
 
+        /// Keeps the first row for each identifier. The diffable snapshot and
+        /// the row lookup both trap on a duplicate identifier, so a duplicate
+        /// from upstream (two queued uploads once shared an empty event id)
+        /// must cost one hidden row, not the app.
+        static func uniqueRows<Row: Identifiable>(_ rows: [Row]) -> (rows: [Row], duplicateCount: Int) {
+            var seen = Set<Row.ID>()
+            seen.reserveCapacity(rows.count)
+            let unique = rows.filter { seen.insert($0.id).inserted }
+            return (unique, rows.count - unique.count)
+        }
+
         static func changedIdentifiers<ID: Hashable, Value: Equatable>(
             currentIDs: Set<ID>,
             currentValues: [ID: Value],
@@ -538,6 +549,18 @@ import SwiftUI
             let isLive: Bool
             let isPaginating: Bool
             let backgroundColor: UIColor
+
+            func withRows(_ rows: [StableTimelineViewportRow]) -> Configuration {
+                Configuration(
+                    routeID: routeID,
+                    sessionGeneration: sessionGeneration,
+                    rows: rows,
+                    command: command,
+                    isLive: isLive,
+                    isPaginating: isPaginating,
+                    backgroundColor: backgroundColor
+                )
+            }
         }
 
         private enum Section {
@@ -594,6 +617,7 @@ import SwiftUI
         private var timestampRevealAppliedGeneration: UInt64?
         private var timestampRevealAppliedSnapshotRevision: UInt64?
         private var dataSource: UITableViewDiffableDataSource<Section, StableTimelineViewportItemID>!
+        private let logger = AppLogger()
         private var rowsByID: [StableTimelineViewportItemID: StableTimelineViewportRow] = [:]
         private var visualRows: [StableTimelineViewportRow] = []
         private var configuration: Configuration?
@@ -642,7 +666,18 @@ import SwiftUI
             updateDiagnostics()
         }
 
-        func update(configuration newConfiguration: Configuration) {
+        func update(configuration proposedConfiguration: Configuration) {
+            let unique = StableTimelineViewportPolicy.uniqueRows(proposedConfiguration.rows)
+            let newConfiguration: Configuration
+            if unique.duplicateCount > 0 {
+                logger.error(
+                    "stable-viewport dropped duplicate row ids count=\(unique.duplicateCount)",
+                    category: .timeline
+                )
+                newConfiguration = proposedConfiguration.withRows(unique.rows)
+            } else {
+                newConfiguration = proposedConfiguration
+            }
             if let configuration,
                configuration.routeID == newConfiguration.routeID,
                newConfiguration.sessionGeneration < configuration.sessionGeneration
@@ -881,7 +916,8 @@ import SwiftUI
             timestampRevealAppliedSnapshotRevision = nil
 
             visualRows = configuration.rows
-            rowsByID = Dictionary(uniqueKeysWithValues: configuration.rows.map { ($0.id, $0) })
+            // Rows arrive deduplicated; keep the lookup total regardless.
+            rowsByID = Dictionary(configuration.rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
             var snapshot = NSDiffableDataSourceSnapshot<Section, StableTimelineViewportItemID>()
             snapshot.appendSections([.main])

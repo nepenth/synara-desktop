@@ -202,6 +202,10 @@ struct TimelineItem: Identifiable, Equatable {
     let serverEventID: String?
     /// Core's receipt frontier paired with this displayed remote tail.
     var readReceiptEventID: String? = nil
+    /// Matrix transaction id of an own send. Core sets it on SDK local echo
+    /// rows; a pending attachment row carries the id it was sent with, so the
+    /// two are matched by transaction id rather than by content.
+    var transactionID: String? = nil
     /// SDK authenticity shield for a message in an encrypted room; nil when trusted.
     var encryptionShield: TimelineEncryptionShield? = nil
     let senderID: String
@@ -314,6 +318,7 @@ struct TimelineItem: Identifiable, Equatable {
         )
         item.readReceiptEventID = readReceiptEventID
         item.encryptionShield = encryptionShield
+        item.transactionID = transactionID
         return item
     }
 
@@ -344,6 +349,7 @@ struct TimelineItem: Identifiable, Equatable {
         )
         item.readReceiptEventID = readReceiptEventID
         item.encryptionShield = encryptionShield
+        item.transactionID = transactionID
         return item
     }
 
@@ -448,11 +454,23 @@ enum TimelinePendingReconciler {
         guard pending.deliveryStatus == .sending || pending.deliveryStatus == .sent else {
             return false
         }
+        // The SDK local echo of the same request carries its transaction id
+        // before the server event id is known.
+        if let transactionID = pending.transactionID,
+           serverItem.isLocalPending == false,
+           serverItem.transactionID == transactionID {
+            return true
+        }
         // A send acknowledgement identifies the event, but does not guarantee
         // that the timeline has observed it yet. Its eventual echo must match
         // that identity, including attachments and server-normalized content.
         if let serverEventID = pending.serverEventID {
             return serverItem.isLocalPending == false && serverItem.serverEventID == serverEventID
+        }
+        // A still-queued attachment is known only by its transaction id;
+        // matching it by content could drop it for an unrelated event.
+        guard pending.transactionID == nil else {
+            return false
         }
         guard pending.senderID == serverItem.senderID else {
             return false
@@ -487,7 +505,7 @@ enum TimelinePendingReconciler {
         var unmatchedPending = pendingItems
         for serverItem in streamItems {
             if let index = unmatchedPending.firstIndex(where: {
-                ($0.serverEventID != nil || serverItem.senderID == currentUserID)
+                ($0.serverEventID != nil || $0.transactionID != nil || serverItem.senderID == currentUserID)
                     && matchesPending($0, serverItem: serverItem)
             }) {
                 unmatchedPending.remove(at: index)

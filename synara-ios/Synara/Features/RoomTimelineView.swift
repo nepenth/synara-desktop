@@ -3274,9 +3274,11 @@ struct RoomTimelineView: View {
     private func appendAcknowledgedUpload(_ item: TimelineItem) {
         // HTTP send completion precedes the timeline echo. Reuse the same local
         // echo lifecycle as text, preserving the exact acknowledged event ID.
+        // A queued upload arrives already pending under its transaction id and
+        // keeps that state until the SDK echo for the same transaction shows.
         let merged = TimelinePendingReconciler.merge(
             streamItems: loadedTimelineItems,
-            localItems: [item.withDeliveryStatus(.sent)],
+            localItems: [item.isLocalPending ? item : item.withDeliveryStatus(.sent)],
             currentUserID: currentUserID
         )
         state = .loaded(merged, isPaginating: currentTimelineIsPaginating)

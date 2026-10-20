@@ -8,11 +8,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use matrix_sdk::ruma::{event_id, room_id};
+use matrix_sdk::ruma::{event_id, mxc_uri, room_id};
 use matrix_sdk::test_utils::mocks::MatrixMockServer;
 use serde_json::json;
+use synara_core::app::send::{send_room_attachment, SendRoomAttachmentRequest};
 use synara_core::app::timeline::NativeTimelineOwner;
-use synara_core::dto::LocalEchoState;
+use synara_core::dto::{LocalEchoState, SendStatus};
 use wiremock::ResponseTemplate;
 
 #[tokio::test]
@@ -273,6 +274,110 @@ async fn recoverable_poll_failure_is_reported_queued_not_failed() {
         .unwrap_or(true));
 }
 
+fn attachment_request(room_id: &str, transaction_id: &str) -> SendRoomAttachmentRequest {
+    SendRoomAttachmentRequest {
+        room_id: room_id.to_owned(),
+        filename: "notes.txt".into(),
+        mime_type: "text/plain".into(),
+        payload: b"attachment bytes".to_vec(),
+        caption: None,
+        formatted_caption: None,
+        reply_to: None,
+        thread_root: None,
+        transaction_id: Some(transaction_id.to_owned()),
+        mention_user_ids: None,
+        mention_room: false,
+    }
+}
+
+#[tokio::test]
+async fn sent_attachment_reports_event_and_caller_transaction_id() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    let room_id = room_id!("!send-queue-attachment-ok:example.org");
+    server.sync_joined_room(&client, room_id).await;
+    server.mock_room_state_encryption().plain().mount().await;
+    // The send queue checks the upload size limit before uploading.
+    server
+        .mock_authenticated_media_config()
+        .ok_default()
+        .mount()
+        .await;
+    server
+        .mock_upload()
+        .ok(mxc_uri!("mxc://example.org/attachment"))
+        .mock_once()
+        .mount()
+        .await;
+    server
+        .mock_room_send()
+        .ok(event_id!("$sent-attachment"))
+        .mock_once()
+        .mount()
+        .await;
+
+    let result = send_room_attachment(
+        &client,
+        attachment_request(room_id.as_str(), "synara-attachment-sent"),
+    )
+    .await
+    .expect("attachment sent");
+    assert_eq!(result.status, SendStatus::Sent);
+    assert_eq!(result.event_id, "$sent-attachment");
+    assert_eq!(result.local_txn_id, "synara-attachment-sent");
+}
+
+#[tokio::test]
+async fn recoverable_attachment_failure_is_queued_with_its_transaction_id() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    let room_id = room_id!("!send-queue-attachment-recoverable:example.org");
+    let room = server.sync_joined_room(&client, room_id).await;
+    server.mock_room_state_encryption().plain().mount().await;
+    // The send queue checks the upload size limit before uploading.
+    server
+        .mock_authenticated_media_config()
+        .ok_default()
+        .mount()
+        .await;
+    server
+        .mock_upload()
+        .ok(mxc_uri!("mxc://example.org/attachment"))
+        .mount()
+        .await;
+    // Exhaust the SDK's short HTTP retry so the room queue sees one
+    // recoverable `SendError` for the media event.
+    server
+        .mock_room_send()
+        .respond_with(ResponseTemplate::new(500).set_body_json(json!({
+            "errcode": "M_UNKNOWN",
+            "error": "transient failure",
+        })))
+        .up_to_n_times(3)
+        .expect(3)
+        .mount()
+        .await;
+
+    let result = send_room_attachment(
+        &client,
+        attachment_request(room_id.as_str(), "synara-attachment-queued"),
+    )
+    .await
+    .expect("a recoverable attachment failure is still queued, not failed");
+    // iOS used to build a timeline row from `event_id` alone; a queued result
+    // has none, so the shell needs the transaction id to name and later
+    // replace its pending row.
+    assert_eq!(result.status, SendStatus::Queued);
+    assert!(result.event_id.is_empty());
+    assert_eq!(result.local_txn_id, "synara-attachment-queued");
+
+    // The SDK local echo the timeline shows carries that same transaction id.
+    let (echoes, _) = room.send_queue().subscribe().await.expect("echoes");
+    assert!(echoes
+        .iter()
+        .any(|echo| echo.transaction_id.as_str() == result.local_txn_id));
+}
+
 #[test]
 fn queued_send_outcome_folds_only_still_queued_failures() {
     use synara_core::app::send::{
@@ -302,6 +407,8 @@ fn queued_send_outcome_folds_only_still_queued_failures() {
     );
     assert_eq!(queued.status("sent"), "queued");
     assert!(queued.event_id().is_empty());
+    assert_eq!(queued.transaction_id(), "t2");
+    assert_eq!(sent.transaction_id(), "t1");
 
     for (wedged, cancelled) in [(true, false), (false, true), (false, false)] {
         assert!(queued_send_outcome(Err(QueuedSendError {

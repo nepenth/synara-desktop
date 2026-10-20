@@ -3,6 +3,7 @@
 ## Unreleased
 
 - iOS: opening a room from a notification loads its earlier messages and keeps receiving new ones, the same as opening it from the room list. You no longer need to leave the room or relaunch Synara to see its history.
+- iOS: sending a photo or file while the connection is slow or the server is failing no longer crashes the room. The attachment shows as sending, with your own preview, until the server has it, instead of a broken image.
 
 ## [2.2.6] - 2026-10-12
 

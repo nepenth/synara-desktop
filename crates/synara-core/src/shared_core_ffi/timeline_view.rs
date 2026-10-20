@@ -211,6 +211,10 @@ pub struct TimelineViewRowDto {
     /// SDK authenticity shield for an event in an encrypted room. Absent when
     /// the event is trusted or no shield applies.
     pub encryption_shield: Option<TimelineViewEncryptionShieldDto>,
+    /// SDK transaction id while this row is still a local echo; absent on
+    /// remote rows. A shell that shows its own pending row for a queued send
+    /// matches it to this row by transaction id. Not a server event id.
+    pub transaction_id: Option<String>,
 }
 
 /// Closed authenticity shield. `tone` is `red` or `grey`; `code` is one of
@@ -631,6 +635,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                     .event
                     .encryption_shield
                     .map(view_encryption_shield_dto),
+                transaction_id: message.event.transaction_id,
             }
         }
         TimelineViewRow::Sticker {
@@ -680,6 +685,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 media_height,
                 media_duration_ms,
                 encryption_shield: event.encryption_shield.map(view_encryption_shield_dto),
+                transaction_id: event.transaction_id,
             }
         }
         TimelineViewRow::Poll(poll) => {
@@ -720,6 +726,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 media_height: None,
                 media_duration_ms: None,
                 encryption_shield: poll.event.encryption_shield.map(view_encryption_shield_dto),
+                transaction_id: poll.event.transaction_id,
             }
         }
         TimelineViewRow::Membership(membership) => TimelineViewRowDto {
@@ -753,6 +760,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_height: None,
             media_duration_ms: None,
             encryption_shield: None,
+            transaction_id: membership.event.transaction_id,
         },
         TimelineViewRow::State(state) => TimelineViewRowDto {
             kind: TimelineRowKindDto::State,
@@ -785,6 +793,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_height: None,
             media_duration_ms: None,
             encryption_shield: None,
+            transaction_id: state.event.transaction_id,
         },
         TimelineViewRow::Call(call) => TimelineViewRowDto {
             kind: TimelineRowKindDto::Call,
@@ -817,6 +826,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_height: None,
             media_duration_ms: None,
             encryption_shield: None,
+            transaction_id: call.event.transaction_id,
         },
         TimelineViewRow::Redacted(redacted) => TimelineViewRowDto {
             kind: TimelineRowKindDto::Redacted,
@@ -849,6 +859,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_height: None,
             media_duration_ms: None,
             encryption_shield: None,
+            transaction_id: redacted.event.transaction_id,
         },
         TimelineViewRow::EncryptedUnavailable(encrypted) => TimelineViewRowDto {
             kind: TimelineRowKindDto::Encrypted,
@@ -881,9 +892,17 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_height: None,
             media_duration_ms: None,
             encryption_shield: None,
+            transaction_id: encrypted.event.transaction_id,
         },
         TimelineViewRow::Other(other) => {
-            let (sender, sender_name, sender_avatar_url, origin_server_ts, capabilities) = other
+            let (
+                sender,
+                sender_name,
+                sender_avatar_url,
+                origin_server_ts,
+                capabilities,
+                transaction_id,
+            ) = other
                 .event
                 .map(|event| {
                     (
@@ -892,9 +911,10 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                         event.sender_avatar_url,
                         event.origin_server_ts,
                         Some(view_row_capabilities_dto(event.capabilities)),
+                        event.transaction_id,
                     )
                 })
-                .unwrap_or_else(|| (String::new(), String::new(), None, 0, None));
+                .unwrap_or_else(|| (String::new(), String::new(), None, 0, None, None));
             TimelineViewRowDto {
                 kind: TimelineRowKindDto::Other,
                 item_id: other.item_id,
@@ -928,6 +948,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 media_height: None,
                 media_duration_ms: None,
                 encryption_shield: None,
+                transaction_id,
             }
         }
         TimelineViewRow::DateSeparator {
@@ -964,6 +985,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_height: None,
             media_duration_ms: None,
             encryption_shield: None,
+            transaction_id: None,
         },
         TimelineViewRow::ReadMarker { item_id } => {
             virtual_row_dto(TimelineRowKindDto::ReadMarker, item_id)
@@ -1012,6 +1034,7 @@ pub(super) fn virtual_row_dto(kind: TimelineRowKindDto, item_id: String) -> Time
         media_height: None,
         media_duration_ms: None,
         encryption_shield: None,
+        transaction_id: None,
     }
 }
 
