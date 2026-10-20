@@ -204,6 +204,8 @@ struct TimelineItem: Identifiable, Equatable {
     var readReceiptEventID: String? = nil
     /// SDK authenticity shield for a message in an encrypted room; nil when trusted.
     var encryptionShield: TimelineEncryptionShield? = nil
+    /// Core-projected decision this account already made on an approval prompt.
+    var agentApprovalDecision: SynaraAgentApprovalCardDecision? = nil
     let senderID: String
     /// Core-resolved profile display name. Mock/local items leave this nil and
     /// continue through the deterministic sender-ID fallback.
@@ -314,6 +316,7 @@ struct TimelineItem: Identifiable, Equatable {
         )
         item.readReceiptEventID = readReceiptEventID
         item.encryptionShield = encryptionShield
+        item.agentApprovalDecision = agentApprovalDecision
         return item
     }
 
@@ -344,6 +347,7 @@ struct TimelineItem: Identifiable, Equatable {
         )
         item.readReceiptEventID = readReceiptEventID
         item.encryptionShield = encryptionShield
+        item.agentApprovalDecision = agentApprovalDecision
         return item
     }
 

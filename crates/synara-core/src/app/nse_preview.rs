@@ -219,35 +219,19 @@ async fn resolve_event_preview_unbounded(
             )
         })?;
 
-    let approval = match &status {
-        NotificationStatus::Event(item) => match &item.event {
-            NotificationEvent::Timeline(event) => match event.as_ref() {
-                AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomMessage(
-                    message,
-                )) => message.as_original().is_some_and(|original| {
-                    crate::app::agent_approvals::is_agent_approval_prompt(original.content.body())
-                }),
-                _ => false,
-            },
-            _ => false,
-        },
-        _ => false,
-    };
-    let preferences = if approval {
-        Default::default()
-    } else {
-        match tokio::time::timeout(
-            Duration::from_secs(2),
-            crate::app::notifications::fetch_agent_notification_preferences(&client),
-        )
-        .await
-        {
-            Ok(Ok(value)) => value,
-            Ok(Err("agent-notification-preferences-invalid")) => Default::default(),
-            _ => crate::app::notifications::cached_agent_notification_preferences(&client)
-                .await
-                .unwrap_or_default(),
-        }
+    // Approval prompts need the agent list too: once it is configured, only a
+    // listed sender may raise the urgent approval presentation.
+    let preferences = match tokio::time::timeout(
+        Duration::from_secs(2),
+        crate::app::notifications::fetch_agent_notification_preferences(&client),
+    )
+    .await
+    {
+        Ok(Ok(value)) => value,
+        Ok(Err("agent-notification-preferences-invalid")) => Default::default(),
+        _ => crate::app::notifications::cached_agent_notification_preferences(&client)
+            .await
+            .unwrap_or_default(),
     };
     let preview = preview_from_status_with_preferences(status, &preferences)?;
     drop(notification_client);
@@ -323,8 +307,13 @@ fn preview_from_status_with_preferences(
             "The notification was excluded by agent notification settings.",
         ));
     }
+    // Same eligibility as the desktop decision owner: a prompt from an account
+    // off a configured agent list is an ordinary message. The server's push
+    // rules already decided whether this push was sent at all.
     let is_agent_approval =
-        crate::app::agent_approvals::is_agent_approval_prompt(original.content.body());
+        crate::app::agent_approvals::is_agent_approval_prompt(original.content.body())
+            && preferences.approval_alert_trust(original.sender.as_str())
+                != crate::app::notifications::ApprovalAlertTrust::NotAnAgent;
     let approval_summary = if is_agent_approval {
         crate::app::agent_approvals::agent_approval_notification_summary(original.content.body())
     } else {
@@ -460,6 +449,28 @@ mod tests {
         .unwrap();
         assert_eq!(ordinary.approval_reason, None);
         assert_eq!(ordinary.approval_command, None);
+    }
+
+    #[test]
+    fn nse_approval_requires_a_listed_agent_once_the_list_is_configured() {
+        let prompt = "Approval Required: Dangerous Command\nReason: cleanup\n```\nrm file\n```";
+        let unconfigured = preview_from_status(policy_status("@anyone:example.org", prompt))
+            .expect("an unconfigured account keeps approvals");
+        assert!(unconfigured.is_agent_approval);
+        let p = crate::app::notifications::AgentNotificationPreferences {
+            agent_user_ids: vec!["@forge:example.org".into()],
+            ..Default::default()
+        };
+        let listed =
+            preview_from_status_with_preferences(policy_status("@forge:example.org", prompt), &p)
+                .unwrap();
+        assert!(listed.is_agent_approval);
+        let impostor =
+            preview_from_status_with_preferences(policy_status("@mallory:example.org", prompt), &p)
+                .unwrap();
+        assert!(!impostor.is_agent_approval);
+        assert_eq!(impostor.approval_reason, None);
+        assert_eq!(impostor.approval_command, None);
     }
 
     #[test]

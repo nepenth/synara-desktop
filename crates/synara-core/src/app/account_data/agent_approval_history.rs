@@ -37,6 +37,15 @@ pub enum SynaraAgentApprovalHistoryDecision {
 }
 
 impl SynaraAgentApprovalHistoryDecision {
+    /// The serialized (snake_case) name, for closed string DTO fields.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ApproveOnce => "approve_once",
+            Self::ApproveAlways => "approve_always",
+            Self::Deny => "deny",
+        }
+    }
+
     pub fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
             AGENT_APPROVAL_ACTION_APPROVE_ONCE => Some(Self::ApproveOnce),

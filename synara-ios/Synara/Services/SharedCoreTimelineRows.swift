@@ -76,6 +76,12 @@ enum SharedCoreTimelineRows {
             isEncrypted: row.kind == .encrypted
         )
         item.encryptionShield = encryptionShield(from: row.encryptionShield)
+        if row.isAgentApproval {
+            item.agentApprovalDecision = SynaraAgentApprovalCardDecision(
+                coreDecision: row.agentApprovalDecision,
+                decidedAtMilliseconds: row.agentApprovalDecidedAt
+            )
+        }
         return item
     }
 

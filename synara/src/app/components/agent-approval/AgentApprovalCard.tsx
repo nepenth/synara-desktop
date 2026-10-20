@@ -7,6 +7,8 @@ import {
   AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS,
   AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
   AGENT_APPROVAL_NOTIFICATION_ACTION_DENY,
+  describeAgentApprovalDecision,
+  type AgentApprovalOwnDecision,
   type AgentApprovalPrompt,
 } from '../../utils/agentApprovals';
 import { decideAgentApprovalWithNativeOwner } from '../../features/room/nativeReactionOwner';
@@ -18,6 +20,8 @@ export type AgentApprovalTarget = {
   canSendReaction?: boolean;
   /** True only when the Core timeline owner classified this exact event. */
   coreEligible?: boolean;
+  /** This account's own decision, projected by Core from its terminal reaction. */
+  decision?: AgentApprovalOwnDecision;
 };
 
 type AgentApprovalCardProps = {
@@ -90,12 +94,20 @@ export function AgentApprovalCard({
     wasConfirming.current = confirmApproveAlways;
   }, [confirmApproveAlways]);
   const canReact = Boolean(target?.coreEligible === true && target.canSendReaction !== false);
-  const disabled = !canReact || Boolean(busyKey || sentKey);
-  const isResolved = Boolean(sentKey);
+  const coreDecision = target?.decision;
+  const disabled = !canReact || Boolean(busyKey || sentKey || coreDecision);
+  const isResolved = Boolean(sentKey || coreDecision);
 
   const submitDecision = useCallback(
     async (action: ApprovalAction) => {
-      if (!target?.coreEligible || target.canSendReaction === false || busyKey || sentKey) return;
+      if (
+        !target?.coreEligible ||
+        target.canSendReaction === false ||
+        busyKey ||
+        sentKey ||
+        target.decision
+      )
+        return;
 
       setBusyKey(action.key);
       setError(undefined);
@@ -299,9 +311,11 @@ export function AgentApprovalCard({
             }}
           >
             <Text size="T300" priority="400">
-              {decisionStatus === 'already_decided'
-                ? 'This approval was already decided on this account.'
-                : `Decision sent (${sentKey}).`}
+              {coreDecision
+                ? describeAgentApprovalDecision(coreDecision)
+                : decisionStatus === 'already_decided'
+                  ? 'This approval was already decided on this account.'
+                  : `Decision sent (${sentKey}).`}
             </Text>
             {prompt.commandPreview && (
               <Text size="T200" priority="300">

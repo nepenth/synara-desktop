@@ -10,7 +10,10 @@ import { parseHermesAgentPayload, type HermesAgentPayload } from '../../utils/he
 import type { RoomEncryptionStatus } from '../matrix-dto/room';
 import { devicePixelScale, nativeThumbnailContentUri } from '../../matrix/nativeThumbnail';
 import type { NativeTimelineEncryptionShield } from './nativeTimelineShield';
-import type { NativeTimelineReactionSender } from '../matrix-dto/generated';
+import type {
+  NativeTimelineReactionSender,
+  SynaraAgentApprovalHistoryDecision,
+} from '../matrix-dto/generated';
 export type { NativeTimelineReactionSender } from '../matrix-dto/generated';
 
 const NATIVE_TIMELINE_VIEW_UPDATED_EVENT = 'matrix-timeline-view-updated';
@@ -273,6 +276,12 @@ export type NativeTimelineRelationPresentation = {
   reactions?: NativeTimelineReaction[];
 };
 
+/** Earliest own terminal reaction on an approval prompt; `decidedAt` is epoch ms. */
+export type NativeTimelineAgentApprovalDecision = {
+  decision: SynaraAgentApprovalHistoryDecision;
+  decidedAt?: number;
+};
+
 /** Core-owned action route. Presenters must not infer this from media handles. */
 export type NativeTimelineForwardTransport = 'text' | 'media';
 
@@ -284,6 +293,8 @@ type NativeTimelineMessageRow = NativeTimelineEventRowBase &
     agentCardJson?: string;
     /** Core-owned approval eligibility; body parsing below is presentation-only. */
     isAgentApproval?: boolean;
+    /** This account's own decision on the approval prompt, projected by Core. */
+    agentApprovalDecision?: NativeTimelineAgentApprovalDecision;
     messageType?: string;
     forwardTransport?: NativeTimelineForwardTransport;
     mediaFilename?: string;

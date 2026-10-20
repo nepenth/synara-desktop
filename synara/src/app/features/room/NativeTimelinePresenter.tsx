@@ -2002,6 +2002,7 @@ const NativeTimelineRow = ({
                         eventId,
                         canSendReaction: capabilities?.react,
                         coreEligible: true,
+                        decision: row.agentApprovalDecision,
                       }}
                     />
                   ) : agentPayload ? (

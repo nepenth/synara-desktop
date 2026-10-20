@@ -5,29 +5,128 @@ import SynaraCore
 
 @MainActor
 final class PushServiceTests: XCTestCase {
-    func testAgentApprovalDecisionsRunInBackgroundForWatchAndLockScreen() throws {
-        let actions = SynaraNotificationActionContract.agentApprovalActions()
-        let approve = try XCTUnwrap(
-            actions.first { $0.identifier == SynaraNotificationActionContract.approveOnceIdentifier }
+    private struct ApprovalActions {
+        let approve: UNNotificationAction
+        let deny: UNNotificationAction
+        let review: UNNotificationAction
+        let all: [UNNotificationAction]
+    }
+
+    private func approvalActions(approveOnceWithoutUnlock: Bool) throws -> ApprovalActions {
+        let actions = SynaraNotificationActionContract.agentApprovalActions(
+            approveOnceWithoutUnlock: approveOnceWithoutUnlock
         )
-        let deny = try XCTUnwrap(
-            actions.first { $0.identifier == SynaraNotificationActionContract.denyIdentifier }
+        return ApprovalActions(
+            approve: try XCTUnwrap(
+                actions.first { $0.identifier == SynaraNotificationActionContract.approveOnceIdentifier }
+            ),
+            deny: try XCTUnwrap(
+                actions.first { $0.identifier == SynaraNotificationActionContract.denyIdentifier }
+            ),
+            review: try XCTUnwrap(
+                actions.first { $0.identifier == SynaraNotificationActionContract.reviewIdentifier }
+            ),
+            all: actions
         )
-        let review = try XCTUnwrap(
-            actions.first { $0.identifier == SynaraNotificationActionContract.reviewIdentifier }
+    }
+
+    func testApproveOnceRequiresUnlockByDefault() throws {
+        XCTAssertFalse(SynaraSharedConstants.defaultApproveOnceWithoutUnlock)
+        let actions = try approvalActions(approveOnceWithoutUnlock: false)
+
+        // Approving runs an agent's command: a locked iPhone must be unlocked
+        // first. The action still runs in the background after unlock.
+        XCTAssertTrue(actions.approve.options.contains(.authenticationRequired))
+        XCTAssertFalse(actions.approve.options.contains(.foreground))
+        // Deny cannot run anything and stays available without an unlock.
+        XCTAssertFalse(actions.deny.options.contains(.authenticationRequired))
+        XCTAssertFalse(actions.deny.options.contains(.foreground))
+        XCTAssertTrue(actions.deny.options.contains(.destructive))
+        XCTAssertTrue(actions.review.options.contains(.foreground))
+        XCTAssertFalse(
+            actions.all.contains { $0.identifier == SynaraAgentApprovalNotificationActionID.approveAlways.rawValue }
         )
+    }
+
+    func testOptInLetsApproveOnceRunFromLockScreenAndWatch() throws {
+        let actions = try approvalActions(approveOnceWithoutUnlock: true)
 
         // Foreground or authentication-required actions cannot complete from
         // a mirrored Apple Watch alert while the iPhone is locked.
-        XCTAssertFalse(approve.options.contains(.foreground))
-        XCTAssertFalse(approve.options.contains(.authenticationRequired))
-        XCTAssertFalse(deny.options.contains(.foreground))
-        XCTAssertFalse(deny.options.contains(.authenticationRequired))
-        XCTAssertTrue(deny.options.contains(.destructive))
-        XCTAssertTrue(review.options.contains(.foreground))
+        XCTAssertFalse(actions.approve.options.contains(.authenticationRequired))
+        XCTAssertFalse(actions.approve.options.contains(.foreground))
+        XCTAssertFalse(actions.deny.options.contains(.authenticationRequired))
+        XCTAssertFalse(actions.deny.options.contains(.foreground))
+        XCTAssertTrue(actions.deny.options.contains(.destructive))
+        XCTAssertTrue(actions.review.options.contains(.foreground))
         XCTAssertFalse(
-            actions.contains { $0.identifier == SynaraAgentApprovalNotificationActionID.approveAlways.rawValue }
+            actions.all.contains { $0.identifier == SynaraAgentApprovalNotificationActionID.approveAlways.rawValue }
         )
+    }
+
+    func testRegisteredCategoryFollowsTheStoredUnlockPreference() throws {
+        let suite = "PushServiceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        func approveOptions() -> UNNotificationActionOptions? {
+            SynaraNotificationActionContract.agentApprovalCategory(
+                approveOnceWithoutUnlock: SynaraApproveOnceWithoutUnlockPreference.isEnabled(defaults: defaults)
+            )
+            .actions
+            .first { $0.identifier == SynaraNotificationActionContract.approveOnceIdentifier }?
+            .options
+        }
+
+        XCTAssertFalse(SynaraApproveOnceWithoutUnlockPreference.isEnabled(defaults: defaults))
+        XCTAssertEqual(approveOptions()?.contains(.authenticationRequired), true)
+
+        defaults.set(true, forKey: SynaraSharedConstants.approveOnceWithoutUnlockKey)
+        XCTAssertTrue(SynaraApproveOnceWithoutUnlockPreference.isEnabled(defaults: defaults))
+        XCTAssertEqual(approveOptions()?.contains(.authenticationRequired), false)
+
+        defaults.set(false, forKey: SynaraSharedConstants.approveOnceWithoutUnlockKey)
+        XCTAssertEqual(approveOptions()?.contains(.authenticationRequired), true)
+    }
+
+    func testSettingsFooterDescribesTheRegisteredActionsInBothStates() {
+        let locked = SynaraApprovalNotificationSettingsCopy.footer(approveOnceWithoutUnlock: false)
+        XCTAssertTrue(locked.contains("Approve once requires unlocking your iPhone first."))
+        XCTAssertTrue(locked.contains("Deny works without unlocking."))
+        XCTAssertFalse(locked.contains("require authentication"))
+        XCTAssertFalse(locked.contains("Apple Watch without unlocking"))
+
+        let unlocked = SynaraApprovalNotificationSettingsCopy.footer(approveOnceWithoutUnlock: true)
+        XCTAssertTrue(
+            unlocked.contains("Approve once and Deny work from the Lock Screen and Apple Watch without unlocking your iPhone.")
+        )
+        XCTAssertFalse(unlocked.contains("requires unlocking"))
+        for footer in [locked, unlocked] {
+            XCTAssertTrue(footer.hasSuffix("Always approval remains in-app only."))
+        }
+    }
+
+    func testNotificationsInboxLabelsApprovalPromptsAsApproval() {
+        func room(approval: Bool, highlight: Bool, membership: RoomSummary.Membership = .joined) -> RoomSummary {
+            RoomSummary(
+                id: "!agent-ops:example.org",
+                name: "Agent Ops",
+                lastMessagePreview: "Dangerous command requires approval",
+                lastMessageIsAgentApproval: approval,
+                unreadCount: 1,
+                hasHighlight: highlight,
+                kind: .room,
+                membership: membership,
+                lastActivityAt: Date()
+            )
+        }
+        XCTAssertEqual(NotificationsInboxReason(room: room(approval: true, highlight: true)), .approval)
+        XCTAssertEqual(NotificationsInboxReason(room: room(approval: true, highlight: false))?.title, "Approval")
+        XCTAssertEqual(NotificationsInboxReason(room: room(approval: false, highlight: true))?.title, "Mention")
+        XCTAssertEqual(
+            NotificationsInboxReason(room: room(approval: false, highlight: false, membership: .invited)),
+            .invite
+        )
+        XCTAssertNil(NotificationsInboxReason(room: room(approval: false, highlight: false)))
     }
 
     func testOnlyOneShotDecisionsRunAsBackgroundActions() {

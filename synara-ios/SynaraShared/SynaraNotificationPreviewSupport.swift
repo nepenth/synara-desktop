@@ -111,6 +111,8 @@ enum SynaraSharedConstants {
     static let defaultTimeSensitiveAgentApprovals = true
     static let approvalNotificationDetailsKey = "synara.settings.showApprovalNotificationDetails"
     static let defaultApprovalNotificationDetails = true
+    static let approveOnceWithoutUnlockKey = "synara.settings.approveOnceWithoutUnlock"
+    static let defaultApproveOnceWithoutUnlock = false
     static let themeBaseColorKey = "themeBaseColor"
     static let hour24ClockKey = "synara.settings.hour24Clock"
     static let hideActivityKey = "synara.settings.hideActivity"
@@ -121,6 +123,7 @@ enum SynaraSharedConstants {
             lockScreenMessagePreviewsKey: defaultLockScreenMessagePreviews,
             timeSensitiveAgentApprovalsKey: defaultTimeSensitiveAgentApprovals,
             approvalNotificationDetailsKey: defaultApprovalNotificationDetails,
+            approveOnceWithoutUnlockKey: defaultApproveOnceWithoutUnlock,
             hour24ClockKey: false,
             hideActivityKey: false
         ]
@@ -547,6 +550,18 @@ enum SynaraApprovalNotificationDetailsPreference {
     }
 }
 
+/// Opt-in, default off: lets Approve once run from the Lock Screen and Apple
+/// Watch without unlocking the iPhone. Deny never needs an unlock.
+enum SynaraApproveOnceWithoutUnlockPreference {
+    static func isEnabled(defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()) -> Bool {
+        guard let defaults,
+              defaults.object(forKey: SynaraSharedConstants.approveOnceWithoutUnlockKey) != nil else {
+            return SynaraSharedConstants.defaultApproveOnceWithoutUnlock
+        }
+        return defaults.bool(forKey: SynaraSharedConstants.approveOnceWithoutUnlockKey)
+    }
+}
+
 /// Core's bounded `agent_approval_notification_summary` for one prompt.
 struct SynaraAgentApprovalSummary: Equatable {
     let sender: String?
@@ -580,6 +595,47 @@ struct SynaraAgentApprovalSummary: Equatable {
 /// Mirrors `classify_agent_approval` in crates/synara-core/src/app/agent_approvals.rs,
 /// which the NSE cannot call over the FFI. Both sides read the vectors in
 /// crates/synara-core/tests/support/notification-policy-vectors.json.
+/// Per-room budget for urgent (Time Sensitive/Critical, actionable) approval
+/// alerts, matching Core's desktop limit. Over budget, the prompt is shown as
+/// an ordinary notification. State lives in the app group because each push
+/// may run in a new extension process.
+enum SynaraApprovalAlertRateLimit {
+    static let windowSeconds: TimeInterval = 60
+    static let alertsPerRoomPerWindow = 3
+    static let storageKey = "synara.notification.approvalAlertTimes.v1"
+    private static let maxTrackedRooms = 64
+
+    static func reserve(
+        roomID: String,
+        now: Date = Date(),
+        defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()
+    ) -> Bool {
+        guard let defaults else {
+            return true
+        }
+        let nowSeconds = now.timeIntervalSince1970
+        let cutoff = nowSeconds - windowSeconds
+        var rooms = (defaults.dictionary(forKey: storageKey) as? [String: [Double]]) ?? [:]
+        rooms = rooms.compactMapValues { times in
+            let recent = times.filter { $0 > cutoff && $0 <= nowSeconds + windowSeconds }
+            return recent.isEmpty ? nil : recent
+        }
+        var times = rooms[roomID] ?? []
+        guard times.count < alertsPerRoomPerWindow else {
+            defaults.set(rooms, forKey: storageKey)
+            return false
+        }
+        times.append(nowSeconds)
+        rooms[roomID] = times
+        if rooms.count > maxTrackedRooms,
+           let oldest = rooms.min(by: { ($0.value.last ?? 0) < ($1.value.last ?? 0) })?.key {
+            rooms.removeValue(forKey: oldest)
+        }
+        defaults.set(rooms, forKey: storageKey)
+        return true
+    }
+}
+
 enum SynaraAgentApprovalFreshness {
     static let ttlMilliseconds: UInt64 = 5 * 60 * 1_000
     static let futureToleranceMilliseconds: UInt64 = 60 * 1_000

@@ -45,6 +45,18 @@ struct ApprovalsView: View {
             load(discoveryActive: true)
             startHistoryUpdates()
         }
+        .task {
+            // Core's inbox is a snapshot, not a stream: the first call only
+            // starts room discovery, and the lease lapses unless renewed. Poll
+            // while visible, like desktop, so new prompts appear promptly.
+            while Task.isCancelled == false {
+                try? await Task.sleep(nanoseconds: Self.inboxRefreshNanoseconds)
+                guard Task.isCancelled == false else {
+                    return
+                }
+                await refreshInbox()
+            }
+        }
         .onDisappear {
             historyUpdatesTask?.cancel()
             historyUpdatesTask = nil
@@ -153,6 +165,26 @@ struct ApprovalsView: View {
             }
             errorMessage = visibleItems.isEmpty ? nextError : nil
             isLoading = false
+        }
+    }
+
+    static let inboxRefreshNanoseconds: UInt64 = 5_000_000_000
+
+    /// Inbox-only renewal. Keeps the last good list on a transient failure.
+    private func refreshInbox() async {
+        guard case .success(let items) = await environment.agentApprovalHistory.loadInbox(
+            discoveryActive: true
+        ) else {
+            return
+        }
+        await MainActor.run {
+            // An unchanged poll must not re-render the rows a tap may be on.
+            if inboxItems != items {
+                inboxItems = items
+            }
+            if visibleItems.isEmpty == false, errorMessage != nil {
+                errorMessage = nil
+            }
         }
     }
 

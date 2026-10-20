@@ -6355,6 +6355,7 @@ private struct TimelineRow: View {
                 AgentApprovalPromptTimelineCard(
                     prompt: approvalPrompt,
                     eventID: item.eventID,
+                    decision: item.agentApprovalDecision,
                     onReaction: onAgentApprovalReaction
                 )
             }
@@ -6520,7 +6521,9 @@ private struct TimelineRow: View {
 
     private var accessibilityHint: String {
         if approvalPrompt != nil {
-            return "Review available approval reactions"
+            return item.agentApprovalDecision == nil
+                ? "Review available approval reactions"
+                : "You already decided this approval"
         }
 
         if item.deliveryStatus == .failed {
@@ -7199,6 +7202,8 @@ private struct ReactionPill: View {
 private struct AgentApprovalPromptTimelineCard: View {
     let prompt: SynaraAgentApprovalPrompt
     let eventID: String
+    /// This account's own terminal reaction, projected by Core.
+    let decision: SynaraAgentApprovalCardDecision?
     let onReaction: (String) -> Void
     @State private var isCommandExpanded = true
     @State private var confirmApproveAlways = false
@@ -7284,86 +7289,117 @@ private struct AgentApprovalPromptTimelineCard: View {
                 .synaraDepth(.raised, cornerRadius: SynaraRadius.control)
             }
 
-            if confirmApproveAlways {
-                VStack(alignment: .leading, spacing: SynaraSpacing.small) {
-                    Text("Approve always permanently trusts this command pattern. Confirm only if you intend to allow it without future prompts.")
-                        .font(SynaraTypography.messageMeta)
-                        .foregroundStyle(SynaraColor.critical)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: SynaraSpacing.small) {
-                        Button("Confirm approve always") {
-                            confirmApproveAlways = false
-                            onReaction(SynaraAgentApprovalPromptReaction.approveAlways.actionIdentifier)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(SynaraColor.critical)
-                        .accessibilityIdentifier("AgentApprovalPromptConfirmApproveAlways-\(eventID)")
-
-                        Button("Cancel") {
-                            confirmApproveAlways = false
-                        }
-                        .buttonStyle(.bordered)
+            if let decision {
+                HStack(alignment: .top, spacing: SynaraSpacing.small) {
+                    Text(decision.reaction.reactionKey)
+                        .font(.system(size: 21, weight: .semibold))
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(decision.title)
+                            .font(SynaraTypography.emphasis)
+                            .foregroundStyle(decision.reaction.tint)
+                        Text(decision.detail())
+                            .font(SynaraTypography.messageMeta)
+                            .foregroundStyle(SynaraColor.secondaryText)
                     }
+                    Spacer(minLength: 0)
                 }
                 .padding(SynaraSpacing.small)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .synaraAccessibleSurfaceFill(
-                    SynaraColor.critical.opacity(0.08),
+                    decision.reaction.tint.opacity(0.10),
                     opaqueFill: SynaraColor.secondarySurface
                 )
                 .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
                 .synaraDepth(
-                    .floating,
+                    .raised,
                     cornerRadius: SynaraRadius.control,
-                    boundaryColor: SynaraColor.critical
+                    boundaryColor: decision.reaction.tint
                 )
-            }
-
-            LazyVGrid(columns: actionColumns, spacing: SynaraSpacing.small) {
-                ForEach(SynaraAgentApprovalPromptReaction.allCases) { action in
-                    if confirmApproveAlways, action == .approveAlways {
-                        EmptyView()
-                    } else {
-                        Button {
-                            if action == .approveAlways {
-                                confirmApproveAlways = true
-                            } else {
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("AgentApprovalPromptDecision-\(eventID)")
+            } else {
+                if confirmApproveAlways {
+                    VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+                        Text("Approve always permanently trusts this command pattern. Confirm only if you intend to allow it without future prompts.")
+                            .font(SynaraTypography.messageMeta)
+                            .foregroundStyle(SynaraColor.critical)
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: SynaraSpacing.small) {
+                            Button("Confirm approve always") {
                                 confirmApproveAlways = false
-                                onReaction(action.actionIdentifier)
+                                onReaction(SynaraAgentApprovalPromptReaction.approveAlways.actionIdentifier)
                             }
-                        } label: {
-                            VStack(spacing: SynaraSpacing.xSmall) {
-                                Text(action.reactionKey)
-                                    .font(.system(size: 21, weight: .semibold))
-                                Text(action.title)
-                                    .font(SynaraTypography.chipLabel.weight(.semibold))
-                                    .multilineTextAlignment(.center)
-                                    .lineLimit(2)
+                            .buttonStyle(.borderedProminent)
+                            .tint(SynaraColor.critical)
+                            .accessibilityIdentifier("AgentApprovalPromptConfirmApproveAlways-\(eventID)")
+
+                            Button("Cancel") {
+                                confirmApproveAlways = false
                             }
-                            .frame(maxWidth: .infinity)
-                            .frame(minHeight: 58)
-                            .foregroundStyle(action.tint)
-                            .synaraAccessibleSurfaceFill(
-                                action.tint.opacity(action == .deny ? 0.08 : 0.10),
-                                opaqueFill: SynaraColor.secondarySurface
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
-                            .synaraDepth(
-                                .raised,
-                                cornerRadius: SynaraRadius.control,
-                                boundaryColor: action.tint
-                            )
+                            .buttonStyle(.bordered)
                         }
-                        .buttonStyle(SynaraTactileButtonStyle())
-                        .accessibilityLabel("\(action.title) \(action.reactionKey)")
-                        .accessibilityIdentifier("AgentApprovalPromptReaction-\(action.accessibilityIdentifierSuffix)-\(eventID)")
+                    }
+                    .padding(SynaraSpacing.small)
+                    .synaraAccessibleSurfaceFill(
+                        SynaraColor.critical.opacity(0.08),
+                        opaqueFill: SynaraColor.secondarySurface
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+                    .synaraDepth(
+                        .floating,
+                        cornerRadius: SynaraRadius.control,
+                        boundaryColor: SynaraColor.critical
+                    )
+                }
+
+                LazyVGrid(columns: actionColumns, spacing: SynaraSpacing.small) {
+                    ForEach(SynaraAgentApprovalPromptReaction.allCases) { action in
+                        if confirmApproveAlways, action == .approveAlways {
+                            EmptyView()
+                        } else {
+                            Button {
+                                if action == .approveAlways {
+                                    confirmApproveAlways = true
+                                } else {
+                                    confirmApproveAlways = false
+                                    onReaction(action.actionIdentifier)
+                                }
+                            } label: {
+                                VStack(spacing: SynaraSpacing.xSmall) {
+                                    Text(action.reactionKey)
+                                        .font(.system(size: 21, weight: .semibold))
+                                    Text(action.title)
+                                        .font(SynaraTypography.chipLabel.weight(.semibold))
+                                        .multilineTextAlignment(.center)
+                                        .lineLimit(2)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(minHeight: 58)
+                                .foregroundStyle(action.tint)
+                                .synaraAccessibleSurfaceFill(
+                                    action.tint.opacity(action == .deny ? 0.08 : 0.10),
+                                    opaqueFill: SynaraColor.secondarySurface
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+                                .synaraDepth(
+                                    .raised,
+                                    cornerRadius: SynaraRadius.control,
+                                    boundaryColor: action.tint
+                                )
+                            }
+                            .buttonStyle(SynaraTactileButtonStyle())
+                            .accessibilityLabel("\(action.title) \(action.reactionKey)")
+                            .accessibilityIdentifier("AgentApprovalPromptReaction-\(action.accessibilityIdentifierSuffix)-\(eventID)")
+                        }
                     }
                 }
-            }
 
-            Text("Session approval is available only by replying !approve session; Hermes does not define a session-approval reaction.")
-                .font(SynaraTypography.messageMeta)
-                .foregroundStyle(SynaraColor.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
+                Text("Session approval is available only by replying !approve session; Hermes does not define a session-approval reaction.")
+                    .font(SynaraTypography.messageMeta)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }

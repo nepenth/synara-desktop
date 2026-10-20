@@ -3,6 +3,10 @@
 ## Unreleased
 
 - iOS: opening a room from a notification loads its earlier messages and keeps receiving new ones, the same as opening it from the room list. You no longer need to leave the room or relaunch Synara to see its history.
+- Approvals (iOS): Approve once on a notification asks you to unlock your iPhone first. To approve from the Lock Screen and Apple Watch without unlocking, turn on Settings → Notifications → Approve once without unlocking (off by default). Deny still works without unlocking. The settings text now describes what each setting actually does.
+- Approvals: urgent approval alerts are harder to abuse. Once you list your agents in Agent Notifications, only those accounts can raise them; a prompt from anyone else arrives as an ordinary message. Without a list, approval alerts follow the room's notification settings, so a muted room stays silent. A room can raise at most three urgent approval alerts per minute; more arrive as ordinary messages. Desktop approval alerts name the room.
+- Approvals: after you approve or deny in the timeline, the approval card shows your decision and when you made it instead of the buttons, on iOS and desktop and on every device. On iOS your own ✅ stays visible in the reactions below the card; a reaction whose count changed no longer disappears.
+- iOS: the Approvals inbox refreshes every few seconds while open, so a new request appears without pulling to refresh. In Notifications, approval requests are labeled Approval instead of Mention.
 
 ## [2.2.6] - 2026-10-12
 

@@ -107,8 +107,10 @@ final class SynaraBackgroundAssertion: @unchecked Sendable {
     }
 }
 
-/// Approve once and Deny are background notification actions so they work
-/// from a locked iPhone and from mirrored Apple Watch alerts. Every other
+/// Approve once and Deny are background notification actions, so they finish
+/// without foregrounding the app. Approve once asks for an iPhone unlock first
+/// unless the user opted in to approving from the Lock Screen and Apple Watch;
+/// either way the response arrives here in the background. Every other
 /// response (body tap, Review, Approve always) still foregrounds the app.
 enum SynaraBackgroundApprovalActionPolicy {
     static func runsInBackground(actionIdentifier: String) -> Bool {

@@ -88,12 +88,15 @@ final class NotificationService: UNNotificationServiceExtension {
                 // Ordinary previews do not wait on another OS settings lookup.
                 // The Matrix owner is already dropped; release its gate before
                 // querying notification authorization for a verified approval.
+                // Same per-room budget as desktop: a flood of prompts in one
+                // room cannot keep raising Focus-bypassing, actionable alerts.
+                let urgentApproval = timeSensitiveApprovals && resolved.isAgentApproval
+                    && SynaraAgentApprovalFreshness.isFresh(
+                        originServerTimestampMS: resolved.originServerTimestampMS
+                    )
+                    && SynaraApprovalAlertRateLimit.reserve(roomID: payload.roomID)
                 var criticalAlertsAuthorized = false
-                if SynaraNotificationCapabilities.criticalAlertsEnabled(),
-                   timeSensitiveApprovals, resolved.isAgentApproval,
-                   SynaraAgentApprovalFreshness.isFresh(
-                    originServerTimestampMS: resolved.originServerTimestampMS
-                   ) {
+                if SynaraNotificationCapabilities.criticalAlertsEnabled(), urgentApproval {
                     let settings = await UNUserNotificationCenter.current().notificationSettings()
                     criticalAlertsAuthorized = settings.criticalAlertSetting == .enabled
                 }
@@ -103,7 +106,7 @@ final class NotificationService: UNNotificationServiceExtension {
                     preview: resolved.preview,
                     showPreview: showPreview,
                     approvalAlertsEnabled: timeSensitiveApprovals,
-                    isAgentApproval: resolved.isAgentApproval,
+                    isAgentApproval: urgentApproval,
                     originServerTimestampMS: resolved.originServerTimestampMS,
                     criticalAlertsAuthorized: criticalAlertsAuthorized,
                     approvalSummary: resolved.approvalSummary
