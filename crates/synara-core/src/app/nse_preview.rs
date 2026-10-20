@@ -178,6 +178,10 @@ async fn resolve_event_preview_unbounded(
             )
         })?;
     config = config.with_indexed_message_search(false);
+    // The extension's vault is read-only, so a refresh here would consume the
+    // app's refresh token without saving its replacement. iOS password
+    // sign-in therefore requests no refresh token; an expired token from an
+    // older session surfaces as `p4-s11-nse-session-rejected`.
     config.handle_refresh_tokens = false;
 
     let client = build_unauthenticated_client(&config).await.map_err(|_| {

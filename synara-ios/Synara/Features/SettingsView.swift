@@ -1064,7 +1064,7 @@ private struct NotificationSettingsView: View {
             } header: {
                 Text("Local Delivery Diagnostics")
             } footer: {
-                Text("Copy or share a report after reproducing a missing preview. It includes app version, notification settings, push registration and shared-store readiness, plus up to 256 fixed stage codes and timestamps. Reports stay on this device until you share them and exclude message content, Matrix IDs, senders, push payloads, tokens, URLs and account secrets.")
+                Text("Copy or share a report after reproducing a missing preview. It includes app version, notification settings, push registration and shared-store readiness, up to 256 fixed stage codes and timestamps, and how many previews failed because the server rejected your session. Reports stay on this device until you share them and exclude message content, Matrix IDs, senders, push payloads, tokens, URLs and account secrets.")
             }
 
             if let pushRules {
@@ -1157,7 +1157,8 @@ private struct NotificationSettingsView: View {
             )
             notificationDiagnosticReport = SynaraNotificationDiagnosticReport.text(
                 context: context,
-                entries: notificationDiagnostics
+                entries: notificationDiagnostics,
+                sessionRejectedCount: SynaraNotificationDiagnostics.sessionRejectedCount()
             )
         }
     }

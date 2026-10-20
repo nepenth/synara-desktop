@@ -3,6 +3,7 @@
 ## Unreleased
 
 - iOS: opening a room from a notification loads its earlier messages and keeps receiving new ones, the same as opening it from the room list. You no longer need to leave the room or relaunch Synara to see its history.
+- iOS: notification previews and approval Approve/Deny keep working when Synara has been in the background for a while. Signing in on iPhone no longer requests a refresh token, so the access token the notification extension uses does not expire after a few minutes (Synapse's default is 5). Sessions signed in with an earlier version keep refreshing in the app; if previews still show generic text after an update, sign out and sign in again. The notification diagnostic report counts previews that failed because the server rejected the session. Desktop is unchanged.
 
 ## [2.2.6] - 2026-10-12
 
