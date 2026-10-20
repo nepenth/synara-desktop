@@ -1,3 +1,4 @@
+import SynaraCore
 import XCTest
 @testable import Synara
 
@@ -41,6 +42,84 @@ final class ThreadDisplayTests: XCTestCase {
         let settings = InMemorySettingsStore()
         settings.setString(ThreadDisplayMode.full.rawValue, for: ThreadDisplayMode.settingsKey)
         XCTAssertEqual(ThreadDisplayMode.resolve(settings.string(for: ThreadDisplayMode.settingsKey)), .full)
+    }
+
+    func testThreadFocusAnchorScrollsToTheRoutedReply() {
+        let items = [item(root, at: 0), item("$r1", at: 1, serverEventID: "$server-r1", threadRoot: root)]
+        XCTAssertEqual(
+            ThreadFocusAnchorPolicy.nextStep(
+                focusedEventID: "$server-r1",
+                items: items,
+                canLoadEarlier: false,
+                earlierPagesLoaded: 0
+            ),
+            .scroll(itemID: "$r1")
+        )
+    }
+
+    func testThreadFocusAnchorLoadsEarlierRepliesWithinItsBudget() {
+        let items = [item("$r9", at: 9, threadRoot: root)]
+        XCTAssertEqual(
+            ThreadFocusAnchorPolicy.nextStep(
+                focusedEventID: "$r2",
+                items: items,
+                canLoadEarlier: true,
+                earlierPagesLoaded: 0
+            ),
+            .loadEarlier
+        )
+        XCTAssertEqual(
+            ThreadFocusAnchorPolicy.nextStep(
+                focusedEventID: "$r2",
+                items: items,
+                canLoadEarlier: true,
+                earlierPagesLoaded: ThreadFocusAnchorPolicy.maximumEarlierPages
+            ),
+            .settle
+        )
+        XCTAssertEqual(
+            ThreadFocusAnchorPolicy.nextStep(
+                focusedEventID: "$r2",
+                items: items,
+                canLoadEarlier: false,
+                earlierPagesLoaded: 0
+            ),
+            .settle
+        )
+    }
+
+    func testCoreEventRouteMapsToTheThreadRoute() {
+        XCTAssertEqual(
+            SharedCoreTimeline.eventRoute(from: TimelineEventRouteDto(kind: .thread, threadRootEventId: root)),
+            .thread(rootEventID: root)
+        )
+        XCTAssertEqual(
+            SharedCoreTimeline.eventRoute(from: TimelineEventRouteDto(kind: .thread, threadRootEventId: nil)),
+            .room
+        )
+        XCTAssertEqual(
+            SharedCoreTimeline.eventRoute(from: TimelineEventRouteDto(kind: .missing, threadRootEventId: nil)),
+            .missing
+        )
+        XCTAssertEqual(
+            SharedCoreTimeline.eventRoute(from: TimelineEventRouteDto(kind: .unreachable, threadRootEventId: nil)),
+            .unreachable
+        )
+        XCTAssertEqual(
+            SharedCoreTimeline.eventRoute(from: TimelineEventRouteDto(kind: .room, threadRootEventId: nil)),
+            .room
+        )
+    }
+
+    func testRoutedThreadCarriesItsReplyThroughEveryPresentation() {
+        XCTAssertEqual(
+            ThreadSheetTarget(rootEventID: root, rootTitle: nil, focusedEventID: "$reply").focusedEventID,
+            "$reply"
+        )
+        let route = AppRoute.thread(roomID: "!room:matrix.org", rootEventID: root, focusedEventID: "$reply")
+        XCTAssertTrue(route.isConversation)
+        XCTAssertEqual(route.conversationRoomID, "!room:matrix.org")
+        XCTAssertNotEqual(route, AppRoute.thread(roomID: "!room:matrix.org", rootEventID: root))
     }
 
     func testThreadStreamsUseThreadOpenKindAndTheirOwnKey() {

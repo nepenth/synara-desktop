@@ -16,6 +16,30 @@ enum SharedCoreTimeline {
         try await core.timelineOpen(roomId: roomId, position: position)
     }
 
+    static func timelineEventRoute(
+        core: SharedCore,
+        roomId: String,
+        eventId: String
+    ) async throws -> TimelineEventRouteDto {
+        try await core.timelineEventRoute(roomId: roomId, eventId: eventId)
+    }
+
+    static func eventRoute(from dto: TimelineEventRouteDto) -> TimelineEventRoute {
+        switch dto.kind {
+        case .room:
+            return .room
+        case .thread:
+            guard let root = dto.threadRootEventId, root.isEmpty == false else {
+                return .room
+            }
+            return .thread(rootEventID: root)
+        case .missing:
+            return .missing
+        case .unreachable:
+            return .unreachable
+        }
+    }
+
     static func timelineClose(core: SharedCore, streamId: String) async throws -> Bool {
         try await core.timelineClose(streamId: streamId)
     }

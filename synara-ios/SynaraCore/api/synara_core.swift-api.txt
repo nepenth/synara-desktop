@@ -218,6 +218,8 @@ extension TimelineDirectionDto: Sendable
 extension TimelineError: Sendable
 extension TimelineEventItemDto: Sendable
 extension TimelineEventReadbackDto: Sendable
+extension TimelineEventRouteDto: Sendable
+extension TimelineEventRouteKindDto: Sendable
 extension TimelineForwardDto: Sendable
 extension TimelineForwardError: Sendable
 extension TimelineMediaError: Sendable
@@ -436,6 +438,7 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func timelineClose(streamId: String) async throws -> Bool
   open func timelineEditText(roomId: String, eventId: String, body: String, formattedBody: String?) async throws -> TimelineMutateDto
   open func timelineEventReadback(roomId: String, eventId: String) async throws -> TimelineEventReadbackDto
+  open func timelineEventRoute(roomId: String, eventId: String) async throws -> TimelineEventRouteDto
   open func timelineForwardMedia(sourceRoomId: String, eventId: String, targetRoomId: String, confirmedEncryptionDowngrade: Bool) async throws -> TimelineForwardDto
   open func timelineForwardText(sourceRoomId: String, eventId: String, targetRoomId: String, asQuote: Bool, confirmedEncryptionDowngrade: Bool) async throws -> TimelineForwardDto
   open func timelineJumpLatest(streamId: String) async throws -> TimelineOpenDto
@@ -826,6 +829,11 @@ public enum TimelineDirectionDto: Equatable, Hashable
 public enum TimelineError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum TimelineEventRouteKindDto: Equatable, Hashable
+  case room
+  case thread
+  case missing
+  case unreachable
 public enum TimelineForwardError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -1093,6 +1101,7 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func timelineClose(streamId: String) async throws -> Bool
   func timelineEditText(roomId: String, eventId: String, body: String, formattedBody: String?) async throws -> TimelineMutateDto
   func timelineEventReadback(roomId: String, eventId: String) async throws -> TimelineEventReadbackDto
+  func timelineEventRoute(roomId: String, eventId: String) async throws -> TimelineEventRouteDto
   func timelineForwardMedia(sourceRoomId: String, eventId: String, targetRoomId: String, confirmedEncryptionDowngrade: Bool) async throws -> TimelineForwardDto
   func timelineForwardText(sourceRoomId: String, eventId: String, targetRoomId: String, asQuote: Bool, confirmedEncryptionDowngrade: Bool) async throws -> TimelineForwardDto
   func timelineJumpLatest(streamId: String) async throws -> TimelineOpenDto
@@ -1863,6 +1872,10 @@ public struct TimelineEventReadbackDto: Equatable, Hashable
   public var eventId: String
   public var item: TimelineEventItemDto
   public init(sessionGeneration: UInt64, roomId: String, eventId: String, item: TimelineEventItemDto)
+public struct TimelineEventRouteDto: Equatable, Hashable
+  public var kind: TimelineEventRouteKindDto
+  public var threadRootEventId: String?
+  public init(kind: TimelineEventRouteKindDto, threadRootEventId: String?)
 public struct TimelineForwardDto: Equatable, Hashable
   public var schemaVersion: UInt32
   public var action: TimelineActionKindDto

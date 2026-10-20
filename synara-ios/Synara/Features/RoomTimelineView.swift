@@ -73,6 +73,40 @@ enum RoomTimelineFocusPolicy {
         }
         return .focused(eventID: focusedEventID)
     }
+
+    /// How a routed event opens once Core has said where it lives. A thread
+    /// reply is never in the room timeline (it hides in-thread events), and an
+    /// event-focused open of one is a thread-only window with no back gap, so
+    /// it must open the thread with the live room behind it.
+    static func eventRouteDecision(
+        focusedEventID: String,
+        route: TimelineEventRoute,
+        liveItems: [TimelineItem]
+    ) -> RoomTimelineEventRouteDecision {
+        switch route {
+        case let .thread(rootEventID) where rootEventID != focusedEventID:
+            return .thread(
+                rootEventID: rootEventID,
+                roomMode: liveModeForEventRoute(focusedEventID: rootEventID, liveItems: liveItems) ?? .live
+            )
+        case .missing:
+            return .unavailable(notice: TimelineEventRouteNotice.missing)
+        case .room, .unreachable, .thread:
+            // An unreachable `/event` can still be served by the focused
+            // provider's `/context`; Core falls back to the live room if not.
+            return .room(liveMode: liveModeForEventRoute(focusedEventID: focusedEventID, liveItems: liveItems))
+        }
+    }
+}
+
+enum RoomTimelineEventRouteDecision: Equatable {
+    /// Show the event in the room. `liveMode` presents the live provider; nil
+    /// means only the event-focused provider can reach it.
+    case room(liveMode: RoomTimelineMode?)
+    /// Present the live room in `roomMode` and open the thread at the reply.
+    case thread(rootEventID: String, roomMode: RoomTimelineMode)
+    /// Present the live room and say why the message is not shown.
+    case unavailable(notice: String)
 }
 
 enum RoomTimelineTitlePolicy {
@@ -412,6 +446,8 @@ struct RoomTimelineView: View {
     @State private var threadDisplay: ThreadDisplayMode = ThreadDisplayMode.defaultMode
     @State private var expandedThreadRoots: Set<String> = []
     @State private var threadSheet: ThreadSheetTarget?
+    @State private var eventRouteNotice: String?
+    @State private var handledEventRouteID: String?
     @State private var inFlightTimelineActionKeys: Set<String> = []
     @State private var cryptoStatus: RoomCryptoStatus = .unknown
     @State private var cryptoActionMessage: String?
@@ -497,6 +533,11 @@ struct RoomTimelineView: View {
                 }
             )
             timelineContent
+            if let eventRouteNotice {
+                TimelineEventRouteNoticeBanner(message: eventRouteNotice) {
+                    self.eventRouteNotice = nil
+                }
+            }
             if let failure = timelineAvailability.failure {
                 TimelineAvailabilityBanner(failure: failure) {
                     Task { await loadTimeline() }
@@ -726,7 +767,8 @@ struct RoomTimelineView: View {
                 roomID: roomID,
                 rootEventID: target.rootEventID,
                 roomTitle: displayRoomTitle,
-                rootTitle: target.rootTitle
+                rootTitle: target.rootTitle,
+                focusedEventID: target.focusedEventID
             )
             .environment(\.appEnvironment, environment)
             .presentationDetents([.medium, .large])
@@ -1795,17 +1837,22 @@ struct RoomTimelineView: View {
 
     /// Opens the full thread with its composer. Inline mode uses a sheet, the
     /// way desktop inline threads reply in the side panel.
-    private func presentThread(rootEventID: String, rootTitle: String?) {
+    private func presentThread(rootEventID: String, rootTitle: String?, focusedEventID: String? = nil) {
         switch threadDisplay {
         case .inline, .sheet:
-            threadSheet = ThreadSheetTarget(rootEventID: rootEventID, rootTitle: rootTitle)
+            threadSheet = ThreadSheetTarget(
+                rootEventID: rootEventID,
+                rootTitle: rootTitle,
+                focusedEventID: focusedEventID
+            )
         case .full:
             environment.router.route(
                 to: .thread(
                     roomID: roomID,
                     rootEventID: rootEventID,
                     roomTitle: displayRoomTitle,
-                    rootTitle: rootTitle
+                    rootTitle: rootTitle,
+                    focusedEventID: focusedEventID
                 )
             )
         }
@@ -1878,21 +1925,35 @@ struct RoomTimelineView: View {
         }
 
         let feed: RoomTimelineSessionFeed
+        var routedThreadRootEventID: String?
+        var routeNotice: String?
         if let focusedEventID, focusedEventID.isEmpty == false {
             guard let liveFeed = await session.open(mode: .live) else {
                 return
             }
-            if let liveMode = RoomTimelineFocusPolicy.liveModeForEventRoute(
+            // Ask Core where the event lives before choosing a provider.
+            let route = await environment.timeline.resolveEventRoute(roomID: roomID, eventID: focusedEventID)
+            switch RoomTimelineFocusPolicy.eventRouteDecision(
                 focusedEventID: focusedEventID,
+                route: route,
                 liveItems: timelineItems(from: liveFeed.initialOutcome)
             ) {
+            case let .room(liveMode?):
                 logTimelineEvent("event-route-provider", fields: ["provider": "live"])
                 feed = liveFeed.presenting(mode: liveMode)
-            } else {
+            case .room(.none):
                 guard let focusedFeed = await session.open(mode: .focused(eventID: focusedEventID)) else {
                     return
                 }
                 feed = focusedFeed
+            case let .thread(rootEventID, roomMode):
+                logTimelineEvent("event-route-provider", fields: ["provider": "live", "route": "thread"])
+                feed = liveFeed.presenting(mode: roomMode)
+                routedThreadRootEventID = rootEventID
+            case let .unavailable(notice):
+                logTimelineEvent("event-route-provider", fields: ["provider": "live", "route": "unavailable"])
+                feed = liveFeed
+                routeNotice = notice
             }
         } else {
             guard let liveFeed = await session.open(mode: .live) else {
@@ -1924,8 +1985,21 @@ struct RoomTimelineView: View {
             return
         }
 
+        let routedThread = routedThreadRootEventID
+        let notice = routeNotice
         await MainActor.run {
             applySessionFeed(feed)
+            // A retry reloads the room; the routed thread or notice is shown once.
+            guard let focusedEventID, handledEventRouteID != focusedEventID else {
+                return
+            }
+            handledEventRouteID = focusedEventID
+            if let notice {
+                eventRouteNotice = notice
+            }
+            if let routedThread {
+                presentThread(rootEventID: routedThread, rootTitle: nil, focusedEventID: focusedEventID)
+            }
         }
     }
 
@@ -3115,13 +3189,11 @@ struct RoomTimelineView: View {
             timelinePosition = .focusedEvent
             showJumpToLatest = targetEventID != loadedTimelineItems.last?.eventID
             if success == false {
-                timelineAvailability.recordFailure(
-                    TimelineLoadFailure(
-                        kind: .viewUnavailable,
-                        diagnosticCode: "timeline-focused-event-unavailable"
-                    ),
-                    preservingRows: true
-                )
+                // The rows loaded but the routed message is not among them (a
+                // hidden event, or Core fell back to the live room). Say so
+                // rather than reporting the whole timeline unavailable.
+                eventRouteNotice = TimelineEventRouteNotice.notShown
+                logTimelineEvent("timeline-focused-event-unavailable")
                 shouldRecoverMissingFocus = true
             }
         }
@@ -3434,6 +3506,30 @@ private enum TimelineViewState: Equatable {
     case empty
     case failed(String)
     case loaded([TimelineItem], isPaginating: Bool)
+}
+
+private struct TimelineEventRouteNoticeBanner: View {
+    let message: String
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: SynaraSpacing.small) {
+            Image(systemName: "info.circle")
+                .foregroundStyle(SynaraColor.secondaryText)
+            Text(message)
+                .font(SynaraTypography.supporting)
+                .foregroundStyle(SynaraColor.secondaryText)
+            Spacer(minLength: SynaraSpacing.small)
+            Button("Dismiss", action: onDismiss)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityIdentifier("TimelineEventRouteNoticeDismiss")
+        }
+        .padding(.horizontal, SynaraSpacing.medium)
+        .padding(.vertical, SynaraSpacing.xSmall)
+        .background(SynaraColor.surface)
+        .accessibilityIdentifier("TimelineEventRouteNotice")
+    }
 }
 
 private struct TimelineAvailabilityBanner: View {
@@ -3794,6 +3890,8 @@ struct ThreadTimelineView: View {
     let rootEventID: String
     let roomTitle: String?
     let rootTitle: String?
+    /// A routed reply (notification or link) to scroll to once it loads.
+    var focusedEventID: String? = nil
     @Environment(\.appEnvironment) private var environment
     @Environment(\.dismiss) private var dismiss
     @Environment(\.synaraCanvasLayout) private var canvasLayout
@@ -3811,6 +3909,8 @@ struct ThreadTimelineView: View {
     @State private var pendingReplies: [TimelineItem] = []
     @State private var isLoadingEarlier = false
     @State private var reachedThreadStart = false
+    @State private var hasSettledFocusedReply = false
+    @State private var focusedReplyEarlierPages = 0
     @State private var notesActionMessage: String?
     @State private var timelineActionMessage: String?
     @State private var reportTarget: TimelineItem?
@@ -3958,56 +4058,92 @@ struct ThreadTimelineView: View {
             }
         case let .loaded(items, _):
             let visibleItems = threadItems(from: items)
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: SynaraSpacing.medium) {
-                    if canLoadEarlier(visibleItems) {
-                        Button(action: loadEarlierReplies) {
-                            if isLoadingEarlier {
-                                ProgressView().controlSize(.small)
-                            } else {
-                                Label("Load earlier replies", systemImage: "arrow.up")
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: SynaraSpacing.medium) {
+                        if canLoadEarlier(visibleItems) {
+                            Button(action: loadEarlierReplies) {
+                                if isLoadingEarlier {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Label("Load earlier replies", systemImage: "arrow.up")
+                                }
                             }
+                            .font(SynaraTypography.chipLabel)
+                            .foregroundStyle(SynaraColor.accent)
+                            .buttonStyle(.plain)
+                            .disabled(isLoadingEarlier)
+                            .frame(maxWidth: .infinity)
+                            .accessibilityIdentifier("ThreadLoadEarlier")
                         }
-                        .font(SynaraTypography.chipLabel)
-                        .foregroundStyle(SynaraColor.accent)
-                        .buttonStyle(.plain)
-                        .disabled(isLoadingEarlier)
-                        .frame(maxWidth: .infinity)
-                        .accessibilityIdentifier("ThreadLoadEarlier")
+                        ForEach(visibleItems) { item in
+                            ThreadMessageRow(
+                                item: item,
+                                availability: environment.eventActions.availability(
+                                    for: item,
+                                    currentUserID: currentUserID,
+                                    roomID: roomID
+                                ),
+                                onReport: { beginReport(item) },
+                                onForward: { forwardTarget = item },
+                                onPollVote: { answerIDs in
+                                    await performAction(
+                                        .pollVote(answerIDs: answerIDs),
+                                        to: item,
+                                        successMessage: "Vote submitted."
+                                    )
+                                },
+                                onDeclineCall: {
+                                    await performAction(
+                                        .declineCall,
+                                        to: item,
+                                        successMessage: "Call declined."
+                                    )
+                                },
+                                onPinToNotes: { pinToNotes(item) }
+                            )
+                        }
                     }
-                    ForEach(visibleItems) { item in
-                        ThreadMessageRow(
-                            item: item,
-                            availability: environment.eventActions.availability(
-                                for: item,
-                                currentUserID: currentUserID,
-                                roomID: roomID
-                            ),
-                            onReport: { beginReport(item) },
-                            onForward: { forwardTarget = item },
-                            onPollVote: { answerIDs in
-                                await performAction(
-                                    .pollVote(answerIDs: answerIDs),
-                                    to: item,
-                                    successMessage: "Vote submitted."
-                                )
-                            },
-                            onDeclineCall: {
-                                await performAction(
-                                    .declineCall,
-                                    to: item,
-                                    successMessage: "Call declined."
-                                )
-                            },
-                            onPinToNotes: { pinToNotes(item) }
-                        )
+                    .padding(.horizontal, SynaraSpacing.xLarge)
+                    .padding(.top, SynaraSpacing.large)
+                    .padding(.bottom, SynaraSpacing.large)
+                }
+                .accessibilityIdentifier("ThreadTimelineList")
+                .onAppear { anchorFocusedReply(in: visibleItems, proxy: proxy) }
+                .onChange(of: visibleItems.map(\.id)) { _ in
+                    anchorFocusedReply(in: visibleItems, proxy: proxy)
+                }
+                .onChange(of: isLoadingEarlier) { loading in
+                    if loading == false {
+                        anchorFocusedReply(in: visibleItems, proxy: proxy)
                     }
                 }
-                .padding(.horizontal, SynaraSpacing.xLarge)
-                .padding(.top, SynaraSpacing.large)
-                .padding(.bottom, SynaraSpacing.large)
             }
-            .accessibilityIdentifier("ThreadTimelineList")
+        }
+    }
+
+    /// Scroll a routed thread to its reply, loading earlier pages until the
+    /// reply is in the window or the policy gives up.
+    private func anchorFocusedReply(in items: [TimelineItem], proxy: ScrollViewProxy) {
+        guard let focusedEventID, hasSettledFocusedReply == false, isLoadingEarlier == false else {
+            return
+        }
+        switch ThreadFocusAnchorPolicy.nextStep(
+            focusedEventID: focusedEventID,
+            items: items,
+            canLoadEarlier: canLoadEarlier(items),
+            earlierPagesLoaded: focusedReplyEarlierPages
+        ) {
+        case let .scroll(itemID):
+            hasSettledFocusedReply = true
+            DispatchQueue.main.async {
+                proxy.scrollTo(itemID, anchor: .center)
+            }
+        case .loadEarlier:
+            focusedReplyEarlierPages += 1
+            loadEarlierReplies()
+        case .settle:
+            hasSettledFocusedReply = true
         }
     }
 
@@ -4092,6 +4228,9 @@ struct ThreadTimelineView: View {
                     applyThreadOutcome(outcome)
                 case .empty:
                     reachedThreadStart = true
+                    if focusedEventID != nil, hasSettledFocusedReply == false {
+                        hasSettledFocusedReply = true
+                    }
                 case let .failed(failure):
                     timelineActionMessage = failure.userMessage
                 }

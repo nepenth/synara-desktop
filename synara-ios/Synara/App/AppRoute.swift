@@ -3,7 +3,13 @@ import Foundation
 enum AppRoute: Hashable {
     case login(homeserverURL: String)
     case room(id: String, eventID: String? = nil, title: String? = nil)
-    case thread(roomID: String, rootEventID: String, roomTitle: String? = nil, rootTitle: String? = nil)
+    case thread(
+        roomID: String,
+        rootEventID: String,
+        roomTitle: String? = nil,
+        rootTitle: String? = nil,
+        focusedEventID: String? = nil
+    )
     case settings
     case notifications
     case later
@@ -21,7 +27,7 @@ enum AppRoute: Hashable {
         switch self {
         case .room(let id, _, _):
             return id
-        case .thread(let roomID, _, _, _):
+        case .thread(let roomID, _, _, _, _):
             return roomID
         case .login, .settings, .notifications, .later:
             return nil

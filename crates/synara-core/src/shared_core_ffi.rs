@@ -80,13 +80,14 @@ use crate::app::sync::{
 use crate::app::timeline::{
     NativeAgentApprovalDecisionResult, NativeComposerReplyDraft, NativeDecryptionState,
     NativeReactionMutation, NativeReactionMutationResult, NativeTimelineDirection,
-    NativeTimelineEventReadback, NativeTimelineItem, NativeTimelineOpenPosition,
-    NativeTimelineOpenReadback, NativeTimelineOwner, NativeTimelineReaction,
-    NativeTimelineReactionSender, NativeTimelineReadAction, NativeTimelineReadIntent,
-    NativeTimelineReadStateReadback, NativeTimelineViewportHint, TimelineMediaHandle,
-    TimelinePageState, TimelinePollAnswer, TimelinePollRow, TimelineReaction, TimelineReplyPreview,
-    TimelineRowCapabilities, TimelineThreadSummary, TimelineViewDeltaBatch, TimelineViewPosition,
-    TimelineViewRow, TimelineViewSnapshot, TimelineViewUpdateEmit, TIMELINE_VIEW_SCHEMA_VERSION,
+    NativeTimelineEventReadback, NativeTimelineEventRoute, NativeTimelineItem,
+    NativeTimelineOpenPosition, NativeTimelineOpenReadback, NativeTimelineOwner,
+    NativeTimelineReaction, NativeTimelineReactionSender, NativeTimelineReadAction,
+    NativeTimelineReadIntent, NativeTimelineReadStateReadback, NativeTimelineViewportHint,
+    TimelineMediaHandle, TimelinePageState, TimelinePollAnswer, TimelinePollRow, TimelineReaction,
+    TimelineReplyPreview, TimelineRowCapabilities, TimelineThreadSummary, TimelineViewDeltaBatch,
+    TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot, TimelineViewUpdateEmit,
+    TIMELINE_VIEW_SCHEMA_VERSION,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot, NativeTypingUpdateSignal};
 use crate::app::user_profile::{NativeOwnProfileOwner, OwnProfileUpdateEmit};
@@ -221,6 +222,8 @@ const TIMELINE_INVALID_ROOM_CODE: &str = "d0.3-timeline-invalid-room-id";
 const TIMELINE_INVALID_ROOM_DESCRIPTION: &str = "The timeline room id is invalid.";
 const TIMELINE_VIEW_NOT_OPEN_CODE: &str = "v-timeline-view-not-open";
 const TIMELINE_VIEW_NOT_OPEN_DESCRIPTION: &str = "The timeline view is not open.";
+const TIMELINE_EVENT_ROUTE_INVALID_EVENT_CODE: &str = "v-crypto.6-invalid-event-id";
+const TIMELINE_EVENT_ROUTE_INVALID_EVENT_DESCRIPTION: &str = "The timeline event id is invalid.";
 const RTC_TRANSPORTS_NO_SESSION_CODE: &str = "p2-rtc-transports-snapshot-no-session";
 const RTC_TRANSPORTS_REFRESH_NO_SESSION_CODE: &str = "p2-rtc-transports-refresh-no-session";
 const RTC_TRANSPORTS_NO_SESSION_DESCRIPTION: &str = "No MatrixRTC transport session is available.";

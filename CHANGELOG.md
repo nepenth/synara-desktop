@@ -8,6 +8,9 @@
 - Media: large images, videos and file downloads no longer fail after 30 seconds on a slow connection. A download now fails only when the server stops sending for 30 seconds.
 - Opening a room or the security settings no longer starts a loop of encryption-status requests, on desktop and iOS. Accounts without cross-signing saw about 60 requests a second and 20-27% CPU while a room was open; status is now read again only when it changes.
 - iOS: sending a photo or file while the connection is slow or the server is failing no longer crashes the room. The attachment shows as sending, with your own preview, until the server has it, instead of a broken image.
+- Threads: a notification or link to a reply in a thread opens that thread at the reply, with the room behind it, and new replies keep arriving. Previously the room showed only that thread's replies, out of order, as if they were the room's messages.
+- Desktop: opening a notification or link for a recent message keeps the room live, so newer messages appear without Jump to latest.
+- A notification or link to a message that was deleted, or that you can no longer see, now says so and opens the room at its latest messages instead of showing "Messages are temporarily unavailable".
 
 ## [2.2.6] - 2026-10-12
 

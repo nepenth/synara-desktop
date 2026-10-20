@@ -1219,6 +1219,21 @@ final class SharedCoreTimelineService: TimelineServicing {
         )
     }
 
+    func resolveEventRoute(roomID: String, eventID: String) async -> TimelineEventRoute {
+        do {
+            return SharedCoreTimeline.eventRoute(
+                from: try await SharedCoreTimeline.timelineEventRoute(
+                    core: host.core,
+                    roomId: roomID,
+                    eventId: eventID
+                )
+            )
+        } catch {
+            // No route lookup: keep placing the event in the room.
+            return .room
+        }
+    }
+
     func closeThreadTimeline(roomID: String, rootEventID: String) {
         guard let streamID = takeStream(
             for: SharedCoreTimelineStreamKey.thread(roomID: roomID, rootEventID: rootEventID)

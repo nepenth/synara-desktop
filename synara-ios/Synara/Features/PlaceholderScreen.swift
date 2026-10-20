@@ -40,12 +40,13 @@ struct RoutePlaceholderView: View {
             .id("\(id)-\(eventID ?? "")")
             .synaraInteractiveSwipeBack()
             .environment(\.synaraAllowsConversationSwipeBack, canvasLayout == .stacked)
-        case .thread(let roomID, let rootEventID, let roomTitle, let rootTitle):
+        case .thread(let roomID, let rootEventID, let roomTitle, let rootTitle, let focusedEventID):
             ThreadTimelineView(
                 roomID: roomID,
                 rootEventID: rootEventID,
                 roomTitle: roomTitle,
-                rootTitle: rootTitle
+                rootTitle: rootTitle,
+                focusedEventID: focusedEventID
             )
             .synaraInteractiveSwipeBack()
             .environment(\.synaraAllowsConversationSwipeBack, true)

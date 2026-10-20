@@ -105,3 +105,31 @@ test('full view keeps swapping the timeline into the thread', async ({ page }) =
   await expect(page.locator('#native-timeline').getByText('Thread reply 7')).toBeVisible();
   await expect(page.locator('[data-thread-side-panel]')).toHaveCount(0);
 });
+
+test('a routed thread reply opens its thread beside the live room', async ({ page }) => {
+  await openThreads(page, 'side');
+  await page.getByRole('button', { name: 'Focus thread reply' }).click();
+
+  const pane = page.locator('[data-thread-side-panel]');
+  await expect(pane).toBeVisible();
+  await expect(pane.getByText('Thread reply 3')).toBeVisible();
+  // The room stays the room: it never shows thread replies as room messages.
+  await expect(page.locator('#native-timeline').getByText('Thread reply 3')).toHaveCount(0);
+  await expect(threadButton(page)).toBeVisible();
+});
+
+test('a routed thread reply in full view swaps the timeline into its thread', async ({ page }) => {
+  await openThreads(page, 'full');
+  await page.getByRole('button', { name: 'Focus thread reply' }).click();
+  await expect(page.locator('#native-timeline').getByText('Thread reply 3')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Back to room' })).toBeVisible();
+});
+
+test('a routed message that no longer exists says so and keeps the room usable', async ({
+  page,
+}) => {
+  await openThreads(page, 'side');
+  await page.getByRole('button', { name: 'Focus deleted' }).click();
+  await expect(page.getByText(/That message isn't available/)).toBeVisible();
+  await expect(threadButton(page)).toBeVisible();
+});

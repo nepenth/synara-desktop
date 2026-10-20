@@ -84,18 +84,18 @@ use super::{
     NativeComposerReplyDraft, NativeComposerReplyDraftReadback, NativeDecryptionState,
     NativeReactionMutation, NativeReactionMutationResult, NativeTimelineActionKind,
     NativeTimelineActionReadback, NativeTimelineCloseRequest, NativeTimelineDirection,
-    NativeTimelineEventReadback, NativeTimelineFollowLiveRequest, NativeTimelineItem,
-    NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
-    NativeTimelineOpenRequest, NativeTimelineReaction, NativeTimelineReactionSender,
-    NativeTimelineReadAction, NativeTimelineReadIntent, NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest, NativeTimelineSnapshot, NativeTimelineTimestampToEventReadback,
-    NativeTimelineViewPaginationRequest, NativeTimelineViewportHint, NativeUtdPhase,
-    NativeUtdStatus, PinnedEventsSnapshot, TimelineMediaRegistry, TimelineMediaSource,
-    TimelinePageState, TimelinePaginationState, TimelineReadState, TimelineRoomActionAuthority,
-    TimelineViewCapabilities, TimelineViewPosition, TimelineViewSnapshot, TimelineViewUpdateEmit,
-    UtdIndex, UtdPhase, UtdReasonCode, ViewDeltaEmitter, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
-    NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
-    TIMELINE_VIEW_SCHEMA_VERSION,
+    NativeTimelineEventReadback, NativeTimelineEventRoute, NativeTimelineFollowLiveRequest,
+    NativeTimelineItem, NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition,
+    NativeTimelineOpenReadback, NativeTimelineOpenRequest, NativeTimelineReaction,
+    NativeTimelineReactionSender, NativeTimelineReadAction, NativeTimelineReadIntent,
+    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest, NativeTimelineSnapshot,
+    NativeTimelineTimestampToEventReadback, NativeTimelineViewPaginationRequest,
+    NativeTimelineViewportHint, NativeUtdPhase, NativeUtdStatus, PinnedEventsSnapshot,
+    TimelineMediaRegistry, TimelineMediaSource, TimelinePageState, TimelinePaginationState,
+    TimelineReadState, TimelineRoomActionAuthority, TimelineViewCapabilities, TimelineViewPosition,
+    TimelineViewSnapshot, TimelineViewUpdateEmit, UtdIndex, UtdPhase, UtdReasonCode,
+    ViewDeltaEmitter, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
+    NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS, TIMELINE_VIEW_SCHEMA_VERSION,
 };
 
 #[cfg(test)]
@@ -105,6 +105,8 @@ mod approval_history;
 mod approval_history_tests;
 #[cfg(test)]
 mod eviction_tests;
+#[cfg(test)]
+mod focused_route_tests;
 #[cfg(test)]
 mod room_read_state_tests;
 #[cfg(test)]
@@ -1286,11 +1288,37 @@ impl NativeTimelineOwner {
         &self,
         request: NativeTimelineOpenRequest,
     ) -> Result<NativeTimelineOpenReadback, &'static str> {
+        // A routed event may need a homeserver fetch. Resolve it before taking
+        // the registry lock so a slow `/event` does not stall other rooms.
+        let focus_route = match &request.position {
+            NativeTimelineOpenPosition::Focused { event_id } => {
+                self.event_route(&request.room_id, event_id).await.ok()
+            }
+            _ => None,
+        };
         self.registry
             .lock()
             .await
-            .open_at(self.emit.clone(), &self.client, request)
+            .open_at(self.emit.clone(), &self.client, request, focus_route)
             .await
+    }
+
+    /// Where a routed event lives: the room timeline, a thread, or nowhere
+    /// this account can see. Reads the event cache or fetches the single
+    /// event; it never builds an event-focused timeline, whose SDK cache is
+    /// memoized per event and would pin whatever context size opened it first.
+    pub async fn event_route(
+        &self,
+        room_id: &str,
+        event_id: &str,
+    ) -> Result<NativeTimelineEventRoute, &'static str> {
+        let room_id = parse_room_id(room_id)?;
+        let event_id = parse_event_id(event_id)?;
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("d0.3-timeline-room-not-found")?;
+        Ok(resolve_event_route(&room, &event_id).await)
     }
 
     #[cfg(test)]
@@ -2327,6 +2355,7 @@ impl NativeTimelineRegistry {
         emit: TimelineViewUpdateEmit,
         client: &Client,
         request: NativeTimelineOpenRequest,
+        resolved_focus_route: Option<NativeTimelineEventRoute>,
     ) -> Result<NativeTimelineOpenReadback, &'static str> {
         let room_id = parse_room_id(&request.room_id)?;
         let room_id_string = room_id.to_string();
@@ -2339,6 +2368,7 @@ impl NativeTimelineRegistry {
             .protect(&protected_room)
             .await;
         let requested_position = request.position;
+        let mut focus_route = None;
         let (timeline, view_position, pagination) = match &requested_position {
             NativeTimelineOpenPosition::Normal { viewport } => {
                 let room = client
@@ -2446,37 +2476,20 @@ impl NativeTimelineRegistry {
             }
             NativeTimelineOpenPosition::Focused { event_id } => {
                 let event_id = parse_event_id(event_id)?;
-                let key = (room_id_string.clone(), event_id.to_string());
                 let room = client
                     .get_room(&room_id)
                     .ok_or("v-timeline-focused-room-not-found")?;
-                if !self.focused_entries.contains_key(&key) {
-                    let timeline = TimelineBuilder::new(&room)
-                        .with_focus(TimelineFocus::Event {
-                            target: event_id.clone(),
-                            num_context_events: FOCUSED_CONTEXT_EVENT_COUNT,
-                            thread_mode: permalink_event_thread_mode(),
-                        })
-                        .build()
-                        .await
-                        .map_err(|_| "v-timeline-focused-open-failed")?;
-                    self.focused_entries.insert(key.clone(), Arc::new(timeline));
-                }
-                let timeline = self
-                    .focused_entries
-                    .get(&key)
-                    .expect("focused timeline present")
-                    .clone();
-                let target_event_id =
-                    resolve_rendered_focus_target(&room, &timeline, &event_id).await;
-                (
-                    timeline,
-                    TimelineViewPosition::Focused { target_event_id },
-                    TimelinePaginationState {
-                        backward: TimelinePageState::Available,
-                        forward: TimelinePageState::Available,
-                    },
-                )
+                let (timeline, position, pagination, route) = self
+                    .open_focused(
+                        client,
+                        &room,
+                        &room_id_string,
+                        &event_id,
+                        resolved_focus_route,
+                    )
+                    .await?;
+                focus_route = Some(route);
+                (timeline, position, pagination)
             }
             NativeTimelineOpenPosition::Thread { root_event_id } => {
                 let room = client
@@ -2636,6 +2649,7 @@ impl NativeTimelineRegistry {
             stream_id: subscription_key,
             position: view_position,
             snapshot,
+            focus_route,
         })
     }
 
@@ -2897,6 +2911,7 @@ impl NativeTimelineRegistry {
                 room_id,
                 position: NativeTimelineOpenPosition::LiveBottom,
             },
+            None,
         )
         .await
     }
@@ -2950,6 +2965,149 @@ impl NativeTimelineRegistry {
         plan_unread_open(&live_ids, target.as_deref())
     }
 
+    /// Event ids the live provider's view stream renders now. A view
+    /// subscription sees only the SDK skip window (the newest items until it
+    /// paginates back), not every item the timeline holds, so a target can be
+    /// placed on the live provider only when it is in this window.
+    async fn live_window_event_ids(&self, room_id: &str) -> Vec<String> {
+        let Some(entry) = self
+            .entries
+            .get(room_id)
+            .inspect(|entry| entry.last_used.touch())
+        else {
+            return Vec::new();
+        };
+        let (items, _updates) = entry.timeline.subscribe().await;
+        items
+            .iter()
+            .filter_map(|item| {
+                item.as_event()
+                    .and_then(|event| event.event_id().map(|event_id| event_id.to_string()))
+            })
+            .collect()
+    }
+
+    /// The room's live provider and its pagination state. `open` must have
+    /// inserted it.
+    fn live_provider(
+        &self,
+        room_id: &str,
+    ) -> Result<(Arc<Timeline>, TimelinePaginationState), &'static str> {
+        let entry = self
+            .entries
+            .get(room_id)
+            .inspect(|entry| entry.last_used.touch())
+            .ok_or("d0.3-timeline-not-open")?;
+        Ok((entry.timeline.clone(), live_pagination_state(entry)))
+    }
+
+    /// Place a `Focused` open: a notification, permalink, search hit or reply
+    /// jump. The live provider opens first, so the room is behind whatever
+    /// the target turns out to be.
+    ///
+    /// - In the live window: present the live provider at the target. It keeps
+    ///   growing with sync and can follow the live tail.
+    /// - Elsewhere in the room: build an event-focused timeline.
+    /// - An in-thread reply: the room timeline never shows it. Present the
+    ///   live provider at the thread root when the live window has it, else at
+    ///   the bottom, and report the thread so shells open it at the reply.
+    /// - Missing, or an event-focused build that fails: present the live
+    ///   bottom and report why instead of failing the open.
+    async fn open_focused(
+        &mut self,
+        client: &Client,
+        room: &Room,
+        room_id: &str,
+        event_id: &OwnedEventId,
+        resolved_route: Option<NativeTimelineEventRoute>,
+    ) -> Result<
+        (
+            Arc<Timeline>,
+            TimelineViewPosition,
+            TimelinePaginationState,
+            NativeTimelineEventRoute,
+        ),
+        &'static str,
+    > {
+        let route = match resolved_route {
+            Some(route) => route,
+            None => resolve_event_route(room, event_id).await,
+        };
+        self.open(client, room_id).await?;
+        let live_ids = self.live_window_event_ids(room_id).await;
+        match plan_focused_open(event_id.as_str(), route, &live_ids) {
+            FocusedOpenPlan::Live {
+                anchor_event_id,
+                route,
+            } => {
+                let (timeline, pagination) = self.live_provider(room_id)?;
+                let position = match anchor_event_id {
+                    Some(target_event_id) => TimelineViewPosition::Focused { target_event_id },
+                    None => TimelineViewPosition::LiveBottom,
+                };
+                return Ok((timeline, position, pagination, route));
+            }
+            FocusedOpenPlan::EventFocused => {}
+        }
+        let key = (room_id.to_owned(), event_id.to_string());
+        if !self.focused_entries.contains_key(&key) {
+            let Ok(timeline) = TimelineBuilder::new(room)
+                .with_focus(TimelineFocus::Event {
+                    target: event_id.clone(),
+                    num_context_events: FOCUSED_CONTEXT_EVENT_COUNT,
+                    thread_mode: permalink_event_thread_mode(),
+                })
+                .build()
+                .await
+            else {
+                // `/context` failed. Keep the room usable at its live bottom
+                // rather than failing the whole open.
+                let (timeline, pagination) = self.live_provider(room_id)?;
+                return Ok((
+                    timeline,
+                    TimelineViewPosition::LiveBottom,
+                    pagination,
+                    NativeTimelineEventRoute::Unreachable,
+                ));
+            };
+            self.focused_entries.insert(key.clone(), Arc::new(timeline));
+        }
+        let timeline = self
+            .focused_entries
+            .get(&key)
+            .expect("focused timeline present")
+            .clone();
+        if timeline.is_threaded() {
+            // `Automatic` thread mode filtered the window to the target's
+            // thread, with no back gap when it holds the root. That is the
+            // thread, not the room: never present it as a room position.
+            self.focused_entries.remove(&key);
+            let root = threaded_focus_root(&timeline, event_id)
+                .await
+                .map(|root| root.to_string());
+            let (timeline, pagination) = self.live_provider(room_id)?;
+            let position = match root.clone().filter(|root| live_ids.contains(root)) {
+                Some(target_event_id) => TimelineViewPosition::Focused { target_event_id },
+                None => TimelineViewPosition::LiveBottom,
+            };
+            let route = match root {
+                Some(root_event_id) => NativeTimelineEventRoute::Thread { root_event_id },
+                None => NativeTimelineEventRoute::Unreachable,
+            };
+            return Ok((timeline, position, pagination, route));
+        }
+        let target_event_id = resolve_rendered_focus_target(room, &timeline, event_id).await;
+        Ok((
+            timeline,
+            TimelineViewPosition::Focused { target_event_id },
+            TimelinePaginationState {
+                backward: TimelinePageState::Available,
+                forward: TimelinePageState::Available,
+            },
+            NativeTimelineEventRoute::Room,
+        ))
+    }
+
     async fn open_focused_unread(
         &mut self,
         room: &Room,
@@ -2977,6 +3135,23 @@ impl NativeTimelineRegistry {
             .get(&key)
             .expect("unread frontier timeline present")
             .clone();
+        if timeline.is_threaded() {
+            // A read marker or restored anchor on an in-thread reply (another
+            // client wrote it). The thread-only window is not the room. The
+            // reply's room position is its thread root: place the live
+            // provider there when the live window has it, else at the bottom.
+            self.focused_entries.remove(&key);
+            let root = threaded_focus_root(&timeline, &event_id)
+                .await
+                .map(|root| root.to_string());
+            let live_ids = self.live_window_event_ids(room_id).await;
+            let (timeline, pagination) = self.live_provider(room_id)?;
+            let position = match root.filter(|root| live_ids.contains(root)) {
+                Some(anchor_event_id) => TimelineViewPosition::Unread { anchor_event_id },
+                None => TimelineViewPosition::LiveBottom,
+            };
+            return Ok((timeline, position, pagination));
+        }
         let anchor_event_id = resolve_rendered_focus_target(room, &timeline, &event_id).await;
         Ok((
             timeline,
@@ -3593,6 +3768,112 @@ fn plan_unread_open(live_event_ids: &[String], candidate: Option<&str>) -> LastR
             event_id: event_id.to_owned(),
         },
         None => LastReadOpenPlan::LiveBottom,
+    }
+}
+
+/// Bounded like the focused-anchor timestamp lookup: a routed open must not
+/// hang on a slow homeserver.
+const EVENT_ROUTE_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Resolve where a routed event lives from the event itself: the event cache,
+/// else one `/event` request. The thread relation is read from the raw event
+/// the same way the SDK's event-focused cache decides on thread mode, and it
+/// is in the clear for encrypted events too.
+async fn resolve_event_route(
+    room: &Room,
+    event_id: &matrix_sdk::ruma::EventId,
+) -> NativeTimelineEventRoute {
+    match timeout(
+        EVENT_ROUTE_TIMEOUT,
+        room.load_or_fetch_event(event_id, None),
+    )
+    .await
+    {
+        Ok(Ok(event)) => event_route_for_thread_root(
+            event_id,
+            matrix_sdk::serde_helpers::extract_thread_root(event.raw()),
+        ),
+        Ok(Err(error)) if event_fetch_is_missing(&error) => NativeTimelineEventRoute::Missing,
+        Ok(Err(_)) | Err(_) => NativeTimelineEventRoute::Unreachable,
+    }
+}
+
+fn event_route_for_thread_root(
+    event_id: &matrix_sdk::ruma::EventId,
+    thread_root: Option<OwnedEventId>,
+) -> NativeTimelineEventRoute {
+    match thread_root {
+        Some(root) if root != event_id => NativeTimelineEventRoute::Thread {
+            root_event_id: root.to_string(),
+        },
+        _ => NativeTimelineEventRoute::Room,
+    }
+}
+
+/// `/event` answers 404 for an event that does not exist or that history
+/// visibility hides, and 403 when the account may not read the room.
+fn event_fetch_is_missing(error: &matrix_sdk::Error) -> bool {
+    error
+        .as_client_api_error()
+        .is_some_and(|error| matches!(error.status_code.as_u16(), 403 | 404))
+}
+
+/// The thread root of `target` inside a thread-filtered event-focused
+/// timeline. The SDK keeps the root private, but the target's own item
+/// carries it.
+async fn threaded_focus_root(
+    timeline: &Timeline,
+    target: &matrix_sdk::ruma::EventId,
+) -> Option<OwnedEventId> {
+    timeline
+        .item_by_event_id(target)
+        .await?
+        .content()
+        .thread_root()
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum FocusedOpenPlan {
+    /// Present the live provider at `anchor_event_id`, or at its bottom.
+    Live {
+        anchor_event_id: Option<String>,
+        route: NativeTimelineEventRoute,
+    },
+    /// Room history outside the live window: build an event-focused timeline.
+    EventFocused,
+}
+
+/// Choose the provider for a `Focused` open from the target's route and the
+/// live provider's rendered window.
+fn plan_focused_open(
+    target: &str,
+    route: NativeTimelineEventRoute,
+    live_window_ids: &[String],
+) -> FocusedOpenPlan {
+    let in_live = |id: &str| live_window_ids.iter().any(|live| live == id);
+    match route {
+        // The live window holds it, so it is a room event whatever `/event`
+        // said.
+        NativeTimelineEventRoute::Room | NativeTimelineEventRoute::Unreachable
+            if in_live(target) =>
+        {
+            FocusedOpenPlan::Live {
+                anchor_event_id: Some(target.to_owned()),
+                route: NativeTimelineEventRoute::Room,
+            }
+        }
+        // An unreachable `/event` may still be served by `/context`.
+        NativeTimelineEventRoute::Room | NativeTimelineEventRoute::Unreachable => {
+            FocusedOpenPlan::EventFocused
+        }
+        NativeTimelineEventRoute::Thread { root_event_id } => FocusedOpenPlan::Live {
+            anchor_event_id: in_live(&root_event_id).then(|| root_event_id.clone()),
+            route: NativeTimelineEventRoute::Thread { root_event_id },
+        },
+        NativeTimelineEventRoute::Missing => FocusedOpenPlan::Live {
+            anchor_event_id: None,
+            route: NativeTimelineEventRoute::Missing,
+        },
     }
 }
 

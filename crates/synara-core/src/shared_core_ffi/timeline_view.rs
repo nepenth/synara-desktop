@@ -294,6 +294,47 @@ pub struct TimelineOpenDto {
     pub snapshot: TimelineSnapshotDto,
 }
 
+super::wire_enum::wire_enum! {
+    /// Where a routed event lives.
+    pub enum TimelineEventRouteKindDto {
+        Room => "room",
+        Thread => "thread",
+        Missing => "missing",
+        Unreachable => "unreachable",
+    }
+}
+
+/// Where a notification, link or search hit should open. `thread` carries
+/// the root the shell opens, scrolled to the routed reply. `missing` means
+/// the homeserver has no such event for this account (deleted or no access);
+/// `unreachable` means it could not be loaded right now.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct TimelineEventRouteDto {
+    pub kind: TimelineEventRouteKindDto,
+    pub thread_root_event_id: Option<String>,
+}
+
+pub(super) fn event_route_dto(route: NativeTimelineEventRoute) -> TimelineEventRouteDto {
+    match route {
+        NativeTimelineEventRoute::Room => TimelineEventRouteDto {
+            kind: TimelineEventRouteKindDto::Room,
+            thread_root_event_id: None,
+        },
+        NativeTimelineEventRoute::Thread { root_event_id } => TimelineEventRouteDto {
+            kind: TimelineEventRouteKindDto::Thread,
+            thread_root_event_id: Some(root_event_id),
+        },
+        NativeTimelineEventRoute::Missing => TimelineEventRouteDto {
+            kind: TimelineEventRouteKindDto::Missing,
+            thread_root_event_id: None,
+        },
+        NativeTimelineEventRoute::Unreachable => TimelineEventRouteDto {
+            kind: TimelineEventRouteKindDto::Unreachable,
+            thread_root_event_id: None,
+        },
+    }
+}
+
 /// Privacy-safe single-event item. No tokens or password.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineEventItemDto {
@@ -1218,6 +1259,39 @@ impl SharedCore {
             position: view_position_dto(readback.position),
             snapshot: timeline_snapshot_dto(readback.snapshot),
         })
+    }
+
+    /// Resolve where a routed event lives before choosing how to open it.
+    ///
+    /// Dedicated UniFFI read, not a `Core.command` envelope. It reads the
+    /// event cache or fetches the single event and never builds a timeline.
+    /// Errors stay static and never echo the room or event id.
+    pub async fn timeline_event_route(
+        &self,
+        room_id: String,
+        event_id: String,
+    ) -> Result<TimelineEventRouteDto, TimelineError> {
+        let Some(owner) = self.core.attached_timeline_owner() else {
+            return Err(timeline_failed(
+                TIMELINE_OPEN_NO_SESSION_CODE,
+                TIMELINE_NO_SESSION_DESCRIPTION,
+            ));
+        };
+        match owner.event_route(&room_id, &event_id).await {
+            Ok(route) => Ok(event_route_dto(route)),
+            Err("d0.3-timeline-invalid-room-id") => Err(timeline_failed(
+                TIMELINE_INVALID_ROOM_CODE,
+                TIMELINE_INVALID_ROOM_DESCRIPTION,
+            )),
+            Err("d0.3-timeline-room-not-found") => Err(timeline_failed(
+                "d0.3-timeline-room-not-found",
+                TIMELINE_ROOM_NOT_FOUND_DESCRIPTION,
+            )),
+            Err(_) => Err(timeline_failed(
+                TIMELINE_EVENT_ROUTE_INVALID_EVENT_CODE,
+                TIMELINE_EVENT_ROUTE_INVALID_EVENT_DESCRIPTION,
+            )),
+        }
     }
 
     pub async fn timeline_close(&self, stream_id: String) -> Result<bool, TimelineError> {
