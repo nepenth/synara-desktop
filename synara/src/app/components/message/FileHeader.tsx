@@ -29,6 +29,7 @@ export function FileDownloadButton({ filename, url }: FileDownloadButtonProps) {
       variant={hasError ? 'Critical' : 'SurfaceVariant'}
       size="300"
       radii="300"
+      aria-label={`Download ${filename}`}
     >
       {downloading ? (
         <Spinner size="100" variant={hasError ? 'Critical' : 'Secondary'} />

@@ -218,6 +218,7 @@ function DateHint({ hasChanges, handleReset }: DateHintProps) {
           fill="None"
           size="300"
           radii="300"
+          aria-label="Reset date format"
         >
           <Icon src={Icons.Cross} size="100" />
         </IconButton>
@@ -231,6 +232,7 @@ function DateHint({ hasChanges, handleReset }: DateHintProps) {
           fill="None"
           size="300"
           radii="300"
+          aria-label="Date format hints"
           aria-expanded={!!anchor}
           aria-haspopup="dialog"
         >

@@ -457,6 +457,7 @@ function SpaceTab({
                 data-id={space.roomId}
                 ref={triggerRef}
                 size={folder ? '300' : '400'}
+                aria-label={space.name}
                 onClick={onClick}
                 onContextMenu={handleContextMenu}
               >
@@ -485,7 +486,6 @@ function SpaceTab({
                 <FocusTrap
                   focusTrapOptions={{
                     initialFocus: false,
-                    returnFocusOnDeactivate: false,
                     onDeactivate: () => setMenuAnchor(undefined),
                     clickOutsideDeactivates: true,
                     isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
@@ -530,7 +530,13 @@ function OpenedSpaceFolder({ folder, onClose, children }: OpenedSpaceFolderProps
     >
       <SidebarFolderDropTarget ref={aboveTargetRef} position="Top" />
       <SidebarAvatar size="300">
-        <IconButton data-id={folder.id} size="300" variant="Background" onClick={onClose}>
+        <IconButton
+          data-id={folder.id}
+          size="300"
+          variant="Background"
+          onClick={onClose}
+          aria-label="Collapse folder"
+        >
           <Icon size="400" src={Icons.ChevronTop} filled />
         </IconButton>
       </SidebarAvatar>
@@ -577,7 +583,13 @@ function ClosedSpaceFolder({
         >
           <SidebarItemTooltip tooltip={disabled ? undefined : tooltipName}>
             {(tooltipRef) => (
-              <SidebarFolder data-id={folder.id} as="button" ref={tooltipRef} onClick={onOpen}>
+              <SidebarFolder
+                data-id={folder.id}
+                as="button"
+                ref={tooltipRef}
+                aria-label={tooltipName}
+                onClick={onOpen}
+              >
                 {folder.content.map((sId) => {
                   const space = getNativeRoom(sId);
                   if (!space) return null;

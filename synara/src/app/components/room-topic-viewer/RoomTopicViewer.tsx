@@ -1,5 +1,6 @@
 import React from 'react';
-import { as, Box, Header, Icon, IconButton, Icons, Modal, Scroll, Text } from 'folds';
+import { as, Box, Header, Icon, IconButton, Icons, Scroll, Text } from 'folds';
+import { Modal } from '../modal-dialog';
 import classNames from 'classnames';
 import Linkify from 'linkify-react';
 import * as css from './style.css';
@@ -26,7 +27,7 @@ export const RoomTopicViewer = as<
           {name}
         </Text>
       </Box>
-      <IconButton size="300" onClick={requestClose} radii="300">
+      <IconButton size="300" onClick={requestClose} radii="300" aria-label="Close">
         <Icon src={Icons.Cross} />
       </IconButton>
     </Header>

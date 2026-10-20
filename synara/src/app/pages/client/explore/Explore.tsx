@@ -5,7 +5,6 @@ import {
   Avatar,
   Box,
   Button,
-  Dialog,
   Header,
   Icon,
   IconButton,
@@ -17,6 +16,7 @@ import {
   Text,
   config,
 } from 'folds';
+import { Dialog } from '../../../components/modal-dialog';
 import {
   NavCategory,
   NavCategoryHeader,

@@ -314,7 +314,7 @@ function PageZoomInput() {
     ) {
       const newZoom = parseInt(evt.target.value, 10);
       if (Number.isNaN(newZoom)) return;
-      const safeZoom = Math.max(Math.min(newZoom, 150), 75);
+      const safeZoom = Math.max(Math.min(newZoom, 200), 75);
       setPageZoom(safeZoom);
       setCurrentZoom(safeZoom.toString());
     }
@@ -327,8 +327,9 @@ function PageZoomInput() {
       size="300"
       radii="300"
       type="number"
+      aria-label="Page zoom percentage"
       min="75"
-      max="150"
+      max="200"
       value={currentZoom}
       onChange={handleZoomChange}
       onKeyDown={handleZoomEnter}
@@ -636,7 +637,7 @@ function TextAndZoom() {
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
           title="Page Zoom"
-          description="Scale the whole interface, from 75% to 150%. Press Enter to apply."
+          description="Scale the whole interface, from 75% to 200%. Press Enter to apply."
           after={<PageZoomInput />}
         />
       </SequenceCard>

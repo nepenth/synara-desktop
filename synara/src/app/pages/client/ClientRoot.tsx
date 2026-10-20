@@ -112,6 +112,7 @@ function ClientRootOptions({
       variant="Background"
       fill="None"
       onClick={handleToggle}
+      aria-label="More options"
     >
       <Icon size="200" src={Icons.VerticalDots} />
       <PopOut
@@ -123,7 +124,6 @@ function ClientRootOptions({
           <FocusTrap
             focusTrapOptions={{
               initialFocus: false,
-              returnFocusOnDeactivate: false,
               onDeactivate: () => setMenuAnchor(undefined),
               clickOutsideDeactivates: true,
               isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',

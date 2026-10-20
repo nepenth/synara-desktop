@@ -1,7 +1,6 @@
 import React, { MouseEventHandler, useCallback, useMemo, useState } from 'react';
 import FocusTrap from '../../../components/FocusTrap';
 import {
-  Dialog,
   Overlay,
   OverlayCenter,
   OverlayBackdrop,
@@ -19,6 +18,7 @@ import {
   PopOut,
   RectCords,
 } from 'folds';
+import { Dialog } from '../../../components/modal-dialog';
 import type { MatrixError } from '../../../utils/matrix';
 import { timestampToEventWithNativeOwner } from '../nativeTimelineTimestampToEvent';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
@@ -107,7 +107,7 @@ export function JumpToTime({ onCancel, onSubmit }: JumpToTimeProps) {
               <Box grow="Yes">
                 <Text size="H4">Jump to Time</Text>
               </Box>
-              <IconButton size="300" onClick={onCancel} radii="300">
+              <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
                 <Icon src={Icons.Cross} />
               </IconButton>
             </Header>

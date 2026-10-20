@@ -49,7 +49,6 @@ export function CreateTab() {
             content={
               <FocusTrap
                 focusTrapOptions={{
-                  returnFocusOnDeactivate: false,
                   initialFocus: false,
                   onDeactivate: () => setMenuCords(undefined),
                   clickOutsideDeactivates: true,
@@ -106,6 +105,7 @@ export function CreateTab() {
               as="button"
               ref={triggerRef}
               outlined
+              aria-label="Add Space"
               onClick={handleMenu}
             >
               <Icon src={Icons.Plus} />

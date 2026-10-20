@@ -373,7 +373,7 @@ export function PowersEditor({ powerLevels, requestClose }: PowersEditorProps) {
             </Chip>
           </Box>
           <Box shrink="No">
-            <IconButton onClick={requestClose} variant="Surface">
+            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
               <Icon src={Icons.Cross} />
             </IconButton>
           </Box>
@@ -492,6 +492,7 @@ export function PowersEditor({ powerLevels, requestClose }: PowersEditorProps) {
                                           fill="None"
                                           radii="Pill"
                                           disabled={applyingChanges}
+                                          aria-label={`Delete ${tag.name}`}
                                           aria-disabled={usedPowers.has(power)}
                                           onClick={
                                             usedPowers.has(power)

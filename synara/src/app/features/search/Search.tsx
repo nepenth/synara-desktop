@@ -8,13 +8,13 @@ import {
   Input,
   Line,
   MenuItem,
-  Modal,
   Overlay,
   OverlayCenter,
   Scroll,
   Text,
   toRem,
 } from 'folds';
+import { Modal } from '../../components/modal-dialog';
 import { getSafeMyUserId } from '../../state/nativeIdentity';
 import React, {
   ChangeEventHandler,
@@ -22,6 +22,7 @@ import React, {
   MouseEventHandler,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -162,6 +163,11 @@ export function Search({ requestClose }: SearchProps) {
   const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listboxId = useId();
+  const optionId = (index: number) => `${listboxId}-option-${index}`;
+  // Escape returns focus to where Cmd+K was pressed; opening a room or running
+  // an action moves on, so focus is not pulled back to the old place.
+  const choseResultRef = useRef(false);
   const { navigateRoom, navigateSpace } = useRoomNavigate();
   const roomToUnread = useAtomValue(roomToUnreadAtom);
 
@@ -298,6 +304,7 @@ export function Search({ requestClose }: SearchProps) {
   }
 
   const openRoomId = (roomId: string, isSpace: boolean) => {
+    choseResultRef.current = true;
     if (isSpace) navigateSpace(roomId);
     else navigateRoom(roomId);
     requestClose();
@@ -336,6 +343,7 @@ export function Search({ requestClose }: SearchProps) {
   const handleInputKeyDown: KeyboardEventHandler<HTMLInputElement> = (evt) => {
     const action = actionResults[listFocus.index];
     if (actionMode && isKeyHotkey('enter', evt) && action) {
+      choseResultRef.current = true;
       action.run();
       requestClose();
       return;
@@ -381,7 +389,7 @@ export function Search({ requestClose }: SearchProps) {
         <FocusTrap
           focusTrapOptions={{
             initialFocus: () => inputRef.current,
-            returnFocusOnDeactivate: false,
+            setReturnFocus: (previous) => (choseResultRef.current ? false : previous),
             allowOutsideClick: true,
             clickOutsideDeactivates: true,
             onDeactivate: requestClose,
@@ -391,7 +399,11 @@ export function Search({ requestClose }: SearchProps) {
             },
           }}
         >
-          <Modal size="400" style={{ maxHeight: toRem(400), borderRadius: config.radii.R500 }}>
+          <Modal
+            size="400"
+            style={{ maxHeight: toRem(400), borderRadius: config.radii.R500 }}
+            aria-label="Search"
+          >
             <Box
               shrink="No"
               style={{ padding: config.space.S400, paddingBottom: 0 }}
@@ -404,6 +416,12 @@ export function Search({ requestClose }: SearchProps) {
                 radii="400"
                 outlined
                 placeholder="Search"
+                aria-label="Search rooms, people, spaces and actions"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={itemCount > 0}
+                aria-controls={listboxId}
+                aria-activedescendant={itemCount > 0 ? optionId(listFocus.index) : undefined}
                 before={<Icon size="200" src={Icons.Search} />}
                 onChange={handleInputChange}
                 onKeyDown={handleInputKeyDown}
@@ -429,7 +447,12 @@ export function Search({ requestClose }: SearchProps) {
               )}
               {itemCount > 0 && (
                 <Scroll ref={scrollRef} size="300" hideTrack>
-                  <div style={{ padding: config.space.S400, paddingRight: config.space.S200 }}>
+                  <div
+                    id={listboxId}
+                    role="listbox"
+                    aria-label="Results"
+                    style={{ padding: config.space.S400, paddingRight: config.space.S200 }}
+                  >
                     {actionMode &&
                       actionResults.map((action, index) => (
                         <MenuItem
@@ -437,11 +460,15 @@ export function Search({ requestClose }: SearchProps) {
                           as="button"
                           data-focus-index={index}
                           onClick={() => {
+                            choseResultRef.current = true;
                             action.run();
                             requestClose();
                           }}
                           variant={listFocus.index === index ? 'Primary' : 'Surface'}
-                          aria-pressed={listFocus.index === index}
+                          id={optionId(index)}
+                          role="option"
+                          tabIndex={-1}
+                          aria-selected={listFocus.index === index}
                           radii="400"
                           before={<Icon size="200" src={action.icon} />}
                         >
@@ -486,7 +513,10 @@ export function Search({ requestClose }: SearchProps) {
                             data-space={room.isSpaceRoom()}
                             onClick={handleRoomClick}
                             variant={listFocus.index === index ? 'Primary' : 'Surface'}
-                            aria-pressed={listFocus.index === index}
+                            id={optionId(index)}
+                            role="option"
+                            tabIndex={-1}
+                            aria-selected={listFocus.index === index}
                             radii="400"
                             after={
                               <Box gap="100">

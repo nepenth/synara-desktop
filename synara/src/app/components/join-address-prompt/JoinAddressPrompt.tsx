@@ -1,7 +1,6 @@
 import React, { FormEventHandler, useState } from 'react';
 import FocusTrap from '../FocusTrap';
 import {
-  Dialog,
   Overlay,
   OverlayCenter,
   OverlayBackdrop,
@@ -16,6 +15,7 @@ import {
   Input,
   color,
 } from 'folds';
+import { Dialog } from '../modal-dialog';
 import { stopPropagation } from '../../utils/keyboard';
 import { isRoomAlias, isRoomId } from '../../utils/matrix';
 import { parseMatrixToRoom, parseMatrixToRoomEvent, testMatrixTo } from '../../plugins/matrix-to';
@@ -82,7 +82,7 @@ export function JoinAddressPrompt({ onOpen, onCancel }: JoinAddressProps) {
               <Box grow="Yes">
                 <Text size="H4">Join with Address</Text>
               </Box>
-              <IconButton size="300" onClick={onCancel} radii="300">
+              <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
                 <Icon src={Icons.Cross} />
               </IconButton>
             </Header>

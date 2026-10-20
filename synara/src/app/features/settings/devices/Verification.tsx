@@ -5,7 +5,6 @@ import {
   Button,
   color,
   config,
-  Dialog,
   Header,
   Icon,
   Icons,
@@ -16,6 +15,7 @@ import {
   OverlayCenter,
   IconButton,
 } from 'folds';
+import { Dialog } from '../../../components/modal-dialog';
 import FocusTrap from '../../../components/FocusTrap';
 import { VerificationStatus } from './nativeDevices';
 import { InfoCard } from '../../../components/info-card';
@@ -253,7 +253,7 @@ function NativeCrossSigningSetup({ onCancel }: { onCancel: () => void }) {
         <Box grow="Yes">
           <Text size="H4">Setup Device Verification</Text>
         </Box>
-        <IconButton size="300" radii="300" onClick={onCancel} disabled={working}>
+        <IconButton size="300" radii="300" onClick={onCancel} disabled={working} aria-label="Close">
           <Icon src={Icons.Cross} />
         </IconButton>
       </Header>

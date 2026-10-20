@@ -104,6 +104,7 @@ function MemberDrawerHeader({ joinedMemberCount }: MemberDrawerHeaderProps) {
                 className={depthCss.quietInteractiveSurface}
                 variant="Background"
                 onClick={() => setPeopleDrawer(false)}
+                aria-label="Close"
               >
                 <Icon src={Icons.Cross} />
               </IconButton>

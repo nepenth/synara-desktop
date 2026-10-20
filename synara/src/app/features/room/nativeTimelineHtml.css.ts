@@ -233,7 +233,8 @@ export const SpoilerButton = style({
   border: `1px solid var(--synara-rich-text-spoiler-border)`,
   borderRadius: config.radii.R300,
   background: 'var(--synara-rich-text-spoiler-background)',
-  color: 'var(--synara-content-secondary)',
+  // Primary, not secondary: secondary was 3.8:1 on the spoiler fill.
+  color: 'var(--synara-content-primary)',
   font: 'inherit',
   lineHeight: 'inherit',
   cursor: 'pointer',
@@ -781,6 +782,13 @@ export const UnfurlLink = style({
   flex: 1,
   color: 'inherit',
   textDecoration: 'none',
+});
+
+// Links in plain bodies are underlined like formatted ones: colour alone is
+// 1.75:1 against dark body text. Unfurl cards are whole-card links.
+globalStyle(`${MessageBody} a:not(.${UnfurlLink})`, {
+  textDecoration: 'underline',
+  textUnderlineOffset: toRem(2),
 });
 
 export const UnfurlThumb = style({

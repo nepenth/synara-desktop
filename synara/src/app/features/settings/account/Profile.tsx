@@ -18,12 +18,11 @@ import {
   Overlay,
   OverlayBackdrop,
   OverlayCenter,
-  Modal,
-  Dialog,
   Header,
   config,
   Spinner,
 } from 'folds';
+import { Modal, Dialog } from '../../../components/modal-dialog';
 import FocusTrap from '../../../components/FocusTrap';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
@@ -288,6 +287,7 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
                   size="300"
                   onClick={() => setAlertRemove(false)}
                   radii="300"
+                  aria-label="Close"
                 >
                   <Icon src={Icons.Cross} />
                 </IconButton>
@@ -397,6 +397,7 @@ function ProfileDisplayName({ profile, userId }: ProfileProps) {
                     radii="300"
                     variant="Secondary"
                     fill="None"
+                    aria-label="Reset display name"
                   >
                     <Icon src={Icons.Cross} size="100" />
                   </IconButton>

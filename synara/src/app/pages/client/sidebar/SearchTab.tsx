@@ -13,7 +13,7 @@ export function SearchTab() {
     <SidebarItem active={opened}>
       <SidebarItemTooltip tooltip="Search">
         {(triggerRef) => (
-          <SidebarAvatar as="button" ref={triggerRef} outlined onClick={open}>
+          <SidebarAvatar as="button" ref={triggerRef} outlined aria-label="Search" onClick={open}>
             <Icon src={Icons.Search} filled={opened} />
           </SidebarAvatar>
         )}

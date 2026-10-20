@@ -46,3 +46,27 @@ export const stopPropagation = (evt: KeyboardEvent): boolean => {
   evt.stopPropagation();
   return true;
 };
+
+/**
+ * The index a list key moves to: ArrowDown/ArrowUp step (stopping at the ends),
+ * Home/End jump. Undefined for other keys or an empty list.
+ */
+export const listNavigationIndex = (
+  key: string,
+  current: number,
+  count: number
+): number | undefined => {
+  if (count === 0) return undefined;
+  switch (key) {
+    case 'ArrowDown':
+      return Math.min(current + 1, count - 1);
+    case 'ArrowUp':
+      return Math.max(current - 1, 0);
+    case 'Home':
+      return 0;
+    case 'End':
+      return count - 1;
+    default:
+      return undefined;
+  }
+};

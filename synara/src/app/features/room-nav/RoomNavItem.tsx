@@ -1,4 +1,10 @@
-import React, { MouseEventHandler, forwardRef, useState } from 'react';
+import React, {
+  KeyboardEventHandler,
+  MouseEventHandler,
+  forwardRef,
+  useRef,
+  useState,
+} from 'react';
 import {
   Box,
   Icon,
@@ -16,7 +22,7 @@ import {
   Spinner,
 } from 'folds';
 import { useFocusWithin, useHover } from 'react-aria';
-import FocusTrap from '../../components/FocusTrap';
+import FocusTrap, { returnFocusOrFallback } from '../../components/FocusTrap';
 import { NavItem, NavItemContent, NavItemOptions, NavLink } from '../../components/nav';
 import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
@@ -28,7 +34,7 @@ import { UseStateProvider } from '../../components/UseStateProvider';
 import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
 import { useRoomTypingMember } from '../../hooks/useRoomTypingMembers';
 import { TypingIndicator } from '../../components/typing-indicator';
-import { stopPropagation } from '../../utils/keyboard';
+import { listNavigationIndex, stopPropagation } from '../../utils/keyboard';
 import type { EventedRoomReading } from '../../utils/roomEvents';
 import { getMatrixToRoom } from '../../plugins/matrix-to';
 import { getCanonicalAliasOrRoomId, isRoomAlias } from '../../utils/matrix';
@@ -314,6 +320,10 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
   const { hoverProps } = useHover({ onHoverChange: setHover });
   const { focusWithinProps } = useFocusWithin({ onFocusWithinChange: setHover });
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
+  // The options button is hover-revealed: focus inside the menu portal clears
+  // the row's focus-within, so it must stay mounted while focus returns to it.
+  const [returningFocus, setReturningFocus] = useState(false);
+  const linkRef = useRef<HTMLAnchorElement>(null);
   const nativeRooms = useNativeRoomListSnapshot();
   const nativeRoom = nativeRooms.rooms.find((summary) => summary.roomId === room.roomId);
   const unread = unreadFromPresentation(nativeRooms.presentation, room.roomId);
@@ -341,11 +351,22 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
     });
   };
 
+  // Arrow keys, Home and End move between rooms; Tab still leaves the list.
+  // Rows render in a virtual list, so only the rows on screen are reachable.
+  const handleLinkKeyDown: KeyboardEventHandler<HTMLAnchorElement> = (evt) => {
+    if (evt.altKey || evt.ctrlKey || evt.metaKey || evt.shiftKey) return;
+    const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[data-room-nav-link]'));
+    const next = listNavigationIndex(evt.key, links.indexOf(evt.currentTarget), links.length);
+    if (next === undefined) return;
+    evt.preventDefault();
+    links[next]?.focus();
+  };
+
   const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
     setMenuAnchor(evt.currentTarget.getBoundingClientRect());
   };
 
-  const optionsVisible = hover || !!menuAnchor;
+  const optionsVisible = hover || !!menuAnchor || returningFocus;
 
   return (
     <NavItem
@@ -359,7 +380,13 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
       {...hoverProps}
       {...focusWithinProps}
     >
-      <NavLink to={linkPath}>
+      <NavLink
+        to={linkPath}
+        ref={linkRef}
+        data-room-nav-link
+        aria-current={selected ? 'page' : undefined}
+        onKeyDown={handleLinkKeyDown}
+      >
         <NavItemContent>
           <Box as="span" grow="Yes" alignItems="Center" gap="200">
             <Text as="span" className={css.RoomGlyph} aria-hidden="true">
@@ -367,10 +394,9 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
             </Text>
             <Box as="span" grow="Yes" direction="Column">
               <Text
-                priority={unread ? '500' : '300'}
                 as="span"
                 size="Inherit"
-                className={css.RoomName}
+                className={unread ? css.RoomName : `${css.RoomName} ${css.RoomNameRead}`}
                 truncate
               >
                 {roomName}
@@ -414,8 +440,13 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
               <FocusTrap
                 focusTrapOptions={{
                   initialFocus: false,
-                  returnFocusOnDeactivate: false,
-                  onDeactivate: () => setMenuAnchor(undefined),
+                  // Keep the trigger mounted until focus is back on it (or the row).
+                  setReturnFocus: returnFocusOrFallback(() => linkRef.current),
+                  onDeactivate: () => {
+                    setReturningFocus(true);
+                    setMenuAnchor(undefined);
+                  },
+                  onPostDeactivate: () => setReturningFocus(false),
                   clickOutsideDeactivates: true,
                   isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
                   isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
@@ -433,7 +464,7 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
             <IconButton
               className={depthCss.quietInteractiveSurface}
               onClick={handleOpenMenu}
-              aria-pressed={!!menuAnchor}
+              aria-expanded={!!menuAnchor}
               aria-controls={`menu-${room.roomId}`}
               aria-label="More Options"
               variant="Background"

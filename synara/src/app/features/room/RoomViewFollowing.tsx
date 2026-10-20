@@ -1,16 +1,6 @@
 import React, { useState } from 'react';
-import {
-  Box,
-  Icon,
-  Icons,
-  Modal,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
-  Text,
-  as,
-  config,
-} from 'folds';
+import { Box, Icon, Icons, Overlay, OverlayBackdrop, OverlayCenter, Text, as, config } from 'folds';
+import { Modal } from '../../components/modal-dialog';
 import classNames from 'classnames';
 import FocusTrap from '../../components/FocusTrap';
 

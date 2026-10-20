@@ -4,7 +4,6 @@ import {
   Button,
   color,
   config,
-  Dialog,
   Header,
   Icon,
   IconButton,
@@ -15,6 +14,7 @@ import {
   Spinner,
   Text,
 } from 'folds';
+import { Dialog } from '../../components/modal-dialog';
 import FocusTrap from '../../components/FocusTrap';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import { NATIVE_CROSS_SIGNING_CHANGED } from '../cross-signing/nativeCrossSigning';

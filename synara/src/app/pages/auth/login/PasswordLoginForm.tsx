@@ -1,8 +1,14 @@
-import React, { FormEventHandler, MouseEventHandler, useCallback, useId, useState } from 'react';
+import React, {
+  FormEventHandler,
+  MouseEventHandler,
+  useCallback,
+  useId,
+  useRef,
+  useState,
+} from 'react';
 import {
   Box,
   Button,
-  Dialog,
   Header,
   Icon,
   IconButton,
@@ -18,6 +24,7 @@ import {
   Text,
   config,
 } from 'folds';
+import { Dialog } from '../../../components/modal-dialog';
 import FocusTrap from '../../../components/FocusTrap';
 import { Link } from 'react-router-dom';
 import { getMxIdLocalPart, getMxIdServer, isUserId } from '../../../utils/matrix';
@@ -106,6 +113,7 @@ function UsernameHint({ server }: { server: string }) {
         variant="Background"
         size="300"
         radii="300"
+        aria-label="Username hint"
         aria-pressed={!!anchor}
       >
         <Icon style={{ opacity: config.opacity.P300 }} size="100" src={Icons.Info} />
@@ -144,6 +152,10 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
   const [storeRecoveryBusy, setStoreRecoveryBusy] = useState(false);
   const [storeRecoveryDiagnostic, setStoreRecoveryDiagnostic] = useState<string>();
   const [storeRecoveryCompleted, setStoreRecoveryCompleted] = useState(false);
+  const storeRecoveryBusyRef = useRef(false);
+  storeRecoveryBusyRef.current = storeRecoveryBusy;
+  const storeRecoveryTitleId = useId();
+  const storeRecoveryDescriptionId = useId();
 
   const openStoreRecovery = () => {
     // Opening this UI has no native side effect. The only archive request is
@@ -366,71 +378,95 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
 
       <Overlay open={storeRecoveryOpen} backdrop={<OverlayBackdrop />}>
         <OverlayCenter>
-          <Dialog variant="Surface">
-            <Box style={{ padding: config.space.S400, maxWidth: 520 }} direction="Column" gap="400">
-              <Text size="H4">Archive and Rebuild Local Store?</Text>
-              <Text size="T300" priority="400">
-                Synara will archive this account&apos;s local state, crypto, cache, and media before
-                rebuilding an empty local layout. It does not delete the archive, change any
-                Keychain store key, send your password, or start another login automatically.
-              </Text>
-              <Text size="T300" priority="400">
-                If the original Keychain store key is missing or corrupt, recovery remains blocked;
-                this action does not replace it.
-              </Text>
-              <Box direction="Column" gap="100">
-                <Text as="label" size="L400" priority="300">
-                  Type {STORE_RECOVERY_CONFIRMATION_TEXT} to enable this action
+          <FocusTrap
+            focusTrapOptions={{
+              initialFocus: false,
+              onDeactivate: closeStoreRecovery,
+              // Escape cancels, even from the confirmation field, unless recovery is running.
+              escapeDeactivates: (evt) => {
+                if (storeRecoveryBusyRef.current) return false;
+                evt.stopPropagation();
+                return true;
+              },
+            }}
+          >
+            <Dialog
+              variant="Surface"
+              role="alertdialog"
+              aria-labelledby={storeRecoveryTitleId}
+              aria-describedby={storeRecoveryDescriptionId}
+            >
+              <Box
+                style={{ padding: config.space.S400, maxWidth: 520 }}
+                direction="Column"
+                gap="400"
+              >
+                <Text size="H4" id={storeRecoveryTitleId}>
+                  Archive and Rebuild Local Store?
                 </Text>
-                <Input
-                  aria-label="Confirm archive and rebuild local Matrix store"
-                  value={storeRecoveryConfirmation}
-                  onChange={(evt) => setStoreRecoveryConfirmation(evt.currentTarget.value)}
-                  variant="Background"
-                  size="500"
-                  outlined
-                  disabled={storeRecoveryBusy}
-                />
+                <Text size="T300" priority="400" id={storeRecoveryDescriptionId}>
+                  Synara will archive this account&apos;s local state, crypto, cache, and media
+                  before rebuilding an empty local layout. It does not delete the archive, change
+                  any Keychain store key, send your password, or start another login automatically.
+                </Text>
+                <Text size="T300" priority="400">
+                  If the original Keychain store key is missing or corrupt, recovery remains
+                  blocked; this action does not replace it.
+                </Text>
+                <Box direction="Column" gap="100">
+                  <Text as="label" size="L400" priority="300">
+                    Type {STORE_RECOVERY_CONFIRMATION_TEXT} to enable this action
+                  </Text>
+                  <Input
+                    aria-label="Confirm archive and rebuild local Matrix store"
+                    value={storeRecoveryConfirmation}
+                    onChange={(evt) => setStoreRecoveryConfirmation(evt.currentTarget.value)}
+                    variant="Background"
+                    size="500"
+                    outlined
+                    disabled={storeRecoveryBusy}
+                  />
+                </Box>
+                {storeRecoveryDiagnostic && (
+                  <>
+                    <FieldError message="Local store recovery could not be completed." />
+                    <Text as="span" size="T200" priority="400">
+                      Diagnostic code: {storeRecoveryDiagnostic}
+                    </Text>
+                  </>
+                )}
+                <Box direction="Column" gap="200">
+                  <Button
+                    type="button"
+                    variant="Critical"
+                    onClick={() => void confirmStoreRecovery()}
+                    disabled={
+                      storeRecoveryBusy ||
+                      storeRecoveryConfirmation !== STORE_RECOVERY_CONFIRMATION_TEXT
+                    }
+                    before={
+                      storeRecoveryBusy && <Spinner variant="Critical" fill="Solid" size="200" />
+                    }
+                  >
+                    <Text as="span" size="B400">
+                      Archive and Rebuild
+                    </Text>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="Secondary"
+                    fill="Soft"
+                    onClick={closeStoreRecovery}
+                    disabled={storeRecoveryBusy}
+                  >
+                    <Text as="span" size="B400">
+                      Cancel
+                    </Text>
+                  </Button>
+                </Box>
               </Box>
-              {storeRecoveryDiagnostic && (
-                <>
-                  <FieldError message="Local store recovery could not be completed." />
-                  <Text as="span" size="T200" priority="400">
-                    Diagnostic code: {storeRecoveryDiagnostic}
-                  </Text>
-                </>
-              )}
-              <Box direction="Column" gap="200">
-                <Button
-                  type="button"
-                  variant="Critical"
-                  onClick={() => void confirmStoreRecovery()}
-                  disabled={
-                    storeRecoveryBusy ||
-                    storeRecoveryConfirmation !== STORE_RECOVERY_CONFIRMATION_TEXT
-                  }
-                  before={
-                    storeRecoveryBusy && <Spinner variant="Critical" fill="Solid" size="200" />
-                  }
-                >
-                  <Text as="span" size="B400">
-                    Archive and Rebuild
-                  </Text>
-                </Button>
-                <Button
-                  type="button"
-                  variant="Secondary"
-                  fill="Soft"
-                  onClick={closeStoreRecovery}
-                  disabled={storeRecoveryBusy}
-                >
-                  <Text as="span" size="B400">
-                    Cancel
-                  </Text>
-                </Button>
-              </Box>
-            </Box>
-          </Dialog>
+            </Dialog>
+          </FocusTrap>
         </OverlayCenter>
       </Overlay>
 

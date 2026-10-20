@@ -164,7 +164,7 @@ export function LobbyHeader({ showProfile, powerLevels }: LobbyHeaderProps) {
             <Box shrink="No">
               <BackRouteHandler>
                 {(onBack) => (
-                  <IconButton fill="None" onClick={onBack}>
+                  <IconButton fill="None" onClick={onBack} aria-label="Back">
                     <Icon src={Icons.ArrowLeft} />
                   </IconButton>
                 )}
@@ -221,6 +221,7 @@ export function LobbyHeader({ showProfile, powerLevels }: LobbyHeaderProps) {
                   fill="None"
                   ref={triggerRef}
                   onClick={() => setPeopleDrawer((drawer) => !drawer)}
+                  aria-label="Members"
                 >
                   <Icon size="400" src={Icons.User} />
                 </IconButton>
@@ -257,7 +258,6 @@ export function LobbyHeader({ showProfile, powerLevels }: LobbyHeaderProps) {
               <FocusTrap
                 focusTrapOptions={{
                   initialFocus: false,
-                  returnFocusOnDeactivate: false,
                   onDeactivate: () => setMenuAnchor(undefined),
                   clickOutsideDeactivates: true,
                   isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',

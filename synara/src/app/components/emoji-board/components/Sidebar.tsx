@@ -69,7 +69,7 @@ function SidebarBtn<T extends string>({
       {(ref) => (
         <IconButton
           aria-pressed={active}
-          aria-labelledby={`SidebarStackItem-${id}-label`}
+          aria-label={label}
           ref={ref}
           onClick={() => onClick(id)}
           size="400"

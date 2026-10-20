@@ -6,7 +6,6 @@ import {
   Chip,
   Icon,
   Icons,
-  Modal,
   Overlay,
   OverlayBackdrop,
   OverlayCenter,
@@ -16,6 +15,7 @@ import {
   TooltipProvider,
   as,
 } from 'folds';
+import { Modal } from '../../modal-dialog';
 import classNames from 'classnames';
 import { BlurhashCanvas } from 'react-blurhash';
 import FocusTrap from '../../FocusTrap';

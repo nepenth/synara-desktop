@@ -138,6 +138,7 @@ export function ServerPicker({
               onClick={handleOpenServerMenu}
               variant={allowCustomServer ? 'Background' : 'Surface'}
               size="300"
+              aria-label="Homeserver list"
               aria-pressed={!!serverMenuAnchor}
               radii="300"
             >

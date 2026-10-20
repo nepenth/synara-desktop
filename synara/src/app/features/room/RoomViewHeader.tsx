@@ -489,6 +489,7 @@ export function RoomViewHeader({
                   className={depthCss.quietInteractiveSurface}
                   fill="None"
                   onClick={onBack}
+                  aria-label="Back"
                 >
                   <Icon src={Icons.ArrowLeft} />
                 </IconButton>
@@ -576,7 +577,6 @@ export function RoomViewHeader({
               <FocusTrap
                 focusTrapOptions={{
                   initialFocus: false,
-                  returnFocusOnDeactivate: false,
                   onDeactivate: () => setCallMenuAnchor(undefined),
                   clickOutsideDeactivates: true,
                   isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
@@ -604,6 +604,7 @@ export function RoomViewHeader({
                   fill="None"
                   ref={triggerRef}
                   onClick={() => onToggleSidePanel('widgets')}
+                  aria-label="Widgets"
                   aria-pressed={widgetsOpen}
                 >
                   <Icon size="400" src={Icons.Code} filled={widgetsOpen} />
@@ -626,6 +627,7 @@ export function RoomViewHeader({
                 fill="None"
                 ref={triggerRef}
                 onClick={handleSearchClick}
+                aria-label="Search"
               >
                 <Icon size="400" src={Icons.Search} />
               </IconButton>
@@ -659,7 +661,6 @@ export function RoomViewHeader({
                 <FocusTrap
                   focusTrapOptions={{
                     initialFocus: false,
-                    returnFocusOnDeactivate: false,
                     onDeactivate: () => setThreadsOverlayOpen(false),
                     clickOutsideDeactivates: true,
                     escapeDeactivates: stopPropagation,
@@ -686,6 +687,7 @@ export function RoomViewHeader({
                 style={{ position: 'relative' }}
                 onClick={handleOpenPinMenu}
                 ref={triggerRef}
+                aria-label={pinnedCount > 0 ? `Pinned Messages, ${pinnedCount}` : 'Pinned Messages'}
                 aria-pressed={pinsOpen}
               >
                 {pinnedCount > 0 && (
@@ -717,7 +719,6 @@ export function RoomViewHeader({
                 <FocusTrap
                   focusTrapOptions={{
                     initialFocus: false,
-                    returnFocusOnDeactivate: false,
                     onDeactivate: () => setPinMenuAnchor(undefined),
                     clickOutsideDeactivates: true,
                     isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
@@ -750,6 +751,7 @@ export function RoomViewHeader({
                 style={{ position: 'relative' }}
                 ref={triggerRef}
                 onClick={handleOpenNotes}
+                aria-label="Personal Notes"
                 aria-pressed={notesOpen}
               >
                 {notesSummary.total > 0 && (
@@ -779,7 +781,6 @@ export function RoomViewHeader({
                 <FocusTrap
                   focusTrapOptions={{
                     initialFocus: false,
-                    returnFocusOnDeactivate: false,
                     onDeactivate: () => setNotesOverlayOpen(false),
                     clickOutsideDeactivates: true,
                     escapeDeactivates: stopPropagation,
@@ -852,7 +853,6 @@ export function RoomViewHeader({
               <FocusTrap
                 focusTrapOptions={{
                   initialFocus: false,
-                  returnFocusOnDeactivate: false,
                   onDeactivate: () => setMenuAnchor(undefined),
                   clickOutsideDeactivates: true,
                   isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',

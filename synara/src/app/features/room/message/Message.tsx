@@ -2,7 +2,6 @@ import {
   Avatar,
   Box,
   Button,
-  Dialog,
   Header,
   Icon,
   IconButton,
@@ -11,7 +10,6 @@ import {
   Line,
   Menu,
   MenuItem,
-  Modal,
   Overlay,
   OverlayBackdrop,
   OverlayCenter,
@@ -23,6 +21,7 @@ import {
   color,
   config,
 } from 'folds';
+import { Modal, Dialog } from '../../../components/modal-dialog';
 import React, {
   FormEventHandler,
   MouseEventHandler,
@@ -201,7 +200,6 @@ export const MessageAllReactionItem = as<
           <FocusTrap
             focusTrapOptions={{
               initialFocus: false,
-              returnFocusOnDeactivate: false,
               onDeactivate: () => handleClose(),
               clickOutsideDeactivates: true,
               escapeDeactivates: stopPropagation,
@@ -509,7 +507,7 @@ export const MessageCustomReminderItem = as<
                 <Box grow="Yes">
                   <Text size="H4">Custom Reminder</Text>
                 </Box>
-                <IconButton size="300" onClick={handleClose} radii="300">
+                <IconButton size="300" onClick={handleClose} radii="300" aria-label="Close">
                   <Icon src={Icons.Cross} />
                 </IconButton>
               </Header>
@@ -660,7 +658,7 @@ export const MessageDeleteItem = as<
                 <Box grow="Yes">
                   <Text size="H4">Delete Message</Text>
                 </Box>
-                <IconButton size="300" onClick={handleClose} radii="300">
+                <IconButton size="300" onClick={handleClose} radii="300" aria-label="Close">
                   <Icon src={Icons.Cross} />
                 </IconButton>
               </Header>
@@ -794,7 +792,7 @@ export const MessageReportItem = as<
                 <Box grow="Yes">
                   <Text size="H4">Report Message</Text>
                 </Box>
-                <IconButton size="300" onClick={handleClose} radii="300">
+                <IconButton size="300" onClick={handleClose} radii="300" aria-label="Close">
                   <Icon src={Icons.Cross} />
                 </IconButton>
               </Header>
@@ -1029,6 +1027,7 @@ export const Message = as<'div', MessageProps>(
           as="button"
           size="300"
           data-user-id={senderId}
+          aria-label={senderDisplayName}
           onClick={onUserClick}
         >
           <UserAvatar
@@ -1185,6 +1184,7 @@ export const Message = as<'div', MessageProps>(
                       variant="SurfaceVariant"
                       size="300"
                       radii="300"
+                      aria-label="Add Reaction"
                       aria-pressed={!!emojiBoardAnchor}
                     >
                       <Icon src={Icons.SmilePlus} size="100" />
@@ -1197,6 +1197,7 @@ export const Message = as<'div', MessageProps>(
                   variant="SurfaceVariant"
                   size="300"
                   radii="300"
+                  aria-label="Reply"
                 >
                   <Icon src={Icons.ReplyArrow} size="100" />
                 </IconButton>
@@ -1207,6 +1208,7 @@ export const Message = as<'div', MessageProps>(
                     variant="SurfaceVariant"
                     size="300"
                     radii="300"
+                    aria-label="Reply in Thread"
                   >
                     <Icon src={Icons.ThreadPlus} size="100" />
                   </IconButton>
@@ -1217,6 +1219,7 @@ export const Message = as<'div', MessageProps>(
                     variant="SurfaceVariant"
                     size="300"
                     radii="300"
+                    aria-label="Edit Message"
                   >
                     <Icon src={Icons.Pencil} size="100" />
                   </IconButton>
@@ -1578,6 +1581,7 @@ export const Message = as<'div', MessageProps>(
                     size="300"
                     radii="300"
                     onClick={handleOpenMenu}
+                    aria-label="More message actions"
                     aria-pressed={!!menuAnchor}
                   >
                     <Icon src={Icons.VerticalDots} size="100" />
@@ -1743,6 +1747,7 @@ export const Event = as<'div', EventProps>(
                     size="300"
                     radii="300"
                     onClick={handleOpenMenu}
+                    aria-label="More message actions"
                     aria-pressed={!!menuAnchor}
                   >
                     <Icon src={Icons.VerticalDots} size="100" />

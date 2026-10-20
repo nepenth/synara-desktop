@@ -13,6 +13,7 @@ import { DesktopTitleBar } from '../features/desktop-titlebar/DesktopTitleBar';
 import { ScreenSizeProvider, useScreenSize } from '../hooks/useScreenSize';
 import { useCompositionEndTracking } from '../hooks/useComposingCheck';
 import { useDesktopExternalLinkInterceptor } from '../utils/appLinks';
+import '../styles/FocusRing.css';
 
 const queryClient = new QueryClient();
 

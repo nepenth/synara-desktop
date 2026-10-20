@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect } from 'react';
 import FocusTrap from '../FocusTrap';
 import {
-  Dialog,
   Overlay,
   OverlayCenter,
   OverlayBackdrop,
@@ -16,6 +15,7 @@ import {
   Button,
   Spinner,
 } from 'folds';
+import { Dialog } from '../modal-dialog';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { stopPropagation } from '../../utils/keyboard';
@@ -67,7 +67,7 @@ export function LeaveSpacePrompt({ roomId, onDone, onCancel }: LeaveSpacePromptP
               <Box grow="Yes">
                 <Text size="H4">Leave Space</Text>
               </Box>
-              <IconButton size="300" onClick={onCancel} radii="300">
+              <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
                 <Icon src={Icons.Cross} />
               </IconButton>
             </Header>

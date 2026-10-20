@@ -4,7 +4,6 @@ import {
   Box,
   Button,
   Chip,
-  Dialog,
   Header,
   Icon,
   IconButton,
@@ -17,6 +16,7 @@ import {
   config,
   toRem,
 } from 'folds';
+import { Dialog } from '../modal-dialog';
 import { useTranslation } from 'react-i18next';
 import { HermesAgentPayload, HermesCodeBlock, hermesPayloadToMarkdown } from '../../utils/hermes';
 import { copyToClipboard } from '../../utils/dom';
@@ -283,7 +283,12 @@ export const HermesAgentCard = memo(({ payload }: HermesAgentCardProps) => {
                   <Box grow="Yes">
                     <Text size="H4">{t('modernization.hermes.confirm_action', 'Open link')}</Text>
                   </Box>
-                  <IconButton size="300" onClick={handleActionOpenCancel} radii="300">
+                  <IconButton
+                    size="300"
+                    onClick={handleActionOpenCancel}
+                    radii="300"
+                    aria-label="Close"
+                  >
                     <Icon src={Icons.Cross} />
                   </IconButton>
                 </Header>

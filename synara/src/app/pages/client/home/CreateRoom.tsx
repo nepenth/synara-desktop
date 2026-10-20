@@ -25,7 +25,7 @@ export function HomeCreateRoom() {
           <Box grow="Yes" alignItems="Center" gap="200">
             <BackRouteHandler>
               {(onBack) => (
-                <IconButton onClick={onBack}>
+                <IconButton onClick={onBack} aria-label="Back">
                   <Icon src={Icons.ArrowLeft} />
                 </IconButton>
               )}

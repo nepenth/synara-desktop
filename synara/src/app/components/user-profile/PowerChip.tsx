@@ -3,7 +3,6 @@ import {
   Button,
   Chip,
   config,
-  Dialog,
   Header,
   Icon,
   IconButton,
@@ -20,6 +19,7 @@ import {
   Text,
   toRem,
 } from 'folds';
+import { Dialog } from '../modal-dialog';
 import React, { MouseEventHandler, useCallback, useState } from 'react';
 import FocusTrap from '../FocusTrap';
 import { isKeyHotkey } from 'is-hotkey';
@@ -72,7 +72,7 @@ function SelfDemoteAlert({ power, onCancel, onChange }: SelfDemoteAlertProps) {
               <Box grow="Yes">
                 <Text size="H4">Self Demotion</Text>
               </Box>
-              <IconButton size="300" onClick={onCancel} radii="300">
+              <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
                 <Icon src={Icons.Cross} />
               </IconButton>
             </Header>
@@ -122,7 +122,7 @@ function SharedPowerAlert({ power, onCancel, onChange }: SharedPowerAlertProps) 
               <Box grow="Yes">
                 <Text size="H4">Shared Power</Text>
               </Box>
-              <IconButton size="300" onClick={onCancel} radii="300">
+              <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
                 <Icon src={Icons.Cross} />
               </IconButton>
             </Header>

@@ -1,6 +1,7 @@
 import React, { ReactNode } from 'react';
 import FocusTrap from './FocusTrap';
-import { Modal, Overlay, OverlayBackdrop, OverlayCenter } from 'folds';
+import { Overlay, OverlayBackdrop, OverlayCenter } from 'folds';
+import { Modal } from './modal-dialog';
 import { stopPropagation } from '../utils/keyboard';
 
 type Modal500Props = {
