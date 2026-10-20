@@ -46,6 +46,13 @@ fn timeline_snapshot_surface_includes_rows_and_not_leftovers() {
     assert!(snapshot.contains("sequence<TimelineViewRowDto> rows"));
     assert!(snapshot.contains("boolean can_redact_own"));
     assert!(snapshot.contains("boolean can_redact_other"));
+    // iOS matches a queued upload's pending row to the SDK local echo by it.
+    let row = udl
+        .split("dictionary TimelineViewRowDto {")
+        .nth(1)
+        .and_then(|rest| rest.split("};").next())
+        .expect("TimelineViewRowDto");
+    assert!(row.contains("string? transaction_id"));
 }
 
 #[test]

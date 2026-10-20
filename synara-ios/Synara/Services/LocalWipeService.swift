@@ -137,6 +137,7 @@ struct AppLocalWipeService: LocalWiping {
         timeline.clearSessionCaches()
         drafts.clearAll()
         outgoingSends?.queue.clear()
+        LocalUploadPreviewStore.shared.removeAll()
         await MainActor.run {
             router.resetNavigationPathsForAccountChange()
         }

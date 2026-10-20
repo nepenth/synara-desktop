@@ -24,10 +24,13 @@ impl std::fmt::Display for MediaUploadError {
 
 impl std::error::Error for MediaUploadError {}
 
-/// Privacy-safe room attachment send ack. Event id and status only.
+/// Privacy-safe room attachment send ack. Event id, transaction id and
+/// status only. `event_id` is empty while `status` is `Queued`; the SDK keeps
+/// sending, and its local echo row carries `local_txn_id`.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SendRoomAttachmentDto {
     pub event_id: String,
+    pub local_txn_id: String,
     pub status: SendStatusDto,
 }
 
@@ -323,6 +326,7 @@ impl SharedCore {
             })?;
         Ok(SendRoomAttachmentDto {
             event_id: result.event_id,
+            local_txn_id: result.local_txn_id,
             status: result.status.into(),
         })
     }

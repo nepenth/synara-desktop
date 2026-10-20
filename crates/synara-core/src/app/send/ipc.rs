@@ -23,11 +23,13 @@ pub struct MatrixSendAttachmentResult {
     pub status: SendStatus,
 }
 
-/// Dedicated Core attachment send ack. Event id and status only — no bytes.
+/// Dedicated Core attachment send ack. Event id, transaction id and status
+/// only — no bytes. `event_id` is empty while `status` is `Queued`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatrixSendRoomAttachmentResult {
     pub event_id: String,
+    pub local_txn_id: String,
     pub status: SendStatus,
 }
 

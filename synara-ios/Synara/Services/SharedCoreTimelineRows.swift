@@ -76,6 +76,7 @@ enum SharedCoreTimelineRows {
             isEncrypted: row.kind == .encrypted
         )
         item.encryptionShield = encryptionShield(from: row.encryptionShield)
+        item.transactionID = row.transactionId
         return item
     }
 

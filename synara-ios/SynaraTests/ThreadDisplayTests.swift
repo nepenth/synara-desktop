@@ -78,6 +78,23 @@ final class ThreadDisplayTests: XCTestCase {
         XCTAssertEqual(ThreadTimelineMerge.unresolved(pending: [localEcho], snapshot: [serverCopy]), [])
     }
 
+    func testQueuedThreadUploadResolvesOnlyByItsTransaction() {
+        let rootItem = item(root, at: 0)
+        var queued = item("$pending-synara-attachment-a", at: 11, threadRoot: root)
+            .withDeliveryStatus(.sending)
+        queued.transactionID = "synara-attachment-a"
+        var otherEcho = item("sdk-other", at: 10, threadRoot: root)
+        otherEcho.transactionID = "synara-attachment-b"
+        XCTAssertEqual(
+            ThreadTimelineMerge.merged(snapshot: [rootItem, otherEcho], pending: [queued]).map(\.eventID),
+            [root, "sdk-other", "$pending-synara-attachment-a"]
+        )
+
+        var sdkEcho = item("sdk-local", at: 10, threadRoot: root)
+        sdkEcho.transactionID = "synara-attachment-a"
+        XCTAssertEqual(ThreadTimelineMerge.unresolved(pending: [queued], snapshot: [rootItem, sdkEcho]), [])
+    }
+
     func testInlineWindowShowsNewestRepliesWithoutTheRoot() {
         let items = [item(root, at: 0)] + (1...8).map { item("$r\($0)", at: TimeInterval($0), threadRoot: root) }
         let replies = InlineThreadWindow.replies(in: items.shuffled(), rootEventID: root)

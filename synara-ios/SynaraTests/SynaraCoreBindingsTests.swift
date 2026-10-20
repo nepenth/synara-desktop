@@ -710,7 +710,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 mediaWidth: nil,
                 mediaHeight: nil,
                 mediaDurationMs: nil,
-                encryptionShield: nil
+                encryptionShield: nil,
+                transactionId: nil
             )
         )
         XCTAssertEqual(mappedRow?.senderProfileDisplayName, "Alice Example")
@@ -718,6 +719,28 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(mappedRow?.threadRootEventID, "$thread-root:example.org")
         XCTAssertEqual(mappedRow?.reactions, ["👍": 2])
         XCTAssertEqual(mappedRow?.reactionOwnership, .known(["👍"]))
+        XCTAssertNil(mappedRow?.transactionID)
+
+        // An SDK local echo (a queued upload) has no event id yet; it keeps
+        // the SDK item id as identity and carries its transaction id so the
+        // pending upload row can be matched to it.
+        let localEcho = SharedCoreTimelineRows.item(
+            from: TimelineViewRowDto(
+                kind: .message, itemId: "sdk-local-item", eventId: "",
+                sender: "@alice:example.org", senderName: "Alice", senderAvatarUrl: nil,
+                body: "photo.jpg", originServerTs: 1_700_000_000_000, edited: false,
+                replyToEventId: nil, replyPreview: nil, threadRootEventId: nil,
+                threadSummary: nil, poll: nil, capabilities: nil, decryptionState: nil,
+                messageType: "m.text", forwardTransport: nil, formattedBody: nil,
+                agentCardJson: nil, isAgentApproval: false, mediaFilename: nil,
+                mediaCaption: nil, reactions: [], mediaHandleId: nil, mediaMimeType: nil,
+                mediaWidth: nil, mediaHeight: nil, mediaDurationMs: nil,
+                encryptionShield: nil, transactionId: "synara-attachment-a"
+            )
+        )
+        XCTAssertEqual(localEcho?.eventID, "sdk-local-item")
+        XCTAssertEqual(localEcho?.transactionID, "synara-attachment-a")
+        XCTAssertEqual(localEcho?.withDeliveryStatus(nil).transactionID, "synara-attachment-a")
 
         let reply = SharedCoreTimelineRows.replyPreview(
             from: TimelineViewReplyPreviewDto(
@@ -871,7 +894,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 mediaWidth: nil,
                 mediaHeight: nil,
                 mediaDurationMs: nil,
-                encryptionShield: nil
+                encryptionShield: nil,
+                transactionId: nil
             )
         }
 

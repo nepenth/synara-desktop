@@ -7,6 +7,7 @@
 - Media: photos, videos and files you send to an encrypted room load on the device that sent them, on desktop and iOS. Ones that stayed broken after an earlier send load again too.
 - Media: large images, videos and file downloads no longer fail after 30 seconds on a slow connection. A download now fails only when the server stops sending for 30 seconds.
 - Opening a room or the security settings no longer starts a loop of encryption-status requests, on desktop and iOS. Accounts without cross-signing saw about 60 requests a second and 20-27% CPU while a room was open; status is now read again only when it changes.
+- iOS: sending a photo or file while the connection is slow or the server is failing no longer crashes the room. The attachment shows as sending, with your own preview, until the server has it, instead of a broken image.
 
 ## [2.2.6] - 2026-10-12
 

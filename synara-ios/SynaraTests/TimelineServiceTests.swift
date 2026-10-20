@@ -2310,6 +2310,76 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(echoArrivedFirst, reconciled)
     }
 
+    func testQueuedUploadStaysPendingUntilTheSdkEchoForItsTransaction() {
+        let request = MediaUploadRequest(
+            roomID: "!room:matrix.org", source: .photoLibrary, displayName: "photo.jpg",
+            data: Data("jpeg".utf8), mimeType: "image/jpeg", transactionID: "synara-attachment-a"
+        )
+        let queued = MediaUploadAcknowledgement.item(
+            eventID: "", transactionID: "synara-attachment-a", isQueued: true,
+            request: request, senderID: "@local:matrix.org",
+            timestamp: TimelineFixtures.baseDate, previews: LocalUploadPreviewStore()
+        )
+        // Same sender, same file, same moment, but a different send: content
+        // must never stand in for the transaction id.
+        let lookalike = TimelineItem(
+            id: "$other-photo", eventID: "$other-photo", senderID: "@local:matrix.org",
+            timestamp: TimelineFixtures.baseDate, kind: queued.kind,
+            replyToEventID: nil, isEdited: false, reactions: [:]
+        )
+        let lagging = TimelinePendingReconciler.merge(
+            streamItems: [lookalike], localItems: [queued], currentUserID: "@local:matrix.org"
+        )
+        XCTAssertEqual(lagging.map(\.id), ["$other-photo", "$pending-synara-attachment-a"])
+        XCTAssertEqual(lagging.last?.deliveryStatus, .sending)
+
+        // Core projects the SDK local echo with the same transaction id (and
+        // no event id yet); it replaces the pending row.
+        var sdkEcho = TimelineItem(
+            id: "sdk-local-item", eventID: "sdk-local-item", senderID: "@local:matrix.org",
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(1), kind: queued.kind,
+            replyToEventID: nil, isEdited: false, reactions: [:]
+        )
+        sdkEcho.transactionID = "synara-attachment-a"
+        let reconciled = TimelinePendingReconciler.merge(
+            streamItems: [lookalike, sdkEcho], localItems: lagging, currentUserID: "@local:matrix.org"
+        )
+        XCTAssertEqual(reconciled.map(\.id), ["$other-photo", "sdk-local-item"])
+        XCTAssertEqual(reconciled.filter(\.isLocalPending), [])
+
+        // Once replaced it is gone for good: the later server row (which no
+        // longer carries the transaction id) does not bring it back.
+        let sent = TimelineItem(
+            id: "sdk-local-item", eventID: "$photo:matrix.org", senderID: "@local:matrix.org",
+            timestamp: sdkEcho.timestamp, kind: queued.kind,
+            replyToEventID: nil, isEdited: false, reactions: [:]
+        )
+        let afterSend = TimelinePendingReconciler.merge(
+            streamItems: [lookalike, sent], localItems: reconciled, currentUserID: "@local:matrix.org"
+        )
+        XCTAssertEqual(afterSend.map(\.eventID), ["$other-photo", "$photo:matrix.org"])
+    }
+
+    func testTwoQueuedUploadsKeepDistinctRowIdentities() {
+        let uploads = ["synara-attachment-a", "synara-attachment-b"].map { transactionID in
+            MediaUploadAcknowledgement.item(
+                eventID: "", transactionID: transactionID, isQueued: true,
+                request: MediaUploadRequest(
+                    roomID: "!room:matrix.org", source: .photoLibrary, displayName: "photo.jpg",
+                    data: Data("jpeg".utf8), mimeType: "image/jpeg", transactionID: transactionID
+                ),
+                senderID: "@local:matrix.org", timestamp: TimelineFixtures.baseDate,
+                previews: LocalUploadPreviewStore()
+            )
+        }
+        let merged = TimelinePendingReconciler.merge(
+            streamItems: [], localItems: uploads, currentUserID: "@local:matrix.org"
+        )
+        XCTAssertEqual(merged.count, 2)
+        XCTAssertEqual(Set(merged.map(\.eventID)).count, 2, "two queued uploads once both became .event(\"\")")
+        XCTAssertFalse(merged.contains { $0.eventID.isEmpty || $0.id.isEmpty })
+    }
+
     func testAcknowledgedEventCannotReconcileWithSimilarDifferentServerEvent() {
         let acknowledged = TimelineItem(
             id: "$ack", eventID: "$ack", senderID: "@local:matrix.org",

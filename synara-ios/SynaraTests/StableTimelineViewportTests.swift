@@ -49,6 +49,61 @@ final class StableTimelineViewportTests: XCTestCase {
         XCTAssertEqual(table.contentOffset.y, initialOffset.y, accuracy: 0.5)
     }
 
+    func testDuplicateRowIdentifiersKeepTheFirstRow() {
+        let unique = StableTimelineViewportPolicy.uniqueRows(duplicateEmptyIdentityRows())
+        XCTAssertEqual(unique.duplicateCount, 1)
+        XCTAssertEqual(unique.rows.map(\.id), [.event("$first"), .event("")])
+        XCTAssertEqual(unique.rows.last?.eventID, "")
+    }
+
+    @MainActor
+    func testDuplicateRowIdentifiersDoNotTrapTheSnapshot() async throws {
+        // Two queued uploads once both produced `.event("")`; the row lookup
+        // and the diffable snapshot trapped on the duplicate.
+        let rows = duplicateEmptyIdentityRows()
+        let viewport = StableTimelineViewport(
+            routeID: "duplicates", sessionGeneration: 1, rows: rows, command: nil,
+            isLive: true, isPaginating: false, backgroundColor: .black,
+            rowContent: { row in AnyView(Text(row.eventID ?? "").frame(height: 70)) },
+            onBottomPinnedChanged: { _, _, _, _ in },
+            onUserInteractionChanged: { _, _, _ in },
+            onPaginationThresholdReached: { _, _, _ in false },
+            onTimestampRevealRequested: { _, _, _ in },
+            onCommandCompleted: { _, _, _, _, _ in }
+        )
+        let controller = StableTimelineViewController(coordinator: viewport.makeCoordinator())
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        controller.update(configuration: StableTimelineViewController.Configuration(
+            routeID: "duplicates", sessionGeneration: 1, rows: rows, command: nil,
+            isLive: true, isPaginating: false, backgroundColor: .black
+        ))
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        let table = try XCTUnwrap(controller.view.subviews.first { $0 is UITableView } as? UITableView)
+        XCTAssertEqual(table.numberOfRows(inSection: 0), 2)
+    }
+
+    private func duplicateEmptyIdentityRows() -> [StableTimelineViewportRow] {
+        let items = TimelineFixtures.largeTimeline(count: 3)
+        let ids: [StableTimelineViewportItemID] = [.event("$first"), .event(""), .event("")]
+        return zip(items, ids).map { item, id in
+            let blank = TimelineItem(
+                id: id == .event("$first") ? item.id : "", eventID: id == .event("$first") ? item.eventID : "",
+                senderID: item.senderID, timestamp: item.timestamp, kind: item.kind,
+                replyToEventID: nil, isEdited: false, reactions: [:]
+            )
+            return StableTimelineViewportRow(id: id, content: .event(.init(
+                item: blank, isGroupedWithPrevious: false, isTimestampRevealed: false,
+                animateSend: false, replyPreview: nil, replyCount: 0,
+                availability: .init(canReply: false, canEdit: false, canRedact: false, canReact: false)
+            )))
+        }
+    }
+
     func testTimestampRevealGestureWaitsUntilDirectionIsKnown() {
         XCTAssertEqual(
             TimelineTimestampRevealGesturePolicy.intent(translation: CGPoint(x: -8, y: 7)),

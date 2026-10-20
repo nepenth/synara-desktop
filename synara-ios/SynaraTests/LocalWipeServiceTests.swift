@@ -110,6 +110,9 @@ final class LocalWipeServiceTests: XCTestCase {
             senderID: "@alice:matrix.org",
             timestamp: Date()
         )
+        let previewURL = try XCTUnwrap(LocalUploadPreviewStore.url(for: "synara-attachment-wipe"))
+        LocalUploadPreviewStore.shared.store(Data("photo".utf8), key: "synara-attachment-wipe")
+        XCTAssertNotNil(LocalUploadPreviewStore.shared.data(for: previewURL))
         let wipe = AppLocalWipeService(
             session: session,
             matrix: matrix,
@@ -137,6 +140,10 @@ final class LocalWipeServiceTests: XCTestCase {
         XCTAssertEqual(secureStore.deleteCallCount, 1)
         XCTAssertEqual(drafts.draft(roomID: "!room:matrix.org"), "")
         XCTAssertTrue(outgoingSends.queue.items.isEmpty)
+        XCTAssertNil(
+            LocalUploadPreviewStore.shared.data(for: previewURL),
+            "picked attachment bytes must not outlive the account"
+        )
         XCTAssertEqual(router.selectedTab, .rooms)
         XCTAssertTrue(router.settingsPath.isEmpty)
         XCTAssertNil(router.sheetDestination)

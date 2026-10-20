@@ -73,11 +73,7 @@ enum ThreadTimelineMerge {
     /// Sent replies stay visible until the thread stream contains them, so a
     /// snapshot taken before the echo arrives cannot make them disappear.
     static func merged(snapshot: [TimelineItem], pending: [TimelineItem]) -> [TimelineItem] {
-        let known = Set(snapshot.flatMap { [$0.eventID, $0.serverEventID].compactMap { $0 } })
-        let stillPending = pending.filter { item in
-            known.contains(item.eventID) == false
-                && (item.serverEventID.map { known.contains($0) } ?? false) == false
-        }
+        let stillPending = unresolved(pending: pending, snapshot: snapshot)
         guard stillPending.isEmpty == false else {
             return snapshot
         }
@@ -85,11 +81,15 @@ enum ThreadTimelineMerge {
     }
 
     /// Pending sends that the snapshot has now delivered can be forgotten.
+    /// A queued attachment has no event id yet; the SDK local echo in the
+    /// snapshot carries its transaction id instead.
     static func unresolved(pending: [TimelineItem], snapshot: [TimelineItem]) -> [TimelineItem] {
         let known = Set(snapshot.flatMap { [$0.eventID, $0.serverEventID].compactMap { $0 } })
+        let knownTransactions = Set(snapshot.compactMap(\.transactionID))
         return pending.filter { item in
             known.contains(item.eventID) == false
                 && (item.serverEventID.map { known.contains($0) } ?? false) == false
+                && (item.transactionID.map { knownTransactions.contains($0) } ?? false) == false
         }
     }
 }
