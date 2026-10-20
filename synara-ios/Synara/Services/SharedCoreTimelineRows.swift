@@ -38,6 +38,17 @@ enum SharedCoreTimelineRows {
         return paginationBackward == .exhausted ? .empty : nil
     }
 
+    static func backwardPagination(from state: TimelinePageStateDto) -> TimelineBackwardPagination {
+        switch state {
+        case .available:
+            return .available
+        case .exhausted:
+            return .exhausted
+        case .loading, .unavailable:
+            return .unknown
+        }
+    }
+
     static func item(from row: TimelineViewRowDto) -> TimelineItem? {
         guard let kind = displayKind(
             rowKind: row.kind,

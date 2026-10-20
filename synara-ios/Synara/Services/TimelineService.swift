@@ -543,22 +543,67 @@ enum TimelineWindowPolicy {
         return Array(stableItems.suffix(limit))
     }
 
-    static func prependingHistory(
-        _ olderItems: [TimelineItem],
-        to currentItems: [TimelineItem],
+    /// The rows a provider presents. Following the live tail, that is the
+    /// newest `limit` rows. Once the user has paged back, it is every row from
+    /// that history floor to the newest: live updates keep arriving without
+    /// trimming the rows being read. A floor the provider no longer holds (the
+    /// SDK reset the room after a gappy sync) keeps the provider's whole window.
+    static func window(
+        _ items: [TimelineItem],
+        historyFloorKey: String?,
         limit: Int = stableEventLimit
     ) -> [TimelineItem] {
-        guard limit > 0 else {
-            return []
+        guard let historyFloorKey else {
+            return replacingServerWindow(items, limit: limit)
         }
-        return Array(deduplicated(olderItems + currentItems).prefix(limit))
+        let stableItems = deduplicated(items.filter { $0.isLocalPending == false })
+        guard let floorIndex = stableItems.firstIndex(where: { key(for: $0) == historyFloorKey }) else {
+            return stableItems
+        }
+        return Array(stableItems[floorIndex...])
+    }
+
+    enum PageDirection {
+        case older
+        case newer
+    }
+
+    /// Core answers a page with the provider's whole window, which holds the
+    /// current rows' edges and is authoritative (rows can also disappear).
+    /// A service that returns only the new page is joined on the side it
+    /// extends. Never capped: the user is reading these rows.
+    static func mergingPage(
+        _ page: [TimelineItem],
+        into currentItems: [TimelineItem],
+        direction: PageDirection
+    ) -> [TimelineItem] {
+        let stablePage = page.filter { $0.isLocalPending == false }
+        let pageKeys = Set(stablePage.map(key(for:)))
+        let currentKeys = Set(currentItems.map(key(for:)))
+        guard pageKeys.isSubset(of: currentKeys) == false else {
+            // An update already delivered these rows.
+            return currentItems
+        }
+        let currentEdges = [currentItems.first, currentItems.last].compactMap { $0.map(key(for:)) }
+        if currentEdges.isEmpty == false, currentEdges.allSatisfy(pageKeys.contains) {
+            return deduplicated(stablePage)
+        }
+        switch direction {
+        case .older:
+            return deduplicated(stablePage + currentItems)
+        case .newer:
+            return deduplicated(currentItems + stablePage)
+        }
+    }
+
+    static func key(for item: TimelineItem) -> String {
+        item.eventID.isEmpty ? item.id : item.eventID
     }
 
     private static func deduplicated(_ items: [TimelineItem]) -> [TimelineItem] {
         var seen = Set<String>()
         return items.filter { item in
-            let key = item.eventID.isEmpty ? item.id : item.eventID
-            return seen.insert(key).inserted
+            seen.insert(key(for: item)).inserted
         }
     }
 }
@@ -825,6 +870,16 @@ enum TimelineEventRoute: Equatable {
 enum TimelineEventRouteNotice {
     static let missing = "That message isn't available. It may have been deleted, or you may not have access to it."
     static let notShown = "That message couldn't be shown. Showing the latest messages instead."
+    static let lastReadUnavailable = "Your last read message couldn't be loaded. Showing the latest messages instead."
+}
+
+/// Core's backward pagination state for a room provider. Only `exhausted`
+/// proves the start of the room; `unknown` covers loading and services
+/// without Core.
+enum TimelineBackwardPagination: Equatable {
+    case available
+    case exhausted
+    case unknown
 }
 
 protocol TimelineServicing: AnyObject {
@@ -833,12 +888,22 @@ protocol TimelineServicing: AnyObject {
     func loadLatestTimeline(roomID: String) async -> TimelineLoadOutcome
     func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome
     func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome
+    /// Older history for the provider `focusedEventID` opened (nil: the live
+    /// room). `.empty` means Core reached the start of the room.
+    func loadOlderTimeline(roomID: String, before eventID: String, focusedEventID: String?) async -> TimelineLoadOutcome
+    /// Newer events for an event-focused provider. `.empty` means its window
+    /// already reaches the present.
+    func loadNewerTimeline(roomID: String, focusedEventID: String) async -> TimelineLoadOutcome
+    /// The last backward pagination state Core reported for that provider.
+    func backwardPagination(roomID: String, focusedEventID: String?) -> TimelineBackwardPagination
     func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome>
     func typingUsers(roomID: String) -> AsyncStream<[String]>
     func threadTimelineUpdates(roomID: String, rootEventID: String) -> AsyncStream<TimelineLoadOutcome>
     /// Older replies for an open thread stream. `.empty` means the thread's
     /// start (its root) is already loaded.
     func loadOlderThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome
+    /// Releases an event-focused window opened beside the live room.
+    func closeFocusedTimeline(roomID: String)
     /// Releases a thread stream opened by `loadThreadTimeline`.
     func closeThreadTimeline(roomID: String, rootEventID: String)
     /// Where a routed event lives, without opening a timeline for it.
@@ -858,7 +923,21 @@ extension TimelineServicing {
         .empty
     }
 
+    func loadOlderTimeline(roomID: String, before eventID: String, focusedEventID _: String?) async -> TimelineLoadOutcome {
+        await loadOlderTimeline(roomID: roomID, before: eventID)
+    }
+
+    func loadNewerTimeline(roomID _: String, focusedEventID _: String) async -> TimelineLoadOutcome {
+        .empty
+    }
+
+    func backwardPagination(roomID _: String, focusedEventID _: String?) -> TimelineBackwardPagination {
+        .unknown
+    }
+
     func closeThreadTimeline(roomID _: String, rootEventID _: String) {}
+
+    func closeFocusedTimeline(roomID _: String) {}
 
     func loadInitialTimeline(roomID: String) async -> TimelineLoadOutcome {
         await loadInitialTimeline(roomID: roomID, focusedEventID: nil)
@@ -959,6 +1038,16 @@ enum RoomTimelineLiveTransition {
     case superseded
 }
 
+/// The result of opening a second provider beside the current one. Only
+/// `switched` replaces the current provider; otherwise it keeps running.
+enum RoomTimelineProviderSwitch {
+    case switched(RoomTimelineSessionFeed)
+    /// The provider opened but its window does not hold the requested event.
+    case missing
+    case failed(TimelineLoadFailure)
+    case superseded
+}
+
 actor RoomTimelineSession {
     private enum UpdateAcceptance {
         case accepted(TimelineLoadOutcome)
@@ -972,6 +1061,9 @@ actor RoomTimelineSession {
     private var mode: RoomTimelineMode = .live
     private var serverItems: [TimelineItem] = []
     private var updateFailureOutstanding = false
+    /// The oldest row the user paged back to. While set, updates keep every
+    /// row from it to the newest instead of only the newest window.
+    private var historyFloorKey: String?
 
     init(roomID: String, service: TimelineServicing) {
         self.roomID = roomID
@@ -983,6 +1075,7 @@ actor RoomTimelineSession {
         let requestedGeneration = generation
         self.mode = mode
         serverItems = []
+        historyFloorKey = nil
         updateFailureOutstanding = false
 
         let outcome = await service.loadInitialTimeline(
@@ -1014,6 +1107,7 @@ actor RoomTimelineSession {
         case let .loaded(items) where items.isEmpty == false:
             generation &+= 1
             mode = .live
+            historyFloorKey = nil
             serverItems = TimelineWindowPolicy.replacingServerWindow(items)
             updateFailureOutstanding = false
             let nextGeneration = generation
@@ -1035,28 +1129,69 @@ actor RoomTimelineSession {
         }
     }
 
+    /// Opens `mode` on its own provider while the current one keeps running,
+    /// and switches only when the new window holds `eventID`. A miss or a
+    /// failure leaves the current provider and its updates untouched.
+    func switchProvider(to mode: RoomTimelineMode, holding eventID: String) async -> RoomTimelineProviderSwitch {
+        let originGeneration = generation
+        let outcome = await service.loadInitialTimeline(roomID: roomID, focusedEventID: mode.focusedEventID)
+        guard originGeneration == generation else {
+            return .superseded
+        }
+        switch outcome {
+        case let .loaded(items) where items.contains(where: { $0.serverEventID == eventID }):
+            generation &+= 1
+            self.mode = mode
+            historyFloorKey = nil
+            serverItems = TimelineWindowPolicy.replacingServerWindow(items)
+            updateFailureOutstanding = false
+            let nextGeneration = generation
+            return .switched(
+                RoomTimelineSessionFeed(
+                    generation: nextGeneration,
+                    mode: mode,
+                    providerIsLive: mode.isLive,
+                    initialOutcome: .loaded(serverItems),
+                    updates: makeUpdateStream(mode: mode, generation: nextGeneration)
+                )
+            )
+        case .loaded, .empty:
+            if mode.isLive == false {
+                service.closeFocusedTimeline(roomID: roomID)
+            }
+            return .missing
+        case let .failed(failure):
+            return .failed(failure)
+        }
+    }
+
+    /// Pages back on the current provider. The provider, its generation and
+    /// its update stream stay as they are: a page is the same SDK timeline
+    /// growing older. `.empty` only when the service reports the start of
+    /// the room; a page whose rows a concurrent update already delivered is
+    /// still `.loaded`.
     func loadOlder(before eventID: String) async -> TimelineLoadOutcome? {
         let originGeneration = generation
-        let outcome = await service.loadOlderTimeline(roomID: roomID, before: eventID)
+        // Pin the rows being read before awaiting: an update that lands
+        // during the page must not trim them back to the newest window.
+        if historyFloorKey == nil {
+            historyFloorKey = serverItems.first.map(TimelineWindowPolicy.key(for:))
+        }
+        let outcome = await service.loadOlderTimeline(
+            roomID: roomID,
+            before: eventID,
+            focusedEventID: mode.focusedEventID
+        )
         guard originGeneration == generation else {
             return nil
         }
 
         switch outcome {
-        case let .loaded(olderItems) where olderItems.isEmpty == false:
-            let existingIDs = Set(serverItems.map { $0.eventID.isEmpty ? $0.id : $0.eventID })
-            let hasNewStableItem = olderItems.contains { item in
-                let key = item.eventID.isEmpty ? item.id : item.eventID
-                return item.isLocalPending == false && existingIDs.contains(key) == false
-            }
-            guard hasNewStableItem else {
-                return .empty
-            }
-            generation &+= 1
-            mode = .focused(eventID: eventID)
-            serverItems = TimelineWindowPolicy.prependingHistory(olderItems, to: serverItems)
+        case let .loaded(page) where page.isEmpty == false:
+            serverItems = TimelineWindowPolicy.mergingPage(page, into: serverItems, direction: .older)
+            historyFloorKey = serverItems.first.map(TimelineWindowPolicy.key(for:))
             updateFailureOutstanding = false
-            return .loaded(serverItems)
+            return serverItems.isEmpty ? .empty : .loaded(serverItems)
         case .loaded, .empty:
             updateFailureOutstanding = false
             return .empty
@@ -1066,9 +1201,50 @@ actor RoomTimelineSession {
         }
     }
 
+    /// Pages an event-focused provider toward the present. `.empty` means its
+    /// window already reaches the live tail; the live provider never pages
+    /// forward.
+    func loadNewer() async -> TimelineLoadOutcome? {
+        guard mode.isLive == false, let focusedEventID = mode.focusedEventID else {
+            return .empty
+        }
+        let originGeneration = generation
+        let outcome = await service.loadNewerTimeline(roomID: roomID, focusedEventID: focusedEventID)
+        guard originGeneration == generation else {
+            return nil
+        }
+
+        switch outcome {
+        case let .loaded(page) where page.isEmpty == false:
+            // Keep the rows above while the user reads down.
+            if historyFloorKey == nil {
+                historyFloorKey = serverItems.first.map(TimelineWindowPolicy.key(for:))
+            }
+            serverItems = TimelineWindowPolicy.mergingPage(page, into: serverItems, direction: .newer)
+            updateFailureOutstanding = false
+            return serverItems.isEmpty ? .empty : .loaded(serverItems)
+        case .loaded, .empty:
+            updateFailureOutstanding = false
+            return .empty
+        case let .failed(failure):
+            updateFailureOutstanding = true
+            return .failed(failure)
+        }
+    }
+
+    /// The user is back on the live tail: later updates may trim the window
+    /// to the newest rows again.
+    func followLiveTail() {
+        guard mode.isLive else {
+            return
+        }
+        historyFloorKey = nil
+    }
+
     func invalidate() {
         generation &+= 1
         serverItems = []
+        historyFloorKey = nil
         updateFailureOutstanding = false
     }
 
@@ -1100,7 +1276,7 @@ actor RoomTimelineSession {
         }
         switch outcome {
         case let .loaded(items):
-            let nextItems = TimelineWindowPolicy.replacingServerWindow(items)
+            let nextItems = TimelineWindowPolicy.window(items, historyFloorKey: historyFloorKey)
             let isRecoveryHeartbeat = updateFailureOutstanding
             updateFailureOutstanding = false
             guard nextItems != serverItems else {
@@ -1389,6 +1565,11 @@ final class MockTimelineService: TimelineServicing {
     var typingUserUpdates: [[String]] = []
     var latestOutcome: TimelineLoadOutcome?
     var olderOutcome: TimelineLoadOutcome?
+    var newerOutcome: TimelineLoadOutcome?
+    var backwardPaginationState: TimelineBackwardPagination = .unknown
+    /// Initial loads by focused event id (nil: live), for provider-key tests.
+    private(set) var initialLoadFocusedEventIDs: [String?] = []
+    private(set) var olderLoadFocusedEventIDs: [String?] = []
     var loadDelayNanoseconds: UInt64 = 0
     var updateDelayNanoseconds: UInt64 = 0
     var updateIntervalNanoseconds: UInt64 = 0
@@ -1422,6 +1603,7 @@ final class MockTimelineService: TimelineServicing {
     }
 
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
+        initialLoadFocusedEventIDs.append(focusedEventID)
         if loadDelayNanoseconds > 0 {
             try? await Task.sleep(nanoseconds: loadDelayNanoseconds)
         }
@@ -1448,6 +1630,19 @@ final class MockTimelineService: TimelineServicing {
         }
         let older = timelineItems(roomID: roomID).filter { $0.eventID != eventID }
         return older.isEmpty ? .empty : .loaded(older)
+    }
+
+    func loadOlderTimeline(roomID: String, before eventID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
+        olderLoadFocusedEventIDs.append(focusedEventID)
+        return await loadOlderTimeline(roomID: roomID, before: eventID)
+    }
+
+    func loadNewerTimeline(roomID _: String, focusedEventID _: String) async -> TimelineLoadOutcome {
+        newerOutcome ?? .empty
+    }
+
+    func backwardPagination(roomID _: String, focusedEventID _: String?) -> TimelineBackwardPagination {
+        backwardPaginationState
     }
 
     func loadLatestTimeline(roomID: String) async -> TimelineLoadOutcome {

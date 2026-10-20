@@ -19,7 +19,7 @@ final class StableTimelineViewportTests: XCTestCase {
             rowContent: { row in AnyView(Text(row.eventID ?? "").frame(height: 70)) },
             onBottomPinnedChanged: { _, _, _, _ in },
             onUserInteractionChanged: { _, _, _ in },
-            onPaginationThresholdReached: { _, _, _ in false },
+            onPaginationThresholdReached: { _, _, _, _ in false },
             onTimestampRevealRequested: { _, _, _ in },
             onCommandCompleted: { _, _, _, _, _ in }
         )
@@ -67,7 +67,7 @@ final class StableTimelineViewportTests: XCTestCase {
             rowContent: { row in AnyView(Text(row.eventID ?? "").frame(height: 70)) },
             onBottomPinnedChanged: { _, _, _, _ in },
             onUserInteractionChanged: { _, _, _ in },
-            onPaginationThresholdReached: { _, _, _ in false },
+            onPaginationThresholdReached: { _, _, _, _ in false },
             onTimestampRevealRequested: { _, _, _ in },
             onCommandCompleted: { _, _, _, _, _ in }
         )
@@ -435,6 +435,48 @@ final class StableTimelineViewportTests: XCTestCase {
         XCTAssertTrue(StableTimelineViewportPolicy.shouldFollowNewest(isLive: true, wasConfirmedPinned: true))
         XCTAssertFalse(StableTimelineViewportPolicy.shouldFollowNewest(isLive: true, wasConfirmedPinned: false))
         XCTAssertFalse(StableTimelineViewportPolicy.shouldFollowNewest(isLive: false, wasConfirmedPinned: true))
+    }
+
+    func testShortContentRequestsPagesWithoutInteractionButBounded() {
+        // I13: content shorter than the viewport never reached the threshold.
+        XCTAssertEqual(
+            StableTimelineViewportPolicy.paginationRequest(
+                contentOffset: 0, contentHeight: 300, viewportHeight: 1000,
+                hasUserInteracted: false, isPaginating: false, requestInFlight: false,
+                shortContentRequestCount: 0
+            ),
+            .fillShortContent
+        )
+        XCTAssertNil(
+            StableTimelineViewportPolicy.paginationRequest(
+                contentOffset: 0, contentHeight: 300, viewportHeight: 1000,
+                hasUserInteracted: true, isPaginating: false, requestInFlight: false,
+                shortContentRequestCount: StableTimelineViewportPolicy.maximumShortContentPaginationRequests
+            )
+        )
+        XCTAssertNil(
+            StableTimelineViewportPolicy.paginationRequest(
+                contentOffset: 0, contentHeight: 300, viewportHeight: 1000,
+                hasUserInteracted: false, isPaginating: true, requestInFlight: false,
+                shortContentRequestCount: 0
+            )
+        )
+        XCTAssertNil(
+            StableTimelineViewportPolicy.paginationRequest(
+                contentOffset: 0, contentHeight: 10000, viewportHeight: 1000,
+                hasUserInteracted: false, isPaginating: false, requestInFlight: false,
+                shortContentRequestCount: 0
+            ),
+            "Tall content still waits for the user"
+        )
+        XCTAssertEqual(
+            StableTimelineViewportPolicy.paginationRequest(
+                contentOffset: 8000, contentHeight: 10000, viewportHeight: 1000,
+                hasUserInteracted: true, isPaginating: false, requestInFlight: false,
+                shortContentRequestCount: 0
+            ),
+            .nearOldest
+        )
     }
 
     func testPaginationThresholdHonorsInteractionAndOneInFlightRequest() {
@@ -819,6 +861,39 @@ final class StableTimelineViewportTests: XCTestCase {
         )
     }
 
+    func testJumpToLastReadHidesWhileTheMarkerOrDividerIsOnScreen() {
+        XCTAssertFalse(RoomTimelineJumpLastReadPolicy.shouldShow(
+            pendingMarkerEventID: "$older:matrix.org",
+            isMarkerVisible: true
+        ))
+        XCTAssertTrue(RoomTimelineJumpLastReadPolicy.shouldShow(
+            pendingMarkerEventID: "$older:matrix.org",
+            isMarkerVisible: false
+        ))
+    }
+
+    func testJumpToLastReadScrollsInTheLiveWindowOrOpensAFocusedWindow() {
+        let loaded = ["$a:matrix.org", "$b:matrix.org"]
+        XCTAssertEqual(
+            RoomTimelineJumpLastReadPolicy.route(
+                markerEventID: "$a:matrix.org", providerIsLive: true, loadedServerEventIDs: loaded
+            ),
+            .scrollLiveWindow
+        )
+        XCTAssertEqual(
+            RoomTimelineJumpLastReadPolicy.route(
+                markerEventID: "$far:matrix.org", providerIsLive: true, loadedServerEventIDs: loaded
+            ),
+            .openFocusedWindow
+        )
+        XCTAssertEqual(
+            RoomTimelineJumpLastReadPolicy.route(
+                markerEventID: "$a:matrix.org", providerIsLive: false, loadedServerEventIDs: loaded
+            ),
+            .openFocusedWindow
+        )
+    }
+
     func testJumpToLastReadVisibilityIsOwnedByThePendingMarkerAlone() {
         // Visibility must not be re-derived from live unread counts: the
         // timeline auto-advances m.fully_read shortly after the tail is visible,
@@ -870,10 +945,108 @@ final class StableTimelineViewportTests: XCTestCase {
                 isConfirmedPinned: true
             )
         )
-        XCTAssertFalse(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(position: .readingHistory))
-        XCTAssertFalse(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(position: .focusedEvent))
-        XCTAssertTrue(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(position: .placingInitial))
-        XCTAssertTrue(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(position: .followingLive))
+        XCTAssertFalse(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(
+            position: .readingHistory, hasPendingPlacement: true, isUserDragging: false
+        ), "An unread placement pins briefly before it scrolls to the marker")
+        XCTAssertFalse(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(
+            position: .focusedEvent, hasPendingPlacement: true, isUserDragging: false
+        ))
+        XCTAssertTrue(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(
+            position: .placingInitial, hasPendingPlacement: true, isUserDragging: false
+        ))
+        XCTAssertTrue(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(
+            position: .followingLive, hasPendingPlacement: false, isUserDragging: false
+        ))
+    }
+
+    func testPlacedUnreadThatFitsOnScreenFollowsLiveAndAcknowledges() {
+        // I4: after an unread open whose messages fit on screen, the pinned
+        // table never scheduled a receipt unless the user dragged.
+        XCTAssertTrue(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(
+            position: .readingHistory, hasPendingPlacement: false, isUserDragging: false
+        ))
+        XCTAssertTrue(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(
+            position: .focusedEvent, hasPendingPlacement: false, isUserDragging: false
+        ))
+        XCTAssertFalse(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(
+            position: .readingHistory, hasPendingPlacement: false, isUserDragging: true
+        ), "A drag owns the position until it ends")
+    }
+
+    func testReadMarkerPlacementSucceedsWhenClampedAtTheLiveEdge() {
+        XCTAssertTrue(StableTimelineViewportPolicy.readMarkerPlaced(
+            isTargetAtVisualTop: true, isTargetVisible: true, isClampedAtNewestEdge: false
+        ))
+        XCTAssertTrue(StableTimelineViewportPolicy.readMarkerPlaced(
+            isTargetAtVisualTop: false, isTargetVisible: true, isClampedAtNewestEdge: true
+        ), "Newer rows shorter than the viewport cannot scroll the marker to the top")
+        XCTAssertFalse(StableTimelineViewportPolicy.readMarkerPlaced(
+            isTargetAtVisualTop: false, isTargetVisible: true, isClampedAtNewestEdge: false
+        ))
+        XCTAssertFalse(StableTimelineViewportPolicy.readMarkerPlaced(
+            isTargetAtVisualTop: false, isTargetVisible: false, isClampedAtNewestEdge: true
+        ))
+    }
+
+    @MainActor
+    func testShortUnreadPlacementCompletesAndReportsPinned() async throws {
+        let rows = TimelineFixtures.largeTimeline(count: 4).map { item in
+            StableTimelineViewportRow(id: .event(item.id), content: .event(.init(
+                item: item, isGroupedWithPrevious: false, isTimestampRevealed: false,
+                animateSend: false, replyPreview: nil, replyCount: 0,
+                availability: .init(canReply: false, canEdit: false, canRedact: false, canReact: false)
+            )))
+        }
+        var completions: [Bool] = []
+        var pinnedReports: [Bool] = []
+        var fillRequests: [Bool] = []
+        let command = StableTimelineViewportCommand(
+            id: 1, routeID: "short", sessionGeneration: 1,
+            kind: .readMarker(eventID: rows[1].eventID ?? "")
+        )
+        let viewport = StableTimelineViewport(
+            routeID: "short", sessionGeneration: 1, rows: rows, command: command,
+            isLive: true, isPaginating: false, backgroundColor: .black,
+            rowContent: { row in AnyView(Text(row.eventID ?? "").frame(height: 70)) },
+            onBottomPinnedChanged: { _, _, isPinned, _ in pinnedReports.append(isPinned) },
+            onUserInteractionChanged: { _, _, _ in },
+            onPaginationThresholdReached: { _, _, _, fillsShortContent in
+                fillRequests.append(fillsShortContent)
+                return true
+            },
+            onTimestampRevealRequested: { _, _, _ in },
+            onCommandCompleted: { _, _, _, success, _ in completions.append(success) }
+        )
+        let controller = StableTimelineViewController(coordinator: viewport.makeCoordinator())
+        // A window outside a scene never lays out; the table needs real bounds
+        // before it executes a placement command.
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        let window = scene.map { UIWindow(windowScene: $0) } ?? UIWindow()
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        window.rootViewController = controller
+        window.isHidden = false
+        defer { window.isHidden = true }
+        controller.view.frame = window.bounds
+        controller.view.layoutIfNeeded()
+
+        let configuration = StableTimelineViewController.Configuration(
+            routeID: "short", sessionGeneration: 1, rows: rows, command: command,
+            isLive: true, isPaginating: false, backgroundColor: .black
+        )
+        controller.update(configuration: configuration)
+        for _ in 0 ..< 30 where completions.isEmpty {
+            controller.view.setNeedsLayout()
+            controller.view.layoutIfNeeded()
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        // A later SwiftUI update with the command settled lets short content
+        // ask for older history without a scroll.
+        controller.update(configuration: configuration)
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(completions, [true])
+        XCTAssertEqual(pinnedReports.last, true)
+        XCTAssertEqual(fillRequests, [true])
     }
 
     func testFiveThousandEventInputAndVisibleCellsRemainBounded() {
