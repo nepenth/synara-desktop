@@ -214,7 +214,7 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
   {
     page: SettingsPages.AppearancePage,
     title: 'Page Zoom',
-    description: 'Scale the whole interface, from 75% to 150%.',
+    description: 'Scale the whole interface, from 75% to 200%.',
     synonyms: ['zoom', 'scale', 'size', 'bigger', 'smaller', 'font size'],
   },
   {

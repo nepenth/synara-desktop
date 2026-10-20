@@ -7,7 +7,6 @@ import {
   Overlay,
   OverlayBackdrop,
   OverlayCenter,
-  Dialog,
   Header,
   config,
   Box,
@@ -15,6 +14,7 @@ import {
   Icon,
   Icons,
 } from 'folds';
+import { Dialog } from '../../../components/modal-dialog';
 import FocusTrap from '../../../components/FocusTrap';
 import type { MatrixError } from '../../../utils/matrix';
 import { SequenceCard } from '../../../components/sequence-card';
@@ -107,7 +107,7 @@ function RoomUpgradeDialog({ requestClose }: { requestClose: () => void }) {
               <Box grow="Yes">
                 <Text size="H4">{room.isSpaceRoom() ? 'Space Upgrade' : 'Room Upgrade'}</Text>
               </Box>
-              <IconButton size="300" onClick={requestClose} radii="300">
+              <IconButton size="300" onClick={requestClose} radii="300" aria-label="Close">
                 <Icon src={Icons.Cross} />
               </IconButton>
             </Header>

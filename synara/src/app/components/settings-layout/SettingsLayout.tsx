@@ -14,13 +14,13 @@ import {
   Icons,
   IconSrc,
   Input,
-  Modal,
   Overlay,
   OverlayBackdrop,
   OverlayCenter,
   Scroll,
   Text,
 } from 'folds';
+import { Modal } from '../modal-dialog';
 import classNames from 'classnames';
 import FocusTrap from '../FocusTrap';
 import { PageHeader, PageNav, PageNavContent, PageNavHeader } from '../page';
@@ -59,7 +59,13 @@ export function SettingsModal({ requestClose, children }: SettingsModalProps) {
             escapeDeactivates: stopPropagation,
           }}
         >
-          <Modal size="500" variant="Background" className={css.SettingsModal}>
+          {/* Named explicitly: its first header is the open page ("General"), not the dialog. */}
+          <Modal
+            size="500"
+            variant="Background"
+            className={css.SettingsModal}
+            aria-label="Settings"
+          >
             {children}
           </Modal>
         </FocusTrap>

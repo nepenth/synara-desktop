@@ -22,7 +22,7 @@ export type TimeProps = {
  * @returns {React.ReactElement} A <Text as="time"> element with the formatted date/time.
  */
 export const Time = as<'span', TimeProps & ComponentProps<typeof Text>>(
-  ({ compact, hour24Clock, dateFormatString, ts, ...props }, ref) => {
+  ({ compact, hour24Clock, dateFormatString, ts, style, ...props }, ref) => {
     const formattedTime = timeHourMinute(ts, hour24Clock);
 
     let time: string;
@@ -37,7 +37,14 @@ export const Time = as<'span', TimeProps & ComponentProps<typeof Text>>(
     }
 
     return (
-      <Text as="time" style={{ flexShrink: 0 }} size="T200" priority="300" {...props} ref={ref}>
+      // Opaque secondary text, not a muted priority: secondary at 0.75 opacity was 3.3:1.
+      <Text
+        as="time"
+        style={{ flexShrink: 0, color: 'var(--synara-content-secondary)', ...style }}
+        size="T200"
+        {...props}
+        ref={ref}
+      >
         {time}
       </Text>
     );

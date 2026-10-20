@@ -294,7 +294,12 @@ function SpaceHeader() {
             {joinRules?.join_rule !== 'public' && <Icon src={Icons.Lock} size="50" />}
           </Box>
           <Box shrink="No">
-            <IconButton aria-pressed={!!menuAnchor} variant="Surface" onClick={handleOpenMenu}>
+            <IconButton
+              aria-label="More options"
+              aria-pressed={!!menuAnchor}
+              variant="Surface"
+              onClick={handleOpenMenu}
+            >
               <Icon src={Icons.VerticalDots} size="200" />
             </IconButton>
           </Box>
@@ -310,7 +315,6 @@ function SpaceHeader() {
             <FocusTrap
               focusTrapOptions={{
                 initialFocus: false,
-                returnFocusOnDeactivate: false,
                 onDeactivate: () => setMenuAnchor(undefined),
                 clickOutsideDeactivates: true,
                 isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',

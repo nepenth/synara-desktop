@@ -272,6 +272,7 @@ export function DeviceDeleteBtn({
       radii="Pill"
       onClick={() => onDeleteToggle(deviceId)}
       disabled={disabled}
+      aria-label="Delete device"
     >
       <Icon size="50" src={Icons.Delete} />
     </Chip>

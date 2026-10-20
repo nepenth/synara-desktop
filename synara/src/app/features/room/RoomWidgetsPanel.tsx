@@ -66,6 +66,7 @@ export function RoomWidgetsPanel({ roomId, requestClose }: RoomWidgetsPanelProps
           size="300"
           onClick={requestClose}
           radii="300"
+          aria-label="Close"
         >
           <Icon src={Icons.Cross} size="400" />
         </IconButton>

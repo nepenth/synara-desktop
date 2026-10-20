@@ -47,7 +47,7 @@ export function JoinBeforeNavigate({
             {screenSize === ScreenSize.Mobile && (
               <BackRouteHandler>
                 {(onBack) => (
-                  <IconButton onClick={onBack}>
+                  <IconButton onClick={onBack} aria-label="Back">
                     <Icon src={Icons.ArrowLeft} />
                   </IconButton>
                 )}

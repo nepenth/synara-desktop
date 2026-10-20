@@ -276,7 +276,6 @@ function InviteCard({
                 ts={invite.inviteTs}
                 hour24Clock={hour24Clock}
                 dateFormatString={dateFormatString}
-                priority="300"
               />
             </Box>
           )}
@@ -752,7 +751,7 @@ export function Invites() {
             {screenSize === ScreenSize.Mobile && (
               <BackRouteHandler>
                 {(onBack) => (
-                  <IconButton onClick={onBack}>
+                  <IconButton onClick={onBack} aria-label="Back">
                     <Icon src={Icons.ArrowLeft} />
                   </IconButton>
                 )}

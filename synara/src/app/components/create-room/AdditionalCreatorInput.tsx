@@ -279,6 +279,7 @@ export function AdditionalCreatorInput({
               variant="Secondary"
               radii="Pill"
               onClick={handleOpenMenu}
+              aria-label="Add founder"
               aria-pressed={!!menuCords}
               disabled={disabled}
             >

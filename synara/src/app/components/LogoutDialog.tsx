@@ -1,5 +1,6 @@
 import React, { forwardRef, useCallback } from 'react';
-import { Dialog, Header, config, Box, Text, Button, Spinner, color } from 'folds';
+import { Header, config, Box, Text, Button, Spinner, color } from 'folds';
+import { Dialog } from './modal-dialog';
 import { AsyncStatus, useAsyncCallback } from '../hooks/useAsyncCallback';
 import {
   attemptLogout,

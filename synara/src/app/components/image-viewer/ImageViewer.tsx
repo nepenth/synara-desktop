@@ -38,7 +38,7 @@ export const ImageViewer = as<'div', ImageViewerProps>(
       >
         <Header className={css.ImageViewerHeader} size="400">
           <Box grow="Yes" alignItems="Center" gap="200">
-            <IconButton size="300" radii="300" onClick={requestClose}>
+            <IconButton size="300" radii="300" onClick={requestClose} aria-label="Back">
               <Icon size="50" src={Icons.ArrowLeft} />
             </IconButton>
             <Text size="T300" truncate>

@@ -6,13 +6,13 @@ import {
   Icon,
   IconButton,
   Icons,
-  Modal,
   Overlay,
   OverlayBackdrop,
   OverlayCenter,
   Scroll,
   Text,
 } from 'folds';
+import { Modal } from '../../components/modal-dialog';
 import FocusTrap from '../../components/FocusTrap';
 import { useAllJoinedRoomsSet, useGetRoom } from '../../hooks/useGetRoom';
 import { SpaceProvider } from '../../hooks/useSpace';
@@ -63,7 +63,7 @@ function CreateRoomModal({ state }: CreateRoomModalProps) {
                     </Text>
                   </Box>
                   <Box shrink="No">
-                    <IconButton size="300" radii="300" onClick={closeDialog}>
+                    <IconButton size="300" radii="300" onClick={closeDialog} aria-label="Close">
                       <Icon src={Icons.Cross} />
                     </IconButton>
                   </Box>

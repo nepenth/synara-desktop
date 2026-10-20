@@ -12,7 +12,6 @@ import {
   Box,
   Button,
   config,
-  Dialog,
   Icon,
   Icons,
   Overlay,
@@ -21,6 +20,7 @@ import {
   Spinner,
   Text,
 } from 'folds';
+import { Dialog } from '../../components/modal-dialog';
 import FocusTrap from '../../components/FocusTrap';
 import { SettingTile } from '../../components/setting-tile';
 import {

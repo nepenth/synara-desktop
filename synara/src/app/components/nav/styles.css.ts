@@ -89,8 +89,9 @@ const NavItemBase = style({
     '&[aria-selected=true]::before': {
       opacity: 1,
     },
+    // Primary, not ContainerLine: the line tone matches the hover fill (~1.2:1).
     [`&:has(.${NavLink}:focus-visible)`]: {
-      outline: `${config.borderWidth.B600} solid ${ContainerLine}`,
+      outline: `${config.borderWidth.B600} solid ${color.Primary.Main}`,
       outlineOffset: `calc(-1 * ${config.borderWidth.B600})`,
     },
     '&[aria-selected=true]:active': {
@@ -120,7 +121,7 @@ const NavItemBase = style({
   '@supports': {
     [`not selector(:has(.${NavLink}:focus-visible))`]: {
       ':focus-within': {
-        outline: `${config.borderWidth.B600} solid ${ContainerLine}`,
+        outline: `${config.borderWidth.B600} solid ${color.Primary.Main}`,
         outlineOffset: `calc(-1 * ${config.borderWidth.B600})`,
       },
     },

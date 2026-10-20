@@ -151,6 +151,7 @@ export function AudioContent({
           size="300"
           radii="Pill"
           onClick={() => setMute(!mute)}
+          aria-label="Mute"
           aria-pressed={mute}
         >
           <Icon src={mute ? Icons.VolumeMute : Icons.VolumeHigh} size="50" />

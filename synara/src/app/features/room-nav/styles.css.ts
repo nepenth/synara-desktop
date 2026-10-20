@@ -24,6 +24,14 @@ export const RoomName = style({
   letterSpacing: '-0.005em',
 });
 
+/**
+ * Read rooms recede through an opaque secondary colour, not opacity: primary at
+ * 0.75 fell to 3.8:1 on a selected light row. Unread rooms add weight instead.
+ */
+export const RoomNameRead = style({
+  color: 'var(--synara-content-secondary)',
+});
+
 /** Resting rows remain on the reading plane; interaction supplies elevation. */
 export const RoomSurface = style({
   backgroundColor: 'transparent',

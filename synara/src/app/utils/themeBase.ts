@@ -136,18 +136,36 @@ const tintScale = (
   OnContainer: scale.OnContainer,
 });
 
+/** A surface the softened colour must also stay readable on, and its floor. */
+type ContrastFloor = readonly [surface: string, minimumContrast: number];
+
 const softenToContrast = (
   foreground: string,
   background: string,
-  minimumContrast: number
+  minimumContrast: number,
+  floors: readonly ContrastFloor[] = []
 ): string => {
   let resolved = foreground;
   for (let step = 1; step <= 95; step += 1) {
     const candidate = chroma.mix(foreground, background, step / 100, 'rgb').hex();
     if (chroma.contrast(candidate, background) < minimumContrast) break;
+    if (floors.some(([surface, floor]) => chroma.contrast(candidate, surface) < floor)) break;
     resolved = candidate;
   }
   return resolved;
+};
+
+/** WCAG 2.2 AA minimum for body text. */
+export const TEXT_CONTRAST_AA = 4.5;
+
+/**
+ * folds `priority="300"` dims text with this opacity (folds ships 0.75). It is
+ * the smallest value that keeps primary text at AA on every derived surface,
+ * the rail, room list, selected row and composer included.
+ */
+export const MUTED_TEXT_OPACITY: Record<ThemeRampKind, number> = {
+  light: 0.86,
+  dark: 0.8,
 };
 
 const surfaceAtContrast = (surface: string, toward: string, targetContrast: number): string => {
@@ -223,11 +241,18 @@ const contentRoles = (
   const neutral = kind === 'dark' ? '#ffffff' : '#000000';
   const heading = softenToContrast(neutral, background, 12);
   const primary = softenToContrast(neutral, background, 8);
-  const secondary = softenToContrast(neutral, background, 5.5);
-  const tertiary = softenToContrast(neutral, background, 4.5);
   const selectedSurface = chroma
     .mix(surface.Container, primary, kind === 'dark' ? 0.1 : 0.06, 'rgb')
     .hex();
+  // Secondary text also labels read rooms and timestamps outside the chat
+  // column, so it keeps AA on the room list, its selected row and the composer.
+  const secondary = softenToContrast(neutral, background, 5.5, [
+    [surface.Container, TEXT_CONTRAST_AA],
+    [surface.ContainerHover, TEXT_CONTRAST_AA],
+    [selectedSurface, TEXT_CONTRAST_AA],
+    [secondaryContainer.Container, TEXT_CONTRAST_AA],
+  ]);
+  const tertiary = softenToContrast(neutral, background, 4.5);
 
   return {
     heading,
@@ -363,7 +388,8 @@ export const deriveThemeSurfaceRamp = (
       chrome: chroma.mix(hslHex(hue, saturation * 0.45, 1), hex, mixRatio * 0.4, 'rgb').hex(),
       overlay: 'rgba(15, 17, 21, 0.45)',
       shadow: 'rgba(15, 17, 21, 0.16)',
-      focusRing: 'rgba(15, 17, 21, 0.45)',
+      // 0.55 keeps the folds focus ring at 3:1 on every light surface (0.45 was ~2.8).
+      focusRing: 'rgba(15, 17, 21, 0.55)',
     },
     kind
   );

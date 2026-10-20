@@ -4,7 +4,6 @@ import {
   Button,
   Icon,
   Icons,
-  Modal,
   Overlay,
   OverlayBackdrop,
   OverlayCenter,
@@ -14,6 +13,7 @@ import {
   TooltipProvider,
   as,
 } from 'folds';
+import { Modal } from '../../modal-dialog';
 import { EncryptedAttachmentInfo, IFileInfo } from '../../../../types/matrix/common';
 import FocusTrap from '../../FocusTrap';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';

@@ -234,6 +234,7 @@ export function RoomPacks({ onViewPack }: RoomPacksProps) {
                     variant="Critical"
                     onClick={() => handleUndoRemove(address)}
                     disabled={applyingChanges}
+                    aria-label={`Restore ${pack.meta.name ?? 'pack'}`}
                   >
                     <Icon src={Icons.Plus} size="100" />
                   </IconButton>
@@ -244,6 +245,7 @@ export function RoomPacks({ onViewPack }: RoomPacksProps) {
                     variant="Secondary"
                     onClick={() => handleRemove(address)}
                     disabled={applyingChanges}
+                    aria-label={`Remove ${pack.meta.name ?? 'pack'}`}
                   >
                     <Icon src={Icons.Cross} size="100" />
                   </IconButton>

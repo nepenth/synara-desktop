@@ -158,6 +158,7 @@ function PinnedMessage({
           size="300"
           radii="Pill"
           onClick={unpinState.status === AsyncStatus.Loading ? undefined : handleUnpinClick}
+          aria-label="Unpin message"
           aria-disabled={unpinState.status === AsyncStatus.Loading}
         >
           {unpinState.status === AsyncStatus.Loading ? (
@@ -300,6 +301,7 @@ function NativePinnedMessage({
             evt.stopPropagation();
             unpin();
           }}
+          aria-label="Unpin message"
           aria-disabled={unpinState.status === AsyncStatus.Loading}
         >
           {unpinState.status === AsyncStatus.Loading ? (
@@ -607,7 +609,7 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
               <Text size="H5">Pinned Messages</Text>
             </Box>
             <Box shrink="No">
-              <IconButton size="300" onClick={requestClose} radii="300">
+              <IconButton size="300" onClick={requestClose} radii="300" aria-label="Close">
                 <Icon src={Icons.Cross} size="400" />
               </IconButton>
             </Box>

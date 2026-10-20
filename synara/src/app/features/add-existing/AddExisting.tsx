@@ -12,7 +12,6 @@ import {
   Input,
   Menu,
   MenuItem,
-  Modal,
   Overlay,
   OverlayBackdrop,
   OverlayCenter,
@@ -20,6 +19,7 @@ import {
   Spinner,
   Text,
 } from 'folds';
+import { Modal } from '../../components/modal-dialog';
 import React, {
   ChangeEventHandler,
   MouseEventHandler,
@@ -216,7 +216,7 @@ export function AddExistingModal({ parentId, space, requestClose }: AddExistingM
                   <Text size="H4">Add Existing</Text>
                 </Box>
                 <Box shrink="No">
-                  <IconButton size="300" radii="300" onClick={requestClose}>
+                  <IconButton size="300" radii="300" onClick={requestClose} aria-label="Close">
                     <Icon src={Icons.Cross} />
                   </IconButton>
                 </Box>

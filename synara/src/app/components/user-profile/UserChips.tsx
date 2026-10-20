@@ -544,7 +544,13 @@ export function OptionsChip({ userId }: { userId: string }) {
         </FocusTrap>
       }
     >
-      <Chip variant="SurfaceVariant" radii="Pill" onClick={open} aria-pressed={!!cords}>
+      <Chip
+        variant="SurfaceVariant"
+        radii="Pill"
+        onClick={open}
+        aria-label="More options"
+        aria-pressed={!!cords}
+      >
         {ignoring ? (
           <Spinner variant="Secondary" size="50" />
         ) : (

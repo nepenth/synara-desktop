@@ -26,8 +26,12 @@ export const ResizeHandle = style({
   zIndex: 1,
   touchAction: 'none',
   selectors: {
-    '&:hover, &:focus-visible': {
+    '&:hover': {
       backgroundColor: color.Primary.ContainerLine,
+    },
+    // The strip itself is the focus indicator: Primary.Main reaches 3:1 on the pane.
+    '&:focus-visible': {
+      backgroundColor: color.Primary.Main,
       outline: 'none',
     },
   },

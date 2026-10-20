@@ -7,7 +7,6 @@ import {
   Icon,
   IconButton,
   Icons,
-  Modal,
   Overlay,
   OverlayBackdrop,
   OverlayCenter,
@@ -16,6 +15,7 @@ import {
   Text,
   config,
 } from 'folds';
+import { Modal } from '../../components/modal-dialog';
 import { copyToClipboard } from '../../utils/dom';
 import { useTimeoutToggle } from '../../hooks/useTimeoutToggle';
 import { previewMatrixMediaText } from '../../matrix/media';

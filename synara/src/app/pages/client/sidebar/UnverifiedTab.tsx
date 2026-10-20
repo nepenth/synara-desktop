@@ -38,6 +38,7 @@ function UnverifiedIndicator() {
                 as="button"
                 ref={triggerRef}
                 outlined
+                aria-label={unverified ? 'Unverified Device' : 'Unverified Devices'}
                 onClick={() => setSettings(true)}
               >
                 <Icon

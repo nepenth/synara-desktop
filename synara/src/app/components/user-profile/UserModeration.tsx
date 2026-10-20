@@ -3,7 +3,6 @@ import {
   Button,
   color,
   config,
-  Dialog,
   Header,
   Icon,
   IconButton,
@@ -15,6 +14,7 @@ import {
   OverlayBackdrop,
   OverlayCenter,
 } from 'folds';
+import { Dialog } from '../modal-dialog';
 import React, { useCallback, useRef, useState } from 'react';
 import FocusTrap from '../FocusTrap';
 import { useRoom } from '../../hooks/useRoom';
@@ -287,7 +287,7 @@ function ModerationConfirmDialog({ action, onCancel, onConfirm }: ModerationConf
               <Box grow="Yes">
                 <Text size="H4">{title}</Text>
               </Box>
-              <IconButton size="300" onClick={onCancel} radii="300">
+              <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
                 <Icon src={Icons.Cross} />
               </IconButton>
             </Header>

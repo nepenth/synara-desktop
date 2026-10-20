@@ -51,7 +51,7 @@ export const EventReaders = as<'div', EventReadersProps>(
           <Box grow="Yes">
             <Text size="H3">Seen by</Text>
           </Box>
-          <IconButton size="300" onClick={requestClose}>
+          <IconButton size="300" onClick={requestClose} aria-label="Close">
             <Icon src={Icons.Cross} />
           </IconButton>
         </Header>
