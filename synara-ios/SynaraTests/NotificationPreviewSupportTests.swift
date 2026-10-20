@@ -480,6 +480,33 @@ final class NotificationPreviewSupportTests: XCTestCase {
         XCTAssertTrue(SynaraNotificationDiagnostics.entries(defaults: defaults).isEmpty)
     }
 
+    func testSessionRejectedCountSurvivesRecordRolloverAndClears() throws {
+        let suiteName = "synara.notification-diagnostics.session-rejected.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        XCTAssertEqual(SynaraNotificationDiagnostics.sessionRejectedCount(defaults: defaults), 0)
+
+        for _ in 0 ..< 3 {
+            SynaraNotificationDiagnostics.record(
+                SynaraNotificationDiagnostics.previewFailureStage(coreCode: "p4-s11-nse-session-rejected"),
+                runID: UUID(),
+                defaults: defaults
+            )
+        }
+        SynaraNotificationDiagnostics.record(.coreNetworkTimeout, runID: UUID(), defaults: defaults)
+        for _ in 0 ..< SynaraNotificationDiagnostics.maximumEntries {
+            SynaraNotificationDiagnostics.record(.received, runID: UUID(), defaults: defaults)
+        }
+
+        XCTAssertFalse(SynaraNotificationDiagnostics.entries(defaults: defaults).contains {
+            $0.stage == SynaraNotificationDiagnostics.Stage.coreSessionRejected.rawValue
+        })
+        XCTAssertEqual(SynaraNotificationDiagnostics.sessionRejectedCount(defaults: defaults), 3)
+
+        SynaraNotificationDiagnostics.clear(defaults: defaults)
+        XCTAssertEqual(SynaraNotificationDiagnostics.sessionRejectedCount(defaults: defaults), 0)
+    }
+
     func testNotificationDiagnosticsDecodeRecordsFromBeforeCorrelationIDs() throws {
         let suiteName = "synara.notification-diagnostics.legacy.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

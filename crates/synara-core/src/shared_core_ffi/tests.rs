@@ -1260,3 +1260,192 @@ fn ios_logout_and_attach_use_the_shared_core_policies() {
         );
     }
 }
+
+fn vault_session_secrets(
+    entries: &Mutex<HashMap<String, Vec<u8>>>,
+    identity: &AccountIdentity,
+) -> crate::app::lifecycle::HostMatrixSessionSecrets {
+    let key = SessionMaterialId::from_identity(identity)
+        .account()
+        .to_owned();
+    let bytes = entries
+        .lock()
+        .expect("vault")
+        .get(&key)
+        .cloned()
+        .expect("session material");
+    SessionMaterial::from_sealed_blob(bytes)
+        .decode_host_secrets()
+        .expect("decodes")
+}
+
+#[tokio::test]
+async fn ios_password_login_requests_no_refresh_token_and_restores_without_one() {
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, ResponseTemplate};
+    let server = MatrixMockServer::new().await;
+    server.mock_versions().ok().mount().await;
+    Mock::given(method("POST"))
+        .and(path("/_matrix/client/v3/login"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "user_id": "@alice:example.org",
+            "access_token": "syt_ios_login_access",
+            "device_id": "IOSDEVICE",
+        })))
+        .expect(1)
+        .mount(server.server())
+        .await;
+    let identity = AccountIdentity::new("@alice:example.org", &server.uri()).unwrap();
+    let entries = Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries.clone())));
+    let root = temp_root("ios-login-no-refresh");
+    let root_path = root.to_string_lossy().into_owned();
+    let dto = shared
+        .login_with_password_inner(
+            identity.user_id(),
+            identity.homeserver_url(),
+            &root_path,
+            "fixture-password",
+        )
+        .await
+        .expect("login");
+    assert_eq!(dto.device_id, "IOSDEVICE");
+
+    let requests = server.server().received_requests().await.unwrap();
+    let login = requests
+        .iter()
+        .find(|request| request.url.path() == "/_matrix/client/v3/login")
+        .expect("login request");
+    let body: serde_json::Value = serde_json::from_slice(&login.body).unwrap();
+    assert_eq!(body["type"], "m.login.password");
+    assert_ne!(
+        body.get("refresh_token"),
+        Some(&serde_json::Value::Bool(true)),
+        "iOS password login does not opt into refresh tokens"
+    );
+    let saved = vault_session_secrets(&entries, &identity);
+    assert_eq!(saved.access_token, "syt_ios_login_access");
+    assert!(!saved.has_refresh_token());
+
+    // Relaunch: restore from the vault without a refresh token.
+    drop(shared);
+    let relaunched = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries)));
+    let restored = relaunched
+        .restore_persisted_session(
+            identity.user_id().to_owned(),
+            identity.homeserver_url().to_owned(),
+            root_path,
+        )
+        .await
+        .expect("restore without refresh token");
+    assert_eq!(restored.device_id, "IOSDEVICE");
+    let tokens = relaunched
+        .retained_client()
+        .unwrap()
+        .session_tokens()
+        .expect("tokens");
+    assert_eq!(tokens.access_token, "syt_ios_login_access");
+    assert!(tokens.refresh_token.is_none());
+    drop(relaunched);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn ios_restore_keeps_refreshing_and_saving_an_existing_refresh_token_session() {
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, ResponseTemplate};
+    let server = MatrixMockServer::new().await;
+    server.mock_versions().ok().mount().await;
+    let identity = AccountIdentity::new("@alice:example.org", &server.uri()).unwrap();
+    // A session saved by a build that still requested refresh tokens.
+    let material = SessionMaterial::from_matrix_tokens(
+        &identity,
+        "DEVICEABC",
+        "syt_legacy_expired",
+        Some("syr_legacy_refresh"),
+    )
+    .unwrap();
+    let entries = Arc::new(Mutex::new(HashMap::new()));
+    persist_session_material(
+        &SecretStoreSessionVault {
+            store: Arc::new(CallbackSecretVault {
+                inner: Box::new(MemoryCallbackVault(entries.clone())),
+            }),
+        },
+        &identity,
+        &material,
+    )
+    .unwrap();
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries.clone())));
+    let root = temp_root("ios-legacy-refresh");
+    shared
+        .restore_persisted_session(
+            identity.user_id().to_owned(),
+            identity.homeserver_url().to_owned(),
+            root.to_string_lossy().into_owned(),
+        )
+        .await
+        .expect("restore with refresh token");
+
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/v3/account/whoami"))
+        .and(header("authorization", "Bearer syt_legacy_expired"))
+        .respond_with(ResponseTemplate::new(401).set_body_json(serde_json::json!({
+            "errcode": "M_UNKNOWN_TOKEN",
+            "error": "Access token has expired",
+            "soft_logout": true,
+        })))
+        .expect(1)
+        .mount(server.server())
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/_matrix/client/v3/refresh"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "access_token": "syt_legacy_rotated",
+            "refresh_token": "syr_legacy_rotated",
+            "expires_in_ms": 300000,
+        })))
+        .expect(1)
+        .mount(server.server())
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/v3/account/whoami"))
+        .and(header("authorization", "Bearer syt_legacy_rotated"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "user_id": "@alice:example.org",
+            "device_id": "DEVICEABC",
+        })))
+        .expect(1)
+        .mount(server.server())
+        .await;
+
+    shared
+        .retained_client()
+        .unwrap()
+        .whoami()
+        .await
+        .expect("the app refreshes the expired token and retries");
+    let saved = vault_session_secrets(&entries, &identity);
+    assert_eq!(saved.access_token, "syt_legacy_rotated");
+    assert_eq!(saved.refresh_token.as_deref(), Some("syr_legacy_rotated"));
+    server.server().verify().await;
+    drop(shared);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn ios_password_login_never_opts_into_refresh_tokens() {
+    let source = include_str!("session_lifecycle.rs");
+    let login = source
+        .split("async fn login_with_password_inner(")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("pub async fn persist_planted_session_for_test(")
+                .next()
+        })
+        .expect("login body");
+    assert!(login.contains("request_refresh_token: false"));
+    assert!(!login.contains("request_refresh_token: true"));
+}

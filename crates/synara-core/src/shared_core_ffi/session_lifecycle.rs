@@ -944,7 +944,12 @@ impl SharedCore {
             identity.user_id(),
             password,
             &LoginOptions {
-                request_refresh_token: true,
+                // The notification extension restores this session read-only
+                // and cannot refresh it, so an expiring access token leaves
+                // pushes without previews once the app has been suspended past
+                // the token lifetime. Sessions saved with a refresh token by
+                // older builds keep refreshing in the app.
+                request_refresh_token: false,
                 device_display_name: Some(DevicePlatform::Ios.device_display_name().to_owned()),
                 device_id: existing_device_id,
             },

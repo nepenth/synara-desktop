@@ -115,6 +115,7 @@ enum SynaraSharedConstants {
     static let hour24ClockKey = "synara.settings.hour24Clock"
     static let hideActivityKey = "synara.settings.hideActivity"
     static let notificationDiagnosticsKey = "synara.notification.previewDiagnostics.v1"
+    static let notificationSessionRejectedCountKey = "synara.notification.sessionRejectedCount.v1"
 
     static var registeredUserDefaults: [String: Any] {
         [
@@ -330,11 +331,26 @@ enum SynaraNotificationDiagnostics {
         return entriesWithoutLock(defaults: defaults)
     }
 
+    /// How often the homeserver rejected the shared session's access token
+    /// while the extension resolved a push, since diagnostics were last
+    /// cleared. Kept outside the bounded records so it survives rollover; a
+    /// rising count means previews fall back because the token expired or
+    /// was revoked.
+    static func sessionRejectedCount(
+        defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()
+    ) -> Int {
+        guard let defaults else { return 0 }
+        lock.lock()
+        defer { lock.unlock() }
+        return max(0, defaults.integer(forKey: SynaraSharedConstants.notificationSessionRejectedCountKey))
+    }
+
     static func clear(defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()) {
         guard let defaults else { return }
         lock.lock()
         defer { lock.unlock() }
         defaults.removeObject(forKey: SynaraSharedConstants.notificationDiagnosticsKey)
+        defaults.removeObject(forKey: SynaraSharedConstants.notificationSessionRejectedCountKey)
     }
 
     private static func entriesWithoutLock(defaults: UserDefaults) -> [SynaraNotificationDiagnosticEntry] {
@@ -364,6 +380,11 @@ enum SynaraNotificationDiagnostics {
         }
         guard let data = try? JSONEncoder().encode(current) else { return }
         defaults.set(data, forKey: SynaraSharedConstants.notificationDiagnosticsKey)
+        let rejected = additions.filter { $0.stage == Stage.coreSessionRejected.rawValue }.count
+        if rejected > 0 {
+            let key = SynaraSharedConstants.notificationSessionRejectedCountKey
+            defaults.set(max(0, defaults.integer(forKey: key)) + rejected, forKey: key)
+        }
     }
 }
 
