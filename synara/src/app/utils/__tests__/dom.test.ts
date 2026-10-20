@@ -4,9 +4,27 @@ import {
   dataTransferHasFiles,
   getDataTransferFiles,
   shouldProbeNativeClipboardImage,
+  snapshotClipboardText,
 } from '../dom';
 
 const emptyFileList = { length: 0 } as unknown as FileList;
+
+test('clipboard text snapshot stays readable after the paste event ends', () => {
+  let eventActive = true;
+  const values: Record<string, string> = { 'text/html': '<b>hi</b>', 'text/plain': 'hi' };
+  // A real DataTransfer returns '' once its event has been dispatched.
+  const clipboardData = {
+    getData: (format: string) => (eventActive ? (values[format] ?? '') : ''),
+  };
+
+  const snapshot = snapshotClipboardText(clipboardData);
+  eventActive = false;
+
+  assert.equal(clipboardData.getData('text/plain'), '');
+  assert.equal(snapshot.getData('text/plain'), 'hi');
+  assert.equal(snapshot.getData('text/html'), '<b>hi</b>');
+  assert.equal(snapshot.getData('image/png'), '');
+});
 
 test('data transfer files fall back to file items', () => {
   const image = new File([new Uint8Array([1, 2, 3])], 'screenshot.png', {

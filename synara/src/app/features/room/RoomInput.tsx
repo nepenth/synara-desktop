@@ -8,21 +8,13 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtom, useAtomValue, useStore } from 'jotai';
 import { isKeyHotkey } from 'is-hotkey';
 import type { EventedRoomReading } from '../../utils/roomEvents';
-
-type RelationTypeRelatesTo = {
-  'm.in_reply_to'?: { event_id: string };
-  event_id?: string;
-  rel_type?: string;
-  is_falling_back?: boolean;
-  [key: string]: unknown;
-};
-import { IContent, MsgType, RelationType } from '../../utils/messageContent';
+import { MsgType } from '../../utils/messageContent';
 import { useTranslation } from 'react-i18next';
 import { ReactEditor } from 'slate-react';
-import { Transforms, Editor } from 'slate';
+import { Descendant, Transforms, Editor } from 'slate';
 import {
   Box,
   Button,
@@ -39,6 +31,7 @@ import {
   PopOut,
   RectCords,
   Scroll,
+  Spinner,
   Text,
   config,
   toRem,
@@ -73,6 +66,7 @@ import {
   getMentions,
   shouldPreventDefaultForClipboardInsert,
   insertClipboardData,
+  type AutocompleteSelectFirstRef,
 } from '../../components/editor';
 import { EmojiBoard } from '../../components/emoji-board';
 import { TUploadContent, getMxIdLocalPart } from '../../utils/matrix';
@@ -92,19 +86,19 @@ import {
   UploadBoard,
   UploadBoardContent,
   UploadBoardHeader,
-  UploadBoardImperativeHandlers,
   UploadSendOptions,
 } from '../../components/upload-board';
-import { Upload, UploadSuccess, createUploadFamilyObserverAtom } from '../../state/upload';
+import { Upload, UploadStatus, createUploadFamilyObserverAtom } from '../../state/upload';
 import {
   editableActiveElement,
   getDataTransferFiles,
   shouldProbeNativeClipboardImage,
+  snapshotClipboardText,
 } from '../../utils/dom';
 import { safeFile } from '../../utils/mimeTypes';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
-import { getMemberDisplayName, getMentionContent, trimReplyFromBody } from '../../utils/room';
+import { getMemberDisplayName, trimReplyFromBody } from '../../utils/room';
 import { stopPropagation } from '../../utils/keyboard';
 import { CommandAutocomplete } from './CommandAutocomplete';
 import { Command, SHRUG, TABLEFLIP, UNFLIP, useCommands } from '../../hooks/useCommands';
@@ -138,7 +132,7 @@ import * as css from './RoomComposer.css';
 import {
   fileToNativeAttachmentBytes,
   nativeComposerAttachmentReady,
-  sendComposerAttachmentPlanWithNativeOwner,
+  sendComposerAttachmentWithNativeOwner,
 } from './nativeSendAttachment';
 import { sendComposerGifWithNativeOwner } from './nativeSendGif';
 import {
@@ -169,15 +163,56 @@ import {
 } from './attachmentSendPlan';
 import { renderComposerHtml } from '../../components/editor/composerMarkdown';
 import { getMyUserId, getSafeMyUserId } from '../../state/nativeIdentity';
+import {
+  ComposerSendQueue,
+  cloneComposerContent,
+  mergeRestoredComposerContent,
+  restoreComposerContent,
+  stashComposerSendError,
+  takeComposerSendError,
+} from './composerSendQueue';
+import {
+  COMPOSER_NOT_SIGNED_IN,
+  ComposerUserError,
+  composerCommandErrorMessage,
+  composerSendErrorMessage,
+} from './composerSendError';
+import type { NativeUploadSendState } from '../../components/upload-card/UploadCardRenderer';
+import { useMediaConfig } from '../../hooks/useMediaConfig';
+import {
+  attachmentTooLargeMessage,
+  effectiveNativeAttachmentLimit,
+  mediaConfigUploadLimit,
+} from '../../utils/nativeMediaLimits';
 
-import { sendNativeMessage } from '../../native/nativeCommands';
+/** Commands that send a message rather than run an action. */
+const MESSAGE_COMMANDS: ReadonlySet<string> = new Set([
+  Command.Me,
+  Command.Notice,
+  Command.Shrug,
+  Command.TableFlip,
+  Command.UnFlip,
+]);
+
+/** One queued composer send, with what goes back to the composer if it fails. */
+type ComposerSendItem = {
+  draftKey: string;
+  content: Descendant[];
+  /** Set for an action command such as /invite, for its error copy. */
+  commandName?: string;
+  /** Composer files this send owns. */
+  transactionIds: string[];
+  /** The Core reply draft this send consumes. */
+  replyRevision?: number;
+};
+
 interface RoomInputProps {
   editor: Editor;
   roomId: string;
   room: EventedRoomReading;
   /**
    * The side-pane thread composer sends into this root. It keeps its own
-   * draft and uploads, and does not move the room timeline after a send.
+   * draft and uploads; after a send only the view showing this thread moves.
    * Without it the composer follows the room's open thread view.
    */
   threadRootOverride?: string;
@@ -219,7 +254,17 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     }, [mentionInsert, roomId, editor, setMentionInsert]);
     const roomThreadRootEventId = useNativeThreadRoot(roomId);
     const threadRootEventId = threadRootOverride ?? roomThreadRootEventId;
-    const replyDraft = useNativeComposerReplyDraft(roomId, threadRootEventId);
+    const coreReplyDraft = useNativeComposerReplyDraft(roomId, threadRootEventId);
+    // A queued send owns the reply it was written as. The preview hides until
+    // the send clears it (or fails and gives it back), so the next message is
+    // not sent as a second reply.
+    const [claimedReplyRevisions, setClaimedReplyRevisions] = useState<ReadonlySet<number>>(
+      () => new Set()
+    );
+    const replyDraft =
+      coreReplyDraft && !claimedReplyRevisions.has(coreReplyDraft.draftRevision)
+        ? coreReplyDraft
+        : undefined;
     const clearReplyDraft = useCallback(
       async (expectedDraftRevision: number) => {
         const result = await clearNativeComposerReplyDraft({
@@ -272,8 +317,18 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       roomUploadAtomFamily,
       selectedFiles.map((f) => f.file)
     );
-    const uploadBoardHandlers = useRef<UploadBoardImperativeHandlers | undefined>(undefined);
     const attachmentSendPlan = useRef<AttachmentSendPlan | undefined>(undefined);
+    // Files owned by a queued send, and the one Core is uploading now.
+    const [claimedTransactionIds, setClaimedTransactionIds] = useState<ReadonlySet<string>>(
+      () => new Set()
+    );
+    const [uploadingTransactionId, setUploadingTransactionId] = useState<string>();
+    const claimedTransactionIdsRef = useRef<ReadonlySet<string>>(claimedTransactionIds);
+    const claimedReplyRevisionsRef = useRef<ReadonlySet<number>>(claimedReplyRevisions);
+    const store = useStore();
+    const mediaConfig = useMediaConfig();
+    const attachmentLimit = effectiveNativeAttachmentLimit(mediaConfigUploadLimit(mediaConfig));
+    const autocompleteSelectFirst: AutocompleteSelectFirstRef = useRef(undefined);
 
     useEffect(() => {
       let cancelled = false;
@@ -311,7 +366,6 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const [gifPickerAnchor, setGifPickerAnchor] = useState<RectCords>();
     const [gifSending, setGifSending] = useState(false);
     const [gifSendError, setGifSendError] = useState<string>();
-    const [sendingMessage, setSendingMessage] = useState(false);
     const [sendError, setSendError] = useState<string>();
     const [composerPreviewUrl, setComposerPreviewUrl] = useState<string>();
     const [composerPreview, setComposerPreview] = useState<NativeMediaPreview | null>(null);
@@ -356,9 +410,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
               );
             })
         );
-        if (owner === 'legacy') {
-          throw new Error('Native Matrix session is required to send polls on desktop.');
-        }
+        if (owner === 'legacy') throw new ComposerUserError(COMPOSER_NOT_SIGNED_IN);
       },
       [clearReplyDraftAfterSend, replyDraft, roomId, t, threadRootEventId]
     );
@@ -373,10 +425,14 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         const safeFiles = files.map(safeFile);
         const fileItems: TUploadItem[] = [];
         // Native Rust encrypts in e2e rooms. JS encrypt is retired.
-        const nativeReady = await nativeComposerAttachmentReady();
+        const nativeReady = await nativeComposerAttachmentReady().catch(() => false);
         setNativeComposerSend(nativeReady);
         if (!nativeReady) {
-          throw new Error('Native Matrix attachment send is unavailable.');
+          // Callers (drop, paste, picker) do not await; report here.
+          setSendError(
+            'Synara is not signed in to your Matrix account, so files can not be attached. Sign in again, then attach them.'
+          );
+          return;
         }
         safeFiles.forEach((f) =>
           fileItems.push({
@@ -398,9 +454,10 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     );
     const pickFile = useFilePicker(handleFiles, true);
     const handleNativeClipboardImage = useCallback(async () => {
-      const file = await readPlatformClipboardImage();
+      // A failed probe falls back to pasting the clipboard's text.
+      const file = await readPlatformClipboardImage().catch(() => undefined);
       if (file) {
-        handleFiles([file]);
+        void handleFiles([file]);
         return true;
       }
       return false;
@@ -410,16 +467,18 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         const files = getDataTransferFiles(evt.clipboardData);
         if (files) {
           evt.preventDefault();
-          handleFiles(files);
+          void handleFiles(files);
           return;
         }
 
         if (isDesktopPlatform() && shouldProbeNativeClipboardImage(evt.clipboardData)) {
           evt.preventDefault();
-          const { clipboardData } = evt;
+          // The clipboard is unreadable once this handler returns; keep its
+          // text for the fallback that runs after the native image probe.
+          const clipboardText = snapshotClipboardText(evt.clipboardData);
           void handleNativeClipboardImage().then((handled) => {
             if (!handled) {
-              insertClipboardData(editor, clipboardData);
+              insertClipboardData(editor, clipboardText);
             }
           });
           return;
@@ -448,7 +507,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         }
 
         evt.preventDefault();
-        handleFiles(files);
+        void handleFiles(files);
       };
 
       window.addEventListener('paste', handleWindowPaste);
@@ -460,23 +519,17 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     const isComposing = useComposingCheck();
 
-    const getReplyRelation = useCallback(() => {
-      const { replyTo, threadRoot } = nativeComposerSendRelation(replyDraft, threadRootEventId);
-      if (!replyTo) return undefined;
-
-      const relation: RelationTypeRelatesTo = {
-        'm.in_reply_to': {
-          event_id: replyTo,
-        },
+    // The draft this composer shows now; undefined once it has closed. A send
+    // that fails after its composer closed restores into the stored draft.
+    const mountedDraftKey = useRef<string | undefined>(draftKey);
+    useEffect(() => {
+      mountedDraftKey.current = draftKey;
+      const stashedError = takeComposerSendError(draftKey);
+      if (stashedError) setSendError(stashedError);
+      return () => {
+        mountedDraftKey.current = undefined;
       };
-      if (threadRoot) {
-        relation.event_id = threadRoot;
-        relation.rel_type = RelationType.Thread;
-        relation.is_falling_back = false;
-      }
-
-      return relation;
-    }, [replyDraft, threadRootEventId]);
+    }, [draftKey]);
 
     useEffect(() => {
       const storedDraft = loadRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
@@ -574,256 +627,341 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       [setSelectedFiles, selectedFiles]
     );
 
-    // Native uploads run to completion in Core; cancelling only drops them here.
+    // Removing a file a queued send owns, before Core starts on it, keeps it
+    // from being sent. The file Core is uploading has no remove control.
     const handleCancelUpload = (uploads: Upload[]) => {
       handleRemoveUpload(uploads.map((upload) => upload.file));
     };
 
-    const handleSendUpload = async (uploads: UploadSuccess[], options?: UploadSendOptions) => {
-      const { draftRevision, replyTo, threadRoot } = nativeComposerSendRelation(
-        replyDraft,
-        threadRootEventId
-      );
-      const nativeInputs = await Promise.all(
-        uploads.map(async (upload) => {
-          const fileItem = selectedFiles.find((f) => f.file === upload.file);
-          if (!fileItem) throw new Error('Broken upload');
-          const source = fileItem.originalFile;
-          return {
-            roomId,
-            transactionId: fileItem.transactionId,
-            file: {
-              filename: source.name || 'attachment',
-              mimeType: source.type || 'application/octet-stream',
-              bytes: await fileToNativeAttachmentBytes(source),
-            },
-            caption: uploads.length === 1 ? options?.caption : undefined,
-            formattedCaption: uploads.length === 1 ? options?.formattedCaption : undefined,
-            mentionUserIds: uploads.length === 1 ? options?.mentionUserIds : undefined,
-            mentionRoom: uploads.length === 1 ? options?.mentionRoom : undefined,
-            replyTo,
-            threadRoot,
-          };
-        })
-      );
-      const owner = await sendComposerAttachmentPlanWithNativeOwner(nativeInputs, (index) => {
-        const sentTransactionId = nativeInputs[index].transactionId;
-        if (attachmentSendPlan.current) {
-          attachmentSendPlan.current = completeAttachmentSendStep(
-            attachmentSendPlan.current,
-            sentTransactionId
-          );
-        }
-        handleRemoveUpload(uploads[index].file);
-      });
-      if (owner !== 'native') {
-        throw new Error('Native Matrix attachment send is unavailable.');
-      }
-      if (nativeInputs.length > 0) {
-        await clearReplyDraftAfterSend(draftRevision, () => {
-          setSendError(
-            t(
-              'composer.reply_clear_after_send_failed',
-              'Message sent, but the reply state could not be cleared.'
-            )
-          );
-        });
-      }
-    };
+    const claimTransactionIds = useCallback((ids: string[], claimed: boolean) => {
+      if (ids.length === 0) return;
+      const next = new Set(claimedTransactionIdsRef.current);
+      ids.forEach((id) => (claimed ? next.add(id) : next.delete(id)));
+      claimedTransactionIdsRef.current = next;
+      setClaimedTransactionIds(next);
+    }, []);
 
-    const submit = useCallback(async () => {
-      if (sendingMessage) return;
+    const claimReplyRevision = useCallback((revision: number | undefined, claimed: boolean) => {
+      if (revision === undefined) return;
+      const next = new Set(claimedReplyRevisionsRef.current);
+      if (claimed) next.add(revision);
+      else next.delete(revision);
+      claimedReplyRevisionsRef.current = next;
+      setClaimedReplyRevisions(next);
+    }, []);
 
-      const commandName = getBeginCommand(editor);
-      let plainText = toPlainText(editor.children, isMarkdown).trim();
-      let customHtml = trimCustomHtml(
-        isMarkdown
-          ? await renderComposerHtml(editor.children)
-          : toMatrixCustomHTML(editor.children, { allowTextFormatting: true })
-      );
-      let msgType: 'm.text' | 'm.emote' | 'm.notice' = MsgType.Text;
+    /** Drop one composer file by transaction id, reading the current list. */
+    const removeUploadItem = useCallback(
+      (key: string, transactionId: string) => {
+        const listAtom = roomIdToUploadItemsAtomFamily(key);
+        const item = store.get(listAtom).find((f) => f.transactionId === transactionId);
+        if (!item) return;
+        store.set(listAtom, { type: 'DELETE', item });
+        roomUploadAtomFamily.remove(item.file);
+      },
+      [store]
+    );
 
-      if (commandName) {
-        plainText = trimCommand(commandName, plainText);
-        customHtml = trimCommand(commandName, customHtml);
-      }
-      if (commandName === Command.Me) {
-        msgType = MsgType.Emote;
-      } else if (commandName === Command.Notice) {
-        msgType = MsgType.Notice;
-      } else if (commandName === Command.Shrug) {
-        plainText = `${SHRUG} ${plainText}`;
-        customHtml = `${SHRUG} ${customHtml}`;
-      } else if (commandName === Command.TableFlip) {
-        plainText = `${TABLEFLIP} ${plainText}`;
-        customHtml = `${TABLEFLIP} ${customHtml}`;
-      } else if (commandName === Command.UnFlip) {
-        plainText = `${UNFLIP} ${plainText}`;
-        customHtml = `${UNFLIP} ${customHtml}`;
-      } else if (commandName) {
-        const commandContent = commands[commandName as Command];
-        if (commandName === Command.Poll && commandContent) {
-          try {
-            setSendingMessage(true);
-            setSendError(undefined);
-            await commandContent.exe(plainText);
-            resetEditor(editor);
-            resetEditorHistory(editor);
-            sendTypingStatus(false);
-          } catch (err) {
-            const reason =
-              err instanceof Error && err.message ? err.message : 'Could not send poll.';
-            setSendError(
-              t('composer.send_failed_with_reason', {
-                reason,
-                defaultValue: 'Could not send message: {{reason}}',
-              })
-            );
-          } finally {
-            setSendingMessage(false);
+    /**
+     * Send composer files one by one. A file removed from the board before
+     * its turn is skipped; each sent file leaves the board as it is sent, so
+     * a failure keeps exactly the unsent ones.
+     */
+    const sendAttachments = useCallback(
+      async (
+        key: string,
+        files: TUploadItem[],
+        options: UploadSendOptions,
+        relation: { replyTo?: string; threadRoot?: string }
+      ) => {
+        for (const fileItem of files) {
+          const { transactionId } = fileItem;
+          const stillListed = store
+            .get(roomIdToUploadItemsAtomFamily(key))
+            .some((f) => f.transactionId === transactionId);
+          if (!stillListed) {
+            claimTransactionIds([transactionId], false);
+            // eslint-disable-next-line no-continue
+            continue;
           }
-          return;
+          const source = fileItem.originalFile;
+          setUploadingTransactionId(transactionId);
+          try {
+            // One file at a time: only the file being sent is held as bytes.
+            // eslint-disable-next-line no-await-in-loop
+            const bytes = await fileToNativeAttachmentBytes(source);
+            // eslint-disable-next-line no-await-in-loop
+            const owner = await sendComposerAttachmentWithNativeOwner({
+              roomId,
+              transactionId,
+              file: {
+                filename: source.name || 'attachment',
+                mimeType: source.type || 'application/octet-stream',
+                bytes,
+              },
+              caption: files.length === 1 ? options.caption : undefined,
+              formattedCaption: files.length === 1 ? options.formattedCaption : undefined,
+              mentionUserIds: files.length === 1 ? options.mentionUserIds : undefined,
+              mentionRoom: files.length === 1 ? options.mentionRoom : undefined,
+              replyTo: relation.replyTo,
+              threadRoot: relation.threadRoot,
+            });
+            if (owner !== 'native') throw new ComposerUserError(COMPOSER_NOT_SIGNED_IN);
+          } finally {
+            setUploadingTransactionId(undefined);
+          }
+          if (attachmentSendPlan.current) {
+            attachmentSendPlan.current = completeAttachmentSendStep(
+              attachmentSendPlan.current,
+              transactionId
+            );
+          }
+          removeUploadItem(key, transactionId);
+          claimTransactionIds([transactionId], false);
         }
-        if (commandContent) {
-          commandContent.exe(plainText);
-        }
-        resetEditor(editor);
-        resetEditorHistory(editor);
-        sendTypingStatus(false);
+      },
+      [claimTransactionIds, removeUploadItem, roomId, store]
+    );
+
+    /**
+     * A queued send failed: it and every send queued behind it go back into
+     * the composer they came from, oldest first, above anything typed since.
+     */
+    const handleSendFailure = (
+      error: unknown,
+      failed: ComposerSendItem,
+      skipped: ComposerSendItem[]
+    ) => {
+      const items = [failed, ...skipped];
+      items.forEach((item) => {
+        claimTransactionIds(item.transactionIds, false);
+        claimReplyRevision(item.replyRevision, false);
+      });
+      const restored = items.flatMap((item) => item.content);
+      const message = failed.commandName
+        ? composerCommandErrorMessage(failed.commandName, error)
+        : composerSendErrorMessage(error);
+      if (mountedDraftKey.current === failed.draftKey) {
+        restoreComposerContent(editor, restored);
+        setSendError(message);
         return;
       }
+      // The composer closed (room or thread pane left): keep the text as its
+      // draft and show the error when it opens again.
+      const draftAtom = roomIdToMsgDraftAtomFamily(failed.draftKey);
+      const inMemory = store.get(draftAtom);
+      const existing =
+        inMemory.length > 0
+          ? inMemory
+          : loadRoomDraft(window.localStorage, getSafeMyUserId(), failed.draftKey);
+      const merged = mergeRestoredComposerContent(restored, existing);
+      store.set(draftAtom, merged);
+      saveRoomDraft(window.localStorage, getSafeMyUserId(), failed.draftKey, merged);
+      stashComposerSendError(failed.draftKey, message);
+    };
+    const sendFailureHandler = useRef(handleSendFailure);
+    sendFailureHandler.current = handleSendFailure;
+    const [waitingSends, setWaitingSends] = useState(0);
+    const [sendQueue] = useState(
+      () =>
+        new ComposerSendQueue<ComposerSendItem>(
+          (error, failed, skipped) => sendFailureHandler.current(error, failed, skipped),
+          setWaitingSends
+        )
+    );
 
-      const attachmentCount = selectedFiles.length;
-      if (plainText === '' && attachmentCount === 0) return;
-
-      const body = plainText;
-      const formattedBody = customHtml;
-      const mentionData = getMentions(roomId, editor);
-
-      const content: IContent = {
-        msgtype: msgType,
-        body,
-      };
-
-      if (replyDraft && replyDraft.senderId !== getMyUserId()) {
-        mentionData.users.add(replyDraft.senderId);
-      }
-
-      const mMentions = getMentionContent(Array.from(mentionData.users), mentionData.room);
-      content['m.mentions'] = mMentions;
-
-      if (replyDraft || !customHtmlEqualsPlainText(formattedBody, body)) {
-        content.format = 'org.matrix.custom.html';
-        content.formatted_body = formattedBody;
-      }
-      // Thread/reply relations for the native owner travel as IPC fields, not
-      // via a JS-built m.relates_to blob. Legacy web keeps getReplyRelation.
-      const relation = getReplyRelation();
-      if (relation) {
-        content['m.relates_to'] = relation;
-      }
-      const sendRelation = nativeComposerSendRelation(replyDraft, threadRootEventId);
-      try {
-        setSendingMessage(true);
-        setSendError(undefined);
-        if (attachmentCount > 0) {
-          const transactionIds = selectedFiles.map((file) => file.transactionId);
-          const plan = makeOrReuseAttachmentSendPlan(
-            attachmentSendPlan.current,
-            transactionIds,
-            body
+    /**
+     * Files ready to go with the next send, or user copy for why they are
+     * not. Files a queued send already owns are left to that send.
+     */
+    const takeSendableFiles = useCallback((): TUploadItem[] | string => {
+      const files = store
+        .get(roomIdToUploadItemsAtomFamily(draftKey))
+        .filter((f) => !claimedTransactionIdsRef.current.has(f.transactionId));
+      for (const fileItem of files) {
+        const upload = store.get(roomUploadAtomFamily(fileItem.file));
+        if (upload.status === UploadStatus.Error) return upload.error.message;
+        if (fileItem.originalFile.size > attachmentLimit) {
+          return attachmentTooLargeMessage(
+            fileItem.originalFile.name,
+            fileItem.originalFile.size,
+            attachmentLimit
           );
-          attachmentSendPlan.current = plan;
-          const attachmentCaption = plan.textRole === 'caption' ? body : undefined;
-          const formattedCaption =
-            attachmentCaption && !customHtmlEqualsPlainText(formattedBody, body)
-              ? formattedBody
-              : undefined;
-          const uploadSender = uploadBoardHandlers.current;
-          if (!uploadSender) {
-            throw new Error('Attachments are still preparing.');
-          }
-          await uploadSender.handleSend({
-            caption: attachmentCaption,
-            formattedCaption,
-            mentionUserIds: attachmentCaption ? Array.from(mentionData.users) : undefined,
-            mentionRoom: attachmentCaption ? mentionData.room : undefined,
-          });
-          if (!threadRootOverride) requestRoomLatestAfterSend(roomId);
-          if (!hasTrailingAttachmentText(plan)) {
-            attachmentSendPlan.current = undefined;
-            resetEditor(editor);
-            resetEditorHistory(editor);
-            clearRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
-            await clearReplyDraftAfterSend(sendRelation.draftRevision, () => {
-              setSendError(
-                t(
-                  'composer.reply_clear_after_send_failed',
-                  'Message sent, but the reply state could not be cleared.'
-                )
-              );
-            });
-            sendTypingStatus(false);
+        }
+        if (upload.status !== UploadStatus.Success) {
+          return 'Attachments are still being prepared. Try again in a moment.';
+        }
+      }
+      return files;
+    }, [attachmentLimit, draftKey, store]);
+
+    /**
+     * Queue what the composer holds and clear it at once, so the user can
+     * write the next message while Core waits for the server. A failed send
+     * puts its text back (see `handleSendFailure`); nothing typed is lost,
+     * and a second press can never send the same content twice.
+     */
+    const submit = useCallback(
+      (options: { filesOnly?: boolean } = {}) => {
+        const { filesOnly = false } = options;
+        const content = filesOnly ? [] : cloneComposerContent(editor.children);
+        const commandName = filesOnly ? undefined : getBeginCommand(editor);
+        let plainText = filesOnly ? '' : toPlainText(content, isMarkdown).trim();
+        let msgType: 'm.text' | 'm.emote' | 'm.notice' = MsgType.Text;
+        if (commandName) plainText = trimCommand(commandName, plainText);
+
+        if (commandName && !MESSAGE_COMMANDS.has(commandName)) {
+          const commandContent = commands[commandName as Command];
+          if (!commandContent) {
+            setSendError(`Synara does not know the command /${commandName}.`);
             return;
           }
-          attachmentSendPlan.current = undefined;
-        }
-        const nativeOwner = await sendPlainTextWithNativeOwner({
-          roomId,
-          body,
-          msgType,
-          formattedBody: content.formatted_body,
-          mentionUserIds: Array.from(mentionData.users),
-          mentionRoom: mentionData.room,
-          replyTo: sendRelation.replyTo,
-          threadRoot: sendRelation.threadRoot,
-        });
-        if (nativeOwner === 'legacy') {
-          await sendNativeMessage(roomId, content as any);
-        }
-        if (!threadRootOverride) requestRoomLatestAfterSend(roomId);
-        resetEditor(editor);
-        resetEditorHistory(editor);
-        clearRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
-        await clearReplyDraftAfterSend(sendRelation.draftRevision, () => {
-          setSendError(
-            t(
-              'composer.reply_clear_after_send_failed',
-              'Message sent, but the reply state could not be cleared.'
-            )
+          resetEditor(editor);
+          resetEditorHistory(editor);
+          sendTypingStatus(false);
+          setSendError(undefined);
+          sendQueue.enqueue({ draftKey, content, commandName, transactionIds: [] }, () =>
+            commandContent.exe(plainText)
           );
-        });
-        sendTypingStatus(false);
-      } catch (err) {
-        const reason =
-          err instanceof Error && err.message
-            ? err.message
-            : t('composer.send_failed', 'Could not send message.');
-        setSendError(
-          t('composer.send_failed_with_reason', {
-            reason,
-            defaultValue: 'Could not send message: {{reason}}',
-          })
+          return;
+        }
+
+        const files = takeSendableFiles();
+        if (typeof files === 'string') {
+          setSendError(files);
+          return;
+        }
+
+        let prefix = '';
+        if (commandName === Command.Me) msgType = MsgType.Emote;
+        else if (commandName === Command.Notice) msgType = MsgType.Notice;
+        else if (commandName === Command.Shrug) prefix = SHRUG;
+        else if (commandName === Command.TableFlip) prefix = TABLEFLIP;
+        else if (commandName === Command.UnFlip) prefix = UNFLIP;
+        const body = prefix ? `${prefix} ${plainText}` : plainText;
+        if (body === '' && files.length === 0) return;
+        const mentionData = getMentions(roomId, editor);
+
+        // A reply already claimed by a queued send is not reused.
+        const sendReply =
+          coreReplyDraft && !claimedReplyRevisionsRef.current.has(coreReplyDraft.draftRevision)
+            ? coreReplyDraft
+            : undefined;
+        if (sendReply && sendReply.senderId !== getMyUserId()) {
+          mentionData.users.add(sendReply.senderId);
+        }
+        const mentionUserIds = Array.from(mentionData.users);
+        const sendRelation = nativeComposerSendRelation(sendReply, threadRootEventId);
+        const transactionIds = files.map((file) => file.transactionId);
+        const sendDraftKey = draftKey;
+
+        claimTransactionIds(transactionIds, true);
+        claimReplyRevision(sendRelation.draftRevision, true);
+        if (!filesOnly) {
+          resetEditor(editor);
+          resetEditorHistory(editor);
+          sendTypingStatus(false);
+        }
+        setSendError(undefined);
+
+        const afterSent = async () => {
+          requestRoomLatestAfterSend(roomId, sendRelation.threadRoot);
+          await clearReplyDraftAfterSend(sendRelation.draftRevision, () => {
+            setSendError(
+              t(
+                'composer.reply_clear_after_send_failed',
+                'Message sent, but the reply state could not be cleared.'
+              )
+            );
+          });
+          claimReplyRevision(sendRelation.draftRevision, false);
+        };
+
+        sendQueue.enqueue(
+          {
+            draftKey: sendDraftKey,
+            content,
+            transactionIds,
+            replyRevision: sendReply?.draftRevision,
+          },
+          async () => {
+            let customHtml = trimCustomHtml(
+              isMarkdown
+                ? await renderComposerHtml(content)
+                : toMatrixCustomHTML(content, { allowTextFormatting: true })
+            );
+            if (commandName) customHtml = trimCommand(commandName, customHtml);
+            const formattedBody = prefix ? `${prefix} ${customHtml}` : customHtml;
+            const htmlDiffers = !customHtmlEqualsPlainText(formattedBody, body);
+
+            if (files.length > 0) {
+              const plan = makeOrReuseAttachmentSendPlan(
+                attachmentSendPlan.current,
+                transactionIds,
+                body
+              );
+              attachmentSendPlan.current = plan;
+              const caption = plan.textRole === 'caption' ? body : undefined;
+              await sendAttachments(
+                sendDraftKey,
+                files,
+                {
+                  caption,
+                  formattedCaption: caption && htmlDiffers ? formattedBody : undefined,
+                  mentionUserIds: caption ? mentionUserIds : undefined,
+                  mentionRoom: caption ? mentionData.room : undefined,
+                },
+                sendRelation
+              );
+              if (!hasTrailingAttachmentText(plan)) {
+                attachmentSendPlan.current = undefined;
+                await afterSent();
+                return;
+              }
+              attachmentSendPlan.current = undefined;
+            }
+
+            const nativeOwner = await sendPlainTextWithNativeOwner({
+              roomId,
+              body,
+              msgType,
+              formattedBody: sendReply || htmlDiffers ? formattedBody : undefined,
+              mentionUserIds,
+              mentionRoom: mentionData.room,
+              replyTo: sendRelation.replyTo,
+              threadRoot: sendRelation.threadRoot,
+            });
+            // Without a native session there is nothing that can send this; the
+            // retired web fallback dropped reply and thread relations.
+            if (nativeOwner === 'legacy') throw new ComposerUserError(COMPOSER_NOT_SIGNED_IN);
+            await afterSent();
+          }
         );
-      } finally {
-        setSendingMessage(false);
-      }
-    }, [
-      roomId,
-      draftKey,
-      threadRootOverride,
-      editor,
-      replyDraft,
-      sendTypingStatus,
-      clearReplyDraftAfterSend,
-      isMarkdown,
-      commands,
-      getReplyRelation,
-      sendingMessage,
-      selectedFiles,
-      t,
-      threadRootEventId,
-    ]);
+      },
+      [
+        roomId,
+        draftKey,
+        editor,
+        coreReplyDraft,
+        sendTypingStatus,
+        clearReplyDraftAfterSend,
+        isMarkdown,
+        commands,
+        sendQueue,
+        takeSendableFiles,
+        claimTransactionIds,
+        claimReplyRevision,
+        sendAttachments,
+        t,
+        threadRootEventId,
+      ]
+    );
+
+    const handleSendUpload = () => submit({ filesOnly: true });
+    const uploadSendState = (transactionId: string): NativeUploadSendState | undefined => {
+      if (uploadingTransactionId === transactionId) return 'uploading';
+      return claimedTransactionIds.has(transactionId) ? 'waiting' : undefined;
+    };
 
     const handlePollAnswerChange: ChangeEventHandler<HTMLInputElement> = (evt) => {
       const index = Number(evt.currentTarget.getAttribute('data-answer-index'));
@@ -901,7 +1039,18 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           !isComposing(evt)
         ) {
           evt.preventDefault();
+          // Enter picks the open suggestion, as Tab does; Mod+Enter always
+          // sends. Short emoticon queries (":D", ":P") stay plain text.
+          const pickSuggestion =
+            autocompleteQuery &&
+            !isKeyHotkey('mod+enter', evt) &&
+            !(
+              autocompleteQuery.prefix === AutocompletePrefix.Emoticon &&
+              autocompleteQuery.text.length < 2
+            );
+          if (pickSuggestion && autocompleteSelectFirst.current?.()) return;
           submit();
+          return;
         }
         if (isKeyHotkey('escape', evt)) {
           evt.preventDefault();
@@ -984,7 +1133,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                 onToggle={() => setUploadBoard(!uploadBoard)}
                 uploadFamilyObserverAtom={uploadFamilyObserverAtom}
                 onSend={handleSendUpload}
-                imperativeHandlerRef={uploadBoardHandlers}
+                sending={selectedFiles.some((f) => claimedTransactionIds.has(f.transactionId))}
                 onCancel={handleCancelUpload}
               />
             }
@@ -1000,6 +1149,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                         key={index}
                         isEncrypted={!!fileItem.encInfo}
                         nativeComposerSend={nativeComposerSend}
+                        sendState={uploadSendState(fileItem.transactionId)}
                         fileItem={fileItem}
                         setMetadata={handleFileMetadata}
                         onRemove={handleRemoveUpload}
@@ -1051,12 +1201,30 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             </IconButton>
           </Box>
         )}
+        {waitingSends > 0 && (
+          // Queued messages reach the timeline only once the one before is
+          // accepted, so say where they are meanwhile.
+          <Box
+            gap="200"
+            alignItems="Center"
+            role="status"
+            style={{ padding: `0 ${config.space.S300} ${config.space.S200}` }}
+          >
+            <Spinner variant="Secondary" size="100" />
+            <Text size="T200" priority="300">
+              {waitingSends === 1
+                ? '1 more message waiting to send…'
+                : `${waitingSends} more messages waiting to send…`}
+            </Text>
+          </Box>
+        )}
         {autocompleteQuery?.prefix === AutocompletePrefix.RoomMention && (
           <RoomMentionAutocomplete
             roomId={roomId}
             editor={editor}
             query={autocompleteQuery}
             requestClose={handleCloseAutocomplete}
+            selectFirstRef={autocompleteSelectFirst}
           />
         )}
         {autocompleteQuery?.prefix === AutocompletePrefix.UserMention && (
@@ -1065,6 +1233,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             editor={editor}
             query={autocompleteQuery}
             requestClose={handleCloseAutocomplete}
+            selectFirstRef={autocompleteSelectFirst}
           />
         )}
         {autocompleteQuery?.prefix === AutocompletePrefix.Emoticon && (
@@ -1073,6 +1242,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             editor={editor}
             query={autocompleteQuery}
             requestClose={handleCloseAutocomplete}
+            selectFirstRef={autocompleteSelectFirst}
           />
         )}
         {autocompleteQuery?.prefix === AutocompletePrefix.Command && (
@@ -1081,12 +1251,21 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             editor={editor}
             query={autocompleteQuery}
             requestClose={handleCloseAutocomplete}
+            selectFirstRef={autocompleteSelectFirst}
           />
         )}
         <RoomComposer
           editableName="RoomInput"
           editor={editor}
           placeholder="Send a message..."
+          ariaLabel={
+            threadRootEventId
+              ? t('composer.thread_aria_label', 'Reply in thread')
+              : t('composer.room_aria_label', {
+                  room: room?.name || roomId,
+                  defaultValue: 'Message {{room}}',
+                })
+          }
           onKeyDown={handleKeyDown}
           onKeyUp={handleKeyUp}
           onPaste={handlePaste}
@@ -1502,8 +1681,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
               <IconButton
                 className={css.ComposerAction}
                 fill="None"
-                onClick={submit}
-                disabled={sendingMessage}
+                onClick={() => submit()}
                 variant="Primary"
                 size="300"
                 radii="300"

@@ -8,7 +8,7 @@ type Fixture = {
   missing(): void;
   releaseLastRead(): void;
   releaseJump(): void;
-  send(roomId?: string): void;
+  send(roomId?: string, threadRootId?: string): void;
   activeStreamCount(): number;
   emitAfterOpen(): void;
   releaseOperation(): void;

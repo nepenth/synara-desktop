@@ -1,7 +1,7 @@
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import {
   isNativeMatrixLoggedIn,
-  sendAttachmentPlanWithNativeOwner,
+  sendAttachmentWithNativeOwner,
   type NativeSendAttachmentInput,
 } from './nativeSendAttachmentOwner';
 
@@ -10,15 +10,15 @@ export const nativeComposerAttachmentReady = (): Promise<boolean> =>
     invokeDesktopWithAvailability(command, args)
   );
 
-export const sendComposerAttachmentPlanWithNativeOwner = (
-  inputs: NativeSendAttachmentInput[],
-  onSent: (index: number) => void | Promise<void>
+/**
+ * Send one composer file. The composer converts and sends files one at a
+ * time, so only the file being sent is held in memory as bytes.
+ */
+export const sendComposerAttachmentWithNativeOwner = (
+  input: NativeSendAttachmentInput
 ): Promise<'native' | 'legacy'> =>
-  sendAttachmentPlanWithNativeOwner(
-    inputs,
-    isSynaraDesktop(),
-    (command, args) => invokeDesktopWithAvailability(command, args),
-    onSent
+  sendAttachmentWithNativeOwner(input, isSynaraDesktop(), (command, args) =>
+    invokeDesktopWithAvailability(command, args)
   );
 
 export async function fileToNativeAttachmentBytes(file: Blob): Promise<number[]> {

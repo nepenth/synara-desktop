@@ -3488,7 +3488,18 @@ export function NativeTimelinePresenter({
           );
       });
   }, [input, loadLatest, onCloseThreadRoute, threadRootId]);
-  useEffect(() => observeRoomLatestAfterSend(roomId, jumpToLatest), [roomId, jumpToLatest]);
+  // A send into this thread scrolls to the thread's tail; `jumpToLatest`
+  // would leave the thread (and close a thread pane).
+  const showThreadTail = useCallback(() => setLatestPlacementRequest((request) => request + 1), []);
+  useEffect(
+    () =>
+      observeRoomLatestAfterSend(
+        roomId,
+        threadRootId,
+        threadRootId ? showThreadTail : jumpToLatest
+      ),
+    [roomId, threadRootId, jumpToLatest, showThreadTail]
+  );
 
   const jumpToLastRead = useCallback(() => {
     if (!pendingLastRead) return;

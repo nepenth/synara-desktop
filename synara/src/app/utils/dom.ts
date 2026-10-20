@@ -148,6 +148,21 @@ export const shouldProbeNativeClipboardImage = (
   return !types.some((type) => type.startsWith('text/'));
 };
 
+/**
+ * Copy the text flavours of a paste while the event is being handled. A
+ * DataTransfer is only readable during its event, so anything that inserts
+ * after an `await` must read this copy instead.
+ */
+export const snapshotClipboardText = (
+  clipboardData: Pick<DataTransfer, 'getData'>
+): { getData: (format: string) => string } => {
+  const values = new Map<string, string>();
+  ['text/html', 'text/plain'].forEach((format) => {
+    values.set(format, clipboardData.getData(format));
+  });
+  return { getData: (format) => values.get(format) ?? '' };
+};
+
 export const renameFile = (file: File, name: string): File =>
   new File([file], name, { type: file.type });
 

@@ -3,6 +3,10 @@ import { afterEach, test } from 'node:test';
 import type { DesktopInvokeResult } from '../../utils/desktop';
 import { setNativeIdentity } from '../../state/nativeIdentity';
 import {
+  effectiveNativeAttachmentLimit,
+  mediaConfigUploadLimit,
+} from '../../utils/nativeMediaLimits';
+import {
   fetchNativeRoomEvent,
   getNativeCryptoStatus,
   getNativeMediaConfig,
@@ -161,7 +165,12 @@ test('getNativeMediaConfig reads m.upload.size wire key', async () => {
     matrix_media_config: { 'm.upload.size': 10485760 },
   });
   setNativeCommandInvokeForTests(invoke);
-  assert.deepEqual(await getNativeMediaConfig(), { maxUploadSizeBytes: 10485760 });
+  const config = await getNativeMediaConfig();
+  assert.deepEqual(config, { maxUploadSizeBytes: 10485760 });
+  // The upload cards read the limit through the same helper; the renamed key
+  // used to leave every room at the 32 MiB fallback.
+  assert.equal(mediaConfigUploadLimit(config), 10485760);
+  assert.equal(effectiveNativeAttachmentLimit(mediaConfigUploadLimit(config)), 10485760);
 });
 
 test('getNativeMediaConfig fails closed (empty) when unavailable', async () => {

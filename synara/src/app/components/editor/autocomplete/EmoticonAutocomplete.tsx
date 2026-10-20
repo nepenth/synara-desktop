@@ -3,7 +3,11 @@ import { Editor } from 'slate';
 import { Box, MenuItem, Text, toRem } from 'folds';
 
 import { AutocompleteQuery } from './autocompleteQuery';
-import { AutocompleteMenu } from './AutocompleteMenu';
+import {
+  AutocompleteMenu,
+  AutocompleteSelectFirstRef,
+  useAutocompleteSelectFirst,
+} from './AutocompleteMenu';
 import { UseAsyncSearchOptions, useAsyncSearch } from '../../../hooks/useAsyncSearch';
 import { onTabPress } from '../../../utils/keyboard';
 import { createEmoticonElement, moveCursor, replaceWithElement } from '../utils';
@@ -25,6 +29,7 @@ type EmoticonAutocompleteProps = {
   editor: Editor;
   query: AutocompleteQuery<string>;
   requestClose: () => void;
+  selectFirstRef?: AutocompleteSelectFirstRef;
 };
 
 const SEARCH_OPTIONS: UseAsyncSearchOptions = {
@@ -38,6 +43,7 @@ export function EmoticonAutocomplete({
   editor,
   query,
   requestClose,
+  selectFirstRef,
 }: EmoticonAutocompleteProps) {
   const useAuthentication = useMediaAuthentication();
 
@@ -71,12 +77,18 @@ export function EmoticonAutocomplete({
     requestClose();
   };
 
+  const selectFirst = (): boolean => {
+    if (autoCompleteEmoticon.length === 0) return false;
+    const emoticon = autoCompleteEmoticon[0];
+    const key = 'url' in emoticon ? emoticon.url : emoticon.unicode;
+    handleAutocomplete(key, emoticon.shortcode);
+    return true;
+  };
+  useAutocompleteSelectFirst(selectFirstRef, selectFirst);
+
   useKeyDown(window, (evt: KeyboardEvent) => {
     onTabPress(evt, () => {
-      if (autoCompleteEmoticon.length === 0) return;
-      const emoticon = autoCompleteEmoticon[0];
-      const key = 'url' in emoticon ? emoticon.url : emoticon.unicode;
-      handleAutocomplete(key, emoticon.shortcode);
+      selectFirst();
     });
   });
 

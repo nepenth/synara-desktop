@@ -2,6 +2,8 @@ import { createContext, useContext } from 'react';
 
 export interface MediaConfig {
   [key: string]: unknown;
+  /** Upload limit as the native media config reports it (`parseMediaConfig`). */
+  maxUploadSizeBytes?: number;
   'm.upload.size'?: number;
 }
 

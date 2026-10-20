@@ -48,6 +48,16 @@ export function makeUploadError(message: string): MatrixError {
 
 export type Upload = UploadIdle | UploadLoading | UploadSuccess | UploadError;
 
+/**
+ * Placeholder for a composer file that Core uploads only when it is sent.
+ * The file is ready to send but nothing has been uploaded, so it must never
+ * be shown as an uploaded file or used as a real content URI.
+ */
+export const NATIVE_STAGED_MXC = 'mxc://synara.native/staged';
+
+export const isNativeStagedUpload = (upload: Upload): boolean =>
+  upload.status === UploadStatus.Success && upload.mxc === NATIVE_STAGED_MXC;
+
 export type UploadAtomAction =
   | {
       promise: Promise<UploadResponse>;
@@ -133,7 +143,7 @@ export const useBindUploadAtom = (uploadAtom: TUploadAtom, hideFilename?: boolea
 
   /** Mark a composer file staged for native Rust upload+send (no JS upload). */
   const markNativeStaged = useCallback(() => {
-    setUpload({ mxc: 'mxc://synara.native/staged' });
+    setUpload({ mxc: NATIVE_STAGED_MXC });
   }, [setUpload]);
 
   return {

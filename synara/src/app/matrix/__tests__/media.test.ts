@@ -156,7 +156,9 @@ test('desktop media boundary has no JS encrypt/decrypt leftover', () => {
   );
   assert.doesNotMatch(media, /browser-encrypt-attachment|decryptFile|downloadEncryptedMedia/);
   assert.doesNotMatch(roomInput, /encryptFile|browser-encrypt-attachment/);
-  assert.match(roomInput, /Native Matrix attachment send is unavailable/);
+  // Attachments fail closed without a native session, with user copy.
+  assert.match(roomInput, /so files can not be attached/);
+  assert.match(roomInput, /if \(owner !== 'native'\) throw new ComposerUserError/);
 });
 
 test('desktop leftover avatars resolve through native media src', () => {
