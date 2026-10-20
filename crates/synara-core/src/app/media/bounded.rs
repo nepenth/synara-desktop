@@ -6,8 +6,15 @@
 //! and stops chunked responses as soon as the product cap is crossed. An
 //! expired access token is refreshed once through the SDK. Display callers go
 //! through [`super::cache::fetch_media_cached`].
+//!
+//! Like the SDK's own media requests, a download has no total deadline: the
+//! client-wide request timeout would otherwise cover the whole body and fail
+//! every large file on a slow link. Instead each wait (response headers, then
+//! every body chunk) is bounded by [`MEDIA_STALL_TIMEOUT`], so a transfer that
+//! keeps making progress finishes and one that stops fails.
 
 use std::io::{Cursor, Read};
+use std::time::Duration;
 
 use futures_util::StreamExt;
 use matrix_sdk::{
@@ -16,6 +23,9 @@ use matrix_sdk::{
     Client,
 };
 use reqwest::{Response, StatusCode, Url};
+
+/// Longest wait for response headers or for the next body chunk.
+const MEDIA_STALL_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BoundedMediaError {
@@ -81,17 +91,23 @@ async fn send_media_request(
     uri: &MxcUri,
     format: &MediaFormat,
     authenticated_endpoint: bool,
+    stall_timeout: Duration,
 ) -> Result<(Response, String), BoundedMediaError> {
     let url = endpoint_url(client, uri, format, authenticated_endpoint)?;
     let access_token = client
         .access_token()
         .ok_or(BoundedMediaError::MissingSession)?;
-    let response = client
+    let request = client
         .http_client()
         .get(url)
         .bearer_auth(&access_token)
-        .send()
+        // Replaces the client-wide total timeout, which would also cover the
+        // body. Every wait is bounded by `stall_timeout` instead.
+        .timeout(Duration::MAX)
+        .send();
+    let response = tokio::time::timeout(stall_timeout, request)
         .await
+        .map_err(|_| BoundedMediaError::RequestFailed)?
         .map_err(|_| BoundedMediaError::RequestFailed)?;
     Ok((response, access_token))
 }
@@ -99,8 +115,8 @@ async fn send_media_request(
 /// Upper bound on a 401 body read to classify the Matrix error.
 const MAX_ERROR_BODY_BYTES: usize = 16 * 1024;
 
-async fn is_unknown_token_response(response: Response) -> bool {
-    let Ok(body) = read_body_bounded(response, MAX_ERROR_BODY_BYTES).await else {
+async fn is_unknown_token_response(response: Response, stall_timeout: Duration) -> bool {
+    let Ok(body) = read_body_bounded(response, MAX_ERROR_BODY_BYTES, stall_timeout).await else {
         return false;
     };
     serde_json::from_slice::<serde_json::Value>(&body)
@@ -122,13 +138,14 @@ async fn request_media(
     uri: &MxcUri,
     format: &MediaFormat,
     authenticated_endpoint: bool,
+    stall_timeout: Duration,
 ) -> Result<Response, BoundedMediaError> {
     let (response, used_token) =
-        send_media_request(client, uri, format, authenticated_endpoint).await?;
+        send_media_request(client, uri, format, authenticated_endpoint, stall_timeout).await?;
     if response.status() != StatusCode::UNAUTHORIZED {
         return Ok(response);
     }
-    if !is_unknown_token_response(response).await {
+    if !is_unknown_token_response(response, stall_timeout).await {
         return Err(BoundedMediaError::RequestFailed);
     }
     if client.access_token().as_deref() == Some(used_token.as_str()) {
@@ -139,7 +156,8 @@ async fn request_media(
             return Err(BoundedMediaError::RequestFailed);
         }
     }
-    let (response, _) = send_media_request(client, uri, format, authenticated_endpoint).await?;
+    let (response, _) =
+        send_media_request(client, uri, format, authenticated_endpoint, stall_timeout).await?;
     Ok(response)
 }
 
@@ -162,16 +180,18 @@ fn extend_bounded(
 async fn read_response_bounded(
     response: Response,
     max_bytes: usize,
+    stall_timeout: Duration,
 ) -> Result<Vec<u8>, BoundedMediaError> {
     if !response.status().is_success() {
         return Err(BoundedMediaError::RequestFailed);
     }
-    read_body_bounded(response, max_bytes).await
+    read_body_bounded(response, max_bytes, stall_timeout).await
 }
 
 async fn read_body_bounded(
     response: Response,
     max_bytes: usize,
+    stall_timeout: Duration,
 ) -> Result<Vec<u8>, BoundedMediaError> {
     if response
         .content_length()
@@ -187,7 +207,10 @@ async fn read_body_bounded(
             .min(max_bytes as u64) as usize,
     );
     let mut stream = response.bytes_stream();
-    while let Some(chunk) = stream.next().await {
+    while let Some(chunk) = tokio::time::timeout(stall_timeout, stream.next())
+        .await
+        .map_err(|_| BoundedMediaError::RequestFailed)?
+    {
         let chunk = chunk.map_err(|_| BoundedMediaError::RequestFailed)?;
         extend_bounded(&mut bytes, &chunk, max_bytes)?;
     }
@@ -240,15 +263,24 @@ pub(super) async fn download_network_bytes_bounded(
     request: &MediaRequestParameters,
     max_bytes: usize,
 ) -> Result<Vec<u8>, BoundedMediaError> {
+    download_network_bytes_within(client, request, max_bytes, MEDIA_STALL_TIMEOUT).await
+}
+
+async fn download_network_bytes_within(
+    client: &Client,
+    request: &MediaRequestParameters,
+    max_bytes: usize,
+    stall_timeout: Duration,
+) -> Result<Vec<u8>, BoundedMediaError> {
     let uri = request.uri();
-    let mut response = request_media(client, uri, &request.format, true).await?;
+    let mut response = request_media(client, uri, &request.format, true, stall_timeout).await?;
     if matches!(
         response.status(),
         StatusCode::NOT_FOUND | StatusCode::METHOD_NOT_ALLOWED
     ) {
-        response = request_media(client, uri, &request.format, false).await?;
+        response = request_media(client, uri, &request.format, false, stall_timeout).await?;
     }
-    read_response_bounded(response, max_bytes).await
+    read_response_bounded(response, max_bytes, stall_timeout).await
 }
 
 #[cfg(test)]
@@ -293,6 +325,15 @@ mod tests {
     }
 
     async fn serve_responses(listener: TcpListener, responses: Vec<String>) -> Vec<String> {
+        serve_raw_responses(
+            listener,
+            responses.into_iter().map(String::into_bytes).collect(),
+        )
+        .await
+    }
+
+    /// [`serve_responses`] for binary bodies such as attachment ciphertext.
+    async fn serve_raw_responses(listener: TcpListener, responses: Vec<Vec<u8>>) -> Vec<String> {
         let mut requests = Vec::with_capacity(responses.len());
         let mut responses = VecDeque::from(responses);
         while let Some(next_response) = responses.pop_front() {
@@ -313,7 +354,7 @@ mod tests {
             }
             requests.push(request);
             socket
-                .write_all(next_response.as_bytes())
+                .write_all(&next_response)
                 .await
                 .expect("write media response");
             socket.shutdown().await.expect("close media response");
@@ -394,11 +435,19 @@ mod tests {
     }
 
     async fn restored_client(listener: &TcpListener) -> Client {
+        restored_client_with(listener, matrix_sdk::config::RequestConfig::new()).await
+    }
+
+    async fn restored_client_with(
+        listener: &TcpListener,
+        request_config: matrix_sdk::config::RequestConfig,
+    ) -> Client {
         let client = Client::builder()
             .homeserver_url(format!(
                 "http://{}",
                 listener.local_addr().expect("loopback address")
             ))
+            .request_config(request_config)
             .build()
             .await
             .expect("build loopback client");
@@ -427,6 +476,16 @@ mod tests {
             source: MediaSource::Plain(OwnedMxcUri::from("mxc://example.org/proof-media")),
             format: MediaFormat::File,
         }
+    }
+
+    fn raw_response(status: &str, body: &[u8]) -> Vec<u8> {
+        let mut response = format!(
+            "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        )
+        .into_bytes();
+        response.extend_from_slice(body);
+        response
     }
 
     fn response(status: &str, body: &[u8]) -> String {
@@ -706,11 +765,14 @@ mod tests {
                 .expect("bind cache server");
             let client = restored_client(&listener).await;
             let (ciphertext, file) = encrypted_attachment(b"secret-photo");
-            // Exactly one media response: a second network read would hang.
-            let server = tokio::spawn(serve_routed(
+            // One plain response, then the ciphertext for the spoofed event's
+            // refetch. Any other network read would hang.
+            let server = tokio::spawn(serve_raw_responses(
                 listener,
-                vec![response("200 OK", b"cached-media")],
-                None,
+                vec![
+                    raw_response("200 OK", b"cached-media"),
+                    raw_response("200 OK", &ciphertext),
+                ],
             ));
             for _ in 0..3 {
                 assert_eq!(
@@ -732,11 +794,11 @@ mod tests {
                 .expect("store read");
             assert_eq!(stored.as_deref(), Some(&b"cached-media"[..]));
 
-            // An encrypted source whose ciphertext is already stored under its
-            // URL decrypts with this event's key; a second event that reuses the
-            // URL with another key cannot read it.
-            let url_request = MediaRequestParameters {
-                source: MediaSource::Plain(file.url.clone()),
+            // An encrypted source whose ciphertext is already stored decrypts
+            // with this event's key; a second event that reuses the URL with
+            // another key cannot read it, even after refetching.
+            let encrypted = MediaRequestParameters {
+                source: MediaSource::Encrypted(Box::new(file.clone())),
                 format: MediaFormat::File,
             };
             client
@@ -745,16 +807,12 @@ mod tests {
                 .await
                 .expect("media store")
                 .add_media_content(
-                    &url_request,
+                    &super::super::cache::store_request(&encrypted),
                     ciphertext,
                     matrix_sdk::media::store::IgnoreMediaRetentionPolicy::Yes,
                 )
                 .await
                 .expect("store ciphertext");
-            let encrypted = MediaRequestParameters {
-                source: MediaSource::Encrypted(Box::new(file.clone())),
-                format: MediaFormat::File,
-            };
             assert_eq!(
                 crate::app::media::fetch_media_cached(&client, &encrypted, 64)
                     .await
@@ -776,11 +834,216 @@ mod tests {
                 .await,
                 Err(BoundedMediaError::DecryptionFailed)
             );
+            let requests = server.await.expect("cache server");
+            assert_eq!(requests.len(), 2, "plain read, spoofed-key refetch");
+            assert!(requests[1].contains("/media/download/example.org/encrypted-proof-media"));
+        })
+        .await
+        .expect("cache loopback proof timed out");
+    }
+
+    #[tokio::test]
+    async fn stored_entry_that_does_not_decrypt_is_refetched_and_replaced() {
+        tokio::time::timeout(LOOPBACK_TEST_TIMEOUT, async {
+            let listener = TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind stale-entry server");
+            let client = restored_client(&listener).await;
+            let (ciphertext, file) = encrypted_attachment(b"sent-photo");
+            let encrypted = MediaRequestParameters {
+                source: MediaSource::Encrypted(Box::new(file.clone())),
+                format: MediaFormat::File,
+            };
+            let ciphertext_key = super::super::cache::store_request(&encrypted);
+            let url_key = MediaRequestParameters {
+                source: MediaSource::Plain(file.url.clone()),
+                format: MediaFormat::File,
+            };
+            {
+                let store = client.media_store().lock().await.expect("media store");
+                // A bad entry under Synara's key (here: plaintext), and the SDK
+                // send queue's plaintext under the URL key.
+                for key in [&ciphertext_key, &url_key] {
+                    store
+                        .add_media_content(
+                            key,
+                            b"sent-photo".to_vec(),
+                            matrix_sdk::media::store::IgnoreMediaRetentionPolicy::No,
+                        )
+                        .await
+                        .expect("seed stale entry");
+                }
+            }
+            let server = tokio::spawn(serve_raw_responses(
+                listener,
+                vec![raw_response("200 OK", &ciphertext)],
+            ));
+
+            assert_eq!(
+                crate::app::media::fetch_media_cached(&client, &encrypted, 64)
+                    .await
+                    .expect("refetch after a stored entry fails to decrypt"),
+                b"sent-photo"
+            );
+            let requests = server.await.expect("stale-entry server");
+            assert_eq!(requests.len(), 1);
+            assert!(requests[0].starts_with(
+                "GET /_matrix/client/v1/media/download/example.org/encrypted-proof-media HTTP/1.1"
+            ));
+
+            let store = client.media_store().lock().await.expect("media store");
+            assert_eq!(
+                store
+                    .get_media_content(&ciphertext_key)
+                    .await
+                    .expect("store read")
+                    .as_deref(),
+                Some(ciphertext.as_slice()),
+                "the stale entry is replaced by the served ciphertext"
+            );
+            assert_eq!(
+                store
+                    .get_media_content(&url_key)
+                    .await
+                    .expect("store read")
+                    .as_deref(),
+                Some(&b"sent-photo"[..]),
+                "the SDK's own entry is left alone"
+            );
+        })
+        .await
+        .expect("stale-entry loopback proof timed out");
+    }
+
+    /// Accept one media request and answer with `chunks` chunked-encoding
+    /// chunks sent `gap` apart, then either finish or stop sending.
+    async fn serve_paced_chunks(
+        listener: TcpListener,
+        chunk: &'static [u8],
+        chunks: usize,
+        gap: Duration,
+        stall: bool,
+    ) {
+        let (mut socket, _) = listener.accept().await.expect("accept paced request");
+        let _ = read_request(&mut socket).await;
+        socket
+            .write_all(
+                b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n",
+            )
+            .await
+            .expect("write paced headers");
+        for _ in 0..chunks {
+            let mut framed = format!("{:x}\r\n", chunk.len()).into_bytes();
+            framed.extend_from_slice(chunk);
+            framed.extend_from_slice(b"\r\n");
+            socket.write_all(&framed).await.expect("write paced chunk");
+            socket.flush().await.expect("flush paced chunk");
+            tokio::time::sleep(gap).await;
+        }
+        if stall {
+            std::future::pending::<()>().await;
+        }
+        socket
+            .write_all(b"0\r\n\r\n")
+            .await
+            .expect("write last chunk");
+        socket.shutdown().await.expect("close paced response");
+    }
+
+    #[tokio::test]
+    async fn slow_but_progressing_download_outlives_the_client_request_timeout() {
+        tokio::time::timeout(LOOPBACK_TEST_TIMEOUT, async {
+            let listener = TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind slow server");
+            // The client-wide request timeout used to cover the whole body.
+            let client = restored_client_with(
+                &listener,
+                matrix_sdk::config::RequestConfig::new().timeout(Duration::from_millis(300)),
+            )
+            .await;
+            let server = tokio::spawn(serve_paced_chunks(
+                listener,
+                b"slow",
+                8,
+                Duration::from_millis(100),
+                false,
+            ));
+
+            let started = Instant::now();
+            let bytes = download_network_bytes_within(
+                &client,
+                &media_request(),
+                64,
+                Duration::from_millis(600),
+            )
+            .await
+            .expect("slow download that keeps progressing");
+            assert_eq!(bytes, b"slow".repeat(8));
+            assert!(started.elapsed() > Duration::from_millis(600));
+            server.await.expect("slow server");
+        })
+        .await
+        .expect("slow download proof timed out");
+    }
+
+    #[tokio::test]
+    async fn stalled_download_fails_at_the_stall_timeout() {
+        tokio::time::timeout(LOOPBACK_TEST_TIMEOUT, async {
+            // The body stops after one chunk.
+            let listener = TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind stalled-body server");
+            let client = restored_client(&listener).await;
+            let server = tokio::spawn(serve_paced_chunks(
+                listener,
+                b"wait",
+                1,
+                Duration::ZERO,
+                true,
+            ));
+            let started = Instant::now();
+            assert_eq!(
+                download_network_bytes_within(
+                    &client,
+                    &media_request(),
+                    64,
+                    Duration::from_millis(300),
+                )
+                .await,
+                Err(BoundedMediaError::RequestFailed)
+            );
+            assert!(started.elapsed() < Duration::from_secs(3));
+            server.abort();
+            let _ = server.await;
+
+            // The response headers never arrive.
+            let listener = TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind silent server");
+            let client = restored_client(&listener).await;
+            let server = tokio::spawn(async move {
+                let (mut socket, _) = listener.accept().await.expect("accept silent request");
+                let _ = read_request(&mut socket).await;
+                std::future::pending::<()>().await;
+            });
+            let started = Instant::now();
+            assert_eq!(
+                download_network_bytes_within(
+                    &client,
+                    &media_request(),
+                    64,
+                    Duration::from_millis(300),
+                )
+                .await,
+                Err(BoundedMediaError::RequestFailed)
+            );
+            assert!(started.elapsed() < Duration::from_secs(3));
             server.abort();
             let _ = server.await;
         })
         .await
-        .expect("cache loopback proof timed out");
+        .expect("stalled download proof timed out");
     }
 
     #[tokio::test]

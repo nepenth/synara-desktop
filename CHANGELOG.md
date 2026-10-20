@@ -3,6 +3,8 @@
 ## Unreleased
 
 - iOS: opening a room from a notification loads its earlier messages and keeps receiving new ones, the same as opening it from the room list. You no longer need to leave the room or relaunch Synara to see its history.
+- Media: photos, videos and files you send to an encrypted room load on the device that sent them, on desktop and iOS. Ones that stayed broken after an earlier send load again too.
+- Media: large images, videos and file downloads no longer fail after 30 seconds on a slow connection. A download now fails only when the server stops sending for 30 seconds.
 
 ## [2.2.6] - 2026-10-12
 
