@@ -4,14 +4,26 @@ import { KeyboardEventHandler } from 'react';
 export interface KeyboardEventLike {
   key: string;
   which: number;
+  keyCode?: number;
   altKey: boolean;
   ctrlKey: boolean;
   metaKey: boolean;
   shiftKey: boolean;
+  /** DOM KeyboardEvent only; React events carry it on `nativeEvent`. */
+  isComposing?: boolean;
+  nativeEvent?: { isComposing?: boolean };
   preventDefault(): void;
 }
 
+/**
+ * True for a key the input method handles (keyCode 229 is the "IME is
+ * processing" code). Tab moves between conversion candidates there.
+ */
+export const isImeKeyEvent = (evt: KeyboardEventLike): boolean =>
+  evt.isComposing === true || evt.nativeEvent?.isComposing === true || evt.keyCode === 229;
+
 export const onTabPress = (evt: KeyboardEventLike, callback: () => void) => {
+  if (isImeKeyEvent(evt)) return;
   if (isKeyHotkey('tab', evt)) {
     evt.preventDefault();
     callback();

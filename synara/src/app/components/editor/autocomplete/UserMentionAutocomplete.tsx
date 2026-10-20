@@ -4,7 +4,11 @@ import { Avatar, Icon, Icons, MenuItem, Text } from 'folds';
 import type { RoomReading } from '../../../utils/room';
 
 import { AutocompleteQuery } from './autocompleteQuery';
-import { AutocompleteMenu } from './AutocompleteMenu';
+import {
+  AutocompleteMenu,
+  AutocompleteSelectFirstRef,
+  useAutocompleteSelectFirst,
+} from './AutocompleteMenu';
 import { useRoomMembers, type RoomMemberListItem } from '../../../hooks/useRoomMembers';
 import {
   SearchItemStrGetter,
@@ -69,6 +73,7 @@ type UserMentionAutocompleteProps = {
   editor: Editor;
   query: AutocompleteQuery<string>;
   requestClose: () => void;
+  selectFirstRef?: AutocompleteSelectFirstRef;
 };
 
 const withAllowedMembership = (member: RoomMemberListItem): boolean =>
@@ -93,6 +98,7 @@ export function UserMentionAutocomplete({
   editor,
   query,
   requestClose,
+  selectFirstRef,
 }: UserMentionAutocompleteProps) {
   const useAuthentication = useMediaAuthentication();
   const roomId: string = room.roomId!;
@@ -129,19 +135,25 @@ export function UserMentionAutocomplete({
     getMxIdLocalPart(member.userId) ??
     member.userId;
 
+  const selectFirst = (): boolean => {
+    if (query.text === 'room') {
+      handleAutocomplete(roomAliasOrId, '@room');
+      return true;
+    }
+    if (autoCompleteMembers.length === 0) {
+      const userId = userIdFromQueryText(query.text);
+      handleAutocomplete(userId, userId);
+      return true;
+    }
+    const roomMember = autoCompleteMembers[0];
+    handleAutocomplete(roomMember.userId, getName(roomMember));
+    return true;
+  };
+  useAutocompleteSelectFirst(selectFirstRef, selectFirst);
+
   useKeyDown(window, (evt: KeyboardEvent) => {
     onTabPress(evt, () => {
-      if (query.text === 'room') {
-        handleAutocomplete(roomAliasOrId, '@room');
-        return;
-      }
-      if (autoCompleteMembers.length === 0) {
-        const userId = userIdFromQueryText(query.text);
-        handleAutocomplete(userId, userId);
-        return;
-      }
-      const roomMember = autoCompleteMembers[0];
-      handleAutocomplete(roomMember.userId, getName(roomMember));
+      selectFirst();
     });
   });
 

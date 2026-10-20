@@ -14,6 +14,20 @@ const openThreadStreams = (page: Page) =>
     ).nativeTimelineFixture.openThreadStreams()
   );
 
+type SendFixture = {
+  nativeTimelineFixture: { send(roomId?: string, threadRootId?: string): void; threadRoot: string };
+};
+/** A composer send acknowledged by Core: into the room, or into the thread. */
+const sendToRoom = (page: Page) =>
+  page.evaluate(() =>
+    (window as unknown as SendFixture).nativeTimelineFixture.send(undefined, undefined)
+  );
+const sendToThread = (page: Page) =>
+  page.evaluate(() => {
+    const { nativeTimelineFixture } = window as unknown as SendFixture;
+    nativeTimelineFixture.send(undefined, nativeTimelineFixture.threadRoot);
+  });
+
 const threadButton = (page: Page) =>
   page.locator('#native-timeline').getByRole('button', { name: /Thread · 7 replies/ });
 
@@ -132,4 +146,35 @@ test('a routed message that no longer exists says so and keeps the room usable',
   await page.getByRole('button', { name: 'Focus deleted' }).click();
   await expect(page.getByText(/That message isn't available/)).toBeVisible();
   await expect(threadButton(page)).toBeVisible();
+});
+
+test('a room send leaves an open thread pane open', async ({ page }) => {
+  await openThreads(page, 'side');
+  await threadButton(page).click();
+  const pane = page.locator('[data-thread-side-panel]');
+  await expect(pane.getByText('Thread reply 7')).toBeVisible();
+
+  await sendToRoom(page);
+  await page.waitForTimeout(300);
+  await expect(pane).toBeVisible();
+  await expect(pane.getByText('Thread reply 7')).toBeVisible();
+  expect(await openThreadStreams(page)).toBe(1);
+
+  // A reply in the pane keeps both views where they are.
+  await sendToThread(page);
+  await page.waitForTimeout(300);
+  await expect(pane.getByText('Thread reply 7')).toBeVisible();
+  await expect(threadButton(page)).toBeVisible();
+});
+
+test('a reply sent from the full thread view stays in the thread', async ({ page }) => {
+  await openThreads(page, 'full');
+  await threadButton(page).click();
+  const timeline = page.locator('#native-timeline');
+  await expect(timeline.getByText('Thread reply 7')).toBeVisible();
+
+  await sendToThread(page);
+  await page.waitForTimeout(300);
+  await expect(timeline.getByText('Thread reply 7')).toBeVisible();
+  expect(await openThreadStreams(page)).toBe(1);
 });

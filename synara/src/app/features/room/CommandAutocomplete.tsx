@@ -6,6 +6,8 @@ import { Command, useCommands } from '../../hooks/useCommands';
 import {
   AutocompleteMenu,
   AutocompleteQuery,
+  AutocompleteSelectFirstRef,
+  useAutocompleteSelectFirst,
   createCommandElement,
   moveCursor,
   replaceWithElement,
@@ -21,6 +23,7 @@ type CommandAutocompleteProps = {
   editor: Editor;
   query: AutocompleteQuery<string>;
   requestClose: () => void;
+  selectFirstRef?: AutocompleteSelectFirstRef;
 };
 
 const SEARCH_OPTIONS: UseAsyncSearchOptions = {
@@ -34,6 +37,7 @@ export function CommandAutocomplete({
   editor,
   query,
   requestClose,
+  selectFirstRef,
 }: CommandAutocompleteProps) {
   const commands = useCommands(room as unknown as Parameters<typeof useCommands>[0]);
   const commandNames = useMemo(() => Object.keys(commands) as Command[], [commands]);
@@ -58,13 +62,16 @@ export function CommandAutocomplete({
     requestClose();
   };
 
+  const selectFirst = (): boolean => {
+    if (autoCompleteNames.length === 0) return false;
+    handleAutocomplete(autoCompleteNames[0]);
+    return true;
+  };
+  useAutocompleteSelectFirst(selectFirstRef, selectFirst);
+
   useKeyDown(window, (evt: KeyboardEvent) => {
     onTabPress(evt, () => {
-      if (autoCompleteNames.length === 0) {
-        return;
-      }
-      const cmdName = autoCompleteNames[0];
-      handleAutocomplete(cmdName);
+      selectFirst();
     });
   });
 

@@ -158,19 +158,29 @@ test('preview, cancellation, and successful sends consume only the Core reply ow
     /clearNativeComposerReplyDraft\(\{\s*roomId,\s*expectedDraftRevision,\s*threadRootEventId,/
   );
   assert.match(roomInput, /clearReplyDraftAfterSend\(sendRelation\.draftRevision, \(\) =>/);
-  const uploadHandler = roomInput.slice(
-    roomInput.indexOf('const handleSendUpload ='),
-    roomInput.indexOf('const submit =')
+  const submitRoute = roomInput.slice(
+    roomInput.indexOf('const submit = useCallback('),
+    roomInput.indexOf('const handleSendUpload =')
   );
   assert.match(
-    uploadHandler,
-    /const \{ draftRevision, replyTo, threadRoot \} = nativeComposerSendRelation\(\s*replyDraft,\s*threadRootEventId\s*\)/,
-    'the upload route must declare its clear revision from the same relation snapshot it sends'
+    submitRoute,
+    /const sendRelation = nativeComposerSendRelation\(sendReply, threadRootEventId\)/,
+    'text and attachment sends snapshot one relation when they are queued'
   );
   assert.match(
-    uploadHandler,
-    /clearReplyDraftAfterSend\(draftRevision, \(\) =>/,
-    'the upload route must clear the revision declared in its own lexical scope'
+    submitRoute,
+    /await sendAttachments\([\s\S]*?sendRelation\s*\)/,
+    'attachments are sent with the same relation snapshot'
+  );
+  assert.match(
+    submitRoute,
+    /clearReplyDraftAfterSend\(sendRelation\.draftRevision, \(\) =>/,
+    'the queued send clears the revision declared in its own lexical scope'
+  );
+  assert.match(
+    roomInput,
+    /const handleSendUpload = \(\) => submit\(\{ filesOnly: true \}\)/,
+    'the upload board Send chip goes through the same queued route'
   );
   assert.doesNotMatch(
     roomInput,
@@ -183,8 +193,8 @@ test('preview, cancellation, and successful sends consume only the Core reply ow
         /clearReplyDraftAfterSend\((?:sendRelation\.draftRevision|draftRevision),/g
       ) ?? []
     ).length,
-    6,
-    'slash poll, attachment plan, attachment-only, text, poll dialog, and GIF routes clear their snapshotted Core revision'
+    4,
+    'slash poll, the queued text/attachment send, poll dialog, and GIF routes clear their snapshotted Core revision'
   );
   assert.ok(
     (roomInput.match(/clearReplyDraft\(replyDraft\.draftRevision\)/g) ?? []).length >= 2,

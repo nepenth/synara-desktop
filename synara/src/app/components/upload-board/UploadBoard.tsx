@@ -1,10 +1,10 @@
-import React, { MutableRefObject, ReactNode, useImperativeHandle, useRef } from 'react';
+import React, { ReactNode } from 'react';
 import { Badge, Box, Chip, Header, Icon, Icons, Spinner, Text, as, percent } from 'folds';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 
 import * as css from './UploadBoard.css';
-import { TUploadFamilyObserverAtom, Upload, UploadStatus, UploadSuccess } from '../../state/upload';
+import { TUploadFamilyObserverAtom, Upload, UploadStatus } from '../../state/upload';
 
 type UploadBoardProps = {
   header: ReactNode;
@@ -31,17 +31,18 @@ export type UploadSendOptions = {
   mentionRoom?: boolean;
 };
 
-export type UploadBoardImperativeHandlers = {
-  handleSend: (options?: UploadSendOptions) => Promise<void>;
-};
-
 type UploadBoardHeaderProps = {
   open: boolean;
   onToggle: () => void;
   uploadFamilyObserverAtom: TUploadFamilyObserverAtom;
   onCancel: (uploads: Upload[]) => void;
-  onSend: (uploads: UploadSuccess[], options?: UploadSendOptions) => Promise<void>;
-  imperativeHandlerRef: MutableRefObject<UploadBoardImperativeHandlers | undefined>;
+  /**
+   * Send the files without the composer text. The owner queues the send and
+   * reports failures where the user acted; it must not reject.
+   */
+  onSend: () => void;
+  /** True while a send owns files on this board. */
+  sending?: boolean;
 };
 
 export function UploadBoardHeader({
@@ -50,9 +51,8 @@ export function UploadBoardHeader({
   uploadFamilyObserverAtom,
   onCancel,
   onSend,
-  imperativeHandlerRef,
+  sending = false,
 }: UploadBoardHeaderProps) {
-  const sendingRef = useRef(false);
   const uploads = useAtomValue(uploadFamilyObserverAtom);
 
   const isSuccess = uploads.every((upload) => upload.status === UploadStatus.Success);
@@ -71,25 +71,6 @@ export function UploadBoardHeader({
     { loaded: 0, total: 0 }
   );
 
-  const handleSend = async (options?: UploadSendOptions) => {
-    if (sendingRef.current) return;
-    if (!isSuccess || uploads.length === 0) {
-      throw new Error('Attachments are still preparing.');
-    }
-    sendingRef.current = true;
-    try {
-      await onSend(
-        uploads.filter((upload) => upload.status === UploadStatus.Success) as UploadSuccess[],
-        options
-      );
-    } finally {
-      sendingRef.current = false;
-    }
-  };
-
-  useImperativeHandle(imperativeHandlerRef, () => ({
-    handleSend,
-  }));
   const handleCancel = () => onCancel(uploads);
 
   return (
@@ -107,10 +88,16 @@ export function UploadBoardHeader({
         <Text size="H6">Files</Text>
       </Box>
       <Box className={css.UploadBoardHeaderContent} alignItems="Center" gap="100">
-        {isSuccess && (
+        {sending && (
+          <Box alignItems="Center" gap="100" role="status">
+            <Spinner variant="Secondary" size="200" />
+            <Text size="B300">Sending…</Text>
+          </Box>
+        )}
+        {isSuccess && !sending && (
           <Chip
             as="button"
-            onClick={() => void handleSend()}
+            onClick={onSend}
             variant="Primary"
             radii="Pill"
             outlined
@@ -124,7 +111,7 @@ export function UploadBoardHeader({
             <Text size="L400">Upload Failed</Text>
           </Badge>
         )}
-        {!isSuccess && !isError && !open && (
+        {!isSuccess && !isError && !open && !sending && (
           <>
             <Badge variant="Secondary" fill="Solid" radii="Pill">
               <Text size="L400">{Math.round(percent(0, progress.total, progress.loaded))}%</Text>

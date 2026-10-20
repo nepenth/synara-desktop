@@ -6,7 +6,11 @@ import { useAtomValue } from 'jotai';
 import { createMentionElement, moveCursor, replaceWithElement } from '../utils';
 import { getDirectRoomAvatarUrl } from '../../../utils/room';
 import { AutocompleteQuery } from './autocompleteQuery';
-import { AutocompleteMenu } from './AutocompleteMenu';
+import {
+  AutocompleteMenu,
+  AutocompleteSelectFirstRef,
+  useAutocompleteSelectFirst,
+} from './AutocompleteMenu';
 import { getMxIdServer, isRoomAlias } from '../../../utils/matrix';
 import { UseAsyncSearchOptions, useAsyncSearch } from '../../../hooks/useAsyncSearch';
 import { onTabPress } from '../../../utils/keyboard';
@@ -62,6 +66,7 @@ type RoomMentionAutocompleteProps = {
   editor: Editor;
   query: AutocompleteQuery<string>;
   requestClose: () => void;
+  selectFirstRef?: AutocompleteSelectFirstRef;
 };
 
 const SEARCH_OPTIONS: UseAsyncSearchOptions = {
@@ -75,6 +80,7 @@ export function RoomMentionAutocomplete({
   editor,
   query,
   requestClose,
+  selectFirstRef,
 }: RoomMentionAutocompleteProps) {
   const mDirects = useAtomValue(mDirectAtom);
 
@@ -114,17 +120,23 @@ export function RoomMentionAutocomplete({
     requestClose();
   };
 
+  const selectFirst = (): boolean => {
+    if (autoCompleteRoomIds.length === 0) {
+      const alias = roomAliasFromQueryText(query.text);
+      handleAutocomplete(alias, alias);
+      return true;
+    }
+    const rId = autoCompleteRoomIds[0];
+    const r = getNativeRoom(rId);
+    const name = r?.name ?? rId;
+    handleAutocomplete(r?.getCanonicalAlias() ?? rId, name);
+    return true;
+  };
+  useAutocompleteSelectFirst(selectFirstRef, selectFirst);
+
   useKeyDown(window, (evt: KeyboardEvent) => {
     onTabPress(evt, () => {
-      if (autoCompleteRoomIds.length === 0) {
-        const alias = roomAliasFromQueryText(query.text);
-        handleAutocomplete(alias, alias);
-        return;
-      }
-      const rId = autoCompleteRoomIds[0];
-      const r = getNativeRoom(rId);
-      const name = r?.name ?? rId;
-      handleAutocomplete(r?.getCanonicalAlias() ?? rId, name);
+      selectFirst();
     });
   });
 

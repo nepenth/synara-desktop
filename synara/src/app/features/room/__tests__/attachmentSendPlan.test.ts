@@ -7,9 +7,12 @@ import {
   makeOrReuseAttachmentSendPlan,
 } from '../attachmentSendPlan';
 import {
+  attachmentTooLargeMessage,
   effectiveNativeAttachmentLimit,
+  mediaConfigUploadLimit,
   NATIVE_ATTACHMENT_MAX_BYTES,
 } from '../../../utils/nativeMediaLimits';
+import { NATIVE_STAGED_MXC, UploadStatus, isNativeStagedUpload } from '../../../state/upload';
 
 test('partial retry preserves the original trailing-text role', () => {
   const initial = makeOrReuseAttachmentSendPlan(undefined, ['one', 'two'], 'Context');
@@ -78,4 +81,28 @@ test('native attachment preflight never exceeds the 32 MiB owner bound', () => {
   assert.equal(effectiveNativeAttachmentLimit(undefined), NATIVE_ATTACHMENT_MAX_BYTES);
   assert.equal(effectiveNativeAttachmentLimit(64 * 1024 * 1024), NATIVE_ATTACHMENT_MAX_BYTES);
   assert.equal(effectiveNativeAttachmentLimit(8 * 1024 * 1024), 8 * 1024 * 1024);
+});
+
+test('the homeserver upload limit is read from the native and the wire key', () => {
+  assert.equal(mediaConfigUploadLimit({ maxUploadSizeBytes: 8_000_000 }), 8_000_000);
+  assert.equal(mediaConfigUploadLimit({ 'm.upload.size': 5_000_000 }), 5_000_000);
+  assert.equal(mediaConfigUploadLimit({}), undefined);
+  assert.equal(mediaConfigUploadLimit({ maxUploadSizeBytes: -1 }), undefined);
+  assert.equal(
+    attachmentTooLargeMessage('clip.mov', 40_000_000, 8_000_000),
+    '"clip.mov" is 40.0 MB, over the 8.0 MB upload limit. Remove it to send.'
+  );
+});
+
+test('a staged composer file is never presented as an uploaded one', () => {
+  const file = new File([new Uint8Array([1])], 'a.png', { type: 'image/png' });
+  assert.equal(
+    isNativeStagedUpload({ file, status: UploadStatus.Success, mxc: NATIVE_STAGED_MXC }),
+    true
+  );
+  assert.equal(
+    isNativeStagedUpload({ file, status: UploadStatus.Success, mxc: 'mxc://example.org/a' }),
+    false
+  );
+  assert.equal(isNativeStagedUpload({ file, status: UploadStatus.Idle }), false);
 });

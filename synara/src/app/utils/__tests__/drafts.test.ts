@@ -50,6 +50,15 @@ test('room drafts ignore malformed and oversized payloads', () => {
   );
 });
 
+test('a draft too large to store replaces the older stored draft with nothing', () => {
+  const storage = createStorage();
+  saveRoomDraft(storage, '@me:example.org', '!room:example.org', draftValue, 123);
+  const huge = [{ type: 'paragraph', children: [{ text: 'x'.repeat(70 * 1024) }] }] as Descendant[];
+
+  assert.equal(saveRoomDraft(storage, '@me:example.org', '!room:example.org', huge, 124), false);
+  assert.equal(loadRoomDraft(storage, '@me:example.org', '!room:example.org'), undefined);
+});
+
 test('clearRoomDraft removes persisted drafts', () => {
   const storage = createStorage();
   saveRoomDraft(storage, '@me:example.org', '!room:example.org', draftValue, 123);

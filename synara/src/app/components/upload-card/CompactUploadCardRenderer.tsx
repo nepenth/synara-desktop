@@ -14,7 +14,10 @@ import { bytesToSize, getFileTypeIcon } from '../../utils/common';
 import { useMediaConfig } from '../../hooks/useMediaConfig';
 import { isSynaraDesktop } from '../../utils/desktop';
 import { uploadMediaNative } from '../../state/nativeMediaUpload';
-import { effectiveNativeAttachmentLimit } from '../../utils/nativeMediaLimits';
+import {
+  effectiveNativeAttachmentLimit,
+  mediaConfigUploadLimit,
+} from '../../utils/nativeMediaLimits';
 
 type CompactUploadCardRendererProps = {
   isEncrypted?: boolean;
@@ -30,7 +33,7 @@ export function CompactUploadCardRenderer({
 }: CompactUploadCardRendererProps) {
   const mediaConfig = useMediaConfig();
   const desktop = isSynaraDesktop();
-  const serverAllowSize = mediaConfig['m.upload.size'];
+  const serverAllowSize = mediaConfigUploadLimit(mediaConfig);
   const allowSize = desktop
     ? effectiveNativeAttachmentLimit(serverAllowSize)
     : serverAllowSize || Infinity;

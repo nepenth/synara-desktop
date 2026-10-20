@@ -834,9 +834,12 @@ const api = {
   releaseJump() {
     releaseJump?.();
   },
-  send(roomId = room) {
-    requestRoomLatestAfterSend(roomId);
+  /** A composer send into the room, or into one of its threads. */
+  send(roomId = room, threadRootId?: string) {
+    requestRoomLatestAfterSend(roomId, threadRootId);
   },
+  /** Root of the `scenario=threads` thread. */
+  threadRoot: THREAD_ROOT,
   openThreadStreams() {
     return openThreadStreams.size;
   },
