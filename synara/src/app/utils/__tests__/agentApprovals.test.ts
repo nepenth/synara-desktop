@@ -13,6 +13,7 @@ import {
   buildAgentApprovalNativeActionDedupeKey,
   buildAgentApprovalNotificationText,
   createAgentApprovalNativeActionDedupeStore,
+  describeAgentApprovalDecision,
   executeAgentApprovalNativeActionOnce,
   formatCoreAgentApprovalPrompt,
   hasLocalAgentApprovalReactionFromSenders,
@@ -329,4 +330,17 @@ test('approval notification text shows reason and command only with details enab
     buildAgentApprovalNotificationText({ roomName: 'forge', summary: {}, showDetails: true }),
     { title: 'Approval Required: Dangerous Command', body: 'forge: Review a request in Synara.' }
   );
+});
+
+test('a Core-projected own decision reads as the decided state with its time', () => {
+  const at = (ms: number) => `t${ms}`;
+  assert.equal(
+    describeAgentApprovalDecision({ decision: 'approve_once', decidedAt: 1_700_000_060_000 }, at),
+    'Approved once at t1700000060000.'
+  );
+  assert.equal(
+    describeAgentApprovalDecision({ decision: 'approve_always' }, at),
+    'Approved always.'
+  );
+  assert.equal(describeAgentApprovalDecision({ decision: 'deny', decidedAt: 0 }, at), 'Denied.');
 });

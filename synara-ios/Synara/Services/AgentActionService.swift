@@ -107,6 +107,54 @@ enum SynaraAgentApprovalPromptReaction: String, CaseIterable, Equatable, Identif
     }
 }
 
+/// Core-projected decision this account already made on an approval prompt
+/// (its own terminal reaction). The card shows it instead of the buttons.
+struct SynaraAgentApprovalCardDecision: Equatable {
+    let reaction: SynaraAgentApprovalPromptReaction
+    let decidedAt: Date?
+
+    /// Maps the closed Core strings `approve_once`, `approve_always`, `deny`.
+    init?(coreDecision: String?, decidedAtMilliseconds: UInt64?) {
+        switch coreDecision {
+        case "approve_once":
+            reaction = .approveOnce
+        case "approve_always":
+            reaction = .approveAlways
+        case "deny":
+            reaction = .deny
+        default:
+            return nil
+        }
+        decidedAt = decidedAtMilliseconds.flatMap { milliseconds in
+            milliseconds > 0 ? Date(timeIntervalSince1970: TimeInterval(milliseconds) / 1000) : nil
+        }
+    }
+
+    var title: String {
+        switch reaction {
+        case .approveOnce:
+            return "Approved once"
+        case .approveAlways:
+            return "Approved always"
+        case .deny:
+            return "Denied"
+        }
+    }
+
+    func detail(timeStyle: (Date) -> String = SynaraAgentApprovalCardDecision.defaultTime) -> String {
+        guard let decidedAt else {
+            return "Your decision was sent."
+        }
+        return "You decided at \(timeStyle(decidedAt))."
+    }
+
+    static func defaultTime(_ date: Date) -> String {
+        Calendar.current.isDateInToday(date)
+            ? date.formatted(date: .omitted, time: .shortened)
+            : date.formatted(date: .abbreviated, time: .shortened)
+    }
+}
+
 struct SynaraAgentApprovalPrompt: Equatable {
     let title: String
     let body: String

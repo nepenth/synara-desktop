@@ -563,6 +563,10 @@ fn timeline_view_row_dto_maps_message_without_token_echo() {
         formatted_body: None,
         agent_card_json: Some(r#"{"title":"Approval"}"#.to_owned()),
         is_agent_approval: true,
+        agent_approval_decision: Some(crate::app::timeline::TimelineAgentApprovalDecision {
+            decision: crate::app::account_data::SynaraAgentApprovalHistoryDecision::ApproveOnce,
+            decided_at: Some(1_700_000_060_000),
+        }),
         message_type: Some("m.text".to_owned()),
         forward_transport: Some(TimelineForwardTransport::Text),
         media_filename: None,
@@ -613,6 +617,8 @@ fn timeline_view_row_dto_maps_message_without_token_echo() {
         Some(r#"{"title":"Approval"}"#)
     );
     assert!(dto.is_agent_approval);
+    assert_eq!(dto.agent_approval_decision.as_deref(), Some("approve_once"));
+    assert_eq!(dto.agent_approval_decided_at, Some(1_700_000_060_000));
     assert_eq!(dto.reply_to_event_id.as_deref(), Some("$reply:example.org"));
     assert_eq!(
         dto.thread_root_event_id.as_deref(),

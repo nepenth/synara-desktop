@@ -678,6 +678,84 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    private func approvalRow(decision: String?, decidedAt: UInt64?, isAgentApproval: Bool = true) -> TimelineViewRowDto {
+        TimelineViewRowDto(
+            kind: .message,
+            itemId: "item-approval",
+            eventId: "$approval:example.org",
+            sender: "@hermes:example.org",
+            senderName: "Hermes",
+            senderAvatarUrl: nil,
+            body: "Approval Required: Dangerous Command\n```\nrm -rf build/\n```",
+            originServerTs: 1_700_000_000_000,
+            edited: false,
+            replyToEventId: nil,
+            replyPreview: nil,
+            threadRootEventId: nil,
+            threadSummary: nil,
+            poll: nil,
+            capabilities: nil,
+            decryptionState: nil,
+            messageType: "m.text",
+            forwardTransport: "text",
+            formattedBody: nil,
+            agentCardJson: nil,
+            isAgentApproval: isAgentApproval,
+            agentApprovalDecision: decision,
+            agentApprovalDecidedAt: decidedAt,
+            mediaFilename: nil,
+            mediaCaption: nil,
+            reactions: [
+                TimelineViewReactionDto(key: "✅", count: 2, own: true, senders: []),
+                TimelineViewReactionDto(key: "♾️", count: 1, own: false, senders: []),
+                TimelineViewReactionDto(key: "❌", count: 1, own: false, senders: [])
+            ],
+            mediaHandleId: nil,
+            mediaMimeType: nil,
+            mediaWidth: nil,
+            mediaHeight: nil,
+            mediaDurationMs: nil,
+            encryptionShield: nil,
+            transactionId: nil
+        )
+    }
+
+    func testApprovalRowCarriesCoreDecisionAndKeepsOwnReactionChip() throws {
+        let decided = try XCTUnwrap(
+            SharedCoreTimelineRows.item(from: approvalRow(decision: "approve_once", decidedAt: 1_700_000_060_000))
+        )
+        let decision = try XCTUnwrap(decided.agentApprovalDecision)
+        XCTAssertEqual(decision.reaction, .approveOnce)
+        XCTAssertEqual(decision.title, "Approved once")
+        XCTAssertEqual(decision.decidedAt, Date(timeIntervalSince1970: 1_700_000_060))
+        XCTAssertEqual(decision.detail(timeStyle: { _ in "3:48 PM" }), "You decided at 3:48 PM.")
+        // The user's own ✅ stays in the chip strip next to Hermes's seeds.
+        XCTAssertEqual(decided.reactions, ["✅": 2, "♾️": 1, "❌": 1])
+        XCTAssertEqual(decided.reactionOwnership, .known(["✅"]))
+        // Delivery-status rewrites keep the decided state.
+        XCTAssertEqual(decided.withDeliveryStatus(nil).agentApprovalDecision, decision)
+
+        let pending = try XCTUnwrap(SharedCoreTimelineRows.item(from: approvalRow(decision: nil, decidedAt: nil)))
+        XCTAssertNil(pending.agentApprovalDecision)
+
+        let denied = SharedCoreTimelineRows.item(from: approvalRow(decision: "deny", decidedAt: nil))?
+            .agentApprovalDecision
+        XCTAssertEqual(denied?.title, "Denied")
+        XCTAssertEqual(denied?.detail(), "Your decision was sent.")
+        XCTAssertEqual(
+            SharedCoreTimelineRows.item(from: approvalRow(decision: "approve_always", decidedAt: 0))?
+                .agentApprovalDecision?.title,
+            "Approved always"
+        )
+        // Only Core-eligible approvals carry a decision; unknown strings are ignored.
+        XCTAssertNil(
+            SharedCoreTimelineRows.item(
+                from: approvalRow(decision: "approve_once", decidedAt: 1, isAgentApproval: false)
+            )?.agentApprovalDecision
+        )
+        XCTAssertNil(SynaraAgentApprovalCardDecision(coreDecision: "maybe", decidedAtMilliseconds: 1))
+    }
+
     func testSharedCoreTimelineRowsPreservesRelationsPollsCapabilitiesAndReactionOwnership() {
         let mappedRow = SharedCoreTimelineRows.item(
             from: TimelineViewRowDto(
@@ -702,6 +780,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 formattedBody: nil,
                 agentCardJson: nil,
                 isAgentApproval: false,
+                agentApprovalDecision: nil,
+                agentApprovalDecidedAt: nil,
                 mediaFilename: nil,
                 mediaCaption: nil,
                 reactions: [TimelineViewReactionDto(key: "👍", count: 2, own: true, senders: [])],
@@ -732,7 +812,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 replyToEventId: nil, replyPreview: nil, threadRootEventId: nil,
                 threadSummary: nil, poll: nil, capabilities: nil, decryptionState: nil,
                 messageType: "m.text", forwardTransport: nil, formattedBody: nil,
-                agentCardJson: nil, isAgentApproval: false, mediaFilename: nil,
+                agentCardJson: nil, isAgentApproval: false, agentApprovalDecision: nil,
+                agentApprovalDecidedAt: nil, mediaFilename: nil,
                 mediaCaption: nil, reactions: [], mediaHandleId: nil, mediaMimeType: nil,
                 mediaWidth: nil, mediaHeight: nil, mediaDurationMs: nil,
                 encryptionShield: nil, transactionId: "synara-attachment-a"
@@ -886,6 +967,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 formattedBody: nil,
                 agentCardJson: nil,
                 isAgentApproval: false,
+                agentApprovalDecision: nil,
+                agentApprovalDecidedAt: nil,
                 mediaFilename: nil,
                 mediaCaption: nil,
                 reactions: [],

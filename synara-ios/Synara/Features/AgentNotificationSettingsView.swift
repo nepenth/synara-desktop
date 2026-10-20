@@ -53,7 +53,7 @@ struct AgentNotificationSettingsView: View {
             } header: {
                 Text("Agent Accounts")
             } footer: {
-                Text("Add each agent’s full Matrix user ID. These rules apply only to the listed agents and sync with your account across Synara clients.")
+                Text("Add each agent’s full Matrix user ID. These rules apply only to the listed agents and sync with your account across Synara clients. Once you add an agent, only listed agents can raise urgent approval alerts, even in muted rooms; with no agents listed, approval alerts follow each room’s notification settings.")
             }
 
             if draft != nil {
@@ -67,7 +67,7 @@ struct AgentNotificationSettingsView: View {
                 } header: {
                     Text("Message Categories")
                 } footer: {
-                    Text("Synara recognizes messages starting with 🛠 Tool activity or 💬 Commentary, including Markdown headings. Other messages from the selected agents use the final response setting. Approval requests remain eligible for urgent alerts. Messages remain in the conversation.")
+                    Text("Synara recognizes messages starting with 🛠 Tool activity or 💬 Commentary, including Markdown headings. Other messages from the selected agents use the final response setting. Approval requests from listed agents remain eligible for urgent alerts. Messages remain in the conversation.")
                 }
                 .disabled(isSaving || isLoading)
             }

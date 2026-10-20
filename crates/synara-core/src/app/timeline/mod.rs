@@ -89,10 +89,11 @@ pub use shield::{
 };
 pub use utd::{UtdEntry, UtdIndex, UtdPhase, UtdReasonCode, UtdUpdate, MAX_UTD_ENTRIES};
 pub use view::{
-    project_event_row, project_event_row_base, project_formatted_body, project_forward_transport,
-    project_local_echo_status, project_message_type_and_media, project_poll_answers,
-    project_timeline_diffs, project_timeline_diffs_with_media, project_timeline_item,
-    project_timeline_item_with_media, sanitize_incoming_html, ProjectedLocalEcho, TimelineCallRow,
+    own_agent_approval_decision, project_event_row, project_event_row_base, project_formatted_body,
+    project_forward_transport, project_local_echo_status, project_message_type_and_media,
+    project_poll_answers, project_timeline_diffs, project_timeline_diffs_with_media,
+    project_timeline_item, project_timeline_item_with_media, sanitize_incoming_html,
+    ProjectedLocalEcho, TimelineAgentApprovalDecision, TimelineCallRow,
     TimelineEncryptedUnavailableRow, TimelineEventRowBase, TimelineForwardTransport,
     TimelineMediaHandle, TimelineMembershipRow, TimelineMessageRow, TimelineOtherRow,
     TimelinePageState, TimelinePaginationState, TimelinePollAnswer, TimelinePollRow,

@@ -152,6 +152,30 @@ final class NotificationPreviewSupportTests: XCTestCase {
         XCTAssertFalse(SynaraApprovalNotificationDetailsPreference.isEnabled(defaults: defaults))
     }
 
+    func testUrgentApprovalAlertsAreRateLimitedPerRoomAcrossExtensionRuns() throws {
+        let suite = "synara.tests.approval-rate.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let start = Date(timeIntervalSince1970: 2_000_000)
+        for second in 0..<SynaraApprovalAlertRateLimit.alertsPerRoomPerWindow {
+            XCTAssertTrue(SynaraApprovalAlertRateLimit.reserve(
+                roomID: "!ops:example.org",
+                now: start.addingTimeInterval(TimeInterval(second)),
+                defaults: defaults
+            ))
+        }
+        XCTAssertFalse(SynaraApprovalAlertRateLimit.reserve(
+            roomID: "!ops:example.org", now: start.addingTimeInterval(10), defaults: defaults
+        ))
+        XCTAssertTrue(SynaraApprovalAlertRateLimit.reserve(
+            roomID: "!other:example.org", now: start.addingTimeInterval(10), defaults: defaults
+        ))
+        // The first alert leaves the one-minute window and frees one slot.
+        let later = start.addingTimeInterval(SynaraApprovalAlertRateLimit.windowSeconds + 0.5)
+        XCTAssertTrue(SynaraApprovalAlertRateLimit.reserve(roomID: "!ops:example.org", now: later, defaults: defaults))
+        XCTAssertFalse(SynaraApprovalAlertRateLimit.reserve(roomID: "!ops:example.org", now: later, defaults: defaults))
+    }
+
     func testVerifiedFreshApprovalUsesCriticalOnlyWithOSAuthorization() {
         let now = Date(timeIntervalSince1970: 2_000_000)
         for authorized in [false, true] {

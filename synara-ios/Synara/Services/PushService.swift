@@ -9,6 +9,20 @@ protocol SparsePushRouteResolving {
     func resolveRoute(eventID: String) async -> AppRoute?
 }
 
+/// Settings copy for agent approval alerts. It must describe the action
+/// options `SynaraNotificationActionContract` registers in either state.
+enum SynaraApprovalNotificationSettingsCopy {
+    static let approveOnceWithoutUnlockTitle = "Approve once without unlocking"
+
+    static func footer(approveOnceWithoutUnlock: Bool) -> String {
+        let delivery = "Fresh, locally verified approval prompts use Critical Alerts when this build supports them and you allow them in iOS; otherwise they use Time Sensitive alerts. Use Request Notification Permission to allow Critical Alerts in a supported build. Show approval details puts the reason and requested command on the notification, including the Lock Screen and Apple Watch, independent of message previews."
+        let actions = approveOnceWithoutUnlock
+            ? "Approve once and Deny work from the Lock Screen and Apple Watch without unlocking your iPhone."
+            : "Approve once requires unlocking your iPhone first. Deny works without unlocking."
+        return "\(delivery) \(actions) Always approval remains in-app only."
+    }
+}
+
 enum SynaraNotificationActionContract {
     static let agentApprovalCategoryIdentifier = "synara.agent-approval"
     static let reviewIdentifier = SynaraAgentApprovalNotificationActionID.review.rawValue
@@ -16,39 +30,49 @@ enum SynaraNotificationActionContract {
     static let approveAlwaysIdentifier = SynaraAgentApprovalNotificationActionID.approveAlways.rawValue
     static let denyIdentifier = SynaraAgentApprovalNotificationActionID.deny.rawValue
 
+    /// Re-run whenever the Approve once unlock setting changes: the category
+    /// owns the action options that iOS enforces on the Lock Screen.
     static func registerCategories(
-        center: UNUserNotificationCenter = UNUserNotificationCenter.current()
+        center: UNUserNotificationCenter = UNUserNotificationCenter.current(),
+        approveOnceWithoutUnlock: Bool = SynaraApproveOnceWithoutUnlockPreference.isEnabled()
     ) {
         // Approve-always is intentionally omitted from the native category: permanent
         // approval requires an explicit in-app confirmation path. Keep the two
         // time-critical decisions first for compact notification surfaces;
         // tapping the notification body remains the primary Review path.
-        let category = UNNotificationCategory(
+        center.setNotificationCategories([
+            agentApprovalCategory(approveOnceWithoutUnlock: approveOnceWithoutUnlock)
+        ])
+    }
+
+    static func agentApprovalCategory(approveOnceWithoutUnlock: Bool) -> UNNotificationCategory {
+        UNNotificationCategory(
             identifier: agentApprovalCategoryIdentifier,
-            actions: agentApprovalActions(),
+            actions: agentApprovalActions(approveOnceWithoutUnlock: approveOnceWithoutUnlock),
             intentIdentifiers: [],
             options: []
         )
-        center.setNotificationCategories([category])
     }
 
-    static func agentApprovalActions() -> [UNNotificationAction] {
+    static func agentApprovalActions(approveOnceWithoutUnlock: Bool) -> [UNNotificationAction] {
         [
             UNNotificationAction(
                 identifier: approveOnceIdentifier,
                 title: "Approve once",
-                // Background actions so the decision can be made from a locked
-                // iPhone or a mirrored Apple Watch alert. Foreground actions do
-                // not run from the Watch, and `.authenticationRequired` would
-                // demand an iPhone unlock. The app delegate opens the stores in
-                // a bounded background transaction; Core still enforces the
-                // five-minute expiry, sender eligibility and one decision per
-                // prompt. Approve always remains in-app only.
-                options: []
+                // Background actions, so the app delegate decides in a bounded
+                // background transaction without foregrounding. By default iOS
+                // first asks to unlock the iPhone, because approving runs an
+                // agent's command. The opt-in drops that requirement so the
+                // action also completes from a locked iPhone or a mirrored Apple
+                // Watch alert. Core still enforces the five-minute expiry, sender
+                // eligibility and one decision per prompt. Approve always
+                // remains in-app only.
+                options: approveOnceWithoutUnlock ? [] : [.authenticationRequired]
             ),
             UNNotificationAction(
                 identifier: denyIdentifier,
                 title: "Deny",
+                // Denying cannot run anything, so it never needs an unlock.
                 options: [.destructive]
             ),
             UNNotificationAction(

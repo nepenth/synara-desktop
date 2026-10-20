@@ -107,7 +107,7 @@ export function AgentNotifications() {
       >
         <SettingTile
           title="Agent accounts"
-          description="Add each agent’s full Matrix user ID. These rules apply only to the listed agents and sync with your account across Synara clients."
+          description="Add each agent’s full Matrix user ID. These rules apply only to the listed agents and sync with your account across Synara clients. Once you add an agent, only listed agents can raise urgent approval alerts, even in muted rooms; with no agents listed, approval alerts follow each room’s notification settings."
         >
           {loading && <Spinner size="100" />}
           {draft && (
@@ -191,10 +191,10 @@ export function AgentNotifications() {
             />
           ))}
         <Text size="T200">
-          Approval requests remain eligible for urgent alerts. Turning a category off keeps its
-          messages in the conversation. On iOS, encrypted background alerts may still appear as
-          generic activity unless the installed build supports Apple’s Notification Filtering
-          capability.
+          Approval requests from listed agents remain eligible for urgent alerts. Turning a category
+          off keeps its messages in the conversation. On iOS, encrypted background alerts may still
+          appear as generic activity unless the installed build supports Apple’s Notification
+          Filtering capability.
         </Text>
         <Box gap="200">
           <Button

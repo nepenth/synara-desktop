@@ -25,6 +25,7 @@ use matrix_sdk_ui::timeline::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
+use crate::app::account_data::SynaraAgentApprovalHistoryDecision;
 use crate::app::agent_approvals::is_eligible_agent_approval_prompt;
 use crate::dto::{EventId, LocalEchoState, RoomId, TimelineItemId, UserId};
 
@@ -133,6 +134,36 @@ pub struct TimelineReaction {
     /// Per-sender annotation ids. Poll voter identities stay off this DTO.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub senders: Vec<TimelineReactionSender>,
+}
+
+/// This account's own terminal reaction on an approval prompt. Hermes acts on
+/// the first decision it sees, so the earliest own terminal reaction wins.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimelineAgentApprovalDecision {
+    pub decision: SynaraAgentApprovalHistoryDecision,
+    /// Reaction timestamp; absent while a local echo has no server time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decided_at: Option<u64>,
+}
+
+/// Project the account's own decision from `(key, own, timestamp_ms)`
+/// reaction entries. Seeded reactions from the agent are never decisions.
+pub fn own_agent_approval_decision<'a>(
+    reactions: impl IntoIterator<Item = (&'a str, bool, Option<u64>)>,
+) -> Option<TimelineAgentApprovalDecision> {
+    reactions
+        .into_iter()
+        .filter(|(_, own, _)| *own)
+        .filter_map(|(key, _, at)| {
+            SynaraAgentApprovalHistoryDecision::from_reaction_key(key).map(|decision| {
+                TimelineAgentApprovalDecision {
+                    decision,
+                    decided_at: at.filter(|at| *at > 0),
+                }
+            })
+        })
+        .min_by_key(|decision| decision.decided_at.unwrap_or(u64::MAX))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -451,12 +482,25 @@ fn project_event_row_for_user(
                         current_user_id.as_str(),
                     )
                 });
+                let agent_approval_decision =
+                    own_user_id
+                        .filter(|_| is_agent_approval)
+                        .and_then(|user_id| {
+                            own_agent_approval_decision(content.reactions.iter().filter_map(
+                                |(key, senders)| {
+                                    senders.get(user_id).map(|info| {
+                                        (key.as_str(), true, Some(u64::from(info.timestamp.get())))
+                                    })
+                                },
+                            ))
+                        });
                 TimelineViewRow::Message(Box::new(TimelineMessageRow {
                     event: base,
                     body,
                     formatted_body: project_formatted_body(msgtype),
                     agent_card_json: project_agent_card_json(event, message.body()),
                     is_agent_approval,
+                    agent_approval_decision,
                     message_type,
                     forward_transport,
                     media_filename,
@@ -1086,6 +1130,9 @@ pub struct TimelineMessageRow {
     /// display details only after this authoritative gate is true.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub is_agent_approval: bool,
+    /// Present only on an approval prompt this account already decided.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_approval_decision: Option<TimelineAgentApprovalDecision>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message_type: Option<String>,
     /// Core-owned dispatch route for forwarding this semantic event.
@@ -1460,6 +1507,38 @@ mod tests {
         NoticeMessageEventContent, TextMessageEventContent,
     };
     use matrix_sdk::ruma::user_id;
+
+    #[test]
+    fn approval_card_projects_only_this_accounts_earliest_terminal_reaction() {
+        // Hermes seeds all three keys; those are never this account's decision.
+        assert_eq!(
+            own_agent_approval_decision([
+                ("✅", false, Some(1)),
+                ("♾️", false, Some(1)),
+                ("❌", false, Some(1)),
+            ]),
+            None
+        );
+        // An ordinary own reaction is not a decision either.
+        assert_eq!(own_agent_approval_decision([("👍", true, Some(5))]), None);
+        assert_eq!(
+            own_agent_approval_decision([
+                ("✅", false, Some(1)),
+                ("❌", true, Some(20)),
+                ("✅", true, Some(10)),
+            ]),
+            Some(TimelineAgentApprovalDecision {
+                decision: SynaraAgentApprovalHistoryDecision::ApproveOnce,
+                decided_at: Some(10),
+            })
+        );
+        // A local echo without a server time still shows the decided state.
+        let pending = own_agent_approval_decision([("❎", true, None)]).unwrap();
+        assert_eq!(pending.decision, SynaraAgentApprovalHistoryDecision::Deny);
+        assert_eq!(pending.decided_at, None);
+        let json = serde_json::to_value(pending).unwrap();
+        assert_eq!(json, serde_json::json!({ "decision": "deny" }));
+    }
 
     #[test]
     fn virtual_timeline_rows_serialize_camel_case_fields() {
@@ -1905,6 +1984,7 @@ mod tests {
             formatted_body: None,
             agent_card_json: None,
             is_agent_approval: false,
+            agent_approval_decision: None,
             message_type: Some("text".into()),
             forward_transport: Some(TimelineForwardTransport::Text),
             media_filename: None,

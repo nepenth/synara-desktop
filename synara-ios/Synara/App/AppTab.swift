@@ -256,6 +256,48 @@ private struct NotificationsTabView: View {
     }
 }
 
+/// Why a room is in the Notifications inbox. An agent approval prompt is
+/// labeled as one even when the push rules also highlighted it.
+enum NotificationsInboxReason: Equatable {
+    case approval
+    case mention
+    case invite
+
+    init?(room: RoomSummary) {
+        if room.lastMessageIsAgentApproval {
+            self = .approval
+        } else if room.hasHighlight {
+            self = .mention
+        } else if room.membership == .invited {
+            self = .invite
+        } else {
+            return nil
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .approval:
+            return "Approval"
+        case .mention:
+            return "Mention"
+        case .invite:
+            return "Invite"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .approval:
+            return "checkmark.shield"
+        case .mention:
+            return "at"
+        case .invite:
+            return "envelope"
+        }
+    }
+}
+
 private struct NotificationsInboxRow: View {
     let room: RoomSummary
 
@@ -279,10 +321,8 @@ private struct NotificationsInboxRow: View {
                     .lineLimit(2)
 
                 HStack(spacing: SynaraSpacing.small) {
-                    if room.hasHighlight {
-                        Label("Mention", systemImage: "at")
-                    } else if room.membership == .invited {
-                        Label("Invite", systemImage: "envelope")
+                    if let reason = NotificationsInboxReason(room: room) {
+                        Label(reason.title, systemImage: reason.systemImage)
                     }
                     if room.lastActivityAt.timeIntervalSince1970 > 0 {
                         Text(room.lastActivityAt, style: .relative)
