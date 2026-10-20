@@ -38,12 +38,22 @@ enum SharedCoreTimelineUpdateBootstrap {
 /// Stream identity and open position for a room's own timeline and for each
 /// thread in it. Thread streams use `TimelineOpenKindDto.thread`, which Core
 /// maps to an SDK thread-focused timeline holding the root and its replies.
-/// The room's live and focused streams hide in-thread events.
+/// The room's live and focused streams hide in-thread events. An
+/// event-focused window has its own key, so opening one never closes the
+/// live stream behind it; a room has at most one focused window open.
 enum SharedCoreTimelineStreamKey {
     private static let separator = "\u{1F}"
 
     static func room(_ roomID: String) -> String {
         roomID
+    }
+
+    static func focused(_ roomID: String) -> String {
+        roomID + separator + "focused"
+    }
+
+    static func room(_ roomID: String, focusedEventID: String?) -> String {
+        focusedEventID == nil ? room(roomID) : focused(roomID)
     }
 
     static func thread(roomID: String, rootEventID: String) -> String {

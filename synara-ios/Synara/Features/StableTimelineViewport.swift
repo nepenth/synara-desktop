@@ -35,8 +35,18 @@ import SwiftUI
             case timeout
         }
 
+        enum PaginationRequest: Equatable {
+            /// The user scrolled within the threshold of the oldest row.
+            case nearOldest
+            /// The rows do not fill the viewport plus the threshold, so no
+            /// scroll can reach the threshold: page without waiting for one.
+            case fillShortContent
+        }
+
         static let maximumMissingTargetAttempts = 3
         static let maximumReadMarkerSettlementAttempts = 6
+        /// Pages requested to fill short content, per generation and per drag.
+        static let maximumShortContentPaginationRequests = 4
 
         static func shouldDeferSnapshot(isDragging: Bool, isDecelerating: Bool) -> Bool {
             isDragging || isDecelerating
@@ -65,17 +75,60 @@ import SwiftUI
             thresholdScreens: CGFloat = 1.5,
             hasUserInteracted: Bool,
             isPaginating: Bool,
-            requestInFlight: Bool
+            requestInFlight: Bool,
+            shortContentRequestCount: Int = 0
         ) -> Bool {
-            guard hasUserInteracted,
-                  isPaginating == false,
+            paginationRequest(
+                contentOffset: contentOffset,
+                contentHeight: contentHeight,
+                viewportHeight: viewportHeight,
+                thresholdScreens: thresholdScreens,
+                hasUserInteracted: hasUserInteracted,
+                isPaginating: isPaginating,
+                requestInFlight: requestInFlight,
+                shortContentRequestCount: shortContentRequestCount
+            ) != nil
+        }
+
+        static func paginationRequest(
+            contentOffset: CGFloat,
+            contentHeight: CGFloat,
+            viewportHeight: CGFloat,
+            thresholdScreens: CGFloat = 1.5,
+            hasUserInteracted: Bool,
+            isPaginating: Bool,
+            requestInFlight: Bool,
+            shortContentRequestCount: Int
+        ) -> PaginationRequest? {
+            guard isPaginating == false,
                   requestInFlight == false,
-                  contentHeight > viewportHeight
+                  viewportHeight > 0
             else {
-                return false
+                return nil
             }
             let threshold = max(viewportHeight, viewportHeight * thresholdScreens)
-            return contentOffset + viewportHeight >= contentHeight - threshold
+            if contentHeight <= viewportHeight + threshold {
+                // Bounded: a window of hidden events can take several pages
+                // to produce rows, and Core may keep reporting more history.
+                return shortContentRequestCount < maximumShortContentPaginationRequests
+                    ? .fillShortContent
+                    : nil
+            }
+            guard hasUserInteracted else {
+                return nil
+            }
+            return contentOffset + viewportHeight >= contentHeight - threshold ? .nearOldest : nil
+        }
+
+        /// A read marker is placed when the first unread row reaches the top,
+        /// or when it is on screen and the newer rows are too short to scroll
+        /// it there: the inverted table is clamped at its newest edge.
+        static func readMarkerPlaced(
+            isTargetAtVisualTop: Bool,
+            isTargetVisible: Bool,
+            isClampedAtNewestEdge: Bool
+        ) -> Bool {
+            isTargetAtVisualTop || (isTargetVisible && isClampedAtNewestEdge)
         }
 
         static func boundedVisibleCellUpperBound(
@@ -462,9 +515,15 @@ import SwiftUI
         let rowContent: (StableTimelineViewportRow) -> AnyView
         let onBottomPinnedChanged: (String, UInt64, Bool, String?) -> Void
         let onUserInteractionChanged: (String, UInt64, Bool) -> Void
-        let onPaginationThresholdReached: (String, UInt64, String?) -> Bool
+        /// Route, generation, anchor event, and whether the request only fills
+        /// short content (no user scroll asked for it).
+        let onPaginationThresholdReached: (String, UInt64, String?, Bool) -> Bool
         let onTimestampRevealRequested: (String, UInt64, String) -> Void
         let onCommandCompleted: (String, UInt64, StableTimelineViewportCommand, Bool, String?) -> Void
+        var lastReadMarkerEventID: String?
+        var paginationCompletions: UInt64 = 0
+        /// Whether the last-read row or the unread divider is on screen.
+        var onLastReadMarkerVisibilityChanged: (String, UInt64, Bool) -> Void = { _, _, _ in }
 
         func makeCoordinator() -> Coordinator {
             Coordinator(parent: self)
@@ -484,7 +543,9 @@ import SwiftUI
                     command: command,
                     isLive: isLive,
                     isPaginating: isPaginating,
-                    backgroundColor: backgroundColor
+                    backgroundColor: backgroundColor,
+                    lastReadMarkerEventID: lastReadMarkerEventID,
+                    paginationCompletions: paginationCompletions
                 )
             )
         }
@@ -516,8 +577,19 @@ import SwiftUI
                 }
             }
 
-            func paginationThresholdReached(routeID: String, generation: UInt64, anchorEventID: String?) -> Bool {
-                parent.onPaginationThresholdReached(routeID, generation, anchorEventID)
+            func paginationThresholdReached(
+                routeID: String,
+                generation: UInt64,
+                anchorEventID: String?,
+                fillsShortContent: Bool
+            ) -> Bool {
+                parent.onPaginationThresholdReached(routeID, generation, anchorEventID, fillsShortContent)
+            }
+
+            func lastReadMarkerVisibilityChanged(routeID: String, generation: UInt64, isVisible: Bool) {
+                DispatchQueue.main.async { [weak self] in
+                    self?.parent.onLastReadMarkerVisibilityChanged(routeID, generation, isVisible)
+                }
             }
 
             func timestampRevealRequested(routeID: String, generation: UInt64, eventID: String) {
@@ -549,6 +621,12 @@ import SwiftUI
             let isLive: Bool
             let isPaginating: Bool
             let backgroundColor: UIColor
+            /// The last-read event a "Jump to Last Read" action points at.
+            var lastReadMarkerEventID: String?
+            /// Counts finished older-history requests. A fast page can finish
+            /// before SwiftUI publishes `isPaginating`, so this, not that flag,
+            /// releases the in-flight request.
+            var paginationCompletions: UInt64 = 0
 
             func withRows(_ rows: [StableTimelineViewportRow]) -> Configuration {
                 Configuration(
@@ -558,7 +636,9 @@ import SwiftUI
                     command: command,
                     isLive: isLive,
                     isPaginating: isPaginating,
-                    backgroundColor: backgroundColor
+                    backgroundColor: backgroundColor,
+                    lastReadMarkerEventID: lastReadMarkerEventID,
+                    paginationCompletions: paginationCompletions
                 )
             }
         }
@@ -636,7 +716,9 @@ import SwiftUI
         private var isDecelerating = false
         private var hasUserInteracted = false
         private var paginationRequestInFlight = false
+        private var shortContentPaginationRequests = 0
         private var lastReportedPinned: Bool?
+        private var lastReportedMarkerVisible: Bool?
 
         init(coordinator: StableTimelineViewport.Coordinator) {
             self.coordinator = coordinator
@@ -708,11 +790,16 @@ import SwiftUI
                 missingTargetAttempts.removeAll()
                 lastExecutedCommandID = nil
                 paginationRequestInFlight = false
+                shortContentPaginationRequests = 0
                 hasUserInteracted = false
                 lastReportedPinned = nil
+                lastReportedMarkerVisible = nil
             }
 
             if configuration?.isPaginating == true, newConfiguration.isPaginating == false {
+                paginationRequestInFlight = false
+            }
+            if let configuration, configuration.paginationCompletions != newConfiguration.paginationCompletions {
                 paginationRequestInFlight = false
             }
 
@@ -880,6 +967,7 @@ import SwiftUI
                     reportBottomPinnedIfChanged()
                     requestPaginationIfNeeded()
                 }
+                reportLastReadMarkerVisibilityIfChanged()
                 updateDiagnostics()
                 return
             }
@@ -970,6 +1058,7 @@ import SwiftUI
                         reportBottomPinnedIfChanged(force: true)
                         requestPaginationIfNeeded()
                     }
+                    reportLastReadMarkerVisibilityIfChanged()
                     updateDiagnostics()
                 }
 
@@ -1054,7 +1143,7 @@ import SwiftUI
             let firedRetryCount = missingTargetAttempts[command.id] ?? 0
             if targetsReadMarker,
                firedRetryCount > 0,
-               isRowAtVisualTop(target.0)
+               isReadMarkerPlaced(target.0)
             {
                 completeCommand(command, success: true, targetEventID: target.1)
                 reportBottomPinnedIfChanged(force: true)
@@ -1096,7 +1185,7 @@ import SwiftUI
                 }
                 let succeeded = StableTimelineViewportPolicy.commandSucceeded(
                     targetsLatest: targetsLatest,
-                    isTargetVisible: targetsReadMarker ? isRowAtVisualTop(target.0) : isRowVisible(target.0),
+                    isTargetVisible: targetsReadMarker ? isReadMarkerPlaced(target.0) : isRowVisible(target.0),
                     isConfirmedPinned: isConfirmedPinned()
                 )
                 if succeeded,
@@ -1406,14 +1495,55 @@ import SwiftUI
             return abs(rowFrame.minY - viewportTop) <= 4
         }
 
+        private func isReadMarkerPlaced(_ id: StableTimelineViewportItemID) -> Bool {
+            StableTimelineViewportPolicy.readMarkerPlaced(
+                isTargetAtVisualTop: isRowAtVisualTop(id),
+                isTargetVisible: isRowVisible(id),
+                isClampedAtNewestEdge: isClampedAtNewestEdge()
+            )
+        }
+
+        private func isClampedAtNewestEdge() -> Bool {
+            let bottomTolerance: CGFloat = 2
+            return tableView.contentOffset.y <= -tableView.adjustedContentInset.top + bottomTolerance
+        }
+
         private func isConfirmedPinned() -> Bool {
             guard let newest = newestEventRow(),
                   isRowVisible(newest.id)
             else {
                 return false
             }
-            let bottomTolerance: CGFloat = 2
-            return tableView.contentOffset.y <= -tableView.adjustedContentInset.top + bottomTolerance
+            return isClampedAtNewestEdge()
+        }
+
+        private func reportLastReadMarkerVisibilityIfChanged() {
+            guard let configuration, let markerEventID = configuration.lastReadMarkerEventID else {
+                lastReportedMarkerVisible = nil
+                return
+            }
+            let isVisible = tableView.visibleCells.contains { cell in
+                guard let cell = cell as? Cell, let stableID = cell.stableID else {
+                    return false
+                }
+                switch stableID {
+                case let .event(eventID):
+                    return eventID == markerEventID
+                case .unreadDivider:
+                    return true
+                case .cryptoBanner, .pagination:
+                    return false
+                }
+            }
+            guard lastReportedMarkerVisible != isVisible else {
+                return
+            }
+            lastReportedMarkerVisible = isVisible
+            coordinator.lastReadMarkerVisibilityChanged(
+                routeID: configuration.routeID,
+                generation: configuration.sessionGeneration,
+                isVisible: isVisible
+            )
         }
 
         private func reportBottomPinnedIfChanged(force: Bool = false) {
@@ -1435,13 +1565,14 @@ import SwiftUI
 
         private func requestPaginationIfNeeded() {
             guard let configuration,
-                  StableTimelineViewportPolicy.shouldRequestPagination(
+                  let request = StableTimelineViewportPolicy.paginationRequest(
                       contentOffset: tableView.contentOffset.y,
                       contentHeight: tableView.contentSize.height,
                       viewportHeight: tableView.bounds.height,
                       hasUserInteracted: hasUserInteracted,
                       isPaginating: configuration.isPaginating,
-                      requestInFlight: paginationRequestInFlight
+                      requestInFlight: paginationRequestInFlight,
+                      shortContentRequestCount: shortContentPaginationRequests
                   )
             else {
                 return
@@ -1451,8 +1582,12 @@ import SwiftUI
             paginationRequestInFlight = coordinator.paginationThresholdReached(
                 routeID: configuration.routeID,
                 generation: configuration.sessionGeneration,
-                anchorEventID: anchorEventID
+                anchorEventID: anchorEventID,
+                fillsShortContent: request == .fillShortContent
             )
+            if paginationRequestInFlight, request == .fillShortContent {
+                shortContentPaginationRequests += 1
+            }
         }
 
         private func visuallyTopmostVisibleEventID() -> String? {
@@ -1489,6 +1624,7 @@ import SwiftUI
         func scrollViewDidScroll(_: UIScrollView) {
             reportBottomPinnedIfChanged()
             requestPaginationIfNeeded()
+            reportLastReadMarkerVisibilityIfChanged()
             updateDiagnostics()
         }
 
@@ -1503,6 +1639,8 @@ import SwiftUI
             isDragging = true
             isDecelerating = false
             hasUserInteracted = true
+            // A pull on short content asks for history again.
+            shortContentPaginationRequests = 0
             if let configuration {
                 coordinator.userInteractionChanged(
                     routeID: configuration.routeID,

@@ -1136,6 +1136,19 @@ struct SharedCoreTimelinePaginationProgress {
             && consecutiveNoProgressPages < Self.maximumConsecutiveNoProgressPages
     }
 
+    /// Backwards, unchanged rows are not a stall: Core pages lazily through
+    /// hidden events before it reaches the server, and its own state ends the
+    /// run. Only the page count bounds it.
+    var hasPageBudget: Bool {
+        pageRequestCount < Self.maximumPageRequests
+    }
+
+    /// Consecutive pages left the rows unchanged: there is nothing further in
+    /// that direction right now.
+    var stoppedMakingProgress: Bool {
+        consecutiveNoProgressPages >= Self.maximumConsecutiveNoProgressPages
+    }
+
     mutating func recordPage(rowIDs: Set<String>) {
         pageRequestCount += 1
         if let lastRowIDs, lastRowIDs == rowIDs {
@@ -1178,6 +1191,7 @@ final class SharedCoreTimelineService: TimelineServicing {
     private struct OpenStreamState {
         let streamID: String
         var visibleItemIDs: Set<String>
+        var backwardPagination: TimelineBackwardPagination = .unknown
     }
 
     private let host: SharedCoreProductHost
@@ -1192,11 +1206,16 @@ final class SharedCoreTimelineService: TimelineServicing {
     }
 
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
-        await openStream(
+        let outcome = await openStream(
             roomID: roomID,
-            key: SharedCoreTimelineStreamKey.room(roomID),
+            key: SharedCoreTimelineStreamKey.room(roomID, focusedEventID: focusedEventID),
             position: SharedCoreTimelineStreamKey.roomPosition(focusedEventID: focusedEventID)
         )
+        if focusedEventID == nil, case .loaded = outcome {
+            // Back on the live room: the event-focused window it replaced is done.
+            closeStream(for: SharedCoreTimelineStreamKey.focused(roomID))
+        }
+        return outcome
     }
 
     func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome {
@@ -1208,14 +1227,33 @@ final class SharedCoreTimelineService: TimelineServicing {
     }
 
     func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome {
+        await loadOlderTimeline(roomID: roomID, before: eventID, focusedEventID: nil)
+    }
+
+    func loadOlderTimeline(roomID: String, before eventID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
         _ = eventID
-        return await paginateOlder(roomID: roomID, key: SharedCoreTimelineStreamKey.room(roomID))
+        return await paginate(
+            key: SharedCoreTimelineStreamKey.room(roomID, focusedEventID: focusedEventID),
+            direction: .backwards
+        )
+    }
+
+    func loadNewerTimeline(roomID: String, focusedEventID: String) async -> TimelineLoadOutcome {
+        await paginate(
+            key: SharedCoreTimelineStreamKey.room(roomID, focusedEventID: focusedEventID),
+            direction: .forwards
+        )
+    }
+
+    func backwardPagination(roomID: String, focusedEventID: String?) -> TimelineBackwardPagination {
+        stream(for: SharedCoreTimelineStreamKey.room(roomID, focusedEventID: focusedEventID))?
+            .backwardPagination ?? .unknown
     }
 
     func loadOlderThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome {
-        await paginateOlder(
-            roomID: roomID,
-            key: SharedCoreTimelineStreamKey.thread(roomID: roomID, rootEventID: rootEventID)
+        await paginate(
+            key: SharedCoreTimelineStreamKey.thread(roomID: roomID, rootEventID: rootEventID),
+            direction: .backwards
         )
     }
 
@@ -1235,9 +1273,15 @@ final class SharedCoreTimelineService: TimelineServicing {
     }
 
     func closeThreadTimeline(roomID: String, rootEventID: String) {
-        guard let streamID = takeStream(
-            for: SharedCoreTimelineStreamKey.thread(roomID: roomID, rootEventID: rootEventID)
-        ) else {
+        closeStream(for: SharedCoreTimelineStreamKey.thread(roomID: roomID, rootEventID: rootEventID))
+    }
+
+    func closeFocusedTimeline(roomID: String) {
+        closeStream(for: SharedCoreTimelineStreamKey.focused(roomID))
+    }
+
+    private func closeStream(for key: String) {
+        guard let streamID = takeStream(for: key) else {
             return
         }
         Task {
@@ -1248,7 +1292,7 @@ final class SharedCoreTimelineService: TimelineServicing {
     func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome> {
         streamUpdates(
             roomID: roomID,
-            key: SharedCoreTimelineStreamKey.room(roomID),
+            key: SharedCoreTimelineStreamKey.room(roomID, focusedEventID: focusedEventID),
             position: SharedCoreTimelineStreamKey.roomPosition(focusedEventID: focusedEventID),
             refreshOnAttach: SharedCoreTimelineUpdateBootstrap.shouldRefreshOpenStream(
                 focusedEventID: focusedEventID
@@ -1336,35 +1380,56 @@ final class SharedCoreTimelineService: TimelineServicing {
         }
     }
 
-    private func paginateOlder(roomID: String, key: String) async -> TimelineLoadOutcome {
-        _ = roomID
+    /// Pages a provider in `direction` until Core delivers rows this stream
+    /// has not shown before. Backwards, `.empty` only when Core reports the
+    /// start of the room. Forwards (event-focused windows), `.empty` when
+    /// pages stop changing the window: it reaches the present.
+    private func paginate(key: String, direction: TimelineDirectionDto) async -> TimelineLoadOutcome {
         guard let initialState = stream(for: key) else {
             return .failed(Self.viewUnavailableFailure)
         }
         var knownItemIDs = initialState.visibleItemIDs
         var paginationProgress = SharedCoreTimelinePaginationProgress()
+        var lastItems: [TimelineItem]?
         while Task.isCancelled == false {
-            guard paginationProgress.canRequestPage else {
+            let mayRequestPage = direction == .backwards
+                ? paginationProgress.hasPageBudget
+                : paginationProgress.canRequestPage
+            guard mayRequestPage else {
+                if direction == .forwards, paginationProgress.stoppedMakingProgress {
+                    return .empty
+                }
+                if direction == .backwards, let lastItems {
+                    // Still more history behind a long hidden run: no new
+                    // rows yet, not a failure and not the start. The caller
+                    // may ask again.
+                    return .loaded(lastItems)
+                }
                 return .failed(Self.temporarilyUnavailableFailure)
             }
             do {
                 let snapshot = try await SharedCoreTimeline.timelinePaginate(
                     core: host.core,
                     streamId: initialState.streamID,
-                    direction: .backwards
+                    direction: direction
                 )
                 paginationProgress.recordPage(rowIDs: Self.nativeRowIDs(snapshot.rows))
                 let items = SharedCoreTimelineRows.items(from: snapshot.rows, visibleTailEventID: snapshot.visibleTailEventId, receiptTailEventID: snapshot.receiptTailEventId)
                 let itemIDs = Self.stableItemIDs(items)
                 let containsNewItems = itemIDs.isSubset(of: knownItemIDs) == false
                 knownItemIDs.formUnion(itemIDs)
+                lastItems = items
                 updateVisibleItemIDs(
                     knownItemIDs,
+                    backwardPagination: snapshot.paginationBackward,
                     key: key,
                     streamID: initialState.streamID
                 )
                 if containsNewItems {
                     return .loaded(items)
+                }
+                guard direction == .backwards else {
+                    continue
                 }
                 if snapshot.paginationBackward == .exhausted {
                     return .empty
@@ -1467,6 +1532,7 @@ final class SharedCoreTimelineService: TimelineServicing {
             let items = SharedCoreTimelineRows.items(from: snapshot.rows, visibleTailEventID: snapshot.visibleTailEventId, receiptTailEventID: snapshot.receiptTailEventId)
             updateVisibleItemIDs(
                 Self.stableItemIDs(items),
+                backwardPagination: snapshot.paginationBackward,
                 key: key,
                 streamID: streamID
             )
@@ -1519,6 +1585,7 @@ final class SharedCoreTimelineService: TimelineServicing {
 
     private func updateVisibleItemIDs(
         _ itemIDs: Set<String>,
+        backwardPagination: TimelinePageStateDto,
         key: String,
         streamID: String
     ) {
@@ -1528,6 +1595,7 @@ final class SharedCoreTimelineService: TimelineServicing {
             return
         }
         state.visibleItemIDs.formUnion(itemIDs)
+        state.backwardPagination = SharedCoreTimelineRows.backwardPagination(from: backwardPagination)
         streams[key] = state
     }
 
