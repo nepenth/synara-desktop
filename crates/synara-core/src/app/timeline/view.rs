@@ -243,8 +243,15 @@ pub struct TimelineEventRowBase {
     /// snapshots. `SendingFailed.error` is never copied here.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub local_echo_state: Option<LocalEchoState>,
-    /// SDK transaction id while this row is still a local echo. Discard and
-    /// retry address this id; it is not a server event id.
+    /// Closed cause of a failed local echo (`send_failure_cause`), e.g.
+    /// `too_large` or `forbidden`. Absent unless the row is Failed or Wedged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub send_failure: Option<String>,
+    /// Transaction id of this account's own send: the SDK id while the row is
+    /// a local echo (Discard and retry address it), then the remote event's
+    /// `unsigned.transaction_id` once the server echo replaced it. A shell
+    /// that shows its own pending row matches it by this id even when the
+    /// remote echo arrives first. Never a server event id.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transaction_id: Option<String>,
     /// SDK authenticity shield for an event in an encrypted room. Absent when
@@ -264,6 +271,8 @@ pub struct TimelineEventRowBase {
 pub struct ProjectedLocalEcho {
     pub state: Option<LocalEchoState>,
     pub event_id: Option<String>,
+    /// Closed cause (`send_failure_cause`) when the echo failed.
+    pub failure: Option<&'static str>,
 }
 
 pub fn project_local_echo_status(
@@ -274,24 +283,54 @@ pub fn project_local_echo_status(
         Some(EventSendState::NotSentYet { .. }) => ProjectedLocalEcho {
             state: Some(LocalEchoState::Sending),
             event_id: None,
+            failure: None,
         },
-        Some(EventSendState::SendingFailed { is_recoverable, .. }) => ProjectedLocalEcho {
+        Some(EventSendState::SendingFailed {
+            error,
+            is_recoverable,
+        }) => ProjectedLocalEcho {
             state: Some(if *is_recoverable {
                 LocalEchoState::Failed
             } else {
                 LocalEchoState::Wedged
             }),
             event_id: None,
+            failure: Some(crate::app::send::send_failure_cause(error)),
         },
         Some(EventSendState::Sent { event_id }) => ProjectedLocalEcho {
             state: Some(LocalEchoState::Sent),
             event_id: Some(event_id.to_string()),
+            failure: None,
         },
         None => ProjectedLocalEcho {
             state: None,
             event_id: known_event_id.map(str::to_owned),
+            failure: None,
         },
     }
+}
+
+/// The transaction id of this account's own event: the local echo's, or the
+/// remote echo's `unsigned.transaction_id`. The homeserver only returns the
+/// latter to the device that sent the event.
+pub fn own_event_transaction_id(event: &EventTimelineItem) -> Option<String> {
+    if let Some(txn) = event.transaction_id() {
+        return Some(txn.to_string());
+    }
+    if !event.is_own() {
+        return None;
+    }
+    #[derive(Deserialize)]
+    struct Unsigned {
+        transaction_id: Option<String>,
+    }
+    event
+        .original_json()?
+        .get_field::<Unsigned>("unsigned")
+        .ok()
+        .flatten()?
+        .transaction_id
+        .filter(|txn| !txn.is_empty())
 }
 
 /// Project the SDK-owned metadata common to every event row.
@@ -322,7 +361,8 @@ fn project_event_row_base_for_user(
         sender_avatar_url,
         origin_server_ts: event.timestamp().get().into(),
         local_echo_state: delivery.state,
-        transaction_id: event.transaction_id().map(ToString::to_string),
+        send_failure: delivery.failure.map(str::to_owned),
+        transaction_id: own_event_transaction_id(event),
         encryption_shield: project_encryption_shield(event.get_shield(STRICT_SHIELDS)),
         capabilities: project_row_action_capabilities(event, own_user_id, authority),
     }
@@ -1834,6 +1874,7 @@ mod tests {
                 sender_avatar_url: None,
                 origin_server_ts: 1,
                 local_echo_state: None,
+                send_failure: None,
                 transaction_id: None,
                 encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
@@ -1966,6 +2007,7 @@ mod tests {
                 sender_avatar_url: None,
                 origin_server_ts: 1,
                 local_echo_state: None,
+                send_failure: None,
                 transaction_id: None,
                 encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
@@ -2123,6 +2165,7 @@ mod tests {
             sender_avatar_url: None,
             origin_server_ts: 1,
             local_echo_state: failed.state,
+            send_failure: None,
             transaction_id: Some("txn-failed".into()),
             encryption_shield: None,
             capabilities: TimelineRowCapabilities {
@@ -2211,6 +2254,12 @@ mod tests {
         let call_end = (call + 1200).min(source.len());
         let call_body = &source[call..call_end];
         assert!(call_body.contains("event.send_state()"));
-        assert!(call_body.contains("event.transaction_id()"));
+        assert!(call_body.contains("own_event_transaction_id(event)"));
+        // The SDK error only ever leaves as a closed cause code.
+        assert!(body.contains("send_failure_cause(error)"));
+        let helper = source
+            .find("pub fn own_event_transaction_id")
+            .expect("own transaction id helper");
+        assert!(source[helper..].contains("event.transaction_id()"));
     }
 }

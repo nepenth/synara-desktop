@@ -3,9 +3,11 @@ import Foundation
 
 /// Product policy for iOS outbound text reliability.
 ///
-/// Native `sendText` fails closed instead of leaving work in the SDK send
-/// queue. This layer accepts the compose, keeps a session-scoped pending
-/// list, and flushes when sync is running/connected.
+/// Every send is handed to Core at once, whatever the sync state: Core puts
+/// it in the SDK's persisted send queue, which keeps it across relaunches and
+/// retries it. Until Core has accepted a message it lives in the durable
+/// outbox of `ComposerLocalStore`; only a session that is not ready yet keeps
+/// it here (`queued`), and it is handed over when the session is.
 enum OutgoingSendPolicy {
     static func isSendReady(_ status: MatrixSyncStatus) -> Bool {
         switch status {
@@ -20,14 +22,6 @@ enum OutgoingSendPolicy {
         isSendReady(current) && isSendReady(previous) == false
     }
 
-    static func initialDeliveryStatus(isSendReady: Bool) -> TimelineDeliveryStatus {
-        isSendReady ? .sending : .queued
-    }
-
-    static func deliveryStatusAfterFailure(isSendReady: Bool) -> TimelineDeliveryStatus {
-        isSendReady ? .failed : .queued
-    }
-
     /// Retry is text-only. Non-text kinds return nil so the chip can no-op
     /// without looking like it sent.
     static func retryBody(for item: TimelineItem) -> String? {
@@ -38,14 +32,30 @@ enum OutgoingSendPolicy {
     }
 
     static func canRetry(_ item: TimelineItem) -> Bool {
-        retryBody(for: item) != nil
+        if item.isLocalPending {
+            return retryBody(for: item) != nil
+        }
+        return item.transactionID != nil && item.localEcho?.canRetry == true
     }
 
-    static func isFlushable(_ item: OutgoingQueuedMessage) -> Bool {
+    /// Discard applies to unsent own messages: a pending row Core never
+    /// accepted, or an SDK local echo that is still sending or failed.
+    static func canDiscard(_ item: TimelineItem) -> Bool {
+        if item.isLocalPending {
+            return item.deliveryStatus == .failed || item.deliveryStatus == .queued
+        }
+        return item.transactionID != nil && item.localEcho != nil
+    }
+
+    /// Messages still waiting for Core: not yet accepted and not failed.
+    static func needsHandoff(_ item: OutgoingQueuedMessage) -> Bool {
+        guard item.transactionID == nil else {
+            return false
+        }
         switch item.deliveryStatus {
-        case .queued, .failed:
+        case .queued, .sending:
             return item.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        case .sending, .sent:
+        case .sent, .failed:
             return false
         }
     }
@@ -102,7 +112,9 @@ enum OutgoingQueueTimelineMerge {
             var ids = Set(items.map(\.id))
             for pending in pendingItems {
                 if let index = updated.firstIndex(where: { $0.id == pending.id }) {
-                    updated[index] = updated[index].withDeliveryStatus(pending.deliveryStatus)
+                    var refreshed = updated[index].withDeliveryStatus(pending.deliveryStatus)
+                    refreshed.transactionID = pending.transactionID
+                    updated[index] = refreshed
                 } else if ids.insert(pending.id).inserted {
                     updated.append(pending)
                 }
@@ -119,6 +131,9 @@ enum OutgoingQueueTimelineMerge {
 
 struct OutgoingQueuedMessage: Equatable, Identifiable {
     let id: String
+    /// Stable caller transaction id for Core: a repeated hand-off (retry,
+    /// relaunch, a second flush) resolves to the same SDK request.
+    let clientTransactionID: String
     let roomID: String
     let body: String
     let formattedBody: String?
@@ -128,19 +143,63 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
     var senderAvatarURL: URL?
     let timestamp: Date
     var deliveryStatus: TimelineDeliveryStatus
+    /// The SDK transaction id Core enqueued this message under. Its SDK local
+    /// echo and its remote echo carry the same id; the row is matched by it.
+    var transactionID: String?
+    /// Server event id when Core already knew it.
+    var serverEventID: String?
+
+    init(
+        id: String,
+        clientTransactionID: String? = nil,
+        roomID: String,
+        body: String,
+        formattedBody: String?,
+        replyToEventID: String?,
+        threadRootEventID: String?,
+        senderID: String,
+        senderAvatarURL: URL? = nil,
+        timestamp: Date,
+        deliveryStatus: TimelineDeliveryStatus,
+        transactionID: String? = nil,
+        serverEventID: String? = nil
+    ) {
+        self.id = id
+        self.clientTransactionID = clientTransactionID ?? Self.newClientTransactionID()
+        self.roomID = roomID
+        self.body = body
+        self.formattedBody = formattedBody
+        self.replyToEventID = replyToEventID
+        self.threadRootEventID = threadRootEventID
+        self.senderID = senderID
+        self.senderAvatarURL = senderAvatarURL
+        self.timestamp = timestamp
+        self.deliveryStatus = deliveryStatus
+        self.transactionID = transactionID
+        self.serverEventID = serverEventID
+    }
+
+    static func newClientTransactionID() -> String {
+        "synara-text-\(UUID().uuidString.lowercased())"
+    }
 
     func asTimelineItem() -> TimelineItem {
-        TimelineItem.pendingMessage(
-            localID: id,
-            body: body,
-            formattedBody: formattedBody,
+        var item = TimelineItem(
+            id: id,
+            eventID: id,
+            serverEventID: serverEventID,
             senderID: senderID,
             senderAvatarURL: senderAvatarURL,
+            timestamp: timestamp,
+            kind: formattedBody.map { .formattedText(body: body, html: $0) } ?? .text(body),
             replyToEventID: replyToEventID,
             threadRootEventID: threadRootEventID,
-            deliveryStatus: deliveryStatus,
-            timestamp: timestamp
+            isEdited: false,
+            reactions: [:],
+            deliveryStatus: deliveryStatus
         )
+        item.transactionID = transactionID
+        return item
     }
 
     func sendRequest() -> MessageSendRequest {
@@ -150,14 +209,56 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
             formattedBody: formattedBody,
             replyToEventID: replyToEventID,
             editEventID: nil,
-            threadRootEventID: threadRootEventID
+            threadRootEventID: threadRootEventID,
+            transactionID: clientTransactionID
+        )
+    }
+
+    fileprivate var outboxMessage: ComposerLocalStore.OutboxMessage {
+        ComposerLocalStore.OutboxMessage(
+            id: id,
+            clientTransactionID: clientTransactionID,
+            roomID: roomID,
+            body: body,
+            formattedBody: formattedBody,
+            replyToEventID: replyToEventID,
+            threadRootEventID: threadRootEventID,
+            senderID: senderID,
+            timestamp: timestamp,
+            failed: deliveryStatus == .failed
+        )
+    }
+
+    /// A message restored after relaunch waits for its hand-off again under
+    /// the same caller transaction id.
+    fileprivate init(restoring message: ComposerLocalStore.OutboxMessage) {
+        self.init(
+            id: message.id,
+            clientTransactionID: message.clientTransactionID,
+            roomID: message.roomID,
+            body: message.body,
+            formattedBody: message.formattedBody,
+            replyToEventID: message.replyToEventID,
+            threadRootEventID: message.threadRootEventID,
+            senderID: message.senderID,
+            timestamp: message.timestamp,
+            deliveryStatus: message.failed ? .failed : .queued
         )
     }
 }
 
-/// Session-scoped pending list. Survives leaving a room; cleared on wipe.
+/// Pending own text messages. Messages Core has not accepted are mirrored to
+/// the durable outbox, so a message sent while the app is terminated is
+/// handed over on the next launch; accepted ones belong to the SDK and stay
+/// here only until their timeline row appears. Cleared on wipe.
 final class OutgoingMessageQueue: ObservableObject {
     @Published private(set) var items: [OutgoingQueuedMessage] = []
+    private let store: ComposerLocalStore
+
+    init(store: ComposerLocalStore = ComposerLocalStore(fileURL: nil)) {
+        self.store = store
+        items = store.current.outbox.map(OutgoingQueuedMessage.init(restoring:))
+    }
 
     func item(id: String) -> OutgoingQueuedMessage? {
         items.first(where: { $0.id == id })
@@ -171,12 +272,15 @@ final class OutgoingMessageQueue: ObservableObject {
         items(in: roomID).map { $0.asTimelineItem() }
     }
 
-    func flushableItems() -> [OutgoingQueuedMessage] {
-        items.filter(OutgoingSendPolicy.isFlushable)
+    func handoffItems() -> [OutgoingQueuedMessage] {
+        items.filter(OutgoingSendPolicy.needsHandoff)
     }
 
-    func upsert(_ message: OutgoingQueuedMessage) {
-        mutate { items in
+    /// Adds or replaces a message and writes the outbox before returning.
+    /// `clearingDraftOf` clears that room's draft in the same write, so the
+    /// text is never only in memory.
+    func upsert(_ message: OutgoingQueuedMessage, clearingDraftOf draftRoomID: String? = nil) {
+        mutate(clearingDraftOf: draftRoomID) { items in
             if let index = items.firstIndex(where: { $0.id == message.id }) {
                 items[index] = message
             } else {
@@ -194,7 +298,25 @@ final class OutgoingMessageQueue: ObservableObject {
         }
     }
 
+    /// Core accepted the message: the SDK's persisted queue owns it now.
+    func markHandedOff(id: String, receipt: MessageSendReceipt) {
+        mutate { items in
+            guard let index = items.firstIndex(where: { $0.id == id }) else {
+                return
+            }
+            items[index].transactionID = receipt.transactionID
+            if let eventID = receipt.eventID, eventID.isEmpty == false {
+                items[index].serverEventID = eventID
+            }
+            items[index].deliveryStatus = receipt.isQueued ? .sending : .sent
+        }
+    }
+
     func hydrateSenderAvatarURL(senderID: String, avatarURL: URL) {
+        let changed = items.contains { $0.senderID == senderID && $0.senderAvatarURL != avatarURL }
+        guard changed else {
+            return
+        }
         mutate { items in
             for index in items.indices where items[index].senderID == senderID {
                 items[index].senderAvatarURL = avatarURL
@@ -208,31 +330,77 @@ final class OutgoingMessageQueue: ObservableObject {
         }
     }
 
+    func remove(where predicate: (OutgoingQueuedMessage) -> Bool) {
+        guard items.contains(where: predicate) else {
+            return
+        }
+        mutate { items in
+            items.removeAll(where: predicate)
+        }
+    }
+
     func clear() {
         mutate { items in
             items.removeAll()
         }
     }
 
-    private func mutate(_ body: (inout [OutgoingQueuedMessage]) -> Void) {
+    /// Binds the durable store to the signed-in account. Unsent messages a
+    /// different account left on disk are dropped, never sent from this one.
+    func bindAccount(_ accountID: String) {
+        let previous = store.current.accountID
+        store.bindAccount(accountID)
+        if let previous, previous != accountID {
+            mutate { items in
+                items.removeAll { $0.transactionID == nil }
+            }
+        }
+    }
+
+    private func mutate(
+        clearingDraftOf draftRoomID: String? = nil,
+        _ body: (inout [OutgoingQueuedMessage]) -> Void
+    ) {
         if Thread.isMainThread {
-            body(&items)
+            apply(clearingDraftOf: draftRoomID, body)
         } else {
             DispatchQueue.main.sync {
-                body(&items)
+                apply(clearingDraftOf: draftRoomID, body)
+            }
+        }
+    }
+
+    /// Main thread only. Messages Core has not accepted are written to the
+    /// outbox before this returns.
+    private func apply(
+        clearingDraftOf draftRoomID: String?,
+        _ body: (inout [OutgoingQueuedMessage]) -> Void
+    ) {
+        body(&items)
+        let outbox = items.filter { $0.transactionID == nil }.map(\.outboxMessage)
+        guard outbox != store.current.outbox || draftRoomID != nil else {
+            return
+        }
+        store.update(durable: true) { snapshot in
+            snapshot.outbox = outbox
+            if let draftRoomID {
+                snapshot.drafts.removeValue(forKey: draftRoomID)
             }
         }
     }
 }
 
-/// Enqueues text sends, transmits when connected, and auto-flushes queued
-/// plus failed-sendable items when sync becomes ready.
+/// The one owner of text hand-off to Core. Enqueue persists the message and
+/// requests a flush; the flusher hands messages over in order, one at a
+/// time. A second request while a flush runs only asks it to run again, so
+/// a reconnect, a launch and a new message never run two flushers.
 final class OutgoingSendCoordinator {
     let queue: OutgoingMessageQueue
     private let messageSender: MessageSending
     private let connectionStatus: ConnectionStatusStore
-    private var inFlight = Set<String>()
-    private let inFlightLock = NSLock()
+    private let flushLock = NSLock()
+    private var isFlushing = false
+    private var flushRequested = false
 
     init(
         messageSender: MessageSending,
@@ -244,9 +412,12 @@ final class OutgoingSendCoordinator {
         self.queue = queue
     }
 
+    /// Records the message durably (clearing `roomID`'s draft in the same
+    /// write when asked). Call `flush()` afterwards to hand it to Core.
     @discardableResult
     func enqueue(
         localID: String,
+        clientTransactionID: String? = nil,
         roomID: String,
         body: String,
         formattedBody: String?,
@@ -254,10 +425,12 @@ final class OutgoingSendCoordinator {
         threadRootEventID: String? = nil,
         senderID: String,
         senderAvatarURL: URL? = nil,
-        timestamp: Date
+        timestamp: Date,
+        clearingDraft: Bool = false
     ) -> OutgoingQueuedMessage {
         let message = OutgoingQueuedMessage(
             id: localID,
+            clientTransactionID: clientTransactionID,
             roomID: roomID,
             body: body,
             formattedBody: formattedBody,
@@ -266,22 +439,22 @@ final class OutgoingSendCoordinator {
             senderID: senderID,
             senderAvatarURL: senderAvatarURL,
             timestamp: timestamp,
-            deliveryStatus: OutgoingSendPolicy.initialDeliveryStatus(
-                isSendReady: OutgoingSendPolicy.isSendReady(connectionStatus.status)
-            )
+            deliveryStatus: .sending
         )
-        queue.upsert(message)
+        queue.upsert(message, clearingDraftOf: clearingDraft ? roomID : nil)
         return message
     }
 
-    /// Rebuilds a failed text row onto the same local id. Returns nil for
-    /// non-text (or non-failed) rows so retry is a true no-op.
+    /// Re-queues a pending row Core rejected, under the same caller
+    /// transaction id. Returns nil for non-text (or non-failed) rows so retry
+    /// is a true no-op. SDK local echo rows retry through `retryLocalEcho`.
     func retry(_ item: TimelineItem, roomID: String, senderID: String) -> OutgoingQueuedMessage? {
         guard let body = OutgoingSendPolicy.retryBody(for: item) else {
             return nil
         }
         return enqueue(
             localID: item.id,
+            clientTransactionID: queue.item(id: item.id)?.clientTransactionID,
             roomID: roomID,
             body: body,
             formattedBody: TimelinePendingReconciler.formattedBody(for: item),
@@ -293,6 +466,48 @@ final class OutgoingSendCoordinator {
         )
     }
 
+    func bindAccount(_ accountID: String) {
+        queue.bindAccount(accountID)
+    }
+
+    /// Retries an SDK local echo (wedged or parked) without a new event.
+    func retryLocalEcho(_ item: TimelineItem, roomID: String) async -> Bool {
+        guard let transactionID = item.transactionID, item.localEcho != nil else {
+            return false
+        }
+        do {
+            try await messageSender.retryLocalEcho(roomID: roomID, transactionID: transactionID)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Discards an unsent message: a pending row Core never accepted is
+    /// dropped here; an SDK local echo is aborted in the SDK queue. True when
+    /// discarded, false when the SDK had already sent it, nil on failure.
+    func discard(_ item: TimelineItem, roomID: String) async -> Bool? {
+        if item.isLocalPending, queue.item(id: item.id)?.transactionID == nil {
+            queue.remove(id: item.id)
+            return true
+        }
+        guard let transactionID = item.transactionID else {
+            return nil
+        }
+        do {
+            let aborted = try await messageSender.discardLocalEcho(
+                roomID: roomID,
+                transactionID: transactionID
+            )
+            if aborted {
+                queue.remove { $0.transactionID == transactionID }
+            }
+            return aborted
+        } catch {
+            return nil
+        }
+    }
+
     /// Reconciles optimistic rows created before the account profile finished
     /// loading. The queue remains the single owner, so leaving or switching a
     /// room cannot race an unstructured view task into a stale local echo.
@@ -300,70 +515,78 @@ final class OutgoingSendCoordinator {
         queue.hydrateSenderAvatarURL(senderID: senderID, avatarURL: avatarURL)
     }
 
-    func transmitIfNeeded(id: String) async {
-        guard let message = queue.item(id: id) else {
+    /// Hands every waiting message to Core, in order. Messages in a room
+    /// whose earlier message is still waiting stay behind it.
+    func flush() async {
+        guard beginFlush() else {
             return
         }
-        await transmitIfNeeded(message)
+        repeat {
+            var blockedRooms = Set<String>()
+            for message in queue.handoffItems() where blockedRooms.contains(message.roomID) == false {
+                if await handOff(message) == false {
+                    blockedRooms.insert(message.roomID)
+                }
+            }
+        } while continueFlush()
     }
 
-    func transmitIfNeeded(_ message: OutgoingQueuedMessage) async {
-        guard OutgoingSendPolicy.isSendReady(connectionStatus.status) else {
-            if message.deliveryStatus != .queued {
-                queue.updateDeliveryStatus(id: message.id, .queued)
-            }
-            return
+    /// Hand-off of one message. False when the room must wait (Core not
+    /// ready); a rejection marks the row failed with Retry and Discard.
+    private func handOff(_ message: OutgoingQueuedMessage) async -> Bool {
+        if message.deliveryStatus != .sending {
+            queue.updateDeliveryStatus(id: message.id, .sending)
         }
-        guard beginFlight(message.id) else {
-            return
-        }
-        defer { endFlight(message.id) }
-
-        queue.updateDeliveryStatus(id: message.id, .sending)
         do {
-            _ = try await messageSender.send(message.sendRequest())
-            queue.updateDeliveryStatus(id: message.id, .sent)
+            let receipt = try await messageSender.sendText(message.sendRequest())
+            queue.markHandedOff(id: message.id, receipt: receipt)
+            return true
+        } catch MessageSendError.notReady {
+            queue.updateDeliveryStatus(id: message.id, .queued)
+            return false
         } catch {
-            queue.updateDeliveryStatus(
-                id: message.id,
-                OutgoingSendPolicy.deliveryStatusAfterFailure(
-                    isSendReady: OutgoingSendPolicy.isSendReady(connectionStatus.status)
-                )
-            )
+            queue.updateDeliveryStatus(id: message.id, .failed)
+            return true
         }
     }
 
-    func flushWhenSendReady() async {
-        guard OutgoingSendPolicy.isSendReady(connectionStatus.status) else {
-            return
-        }
-        for message in queue.flushableItems() {
-            await transmitIfNeeded(message)
-        }
-    }
-
-    func dropConfirmed(matching streamItems: [TimelineItem], currentUserID: String) {
-        for pending in queue.items {
-            let timeline = pending.asTimelineItem()
-            let matched = streamItems.contains { serverItem in
-                TimelinePendingReconciler.matchesPending(timeline, serverItem: serverItem)
-                    && serverItem.senderID == currentUserID
+    /// Forgets accepted messages whose timeline row arrived: the SDK local
+    /// echo or the remote echo with the same transaction id, or the server
+    /// event id Core reported. Never by content.
+    func dropConfirmed(matching streamItems: [TimelineItem]) {
+        let transactions = Set(streamItems.filter { $0.isLocalPending == false }.compactMap(\.transactionID))
+        let events = Set(streamItems.filter { $0.isLocalPending == false }.compactMap(\.serverEventID))
+        queue.remove { pending in
+            if let transactionID = pending.transactionID, transactions.contains(transactionID) {
+                return true
             }
-            if matched {
-                queue.remove(id: pending.id)
+            if let serverEventID = pending.serverEventID, events.contains(serverEventID) {
+                return true
             }
+            return false
         }
     }
 
-    private func beginFlight(_ id: String) -> Bool {
-        inFlightLock.lock()
-        defer { inFlightLock.unlock() }
-        return inFlight.insert(id).inserted
+    private func beginFlush() -> Bool {
+        flushLock.lock()
+        defer { flushLock.unlock() }
+        if isFlushing {
+            flushRequested = true
+            return false
+        }
+        isFlushing = true
+        flushRequested = false
+        return true
     }
 
-    private func endFlight(_ id: String) {
-        inFlightLock.lock()
-        inFlight.remove(id)
-        inFlightLock.unlock()
+    private func continueFlush() -> Bool {
+        flushLock.lock()
+        defer { flushLock.unlock() }
+        if flushRequested {
+            flushRequested = false
+            return true
+        }
+        isFlushing = false
+        return false
     }
 }

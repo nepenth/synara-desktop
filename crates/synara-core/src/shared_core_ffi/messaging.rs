@@ -1556,6 +1556,41 @@ impl SharedCore {
         self.send_text_command(self.core.send_text(request)).await
     }
 
+    /// Retry one unsent local echo under its SDK transaction id: unwedges an
+    /// unrecoverable failure, or wakes the room queue for a recoverable one.
+    /// Never creates a second event.
+    pub async fn local_echo_retry(
+        &self,
+        room_id: String,
+        transaction_id: String,
+    ) -> Result<(), SendTextError> {
+        self.core
+            .local_echo_retry(crate::core_api::MatrixLocalEchoRequest {
+                room_id,
+                transaction_id,
+            })
+            .await
+            .map(|_| ())
+            .map_err(|error| map_send_text_core_error("p2-local-echo-retry-no-session", error))
+    }
+
+    /// Discard one unsent local echo. `false` means the SDK no longer held it
+    /// because it was already sent; the row then turns into the sent event.
+    pub async fn local_echo_discard(
+        &self,
+        room_id: String,
+        transaction_id: String,
+    ) -> Result<bool, SendTextError> {
+        self.core
+            .local_echo_discard(crate::core_api::MatrixLocalEchoRequest {
+                room_id,
+                transaction_id,
+            })
+            .await
+            .map(|result| result.aborted)
+            .map_err(|error| map_send_text_core_error("p2-local-echo-discard-no-session", error))
+    }
+
     pub async fn send_poll(
         &self,
         room_id: String,

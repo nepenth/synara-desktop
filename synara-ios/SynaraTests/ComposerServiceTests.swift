@@ -100,6 +100,47 @@ final class ComposerServiceTests: XCTestCase {
         XCTAssertEqual(store.draft(roomID: "!other:matrix.org"), "")
     }
 
+    func testDraftSurvivesRelaunchAndIsClearedOnSignOut() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("composer-drafts-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let firstLaunch = ComposerLocalStore(fileURL: url, draftWriteDelay: 0)
+        firstLaunch.bindAccount("@alice:matrix.org")
+        DraftStore(store: firstLaunch).setDraft("typed, never sent", roomID: "!room:matrix.org")
+        // Keystrokes are written shortly after; the app is then terminated.
+        let written = expectation(description: "draft written")
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) { written.fulfill() }
+        wait(for: [written], timeout: 2)
+
+        let relaunched = ComposerLocalStore(fileURL: url)
+        relaunched.bindAccount("@alice:matrix.org")
+        let drafts = DraftStore(store: relaunched)
+        XCTAssertEqual(drafts.draft(roomID: "!room:matrix.org"), "typed, never sent")
+
+        // Sign-out forgets drafts and removes the file.
+        drafts.clearAll()
+        XCTAssertEqual(drafts.draft(roomID: "!room:matrix.org"), "")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertEqual(DraftStore(store: ComposerLocalStore(fileURL: url)).draft(roomID: "!room:matrix.org"), "")
+    }
+
+    func testDraftsOfAnotherAccountAreDroppedWhenAccountsChange() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("composer-drafts-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = ComposerLocalStore(fileURL: url)
+        store.bindAccount("@alice:matrix.org")
+        DraftStore(store: store).setDraft("alice's words", roomID: "!room:matrix.org")
+        store.flush()
+
+        let next = ComposerLocalStore(fileURL: url)
+        next.bindAccount("@bob:matrix.org")
+        XCTAssertEqual(DraftStore(store: next).draft(roomID: "!room:matrix.org"), "")
+        XCTAssertEqual(ComposerLocalStore(fileURL: url).current.accountID, "@bob:matrix.org")
+    }
+
     func testSendRejectsWhitespaceOnlyMessage() async throws {
         let service = MockMessageSendService()
         let request = MessageSendRequest(

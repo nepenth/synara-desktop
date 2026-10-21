@@ -88,6 +88,12 @@ enum SharedCoreTimelineRows {
         )
         item.encryptionShield = encryptionShield(from: row.encryptionShield)
         item.transactionID = row.transactionId
+        item.localEcho = TimelineLocalEchoState(coreState: row.localEchoState, cause: row.sendFailure)
+        if row.eventId.isEmpty {
+            // An SDK local echo: its id is the timeline item id, which receipt,
+            // read-marker and tail code must never send as an event id.
+            item.serverEventID = nil
+        }
         if row.isAgentApproval {
             item.agentApprovalDecision = SynaraAgentApprovalCardDecision(
                 coreDecision: row.agentApprovalDecision,

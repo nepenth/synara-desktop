@@ -229,8 +229,16 @@ pub async fn matrix_send_attachment(
 
     // A still-queued upload keeps going in the SDK. Reporting it as a
     // failure made the user attach the file again and post a duplicate.
-    let outcome = synara_core::app::send::queued_send_outcome(send_result)
-        .map_err(|error| map_attachment_error(error.diagnostic_id))?;
+    let outcome = synara_core::app::send::queued_send_outcome(send_result).map_err(|error| {
+        let mapped = map_attachment_error(error.diagnostic_id);
+        // The wedged request stays in the timeline under this id; the cause
+        // is in the diagnostic (`d0.4-send-queue-wedged-too-large`, …).
+        if error.wedged {
+            mapped.with_transaction_id(local_txn_id.clone())
+        } else {
+            mapped
+        }
+    })?;
     Ok(MatrixSendAttachmentResult {
         room_id: room_id.to_string(),
         event_id: outcome.event_id(),
@@ -331,11 +339,13 @@ pub(super) fn map_attachment_error(diagnostic_id: &'static str) -> MatrixAuthCom
                 diagnostic_id,
             )
         }
-        "d0.4-send-queue-wedged" => MatrixAuthCommandError::new(
-            "Unknown",
-            "The native Matrix send queue is wedged in this room.",
-            "d0.4-send-queue-wedged",
-        ),
+        wedged if synara_core::app::send::is_wedged_send_diagnostic(wedged) => {
+            MatrixAuthCommandError::new(
+                "Unknown",
+                "The native Matrix send queue is wedged in this room.",
+                wedged,
+            )
+        }
         _ => MatrixAuthCommandError::new(
             "Unknown",
             "The native Matrix attachment could not be sent.",

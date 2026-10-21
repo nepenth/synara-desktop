@@ -106,17 +106,26 @@ struct RootShellView: View {
             #endif
         }
         .onChange(of: connectionStatus.status) { status in
+            // The only flush trigger outside a send: messages Core could not
+            // take while the session was not ready go out now.
             guard OutgoingSendPolicy.isSendReady(status) else {
                 return
             }
             Task {
-                await environment.outgoingSends.flushWhenSendReady()
+                await environment.outgoingSends.flush()
             }
         }
         .task(id: "\(authenticatedSession.userID)-\(authenticatedSession.deviceID)-\(session.sessionEpoch)") {
+            // Drafts and unsent messages on disk belong to this account only.
+            environment.outgoingSends.bindAccount(authenticatedSession.userID)
             let signpostID = PerformanceTrace.begin("SignedInSessionStart")
             await SessionCoordinator.startSignedInSession(environment: environment, session: authenticatedSession)
             PerformanceTrace.end("SignedInSessionStart", id: signpostID)
+            // Messages sent before the app was last terminated, not yet
+            // accepted by Core, are handed over under their original ids.
+            Task {
+                await environment.outgoingSends.flush()
+            }
             environment.router.replayPendingDeepLinkIfNeeded(sessionIsSignedIn: true)
             startTabBadgeUpdates()
             startCryptoVerificationUpdates(sessionKey: "\(authenticatedSession.userID)-\(authenticatedSession.deviceID)-\(session.sessionEpoch)")

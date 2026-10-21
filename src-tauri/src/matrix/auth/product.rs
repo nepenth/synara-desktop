@@ -161,6 +161,9 @@ pub struct MatrixAuthCommandError {
     pub code: &'static str,
     pub message: &'static str,
     pub diagnostic_id: String,
+    /// Send-queue transaction id of a wedged send; absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction_id: Option<String>,
 }
 
 pub use synara_core::app::media::{
@@ -206,7 +209,15 @@ impl MatrixAuthCommandError {
             code,
             message,
             diagnostic_id: diagnostic_id.into(),
+            transaction_id: None,
         }
+    }
+
+    /// Names the send-queue request a rejection belongs to, so the shell can
+    /// find its failed timeline row (Retry / Discard).
+    pub(crate) fn with_transaction_id(mut self, transaction_id: impl Into<String>) -> Self {
+        self.transaction_id = Some(transaction_id.into());
+        self
     }
 
     fn invalid_input(diagnostic_id: &'static str) -> Self {

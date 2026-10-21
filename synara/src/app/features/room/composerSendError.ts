@@ -24,6 +24,13 @@ const ROOM_UNAVAILABLE =
 const QUEUE_FAILED = 'Synara could not queue the message. Check your connection and try again.';
 const ENCRYPTION_FAILED =
   'Synara could not encrypt the message. Try again; if it keeps failing, restart Synara.';
+/**
+ * Core names the cause of an unrecoverable send after this prefix
+ * (`d0.4-send-queue-wedged-too-large`, `…-forbidden`, …).
+ */
+const WEDGED = 'd0.4-send-queue-wedged';
+const WEDGED_ENCRYPTION =
+  'Synara did not send this message because a verified contact in this room has an unverified session or changed identity. Review it in the room, then retry or discard the failed message in the timeline.';
 
 /** Send diagnostics from Core (`crates/synara-core/src/app/send`) mapped to user copy. */
 const SEND_DIAGNOSTIC_MESSAGES: Record<string, string> = {
@@ -47,8 +54,18 @@ const SEND_DIAGNOSTIC_MESSAGES: Record<string, string> = {
   'v-send.1-attachment-sdk-failed': 'Synara could not prepare this file for sending.',
   // An unrecoverable send stays in the timeline as a failed message with
   // Retry and Discard. The composer gets the text back so nothing is lost.
-  'd0.4-send-queue-wedged':
+  [WEDGED]:
     'Your homeserver refused this message. Your text is back in the composer; discard the failed copy in the timeline before you send it again.',
+  [`${WEDGED}-too-large`]:
+    'Your homeserver refused this message because it is too large. Discard the failed copy in the timeline, then send something smaller.',
+  [`${WEDGED}-forbidden`]:
+    'Your homeserver refused this message: you do not have permission to send it here. Discard the failed copy in the timeline.',
+  [`${WEDGED}-not-joined`]:
+    'You can not send here because you are no longer joined to this room. Discard the failed copy in the timeline.',
+  [`${WEDGED}-insecure-devices`]: WEDGED_ENCRYPTION,
+  [`${WEDGED}-identity-violation`]: WEDGED_ENCRYPTION,
+  [`${WEDGED}-verification-required`]:
+    'Verify this session before sending to this room. Then retry the failed message in the timeline.',
   'd0.4-send-queue-cancelled':
     'The message was discarded before it was sent. Your text is back in the composer.',
   'd0.4-send-queue-timeout': QUEUE_FAILED,
@@ -98,6 +115,8 @@ export const coreDiagnosticId = (error: unknown): string | undefined => {
 export const diagnosticMessage = (diagnosticId: string): string | undefined => {
   const exact = SEND_DIAGNOSTIC_MESSAGES[diagnosticId];
   if (exact) return exact;
+  // A wedge cause without its own copy reads as the generic refusal.
+  if (diagnosticId.startsWith(WEDGED)) return SEND_DIAGNOSTIC_MESSAGES[WEDGED];
   return DIAGNOSTIC_SUFFIX_MESSAGES.find(([suffix]) => diagnosticId.endsWith(suffix))?.[1];
 };
 

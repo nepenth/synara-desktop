@@ -18,7 +18,7 @@ use mime::Mime;
 use tokio::sync::broadcast;
 use tokio::time::timeout;
 
-use super::text::send_message_error_diagnostic;
+use super::text::{send_failure_cause, send_message_error_diagnostic, wedged_send_diagnostic};
 
 /// How long IPC waits for `SentEvent` / `SendError` / cancel for one request.
 const QUEUED_SEND_WAIT: Duration = Duration::from_secs(30);
@@ -65,9 +65,12 @@ impl QueuedSendError {
         }
     }
 
-    fn wedged(transaction_id: Option<String>) -> Self {
+    /// The diagnostic names the SDK cause (`d0.4-send-queue-wedged-too-large`,
+    /// `…-forbidden`, …) so a 413 can be told from a 403; every variant keeps
+    /// the `d0.4-send-queue-wedged` prefix.
+    fn wedged(transaction_id: Option<String>, error: &matrix_sdk::Error) -> Self {
         Self {
-            diagnostic_id: "d0.4-send-queue-wedged",
+            diagnostic_id: wedged_send_diagnostic(send_failure_cause(error)),
             transaction_id,
             wedged: true,
             cancelled: false,
@@ -89,7 +92,6 @@ impl QueuedSendError {
 /// In-flight `RoomSendQueue` request waiting for `SentEvent`.
 pub struct QueuedSendSession {
     updates: broadcast::Receiver<RoomSendQueueUpdate>,
-    room: Room,
     pub transaction_id: String,
 }
 
@@ -188,7 +190,6 @@ pub async fn enqueue_event_via_room_queue(
     let transaction_id = identify_transaction(&queue, &mut updates, &handle).await?;
     Ok(QueuedSendSession {
         updates,
-        room: room.clone(),
         transaction_id: transaction_id.to_string(),
     })
 }
@@ -221,7 +222,6 @@ pub async fn enqueue_attachment_via_room_queue(
     let transaction_id = identify_transaction(&queue, &mut updates, &handle).await?;
     Ok(QueuedSendSession {
         updates,
-        room: room.clone(),
         transaction_id: transaction_id.to_string(),
     })
 }
@@ -250,21 +250,21 @@ pub async fn wait_for_queued_send(
                 }) if transaction_id.as_str() == txn => {
                     if is_recoverable {
                         // The SDK disables this room's local queue after
-                        // *any* send error, recoverable or not (0.19
-                        // `send_queue::mod.rs` `sending_task`). Only an
-                        // unrecoverable (wedged) failure should keep later
-                        // sends in this room blocked; a recoverable failure
-                        // must not silently strand every following send
-                        // behind a queue nobody re-enables. The failed
-                        // request stays queued (not removed), so re-enabling
-                        // here also lets the SDK retry it in order.
-                        session.room.send_queue().set_enabled(true);
+                        // *any* send error and keeps the request queued.
+                        // Re-enabling belongs to the session's recovery
+                        // owner (`send/recovery.rs`): it backs off 5–60 s
+                        // while sync runs and wakes every room when sync
+                        // recovers. Re-enabling here retried at once while
+                        // offline and doubled the error traffic.
                         return Err(QueuedSendError::still_queued(
                             send_message_error_diagnostic(error.as_ref()),
                             txn.to_owned(),
                         ));
                     }
-                    return Err(QueuedSendError::wedged(Some(txn.to_owned())));
+                    return Err(QueuedSendError::wedged(
+                        Some(txn.to_owned()),
+                        error.as_ref(),
+                    ));
                 }
                 Ok(RoomSendQueueUpdate::CancelledLocalEvent { transaction_id })
                     if transaction_id.as_str() == txn =>
@@ -521,7 +521,6 @@ pub async fn redact_via_room_queue(
     };
     let mut session = QueuedSendSession {
         updates,
-        room: room.clone(),
         transaction_id: transaction_id.to_string(),
     };
     wait_for_queued_send(&mut session).await

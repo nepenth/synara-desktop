@@ -43,6 +43,19 @@ test('Core send rejections become specific copy instead of a doubled generic lin
   }
 });
 
+test('a wedged send names its cause, and unknown causes read as the generic refusal', () => {
+  const tooLarge = composerSendErrorMessage(coreRejection('d0.4-send-queue-wedged-too-large'));
+  assert.match(tooLarge, /too large/);
+  assert.match(tooLarge, /Discard the failed copy/);
+  const forbidden = composerSendErrorMessage(coreRejection('d0.4-send-queue-wedged-forbidden'));
+  assert.match(forbidden, /permission/);
+  assert.notEqual(tooLarge, forbidden, 'a 413 must read differently from a 403');
+  assert.equal(
+    composerSendErrorMessage(coreRejection('d0.4-send-queue-wedged-media')),
+    composerSendErrorMessage(coreRejection('d0.4-send-queue-wedged'))
+  );
+});
+
 test('unknown Core failures keep their diagnostic id for reporting', () => {
   assert.equal(
     composerSendErrorMessage(coreRejection('d0.4-send-sdk-concurrent-request-failed')),

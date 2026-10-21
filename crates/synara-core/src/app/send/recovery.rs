@@ -49,10 +49,15 @@ where
                     None => std::future::pending().await,
                 }
             };
+            // Biased, state first: when sync stops and a retry deadline
+            // passes together, the stop must win. `stop_sync` pauses the
+            // client right after stopping sync; a retry that ran first would
+            // re-enable the send queues on closed stores.
             tokio::select! {
+                biased;
                 state = sync_running.next() => {
                     let Some(now_running) = state else { break };
-                    if now_running && !running {
+                    if now_running && !running && stores_open(&client) {
                         // Sync recovered: wake every room queue a send error
                         // disabled, and respawn rooms with persisted requests.
                         client.send_queue().set_enabled(true).await;
@@ -77,13 +82,21 @@ where
                 () = retry => {
                     retry_at = None;
                     // While sync is down the recovery edge above re-enables.
-                    if running {
+                    if running && stores_open(&client) {
                         client.send_queue().set_enabled(true).await;
                     }
                 }
             }
         }
     })
+}
+
+/// False while the client is paused. `Client::pause()` disables the send
+/// queue client-wide before it closes the stores, and only `Client::resume()`
+/// enables it again; room errors disable single rooms, never this flag.
+/// Re-enabling while paused would wake send tasks against closed stores.
+fn stores_open(client: &Client) -> bool {
+    client.send_queue().is_enabled()
 }
 
 #[cfg(test)]
@@ -97,5 +110,33 @@ mod tests {
             .collect();
         assert_eq!(delays, vec![5, 10, 20, 40, 60, 60, 60]);
         assert_eq!(send_queue_retry_delay(0), FIRST_RETRY);
+    }
+
+    #[test]
+    fn sync_stop_wins_over_a_due_retry_and_paused_clients_stay_disabled() {
+        // When the stop and an elapsed retry are both ready, an unbiased
+        // select could run the retry first and re-enable queues that
+        // `Client::pause()` is about to (or did) disable. The mock suite
+        // proves the pause gate; this pins the branch order.
+        let source = include_str!("recovery.rs");
+        let select = source.find("tokio::select! {").expect("select");
+        let biased = source[select..].find("biased;").expect("biased select") + select;
+        let state = source[select..]
+            .find("state = sync_running.next()")
+            .expect("state branch")
+            + select;
+        let retry = source[select..]
+            .find("() = retry =>")
+            .expect("retry branch")
+            + select;
+        assert!(
+            biased < state && state < retry,
+            "state branch must be polled first"
+        );
+        assert_eq!(
+            source.matches("set_enabled(true)").count(),
+            source.matches("stores_open(&client)").count(),
+            "every re-enable is gated on the client not being paused"
+        );
     }
 }

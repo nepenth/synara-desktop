@@ -13,6 +13,8 @@ mod ffi_surface;
 mod inbox_notifications;
 #[path = "../message_format_corpus.rs"]
 mod message_format_corpus;
+#[path = "../messaging_core_local_echo_rows.rs"]
+mod messaging_core_local_echo_rows;
 #[path = "../messaging_core_pins.rs"]
 mod messaging_core_pins;
 #[path = "../messaging_core_reactions.rs"]

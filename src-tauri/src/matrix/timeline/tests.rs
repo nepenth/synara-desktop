@@ -1128,6 +1128,7 @@ mod view_pure {
                 sender_avatar_url: None,
                 origin_server_ts: 1,
                 local_echo_state: None,
+                send_failure: None,
                 transaction_id: None,
                 encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
@@ -1182,6 +1183,7 @@ mod view_pure {
                 sender_avatar_url: None,
                 origin_server_ts: 1,
                 local_echo_state: None,
+                send_failure: None,
                 transaction_id: None,
                 encryption_shield: None,
                 capabilities: TimelineRowCapabilities {

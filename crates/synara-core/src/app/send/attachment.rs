@@ -166,7 +166,8 @@ pub async fn send_room_attachment(
     )
     .map_err(|error| {
         if error.wedged {
-            "d0.4-send-queue-wedged"
+            // Cause-specific: `d0.4-send-queue-wedged-too-large`, …
+            error.diagnostic_id
         } else {
             "v-send.1-attachment-sdk-failed"
         }

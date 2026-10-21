@@ -35,4 +35,27 @@ enum SharedCoreSendText {
             txnId: txnId
         )
     }
+
+    /// Retry one unsent SDK local echo under its transaction id.
+    static func retryLocalEcho(core: SharedCore, roomId: String, transactionId: String) async throws {
+        try await core.localEchoRetry(roomId: roomId, transactionId: transactionId)
+    }
+
+    /// Discard one unsent SDK local echo; false when it was already sent.
+    static func discardLocalEcho(
+        core: SharedCore,
+        roomId: String,
+        transactionId: String
+    ) async throws -> Bool {
+        try await core.localEchoDiscard(roomId: roomId, transactionId: transactionId)
+    }
+
+    /// Core could not take the message yet (no session, or the room is not
+    /// known while the session restores). Anything else is a rejection.
+    static func isNotReady(_ error: Error) -> Bool {
+        guard case let SendTextError.Failed(code, _) = error else {
+            return false
+        }
+        return code == "p2-send-text-no-session" || code == "d0.4-send-room-not-found"
+    }
 }

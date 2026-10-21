@@ -20,6 +20,9 @@ struct SynaraMessageBubble<Content: View>: View {
     let deliveryStatus: TimelineDeliveryStatus?
     var statusEventID: String? = nil
     var onRetryFailedSend: (() -> Void)? = nil
+    /// Discard for a failed own message; shown beside Retry, or alone when
+    /// the cause cannot succeed on retry (too large, not joined).
+    var onDiscardFailedSend: (() -> Void)? = nil
     /// SDK authenticity shield for a message in an encrypted room.
     var encryptionShield: TimelineEncryptionShield? = nil
     @ViewBuilder let content: () -> Content
@@ -99,10 +102,32 @@ struct SynaraMessageBubble<Content: View>: View {
                 .accessibilityLabel("Sent")
                 .allowsHitTesting(false)
         case .failed where alignment == .own:
-            retryChip
+            HStack(spacing: SynaraSpacing.xSmall) {
+                if onRetryFailedSend != nil || onDiscardFailedSend == nil {
+                    retryChip
+                }
+                if let onDiscardFailedSend {
+                    discardChip(onDiscardFailedSend)
+                }
+            }
         default:
             EmptyView()
         }
+    }
+
+    private func discardChip(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label("Discard", systemImage: "trash")
+                .font(SynaraTypography.chipLabel)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .padding(.horizontal, SynaraSpacing.small)
+                .padding(.vertical, SynaraSpacing.xSmall)
+                .background(SynaraColor.secondaryText.opacity(0.12))
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Discard unsent message")
+        .accessibilityIdentifier(statusIdentifier("TimelineItemDiscard"))
     }
 
     @ViewBuilder
@@ -285,6 +310,7 @@ extension SynaraMessageBubble where Content == AnyView {
         deliveryStatus: TimelineDeliveryStatus? = nil,
         statusEventID: String? = nil,
         onRetryFailedSend: (() -> Void)? = nil,
+        onDiscardFailedSend: (() -> Void)? = nil,
         encryptionShield: TimelineEncryptionShield? = nil
     ) {
         self.alignment = alignment
@@ -294,6 +320,7 @@ extension SynaraMessageBubble where Content == AnyView {
         self.deliveryStatus = deliveryStatus
         self.statusEventID = statusEventID
         self.onRetryFailedSend = onRetryFailedSend
+        self.onDiscardFailedSend = onDiscardFailedSend
         self.encryptionShield = encryptionShield
         self.content = {
             AnyView(
