@@ -82,7 +82,9 @@ devtools = [ "tauri/devtools" ]
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-global-shortcut = "2"
-tauri-plugin-updater = "~2.13.1"
+# The default "zip" feature only adds Windows zip and Linux AppImage extraction.
+# The updater ships for macOS only, which unpacks with tar and flate2 regardless.
+tauri-plugin-updater = { version = "~2.13.1", default-features = false, features = ["rustls-tls", "system-proxy"] }
 tauri-plugin-process = "2"
 tauri-plugin-single-instance = "2.4.5"
 
