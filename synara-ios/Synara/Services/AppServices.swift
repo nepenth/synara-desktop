@@ -65,7 +65,16 @@ enum OwnProfileWriteStatus: Equatable {
     }
 }
 
-protocol MatrixClientServicing: AnyObject {
+/// The account push rules behind Settings → Notifications.
+protocol PushRuleSettingsServicing: AnyObject {
+    func pushRulesSnapshot() async -> SynaraPushRulesSnapshot?
+    func setPushRuleDefault(encrypted: Bool, oneToOne: Bool, mode: String) async -> Bool
+    func setPushRuleMention(ruleID: String, enabled: Bool) async -> Bool
+    func addPushKeyword(_ keyword: String) async -> Bool
+    func removePushKeyword(_ keyword: String) async -> Bool
+}
+
+protocol MatrixClientServicing: PushRuleSettingsServicing {
     var syncStatusDescription: String { get }
     var syncStatus: MatrixSyncStatus { get }
 
@@ -109,15 +118,10 @@ protocol MatrixClientServicing: AnyObject {
     func ignoredUserIDs() async -> [String]
     func ignoreUser(_ userID: String) async -> Bool
     func unignoreUser(_ userID: String) async -> Bool
-    func pushRulesSnapshot() async -> SynaraPushRulesSnapshot?
     func agentNotificationPreferences() async throws -> SynaraAgentNotificationPreferences
     func agentNotificationEventAllowed(roomID: String, eventID: String, session: AuthenticatedSession) async -> Bool
     func agentNotificationPreferenceUpdates() -> AsyncStream<Void>
     func setAgentNotificationPreferences(_ preferences: SynaraAgentNotificationPreferences) async throws -> SynaraAgentNotificationPreferences
-    func setPushRuleDefault(encrypted: Bool, oneToOne: Bool, mode: String) async -> Bool
-    func setPushRuleMention(ruleID: String, enabled: Bool) async -> Bool
-    func addPushKeyword(_ keyword: String) async -> Bool
-    func removePushKeyword(_ keyword: String) async -> Bool
     func threepidEmails() async -> [String]
     func deleteThreepidEmail(_ address: String) async -> Bool
     func requestThreepidEmailToken(_ email: String) async -> Bool
@@ -125,7 +129,7 @@ protocol MatrixClientServicing: AnyObject {
     func addThreepidEmailPassword(_ password: String) async -> ThreepidAddStatusDto?
 }
 
-struct SynaraPushRuleMentions {
+struct SynaraPushRuleMentions: Equatable {
     var userMention: Bool
     var displayName: Bool
     var userName: Bool
@@ -133,7 +137,7 @@ struct SynaraPushRuleMentions {
     var atRoom: Bool
 }
 
-struct SynaraPushRulesSnapshot {
+struct SynaraPushRulesSnapshot: Equatable {
     var dm: String
     var dmEncrypted: String
     var group: String
@@ -1713,9 +1717,13 @@ final class MockMatrixClientService: MatrixClientServicing {
         self.syncStatus = syncStatus
     }
 
+    /// What `start` leaves the session in; UI tests use it to show the
+    /// connection banner's error states.
+    var statusAfterStart: MatrixSyncStatus = .syncing
+
     func start(session: AuthenticatedSession) async {
         startedSessions.append(session)
-        syncStatus = .syncing
+        syncStatus = statusAfterStart
     }
 
     func warmSync(session: AuthenticatedSession) async {
@@ -1761,7 +1769,7 @@ final class MockMatrixClientService: MatrixClientServicing {
         onOperation?("matrix-resume")
         resumeCallCount += 1
         resumedSessions.append(session)
-        syncStatus = .syncing
+        syncStatus = statusAfterStart
     }
 
     func syncForBackgroundNotification(session: AuthenticatedSession) async -> Bool {

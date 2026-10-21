@@ -118,22 +118,37 @@ final class SharedCoreProductHost {
     }
 }
 
+/// Core's sign-in codes (`session_lifecycle.rs` `login_auth_error`). Only a
+/// homeserver rejection reads as wrong credentials; anything unclassified is
+/// a generic failure rather than "incorrect password".
 enum SharedCoreLoginErrorMapping {
     static func loginError(for error: Error) -> LoginError {
         guard case let SessionLoginError.Failed(code, _) = error else {
-            return .invalidCredentials
+            return .signInFailed
         }
         switch code {
+        case "p4-s3c-credentials-rejected":
+            return .invalidCredentials
+        case "p4-s3c-network-unavailable":
+            return .networkFailure
+        case "p4-s3c-server-unavailable":
+            return .serverUnavailable
+        case "p4-s3c-rate-limited":
+            return .rateLimited
+        case "p4-s3c-user-deactivated":
+            return .accountDeactivated
+        case "p4-s3c-login-unsupported", "p4-s3c-identity-invalid":
+            return .unsupported
         case "p4-s3c-secret-vault-unavailable", "p4-s3c-store-root-invalid":
             return .sessionPersistenceFailed
-        case "p4-s3c-identity-invalid":
-            return .unsupported
         case "p4-s3c-sliding-sync-unsupported":
             return .slidingSyncUnsupported
         case "p4-s3c-store-reset-required":
             return .localDataUnreadable
+        case "p4-s3c-store-locked":
+            return .localDataInUse
         default:
-            return .invalidCredentials
+            return .signInFailed
         }
     }
 }

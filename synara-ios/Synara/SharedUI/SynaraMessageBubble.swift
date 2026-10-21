@@ -134,7 +134,7 @@ struct SynaraMessageBubble<Content: View>: View {
     private var retryChip: some View {
         let chip = Label("Retry", systemImage: "arrow.clockwise")
             .font(SynaraTypography.chipLabel)
-            .foregroundStyle(SynaraColor.critical)
+            .foregroundStyle(SynaraColor.criticalText)
             .padding(.horizontal, SynaraSpacing.small)
             .padding(.vertical, SynaraSpacing.xSmall)
             .background(SynaraColor.critical.opacity(0.12))

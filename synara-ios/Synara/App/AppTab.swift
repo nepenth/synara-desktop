@@ -37,7 +37,7 @@ private struct NotificationsTabView: View {
             if let membershipError {
                 Text(membershipError)
                     .font(SynaraTypography.supporting)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SynaraColor.criticalText)
                     .padding(SynaraSpacing.medium)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(SynaraColor.secondarySurface)

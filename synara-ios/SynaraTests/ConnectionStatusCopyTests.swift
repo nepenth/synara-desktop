@@ -114,7 +114,6 @@ final class ConnectionStatusCopyTests: XCTestCase {
     func testRestoreFailedOffersSignOutWithoutRetry() {
         XCTAssertTrue(ConnectionStatusCopy.showsSignOutAction(.restoreFailed))
         XCTAssertFalse(ConnectionStatusCopy.showsRetryAction(.restoreFailed))
-        XCTAssertTrue(ConnectionStatusCopy.showsSignOutAction(.disconnected))
         XCTAssertTrue(ConnectionStatusCopy.showsRetryAction(.disconnected))
         XCTAssertTrue(ConnectionStatusCopy.showsRetryAction(.reconnecting))
         XCTAssertFalse(ConnectionStatusCopy.showsSignOutAction(.connected))

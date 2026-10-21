@@ -4069,7 +4069,7 @@ private struct RoomIdentityWarningBanner: View {
                 if failed {
                     Text("Couldn't update this identity change.")
                         .font(SynaraTypography.messageMeta)
-                        .foregroundStyle(SynaraColor.critical)
+                        .foregroundStyle(SynaraColor.criticalText)
                 }
             }
             Spacer(minLength: SynaraSpacing.small)
@@ -4156,29 +4156,47 @@ private struct JumpToLatestButton: View {
     }
 }
 
-private struct JumpToLastReadButton: View {
+struct JumpToLastReadButton: View {
     let action: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: SynaraSpacing.xSmall) {
-                Image(systemName: "arrow.up.to.line")
-                    .font(.system(size: 13, weight: .bold))
-                Text("Jump to Last Read")
-                    .font(SynaraTypography.fineMetaBold)
+            if SynaraDynamicTypeLayout.jumpToLastReadShowsTitle(dynamicTypeSize) {
+                HStack(spacing: SynaraSpacing.xSmall) {
+                    Image(systemName: "arrow.up.to.line")
+                        .font(.system(size: 13, weight: .bold))
+                    Text("Jump to Last Read")
+                        .font(SynaraTypography.fineMetaBold)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, SynaraSpacing.medium)
+                .frame(minHeight: SynaraHitTarget.minimum)
+                .background(
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(SynaraColor.separator.opacity(0.8), lineWidth: 1)
+                )
+                .foregroundStyle(SynaraColor.accentText)
+                .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
+            } else {
+                // At accessibility sizes the titled pill spans most of the
+                // width over the messages; match Jump to latest instead.
+                ZStack {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                    Circle()
+                        .stroke(SynaraColor.separator.opacity(0.8), lineWidth: 1)
+                    Image(systemName: "arrow.up.to.line")
+                        .font(.system(size: 17, weight: .bold))
+                }
+                .frame(width: SynaraHitTarget.minimum, height: SynaraHitTarget.minimum)
+                .foregroundStyle(SynaraColor.accent)
+                .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
             }
-            .padding(.horizontal, SynaraSpacing.medium)
-            .frame(height: 36)
-            .background(
-                Capsule()
-                    .fill(.ultraThinMaterial)
-            )
-            .overlay(
-                Capsule()
-                    .stroke(SynaraColor.separator.opacity(0.8), lineWidth: 1)
-            )
-            .foregroundStyle(SynaraColor.accent)
-            .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Jump to last read message")
@@ -4195,6 +4213,7 @@ private struct TimelineHeader: View {
     let onSearch: () -> Void
     let onDetails: () -> Void
     let onBack: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
@@ -4202,21 +4221,30 @@ private struct TimelineHeader: View {
                 Button(action: onBack) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 19, weight: .semibold))
-                        .frame(width: 34, height: 34)
+                        .frame(width: SynaraHitTarget.minimum, height: SynaraHitTarget.minimum)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .padding(.leading, -5)
                 .accessibilityLabel("Back")
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: SynaraSpacing.xSmall) {
-                    Text("#")
-                        .foregroundStyle(SynaraColor.secondaryText)
+                HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.xSmall) {
+                    // At accessibility sizes the glyph would take the
+                    // title's width.
+                    if dynamicTypeSize.isAccessibilitySize == false {
+                        Text("#")
+                            .foregroundStyle(SynaraColor.secondaryText)
+                            .accessibilityHidden(true)
+                    }
                     Text(title)
                         .accessibilityIdentifier("TimelineRoomTitle")
                         .font(SynaraTypography.sectionTitle.weight(.semibold))
                         .foregroundStyle(SynaraColor.headingText)
-                        .lineLimit(1)
+                        .lineLimit(SynaraDynamicTypeLayout.titleLineLimit(dynamicTypeSize))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
                 }
                 HStack(spacing: SynaraSpacing.small) {
                     Text(subtitle)
@@ -4225,22 +4253,25 @@ private struct TimelineHeader: View {
                             .foregroundStyle(
                                 cryptoLabel == "Encrypted"
                                     ? SynaraColor.secondaryText
-                                    : SynaraColor.warning
+                                    : SynaraColor.warningText
                             )
                             .accessibilityIdentifier("RoomEncryptionStatus")
                     }
                 }
                 .font(SynaraTypography.messageMeta)
                 .foregroundStyle(SynaraColor.secondaryText)
-                .lineLimit(1)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
             }
+            .layoutPriority(1)
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            HStack(spacing: SynaraSpacing.small) {
+            HStack(spacing: 0) {
                 Button(action: onSearch) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 17, weight: .medium))
+                        .frame(width: SynaraHitTarget.minimum, height: SynaraHitTarget.minimum)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Search messages")
@@ -4248,15 +4279,18 @@ private struct TimelineHeader: View {
                 Button(action: onDetails) {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 17, weight: .medium))
+                        .frame(width: SynaraHitTarget.minimum, height: SynaraHitTarget.minimum)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Room details")
                 .accessibilityIdentifier("RoomDetailsButton")
             }
+            .padding(.trailing, -SynaraSpacing.small)
             .foregroundStyle(SynaraColor.primaryText)
         }
         .padding(.horizontal, SynaraSpacing.large)
-        .padding(.vertical, SynaraSpacing.medium)
+        .padding(.vertical, SynaraSpacing.small)
         .background(SynaraColor.surface)
         .overlay(alignment: .bottom) {
             Divider()
@@ -6898,6 +6932,8 @@ private struct TimelineRow: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Message actions")
+                        // A one-element row offers these as custom actions.
+                        .accessibilityHidden(combinesAccessibilityChildren)
                         .accessibilityIdentifier("TimelineItemActions-\(item.eventID)")
                     }
                 }
@@ -6911,6 +6947,11 @@ private struct TimelineRow: View {
         .accessibilityElement(children: accessibilityChildBehavior)
         .accessibilityLabel(accessibilitySummary)
         .accessibilityHint(accessibilityHint)
+        .accessibilityActions {
+            ForEach(accessibilityActionList, id: \.title) { action in
+                Button(action.title) { performAccessibilityAction(action) }
+            }
+        }
         .accessibilityIdentifier("TimelineItem-\(item.eventID)")
         .sheet(isPresented: $isSelectingText) {
             if let copyPayload = TimelineMessageCopy.payload(for: item) {
@@ -7057,11 +7098,13 @@ private struct TimelineRow: View {
             Button(action: onEdit) {
                 Label("Edit", systemImage: "pencil")
                     .font(SynaraTypography.chipLabel)
-                    .foregroundStyle(SynaraColor.accent)
+                    .foregroundStyle(SynaraColor.accentText)
                     .padding(.horizontal, SynaraSpacing.small)
                     .padding(.vertical, SynaraSpacing.xSmall)
                     .background(SynaraColor.accent.opacity(0.12))
                     .clipShape(Capsule())
+                    .frame(minWidth: SynaraHitTarget.minimum, minHeight: SynaraHitTarget.minimum)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Edit unsent message")
@@ -7094,12 +7137,15 @@ private struct TimelineRow: View {
                             animationIndex: index
                         )
                     }
+                    // Decorative until reactions are interactive; the React
+                    // action is on the row.
                     ReactionPill(
                         title: "face.smiling",
                         count: nil,
                         isSystemImage: true,
                         animationIndex: item.reactions.count
                     )
+                    .accessibilityHidden(true)
                 }
             }
 
@@ -7107,17 +7153,22 @@ private struct TimelineRow: View {
                 Button(action: onOpenThread) {
                     HStack(spacing: SynaraSpacing.xSmall) {
                         Image(systemName: "bubble.left.and.bubble.right.fill")
-                        Text(replyCount == 1 ? "1 reply" : "\(replyCount) replies")
+                            .accessibilityHidden(true)
+                        Text(TimelineRowAccessibility.replyCountLabel(replyCount))
                         if isInlineThreadMode {
                             Image(systemName: isThreadExpanded ? "chevron.up" : "chevron.down")
+                                .accessibilityHidden(true)
                         }
                     }
                     .font(SynaraTypography.chipLabel)
-                    .foregroundStyle(SynaraColor.accent)
+                    .foregroundStyle(SynaraColor.accentText)
+                    .frame(minHeight: SynaraHitTarget.minimum)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("ThreadButton-\(item.eventID)")
                 .accessibilityHint(threadChipHint)
+                .accessibilityValue(isInlineThreadMode ? (isThreadExpanded ? "Expanded" : "Collapsed") : "")
             }
 
             if let inlineThread {
@@ -7288,48 +7339,86 @@ private struct TimelineRow: View {
     }
 
     private var accessibilitySummary: String {
-        let senderAndTime = "\(item.senderID) at \(item.timestamp.timelineTime)"
-        switch item.kind {
-        case let .text(body):
-            return "\(senderAndTime): \(body)"
-        case let .formattedText(body, _):
-            return "\(senderAndTime): \(body)"
-        case let .mediaPlaceholder(resource):
-            if resource.isEncrypted {
-                return "\(senderAndTime) sent encrypted media that cannot be opened until keys are available"
-            }
-            if let caption = resource.caption {
-                return "\(senderAndTime) sent \(resource.safeDescription): \(caption)"
-            }
-            return "\(senderAndTime) sent \(resource.safeDescription)"
-        case .redacted:
-            return "\(senderAndTime): message deleted"
-        case .encryptedPlaceholder:
-            return "\(senderAndTime): encrypted message unavailable"
-        case .unknown:
-            return "\(senderAndTime): \(TimelineUnavailableMessageCopy.text)"
-        case let .systemNotice(text):
-            return text
-        case let .agentCard(card):
-            let status = card.status.map { ", status \($0)" } ?? ""
-            let primaryAction = card.actions.first(where: SynaraAgentCardActionResolver.shouldRender)
-                .map { ", primary action \($0.title)" } ?? ""
-            return "\(senderAndTime): agent card: \(card.title)\(status)\(primaryAction)"
-        }
+        TimelineRowAccessibility.summary(
+            sender: senderDisplayName,
+            time: item.timestamp.timelineTime,
+            kind: item.kind,
+            isEdited: item.isEdited,
+            reactions: item.reactions,
+            ownReactions: item.reactionOwnership,
+            replyCount: replyCount
+        )
     }
 
+    /// One element per message, first of a group or not, unless the row
+    /// holds controls VoiceOver must reach on their own (retry, polls,
+    /// approval and agent cards, the thread chip). The menu's actions are
+    /// then custom actions on that element.
     private var accessibilityChildBehavior: AccessibilityChildBehavior {
-        if isGroupedWithPrevious == false {
-            return .contain
-        }
+        combinesAccessibilityChildren ? .combine : .contain
+    }
 
-        return TimelineRowAccessibility.containsChildren(
+    /// UI automation keeps descendants (as `RoomListRow` does) so it can
+    /// reach the rendered body and the actions menu.
+    private var combinesAccessibilityChildren: Bool {
+        rowContainsAccessibleChildren == false
+            && ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] != "1"
+    }
+
+    private var rowContainsAccessibleChildren: Bool {
+        TimelineRowAccessibility.containsChildren(
             deliveryStatus: item.presentedDeliveryStatus,
             kind: item.kind,
             replyCount: replyCount,
             hasApprovalPrompt: approvalPrompt != nil,
             hasInteractivePoll: item.poll != nil
-        ) ? .contain : .combine
+        )
+    }
+
+    private var accessibilityActionList: [TimelineRowAccessibility.Action] {
+        guard rowContainsAccessibleChildren == false else { return [] }
+        return TimelineRowAccessibility.actions(
+            availability: availability,
+            replyCount: replyCount,
+            canCopy: TimelineMessageCopy.payload(for: item) != nil,
+            canPinToNotes: TimelinePinActionAvailability.forItem(item).canPinToPrivateNotes
+        )
+    }
+
+    private func performAccessibilityAction(_ action: TimelineRowAccessibility.Action) {
+        switch action {
+        case .reply:
+            onReply()
+        case .replyInThread:
+            onReplyInThread()
+        case .openThread:
+            onOpenThread()
+        case .react:
+            onReact()
+        case .edit:
+            onEdit()
+        case .copy:
+            if let payload = TimelineMessageCopy.payload(for: item) {
+                TimelineMessageCopy.copyToPasteboard(payload)
+            }
+        case .selectText:
+            isSelectingText = true
+        case .forward:
+            onForward()
+        case .pinToNotes:
+            onPinToNotes()
+        case .declineCall:
+            guard isDeclinePending == false else { return }
+            isDeclinePending = true
+            Task { @MainActor in
+                _ = await onDeclineCall()
+                isDeclinePending = false
+            }
+        case .report:
+            onReport()
+        case .redact:
+            onRedact()
+        }
     }
 
     private var accessibilityHint: String {
@@ -7352,9 +7441,10 @@ private struct TimelineRow: View {
         case .agentCard:
             return "Review available agent actions"
         default:
-            return isGroupedWithPrevious
-                ? "Swipe left to reveal the sent time. Long press for message actions"
-                : "Use the Message actions button or long press for message actions"
+            // A one-element row lists its actions in the VoiceOver actions rotor.
+            return rowContainsAccessibleChildren
+                ? "Use the Message actions button or long press for message actions"
+                : ""
         }
     }
 
@@ -7505,7 +7595,7 @@ private struct MediaAttachmentCard: View {
                 if resource.isEncrypted {
                     Text("Encrypted media requires recovered keys")
                         .font(SynaraTypography.fineMeta)
-                        .foregroundStyle(SynaraColor.warning)
+                        .foregroundStyle(SynaraColor.warningText)
                         .lineLimit(2)
                 }
             }
@@ -7592,6 +7682,7 @@ enum TimelineUnavailableMessageCopy {
 /// The day the rows below belong to, in the unread divider's rule style.
 private struct TimelineDayHeader: View {
     let day: Date
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         let label = TimelineDayHeaderPolicy.label(for: day)
@@ -7602,8 +7693,10 @@ private struct TimelineDayHeader: View {
             Text(label)
                 .font(SynaraTypography.chipLabel)
                 .foregroundStyle(SynaraColor.secondaryText)
-                .lineLimit(1)
-                .fixedSize()
+                .multilineTextAlignment(.center)
+                .lineLimit(SynaraDynamicTypeLayout.ruleLabelLineLimit(dynamicTypeSize))
+                .fixedSize(horizontal: dynamicTypeSize.isAccessibilitySize == false, vertical: true)
+                .layoutPriority(1)
             Rectangle()
                 .fill(SynaraColor.separator.opacity(0.55))
                 .frame(height: 0.5)
@@ -7639,21 +7732,32 @@ private struct TimelineSystemNoticeRow: View {
     }
 }
 
-private struct UnreadMessagesDivider: View {
+struct UnreadMessagesDivider: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
             Rectangle()
                 .fill(SynaraColor.separator.opacity(0.55))
                 .frame(height: 0.5)
+            // The label wins the width over the rules ("Unr…" at AX5).
             Text("Unread messages")
                 .font(SynaraTypography.chipLabel)
-                .foregroundStyle(SynaraColor.accent)
-                .lineLimit(1)
+                .foregroundStyle(SynaraColor.accentText)
+                .multilineTextAlignment(.center)
+                .lineLimit(SynaraDynamicTypeLayout.ruleLabelLineLimit(dynamicTypeSize))
+                .fixedSize(horizontal: dynamicTypeSize.isAccessibilitySize == false, vertical: true)
+                .layoutPriority(1)
             Rectangle()
                 .fill(SynaraColor.separator.opacity(0.55))
                 .frame(height: 0.5)
         }
-        .padding(.leading, 46)
+        .padding(.leading, dynamicTypeSize.isAccessibilitySize ? 0 : 46)
+        // A heading, so the rotor can jump to where unread messages start.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Unread messages")
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityIdentifier("TimelineUnreadDivider")
     }
 }
 
@@ -8045,6 +8149,11 @@ private struct ReactionPill: View {
         return "\(title)-\(isSystemImage)"
     }
 
+    /// "👍 3, you reacted"; VoiceOver names the emoji.
+    private var accessibilityLabel: String {
+        TimelineRowAccessibility.reactionLabel(key: title, count: count ?? 0, isOwn: isSelected)
+    }
+
     var body: some View {
         HStack(spacing: SynaraSpacing.xSmall) {
             if isSystemImage {
@@ -8062,10 +8171,12 @@ private struct ReactionPill: View {
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
-        .foregroundStyle(isSelected ? SynaraColor.accent : SynaraColor.primaryText)
+        .foregroundStyle(isSelected ? SynaraColor.accentText : SynaraColor.primaryText)
         .background(isSelected ? SynaraColor.accent.opacity(0.14) : SynaraColor.elevatedSurface)
         .clipShape(Capsule())
         .synaraDepth(.raised, shape: Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .synaraReactionPop(animationIndex: animationIndex, animationKey: reactionAnimationKey)
     }
@@ -8195,7 +8306,7 @@ private struct AgentApprovalPromptTimelineCard: View {
                     VStack(alignment: .leading, spacing: SynaraSpacing.small) {
                         Text("Approve always permanently trusts this command pattern. Confirm only if you intend to allow it without future prompts.")
                             .font(SynaraTypography.messageMeta)
-                            .foregroundStyle(SynaraColor.critical)
+                            .foregroundStyle(SynaraColor.criticalText)
                             .fixedSize(horizontal: false, vertical: true)
                         HStack(spacing: SynaraSpacing.small) {
                             Button("Confirm approve always") {
@@ -8286,7 +8397,7 @@ private struct AgentApprovalButtonStyle: ViewModifier {
                 .buttonStyle(.plain)
                 .padding(.vertical, SynaraSpacing.small)
                 .padding(.horizontal, SynaraSpacing.medium)
-                .foregroundStyle(SynaraColor.success)
+                .foregroundStyle(SynaraColor.successText)
                 .background(SynaraColor.success.opacity(0.08))
                 .overlay(
                     RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
@@ -8298,7 +8409,7 @@ private struct AgentApprovalButtonStyle: ViewModifier {
                 .buttonStyle(.plain)
                 .padding(.vertical, SynaraSpacing.small)
                 .padding(.horizontal, SynaraSpacing.medium)
-                .foregroundStyle(SynaraColor.critical)
+                .foregroundStyle(SynaraColor.criticalText)
                 .background(SynaraColor.critical.opacity(0.06))
                 .overlay(
                     RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
@@ -8607,7 +8718,7 @@ private struct ComposerView: View {
             if let sendError {
                 Text(sendError)
                     .font(SynaraTypography.supporting)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SynaraColor.criticalText)
                     .accessibilityIdentifier("ComposerErrorText")
             }
 
@@ -8635,7 +8746,7 @@ private struct ComposerView: View {
             } else if case let .failed(message) = uploadState {
                 Text(message)
                     .font(SynaraTypography.supporting)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SynaraColor.criticalText)
                     .accessibilityIdentifier("MediaUploadErrorText")
             }
         }
@@ -9529,14 +9640,18 @@ private struct InlineThreadReplies: View {
 
             if hasEarlier {
                 Button(action: showEarlier) {
-                    if isLoadingEarlier {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Text("Show earlier replies")
+                    Group {
+                        if isLoadingEarlier {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Text("Show earlier replies")
+                        }
                     }
+                    .frame(minWidth: SynaraHitTarget.minimum, minHeight: SynaraHitTarget.minimum, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
                 .font(SynaraTypography.chipLabel)
-                .foregroundStyle(SynaraColor.accent)
+                .foregroundStyle(SynaraColor.accentText)
                 .buttonStyle(.plain)
                 .disabled(isLoadingEarlier)
                 .accessibilityIdentifier("InlineThreadEarlier-\(rootEventID)")
@@ -9551,15 +9666,19 @@ private struct InlineThreadReplies: View {
             HStack(spacing: SynaraSpacing.medium) {
                 Button(action: onReplyInThread) {
                     Label("Reply in thread", systemImage: "arrowshape.turn.up.left")
+                        .frame(minHeight: SynaraHitTarget.minimum)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityIdentifier("InlineThreadReply-\(rootEventID)")
                 Button(action: onOpenThread) {
                     Label("Open thread", systemImage: "arrow.up.left.and.arrow.down.right")
+                        .frame(minHeight: SynaraHitTarget.minimum)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityIdentifier("InlineThreadOpen-\(rootEventID)")
             }
             .font(SynaraTypography.chipLabel)
-            .foregroundStyle(SynaraColor.accent)
+            .foregroundStyle(SynaraColor.accentText)
             .buttonStyle(.plain)
         }
         .padding(.leading, SynaraSpacing.medium)

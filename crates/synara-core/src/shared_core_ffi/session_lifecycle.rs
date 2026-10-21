@@ -121,6 +121,73 @@ pub(super) fn login_store_key_error(error: SessionRestoreError) -> SessionLoginE
     }
 }
 
+/// Sign-in view of a Core [`AuthError`] (the `/versions` probe, the crypto
+/// store peek, and the login request). Only a rejection by the homeserver is
+/// reported as wrong credentials; connectivity, outages, rate limits,
+/// deactivation, unsupported steps and local store states keep codes of
+/// their own. Unclassified failures stay `p4-s3c-login-failed`.
+pub(super) fn login_auth_error(error: &AuthError) -> SessionLoginError {
+    match error {
+        AuthError::AuthenticationRejected { .. } => login_failed(
+            LOGIN_CREDENTIALS_REJECTED_CODE,
+            LOGIN_CREDENTIALS_REJECTED_DESCRIPTION,
+        ),
+        AuthError::Connectivity { .. } => login_failed(
+            LOGIN_NETWORK_UNAVAILABLE_CODE,
+            LOGIN_NETWORK_UNAVAILABLE_DESCRIPTION,
+        ),
+        AuthError::HomeserverUnavailable { .. } => login_failed(
+            LOGIN_SERVER_UNAVAILABLE_CODE,
+            LOGIN_SERVER_UNAVAILABLE_DESCRIPTION,
+        ),
+        AuthError::RateLimited { .. } => {
+            login_failed(LOGIN_RATE_LIMITED_CODE, LOGIN_RATE_LIMITED_DESCRIPTION)
+        }
+        AuthError::UserDeactivated { .. } => login_failed(
+            LOGIN_USER_DEACTIVATED_CODE,
+            LOGIN_USER_DEACTIVATED_DESCRIPTION,
+        ),
+        AuthError::UnsupportedCapability { .. }
+        | AuthError::WellKnownNotFound { .. }
+        | AuthError::InteractiveAuthRequired { .. } => {
+            login_failed(LOGIN_UNSUPPORTED_CODE, LOGIN_UNSUPPORTED_DESCRIPTION)
+        }
+        AuthError::SdkInvariant { diagnostic_id }
+            if *diagnostic_id == "p3.2-login-store-reset-required" =>
+        {
+            login_failed(
+                LOGIN_STORE_RESET_REQUIRED_CODE,
+                STORE_RESET_REQUIRED_DESCRIPTION,
+            )
+        }
+        AuthError::SdkInvariant { diagnostic_id }
+            if *diagnostic_id == "p3.2-login-store-locked" =>
+        {
+            login_failed(LOGIN_STORE_LOCKED_CODE, LOGIN_STORE_LOCKED_DESCRIPTION)
+        }
+        AuthError::InvalidInput { .. }
+        | AuthError::SdkInvariant { .. }
+        | AuthError::Unknown { .. } => login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION),
+    }
+}
+
+/// Sign-in view of a client build failure: a store that needs a reset or is
+/// locked keeps its own code.
+pub(super) fn login_client_build_error(
+    error: &crate::app::client_builder::ClientBuilderError,
+) -> SessionLoginError {
+    if store_build_needs_reset(error) {
+        return login_failed(
+            LOGIN_STORE_RESET_REQUIRED_CODE,
+            STORE_RESET_REQUIRED_DESCRIPTION,
+        );
+    }
+    if error.to_factory_error().category == MatrixIpcErrorCategory::StoreLocked {
+        return login_failed(LOGIN_STORE_LOCKED_CODE, LOGIN_STORE_LOCKED_DESCRIPTION);
+    }
+    login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION)
+}
+
 /// Privacy-safe attach outcome. Owner names only; no tokens or password.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SessionAttachDto {
@@ -1034,19 +1101,10 @@ impl SharedCore {
             config.store_passphrase_hex().as_deref(),
         )
         .await
-        .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        .map_err(|error| login_auth_error(&error))?;
         let client = build_unauthenticated_client(&config)
             .await
-            .map_err(|error| {
-                if store_build_needs_reset(&error) {
-                    login_failed(
-                        LOGIN_STORE_RESET_REQUIRED_CODE,
-                        STORE_RESET_REQUIRED_DESCRIPTION,
-                    )
-                } else {
-                    login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION)
-                }
-            })?;
+            .map_err(|error| login_client_build_error(&error))?;
         let persistence = SessionPersistenceOwner::new();
         install_session_rotation_callbacks(
             &client,
@@ -1064,7 +1122,9 @@ impl SharedCore {
                         LOGIN_SLIDING_SYNC_UNSUPPORTED_DESCRIPTION,
                     )
                 } else {
-                    login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION)
+                    // The `/versions` probe is the first request: an
+                    // unreachable or failing server shows up here.
+                    login_auth_error(&error)
                 }
             })?;
         let outcome = core_login_with_password(
@@ -1083,7 +1143,7 @@ impl SharedCore {
             },
         )
         .await
-        .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        .map_err(|error| login_auth_error(&error))?;
         let live_identity = AccountIdentity::new(&outcome.user_id, &outcome.homeserver_url)
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         if live_identity != identity {

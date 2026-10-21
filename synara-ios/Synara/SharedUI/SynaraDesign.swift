@@ -594,7 +594,77 @@ enum SynaraColor {
     static var richTextTableHeader: Color { synaraAdaptive(\.richTextTableHeader) }
     static var richTextTableOdd: Color { synaraAdaptive(\.richTextTableOdd) }
     static var richTextTableEven: Color { synaraAdaptive(\.richTextTableEven) }
+    /// Status hues for text. `success` / `warning` / `critical` / `accent`
+    /// stay the fills and icon tints; as caption text they fall under 4.5:1
+    /// in light mode.
+    static var successText: Color { synaraStatusText(SynaraStatusTextPalette.success) }
+    static var warningText: Color { synaraStatusText(SynaraStatusTextPalette.warning) }
+    static var criticalText: Color { synaraStatusText(SynaraStatusTextPalette.critical) }
+    static var accentText: Color { synaraStatusText(SynaraStatusTextPalette.accent) }
 }
+
+/// Text variants of the system status colors: darker in light mode, lighter
+/// in dark mode, same hue. Each clears WCAG AA (4.5:1) on the chrome
+/// surfaces and on a 14% tint of its own status color.
+enum SynaraStatusTextPalette {
+    struct Pair: Equatable {
+        let light: String
+        let dark: String
+
+        func hex(dark isDark: Bool) -> String {
+            isDark ? dark : light
+        }
+    }
+
+    static let success = Pair(light: "#1a6b2d", dark: "#30d158")
+    static let warning = Pair(light: "#9a4500", dark: "#ff9f0a")
+    static let critical = Pair(light: "#b3141a", dark: "#ff7f78")
+    static let accent = Pair(light: "#0058b8", dark: "#5eacff")
+
+    static let all: [(name: String, pair: Pair)] = [
+        ("success", success),
+        ("warning", warning),
+        ("critical", critical),
+        ("accent", accent),
+    ]
+}
+
+/// Smallest comfortable touch target (Apple HIG).
+enum SynaraHitTarget {
+    static let minimum: CGFloat = 44
+}
+
+/// A small bordered capsule that keeps a 44-point touch area around it, for
+/// actions inside compact chrome such as the connection banner.
+struct SynaraCompactBorderedButtonStyle: ButtonStyle {
+    var tint: Color = SynaraColor.primaryText
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(SynaraTypography.fineMetaBold)
+            .foregroundStyle(tint)
+            .padding(.horizontal, SynaraSpacing.medium)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(SynaraColor.secondaryText.opacity(configuration.isPressed ? 0.22 : 0.12))
+            )
+            .frame(minWidth: SynaraHitTarget.minimum, minHeight: SynaraHitTarget.minimum)
+            .contentShape(Rectangle())
+    }
+}
+
+#if canImport(UIKit)
+private func synaraStatusText(_ pair: SynaraStatusTextPalette.Pair) -> Color {
+    Color(uiColor: UIColor { traits in
+        UIColor(synaraHex: pair.hex(dark: traits.userInterfaceStyle == .dark)) ?? .label
+    })
+}
+#else
+private func synaraStatusText(_ pair: SynaraStatusTextPalette.Pair) -> Color {
+    Color(synaraHex: pair.light)
+}
+#endif
 
 #if canImport(UIKit)
 extension SynaraThemeRamp {
@@ -1313,7 +1383,9 @@ struct SynaraFilterChip: View {
                 }
             }
             .padding(.horizontal, SynaraSpacing.medium)
-            .frame(height: 32)
+            // Grows with Dynamic Type instead of clipping the label.
+            .padding(.vertical, SynaraSpacing.xSmall)
+            .frame(minHeight: 32)
             .background(isSelected ? SynaraColor.accent : SynaraColor.secondarySurface)
             .foregroundStyle(isSelected ? Color.white : SynaraColor.secondaryText)
             .clipShape(Capsule())

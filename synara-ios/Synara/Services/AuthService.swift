@@ -30,6 +30,14 @@ enum LoginError: LocalizedError, Equatable {
     /// This account's encrypted data on the device exists but its key does
     /// not (for example after restoring a backup to a new iPhone).
     case localDataUnreadable
+    /// The homeserver answered with an outage (5xx, endpoint missing).
+    case serverUnavailable
+    case rateLimited
+    case accountDeactivated
+    /// Another process holds this account's local store.
+    case localDataInUse
+    /// Unclassified: not reported as wrong credentials.
+    case signInFailed
 
     var errorDescription: String? {
         switch self {
@@ -51,6 +59,16 @@ enum LoginError: LocalizedError, Equatable {
             return "Could not save the session securely."
         case .localDataUnreadable:
             return "Synara can't open this account's saved data on this device, for example after restoring from a backup. Reset local data to sign in again."
+        case .serverUnavailable:
+            return "The homeserver is having problems. Try again later."
+        case .rateLimited:
+            return "Too many sign-in attempts. Wait a moment, then try again."
+        case .accountDeactivated:
+            return "This account has been deactivated."
+        case .localDataInUse:
+            return "This account's saved data is in use. Close other copies of Synara, then try again."
+        case .signInFailed:
+            return "Sign-in failed. Try again."
         }
     }
 }
