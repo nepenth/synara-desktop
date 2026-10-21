@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Desktop: while you type a long message, others now see "typing" without interruption. It used to drop out for a moment every few seconds; it now stops only after 5 seconds without typing, when you send or clear the message, or when you leave the room.
 - Desktop approvals: Approve once, Deny or Review on a notification now always shows a result, even with Synara closed to the tray. Review brings Synara forward at the request. If a decision can't be sent, Synara opens the request and posts "Approval not sent"; after a timeout it says the decision may still be sent; and if the request was already decided on another device, it says which decision was recorded instead of showing your click.
 - Desktop notifications: clicking a notification or its buttons right after launching Synara, before it finishes signing in, or after signing out and back in as the same account now opens the conversation or sends the decision once Synara is ready. A notification from a different account only brings the window forward.
 - macOS: Synara no longer asks for notification permission when the first message arrives (which could stall images and sync status until you answered). It asks once after sign-in, and Settings shows "Enable" instead of "blocked" before you have been asked. Desktop Integration reports the same permission.
