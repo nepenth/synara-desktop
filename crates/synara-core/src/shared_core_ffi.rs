@@ -72,8 +72,8 @@ use crate::app::rtc_transports::{
     NativeRtcTransport, NativeRtcTransportsOwner, NativeRtcTransportsSnapshot,
 };
 use crate::app::store::{
-    get_or_create_store_key, AccountIdentity, StoreKeyId, StoreKeyMaterial, StoreKeyVault,
-    StoreKeyVaultError, STORE_KEY_LEN,
+    get_or_migrate_store_key, AccountIdentity, StoreKeyId, StoreKeyMaterial, StoreKeyVault,
+    StoreKeyVaultError, StorePaths, STORE_KEY_LEN,
 };
 use crate::app::sync::{
     build_sync_service, SyncReadiness, SyncReadinessSnapshot, SyncServiceConfig, SyncServiceOwner,
@@ -128,6 +128,13 @@ const ALREADY_RESTORED_DESCRIPTION: &str = "A live session is already restored."
 const RESTORED_IDENTITY_MISMATCH_CODE: &str = "p4-s3b-session-identity-mismatch";
 const RESTORED_IDENTITY_MISMATCH_DESCRIPTION: &str =
     "A different account's session is already restored.";
+/// The account's encrypted local store exists but its key is missing or unusable
+/// (for example after a device restore: the Keychain item does not migrate).
+/// Never answered by generating a new key; the user resets local data.
+const STORE_RESET_REQUIRED_CODE: &str = "p4-s3b-store-reset-required";
+const STORE_RESET_REQUIRED_DESCRIPTION: &str =
+    "The local encrypted data for this account cannot be opened on this device.";
+const LOGIN_STORE_RESET_REQUIRED_CODE: &str = "p4-s3c-store-reset-required";
 const LOGIN_VAULT_UNAVAILABLE_CODE: &str = "p4-s3c-secret-vault-unavailable";
 const LOGIN_VAULT_UNAVAILABLE_DESCRIPTION: &str = "The secret store is unavailable.";
 const LOGIN_IDENTITY_INVALID_CODE: &str = "p4-s3c-identity-invalid";

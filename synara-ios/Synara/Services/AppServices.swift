@@ -394,6 +394,20 @@ enum SynaraCryptoBackupStatus: Equatable {
     case syncing
 }
 
+/// The account's cross-signing identity as this device sees it (Core's
+/// `cross_signing_status` readiness).
+enum SynaraCryptoCrossSigningStatus: Equatable {
+    case unknown
+    /// Published, and this device holds and trusts it.
+    case ready
+    /// The account has no identity yet.
+    case notSetUp
+    /// Published, but this device is not verified against it yet.
+    case needsVerification
+    /// Published, but this device lacks some private keys.
+    case needsRecovery
+}
+
 struct RoomCryptoStatus: Equatable {
     let encryption: SynaraRoomEncryptionStatus
     let verification: SynaraCryptoVerificationStatus
@@ -492,6 +506,10 @@ struct SessionCryptoStatus: Equatable {
     let hasDevicesToVerifyAgainst: Bool?
     let isLastDevice: Bool?
     let unableToDecryptCount: Int?
+    var crossSigning: SynaraCryptoCrossSigningStatus = .unknown
+    /// True when the account has no recovery yet, so Security offers
+    /// "Set Up Recovery". Nil until secret storage has been read.
+    var recoverySetupAvailable: Bool? = nil
 
     // Session crypto metadata does not scan message history. A missing count
     // must never be presented as proof that every encrypted event decrypted.
@@ -608,6 +626,34 @@ enum CryptoActionResult: Equatable {
     }
 }
 
+/// One cross-signing setup step (Security → Set Up Recovery).
+enum CrossSigningSetupResult: Equatable {
+    /// The account's identity is published (now, or already).
+    case ready
+    /// The homeserver wants the account password to publish it.
+    case passwordRequired
+    /// The password was not accepted; it can be entered again.
+    case passwordRejected
+    case failed(String)
+}
+
+/// Recovery enrolment after cross-signing is ready.
+enum RecoveryEnrollmentResult: Equatable {
+    /// Recovery was set up now. The key is shown once and never stored.
+    case enabled(recoveryKey: String)
+    /// Recovery was already set up; no new key was made.
+    case alreadyEnabled
+    case failed(String)
+}
+
+enum RecoverySetupCopy {
+    static let setupFailed = "Synara could not set up cross-signing. Try again."
+    static let enrollmentFailed = "Synara could not update secret storage. Try again."
+    static let passwordRejected =
+        "Cross-signing setup authentication failed. Check your password and try again."
+    static let unavailable = "Recovery setup is unavailable."
+}
+
 protocol CryptoStatusServicing {
     func roomStatus(roomID: String) async -> RoomCryptoStatus
     /// Room status over a session status the caller already has (from
@@ -623,6 +669,12 @@ protocol CryptoStatusServicing {
     func declineVerification() async -> CryptoActionResult
     func cancelVerification() async -> CryptoActionResult
     func recover(recoveryKey: String) async -> CryptoActionResult
+    /// Create and publish the account's cross-signing identity when it has none.
+    func startCrossSigningSetup() async -> CrossSigningSetupResult
+    /// Answer the password stage of a setup that returned `.passwordRequired`.
+    func authenticateCrossSigningSetup(password: String) async -> CrossSigningSetupResult
+    /// Enrol secret storage and key backup with a recovery passphrase.
+    func enableRecovery(passphrase: String) async -> RecoveryEnrollmentResult
     func sessionDevices() async -> [SharedCoreSessionDevice]
     func sessionDeviceUpdates() -> AsyncStream<Void>
     func signOutSession(deviceId: String, password: String) async -> CryptoActionResult
@@ -714,6 +766,20 @@ extension CryptoStatusServicing {
 
     func requestDeviceVerification() async -> CryptoActionResult {
         await requestDeviceVerification(deviceId: nil)
+    }
+
+    func startCrossSigningSetup() async -> CrossSigningSetupResult {
+        .failed(RecoverySetupCopy.unavailable)
+    }
+
+    func authenticateCrossSigningSetup(password: String) async -> CrossSigningSetupResult {
+        _ = password
+        return .failed(RecoverySetupCopy.unavailable)
+    }
+
+    func enableRecovery(passphrase: String) async -> RecoveryEnrollmentResult {
+        _ = passphrase
+        return .failed(RecoverySetupCopy.unavailable)
     }
 
     func sessionDevices() async -> [SharedCoreSessionDevice] {

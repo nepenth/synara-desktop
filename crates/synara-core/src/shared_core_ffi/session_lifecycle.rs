@@ -102,6 +102,25 @@ pub(super) fn login_failed(code: &'static str, description: &'static str) -> Ses
     }
 }
 
+/// Sign-in view of a `store_key_for` failure. A store that needs a reset
+/// keeps its own code so Swift can offer the reset instead of reporting
+/// wrong credentials.
+pub(super) fn login_store_key_error(error: SessionRestoreError) -> SessionLoginError {
+    match error {
+        SessionRestoreError::Failed { code, .. } if code == VAULT_UNAVAILABLE_CODE => login_failed(
+            LOGIN_VAULT_UNAVAILABLE_CODE,
+            LOGIN_VAULT_UNAVAILABLE_DESCRIPTION,
+        ),
+        SessionRestoreError::Failed { code, .. } if code == STORE_RESET_REQUIRED_CODE => {
+            login_failed(
+                LOGIN_STORE_RESET_REQUIRED_CODE,
+                STORE_RESET_REQUIRED_DESCRIPTION,
+            )
+        }
+        _ => login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION),
+    }
+}
+
 /// Privacy-safe attach outcome. Owner names only; no tokens or password.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SessionAttachDto {
@@ -451,6 +470,8 @@ pub(super) fn map_session_status_core_error(error: MatrixIpcError) -> SessionSta
                 || code.starts_with("p2-sync-status-")
                 || code.starts_with("p2-media-config-")
                 || code.starts_with("p2-secret-storage-status-")
+                || code.starts_with("p2-cross-signing-setup-")
+                || code.starts_with("v-crypto.2-")
                 || code.starts_with("v-crypto.4-") =>
         {
             session_status_failed(code, SESSION_STATUS_OWNER_DESCRIPTION)
@@ -901,14 +922,20 @@ impl SharedCore {
             ));
         }
 
-        let store_key = store_key_for(&self.secret_store, &identity)?;
+        let store_key = store_key_for(&self.secret_store, root, &identity)?;
         prepare_session_store(root, &identity)
             .map_err(|()| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
         let config = ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))
             .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
         let client = build_unauthenticated_client(&config)
             .await
-            .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
+            .map_err(|error| {
+                if store_build_needs_reset(&error) {
+                    store_reset_required()
+                } else {
+                    restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION)
+                }
+            })?;
         let persistence = SessionPersistenceOwner::new();
         install_session_rotation_callbacks(
             &client,
@@ -997,15 +1024,7 @@ impl SharedCore {
             store: Arc::clone(&self.secret_store),
         };
         let store_key =
-            store_key_for(&self.secret_store, &identity).map_err(|error| match error {
-                SessionRestoreError::Failed { code, .. } if code == VAULT_UNAVAILABLE_CODE => {
-                    login_failed(
-                        LOGIN_VAULT_UNAVAILABLE_CODE,
-                        LOGIN_VAULT_UNAVAILABLE_DESCRIPTION,
-                    )
-                }
-                _ => login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION),
-            })?;
+            store_key_for(&self.secret_store, root, &identity).map_err(login_store_key_error)?;
         prepare_session_store(root, &identity)
             .map_err(|()| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let config = ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))
@@ -1018,7 +1037,16 @@ impl SharedCore {
         .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let client = build_unauthenticated_client(&config)
             .await
-            .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+            .map_err(|error| {
+                if store_build_needs_reset(&error) {
+                    login_failed(
+                        LOGIN_STORE_RESET_REQUIRED_CODE,
+                        STORE_RESET_REQUIRED_DESCRIPTION,
+                    )
+                } else {
+                    login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION)
+                }
+            })?;
         let persistence = SessionPersistenceOwner::new();
         install_session_rotation_callbacks(
             &client,
@@ -1061,6 +1089,10 @@ impl SharedCore {
         if live_identity != identity {
             return Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION));
         }
+        // An account's first device gets a cross-signing identity now (same
+        // guarded Core step as desktop). Sign-in never fails because of it;
+        // Security settings still offers setup when it was skipped.
+        let _ = crate::app::cross_signing::bootstrap_after_login(&client, password).await;
         self.persist_open_and_retain(
             client,
             persistence,
@@ -1105,15 +1137,7 @@ impl SharedCore {
             store: Arc::clone(&self.secret_store),
         };
         let store_key =
-            store_key_for(&self.secret_store, &identity).map_err(|error| match error {
-                SessionRestoreError::Failed { code, .. } if code == VAULT_UNAVAILABLE_CODE => {
-                    login_failed(
-                        LOGIN_VAULT_UNAVAILABLE_CODE,
-                        LOGIN_VAULT_UNAVAILABLE_DESCRIPTION,
-                    )
-                }
-                _ => login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION),
-            })?;
+            store_key_for(&self.secret_store, root, &identity).map_err(login_store_key_error)?;
         prepare_session_store(root, &identity)
             .map_err(|()| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let config = ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))
@@ -1740,6 +1764,40 @@ impl SharedCore {
             std::fs::remove_dir_all(root)
                 .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
         }
+        Ok(LeftoverAckDto {
+            status: LeftoverAckStatusDto::Wiped,
+        })
+    }
+
+    /// Delete one account's local store and its store key, after the user
+    /// confirmed the reset that a `store-reset-required` sign-in or restore
+    /// asked for. Other accounts' stores, the session vault entry and the
+    /// homeserver account are untouched. Refused while any session is
+    /// retained, so a live store is never removed underneath its client.
+    pub async fn reset_local_account_store(
+        &self,
+        user_id: String,
+        homeserver_url: String,
+        store_root: String,
+    ) -> Result<LeftoverAckDto, LeftoverCommandError> {
+        leftover_reject_oversize(store_root.len() + user_id.len() + homeserver_url.len())?;
+        let failed = || leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION);
+        let identity = AccountIdentity::new(&user_id, &homeserver_url).map_err(|_| failed())?;
+        let root = parse_store_root(&store_root).map_err(|_| {
+            leftover_failed(
+                LEFTOVER_STORE_ROOT_INVALID_CODE,
+                LEFTOVER_STORE_ROOT_INVALID_DESCRIPTION,
+            )
+        })?;
+        if self.has_retained_client() {
+            return Err(failed());
+        }
+        let target =
+            crate::app::lifecycle::WipeTarget::resolve(root, identity).map_err(|_| failed())?;
+        let vault = SecretStoreKeyVault {
+            store: Arc::clone(&self.secret_store),
+        };
+        crate::app::lifecycle::wipe_account_store(&target, Some(&vault)).map_err(|_| failed())?;
         Ok(LeftoverAckDto {
             status: LeftoverAckStatusDto::Wiped,
         })

@@ -677,6 +677,33 @@ impl Core {
             })
     }
 
+    /// Finish a cross-signing setup that asked for the account password.
+    /// The password is a method argument only, never a command field.
+    pub async fn cross_signing_setup_password(
+        &self,
+        password: &str,
+    ) -> Result<crate::app::cross_signing::NativeCrossSigningSetupResult, MatrixIpcError> {
+        if password.is_empty() || password.len() > 100_000 {
+            return Err(MatrixIpcError::new(MatrixIpcErrorCategory::Unknown)
+                .with_diagnostic("v-crypto.2-cross-signing-password-empty"));
+        }
+        let owner = self.state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-cross-signing-setup-no-session")
+        })?;
+        owner
+            .authenticate_cross_signing_password(password)
+            .await
+            .map_err(|diagnostic| {
+                let category = match diagnostic {
+                    "v-crypto.2-cross-signing-password-rejected"
+                    | "v-crypto.2-cross-signing-user-missing" => MatrixIpcErrorCategory::Forbidden,
+                    _ => MatrixIpcErrorCategory::Unknown,
+                };
+                MatrixIpcError::new(category).with_diagnostic(diagnostic)
+            })
+    }
+
     pub async fn secret_storage_bootstrap(
         &self,
         passphrase: &str,

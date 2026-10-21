@@ -57,6 +57,25 @@ test("the setup response cannot acquire a stored password or arbitrary secret fi
   );
 });
 
+test("the cross-signing password stage stays typed and returns no secret", () => {
+  const ffi = inputs.ffi.replace(
+    ".cross_signing_setup_password(secret.as_str())",
+    '.command(serde_json::json!({"password": secret.as_str()}))'
+  );
+  assert.match(
+    inspectTypedRecoveryBoundaries({ ...inputs, ffi }).errors.join("\n"),
+    /cross_signing_setup_password must not put recovery input in generic envelopes/
+  );
+  const udl = inputs.udl.replace(
+    "dictionary CrossSigningSetupDto {",
+    "dictionary CrossSigningSetupDto {\n  string auth_session;"
+  );
+  assert.match(
+    inspectTypedRecoveryBoundaries({ ...inputs, udl }).errors.join("\n"),
+    /only the generation, outcome and readiness/
+  );
+});
+
 test("commented or literal recovery code cannot satisfy native secret boundaries", () => {
   const ffi = inputs.ffi.replaceAll(
     "Zeroizing::new(passphrase)",

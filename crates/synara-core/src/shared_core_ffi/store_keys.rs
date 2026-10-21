@@ -24,24 +24,47 @@ pub(super) fn validate_store_root(store_root: &str) -> Result<&Path, SessionRest
         .map_err(|_| restore_failed(STORE_ROOT_INVALID_CODE, STORE_ROOT_INVALID_DESCRIPTION))
 }
 
+/// The account's store key: the vault's key (or a known older revision of
+/// it) when present, and a new one only for an account root that does not
+/// exist yet.
+///
+/// Call before `prepare_session_store`, which creates the account layout.
+/// A missing or corrupt key for an existing store fails closed with
+/// `STORE_RESET_REQUIRED_CODE`: iOS Keychain items do not move to a restored
+/// device while the app-group store does, and a fresh key could never open
+/// that store. Swift then offers `reset_local_account_store`.
 pub(super) fn store_key_for(
     store: &Arc<dyn SecretVault + Send + Sync>,
+    root: &Path,
     identity: &AccountIdentity,
 ) -> Result<StoreKeyMaterial, SessionRestoreError> {
+    let creation_policy = StorePaths::derive(root, identity)
+        .and_then(|paths| paths.key_creation_policy())
+        .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
     let vault = SecretStoreKeyVault {
         store: Arc::clone(store),
     };
-    get_or_create_store_key(&vault, &StoreKeyId::from_identity(identity)).map_err(|error| {
-        match error {
-            StoreKeyVaultError::BackendUnavailable { .. } => {
-                restore_failed(VAULT_UNAVAILABLE_CODE, VAULT_UNAVAILABLE_DESCRIPTION)
-            }
-            StoreKeyVaultError::CorruptPayload => {
-                restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION)
-            }
-            _ => restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION),
+    get_or_migrate_store_key(&vault, identity, creation_policy).map_err(|error| match error {
+        StoreKeyVaultError::BackendUnavailable { .. } => {
+            restore_failed(VAULT_UNAVAILABLE_CODE, VAULT_UNAVAILABLE_DESCRIPTION)
         }
+        StoreKeyVaultError::MissingKeyForExistingStore | StoreKeyVaultError::CorruptPayload => {
+            store_reset_required()
+        }
+        _ => restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION),
     })
+}
+
+pub(super) fn store_reset_required() -> SessionRestoreError {
+    restore_failed(STORE_RESET_REQUIRED_CODE, STORE_RESET_REQUIRED_DESCRIPTION)
+}
+
+/// A client build that failed on the store itself (a key that does not open
+/// it) needs the same reset as a missing key.
+pub(super) fn store_build_needs_reset(
+    error: &crate::app::client_builder::ClientBuilderError,
+) -> bool {
+    error.to_factory_error().category == MatrixIpcErrorCategory::StoreCorrupt
 }
 
 pub(super) struct SecretStoreKeyVault {

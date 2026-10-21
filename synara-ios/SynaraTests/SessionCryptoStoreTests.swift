@@ -1,5 +1,7 @@
 import XCTest
+import UIKit
 @testable import Synara
+import SynaraCore
 
 final class SessionCryptoStoreTests: XCTestCase {
     private let unverified = SessionCryptoStatus(
@@ -244,6 +246,215 @@ private final class CountingCryptoStatusService: CryptoStatusServicing {
         }
     }
 
+    func roomStatus(roomID: String) async -> RoomCryptoStatus { .unknown }
+    func verificationUpdates() -> AsyncStream<CryptoVerificationSnapshot?> { AsyncStream { $0.finish() } }
+    func retryDecryption(roomID: String) async -> CryptoActionResult { .unavailable("unused") }
+    func requestDeviceVerification(deviceId: String?) async -> CryptoActionResult { .unavailable("unused") }
+    func acceptVerificationRequest() async -> CryptoActionResult { .unavailable("unused") }
+    func startSasVerification() async -> CryptoActionResult { .unavailable("unused") }
+    func approveVerification() async -> CryptoActionResult { .unavailable("unused") }
+    func declineVerification() async -> CryptoActionResult { .unavailable("unused") }
+    func cancelVerification() async -> CryptoActionResult { .unavailable("unused") }
+    func recover(recoveryKey: String) async -> CryptoActionResult { .unavailable("unused") }
+}
+
+/// Security → Set Up Recovery: the flow's states, and the Core-to-Swift
+/// status and error mapping it relies on.
+@MainActor
+final class RecoverySetupFlowTests: XCTestCase {
+    func testNoPasswordServerGoesStraightToTheKeyShownOnce() async {
+        let crypto = ScriptedRecoveryService(setup: [.ready], enrollment: .enabled(recoveryKey: "EsTj 3yST y93F"))
+        let flow = RecoverySetupFlow()
+
+        await flow.start(passphrase: "correct horse", confirmation: "correct horse", crypto: crypto)
+
+        XCTAssertEqual(flow.phase, .showingKey("EsTj 3yST y93F"))
+        XCTAssertNil(flow.errorMessage)
+        XCTAssertEqual(crypto.enrolledPassphrases, ["correct horse"])
+        flow.acknowledgeKey()
+        XCTAssertEqual(flow.phase, .finished, "the key leaves memory once acknowledged")
+    }
+
+    func testPasswordStageThenRejectedPasswordThenSuccess() async {
+        let crypto = ScriptedRecoveryService(
+            setup: [.passwordRequired],
+            authentication: [.passwordRejected, .ready],
+            enrollment: .enabled(recoveryKey: "key")
+        )
+        let flow = RecoverySetupFlow()
+
+        await flow.start(passphrase: "pass", confirmation: "pass", crypto: crypto)
+        XCTAssertEqual(flow.phase, .passwordRequired)
+        XCTAssertTrue(crypto.enrolledPassphrases.isEmpty, "no enrolment before cross-signing")
+
+        await flow.authenticate(password: "", crypto: crypto)
+        XCTAssertEqual(flow.errorMessage, "Enter your account password.")
+        XCTAssertTrue(crypto.passwords.isEmpty)
+
+        await flow.authenticate(password: "wrong", crypto: crypto)
+        XCTAssertEqual(flow.phase, .passwordRequired)
+        XCTAssertEqual(flow.errorMessage, RecoverySetupCopy.passwordRejected)
+
+        await flow.authenticate(password: "right", crypto: crypto)
+        XCTAssertEqual(flow.phase, .showingKey("key"))
+        XCTAssertNil(flow.errorMessage)
+        XCTAssertEqual(crypto.passwords, ["wrong", "right"])
+        XCTAssertEqual(crypto.enrolledPassphrases, ["pass"])
+    }
+
+    func testMismatchedOrEmptyPassphraseNeverCallsCore() async {
+        let crypto = ScriptedRecoveryService(setup: [.ready], enrollment: .enabled(recoveryKey: "key"))
+        let flow = RecoverySetupFlow()
+
+        await flow.start(passphrase: "one", confirmation: "two", crypto: crypto)
+        XCTAssertEqual(flow.errorMessage, "Recovery passphrases do not match.")
+        await flow.start(passphrase: "  ", confirmation: "  ", crypto: crypto)
+        XCTAssertEqual(flow.errorMessage, "Choose a recovery passphrase.")
+
+        XCTAssertEqual(flow.phase, .idle)
+        XCTAssertEqual(crypto.setupCalls, 0)
+    }
+
+    func testAlreadyEnabledFinishesWithoutAKeyAndFailuresReturnToIdle() async {
+        let already = ScriptedRecoveryService(setup: [.ready], enrollment: .alreadyEnabled)
+        let flow = RecoverySetupFlow()
+        await flow.start(passphrase: "p", confirmation: "p", crypto: already)
+        XCTAssertEqual(flow.phase, .finished)
+
+        let partial = ScriptedRecoveryService(setup: [.failed("partial identity")], enrollment: .alreadyEnabled)
+        let failing = RecoverySetupFlow()
+        await failing.start(passphrase: "p", confirmation: "p", crypto: partial)
+        XCTAssertEqual(failing.phase, .idle)
+        XCTAssertEqual(failing.errorMessage, "partial identity")
+        XCTAssertTrue(partial.enrolledPassphrases.isEmpty)
+
+        let enrolFails = ScriptedRecoveryService(setup: [.ready], enrollment: .failed("existing backup"))
+        let retry = RecoverySetupFlow()
+        await retry.start(passphrase: "p", confirmation: "p", crypto: enrolFails)
+        XCTAssertEqual(retry.phase, .idle)
+        XCTAssertEqual(retry.errorMessage, "existing backup")
+    }
+
+    func testCancellingThePasswordStepEnrolsNothing() async {
+        let crypto = ScriptedRecoveryService(setup: [.passwordRequired], enrollment: .enabled(recoveryKey: "key"))
+        let flow = RecoverySetupFlow()
+        await flow.start(passphrase: "p", confirmation: "p", crypto: crypto)
+        flow.cancel()
+        XCTAssertEqual(flow.phase, .idle)
+        await flow.authenticate(password: "right", crypto: crypto)
+        XCTAssertTrue(crypto.passwords.isEmpty)
+        XCTAssertTrue(crypto.enrolledPassphrases.isEmpty)
+    }
+
+    func testCrossSigningReadinessAndRecoveryAvailabilityMapping() {
+        XCTAssertEqual(SharedCoreSessionCrypto.crossSigning(.ready), .ready)
+        XCTAssertEqual(SharedCoreSessionCrypto.crossSigning(.setupRequired), .notSetUp)
+        XCTAssertEqual(SharedCoreSessionCrypto.crossSigning(.verificationRequired), .needsVerification)
+        XCTAssertEqual(SharedCoreSessionCrypto.crossSigning(.recoveryRequired), .needsRecovery)
+        XCTAssertEqual(SharedCoreSessionCrypto.crossSigning(.unavailable), .unknown)
+        XCTAssertEqual(SharedCoreSessionCrypto.crossSigning(nil), .unknown)
+        XCTAssertEqual(SynaraCryptoCrossSigningStatus.ready.settingsDisplayName, "Ready")
+        XCTAssertEqual(SynaraCryptoCrossSigningStatus.notSetUp.settingsDisplayName, "Not Set Up")
+
+        XCTAssertEqual(SharedCoreSessionCrypto.recoverySetupAvailable(.bootstrapRequired), true)
+        XCTAssertEqual(SharedCoreSessionCrypto.recoverySetupAvailable(.unlockRequired), false)
+        XCTAssertEqual(SharedCoreSessionCrypto.recoverySetupAvailable(.noAction), false)
+        XCTAssertNil(SharedCoreSessionCrypto.recoverySetupAvailable(nil))
+        XCTAssertEqual(SessionCryptoStatus.unknown.crossSigning, .unknown)
+        XCTAssertNil(SessionCryptoStatus.unknown.recoverySetupAvailable)
+    }
+
+    func testCoreSetupOutcomesAndErrorsMapToFlowResults() {
+        XCTAssertEqual(SharedCoreCryptoStatusService.crossSigningSetupResult(.complete), .ready)
+        XCTAssertEqual(SharedCoreCryptoStatusService.crossSigningSetupResult(.alreadyConfigured), .ready)
+        XCTAssertEqual(
+            SharedCoreCryptoStatusService.crossSigningSetupResult(.authenticationRequired),
+            .passwordRequired
+        )
+        func failure(_ code: String) -> SessionStatusError {
+            .Failed(code: code, description: "static")
+        }
+        XCTAssertEqual(
+            SharedCoreCryptoStatusService.crossSigningSetupFailure(
+                failure("v-crypto.2-cross-signing-password-rejected")
+            ),
+            .passwordRejected
+        )
+        guard case .failed(let partial) = SharedCoreCryptoStatusService.crossSigningSetupFailure(
+            failure("v-crypto.2-cross-signing-partial-private-identity")
+        ) else {
+            return XCTFail("partial identity must fail")
+        }
+        XCTAssertTrue(partial.contains("only part"))
+        XCTAssertEqual(
+            SharedCoreCryptoStatusService.crossSigningSetupFailure(failure("anything-else")),
+            .failed(RecoverySetupCopy.setupFailed)
+        )
+        guard case .failed(let existing) = SharedCoreCryptoStatusService.recoveryEnrollmentFailure(
+            failure("v-crypto.4-bootstrap-existing-backup")
+        ) else {
+            return XCTFail("existing backup must fail")
+        }
+        XCTAssertTrue(existing.contains("Recover Keys"))
+        XCTAssertEqual(
+            SharedCoreCryptoStatusService.recoveryEnrollmentFailure(failure("v-crypto.4-bootstrap-failed")),
+            .failed(RecoverySetupCopy.enrollmentFailed)
+        )
+    }
+
+    func testUnreadableLocalDataIsNotReportedAsBadCredentials() {
+        XCTAssertEqual(
+            SharedCoreLoginErrorMapping.loginError(
+                for: SessionLoginError.Failed(code: "p4-s3c-store-reset-required", description: "static")
+            ),
+            .localDataUnreadable
+        )
+        XCTAssertNotEqual(LoginError.localDataUnreadable.errorDescription, LoginError.invalidCredentials.errorDescription)
+    }
+
+    func testRecoveryKeyCopyIsLocalOnlyAndExpires() {
+        let pasteboard = UIPasteboard.withUniqueName()
+        defer { UIPasteboard.remove(withName: pasteboard.name) }
+        RecoveryKeyPasteboard.copy("EsTj 3yST", to: pasteboard)
+        XCTAssertEqual(pasteboard.string, "EsTj 3yST")
+        XCTAssertEqual(RecoveryKeyPasteboard.lifetime, 120)
+    }
+}
+
+private final class ScriptedRecoveryService: CryptoStatusServicing {
+    private var setupResults: [CrossSigningSetupResult]
+    private var authenticationResults: [CrossSigningSetupResult]
+    private let enrollment: RecoveryEnrollmentResult
+    private(set) var setupCalls = 0
+    private(set) var passwords: [String] = []
+    private(set) var enrolledPassphrases: [String] = []
+
+    init(
+        setup: [CrossSigningSetupResult],
+        authentication: [CrossSigningSetupResult] = [],
+        enrollment: RecoveryEnrollmentResult
+    ) {
+        setupResults = setup
+        authenticationResults = authentication
+        self.enrollment = enrollment
+    }
+
+    func startCrossSigningSetup() async -> CrossSigningSetupResult {
+        setupCalls += 1
+        return setupResults.isEmpty ? .failed("unscripted") : setupResults.removeFirst()
+    }
+
+    func authenticateCrossSigningSetup(password: String) async -> CrossSigningSetupResult {
+        passwords.append(password)
+        return authenticationResults.isEmpty ? .failed("unscripted") : authenticationResults.removeFirst()
+    }
+
+    func enableRecovery(passphrase: String) async -> RecoveryEnrollmentResult {
+        enrolledPassphrases.append(passphrase)
+        return enrollment
+    }
+
+    func sessionStatus() async -> SessionCryptoStatus { .unknown }
     func roomStatus(roomID: String) async -> RoomCryptoStatus { .unknown }
     func verificationUpdates() -> AsyncStream<CryptoVerificationSnapshot?> { AsyncStream { $0.finish() } }
     func retryDecryption(roomID: String) async -> CryptoActionResult { .unavailable("unused") }

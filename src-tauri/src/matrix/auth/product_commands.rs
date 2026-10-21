@@ -138,6 +138,10 @@ pub async fn matrix_login_password(
     );
     let preparation = async {
         ensure_crypto_ready(&client).await?;
+        // An account's first device gets a cross-signing identity now (same
+        // guarded Core step as iOS). Sign-in never fails because of it.
+        let _ = synara_core::app::cross_signing::bootstrap_after_login(&client, password.as_str())
+            .await;
         let session_generation = state.next_generation();
         let owners = start_desktop_owners(
             &client,

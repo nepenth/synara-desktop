@@ -9,6 +9,10 @@ struct LoginView: View {
     @State private var username: String = ""
     @State private var password: String = ""
     @State private var state: LoginViewState = .idle
+    /// Set when sign-in found this account's local data unreadable; the
+    /// failure section then offers a confirmed reset.
+    @State private var storeResetRequest: LoginRequest?
+    @State private var confirmingStoreReset = false
 
     var body: some View {
         Form {
@@ -61,15 +65,54 @@ struct LoginView: View {
                     Text(message)
                         .foregroundStyle(.red)
                         .accessibilityIdentifier("LoginErrorText")
+                    if storeResetRequest != nil {
+                        Button("Reset Local Data", role: .destructive) {
+                            confirmingStoreReset = true
+                        }
+                        .accessibilityIdentifier("LoginResetLocalDataButton")
+                    }
                 }
             }
         }
         .navigationTitle("Login")
         .accessibilityIdentifier("LoginScreen")
+        .confirmationDialog(
+            "Reset local data for this account?",
+            isPresented: $confirmingStoreReset,
+            titleVisibility: .visible
+        ) {
+            Button("Reset and Sign In", role: .destructive) {
+                resetLocalDataAndLogin()
+            }
+        } message: {
+            Text("Synara deletes this account's saved data on this iPhone, then signs in again. Rooms come back from your homeserver; use your recovery key afterwards to read older encrypted messages.")
+        }
+    }
+
+    private func resetLocalDataAndLogin() {
+        guard let request = storeResetRequest else { return }
+        state = .loading
+        Task {
+            do {
+                try await environment.auth.resetLocalData(for: request)
+            } catch {
+                await MainActor.run {
+                    state = .failed("Synara could not reset local data. Try again.")
+                    environment.logger.error("Local data reset failed", category: .auth)
+                }
+                return
+            }
+            await MainActor.run {
+                storeResetRequest = nil
+                environment.logger.info("Local data reset before sign-in", category: .auth)
+                login()
+            }
+        }
     }
 
     private func login() {
         state = .loading
+        storeResetRequest = nil
 
         guard let homeserverURL = URL(string: homeserverURLString) else {
             state = .failed(HomeserverDiscoveryError.invalidURL.localizedDescription)
@@ -103,6 +146,7 @@ struct LoginView: View {
                 }
             } catch let error as LoginError {
                 await MainActor.run {
+                    storeResetRequest = error == .localDataUnreadable ? request : nil
                     state = .failed(error.localizedDescription)
                     environment.logger.error("Password login failed: \(error.localizedDescription)", category: .auth)
                 }

@@ -1142,11 +1142,16 @@ impl CoreState {
     }
 
     /// Typed `matrix_crypto_status`: the validated public crypto observation.
+    ///
+    /// Like `secret_storage_status`, the attached device owner answers first.
+    /// The iOS platform has no shell-owned session to observe, so without it
+    /// this read could never succeed there.
     pub(super) async fn public_crypto_status(&self) -> Result<MatrixCryptoStatus, MatrixIpcError> {
-        let status = self
-            .platform()
-            .crypto_status()
-            .await
+        let status = match self.device_owner()? {
+            Some(owner) => owner.crypto_status().await,
+            None => self.platform().crypto_status().await,
+        };
+        let status = status
             // A Platform crypto error is a closed enum. Never attach a shell
             // error, SDK diagnostic, identity, or key to the public command.
             .map_err(|_| core_state_error("p2-crypto-status-platform-unavailable"))?;
@@ -1236,16 +1241,18 @@ pub(super) fn matrix_crypto_status(
 /// `matrix_cross_signing_status` is a payload-free read observation. Core owns
 /// its registration, exact wire DTO, and legacy truth-table reconstruction;
 /// the Platform remains the sole owner of the Matrix SDK identity query and
-/// its client/crypto/store/network side effects.
+/// its client/crypto/store/network side effects. The attached device owner
+/// answers first, with the same projection and own-user query gate, so iOS
+/// (whose platform owns no session) gets a real status.
 /// Typed `matrix_cross_signing_status`.
 pub(super) async fn cross_signing_status(
     state: &Arc<CoreState>,
 ) -> Result<MatrixCrossSigningStatusResponse, MatrixIpcError> {
-    let status = state
-        .platform()
-        .cross_signing_status()
-        .await
-        .map_err(cross_signing_status_transport_error)?;
+    let status = match state.device_owner()? {
+        Some(owner) => owner.cross_signing_status().await,
+        None => state.platform().cross_signing_status().await,
+    };
+    let status = status.map_err(cross_signing_status_transport_error)?;
     let response = MatrixCrossSigningStatusResponse::from_platform(status)?;
     Ok(response)
 }

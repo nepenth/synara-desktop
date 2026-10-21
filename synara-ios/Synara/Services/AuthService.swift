@@ -27,6 +27,9 @@ enum LoginError: LocalizedError, Equatable {
     case unsupported
     case slidingSyncUnsupported
     case sessionPersistenceFailed
+    /// This account's encrypted data on the device exists but its key does
+    /// not (for example after restoring a backup to a new iPhone).
+    case localDataUnreadable
 
     var errorDescription: String? {
         switch self {
@@ -46,12 +49,24 @@ enum LoginError: LocalizedError, Equatable {
             return ServerCompatibilityCopy.slidingSyncUnsupported
         case .sessionPersistenceFailed:
             return "Could not save the session securely."
+        case .localDataUnreadable:
+            return "Synara can't open this account's saved data on this device, for example after restoring from a backup. Reset local data to sign in again."
         }
     }
 }
 
 protocol AuthServicing {
     func login(_ request: LoginRequest) async throws -> AuthenticatedSession
+    /// Delete this account's local store and its key after the user
+    /// confirmed a `.localDataUnreadable` reset. Other accounts stay.
+    func resetLocalData(for request: LoginRequest) async throws
+}
+
+extension AuthServicing {
+    func resetLocalData(for request: LoginRequest) async throws {
+        _ = request
+        throw LoginError.unsupported
+    }
 }
 
 struct PlaceholderAuthService: AuthServicing {

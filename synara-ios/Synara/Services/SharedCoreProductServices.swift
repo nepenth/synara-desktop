@@ -130,6 +130,8 @@ enum SharedCoreLoginErrorMapping {
             return .unsupported
         case "p4-s3c-sliding-sync-unsupported":
             return .slidingSyncUnsupported
+        case "p4-s3c-store-reset-required":
+            return .localDataUnreadable
         default:
             return .invalidCredentials
         }
@@ -165,6 +167,14 @@ struct SharedCoreAuthService: AuthServicing {
         } catch {
             throw SharedCoreLoginErrorMapping.loginError(for: error)
         }
+    }
+
+    func resetLocalData(for request: LoginRequest) async throws {
+        _ = try await host.core.resetLocalAccountStore(
+            userId: request.userID,
+            homeserverUrl: request.homeserverURL.absoluteString,
+            storeRoot: host.storeRoot.path
+        )
     }
 }
 
@@ -2680,16 +2690,18 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     }
 
     func sessionStatus() async -> SessionCryptoStatus {
-        let crypto = try? await SharedCoreLeftovers.cryptoStatus(core: host.core)
+        // Core answers cross-signing through the attached device owner (L11):
+        // the local identity, and at most one own-user key query a session.
+        let crossSigning = try? await SharedCoreLeftovers.crossSigningStatus(core: host.core)
         let backup = try? await SharedCoreLeftovers.backupStatus(core: host.core)
         let secretStorage = try? await SharedCoreSessionStatus.secretStorageStatus(core: host.core)
         let deviceSnapshot = try? await SharedCoreDevices.deviceSnapshot(core: host.core)
         let devices = deviceSnapshot?.devices ?? []
-        guard crypto != nil || backup != nil || secretStorage != nil || deviceSnapshot != nil else {
+        guard crossSigning != nil || backup != nil || secretStorage != nil || deviceSnapshot != nil else {
             return .unknown
         }
         let mapped = SharedCoreSessionCrypto.status(
-            crossSigningState: crypto?.crossSigningState,
+            crossSigningState: nil,
             backupEnabled: backup?.enabled,
             backupAvailability: backup?.availability,
             backupDeviceState: backup?.deviceState,
@@ -2716,8 +2728,91 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
             backup: mapped.backup,
             hasDevicesToVerifyAgainst: deviceSnapshot?.hasDevicesToVerifyAgainst,
             isLastDevice: devices.isEmpty ? nil : hasOtherDevices == false,
-            unableToDecryptCount: mapped.unableToDecryptCount
+            unableToDecryptCount: mapped.unableToDecryptCount,
+            crossSigning: SharedCoreSessionCrypto.crossSigning(crossSigning?.readiness),
+            recoverySetupAvailable: SharedCoreSessionCrypto.recoverySetupAvailable(secretStorage?.action)
         )
+    }
+
+    func startCrossSigningSetup() async -> CrossSigningSetupResult {
+        do {
+            let dto = try await SharedCoreBackupRestore.crossSigningSetup(core: host.core)
+            return Self.crossSigningSetupResult(dto.outcome)
+        } catch {
+            return Self.crossSigningSetupFailure(error)
+        }
+    }
+
+    func authenticateCrossSigningSetup(password: String) async -> CrossSigningSetupResult {
+        guard password.isEmpty == false else {
+            return .failed("Enter your account password.")
+        }
+        do {
+            let dto = try await SharedCoreBackupRestore.crossSigningSetupPassword(
+                core: host.core,
+                password: password
+            )
+            return Self.crossSigningSetupResult(dto.outcome)
+        } catch {
+            return Self.crossSigningSetupFailure(error)
+        }
+    }
+
+    func enableRecovery(passphrase: String) async -> RecoveryEnrollmentResult {
+        guard passphrase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+            return .failed("Choose a recovery passphrase.")
+        }
+        do {
+            let dto = try await SharedCoreBackupRestore.secretStorageBootstrap(
+                core: host.core,
+                passphrase: passphrase
+            )
+            guard let key = dto.recoveryKey else { return .alreadyEnabled }
+            return .enabled(recoveryKey: key)
+        } catch {
+            return Self.recoveryEnrollmentFailure(error)
+        }
+    }
+
+    static func crossSigningSetupResult(_ outcome: CrossSigningSetupOutcomeDto) -> CrossSigningSetupResult {
+        switch outcome {
+        case .complete, .alreadyConfigured:
+            return .ready
+        case .authenticationRequired:
+            return .passwordRequired
+        }
+    }
+
+    static func crossSigningSetupFailure(_ error: Error) -> CrossSigningSetupResult {
+        guard case let SessionStatusError.Failed(code, _) = error else {
+            return .failed(RecoverySetupCopy.setupFailed)
+        }
+        switch code {
+        case "v-crypto.2-cross-signing-password-rejected":
+            return .passwordRejected
+        case "v-crypto.2-cross-signing-auth-unsupported":
+            return .failed("This homeserver asks for a sign-in step Synara cannot complete for device verification setup.")
+        case "v-crypto.2-cross-signing-partial-private-identity":
+            return .failed("This device has only part of your cross-signing identity. Verify it with another device or recover with your recovery key.")
+        default:
+            return .failed(RecoverySetupCopy.setupFailed)
+        }
+    }
+
+    static func recoveryEnrollmentFailure(_ error: Error) -> RecoveryEnrollmentResult {
+        guard case let SessionStatusError.Failed(code, _) = error else {
+            return .failed(RecoverySetupCopy.enrollmentFailed)
+        }
+        switch code {
+        case "v-crypto.4-bootstrap-existing-backup":
+            return .failed("This account already has a key backup. Use Recover Keys with its recovery key instead.")
+        case "v-crypto.4-bootstrap-cross-signing-required":
+            return .failed("Set up device verification first so its identity can be protected by secret storage.")
+        case "v-crypto.4-operation-incomplete", "v-crypto.4-passphrase-not-configured":
+            return .failed("Recovery was only partly set up. Synara will not enrol again automatically; use Recover Keys or set it up from another device.")
+        default:
+            return .failed(RecoverySetupCopy.enrollmentFailed)
+        }
     }
 
     func verificationUpdates() -> AsyncStream<CryptoVerificationSnapshot?> {

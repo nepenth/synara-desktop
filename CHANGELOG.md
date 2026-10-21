@@ -61,6 +61,10 @@
 - Desktop: downloads go to your Downloads folder as your desktop names it (for example `~/Téléchargements`), not a new English `~/Downloads`.
 - Desktop: a file dropped on the thread pane attaches to the thread's composer and one dropped on the room attaches to the room's, once, and only that composer shows the drop overlay. A dropped file over the upload limit says so at once instead of being read into memory first. Attachments and dropped files move between the app and its core as raw bytes, which is much faster and lighter for large files.
 - Desktop: a message that can't be opened (for example from a reply preview) reports why instead of "The native Matrix timeline request is invalid", and creating a room while the server is rate-limiting or refusing says so instead of a generic failure.
+- Encryption: signing in to an account that has no cross-signing identity yet now creates one on that device, on desktop and iOS, so the device is cross-signed as Element's clients will soon require. Synara uses the password you just signed in with when the server asks for it, and never replaces an identity another device already published.
+- iOS: Settings → Security can set up recovery on an account's first device. Set Up Recovery creates the cross-signing identity (asking for your account password when the server wants it), then turns on secret storage and key backup with a recovery passphrase and shows the recovery key once, with a Copy button; the copy stays on this iPhone and expires after two minutes. Security now shows Cross-Signing, and both apps refuse to enrol again over a partial or existing setup. A cancelled or refused password step can be finished later from the same screen.
+- iOS: after restoring an iPhone backup to a new device, signing in no longer fails with "The username or password is incorrect". Synara says it can't open this account's saved data and offers Reset Local Data, which removes only that account's local data and signs in again.
+- Verification: closing a session no longer leaves its verification listeners behind, so a re-opened session no longer handles each verification event twice.
 
 ## [2.2.6] - 2026-10-12
 
