@@ -57,7 +57,7 @@ impl<R: Runtime> Platform for TauriPlatform<R> {
 
     /// Use the established desktop product identity for core HTTP probes.
     fn http_user_agent(&self) -> String {
-        crate::matrix::client_builder::default_user_agent()
+        crate::matrix::client_builder::desktop_user_agent()
     }
 
     /// Observe sync through the shell-owned Matrix session. The local snapshot

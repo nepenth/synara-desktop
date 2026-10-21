@@ -47,13 +47,29 @@ fn desktop_manifest_never_requests_automatic_room_key_forwarding() {
 }
 
 #[test]
-fn default_user_agent_includes_product_and_sdk_pin() {
-    let ua = default_user_agent();
-    assert!(ua.contains("Synara-Desktop/"), "{ua}");
-    assert!(
-        ua.contains(&format!("(matrix-sdk/{MATRIX_SDK_PIN_VERSION})")),
-        "{ua}"
+fn desktop_user_agent_names_the_app_version_and_sdk_pin() {
+    let ua = super::desktop_user_agent();
+    assert_eq!(
+        ua,
+        format!(
+            "Synara-Desktop/{} (matrix-sdk/{MATRIX_SDK_PIN_VERSION})",
+            env!("CARGO_PKG_VERSION")
+        )
     );
+    // Core's fallback carries the crate version and must not pose as the app.
+    assert!(default_user_agent().starts_with("Synara-Core/"));
+
+    let identity =
+        synara_core::app::store::AccountIdentity::new("@alice:example.org", "https://example.org")
+            .unwrap();
+    let config = super::desktop_client_config(
+        std::path::Path::new("/tmp/synara-desktop-ua-test"),
+        identity,
+        None,
+    )
+    .unwrap();
+    assert_eq!(config.plan().user_agent, ua);
+    assert_eq!(config.store_footprint(), StoreFootprint::Standard);
 }
 
 #[test]

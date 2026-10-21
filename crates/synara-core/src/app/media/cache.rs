@@ -36,8 +36,13 @@ use super::bounded::{
 };
 use crate::app::media_cache::MEDIA_STORE_MAX_FILE_BYTES;
 
-/// Total in-memory budget for hot media bytes.
+/// Total in-memory budget for hot media bytes. iOS terminates a suspended app
+/// that holds too much memory, so it keeps less; the SQLite media store
+/// still serves everything the hot layer drops.
+#[cfg(not(target_os = "ios"))]
 pub const HOT_MEDIA_CACHE_MAX_BYTES: usize = 64 * 1024 * 1024;
+#[cfg(target_os = "ios")]
+pub const HOT_MEDIA_CACHE_MAX_BYTES: usize = 24 * 1024 * 1024;
 /// Larger items (video, big files) are served from the store or the network
 /// rather than pinned in memory.
 pub const HOT_MEDIA_CACHE_MAX_ITEM_BYTES: usize = 8 * 1024 * 1024;
@@ -114,6 +119,21 @@ impl HotMediaCache {
         self.total_bytes = 0;
     }
 
+    /// Drop every entry whose key starts with `prefix` (one account's scope).
+    pub fn remove_prefix(&mut self, prefix: &str) {
+        let mut removed = 0;
+        self.entries.retain(|key, (_, bytes)| {
+            let keep = !key.starts_with(prefix);
+            if !keep {
+                removed += bytes.len();
+            }
+            keep
+        });
+        self.total_bytes -= removed;
+        let entries = &self.entries;
+        self.order.retain(|(_, key)| entries.contains_key(key));
+    }
+
     pub fn total_bytes(&self) -> usize {
         self.total_bytes
     }
@@ -147,26 +167,75 @@ fn hot_cache() -> &'static Mutex<HotMediaCache> {
     })
 }
 
-/// Forget every hot media entry. Called when a session closes so decrypted
-/// bytes do not outlive the account that could read them.
+/// Forget every hot media entry, for every account in the process. iOS calls
+/// it on a memory warning.
 pub fn clear_hot_media_cache() {
     if let Ok(mut cache) = hot_cache().lock() {
         cache.clear();
     }
 }
 
-/// In-memory key: homeserver, user, complete source and format. The encrypted
+/// Forget one account's hot media entries. Called when its session closes,
+/// so decrypted bytes do not outlive the account that could read them, and
+/// when iOS suspends it. Other accounts' entries (another `Core` in the same
+/// process, or a parallel test) stay.
+pub fn clear_hot_media_cache_for_user(user_id: &str) {
+    if user_id.is_empty() {
+        return;
+    }
+    if let Ok(mut cache) = hot_cache().lock() {
+        cache.remove_prefix(&hot_scope(user_id));
+    }
+}
+
+/// [`clear_hot_media_cache_for_user`] for the account `client` is signed in as.
+pub fn clear_hot_media_cache_for_client(client: &Client) {
+    if let Some(user_id) = client.user_id() {
+        clear_hot_media_cache_for_user(user_id.as_str());
+    }
+}
+
+/// Every key of one account starts with this. The separator cannot occur in
+/// a Matrix user ID, so one account's scope never prefixes another's.
+fn hot_scope(user_id: &str) -> String {
+    format!("{user_id}\u{1f}")
+}
+
+/// In-memory key: user, homeserver, complete source and format. The encrypted
 /// source contributes its key, IV and hashes so plaintext is never shared by
 /// two events that merely reuse one URL.
 fn hot_key(client: &Client, request: &MediaRequestParameters) -> Option<String> {
     let user_id = client.user_id()?;
     let source = serde_json::to_string(&request.source).ok()?;
     Some(format!(
-        "{}\u{1f}{user_id}\u{1f}{source}\u{1f}{}",
+        "{}{}\u{1f}{source}\u{1f}{}",
+        hot_scope(user_id.as_str()),
         client.homeserver(),
         request.format.unique_key()
     ))
 }
+
+#[cfg(test)]
+pub(crate) fn hot_media_cache_insert_for_test(user_id: &str, name: &str, bytes: Vec<u8>) {
+    hot_cache()
+        .lock()
+        .unwrap()
+        .insert(format!("{}{name}", hot_scope(user_id)), bytes);
+}
+
+#[cfg(test)]
+pub(crate) fn hot_media_cache_contains_for_test(user_id: &str, name: &str) -> bool {
+    hot_cache()
+        .lock()
+        .unwrap()
+        .entries
+        .contains_key(&format!("{}{name}", hot_scope(user_id)))
+}
+
+/// Serializes the tests that clear the whole process-wide cache with the
+/// tests that expect another account's entries to survive.
+#[cfg(test)]
+pub(crate) static HOT_MEDIA_CACHE_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 /// Synthetic server name for ciphertext store keys. `.invalid` cannot resolve,
 /// so no real event can name media there.
@@ -348,6 +417,33 @@ mod tests {
         cache.clear();
         assert!(cache.is_empty());
         assert_eq!(cache.total_bytes(), 0);
+    }
+
+    #[test]
+    fn remove_prefix_drops_one_scope_and_keeps_the_budget_exact() {
+        let mut cache = HotMediaCache::new(64, 16);
+        cache.insert(format!("{}a", hot_scope("@alice:x")), vec![1; 4]);
+        cache.insert(format!("{}b", hot_scope("@alice:x")), vec![2; 4]);
+        cache.insert(format!("{}a", hot_scope("@alice:xy")), vec![3; 4]);
+        cache.insert(format!("{}a", hot_scope("@bob:x")), vec![4; 4]);
+        cache.remove_prefix(&hot_scope("@alice:x"));
+        assert_eq!(cache.len(), 2, "@alice:xy is another account");
+        assert_eq!(cache.total_bytes(), 8);
+        assert!(cache.order.len() <= cache.len());
+        assert_eq!(
+            cache.get(&format!("{}a", hot_scope("@alice:xy"))),
+            Some(vec![3; 4])
+        );
+    }
+
+    #[test]
+    fn hot_media_budget_is_smaller_on_ios() {
+        if cfg!(target_os = "ios") {
+            assert_eq!(HOT_MEDIA_CACHE_MAX_BYTES, 24 * 1024 * 1024);
+        } else {
+            assert_eq!(HOT_MEDIA_CACHE_MAX_BYTES, 64 * 1024 * 1024);
+        }
+        const { assert!(HOT_MEDIA_CACHE_MAX_ITEM_BYTES < HOT_MEDIA_CACHE_MAX_BYTES) };
     }
 
     #[test]

@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 @testable import Synara
 import SynaraCore
@@ -355,6 +356,60 @@ final class SynaraCoreBindingsTests: XCTestCase {
         await service.pauseForBackground()
 
         XCTAssertEqual(service.syncStatus, .stopped)
+    }
+
+    /// I23: the apply chain, the status watch, path monitor start/stop and
+    /// the main thread all touch the service's state. Run them together (and
+    /// under Thread Sanitizer) and read `syncStatus` throughout.
+    func testSharedCoreClientServiceStateSurvivesConcurrentLifecycleCalls() async throws {
+        let host = SharedCoreProductHost(
+            core: SharedCore.newForApp(store: InMemoryIosSecretVault(), appVersion: "2.2.6"),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreMatrixClientService(host: host)
+        let session = AuthenticatedSession(
+            userID: "@alice:example.org",
+            deviceID: "DEVICE",
+            homeserverURL: try XCTUnwrap(URL(string: "https://matrix.example.org")),
+            accessToken: "syt_secret_token"
+        )
+        let reads = Task.detached {
+            for _ in 0..<500 {
+                _ = service.syncStatus.description
+                _ = service.isMonitoringPath
+            }
+        }
+        await withTaskGroup(of: Void.self) { group in
+            for round in 0..<20 {
+                group.addTask {
+                    switch round % 4 {
+                    case 0: await service.resumeFromForeground(session: session)
+                    case 1: await service.pauseForBackground()
+                    case 2: service.setForegroundActive(true)
+                    default: await service.stop()
+                    }
+                }
+            }
+        }
+        await reads.value
+        await service.stop()
+        XCTAssertEqual(service.syncStatus, .stopped)
+        XCTAssertFalse(service.isMonitoringPath)
+    }
+
+    /// L14: a memory warning hands Core's decrypted media back.
+    func testMemoryWarningReleasesCoreMemory() {
+        let center = NotificationCenter()
+        let released = expectation(description: "released")
+        let token = SharedCoreMemoryPressure.observe(center: center) {
+            released.fulfill()
+        }
+        center.post(name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
+        wait(for: [released], timeout: 1)
+        center.removeObserver(token)
+        // The real export is safe to call without a session.
+        SharedCore.newForApp(store: InMemoryIosSecretVault(), appVersion: "2.2.6").releaseCachedMemory()
     }
 
     func testSharedCoreSessionStopDoesNotRevokeForegroundAuthorityForRelogin() async throws {

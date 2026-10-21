@@ -79,6 +79,8 @@ pub struct NsePreviewRequest {
     store_root: String,
     room_id: String,
     event_id: String,
+    /// The app's short version, for the `Synara-iOS-NSE/<version>` User-Agent.
+    app_version: String,
     cancellation: CancellationToken,
     started: AtomicBool,
 }
@@ -128,6 +130,7 @@ impl NsePreviewRequest {
         store_root: String,
         room_id: String,
         event_id: String,
+        app_version: String,
     ) -> Self {
         install_nse_ffi_runtime();
         Self {
@@ -137,6 +140,7 @@ impl NsePreviewRequest {
             store_root,
             room_id,
             event_id,
+            app_version,
             cancellation: CancellationToken::new(),
             started: AtomicBool::new(false),
         }
@@ -159,6 +163,7 @@ impl NsePreviewRequest {
                 &self.store_root,
                 &self.room_id,
                 &self.event_id,
+                &self.app_version,
             )
             .await
             .map_err(map_core_error)?;

@@ -166,6 +166,7 @@ final class AppEnvironmentTests: XCTestCase {
     func testSharedCoreLoginErrorMappingDoesNotMislabelVaultFailureAsBadCredentials() {
         XCTAssertEqual(
             SharedCoreLoginErrorMapping.loginError(for: SessionLoginError.Failed(
+                kind: .terminal,
                 code: "p4-s3c-secret-vault-unavailable",
                 description: "The secret store is unavailable."
             )),
@@ -174,6 +175,7 @@ final class AppEnvironmentTests: XCTestCase {
         // Unclassified is a generic failure, not "incorrect password" (L8).
         XCTAssertEqual(
             SharedCoreLoginErrorMapping.loginError(for: SessionLoginError.Failed(
+                kind: .terminal,
                 code: "p4-s3c-login-failed",
                 description: "The session could not be authenticated."
             )),
@@ -196,7 +198,7 @@ final class AppEnvironmentTests: XCTestCase {
         ]
         for (code, expected) in cases {
             let error = SharedCoreLoginErrorMapping.loginError(
-                for: SessionLoginError.Failed(code: code, description: "static")
+                for: SessionLoginError.Failed(kind: .terminal, code: code, description: "static")
             )
             XCTAssertEqual(error, expected, code)
             if expected != .invalidCredentials {
@@ -213,6 +215,7 @@ final class AppEnvironmentTests: XCTestCase {
 
     func testSharedCoreLoginErrorMappingNamesAServerWithoutSlidingSync() {
         let error = SharedCoreLoginErrorMapping.loginError(for: SessionLoginError.Failed(
+                kind: .terminal,
             code: "p4-s3c-sliding-sync-unsupported",
             description: "The homeserver does not support simplified sliding sync (MSC4186)."
         ))

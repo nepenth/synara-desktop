@@ -24,6 +24,7 @@ extension ComposerDraftStatusDto: Sendable
 extension ComposerReplyDraftDto: Sendable
 extension ComposerReplyDraftError: Sendable
 extension ComposerReplyDraftPreviewDto: Sendable
+extension CoreErrorKind: Sendable
 extension CrossSigningReadinessDto: Sendable
 extension CrossSigningSetupDto: Sendable
 extension CrossSigningSetupOutcomeDto: Sendable
@@ -369,6 +370,7 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func reactionRedact(roomId: String, targetEventId: String, reactionEventId: String, key: String) async throws -> TimelineReactionMutationDto
   open func recover(recoveryKey: String) async throws -> LeftoverAckDto
   open func registerHttpPusher(pushKey: String, appId: String, gatewayUrl: String, appDisplayName: String, lang: String) async throws -> PusherWriteDto
+  open func releaseCachedMemory()
   open func resetLocalAccountStore(userId: String, homeserverUrl: String, storeRoot: String) async throws -> LeftoverAckDto
   open func resolveRoomIdentityWarning(roomId: String, userId: String, action: IdentityWarningActionDto) async throws -> RoomIdentityWarningsDto
   open func restartSync() async throws -> SyncStartDto
@@ -483,6 +485,7 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func verificationStart(deviceId: String?) async throws -> VerificationRequestDto
   open func wipePersistedStores(storeRoot: String) async throws -> LeftoverAckDto
   public convenience init()
+  public static func newForApp(store: IosSecretVault, appVersion: String) -> SharedCore
   public static func newWithSecretStore(store: IosSecretVault) -> SharedCore
 public enum AgentApprovalDecisionStatusDto: Equatable, Hashable
   case applied
@@ -537,6 +540,11 @@ public enum ComposerDraftStatusDto: Equatable, Hashable
 public enum ComposerReplyDraftError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum CoreErrorKind: Equatable, Hashable
+  case retryable
+  case notReady
+  case actionRequired
+  case terminal
 public enum CrossSigningReadinessDto: Equatable, Hashable
   case unavailable
   case setupRequired
@@ -619,7 +627,7 @@ public enum LeftoverAckStatusDto: Equatable, Hashable
   case retired
   case loggedOut
 public enum LeftoverCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
-  case Failed(code: String, description: String)
+  case Failed(kind: CoreErrorKind, code: String, description: String)
   public var errorDescription: String?
 public enum LoginFlowsError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case ProbeFailed(category: String, code: String, description: String)
@@ -763,13 +771,13 @@ public enum SendStatusDto: Equatable, Hashable
   case sent
   case queued
 public enum SendTextError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
-  case Failed(code: String, description: String)
+  case Failed(kind: CoreErrorKind, code: String, description: String)
   public var errorDescription: String?
 public enum SessionAttachError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
-  case Failed(code: String, description: String)
+  case Failed(kind: CoreErrorKind, code: String, description: String)
   public var errorDescription: String?
 public enum SessionLoginError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
-  case Failed(code: String, description: String)
+  case Failed(kind: CoreErrorKind, code: String, description: String)
   public var errorDescription: String?
 public enum SessionProjectionError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Rejected(code: String, description: String)
@@ -787,13 +795,13 @@ public enum SessionProjectionLifecycle: Equatable, Hashable
   case failed
   case wiping
 public enum SessionRestoreError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
-  case Failed(code: String, description: String)
+  case Failed(kind: CoreErrorKind, code: String, description: String)
   public var errorDescription: String?
 public enum SessionStatusDto: Equatable, Hashable
   case loggedOut
   case loggedIn
 public enum SessionStatusError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
-  case Failed(code: String, description: String)
+  case Failed(kind: CoreErrorKind, code: String, description: String)
   public var errorDescription: String?
 public enum SpaceCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
@@ -806,10 +814,10 @@ public enum SyncReadinessDto: Equatable, Hashable
   case terminated
   case failed
 public enum SyncStartError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
-  case Failed(code: String, description: String)
+  case Failed(kind: CoreErrorKind, code: String, description: String)
   public var errorDescription: String?
 public enum SyncStopError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
-  case Failed(code: String, description: String)
+  case Failed(kind: CoreErrorKind, code: String, description: String)
   public var errorDescription: String?
 public enum ThreepidAddStatusDto: Equatable, Hashable
   case ok
@@ -1043,6 +1051,7 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func reactionRedact(roomId: String, targetEventId: String, reactionEventId: String, key: String) async throws -> TimelineReactionMutationDto
   func recover(recoveryKey: String) async throws -> LeftoverAckDto
   func registerHttpPusher(pushKey: String, appId: String, gatewayUrl: String, appDisplayName: String, lang: String) async throws -> PusherWriteDto
+  func releaseCachedMemory()
   func resetLocalAccountStore(userId: String, homeserverUrl: String, storeRoot: String) async throws -> LeftoverAckDto
   func resolveRoomIdentityWarning(roomId: String, userId: String, action: IdentityWarningActionDto) async throws -> RoomIdentityWarningsDto
   func restartSync() async throws -> SyncStartDto

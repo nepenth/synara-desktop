@@ -372,7 +372,7 @@ final class RecoverySetupFlowTests: XCTestCase {
             .passwordRequired
         )
         func failure(_ code: String) -> SessionStatusError {
-            .Failed(code: code, description: "static")
+            .Failed(kind: .terminal, code: code, description: "static")
         }
         XCTAssertEqual(
             SharedCoreCryptoStatusService.crossSigningSetupFailure(
@@ -405,7 +405,7 @@ final class RecoverySetupFlowTests: XCTestCase {
     func testUnreadableLocalDataIsNotReportedAsBadCredentials() {
         XCTAssertEqual(
             SharedCoreLoginErrorMapping.loginError(
-                for: SessionLoginError.Failed(code: "p4-s3c-store-reset-required", description: "static")
+                for: SessionLoginError.Failed(kind: .actionRequired, code: "p4-s3c-store-reset-required", description: "static")
             ),
             .localDataUnreadable
         )

@@ -4,7 +4,7 @@ extension NseSecretVaultError: Sendable
 open class NsePreviewRequest: NsePreviewRequestProtocol, @unchecked Sendable
   open func cancel()
   open func resolve() async throws -> NsePreviewDto
-  public convenience init(store: NseSecretVault, userId: String, homeserverUrl: String, storeRoot: String, roomId: String, eventId: String)
+  public convenience init(store: NseSecretVault, userId: String, homeserverUrl: String, storeRoot: String, roomId: String, eventId: String, appVersion: String)
 public enum NseCoreError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?

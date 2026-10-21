@@ -10,8 +10,9 @@ mod features;
 mod open;
 
 pub use config::{
-    default_user_agent, ClientBuildConfig, ClientBuildPlan, HomeserverMode, NetworkPolicy,
-    TimeoutPolicy, DEFAULT_REQUEST_TIMEOUT_SECS, DEFAULT_RETRY_LIMIT,
+    default_user_agent, product_user_agent, ClientBuildConfig, ClientBuildPlan, ClientProduct,
+    HomeserverMode, NetworkPolicy, StoreFootprint, TimeoutPolicy, DEFAULT_REQUEST_TIMEOUT_SECS,
+    DEFAULT_RETRY_LIMIT,
 };
 pub use error::{ClientBuilderError, FactoryError};
 pub use features::{

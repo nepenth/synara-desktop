@@ -4,6 +4,9 @@
 //! Credentials use dedicated zeroizing arguments; generic command envelopes
 //! never carry recovery secrets. Narrow NSE product builds use synara-nse-core.
 
+mod error_kind;
+use error_kind::SEND_ROOM_NOT_FOUND_CODE;
+pub use error_kind::{CoreErrorKind, TypedFfiError};
 mod wire_enum;
 mod write_status;
 pub use write_status::*;
@@ -51,9 +54,9 @@ use crate::app::devices::{
     NativeDeviceSnapshot, NativeDeviceTrust, NativeDeviceUpdateSignal,
 };
 use crate::app::lifecycle::{
-    persist_session_after_login, restore_session_from_vault,
-    restore_session_from_vault_with_room_load_settings, restore_session_onto_client,
-    SessionMaterial, SessionMaterialId, SessionMaterialVault,
+    persist_session_after_login, restore_session_onto_client,
+    restore_session_onto_client_with_room_load_settings, SessionMaterial, SessionMaterialId,
+    SessionMaterialVault,
 };
 use crate::app::media_cache::NativeMediaRetentionOwner;
 use crate::app::notifications::NativeHttpPusherOwner;
@@ -641,6 +644,8 @@ const SESSION_STATUS_OWNER_DESCRIPTION: &str = "The session or status request is
 pub struct SharedCore {
     core: Core,
     secret_store: Arc<dyn SecretVault + Send + Sync>,
+    /// User-Agent of every SDK client this Core builds.
+    user_agent: String,
     restored_client: Mutex<RestoredClientSlot>,
     owner_attach: Mutex<OwnerAttachSlot>,
     /// Serializes the complete SyncService/Client lifecycle transaction.
@@ -659,7 +664,7 @@ pub struct SharedCore {
     /// process must not reuse the generation a retired session carried.
     generations: crate::app::lifecycle::session::SessionGenerations,
     /// Backoff for re-saving tokens after a failed rotation save.
-    maintenance: Mutex<crate::app::lifecycle::session::SessionMaintenance>,
+    maintenance: Arc<Mutex<crate::app::lifecycle::session::SessionMaintenance>>,
     /// The generation (and account) whose sync reported a rejected refresh.
     /// Latched when observed so retirement does not depend on the live sync
     /// owner still existing, or still reporting, after the shell stops it.

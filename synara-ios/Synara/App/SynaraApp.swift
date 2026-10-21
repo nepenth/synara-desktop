@@ -291,6 +291,10 @@ final class SynaraBackgroundSyncCoordinator {
     }
 }
 
+/// Main-actor isolated: UIKit calls it on the main thread, but its async
+/// notification-center callbacks used to run on whatever thread resumed
+/// them and read and wrote `foregroundActive` and the pending response there.
+@MainActor
 final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     private var push: PushServicing?
     private var matrix: MatrixClientServicing?

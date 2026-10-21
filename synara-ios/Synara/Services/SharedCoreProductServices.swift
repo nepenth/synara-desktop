@@ -1,6 +1,27 @@
 import Foundation
 import Network
 import SynaraCore
+#if canImport(UIKit)
+import UIKit
+#endif
+
+/// Hands rebuildable memory back to Core when iOS warns about memory: the
+/// decrypted media cache, which Core refills from its encrypted store.
+enum SharedCoreMemoryPressure {
+    static func observe(
+        center: NotificationCenter = .default,
+        release: @escaping @Sendable () -> Void
+    ) -> NSObjectProtocol {
+        #if canImport(UIKit)
+        let name = UIApplication.didReceiveMemoryWarningNotification
+        #else
+        let name = Notification.Name("SynaraMemoryWarning")
+        #endif
+        return center.addObserver(forName: name, object: nil, queue: nil) { _ in
+            release()
+        }
+    }
+}
 
 /// Caller-owned SharedCore used by live product services after S10 leftover retirement.
 /// UniFFI must not construct-and-drop this instance.
@@ -123,7 +144,7 @@ final class SharedCoreProductHost {
 /// a generic failure rather than "incorrect password".
 enum SharedCoreLoginErrorMapping {
     static func loginError(for error: Error) -> LoginError {
-        guard case let SessionLoginError.Failed(code, _) = error else {
+        guard let code = (error as? SessionLoginError)?.coreErrorCode else {
             return .signInFailed
         }
         switch code {
@@ -417,6 +438,9 @@ enum SharedCoreSyncReconnect {
 final class SharedCoreMatrixClientService: MatrixClientServicing {
     private let host: SharedCoreProductHost
     private let connectionStatus: ConnectionStatusStore
+    /// Guards every mutable property below. The apply chain, the status
+    /// watch, path updates, retirement and the main thread all read and write
+    /// them; none of them holds the lock across an `await`.
     private let applyLock = NSLock()
     private var applyChain: Task<Void, Never> = Task {}
     /// Fail closed until the app delegate binds UIKit's actual state. This
@@ -431,17 +455,29 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     /// or has finished. Cleared only after a failed sign-out so a later poll
     /// may retry.
     private var retiringAuthenticationGeneration: UInt64?
-    private(set) var syncStatus: MatrixSyncStatus = .stopped
-    private static let syncNotAttachedCode = "p4-s12-sync-not-attached"
+    private var currentSyncStatus: MatrixSyncStatus = .stopped
     /// Suspended while the stores are closed for background, so rooms and
     /// timelines opened meanwhile wait for the resume instead of failing.
     private let sessionReadiness: SignedInSessionReadinessServicing
     /// Applies path updates one at a time, in delivery order.
     private var pathSequencer: ConnectionPathSequencer?
 
+    /// Read on the main thread (session coordinator, app shell) while the
+    /// apply chain and the status watch publish it, so it is read under
+    /// `applyLock`: a torn `.failed(String)` could crash.
+    var syncStatus: MatrixSyncStatus {
+        applyLock.withLock { currentSyncStatus }
+    }
+
     var syncStatusDescription: String {
         syncStatus.description
     }
+
+    private func setLastSession(_ session: AuthenticatedSession?) {
+        applyLock.withLock { lastSession = session }
+    }
+
+    private var memoryWarningObserver: NSObjectProtocol?
 
     init(
         host: SharedCoreProductHost,
@@ -451,6 +487,16 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         self.host = host
         self.connectionStatus = connectionStatus
         self.sessionReadiness = sessionReadiness
+        let core = host.core
+        memoryWarningObserver = SharedCoreMemoryPressure.observe {
+            core.releaseCachedMemory()
+        }
+    }
+
+    deinit {
+        if let memoryWarningObserver {
+            NotificationCenter.default.removeObserver(memoryWarningObserver)
+        }
     }
 
     func start(session: AuthenticatedSession) async {
@@ -550,12 +596,12 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         do {
             let stopped = try await SharedCoreSyncStop.stopSync(core: host.core)
             if clearLastSession {
-                lastSession = nil
+                setLastSession(nil)
             }
             await publish(stopped.stopped ? .stopped : .failed("Native sync did not stop"))
-        } catch let SyncStopError.Failed(code, _) where code == Self.syncNotAttachedCode {
+        } catch let error as SyncStopError where error.coreErrorKind == .notReady {
             if clearLastSession {
-                lastSession = nil
+                setLastSession(nil)
             }
             // A cold background launch has no native owners or open stores to
             // quiesce. Preserve the fail-closed state instead of inventing a
@@ -563,14 +609,14 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
             await publish(.stopped)
         } catch {
             if clearLastSession {
-                lastSession = nil
+                setLastSession(nil)
             }
             await publish(.failed("Native sync stop failed"))
         }
     }
 
     private func applyLiveSession(_ session: AuthenticatedSession) async {
-        lastSession = session
+        setLastSession(session)
         await publish(.starting)
         let outcome = await SharedCoreSessionBootstrap.prepareLiveSession(
             userID: session.userID,
@@ -603,23 +649,28 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     }
 
     private func startStatusWatch() {
-        if statusWatchTask != nil {
-            return
-        }
-        statusWatchTask = Task { [weak self] in
-            while Task.isCancelled == false {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                guard Task.isCancelled == false else {
-                    return
+        applyLock.withLock {
+            guard statusWatchTask == nil else {
+                return
+            }
+            statusWatchTask = Task { [weak self] in
+                while Task.isCancelled == false {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    guard Task.isCancelled == false else {
+                        return
+                    }
+                    await self?.refreshLiveSyncStatus()
                 }
-                await self?.refreshLiveSyncStatus()
             }
         }
     }
 
     private func stopStatusWatch() {
-        statusWatchTask?.cancel()
-        statusWatchTask = nil
+        let watch: Task<Void, Never>? = applyLock.withLock {
+            defer { statusWatchTask = nil }
+            return statusWatchTask
+        }
+        watch?.cancel()
     }
 
     private func refreshLiveSyncStatus() async {
@@ -631,7 +682,8 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
             return
         }
         connectionStatus.updateSlidingSyncCapability(dto.slidingSyncCapable)
-        switch syncStatus {
+        let previous = syncStatus
+        switch previous {
         case .restoreFailed, .stopped:
             return
         default:
@@ -640,7 +692,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         await publish(
             ConnectionStatusCopy.fromReadiness(
                 dto.readiness,
-                previous: syncStatus,
+                previous: previous,
                 commandGate: dto.commandGate
             )
         )
@@ -682,7 +734,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
             guard let self else {
                 return
             }
-            self.lastSession = nil
+            self.setLastSession(nil)
             switch outcome {
             case .retired, .signedOutCredentialsKept:
                 self.stopStatusWatch()
@@ -699,35 +751,50 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     }
 
     private func publish(_ status: MatrixSyncStatus) async {
-        syncStatus = status
+        applyLock.withLock { currentSyncStatus = status }
         await MainActor.run {
             connectionStatus.update(status)
         }
     }
 
+    /// Started and stopped from the apply chain, background pause, the
+    /// retirement task and background mutations, so the monitor and its
+    /// sequencer are installed and removed together under `applyLock`.
     private func startPathMonitor() {
-        if pathMonitor != nil {
-            return
+        applyLock.withLock {
+            guard pathMonitor == nil else {
+                return
+            }
+            // One consumer, so updates apply in delivery order and a restart
+            // finishes before the next update is judged against it.
+            let sequencer = ConnectionPathSequencer { [weak self] previous, path in
+                await self?.handlePath(path, previous: previous)
+            }
+            let monitor = NWPathMonitor()
+            monitor.pathUpdateHandler = { path in
+                sequencer.receive(ConnectionPathSnapshot(path))
+            }
+            pathMonitor = monitor
+            pathSequencer = sequencer
+            monitor.start(queue: pathQueue)
         }
-        // One consumer, so updates apply in delivery order and a restart
-        // finishes before the next update is judged against it.
-        let sequencer = ConnectionPathSequencer { [weak self] previous, path in
-            await self?.handlePath(path, previous: previous)
-        }
-        let monitor = NWPathMonitor()
-        monitor.pathUpdateHandler = { path in
-            sequencer.receive(ConnectionPathSnapshot(path))
-        }
-        monitor.start(queue: pathQueue)
-        pathMonitor = monitor
-        pathSequencer = sequencer
     }
 
     private func stopPathMonitor() {
-        pathMonitor?.cancel()
-        pathMonitor = nil
-        pathSequencer?.finish()
-        pathSequencer = nil
+        let (monitor, sequencer): (NWPathMonitor?, ConnectionPathSequencer?) = applyLock.withLock {
+            defer {
+                pathMonitor = nil
+                pathSequencer = nil
+            }
+            return (pathMonitor, pathSequencer)
+        }
+        monitor?.cancel()
+        sequencer?.finish()
+    }
+
+    /// Whether a path monitor is installed. Tests only.
+    var isMonitoringPath: Bool {
+        applyLock.withLock { pathMonitor != nil && pathSequencer != nil }
     }
 
     private func handlePath(_ path: ConnectionPathSnapshot, previous: ConnectionPathSnapshot?) async {
@@ -2799,7 +2866,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     }
 
     static func crossSigningSetupFailure(_ error: Error) -> CrossSigningSetupResult {
-        guard case let SessionStatusError.Failed(code, _) = error else {
+        guard let code = (error as? SessionStatusError)?.coreErrorCode else {
             return .failed(RecoverySetupCopy.setupFailed)
         }
         switch code {
@@ -2815,7 +2882,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     }
 
     static func recoveryEnrollmentFailure(_ error: Error) -> RecoveryEnrollmentResult {
-        guard case let SessionStatusError.Failed(code, _) = error else {
+        guard let code = (error as? SessionStatusError)?.coreErrorCode else {
             return .failed(RecoverySetupCopy.enrollmentFailed)
         }
         switch code {

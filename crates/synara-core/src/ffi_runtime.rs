@@ -42,6 +42,37 @@ pub fn ffi_runtime_builder(max_workers: usize) -> Builder {
     builder
 }
 
+/// Run a synchronous Keychain, keyring or file call that cannot be awaited,
+/// such as one inside an SDK callback.
+///
+/// On a multi-threaded runtime worker it uses `block_in_place`, so the
+/// runtime moves the worker's other tasks to another thread first. Anywhere
+/// else (a Swift thread polling an export, a blocking-pool thread, no
+/// runtime) it simply runs `operation`, which is already off the workers;
+/// a `current_thread` runtime cannot hand its tasks over, so it runs there
+/// as before.
+pub fn block_in_place_if_worker<T>(operation: impl FnOnce() -> T) -> T {
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) if handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread => {
+            tokio::task::block_in_place(operation)
+        }
+        _ => operation(),
+    }
+}
+
+/// Run blocking Keychain, file or SQLite-adjacent work on the blocking pool
+/// and await it, so it holds neither a runtime worker nor the Swift thread
+/// that polls the export. Without a runtime (plain unit tests) it runs
+/// inline. `None` only if the closure panicked.
+pub async fn run_blocking<T: Send + 'static>(
+    operation: impl FnOnce() -> T + Send + 'static,
+) -> Option<T> {
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => handle.spawn_blocking(operation).await.ok(),
+        Err(_) => Some(operation()),
+    }
+}
+
 /// Install the app's async-compat runtime builder. Idempotent; a no-op once
 /// any async export has run.
 #[cfg(feature = "full-uniffi")]
@@ -116,6 +147,58 @@ mod tests {
             workers.len() >= 2,
             "spawned SDK work must not share one OS thread"
         );
+    }
+
+    #[test]
+    fn blocking_helpers_run_off_the_async_workers_on_every_runtime_flavor() {
+        // A multi-threaded worker hands its other tasks over first.
+        let multi = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        let (inline, pooled) = multi.block_on(async {
+            tokio::spawn(async {
+                let worker = thread::current().id();
+                let inline = super::block_in_place_if_worker(|| thread::current().id());
+                let pooled = super::run_blocking(|| thread::current().id())
+                    .await
+                    .unwrap();
+                (inline == worker, pooled != worker)
+            })
+            .await
+            .unwrap()
+        });
+        assert!(inline, "block_in_place keeps the call on the same thread");
+        assert!(pooled, "run_blocking moves the call to the blocking pool");
+
+        // A current_thread runtime would panic in block_in_place.
+        let current = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let value = current.block_on(async {
+            let inline = super::block_in_place_if_worker(|| 7);
+            inline + super::run_blocking(|| 1).await.unwrap()
+        });
+        assert_eq!(value, 8);
+
+        // No runtime at all, and a Swift-polled export.
+        assert_eq!(super::block_in_place_if_worker(|| 3), 3);
+        super::install_app_ffi_runtime();
+        let swift = thread::spawn(|| {
+            poll_like_swift(async {
+                let poller = thread::current().id();
+                let inline = super::block_in_place_if_worker(|| thread::current().id());
+                let pooled = super::run_blocking(|| thread::current().id())
+                    .await
+                    .unwrap();
+                (inline == poller, pooled != poller)
+            })
+        })
+        .join()
+        .unwrap();
+        assert_eq!(swift, (true, true));
     }
 
     #[test]

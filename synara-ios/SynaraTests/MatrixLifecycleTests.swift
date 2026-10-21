@@ -322,6 +322,7 @@ final class MatrixLifecycleTests: XCTestCase {
         let bootstrapped = await SharedCoreSyncReconnect.run(
             restartSync: {
                 throw SyncStartError.Failed(
+                    kind: .notReady,
                     code: "p4-s12-sync-not-attached",
                     description: "Session owners are not attached."
                 )
@@ -359,12 +360,33 @@ final class MatrixLifecycleTests: XCTestCase {
     }
 
     func testSuspendedSendStaysQueuedAsNotReady() {
+        // L22: the decision follows Core's typed kind, not the code text.
         XCTAssertTrue(SharedCoreSendText.isNotReady(
-            SendTextError.Failed(code: SharedCoreSessionSuspension.code, description: "paused")
+            SendTextError.Failed(kind: .retryable, code: SharedCoreSessionSuspension.code, description: "paused")
+        ))
+        XCTAssertTrue(SharedCoreSendText.isNotReady(
+            SendTextError.Failed(kind: .notReady, code: "d0.4-send-room-not-found", description: "later")
         ))
         XCTAssertFalse(SharedCoreSendText.isNotReady(
-            SendTextError.Failed(code: "p2-send-text-failed", description: "failed")
+            SendTextError.Failed(kind: .terminal, code: "p2-send-text-failed", description: "failed")
         ))
+        XCTAssertFalse(SharedCoreSendText.isNotReady(
+            SendTextError.Failed(kind: .actionRequired, code: "p2-send-text-forbidden", description: "no")
+        ))
+        XCTAssertFalse(SharedCoreSendText.isNotReady(CancellationError()))
+    }
+
+    func testTypedCoreErrorsExposeKindAndCode() {
+        let stop = SyncStopError.Failed(kind: .notReady, code: "p4-s12-sync-not-attached", description: "x")
+        XCTAssertEqual(stop.coreErrorKind, .notReady)
+        XCTAssertEqual(stop.coreErrorCode, "p4-s12-sync-not-attached")
+        XCTAssertEqual(
+            SharedCoreSessionBootstrap.errorCode(
+                from: SessionRestoreError.Failed(kind: .terminal, code: "p4-s3b-session-already-restored", description: "x")
+            ),
+            "p4-s3b-session-already-restored"
+        )
+        XCTAssertNil(SharedCoreSessionBootstrap.errorCode(from: CancellationError()))
     }
 
     func testBackgroundNotificationSyncReportsResult() async throws {

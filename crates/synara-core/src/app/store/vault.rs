@@ -168,3 +168,163 @@ pub fn get_or_migrate_store_key<V: StoreKeyVault + ?Sized>(
         }
     }
 }
+
+/// The store key for an account whose local store the user just reset with
+/// archive-and-rebuild ([`super::reset_store_for_recovery`]).
+///
+/// The rebuilt layout is empty but its account root still exists, so
+/// [`super::StorePaths::key_creation_policy`] keeps forbidding a new key and
+/// a missing key would ask for the same reset forever. A key that is present
+/// (current or a known older revision) is kept, so the archive stays
+/// readable. A missing key, or a current entry whose bytes are corrupt, could
+/// never open the archive, so the empty store gets a new key and loses
+/// nothing. Call it only right after that user-confirmed reset: for any other
+/// existing store a missing key must keep failing closed.
+pub fn store_key_after_confirmed_reset<V: StoreKeyVault + ?Sized>(
+    vault: &V,
+    identity: &AccountIdentity,
+) -> Result<StoreKeyMaterial, StoreKeyVaultError> {
+    let current = StoreKeyId::from_identity(identity);
+    let forbid = StoreKeyCreationPolicy::ForbidForExistingStore;
+    match get_or_migrate_store_key(vault, identity, forbid) {
+        Err(StoreKeyVaultError::CorruptPayload) => {
+            vault.delete(&current)?;
+        }
+        Err(StoreKeyVaultError::MissingKeyForExistingStore) => {}
+        kept => return kept,
+    }
+    match get_or_migrate_store_key(vault, identity, forbid) {
+        Err(StoreKeyVaultError::MissingKeyForExistingStore) => {
+            get_or_create_store_key(vault, &current)
+        }
+        other => other,
+    }
+}
+
+#[cfg(test)]
+mod confirmed_reset_tests {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    use super::*;
+    use crate::app::store::{migrate_store_to_current, reset_store_for_recovery, StorePaths};
+
+    fn identity() -> AccountIdentity {
+        AccountIdentity::new("@reset:example.org", "https://example.org").unwrap()
+    }
+
+    fn rebuilt_store(label: &str) -> (std::path::PathBuf, StorePaths) {
+        let root = std::env::temp_dir().join(format!(
+            "synara-confirmed-reset-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|elapsed| elapsed.as_nanos())
+                .unwrap_or(0)
+        ));
+        let paths = StorePaths::derive(&root, &identity()).unwrap();
+        migrate_store_to_current(&paths).unwrap();
+        std::fs::write(paths.state_dir().join("matrix-sdk-state.sqlite3"), b"old").unwrap();
+        reset_store_for_recovery(&paths).unwrap();
+        (root, paths)
+    }
+
+    /// The desktop follow-up from the crypto batch: archive-and-rebuild
+    /// leaves the account root, so the creation policy alone can never
+    /// finish recovering from a lost key.
+    #[test]
+    fn a_rebuilt_store_without_its_key_gets_a_new_one_only_through_the_reset() {
+        let (root, paths) = rebuilt_store("missing");
+        let vault = InMemoryStoreKeyVault::new();
+        let policy = paths.key_creation_policy().unwrap();
+        assert_eq!(policy, StoreKeyCreationPolicy::ForbidForExistingStore);
+        assert_eq!(
+            get_or_migrate_store_key(&vault, &identity(), policy).unwrap_err(),
+            StoreKeyVaultError::MissingKeyForExistingStore,
+            "the ordinary sign-in path would ask for the same reset again"
+        );
+
+        let key = store_key_after_confirmed_reset(&vault, &identity()).unwrap();
+        // The next sign-in finds it under the unchanged, protective policy.
+        let reopened = get_or_migrate_store_key(&vault, &identity(), policy).unwrap();
+        assert_eq!(reopened.as_bytes(), key.as_bytes());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_present_key_survives_the_reset() {
+        let (root, _paths) = rebuilt_store("present");
+        let vault = InMemoryStoreKeyVault::new();
+        let existing = StoreKeyMaterial::from_bytes([9; STORE_KEY_LEN]);
+        vault
+            .set(&StoreKeyId::from_identity(&identity()), &existing)
+            .unwrap();
+        let kept = store_key_after_confirmed_reset(&vault, &identity()).unwrap();
+        assert_eq!(
+            kept.as_bytes(),
+            existing.as_bytes(),
+            "the archive stays readable"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    /// Reads the current entry as corrupt until it is deleted.
+    #[derive(Default)]
+    struct CorruptCurrent {
+        inner: InMemoryStoreKeyVault,
+        deleted: AtomicBool,
+    }
+
+    impl StoreKeyVault for CorruptCurrent {
+        fn get(&self, id: &StoreKeyId) -> Result<Option<StoreKeyMaterial>, StoreKeyVaultError> {
+            if !self.deleted.load(Ordering::Acquire)
+                && *id == StoreKeyId::from_identity(&identity())
+            {
+                return Err(StoreKeyVaultError::CorruptPayload);
+            }
+            self.inner.get(id)
+        }
+
+        fn set(&self, id: &StoreKeyId, key: &StoreKeyMaterial) -> Result<(), StoreKeyVaultError> {
+            self.inner.set(id, key)
+        }
+
+        fn delete(&self, id: &StoreKeyId) -> Result<bool, StoreKeyVaultError> {
+            self.deleted.store(true, Ordering::Release);
+            self.inner.delete(id)
+        }
+    }
+
+    #[test]
+    fn a_corrupt_key_is_replaced_and_a_locked_vault_gets_nothing() {
+        let vault = CorruptCurrent::default();
+        let replaced = store_key_after_confirmed_reset(&vault, &identity()).unwrap();
+        assert!(vault.deleted.load(Ordering::Acquire));
+        assert_eq!(
+            vault
+                .get(&StoreKeyId::from_identity(&identity()))
+                .unwrap()
+                .unwrap()
+                .as_bytes(),
+            replaced.as_bytes()
+        );
+
+        struct Locked;
+        impl StoreKeyVault for Locked {
+            fn get(&self, _: &StoreKeyId) -> Result<Option<StoreKeyMaterial>, StoreKeyVaultError> {
+                Err(StoreKeyVaultError::BackendUnavailable {
+                    diagnostic_id: "test-locked",
+                })
+            }
+            fn set(&self, _: &StoreKeyId, _: &StoreKeyMaterial) -> Result<(), StoreKeyVaultError> {
+                panic!("a locked vault must not be written")
+            }
+            fn delete(&self, _: &StoreKeyId) -> Result<bool, StoreKeyVaultError> {
+                panic!("a locked vault must not be cleared")
+            }
+        }
+        assert!(matches!(
+            store_key_after_confirmed_reset(&Locked, &identity()),
+            Err(StoreKeyVaultError::BackendUnavailable { .. })
+        ));
+    }
+}

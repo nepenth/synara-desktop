@@ -419,26 +419,31 @@ impl RoomListDebounce {
 const ENCRYPTION_PROBE_RETRY: Duration = Duration::from_secs(300);
 const ENCRYPTION_PROBE_MAX_TRACKED: usize = 4096;
 
-fn encryption_probes() -> &'static Mutex<HashMap<OwnedRoomId, Instant>> {
-    static PROBES: OnceLock<Mutex<HashMap<OwnedRoomId, Instant>>> = OnceLock::new();
+/// Keyed by account and room: one process can hold two accounts (and parallel
+/// tests), and one account's probe must not hold back another's.
+type EncryptionProbeKey = (OwnedUserId, OwnedRoomId);
+
+fn encryption_probes() -> &'static Mutex<HashMap<EncryptionProbeKey, Instant>> {
+    static PROBES: OnceLock<Mutex<HashMap<EncryptionProbeKey, Instant>>> = OnceLock::new();
     PROBES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn encryption_probe_allowed(room_id: &RoomId, now: Instant) -> bool {
+fn encryption_probe_allowed(own_user: &UserId, room_id: &RoomId, now: Instant) -> bool {
     let Ok(probes) = encryption_probes().lock() else {
         return false;
     };
     probes
-        .get(room_id)
+        .get(&(own_user.to_owned(), room_id.to_owned()))
         .is_none_or(|last| now.saturating_duration_since(*last) >= ENCRYPTION_PROBE_RETRY)
 }
 
-fn record_encryption_probe(room_id: &RoomId, resolved: bool, now: Instant) {
+fn record_encryption_probe(own_user: &UserId, room_id: &RoomId, resolved: bool, now: Instant) {
     let Ok(mut probes) = encryption_probes().lock() else {
         return;
     };
+    let key = (own_user.to_owned(), room_id.to_owned());
     if resolved {
-        probes.remove(room_id);
+        probes.remove(&key);
         return;
     }
     if probes.len() >= ENCRYPTION_PROBE_MAX_TRACKED {
@@ -447,7 +452,7 @@ fn record_encryption_probe(room_id: &RoomId, resolved: bool, now: Instant) {
             probes.clear();
         }
     }
-    probes.insert(room_id.to_owned(), now);
+    probes.insert(key, now);
 }
 
 /// Cached encryption state, probing the homeserver at most once per
@@ -458,12 +463,12 @@ pub(super) async fn room_encryption_state(room: &Room) -> matrix_sdk::Result<Enc
         return Ok(cached);
     }
     let now = Instant::now();
-    if !encryption_probe_allowed(room.room_id(), now) {
+    if !encryption_probe_allowed(room.own_user_id(), room.room_id(), now) {
         return Ok(cached);
     }
     let result = room.latest_encryption_state().await;
     let resolved = result.as_ref().is_ok_and(|state| !state.is_unknown());
-    record_encryption_probe(room.room_id(), resolved, now);
+    record_encryption_probe(room.own_user_id(), room.room_id(), resolved, now);
     result
 }
 
@@ -1118,20 +1123,26 @@ mod tests {
     #[test]
     fn encryption_probe_is_throttled_until_the_state_resolves() {
         let room_id: OwnedRoomId = "!probe-throttle:example.org".try_into().unwrap();
+        let alice = matrix_sdk::ruma::user_id!("@probe-alice:example.org");
+        let bob = matrix_sdk::ruma::user_id!("@probe-bob:example.org");
         let now = Instant::now();
-        assert!(encryption_probe_allowed(&room_id, now));
-        record_encryption_probe(&room_id, false, now);
-        assert!(!encryption_probe_allowed(&room_id, now));
+        assert!(encryption_probe_allowed(alice, &room_id, now));
+        record_encryption_probe(alice, &room_id, false, now);
+        assert!(!encryption_probe_allowed(alice, &room_id, now));
+        // Another account in the same process probes the same room itself.
+        assert!(encryption_probe_allowed(bob, &room_id, now));
         assert!(!encryption_probe_allowed(
+            alice,
             &room_id,
             now + ENCRYPTION_PROBE_RETRY - Duration::from_secs(1)
         ));
         assert!(encryption_probe_allowed(
+            alice,
             &room_id,
             now + ENCRYPTION_PROBE_RETRY
         ));
-        record_encryption_probe(&room_id, true, now);
-        assert!(encryption_probe_allowed(&room_id, now));
+        record_encryption_probe(alice, &room_id, true, now);
+        assert!(encryption_probe_allowed(alice, &room_id, now));
     }
 
     #[test]
