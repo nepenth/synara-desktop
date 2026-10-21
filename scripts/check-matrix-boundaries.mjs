@@ -38,6 +38,14 @@ const DESKTOP_ALLOWED_DIRECT_MATRIX_PATHS = new Map([
     "synara/src/app/cs-api.ts",
     "DESKTOP-REST-EXCEPTION-002: login-time homeserver version discovery helper.",
   ],
+  [
+    "synara/src/app/components/uia-stages/recaptchaFallback.ts",
+    "DESKTOP-REST-EXCEPTION-003: UIA reCAPTCHA fallback page URL, opened in the system browser; the app sends no request.",
+  ],
+  [
+    "src-tauri/src/csp_tests.rs",
+    "DESKTOP-REST-EXCEPTION-004: test-only CSP assertions on the scoped loopback discovery sources; no request.",
+  ],
 ]);
 
 const DOCS_ALLOWLIST = [
