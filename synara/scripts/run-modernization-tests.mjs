@@ -18,6 +18,7 @@ const tests = [
   'src/app/components/app-error/__tests__/errorMessage.test.ts',
   'src/app/hooks/__tests__/useAsyncSearchRenderSafety.test.ts',
   'src/app/hooks/__tests__/useAsyncSearch.test.ts',
+  'src/app/hooks/__tests__/useTypingStatusUpdater.test.ts',
   'src/app/hooks/__tests__/useImagePacks.test.ts',
   'src/app/hooks/__tests__/nativeRoomMembersOwner.test.ts',
   'src/app/hooks/__tests__/nativeRoomPowerReadOwner.test.ts',
