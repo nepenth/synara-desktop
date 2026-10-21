@@ -305,10 +305,13 @@ test('native formatted HTML applies the exact Matrix v1.19 presentation profile'
       '<strike>legacy strike</strike>' +
       '<ol start="10"><li>ten</li></ol>' +
       '<ol start="not-a-number"><li>one</li></ol>' +
-      '<img src="mxc://example.org/media" alt="diagram" data-mx-emoticon>'
+      '<img src="mxc://example.org/media" alt="diagram">' +
+      '<img src="mxc://example.org/party" alt=":party:" data-mx-emoticon>' +
+      '<img src="https://evil.example/e.png" alt=":evil:" data-mx-emoticon>' +
+      '<span data-mx-emoticon="mxc://example.org/forged">forged</span>'
   );
   assert.ok(sanitized);
-  assert.doesNotMatch(sanitized, /data-md|name=|data-mx-pill|data-mx-emoticon/);
+  assert.doesNotMatch(sanitized, /data-md|name=|data-mx-pill/);
   assert.match(sanitized, /<a>relative<\/a>/);
   assert.match(sanitized, /<a>matrix<\/a>/);
   assert.match(
@@ -321,8 +324,14 @@ test('native formatted HTML applies the exact Matrix v1.19 presentation profile'
   assert.match(sanitized, /<s>legacy strike<\/s>/);
   assert.match(sanitized, /<ol start="10">/);
   assert.match(sanitized, /<ol><li>one<\/li><\/ol>/);
-  assert.doesNotMatch(sanitized, /<img|src=|mxc:\/\//);
+  // No `<img>` survives. A custom emoji keeps only its mxc source on an inert
+  // span for the presenter; other images, remote emoji and author-written
+  // spans are plain text.
+  assert.doesNotMatch(sanitized, /<img|src=|evil\.example|forged"/);
   assert.match(sanitized, /<span>diagram<\/span>/);
+  assert.match(sanitized, /<span data-mx-emoticon="mxc:\/\/example\.org\/party">:party:<\/span>/);
+  assert.match(sanitized, /<span>:evil:<\/span>/);
+  assert.match(sanitized, /<span>forged<\/span>/);
 });
 
 test('copy Message HTML uses presentation sanitizer so remote images stay inert', () => {
@@ -346,5 +355,12 @@ test('native formatted renderer explicitly owns spoilers, image fallback, and pl
   assert.match(formattedBody, /InlineImageFallback/);
   assert.match(presentationProjection, /prepareNativeFormattedBody/);
   assert.match(formattedBody, /fallbackBody/);
-  assert.doesNotMatch(formattedBody, /<img/);
+  // The one image the renderer creates is a custom emoji, through Core's
+  // authenticated media protocol; it falls back to its shortcode on error.
+  assert.equal(formattedBody.match(/<img/g)?.length, 1);
+  assert.match(
+    formattedBody,
+    /convertDesktopFileSrc\(nativeCustomEmojiContentUri\(mxc\), 'synara-media'\)/
+  );
+  assert.match(formattedBody, /onError=\{\(\) => setFailed\(true\)\}/);
 });

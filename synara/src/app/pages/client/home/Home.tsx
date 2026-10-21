@@ -30,6 +30,7 @@ import {
   NavCategory,
   NavCategoryHeader,
   NavEmptyCenter,
+  NavLoading,
   NavEmptyLayout,
   NavItem,
   NavItemContent,
@@ -58,7 +59,10 @@ import {
   writeRoomListSort,
   type RoomListSort,
 } from './homeRoomList';
-import { useNativeRoomListSnapshot } from '../../../state/room-list/roomList';
+import {
+  useNativeRoomListLoaded,
+  useNativeRoomListSnapshot,
+} from '../../../state/room-list/roomList';
 import { VirtualTile } from '../../../components/virtualizer';
 import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
 import { makeNavCategoryId } from '../../../state/closedNavCategories';
@@ -234,7 +238,7 @@ function HomeHeader() {
           </Box>
           <Box>
             <IconButton
-              aria-label="More options"
+              aria-label="Home options"
               aria-pressed={!!menuAnchor}
               variant="Surface"
               onClick={handleOpenMenu}
@@ -323,6 +327,7 @@ export function Home() {
   const createRoomSelected = useHomeCreateSelected();
   const joinSelected = useHomeJoinSelected();
   const searchSelected = useHomeSearchSelected();
+  const roomListLoaded = useNativeRoomListLoaded();
   const noRoomToDisplay = rooms.length === 0;
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 
@@ -385,10 +390,14 @@ export function Home() {
   );
 
   return (
-    <PageNav>
+    <PageNav label="Rooms">
       <HomeHeader />
       {noRoomToDisplay ? (
-        <HomeEmpty />
+        roomListLoaded ? (
+          <HomeEmpty />
+        ) : (
+          <NavLoading label="Loading rooms…" />
+        )
       ) : (
         <PageNavContent scrollRef={scrollRef}>
           <Box direction="Column" gap="300">
@@ -397,9 +406,12 @@ export function Home() {
                 className={depthCss.quietInteractiveSurface}
                 variant="Surface"
                 radii="400"
-                aria-selected={createRoomSelected}
+                selected={createRoomSelected}
               >
-                <NavButton onClick={() => navigate(getHomeCreatePath())}>
+                <NavButton
+                  aria-current={createRoomSelected ? 'page' : undefined}
+                  onClick={() => navigate(getHomeCreatePath())}
+                >
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">
                       <Avatar size="200" radii="400">
@@ -418,9 +430,12 @@ export function Home() {
                 className={depthCss.quietInteractiveSurface}
                 variant="Surface"
                 radii="400"
-                aria-selected={joinSelected}
+                selected={joinSelected}
               >
-                <NavButton onClick={() => navigate(getHomeJoinPath())}>
+                <NavButton
+                  aria-current={joinSelected ? 'page' : undefined}
+                  onClick={() => navigate(getHomeJoinPath())}
+                >
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">
                       <Avatar size="200" radii="400">
@@ -439,9 +454,12 @@ export function Home() {
                 className={depthCss.quietInteractiveSurface}
                 variant="Surface"
                 radii="400"
-                aria-selected={searchSelected}
+                selected={searchSelected}
               >
-                <NavLink to={getHomeSearchPath()}>
+                <NavLink
+                  aria-current={searchSelected ? 'page' : undefined}
+                  to={getHomeSearchPath()}
+                >
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">
                       <Avatar size="200" radii="400">

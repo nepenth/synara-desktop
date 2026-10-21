@@ -295,7 +295,7 @@ function SpaceHeader() {
           </Box>
           <Box shrink="No">
             <IconButton
-              aria-label="More options"
+              aria-label={`${spaceName} options`}
               aria-pressed={!!menuAnchor}
               variant="Surface"
               onClick={handleOpenMenu}
@@ -467,7 +467,7 @@ export function Space() {
     getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(roomId));
 
   return (
-    <PageNav>
+    <PageNav label="Space rooms">
       <SpaceHeader />
       <PageNavContent scrollRef={scrollRef}>
         <Box direction="Column" gap="300">
@@ -478,8 +478,11 @@ export function Space() {
             />
           )}
           <NavCategory>
-            <NavItem variant="Surface" radii="400" aria-selected={lobbySelected}>
-              <NavLink to={getSpaceLobbyPath(getCanonicalAliasOrRoomId(space.roomId))}>
+            <NavItem variant="Surface" radii="400" selected={lobbySelected}>
+              <NavLink
+                aria-current={lobbySelected ? 'page' : undefined}
+                to={getSpaceLobbyPath(getCanonicalAliasOrRoomId(space.roomId))}
+              >
                 <NavItemContent>
                   <Box as="span" grow="Yes" alignItems="Center" gap="200">
                     <Avatar size="200" radii="400">
@@ -494,8 +497,11 @@ export function Space() {
                 </NavItemContent>
               </NavLink>
             </NavItem>
-            <NavItem variant="Surface" radii="400" aria-selected={searchSelected}>
-              <NavLink to={getSpaceSearchPath(getCanonicalAliasOrRoomId(space.roomId))}>
+            <NavItem variant="Surface" radii="400" selected={searchSelected}>
+              <NavLink
+                aria-current={searchSelected ? 'page' : undefined}
+                to={getSpaceSearchPath(getCanonicalAliasOrRoomId(space.roomId))}
+              >
                 <NavItemContent>
                   <Box as="span" grow="Yes" alignItems="Center" gap="200">
                     <Avatar size="200" radii="400">

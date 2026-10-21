@@ -283,6 +283,7 @@ function NativePushRulesEditor() {
             >
               <Box grow="Yes" direction="Column">
                 <Input
+                  aria-label="New keyword"
                   value={keyword}
                   onChange={(evt) => setKeyword(evt.currentTarget.value)}
                   variant="Secondary"

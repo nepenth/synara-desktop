@@ -112,6 +112,7 @@ export function SystemNotification() {
               </Button>
             ) : (
               <Switch
+                aria-label="Desktop Notifications"
                 disabled={notifPermission !== 'granted'}
                 value={showNotifications}
                 onChange={setShowNotifications}

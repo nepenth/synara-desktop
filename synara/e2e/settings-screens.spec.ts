@@ -43,7 +43,7 @@ for (const theme of ['light', 'dark'] as const) {
 
     test(`room settings pages (${theme})`, async ({ page }) => {
       await page.goto(`${HARNESS}?theme=${theme}#/home/${ROOM}/`);
-      await page.getByRole('button', { name: 'More Options', exact: true }).click();
+      await page.getByRole('button', { name: 'More Options' }).click();
       await page.getByRole('button', { name: 'Room Settings' }).click();
       await captureAll(page, 'room', theme);
     });
@@ -52,7 +52,7 @@ for (const theme of ['light', 'dark'] as const) {
       await page.goto(
         `${HARNESS}?theme=${theme}&space=1#/${encodeURIComponent('!studio:example.test')}/lobby/`
       );
-      await page.getByRole('button', { name: 'More Options', exact: true }).click();
+      await page.getByRole('button', { name: 'More Options' }).click();
       await page.getByRole('button', { name: 'Space Settings' }).click();
       await captureAll(page, 'space', theme);
     });

@@ -18,6 +18,9 @@ const fixture = (page: Page, action: Exclude<keyof Fixture, 'commands' | 'active
   page.evaluate((key) => {
     (window as unknown as { nativeTimelineFixture: Fixture }).nativeTimelineFixture[key]();
   }, action);
+/** The timeline error view, or a notice that an update could not be loaded. */
+const desyncIndicator = (page: Page) =>
+  page.locator('[data-native-timeline-error="true"], [data-native-timeline-notice="error"]');
 const open = async (page: Page, scenario: string) => {
   await page.goto(`/e2e/native-timeline-harness/index.html?scenario=${scenario}`);
   await expect(page.locator('[data-native-timeline-event-id]').first()).toBeVisible();
@@ -98,7 +101,7 @@ test('candidate deltas received before open completion are applied before later 
   await expect(target).toBeInViewport();
   await fixture(page, 'emitAfterOpen');
   await expect(target).toContainText('Last read changed after adoption');
-  await expect(page.getByText('Native timeline stream lost synchronization.')).toBeHidden();
+  await expect(desyncIndicator(page)).toBeHidden();
 });
 
 for (const earlyOpen of ['initial', 'latest']) {
@@ -111,7 +114,7 @@ for (const earlyOpen of ['initial', 'latest']) {
     }
     await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
     await fixture(page, 'emitAfterOpen');
-    await expect(page.getByText('Native timeline stream lost synchronization.')).toBeHidden();
+    await expect(desyncIndicator(page)).toBeHidden();
     await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
   });
 }
@@ -159,9 +162,8 @@ for (const operation of ['paginate', 'read', 'follow', 'poll']) {
       await fixture(page, 'releaseOperation');
       await page.waitForTimeout(100);
       await expect(target).toBeInViewport();
-      await expect(
-        page.getByText(/lost synchronization|Superseded operation rejected/)
-      ).toBeHidden();
+      await expect(desyncIndicator(page)).toBeHidden();
+      await expect(page.getByText('Superseded operation rejected')).toBeHidden();
       const after = await geometry(page);
       expect(after.eventId).toBe(before.eventId);
       expect(Math.abs(after.offset - before.offset)).toBeLessThanOrEqual(2);
@@ -203,7 +205,7 @@ for (const operation of ['paginate', 'read', 'follow', 'poll']) {
       expect(after.eventId).toBe(before.eventId);
       expect(Math.abs(after.offset - before.offset)).toBeLessThanOrEqual(2);
       expect(pageErrors).toEqual([]);
-      if (result === 'success') await expect(page.getByText(/lost synchronization/)).toBeHidden();
+      if (result === 'success') await expect(desyncIndicator(page)).toBeHidden();
       if (operation === 'paginate') {
         const retry = page.getByRole('button', { name: 'Retry', exact: true });
         if (await retry.isVisible()) await retry.click();

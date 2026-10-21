@@ -63,6 +63,7 @@ export function RoomPublish({ permissions, roomId, isSpace }: RoomPublishProps) 
             {loading && <Spinner variant="Secondary" />}
             {!loading && visibilityState.status === AsyncStatus.Success && (
               <Switch
+                aria-label="Publish to Directory"
                 value={visibilityState.data}
                 onChange={toggleVisibility}
                 disabled={!canEditCanonical || !validRule}

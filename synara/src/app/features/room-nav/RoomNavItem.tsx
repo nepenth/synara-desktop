@@ -374,7 +374,7 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
       variant="Surface"
       radii="300"
       highlight={unread !== undefined}
-      aria-selected={selected}
+      selected={selected}
       data-hover={!!menuAnchor}
       onContextMenu={handleContextMenu}
       {...hoverProps}
@@ -420,7 +420,9 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
               <Icon
                 size="50"
                 src={getRoomNotificationModeIcon(notificationMode)}
-                aria-label={notificationMode}
+                aria-label={
+                  ROOM_NOTIFICATION_MODE_LABELS[notificationMode ?? RoomNotificationMode.Unset]
+                }
               />
             )}
           </Box>
@@ -490,5 +492,13 @@ function areRoomNavItemPropsEqual(prev: RoomNavItemProps, next: RoomNavItemProps
   if (prev.notificationMode !== next.notificationMode) return false;
   return true;
 }
+
+/** Spoken names for the room row's notification icon (not the enum value). */
+const ROOM_NOTIFICATION_MODE_LABELS: Record<RoomNotificationMode, string> = {
+  [RoomNotificationMode.Unset]: 'Default notifications',
+  [RoomNotificationMode.AllMessages]: 'Notifications: all messages',
+  [RoomNotificationMode.SpecialMessages]: 'Notifications: mentions and keywords',
+  [RoomNotificationMode.Mute]: 'Muted',
+};
 
 export const RoomNavItem = React.memo(RoomNavItemImpl, areRoomNavItemPropsEqual);

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import {
   DESKTOP_EXTERNAL_LINK_CLICK_OPTIONS,
+  IN_APP_LINK_ATTRIBUTE,
   SYNARA_SUPPORT_URL,
   openDesktopExternalAnchorFromClick,
   openExternalUrl,
@@ -74,6 +75,7 @@ test('desktop anchor click opens external links through the native bridge', asyn
     const anchor = {
       href: 'https://example.org/docs',
       getAttribute: (name: string) => (name === 'href' ? 'https://example.org/docs' : null),
+      hasAttribute: () => false,
     };
 
     openDesktopExternalAnchorFromClick({
@@ -104,7 +106,7 @@ test('desktop anchor click opens external links through the native bridge', asyn
   ]);
 });
 
-test('desktop anchor click ignores handled, modified, and app-relative links', async () => {
+test('desktop anchor click ignores handled, modified, app-relative and in-app links', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   let prevented = false;
   const originalWindow = globalThis.window;
@@ -133,16 +135,26 @@ test('desktop anchor click ignores handled, modified, and app-relative links', a
     const externalAnchor = {
       href: 'https://example.org/docs',
       getAttribute: (name: string) => (name === 'href' ? 'https://example.org/docs' : null),
+      hasAttribute: () => false,
     };
     const relativeAnchor = {
       href: 'http://localhost:44548/settings',
       getAttribute: (name: string) => (name === 'href' ? '/settings' : null),
+      hasAttribute: () => false,
+    };
+    // A matrix.to mention in a message navigates inside Synara on its own.
+    const inAppAnchor = {
+      href: 'https://matrix.to/#/@alice:example.org',
+      getAttribute: (name: string) =>
+        name === 'href' ? 'https://matrix.to/#/@alice:example.org' : null,
+      hasAttribute: (name: string) => name === IN_APP_LINK_ATTRIBUTE,
     };
 
     for (const event of [
       { defaultPrevented: true, metaKey: false, target: new FakeElement(externalAnchor) },
       { defaultPrevented: false, metaKey: true, target: new FakeElement(externalAnchor) },
       { defaultPrevented: false, metaKey: false, target: new FakeElement(relativeAnchor) },
+      { defaultPrevented: false, metaKey: false, target: new FakeElement(inAppAnchor) },
     ]) {
       openDesktopExternalAnchorFromClick({
         button: 0,

@@ -317,7 +317,7 @@ function InviteFilters({
     <Box gap="200">
       <Chip
         variant={isKnown ? 'Success' : 'Surface'}
-        aria-selected={isKnown}
+        aria-pressed={isKnown}
         outlined={!isKnown}
         onClick={() => onFilter(InviteFilter.Known)}
         before={isKnown && <Icon size="100" src={Icons.Check} />}
@@ -333,7 +333,7 @@ function InviteFilters({
       </Chip>
       <Chip
         variant={isUnknown ? 'Warning' : 'Surface'}
-        aria-selected={isUnknown}
+        aria-pressed={isUnknown}
         outlined={!isUnknown}
         onClick={() => onFilter(InviteFilter.Unknown)}
         before={isUnknown && <Icon size="100" src={Icons.Check} />}
@@ -349,7 +349,7 @@ function InviteFilters({
       </Chip>
       <Chip
         variant={isSpam ? 'Critical' : 'Surface'}
-        aria-selected={isSpam}
+        aria-pressed={isSpam}
         outlined={!isSpam}
         onClick={() => onFilter(InviteFilter.Spam)}
         before={isSpam && <Icon size="100" src={Icons.Check} />}

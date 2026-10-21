@@ -208,10 +208,22 @@ a:hover {
   }
 
   [aria-selected='true'],
+  [data-selected='true'],
   [aria-current='page'],
   [aria-current='true'] {
     outline: 2px solid SelectedItem;
     outline-offset: -2px;
+  }
+}
+
+/* Motion that is not needed to understand the interface: folds dialog,
+   menu and tooltip entrances. Spinners keep turning; they show progress. */
+@media (prefers-reduced-motion: reduce) {
+  [role='dialog'],
+  [role='alertdialog'],
+  [role='menu'],
+  [role='tooltip'] {
+    animation: none !important;
   }
 }
 

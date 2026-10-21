@@ -2,7 +2,8 @@ import { observeRoomLatestAfterSend } from './nativeTimelineNavigation';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useFocusWithin, useHover } from 'react-aria';
-import FocusTrap from '../../components/FocusTrap';
+import FocusTrap, { returnFocusOrFallback } from '../../components/FocusTrap';
+import { Modal } from '../../components/modal-dialog';
 import { ErrorBoundary } from 'react-error-boundary';
 import {
   Avatar,
@@ -14,7 +15,6 @@ import {
   Menu,
   MenuItem,
   Line,
-  Modal,
   Overlay,
   OverlayBackdrop,
   OverlayCenter,
@@ -41,7 +41,6 @@ import {
 import { ReactionViewer } from './reaction-viewer';
 import { observeNativeTimelineBottom } from './nativeTimelineVisibility';
 import {
-  editTextWithNativeTimelineAction,
   forwardMediaWithNativeTimelineAction,
   forwardTextWithNativeTimelineAction,
   pinWithNativeTimelineAction,
@@ -67,7 +66,6 @@ import {
   type NativeTimelineFilePreviewTarget,
 } from './nativeTimelineFilePreview';
 import {
-  editedFormattedBodyForSubmit,
   filterNativeForwardTargets,
   isNativeTimelineEventPinned,
   nativeTimelineEchoFields,
@@ -104,6 +102,7 @@ import { UserAvatar } from '../../components/user-avatar';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { getMxIdLocalPart } from '../../utils/matrix';
+import colorMXID from '../../../util/colorMXID';
 import { nameInitials } from '../../utils/common';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { stopPropagation } from '../../utils/keyboard';
@@ -155,6 +154,17 @@ import {
 import type { ThreadDisplayMode } from '../../utils/threadDisplay';
 import { getMyUserId } from '../../state/nativeIdentity';
 import { resolveNativeFocusRouteAction } from './nativeFocusRoute';
+import { isNativeTimelineRowVisible } from './nativeTimelineRowFilter';
+import { nativeFormattedBodyMentionsUser } from './nativeTimelineLinks';
+import { preferredScrollBehavior } from '../../utils/motion';
+import { nativeTimelineArrivals } from './nativeTimelineAnnouncements';
+import { NativeTimelineMessageEditor } from './NativeTimelineMessageEditor';
+import { isNativeTextEditable } from './nativeTimelineEdit';
+import {
+  nativeTimelineActionErrorMessage,
+  nativeTimelineLoadErrorMessage,
+  TIMELINE_ACTION_FAILED,
+} from './nativeTimelineErrorCopy';
 
 const HermesAgentCard = React.lazy(() =>
   import('../../components/hermes/HermesAgentCard').then((module) => ({
@@ -411,6 +421,10 @@ type NativeTimelineRowProps = {
   onOpenThread: (rootEventId: string, latestEventId?: string) => void;
   activeThreadRoot?: string;
   onOpenMarkdownPreview: (file: NativeTimelineFilePreviewTarget) => void;
+  /** This row's message is open in the in-place editor. */
+  editing: boolean;
+  /** Open the editor for an event, or close it with `undefined`. */
+  onEditingChange: (eventId: string | undefined) => void;
 };
 
 // Popout menus can unmount while a Core write is still running. Keep the
@@ -472,7 +486,7 @@ const runNativeRowAction = (
   }
   void action()
     .catch((error) => {
-      onActionError(error instanceof Error ? error.message : failureLabel);
+      onActionError(nativeTimelineActionErrorMessage(error, failureLabel));
     })
     .finally(() => {
       if (inFlightKey) nativeTimelineActionsInFlight.delete(inFlightKey);
@@ -496,6 +510,8 @@ type NativeTimelineRowActionsProps = {
   onRequestClose?: () => void;
   onViewReactions?: () => void;
   hasReactions?: boolean;
+  /** Edit this message in place; set only for text messages Core lets us edit. */
+  onEdit?: () => void;
 };
 
 const NativeTimelineRowActions = ({
@@ -514,14 +530,11 @@ const NativeTimelineRowActions = ({
   onRequestClose,
   onViewReactions,
   hasReactions,
+  onEdit,
 }: NativeTimelineRowActionsProps) => {
   const roomList = useNativeRoomListSnapshot();
-  const [editing, setEditing] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [reportReason, setReportReason] = useState('');
-  const [editBody, setEditBody] = useState(body ?? '');
-  const [editFormattedBody, setEditFormattedBody] = useState(formattedBody ?? '');
-  const [editFormattedBodyWasEdited, setEditFormattedBodyWasEdited] = useState(false);
   const [forwarding, setForwarding] = useState(false);
   const [forwardQuery, setForwardQuery] = useState('');
   const [forwardAsQuote, setForwardAsQuote] = useState(false);
@@ -541,14 +554,6 @@ const NativeTimelineRowActions = ({
       actionsMountedRef.current = false;
     };
   }, []);
-
-  useEffect(() => {
-    if (!editing) {
-      setEditBody(body ?? '');
-      setEditFormattedBody(formattedBody ?? '');
-      setEditFormattedBodyWasEdited(false);
-    }
-  }, [body, editing, formattedBody]);
 
   const forwardTargets = useMemo(
     () =>
@@ -572,6 +577,7 @@ const NativeTimelineRowActions = ({
   if (body) {
     buttons.push(
       <MenuItem
+        role="menuitem"
         key="copy"
         className={depthCss.quietInteractiveSurface}
         variant="Surface"
@@ -593,6 +599,7 @@ const NativeTimelineRowActions = ({
   if (hasReactions && onViewReactions) {
     buttons.push(
       <MenuItem
+        role="menuitem"
         key="view-reactions"
         className={depthCss.quietInteractiveSurface}
         variant="Surface"
@@ -612,6 +619,7 @@ const NativeTimelineRowActions = ({
   if (capabilities.reply) {
     buttons.push(
       <MenuItem
+        role="menuitem"
         key="reply"
         className={depthCss.quietInteractiveSurface}
         variant="Surface"
@@ -623,11 +631,11 @@ const NativeTimelineRowActions = ({
             async () => {
               const result = await setNativeComposerReplyDraft({ roomId, eventId });
               if (result === 'unavailable') {
-                throw new Error('Native reply draft is unavailable.');
+                throw new Error(TIMELINE_ACTION_FAILED.reply);
               }
             },
             onActionError,
-            'Native reply draft failed.'
+            TIMELINE_ACTION_FAILED.reply
           );
           closeAfterOneShotAction();
         }}
@@ -637,6 +645,7 @@ const NativeTimelineRowActions = ({
     );
     buttons.push(
       <MenuItem
+        role="menuitem"
         key="reply-thread"
         className={depthCss.quietInteractiveSurface}
         variant="Surface"
@@ -652,12 +661,12 @@ const NativeTimelineRowActions = ({
                 startThread: true,
               });
               if (result === 'unavailable') {
-                throw new Error('Native thread reply draft is unavailable.');
+                throw new Error(TIMELINE_ACTION_FAILED.threadReply);
               }
               onOpenThread?.(threadRoot ?? eventId);
             },
             onActionError,
-            'Native thread reply draft failed.'
+            TIMELINE_ACTION_FAILED.threadReply
           );
           closeAfterOneShotAction();
         }}
@@ -666,9 +675,10 @@ const NativeTimelineRowActions = ({
       </MenuItem>
     );
   }
-  if (capabilities.edit) {
+  if (capabilities.edit && onEdit) {
     buttons.push(
       <MenuItem
+        role="menuitem"
         key="edit"
         className={depthCss.quietInteractiveSurface}
         variant="Surface"
@@ -676,20 +686,18 @@ const NativeTimelineRowActions = ({
         fill="None"
         radii="300"
         onClick={() => {
-          setForwarding(false);
-          setEditing((open) => !open);
-          setEditBody(body ?? '');
-          setEditFormattedBody(formattedBody ?? '');
-          setEditFormattedBodyWasEdited(false);
+          onEdit();
+          closeAfterOneShotAction();
         }}
       >
-        {editing ? 'Cancel edit' : 'Edit'}
+        Edit
       </MenuItem>
     );
   }
   if (capabilities.forward && isNativeTimelineForwardTransport(forwardTransport)) {
     buttons.push(
       <MenuItem
+        role="menuitem"
         key="forward"
         className={depthCss.quietInteractiveSurface}
         variant="Surface"
@@ -697,8 +705,8 @@ const NativeTimelineRowActions = ({
         fill="None"
         radii="300"
         disabled={pendingProductAction !== undefined}
+        aria-expanded={forwarding}
         onClick={() => {
-          setEditing(false);
           setReporting(false);
           setForwarding((open) => !open);
           setForwardConfirm(null);
@@ -711,6 +719,7 @@ const NativeTimelineRowActions = ({
   if (capabilities.redact) {
     moderationButtons.push(
       <MenuItem
+        role="menuitem"
         key="redact"
         className={depthCss.quietInteractiveSurface}
         variant="Critical"
@@ -721,7 +730,7 @@ const NativeTimelineRowActions = ({
           runNativeRowAction(
             () => redactWithNativeTimelineAction({ roomId, eventId }),
             onActionError,
-            'Native redact failed.',
+            TIMELINE_ACTION_FAILED.redact,
             nativeTimelineActionFlightKey(sessionGeneration, roomId, eventId, 'redact'),
             sessionGeneration
           );
@@ -735,6 +744,7 @@ const NativeTimelineRowActions = ({
   if (capabilities.report) {
     moderationButtons.push(
       <MenuItem
+        role="menuitem"
         key="report"
         className={depthCss.quietInteractiveSurface}
         variant="Critical"
@@ -742,8 +752,8 @@ const NativeTimelineRowActions = ({
         fill="None"
         radii="300"
         disabled={pendingProductAction !== undefined}
+        aria-expanded={reporting}
         onClick={() => {
-          setEditing(false);
           setForwarding(false);
           setReporting((open) => !open);
         }}
@@ -756,6 +766,7 @@ const NativeTimelineRowActions = ({
     const pinAction = selectNativeTimelinePinAction(Boolean(pinned));
     buttons.push(
       <MenuItem
+        role="menuitem"
         key={pinAction}
         className={depthCss.quietInteractiveSurface}
         variant="Surface"
@@ -769,7 +780,7 @@ const NativeTimelineRowActions = ({
                 ? unpinWithNativeTimelineAction({ roomId, eventId })
                 : pinWithNativeTimelineAction({ roomId, eventId }),
             onActionError,
-            pinAction === 'unpin' ? 'Native unpin failed.' : 'Native pin failed.',
+            pinAction === 'unpin' ? TIMELINE_ACTION_FAILED.unpin : TIMELINE_ACTION_FAILED.pin,
             nativeTimelineActionFlightKey(sessionGeneration, roomId, eventId, pinAction),
             sessionGeneration
           );
@@ -783,6 +794,7 @@ const NativeTimelineRowActions = ({
   // Later is a room-event affordance for any remote timeline item with an id.
   buttons.push(
     <MenuItem
+      role="menuitem"
       key="later"
       className={depthCss.quietInteractiveSurface}
       variant="Surface"
@@ -793,7 +805,7 @@ const NativeTimelineRowActions = ({
         runNativeRowAction(
           () => upsertLaterWithNativeOwner(createLaterItemFromIds(roomId, eventId, 'saved')),
           onActionError,
-          'Native later save failed.'
+          TIMELINE_ACTION_FAILED.later
         );
         closeAfterOneShotAction();
       }}
@@ -802,36 +814,6 @@ const NativeTimelineRowActions = ({
     </MenuItem>
   );
   if (buttons.length === 0) return null;
-
-  const submitEdit = () => {
-    const nextBody = editBody.trim();
-    if (!nextBody) {
-      onActionError('Edited body cannot be empty.');
-      return;
-    }
-    const nextFormatted = editedFormattedBodyForSubmit(
-      body ?? '',
-      nextBody,
-      editFormattedBody,
-      editFormattedBodyWasEdited
-    );
-    runNativeRowAction(
-      async () => {
-        await editTextWithNativeTimelineAction({
-          roomId,
-          eventId,
-          body: nextBody,
-          formattedBody: nextFormatted,
-        });
-        setEditing(false);
-        onRequestClose?.();
-      },
-      onActionError,
-      'Native edit failed.',
-      nativeTimelineActionFlightKey(sessionGeneration, roomId, eventId, 'edit'),
-      sessionGeneration
-    );
-  };
 
   const submitReport = async () => {
     if (pendingProductActionRef.current !== undefined) return;
@@ -852,7 +834,7 @@ const NativeTimelineRowActions = ({
       setReportReason('');
       onRequestClose?.();
     } catch (error) {
-      onActionError(error instanceof Error ? error.message : 'Native report failed.');
+      onActionError(nativeTimelineActionErrorMessage(error, TIMELINE_ACTION_FAILED.report));
     } finally {
       nativeTimelineActionsInFlight.delete(actionKey);
       pendingProductActionRef.current = undefined;
@@ -865,7 +847,7 @@ const NativeTimelineRowActions = ({
   const sendForward = async (targetRoomId: string, confirmedEncryptionDowngrade = false) => {
     if (pendingProductActionRef.current !== undefined) return;
     if (!isNativeTimelineForwardTransport(forwardTransport)) {
-      onActionError('Native forward transport is unavailable.');
+      onActionError('This message can not be forwarded.');
       return;
     }
     const actionKey = nativeTimelineActionFlightKey(sessionGeneration, roomId, eventId, 'forward');
@@ -899,7 +881,7 @@ const NativeTimelineRowActions = ({
       setForwardConfirm(null);
       onRequestClose?.();
     } catch (error) {
-      onActionError(error instanceof Error ? error.message : 'Native forward failed.');
+      onActionError(nativeTimelineActionErrorMessage(error, TIMELINE_ACTION_FAILED.forward));
     } finally {
       nativeTimelineActionsInFlight.delete(actionKey);
       pendingProductActionRef.current = undefined;
@@ -930,44 +912,24 @@ const NativeTimelineRowActions = ({
 
   return (
     <Box direction="Column" gap="100" style={{ minWidth: 240, padding: config.space.S100 }}>
-      <Box direction="Column" gap="100">
+      {/* Arrow keys move between items (the surrounding FocusTrap maps them). */}
+      <Box
+        direction="Column"
+        gap="100"
+        role="menu"
+        aria-label="Message actions"
+        aria-orientation="vertical"
+      >
         {buttons}
+        {moderationButtons.length > 0 && (
+          <>
+            <Line size="300" role="separator" className={htmlCss.MessageActionDivider} />
+            <Box direction="Column" gap="100" role="group" aria-label="Moderation actions">
+              {moderationButtons}
+            </Box>
+          </>
+        )}
       </Box>
-      {moderationButtons.length > 0 && (
-        <>
-          <Line size="300" className={htmlCss.MessageActionDivider} />
-          <Box direction="Column" gap="100" role="group" aria-label="Moderation actions">
-            {moderationButtons}
-          </Box>
-        </>
-      )}
-      {editing && (
-        <Box direction="Column" gap="100">
-          <textarea
-            value={editBody}
-            onChange={(event) => setEditBody(event.target.value)}
-            rows={3}
-            style={{ width: '100%', resize: 'vertical' }}
-            aria-label="Edit message body"
-          />
-          <textarea
-            value={editFormattedBody}
-            onChange={(event) => {
-              setEditFormattedBodyWasEdited(true);
-              setEditFormattedBody(event.target.value);
-            }}
-            rows={3}
-            style={{ width: '100%', resize: 'vertical' }}
-            aria-label="Edit message HTML body"
-            placeholder="Optional Matrix HTML (org.matrix.custom.html)"
-          />
-          <Box gap="100">
-            <Button size="300" onClick={submitEdit}>
-              Save edit
-            </Button>
-          </Box>
-        </Box>
-      )}
       {reporting && (
         <Box direction="Column" gap="100">
           <textarea
@@ -1185,9 +1147,23 @@ const NativeTimelineRowActionSurface = ({
     setEmojiBoardAnchor(target.getBoundingClientRect());
   };
   const reactionImagePackRooms = useMemo(() => [actionProps.roomId], [actionProps.roomId]);
+  // The rail's buttons unmount once the pointer leaves; focus then returns
+  // to the message itself instead of being dropped.
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const returnFocusToSurface = useMemo(() => returnFocusOrFallback(() => surfaceRef.current), []);
+  // Edit opens the in-place editor as the menu closes; focus belongs there.
+  const returnFocusFromMenu = useMemo(
+    () => (previous: HTMLElement | SVGElement) =>
+      surfaceRef.current?.querySelector<HTMLElement>(
+        '[data-native-timeline-editor] [contenteditable="true"]'
+      ) ?? returnFocusToSurface(previous),
+    [returnFocusToSurface]
+  );
 
   return (
     <div
+      ref={surfaceRef}
+      data-native-timeline-row-surface={hasActionMenu ? 'true' : undefined}
       {...(hasActionMenu ? hoverProps : {})}
       {...(hasActionMenu ? focusWithinProps : {})}
       tabIndex={hasActionMenu ? 0 : undefined}
@@ -1198,7 +1174,7 @@ const NativeTimelineRowActionSurface = ({
       {showActionRail && (
         <div data-native-timeline-action-rail="true" className={htmlCss.MessageActionRail}>
           <Menu variant="SurfaceVariant" style={{ padding: config.space.S100 }}>
-            <Box gap="100">
+            <Box gap="100" role="toolbar" aria-label="Message tools">
               {capabilities?.react && (
                 <PopOut
                   anchor={emojiBoardAnchor}
@@ -1207,7 +1183,7 @@ const NativeTimelineRowActionSurface = ({
                   content={
                     <EmojiBoard
                       imagePackRooms={reactionImagePackRooms}
-                      returnFocusOnDeactivate={false}
+                      setReturnFocus={returnFocusToSurface}
                       addToRecentEmoji={false}
                       onEmojiSelect={(unicode) => {
                         onReaction(unicode);
@@ -1227,7 +1203,8 @@ const NativeTimelineRowActionSurface = ({
                     radii="300"
                     title="Add reaction"
                     aria-label="Add reaction"
-                    aria-pressed={emojiBoardOpen}
+                    aria-haspopup="dialog"
+                    aria-expanded={emojiBoardOpen}
                     onClick={openEmojiBoard}
                   >
                     <Icon src={Icons.SmilePlus} size="100" />
@@ -1242,6 +1219,7 @@ const NativeTimelineRowActionSurface = ({
                   <FocusTrap
                     focusTrapOptions={{
                       initialFocus: false,
+                      setReturnFocus: returnFocusFromMenu,
                       onDeactivate: closeMenu,
                       clickOutsideDeactivates: true,
                       isKeyForward: (event: KeyboardEvent) =>
@@ -1291,6 +1269,59 @@ const NativeTimelineRowActionSurface = ({
   );
 };
 
+type NativeTimelineNoticeState = { tone: 'error' | 'info'; message: string };
+
+/** A failed row action or a routing notice, shown above the timeline. */
+const NativeTimelineNotice = ({
+  tone,
+  message,
+  action,
+  onDismiss,
+}: NativeTimelineNoticeState & {
+  action?: { label: string; onClick: () => void };
+  onDismiss?: () => void;
+}) => (
+  <Box
+    className={htmlCss.TimelineNotice({ tone })}
+    gap="200"
+    alignItems="Center"
+    role={tone === 'error' ? 'alert' : 'status'}
+    data-native-timeline-notice={tone}
+  >
+    <Icon src={tone === 'error' ? Icons.Warning : Icons.Info} size="100" />
+    <Box grow="Yes">
+      <Text size="T200">{message}</Text>
+    </Box>
+    {action ? (
+      <Button
+        size="300"
+        variant={tone === 'error' ? 'Critical' : 'Secondary'}
+        fill="Soft"
+        radii="300"
+        onClick={action.onClick}
+      >
+        <Text size="B300">{action.label}</Text>
+      </Button>
+    ) : null}
+    {onDismiss ? (
+      <IconButton
+        onClick={onDismiss}
+        variant={tone === 'error' ? 'Critical' : 'SurfaceVariant'}
+        fill="Soft"
+        size="300"
+        radii="300"
+        aria-label="Dismiss"
+      >
+        <Icon src={Icons.Cross} size="50" />
+      </IconButton>
+    ) : null}
+  </Box>
+);
+
+const FOCUSED_OPEN_FAILED =
+  'That message could not be opened. Showing the latest messages instead.';
+const STREAM_GAP_FAILED = 'Some new messages could not be loaded.';
+
 const NativeTimelineFileChip = ({
   handleId,
   filename,
@@ -1312,7 +1343,7 @@ const NativeTimelineFileChip = ({
     setBusy(true);
     void saveNativeTimelineFileAttachment({ handleId, filename, mimeType })
       .catch((error) => {
-        onActionError?.(error instanceof Error ? error.message : 'Could not download file.');
+        onActionError?.(nativeTimelineActionErrorMessage(error, TIMELINE_ACTION_FAILED.download));
       })
       .finally(() => setBusy(false));
   };
@@ -1351,6 +1382,29 @@ const NativeTimelineFileChip = ({
   );
 };
 
+// Media the user chose to load while auto-loading is off. Rows remount as
+// they scroll, so the choice lives outside them for the session.
+const nativeTimelineRequestedMediaLoads = new Set<string>();
+
+/** The placeholder keeps the media's own box so loading it does not shift rows. */
+const nativeTimelineDeferredMediaStyle = (
+  media: NativeTimelineMediaHandle
+): React.CSSProperties => {
+  const reserved = reservedNativeTimelineMediaSize(
+    media.width,
+    media.height,
+    media.width
+      ? Math.min(media.width, NATIVE_TIMELINE_MEDIA_MAX_PX)
+      : NATIVE_TIMELINE_MEDIA_MAX_PX,
+    media.height
+      ? Math.min(media.height, NATIVE_TIMELINE_MEDIA_MAX_PX)
+      : NATIVE_TIMELINE_MEDIA_MAX_PX
+  );
+  return reserved
+    ? { width: reserved.width, height: reserved.height }
+    : { width: 240, height: 135 };
+};
+
 const NativeTimelineMedia = ({
   media,
   messageType,
@@ -1370,8 +1424,16 @@ const NativeTimelineMedia = ({
   onActionError?: (message: string) => void;
   onOpenMarkdownPreview?: (file: NativeTimelineFilePreviewTarget) => void;
 }) => {
+  const [mediaAutoLoad] = useSetting(settingsAtom, 'mediaAutoLoad');
+  const [loadRequested, setLoadRequested] = useState(() =>
+    media?.handleId ? nativeTimelineRequestedMediaLoads.has(media.handleId) : false
+  );
   const mediaSrc = media ? nativeTimelineMediaSrc(media) : undefined;
   const reservedBox = sticker ? NATIVE_TIMELINE_STICKER_MAX_PX : NATIVE_TIMELINE_MEDIA_MAX_PX;
+  // "Load Media Automatically" off: images and videos wait for a click, and
+  // audio downloads only when played.
+  const deferVisualMedia =
+    !mediaAutoLoad && !loadRequested && (messageType === 'image' || messageType === 'video');
   const captionView = caption ? (
     formattedCaption ? (
       <NativeFormattedBody html={formattedCaption} fallbackBody={caption} />
@@ -1417,6 +1479,31 @@ const NativeTimelineMedia = ({
   if (sticker) {
     return <img src={mediaSrc} alt="Sticker" style={mediaStyle(media, reservedBox)} />;
   }
+  if (deferVisualMedia && media) {
+    const kind = messageType === 'video' ? 'video' : 'image';
+    const label = filename?.trim() || caption?.trim() || kind;
+    return (
+      <Box direction="Column" gap="100">
+        <button
+          type="button"
+          className={htmlCss.MediaLoadPlaceholder}
+          style={nativeTimelineDeferredMediaStyle(media)}
+          aria-label={`Load ${kind}: ${label}`}
+          data-native-timeline-media-deferred={kind}
+          onClick={() => {
+            nativeTimelineRequestedMediaLoads.add(media.handleId);
+            setLoadRequested(true);
+          }}
+        >
+          <Icon src={kind === 'video' ? Icons.Play : Icons.Photo} size="200" />
+          <Text as="span" size="B300">
+            {kind === 'video' ? 'Load video' : 'Load image'}
+          </Text>
+        </button>
+        {captionView}
+      </Box>
+    );
+  }
   if (messageType === 'image') {
     const inlineSrc = media ? nativeTimelineInlineImageSrc(media, reservedBox) : undefined;
     return (
@@ -1438,6 +1525,7 @@ const NativeTimelineMedia = ({
         <audio
           src={mediaSrc}
           controls
+          preload={mediaAutoLoad ? undefined : 'none'}
           {...(media?.durationMs ? { 'data-duration-ms': String(media.durationMs) } : {})}
         />
         {captionView}
@@ -1725,12 +1813,19 @@ const NativeTimelineRow = ({
   onOpenThread,
   activeThreadRoot,
   onOpenMarkdownPreview,
+  editing,
+  onEditingChange,
 }: NativeTimelineRowProps) => {
   const [declinePending, setDeclinePending] = useState(false);
   const declinePendingRef = useRef(false);
   const rowMountedRef = useRef(true);
   const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
   const [dateFormatString] = useSetting(settingsAtom, 'dateFormatString');
+  const [legacyUsernameColor] = useSetting(settingsAtom, 'legacyUsernameColor');
+  // "Legacy Username Color": per-user palette instead of the heading colour.
+  const senderNameStyle = legacyUsernameColor
+    ? { color: colorMXID(rowSenderId(row) ?? '') }
+    : undefined;
   const surface = hasMessageSurface(row.kind);
   const rowClassName = htmlCss.MessageRow({
     surface,
@@ -1786,7 +1881,7 @@ const NativeTimelineRow = ({
         }
       })
       .catch((error) => {
-        onActionError(error instanceof Error ? error.message : 'Native reaction failed.');
+        onActionError(nativeTimelineActionErrorMessage(error, TIMELINE_ACTION_FAILED.reaction));
         nativeReactionFlights.settleDispatch(actionKey, false);
         nativeTimelineActionsInFlight.delete(actionKey);
       });
@@ -1811,9 +1906,9 @@ const NativeTimelineRow = ({
         isSynaraDesktop(),
         invokeDesktopWithAvailability
       );
-      if (result === 'unavailable') onActionError('Native call decline is unavailable.');
+      if (result === 'unavailable') onActionError(TIMELINE_ACTION_FAILED.callDecline);
     } catch (error) {
-      onActionError(error instanceof Error ? error.message : 'Native call decline failed.');
+      onActionError(nativeTimelineActionErrorMessage(error, TIMELINE_ACTION_FAILED.callDecline));
     } finally {
       nativeTimelineActionsInFlight.delete(actionKey);
       declinePendingRef.current = false;
@@ -1841,7 +1936,7 @@ const NativeTimelineRow = ({
       }
       return true;
     } catch (error) {
-      onActionError(error instanceof Error ? error.message : 'Native poll vote failed.');
+      onActionError(nativeTimelineActionErrorMessage(error, TIMELINE_ACTION_FAILED.pollVote));
       nativePollFlights.settleDispatch(actionKey, false);
       nativeTimelineActionsInFlight.delete(actionKey);
       return false;
@@ -1927,6 +2022,14 @@ const NativeTimelineRow = ({
       const approvalPrompt = row.isAgentApproval
         ? formatCoreAgentApprovalPrompt(row.body)
         : undefined;
+      const mentionsMe = nativeFormattedBodyMentionsUser(row.formattedBody, getMyUserId());
+      const editableInPlace =
+        Boolean(eventId) &&
+        !row.media &&
+        !approvalPrompt &&
+        !agentPayload &&
+        isNativeTextEditable(row.messageType);
+      const editingInPlace = editing && editableInPlace && eventId !== undefined;
       return (
         <NativeTimelineRowActionSurface
           actionProps={{
@@ -1944,6 +2047,7 @@ const NativeTimelineRow = ({
             onViewReactions: rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
             threadRoot: rowThreadRoot(row),
             onOpenThread,
+            onEdit: editableInPlace ? () => onEditingChange(eventId) : undefined,
           }}
           onReaction={runReaction}
           unsent={unsentDelivery}
@@ -1971,7 +2075,10 @@ const NativeTimelineRow = ({
             <Box
               direction="Column"
               gap="100"
-              className={`${rowClassName} ${htmlCss.MessageSwipeContent}`}
+              className={`${rowClassName} ${htmlCss.MessageSwipeContent}${
+                mentionsMe ? ` ${htmlCss.MentionsMeRow}` : ''
+              }`}
+              data-native-timeline-mentions-me={mentionsMe || undefined}
             >
               <Box gap="300" alignItems="Start">
                 <Box direction="Column" alignItems="Center" style={{ width: 36, flexShrink: 0 }}>
@@ -1980,7 +2087,7 @@ const NativeTimelineRow = ({
                 <Box direction="Column" gap="100" grow="Yes" style={{ minWidth: 0 }}>
                   {grouped ? null : (
                     <Box gap="200" alignItems="Baseline" className={htmlCss.Metadata}>
-                      <Text size="T300" className={htmlCss.SenderName}>
+                      <Text size="T300" className={htmlCss.SenderName} style={senderNameStyle}>
                         {displayNameForRow(row)}
                       </Text>
                       {originServerTs ? (
@@ -2017,7 +2124,16 @@ const NativeTimelineRow = ({
                         <HermesAgentCard payload={agentPayload} />
                       </React.Suspense>
                     </ErrorBoundary>
-                  ) : row.media ? null : (
+                  ) : row.media ? null : editingInPlace ? (
+                    <NativeTimelineMessageEditor
+                      roomId={roomId}
+                      eventId={eventId}
+                      body={row.body}
+                      formattedBody={row.formattedBody}
+                      messageType={row.messageType}
+                      onClose={() => onEditingChange(undefined)}
+                    />
+                  ) : (
                     <div className={htmlCss.MessageBody}>
                       {row.formattedBody ? (
                         <NativeFormattedBody
@@ -2349,7 +2465,7 @@ const NativeTimelineRow = ({
         >
           <Box direction="Column" gap="100" className={rowClassName}>
             <Box gap="200" alignItems="Baseline" className={htmlCss.Metadata}>
-              <Text size="T300" className={htmlCss.SenderName}>
+              <Text size="T300" className={htmlCss.SenderName} style={senderNameStyle}>
                 {row.event.senderName}
               </Text>
               {originServerTs ? (
@@ -2465,11 +2581,25 @@ export function NativeTimelinePresenter({
     [focusEventId, openingViewport, preferLiveBottom, roomId, threadRootId]
   );
   const controller = useNativeTimelineView(input);
-  const { setReadState, followLive, jumpLatest: loadLatest, restoreLastRead } = controller;
+  const {
+    setReadState,
+    followLive,
+    jumpLatest: loadLatest,
+    restoreLastRead,
+    reload,
+    streamGap,
+  } = controller;
   const timelineState = controller.state;
   const readyState = timelineState.status === 'ready' ? timelineState : undefined;
   const activeSessionGeneration = readyState?.snapshot.sessionGeneration;
-  const [actionError, setActionError] = useState<string>();
+  const [notice, setNotice] = useState<NativeTimelineNoticeState>();
+  // Kept here, not in the row, so an edit survives the row scrolling away.
+  const [editingEventId, setEditingEventId] = useState<string>();
+  useEffect(() => setEditingEventId(undefined), [roomId, threadRootId]);
+  const showActionError = useCallback(
+    (message: string) => setNotice({ tone: 'error', message }),
+    []
+  );
   const [filePreview, setFilePreview] = useState<NativeTimelineFilePreviewTarget>();
   const [atLiveBottom, setAtLiveBottom] = useState(false);
   const [pendingLastRead, setPendingLastRead] = useState<string>();
@@ -2542,7 +2672,7 @@ export function NativeTimelinePresenter({
   const lastTotalSizeRef = useRef(0);
   const [hideMembershipEvents] = useSetting(settingsAtom, 'hideMembershipEvents');
   const [hideNickAvatarEvents] = useSetting(settingsAtom, 'hideNickAvatarEvents');
-  const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+  const [showHiddenEvents] = useSetting(settingsAtom, 'showHiddenEvents');
   const [messageSpacing] = useSetting(settingsAtom, 'messageSpacing');
   const timelineReady = readyState !== undefined;
   useEffect(() => {
@@ -2567,12 +2697,9 @@ export function NativeTimelinePresenter({
   }, [activeSessionGeneration]);
   const rows = useMemo(() => {
     const raw = readyState?.snapshot.rows ?? [];
-    return raw.filter((row) => {
-      if (hideMembershipEvents && row.kind === 'membership') return false;
-      if (hideNickAvatarEvents && row.kind === 'state') return false;
-      return true;
-    });
-  }, [hideMembershipEvents, hideNickAvatarEvents, readyState?.snapshot.rows]);
+    const settings = { hideMembershipEvents, hideNickAvatarEvents, showHiddenEvents };
+    return raw.filter((row) => isNativeTimelineRowVisible(row, settings));
+  }, [hideMembershipEvents, hideNickAvatarEvents, showHiddenEvents, readyState?.snapshot.rows]);
   const latestRemoteTailEventId = useMemo(
     () => latestNativeReadEventId(readyState?.snapshot.rows.map(rowEventId) ?? []),
     [readyState?.snapshot.rows]
@@ -2760,7 +2887,6 @@ export function NativeTimelinePresenter({
         selectedRoomId: roomId,
         snapshotRoomId: readyState.snapshot.roomId,
         documentActive,
-        hideActivity,
         atLiveBottom,
         positionKind: readyState.selectedPosition.kind,
         canMarkRead: readyState.snapshot.capabilities.markRead,
@@ -2929,8 +3055,9 @@ export function NativeTimelinePresenter({
       setPaginationErrors((errors) => clearTimelinePaginationError(errors, errorDirection));
       void paginate(direction)
         .catch((error) => {
+          const message = nativeTimelineActionErrorMessage(error, TIMELINE_ACTION_FAILED.history);
           setPaginationErrors((errors) =>
-            setTimelinePaginationError(errors, errorDirection, error)
+            setTimelinePaginationError(errors, errorDirection, new Error(message))
           );
         })
         .finally(() => {
@@ -3035,6 +3162,9 @@ export function NativeTimelinePresenter({
       paginateAtEdge();
     };
     const onUserInput = (event?: Event) => {
+      // Keys typed in the in-place editor (Home, End) move its caret, not
+      // the timeline.
+      if (event instanceof KeyboardEvent && isTimelineActionEditableTarget(event.target)) return;
       userInitiatedScrollRef.current = true;
       // End is an explicit request for the live tail. Stick now and keep the
       // programmatic lock so the following scroll event cannot drop ownership
@@ -3357,8 +3487,9 @@ export function NativeTimelinePresenter({
     (targetEventId: string) => {
       const index = findAnchorIndex(rows, { itemId: targetEventId, eventId: targetEventId });
       if (index >= 0) {
-        smoothScrollActiveRef.current = true;
-        virtualizer.scrollToIndex(index, { align: 'center', behavior: 'smooth' });
+        const behavior = preferredScrollBehavior();
+        smoothScrollActiveRef.current = behavior === 'smooth';
+        virtualizer.scrollToIndex(index, { align: 'center', behavior });
         return;
       }
       // Not in the current window: reopen focused through the native owner.
@@ -3399,9 +3530,39 @@ export function NativeTimelinePresenter({
     if (action.kind === 'open_thread') {
       openThread(action.rootEventId, undefined, action.replyEventId);
     } else if (action.kind === 'notice') {
-      setActionError(action.message);
+      setNotice({ tone: 'info', message: action.message });
     }
   }, [focusEventId, focusRoute, openThread]);
+
+  // A focused open that fails (Core error, unreachable event) falls back to
+  // the live room with a notice; the room stays usable instead of showing
+  // only the error until the user switches rooms.
+  const focusedOpenFailed = timelineState.status === 'error' && input.position.kind === 'focused';
+  useEffect(() => {
+    if (!focusedOpenFailed) return;
+    setNotice({ tone: 'info', message: FOCUSED_OPEN_FAILED });
+    setFocusEventId(undefined);
+    setPreferLiveBottom(true);
+  }, [focusedOpenFailed]);
+
+  // New messages from others are read out politely; the virtualized list
+  // itself is not live, or every remount and history page would be read.
+  const [arrivalAnnouncement, setArrivalAnnouncement] = useState('');
+  const announcedTailRef = useRef<string | undefined>(undefined);
+  const arrivalPositionKind = readyState?.selectedPosition.kind;
+  useEffect(() => {
+    announcedTailRef.current = undefined;
+    setArrivalAnnouncement('');
+  }, [roomId, threadRootId]);
+  useEffect(() => {
+    if (arrivalPositionKind !== 'live_bottom' && arrivalPositionKind !== 'thread') {
+      announcedTailRef.current = undefined;
+      return;
+    }
+    const arrivals = nativeTimelineArrivals(announcedTailRef.current, rows, ownUserId);
+    announcedTailRef.current = arrivals.tailEventId;
+    if (arrivals.announcement) setArrivalAnnouncement(arrivals.announcement);
+  }, [arrivalPositionKind, ownUserId, rows]);
 
   const inlineExpansion = useInlineThreadExpansion(roomId);
   const inlineHoldFrameRef = useRef(0);
@@ -3463,7 +3624,7 @@ export function NativeTimelinePresenter({
   }, [onCloseThreadRoute]);
 
   const jumpToLatest = useCallback(() => {
-    setActionError(undefined);
+    setNotice(undefined);
     setPendingLastRead(undefined);
     if (threadRootId) {
       setThreadRootId(undefined);
@@ -3484,11 +3645,9 @@ export function NativeTimelinePresenter({
       })
       .catch((error) => {
         if (mountedNavigationRef.current === navigation)
-          setActionError(
-            error instanceof Error ? error.message : 'Could not open latest messages.'
-          );
+          showActionError(nativeTimelineActionErrorMessage(error, TIMELINE_ACTION_FAILED.latest));
       });
-  }, [input, loadLatest, onCloseThreadRoute, threadRootId]);
+  }, [input, loadLatest, onCloseThreadRoute, showActionError, threadRootId]);
   // A send into this thread scrolls to the thread's tail; `jumpToLatest`
   // would leave the thread (and close a thread pane).
   const showThreadTail = useCallback(() => setLatestPlacementRequest((request) => request + 1), []);
@@ -3505,7 +3664,7 @@ export function NativeTimelinePresenter({
   const jumpToLastRead = useCallback(() => {
     if (!pendingLastRead) return;
     const navigation = input;
-    setActionError(undefined);
+    setNotice(undefined);
     void restoreLastRead(pendingLastRead)
       .then((adoptedAnchor) => {
         if (adoptedAnchor !== undefined && mountedNavigationRef.current === navigation) {
@@ -3517,12 +3676,26 @@ export function NativeTimelinePresenter({
       })
       .catch((error) => {
         if (mountedNavigationRef.current === navigation) {
-          setActionError(
-            error instanceof Error ? error.message : 'Could not open last-read messages.'
-          );
+          showActionError(nativeTimelineActionErrorMessage(error, TIMELINE_ACTION_FAILED.lastRead));
         }
       });
-  }, [input, pendingLastRead, restoreLastRead]);
+  }, [input, pendingLastRead, restoreLastRead, showActionError]);
+
+  // From the error view: leave a focused, restored or thread position for
+  // the room's live tail. A side-pane thread has its own close instead.
+  const canLeaveForLatest = threadRootId
+    ? showThreadBack
+    : input.position.kind === 'focused' ||
+      (input.position.kind === 'normal' && Boolean(input.position.restoredAnchorEventId));
+  const leaveForLatest = useCallback(() => {
+    setNotice(undefined);
+    if (threadRootId) {
+      closeThread();
+      return;
+    }
+    setFocusEventId(undefined);
+    setPreferLiveBottom(true);
+  }, [closeThread, threadRootId]);
 
   if (timelineState.status === 'unavailable') {
     return (
@@ -3532,19 +3705,22 @@ export function NativeTimelinePresenter({
         justifyContent="Center"
         style={{ padding: config.space.S400 }}
       >
-        <Text size="T300">The native timeline is unavailable in this window.</Text>
+        <Text size="T300">Messages are not available in this window.</Text>
       </Box>
     );
   }
-  if (timelineState.status === 'loading') {
+  if (timelineState.status === 'loading' || focusedOpenFailed) {
     return (
       <Box
         grow="Yes"
         alignItems="Center"
         justifyContent="Center"
+        gap="200"
+        role="status"
         style={{ padding: config.space.S400 }}
       >
-        <Text size="T300">Opening native timeline…</Text>
+        <Spinner variant="Secondary" size="200" />
+        <Text size="T300">Loading messages…</Text>
       </Box>
     );
   }
@@ -3552,11 +3728,26 @@ export function NativeTimelinePresenter({
     return (
       <Box
         grow="Yes"
+        direction="Column"
         alignItems="Center"
         justifyContent="Center"
+        gap="300"
         style={{ padding: config.space.S400 }}
+        data-native-timeline-error="true"
       >
-        <Text size="T300">{timelineState.error.message}</Text>
+        <Text size="T300" align="Center" role="alert">
+          {nativeTimelineLoadErrorMessage(timelineState.error)}
+        </Text>
+        <Box gap="200" wrap="Wrap" justifyContent="Center">
+          <Button size="300" variant="Secondary" fill="Soft" radii="300" onClick={reload}>
+            <Text size="B300">Try again</Text>
+          </Button>
+          {canLeaveForLatest ? (
+            <Button size="300" variant="Secondary" fill="Soft" radii="300" onClick={leaveForLatest}>
+              <Text size="B300">{threadRootId ? 'Back to room' : 'Go to latest'}</Text>
+            </Button>
+          ) : null}
+        </Box>
       </Box>
     );
   }
@@ -3605,7 +3796,23 @@ export function NativeTimelinePresenter({
   return (
     <NativeThreadDisplayProvider value={threadDisplayValue}>
       <Box grow="Yes" direction="Column" style={{ minHeight: 0 }}>
-        {actionError && <Text size="T300">{actionError}</Text>}
+        <div role="log" aria-live="polite" className={htmlCss.VisuallyHidden}>
+          {arrivalAnnouncement}
+        </div>
+        {notice ? (
+          <NativeTimelineNotice
+            tone={notice.tone}
+            message={notice.message}
+            onDismiss={() => setNotice(undefined)}
+          />
+        ) : null}
+        {streamGap === 'failed' ? (
+          <NativeTimelineNotice
+            tone="error"
+            message={STREAM_GAP_FAILED}
+            action={{ label: 'Reload', onClick: reload }}
+          />
+        ) : null}
         {threadRootId && showThreadBack ? (
           <Box style={{ padding: config.space.S200 }} alignItems="Start">
             <Button
@@ -3629,6 +3836,8 @@ export function NativeTimelinePresenter({
         <Box grow="Yes" style={{ minHeight: 0, position: 'relative' }}>
           <Scroll
             id="native-timeline-history"
+            role="region"
+            aria-label={threadRootId ? 'Thread messages' : 'Messages'}
             data-native-timeline-scrolling={virtualizer.isScrolling}
             ref={scrollRef}
             visibility="Always"
@@ -3691,7 +3900,7 @@ export function NativeTimelinePresenter({
                       roomId={roomId}
                       pinnedEventIds={snapshot.pinnedEventIds}
                       sourceEncryptionStatus={sourceEncryptionStatus}
-                      onActionError={setActionError}
+                      onActionError={showActionError}
                       onFocusEvent={onFocusEvent}
                       onViewReactions={(request) => {
                         setReactionViewer(request);
@@ -3710,6 +3919,8 @@ export function NativeTimelinePresenter({
                       onOpenThread={openThread}
                       activeThreadRoot={threadRootId}
                       onOpenMarkdownPreview={setFilePreview}
+                      editing={editingEventId !== undefined && rowEventId(row) === editingEventId}
+                      onEditingChange={setEditingEventId}
                     />
                   </div>
                 );
@@ -3790,13 +4001,22 @@ export function NativeTimelinePresenter({
             <FocusTrap
               focusTrapOptions={{
                 initialFocus: false,
-                returnFocusOnDeactivate: false,
+                // The opener (a menu item or pill) may be gone; return to the message.
+                setReturnFocus: returnFocusOrFallback(() =>
+                  reactionViewer
+                    ? scrollRef.current?.querySelector<HTMLElement>(
+                        `[data-native-timeline-event-id="${CSS.escape(
+                          reactionViewer.eventId
+                        )}"] [role="group"]`
+                      )
+                    : undefined
+                ),
                 onDeactivate: () => setReactionViewer(null),
                 clickOutsideDeactivates: true,
                 escapeDeactivates: stopPropagation,
               }}
             >
-              <Modal variant="Surface" size="300">
+              <Modal variant="Surface" size="300" aria-label="Reactions">
                 {reactionViewer ? (
                   <ReactionViewer
                     roomId={roomId}
@@ -3817,7 +4037,7 @@ export function NativeTimelinePresenter({
           <NativeTimelineMarkdownPreview
             target={filePreview}
             onClose={() => setFilePreview(undefined)}
-            onActionError={setActionError}
+            onActionError={showActionError}
           />
         ) : null}
       </Box>

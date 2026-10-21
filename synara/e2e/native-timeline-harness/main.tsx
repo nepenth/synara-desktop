@@ -22,6 +22,15 @@ const params = new URLSearchParams(location.search);
 const scenario = params.get('scenario') ?? 'live';
 const polish = params.has('polish');
 const jank = params.has('jank');
+// `editable`: Core lets the user edit every message (the in-place editor).
+const editable = params.has('editable');
+// `failOpen`: the first room open fails the way Core rejects a command.
+let failOpen = params.has('failOpen');
+const coreOpenFailure = (diagnosticId: string) => ({
+  code: 'Unknown',
+  message: 'The native Matrix timeline is unavailable.',
+  diagnosticId,
+});
 const FILE_MD_HANDLE = `timeline-media-${'ab'.repeat(32)}`;
 const FILE_ZIP_HANDLE = `timeline-media-${'cd'.repeat(32)}`;
 const FILE_MD_BYTES = `# Agent notes
@@ -117,7 +126,7 @@ const makeRow = (index: number) => ({
   capabilities: {
     react: polish,
     reply: polish,
-    edit: false,
+    edit: editable,
     redact: polish,
     report: polish,
     pin: polish,
@@ -285,6 +294,28 @@ window.__SYNARA_DESKTOP__ = {
           ? { snapshot: oldSnapshot, receiptSent: true }
           : oldSnapshot
       ) as T;
+    }
+    if (command === 'matrix_session_snapshot') return { status: 'logged_in' } as T;
+    if (command === 'matrix_edit_message') {
+      return {
+        roomId: room,
+        eventId: args?.eventId,
+        localTxnId: 'edit-txn',
+        status: 'sent',
+      } as T;
+    }
+    if (
+      command === 'matrix_timeline_open' &&
+      request?.position?.kind === 'focused' &&
+      request.position.event_id === '$broken'
+    ) {
+      // Core could not open the routed event at all (the bridge reports it
+      // as an invalid request).
+      throw coreOpenFailure('d0.3-timeline-invalid-room-id');
+    }
+    if (command === 'matrix_timeline_open' && failOpen && request?.position?.kind !== 'focused') {
+      failOpen = false;
+      throw coreOpenFailure('d0.3-timeline-open-failed');
     }
     if (command === 'matrix_timeline_timestamp_to_event') {
       return {
@@ -866,6 +897,7 @@ function App() {
       <button onClick={() => setFocusedEventId('$30')}>Focus middle</button>
       <button onClick={() => setFocusedEventId('$t3')}>Focus thread reply</button>
       <button onClick={() => setFocusedEventId('$gone')}>Focus deleted</button>
+      <button onClick={() => setFocusedEventId('$broken')}>Focus broken</button>
       <div style={{ display: 'flex', alignItems: 'stretch' }}>
         <div
           id="native-timeline"

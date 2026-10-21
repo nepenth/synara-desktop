@@ -1,4 +1,4 @@
-import { Box, config } from 'folds';
+import { Box, Spinner, Text, config } from 'folds';
 import React, { ReactNode } from 'react';
 
 export function NavEmptyCenter({ children }: { children: ReactNode }) {
@@ -36,5 +36,19 @@ export function NavEmptyLayout({ icon, title, content, options }: NavEmptyLayout
         {options}
       </Box>
     </Box>
+  );
+}
+
+/** Stands in for an empty state until the list it describes has loaded. */
+export function NavLoading({ label }: { label: string }) {
+  return (
+    <NavEmptyCenter>
+      <Box direction="Column" alignItems="Center" gap="200" role="status">
+        <Spinner variant="Secondary" size="400" />
+        <Text size="T300" align="Center">
+          {label}
+        </Text>
+      </Box>
+    </NavEmptyCenter>
   );
 }

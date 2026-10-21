@@ -174,7 +174,7 @@ export function Explore() {
   const selectedServer = useExploreServer();
 
   return (
-    <PageNav>
+    <PageNav label="Explore">
       <PageNavHeader>
         <Box grow="Yes" gap="300">
           <Box grow="Yes">
@@ -188,8 +188,11 @@ export function Explore() {
       <PageNavContent>
         <Box direction="Column" gap="300">
           <NavCategory>
-            <NavItem variant="Surface" radii="400" aria-selected={featuredSelected}>
-              <NavLink to={getExploreFeaturedPath()}>
+            <NavItem variant="Surface" radii="400" selected={featuredSelected}>
+              <NavLink
+                aria-current={featuredSelected ? 'page' : undefined}
+                to={getExploreFeaturedPath()}
+              >
                 <NavItemContent>
                   <Box as="span" grow="Yes" alignItems="Center" gap="200">
                     <Avatar size="200" radii="400">
@@ -205,8 +208,11 @@ export function Explore() {
               </NavLink>
             </NavItem>
             {userServer && (
-              <NavItem variant="Surface" radii="400" aria-selected={selectedServer === userServer}>
-                <NavLink to={getExploreServerPath(userServer)}>
+              <NavItem variant="Surface" radii="400" selected={selectedServer === userServer}>
+                <NavLink
+                  aria-current={selectedServer === userServer ? 'page' : undefined}
+                  to={getExploreServerPath(userServer)}
+                >
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">
                       <Avatar size="200" radii="400">
@@ -239,9 +245,12 @@ export function Explore() {
                   key={server}
                   variant="Surface"
                   radii="400"
-                  aria-selected={server === selectedServer}
+                  selected={server === selectedServer}
                 >
-                  <NavLink to={getExploreServerPath(server)}>
+                  <NavLink
+                    aria-current={server === selectedServer ? 'page' : undefined}
+                    to={getExploreServerPath(server)}
+                  >
                     <NavItemContent>
                       <Box as="span" grow="Yes" alignItems="Center" gap="200">
                         <Avatar size="200" radii="400">

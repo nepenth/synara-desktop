@@ -20,13 +20,12 @@ const foldsImport = (text: string): string[] =>
 
 test('overlay dialogs use the Synara Modal/Dialog with dialog semantics', () => {
   // Non-modal folds Dialogs: splash-screen error cards, UIA stage cards inside the
-  // UIAFlowOverlay dialog, and files other batches own (B8b presenter, B9 composer).
+  // UIAFlowOverlay dialog, and the composer (B9).
   const allowed = [
     'src/app/pages/ConfigConfig.tsx',
     'src/app/pages/client/ClientRoot.tsx',
     'src/app/components/uia-stages/',
     'src/app/components/modal-dialog/',
-    'src/app/features/room/NativeTimelinePresenter.tsx',
     'src/app/features/room/RoomInput.tsx',
   ];
   const offenders = APP_FILES.filter(
@@ -77,10 +76,9 @@ test('the store-recovery dialog traps focus, is an alertdialog and closes on Esc
 
 test('menus return focus when they close', () => {
   // The composer autocomplete keeps focus in the editor; Search returns focus
-  // only on Escape; the presenter and composer belong to B8b and B9.
+  // only on Escape; the composer belongs to B9.
   const allowed = [
     'src/app/components/editor/autocomplete/AutocompleteMenu.tsx',
-    'src/app/features/room/NativeTimelinePresenter.tsx',
     'src/app/features/room/RoomInput.tsx',
   ];
   const offenders = APP_FILES.filter(

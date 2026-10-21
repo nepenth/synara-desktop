@@ -5,6 +5,7 @@ import { prepareNativeFormattedBody } from './nativeTimelineRichText';
 
 export type NativeFormattedElementPresentation =
   | 'codeBlock'
+  | 'customEmoji'
   | 'inlineCode'
   | 'inlineImageFallback'
   | 'matrixColor'
@@ -33,6 +34,8 @@ export type NativeFormattedPresentationProjection = {
   codeBlocks: string[];
   orderedListStarts: number[];
   inlineImageFallbacks: string[];
+  /** Custom emoji the presenter loads through Core media (shortcode labels). */
+  customEmoji: string[];
   resourceOwningElements: number;
 };
 
@@ -49,6 +52,7 @@ export const classifyNativeFormattedElement = (
 ): NativeFormattedElementPresentation => {
   if (name === 'table') return 'table';
   if (name === 'span' && 'data-mx-spoiler' in attributes) return 'spoiler';
+  if (name === 'span' && 'data-mx-emoticon' in attributes) return 'customEmoji';
   if (name === 'span' && ('data-mx-color' in attributes || 'data-mx-bg-color' in attributes)) {
     return 'matrixColor';
   }
@@ -82,6 +86,7 @@ export const projectNativeFormattedBody = (
   const codeBlocks: string[] = [];
   const orderedListStarts: number[] = [];
   const inlineImageFallbacks: string[] = [];
+  const customEmoji: string[] = [];
   const resourceOwningElements = (sanitizedHtml.match(/<img\b/gi) ?? []).length;
 
   const visit = (node: ChildNode): void => {
@@ -121,6 +126,9 @@ export const projectNativeFormattedBody = (
           node.attribs.alt?.trim() || node.attribs.title?.trim() || 'Inline image'
         );
         break;
+      case 'customEmoji':
+        customEmoji.push(exactText(node));
+        break;
       case 'matrixColor':
       case 'passthrough':
         break;
@@ -147,6 +155,7 @@ export const projectNativeFormattedBody = (
     codeBlocks,
     orderedListStarts,
     inlineImageFallbacks,
+    customEmoji,
     resourceOwningElements,
   };
 };

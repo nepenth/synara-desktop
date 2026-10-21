@@ -30,7 +30,7 @@ type NativeSessionSnapshot = {
   sessionGeneration?: number;
 };
 
-const unavailableMessage = 'Native Matrix URL preview is unavailable.';
+const unavailableMessage = 'A link preview is not available.';
 
 const inFlight = new Map<string, Promise<NativeMediaPreview | null>>();
 

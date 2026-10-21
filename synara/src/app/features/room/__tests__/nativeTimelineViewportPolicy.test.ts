@@ -124,7 +124,6 @@ const liveReadInput = {
   selectedRoomId: '!room:example.org',
   snapshotRoomId: '!room:example.org',
   documentActive: true,
-  hideActivity: false,
   atLiveBottom: true,
   positionKind: 'live_bottom' as const,
   canMarkRead: true,
@@ -154,6 +153,34 @@ test('live-tail read target rejects background, stale-room, and non-live views',
     nativeLiveReadTarget({ ...liveReadInput, positionKind: 'thread' }),
     '$tail:example.org'
   );
+});
+
+test('hiding typing and read receipts still marks the visible tail read privately', () => {
+  // The policy has no hide-activity input: Core sends only the fully-read
+  // marker and a private receipt, so unread badges clear without telling
+  // anyone else what was read (review D18).
+  assert.equal(
+    nativeLiveReadTarget({ ...liveReadInput, hideActivity: true } as typeof liveReadInput),
+    '$tail:example.org'
+  );
+  const policy = readFileSync(
+    join(process.cwd(), 'src/app/features/room/nativeTimelineViewportPolicy.ts'),
+    'utf8'
+  );
+  assert.doesNotMatch(policy, /hideActivity/);
+  const live = readFileSync(
+    join(process.cwd(), '../crates/synara-core/src/app/timeline/live.rs'),
+    'utf8'
+  );
+  assert.match(
+    live,
+    /\.fully_read_marker\(Some\(event_id\.clone\(\)\)\)\s*\.private_read_receipt\(Some\(event_id\)\)/
+  );
+  const general = readFileSync(
+    join(process.cwd(), 'src/app/features/settings/general/General.tsx'),
+    'utf8'
+  );
+  assert.match(general, /still marks rooms as read privately/);
 });
 
 test('explicit marked-unread state is cleared even when the receipt already covers the tail', () => {
