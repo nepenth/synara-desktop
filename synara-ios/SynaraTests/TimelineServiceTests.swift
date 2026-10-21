@@ -1378,6 +1378,45 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertFalse(progress.canRequestPage)
     }
 
+    func testForwardPaginationEndsOnCoresForwardStateNotOnUnchangedPages() {
+        // Core reports the SDK's own end of an event-focused window, and no
+        // forward pagination for a thread.
+        XCTAssertEqual(SharedCoreTimelineForwardPagination.next(after: .exhausted), .reachedPresent)
+        XCTAssertEqual(SharedCoreTimelineForwardPagination.next(after: .unavailable), .reachedPresent)
+        XCTAssertEqual(SharedCoreTimelineForwardPagination.next(after: .available), .pageAgain)
+        XCTAssertEqual(SharedCoreTimelineForwardPagination.next(after: .loading), .pageAgain)
+    }
+
+    func testRoomSignalsRefreshOnlyStreamsWhoseRevisionMoved() {
+        XCTAssertTrue(
+            SharedCoreTimelineRefreshPolicy.shouldRefresh(shownRevision: nil, announcedRevision: 3),
+            "nothing shown yet"
+        )
+        XCTAssertTrue(
+            SharedCoreTimelineRefreshPolicy.shouldRefresh(shownRevision: 3, announcedRevision: nil),
+            "no batch seen for this stream: read it"
+        )
+        XCTAssertTrue(SharedCoreTimelineRefreshPolicy.shouldRefresh(shownRevision: 3, announcedRevision: 4))
+        XCTAssertFalse(
+            SharedCoreTimelineRefreshPolicy.shouldRefresh(shownRevision: 4, announcedRevision: 4),
+            "another stream of the room sent the signal"
+        )
+        XCTAssertFalse(SharedCoreTimelineRefreshPolicy.shouldRefresh(shownRevision: 5, announcedRevision: 4))
+    }
+
+    func testOnlyTheLastSubscriptionOfAStreamKeyReleasesIt() {
+        var subscriptions = SharedCoreTimelineSubscriptions()
+        subscriptions.begin(key: "room")
+        subscriptions.begin(key: "room")
+        subscriptions.begin(key: "thread")
+        XCTAssertFalse(subscriptions.end(key: "room"), "another room view still listens")
+        XCTAssertTrue(subscriptions.end(key: "room"))
+        XCTAssertEqual(subscriptions.count(key: "room"), 0)
+        XCTAssertEqual(subscriptions.count(key: "thread"), 1)
+        XCTAssertTrue(subscriptions.end(key: "never-begun"), "an unmatched end never goes negative")
+        XCTAssertEqual(subscriptions.count(key: "never-begun"), 0)
+    }
+
     func testBackwardPaginationKeepsPagingThroughUnchangedHiddenRuns() {
         // I13: Core pages lazily through hidden events, leaving the rows
         // unchanged; two such pages used to fail the request.

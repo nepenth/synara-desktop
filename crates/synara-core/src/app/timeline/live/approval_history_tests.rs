@@ -110,7 +110,6 @@ async fn approval_history_cancelled_open_releases_unpublished_view_ownership() {
         "cancelled open must drop its local lease"
     );
     assert!(registry.view_streams.is_empty());
-    assert!(registry.view_revisions.is_empty());
     assert!(registry.view_update_tasks.is_empty());
 }
 

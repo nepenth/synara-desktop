@@ -1465,7 +1465,12 @@ impl SharedCore {
                 guard.push(batch);
             }
         });
-        let timelines = Arc::new(NativeTimelineOwner::new(&client, timeline_emit, generation));
+        // iOS closes a room's stream when its view stops listening; the TTL
+        // also retires any stream whose batches nobody reads anymore.
+        let timelines = Arc::new(
+            NativeTimelineOwner::new(&client, timeline_emit, generation)
+                .with_unclaimed_stream_ttl(crate::app::timeline::UNCLAIMED_VIEW_STREAM_TTL),
+        );
         let sync = Arc::new(
             build_sync_service(&client, generation, SyncServiceConfig::default())
                 .await

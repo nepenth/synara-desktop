@@ -746,10 +746,19 @@ pub fn project_media_filename_and_caption(
 /// JSON. Direct custom-content fields are preferred; the body wrapper remains
 /// supported for compatibility with existing Hermes agents and encrypted
 /// messages whose decrypted custom content is represented by the SDK body.
+///
+/// Every message row is projected on each update, so both sources are probed
+/// cheaply first: the raw event must name a card content key, and the body
+/// must look like a JSON object, before anything is parsed.
 fn project_agent_card_json(event: &EventTimelineItem, body: &str) -> Option<String> {
     let direct = event
         .latest_json()
         .filter(|raw| raw.json().get().len() <= MAX_AGENT_CARD_JSON_BYTES * 2)
+        .filter(|raw| {
+            AGENT_CARD_CONTENT_KEYS
+                .iter()
+                .any(|key| raw.json().get().contains(key))
+        })
         .and_then(|raw| serde_json::from_str::<JsonValue>(raw.json().get()).ok())
         .and_then(|event| event.get("content").cloned())
         .and_then(|content| agent_card_payload_from_content(&content));
@@ -767,7 +776,7 @@ fn agent_card_payload_from_content(content: &JsonValue) -> Option<JsonValue> {
 }
 
 fn agent_card_payload_from_body(body: &str) -> Option<JsonValue> {
-    if body.len() > MAX_AGENT_CARD_JSON_BYTES {
+    if body.len() > MAX_AGENT_CARD_JSON_BYTES || !body.trim_start().starts_with('{') {
         return None;
     }
     let parsed = serde_json::from_str::<JsonValue>(body).ok()?;
