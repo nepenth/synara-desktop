@@ -1,4 +1,12 @@
-import React, { KeyboardEvent, MutableRefObject, ReactNode, useId, useMemo, useState } from 'react';
+import React, {
+  KeyboardEvent,
+  MutableRefObject,
+  ReactNode,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Box,
   Icon,
@@ -22,6 +30,16 @@ import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { stopPropagation } from '../../utils/keyboard';
 import * as depthCss from '../../styles/Depth.css';
 import * as css from './style.css';
+import {
+  matchRanges,
+  matchSnippet,
+  searchSettings,
+  searchWords,
+  SettingsSearchEntry,
+  SettingsSearchResult,
+} from './settingsSearch';
+
+export * from './settingsSearch';
 
 type SettingsModalProps = {
   requestClose: () => void;
@@ -63,14 +81,50 @@ export type SettingsNavGroup<T> = {
   items: SettingsNavItem<T>[];
 };
 
-const matchesFilter = <T,>(item: SettingsNavItem<T>, query: string): boolean => {
-  if (!query) return true;
-  const haystack = [item.name, ...(item.keywords ?? [])].join(' ').toLowerCase();
-  return query
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-    .every((word) => haystack.includes(word));
+/** Wraps the parts of `text` that match the search words in a highlight. */
+function Highlighted({ text, words }: { text: string; words: string[] }) {
+  const ranges = matchRanges(text, words);
+  if (ranges.length === 0) return <>{text}</>;
+  const parts: ReactNode[] = [];
+  let at = 0;
+  ranges.forEach(([from, to]) => {
+    if (from > at) parts.push(text.slice(at, from));
+    parts.push(
+      <mark key={from} className={css.SearchMatch}>
+        {text.slice(from, to)}
+      </mark>
+    );
+    at = to;
+  });
+  if (at < text.length) parts.push(text.slice(at));
+  return <>{parts}</>;
+}
+
+/**
+ * Scrolls the settings row or section titled `title` into view once its page
+ * has rendered, then marks it briefly. Gives up quietly if it never appears.
+ */
+export const revealSetting = (title: string) => {
+  if (typeof window === 'undefined') return;
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  let frames = 0;
+  const attempt = () => {
+    const target = Array.from(document.querySelectorAll<HTMLElement>('[data-setting-title]')).find(
+      (element) => element.dataset.settingTitle === title
+    );
+    if (!target) {
+      frames += 1;
+      if (frames < 60) window.requestAnimationFrame(attempt);
+      return;
+    }
+    target.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+    target.classList.remove(css.RevealedSetting);
+    // Restart the highlight when the same row is revealed twice in a row.
+    target.getBoundingClientRect();
+    target.classList.add(css.RevealedSetting);
+    window.setTimeout(() => target.classList.remove(css.RevealedSetting), 1600);
+  };
+  window.requestAnimationFrame(attempt);
 };
 
 /** Moves focus between nav entries with the arrow, Home and End keys. */
@@ -102,7 +156,13 @@ type SettingsNavProps<T> = {
   active?: T;
   onSelect: (id: T) => void;
   footer?: ReactNode;
+  /** Every setting the pages render, so search finds rows and not only pages. */
+  searchIndex?: SettingsSearchEntry<T>[];
 };
+
+/** Search shows for long navigations, or wherever there are many settings to find. */
+const SEARCH_MIN_NAV_ITEMS = 6;
+const SEARCH_MIN_INDEX_ENTRIES = 8;
 
 /** Grouped, filterable settings navigation shared by App, Room and Space settings. */
 export function SettingsNav<T>({
@@ -112,20 +172,58 @@ export function SettingsNav<T>({
   active,
   onSelect,
   footer,
+  searchIndex,
 }: SettingsNavProps<T>) {
   const [query, setQuery] = useState('');
   const filterId = useId();
-  const visibleGroups = useMemo(
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const pages = useMemo(() => groups.flatMap((group) => group.items), [groups]);
+  const words = useMemo(() => searchWords(query), [query]);
+  const searching = words.length > 0;
+  const resultGroups = useMemo(
     () =>
-      groups
-        .map((group) => ({
-          ...group,
-          items: group.items.filter((item) => matchesFilter(item, query.trim())),
-        }))
-        .filter((group) => group.items.length > 0),
-    [groups, query]
+      searching
+        ? searchSettings(
+            pages.map((item) => ({ id: item.id, name: item.name, keywords: item.keywords })),
+            searchIndex ?? [],
+            query
+          )
+        : [],
+    [pages, searchIndex, query, searching]
   );
-  const total = groups.reduce((count, group) => count + group.items.length, 0);
+  const iconFor = (page: T) => pages.find((item) => item.id === page)?.icon ?? Icons.Setting;
+  const showSearch =
+    pages.length >= SEARCH_MIN_NAV_ITEMS || (searchIndex?.length ?? 0) >= SEARCH_MIN_INDEX_ENTRIES;
+
+  const chooseResult = (result: SettingsSearchResult<T>) => {
+    onSelect(result.page);
+    if (result.title) revealSetting(result.title);
+  };
+
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape' && query) {
+      // Clear the search first; a second Escape closes the dialog.
+      event.preventDefault();
+      event.stopPropagation();
+      setQuery('');
+      return;
+    }
+    if (!searching) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      resultsRef.current
+        ?.querySelector<HTMLButtonElement>('button[data-settings-nav-item]')
+        ?.focus();
+      return;
+    }
+    if (event.key === 'Enter') {
+      const first = resultGroups[0]?.results[0];
+      if (first) {
+        event.preventDefault();
+        chooseResult(first);
+      }
+    }
+  };
 
   return (
     <PageNav size="300">
@@ -135,7 +233,7 @@ export function SettingsNav<T>({
         </Box>
         {headerAfter && <Box shrink="No">{headerAfter}</Box>}
       </PageNavHeader>
-      {total > 5 && (
+      {showSearch && (
         <div className={css.NavFilter}>
           <Input
             id={filterId}
@@ -145,6 +243,7 @@ export function SettingsNav<T>({
             outlined
             value={query}
             onChange={(event) => setQuery(event.currentTarget.value)}
+            onKeyDown={handleSearchKeyDown}
             placeholder="Search settings"
             aria-label="Search settings"
             before={<Icon src={Icons.Search} size="50" />}
@@ -153,52 +252,107 @@ export function SettingsNav<T>({
       )}
       <Box grow="Yes" direction="Column">
         <PageNavContent>
-          <nav aria-label="Settings sections">
-            <div data-settings-nav>
-              {visibleGroups.map((group) => (
+          {searching ? (
+            <div
+              ref={resultsRef}
+              role="region"
+              aria-label="Settings search results"
+              data-settings-nav
+              data-settings-search-results
+            >
+              {resultGroups.map((group) => (
                 <div
-                  key={group.label}
+                  key={String(group.page)}
                   className={css.NavGroup}
                   role="group"
-                  aria-label={group.label}
+                  aria-label={group.pageName}
                 >
                   <Text as="span" className={css.NavGroupLabel} aria-hidden>
-                    {group.label}
+                    {group.pageName}
                   </Text>
-                  {group.items.map((item) => {
-                    const selected = active === item.id;
-                    return (
-                      <NavItem
-                        key={item.name}
-                        variant="Background"
-                        radii="400"
-                        aria-selected={selected}
+                  {group.results.map((result) => (
+                    <NavItem
+                      key={result.title ?? group.pageName}
+                      variant="Background"
+                      radii="400"
+                      aria-selected={false}
+                    >
+                      <button
+                        type="button"
+                        className={css.SearchResultButton}
+                        data-settings-nav-item
+                        data-settings-search-result={result.title ?? group.pageName}
+                        onKeyDown={handleNavKeyDown}
+                        onClick={() => chooseResult(result)}
                       >
-                        <button
-                          type="button"
-                          className={css.NavItemButton}
-                          data-settings-nav-item
-                          onKeyDown={handleNavKeyDown}
-                          aria-current={selected ? 'page' : undefined}
-                          onClick={() => onSelect(item.id)}
-                        >
-                          <Icon src={item.icon} size="100" filled={selected} />
+                        <Icon src={iconFor(group.page)} size="100" />
+                        <span className={css.SearchResultCopy}>
                           <Text as="span" size="T300" truncate>
-                            {item.name}
+                            <Highlighted text={result.title ?? group.pageName} words={words} />
                           </Text>
-                        </button>
-                      </NavItem>
-                    );
-                  })}
+                          {result.description && (
+                            <Text as="span" size="T200" priority="300" truncate>
+                              <Highlighted
+                                text={matchSnippet(result.description, words)}
+                                words={words}
+                              />
+                            </Text>
+                          )}
+                        </span>
+                      </button>
+                    </NavItem>
+                  ))}
                 </div>
               ))}
-              {visibleGroups.length === 0 && (
+              {resultGroups.length === 0 && (
                 <Text className={css.NavEmpty} size="T200" priority="300">
                   No settings match “{query.trim()}”.
                 </Text>
               )}
             </div>
-          </nav>
+          ) : (
+            <nav aria-label="Settings sections">
+              <div data-settings-nav>
+                {groups.map((group) => (
+                  <div
+                    key={group.label}
+                    className={css.NavGroup}
+                    role="group"
+                    aria-label={group.label}
+                  >
+                    <Text as="span" className={css.NavGroupLabel} aria-hidden>
+                      {group.label}
+                    </Text>
+                    {group.items.map((item) => {
+                      const selected = active === item.id;
+                      return (
+                        <NavItem
+                          key={item.name}
+                          variant="Background"
+                          radii="400"
+                          aria-selected={selected}
+                        >
+                          <button
+                            type="button"
+                            className={css.NavItemButton}
+                            data-settings-nav-item
+                            onKeyDown={handleNavKeyDown}
+                            aria-current={selected ? 'page' : undefined}
+                            onClick={() => onSelect(item.id)}
+                          >
+                            <Icon src={item.icon} size="100" filled={selected} />
+                            <Text as="span" size="T300" truncate>
+                              {item.name}
+                            </Text>
+                          </button>
+                        </NavItem>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </nav>
+          )}
         </PageNavContent>
         {footer && <div className={css.NavFooter}>{footer}</div>}
       </Box>
@@ -309,6 +463,7 @@ export function SettingsSection({
       className={classNames(css.Section, className)}
       aria-labelledby={labelled ? titleId : undefined}
       data-settings-section
+      data-setting-title={typeof title === 'string' ? title : undefined}
     >
       {(title || description || after) && (
         <Box className={css.SectionHeader} alignItems="End" gap="200">

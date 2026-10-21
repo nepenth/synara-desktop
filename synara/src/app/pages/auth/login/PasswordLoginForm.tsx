@@ -43,6 +43,7 @@ import { FieldError } from '../FiledError';
 import { getResetPasswordPath } from '../../pathUtils';
 import { stopPropagation } from '../../../utils/keyboard';
 import { synaraDeviceDisplayName } from '../../../utils/user-agent';
+import { useAuthServerPending, useAuthServerReady } from '../authServerResolution';
 
 function UsernameHint({ server }: { server: string }) {
   const [anchor, setAnchor] = useState<RectCords>();
@@ -118,6 +119,8 @@ type PasswordLoginFormProps = {
 };
 export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLoginFormProps) {
   const server = useAuthServer();
+  const serverReady = useAuthServerReady();
+  const serverPending = useAuthServerPending();
   const clientConfig = useClientConfig();
 
   const serverDiscovery = useAutoDiscoveryInfo();
@@ -217,6 +220,7 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = (evt) => {
     evt.preventDefault();
+    if (!serverReady) return;
     const { usernameInput, passwordInput } = evt.target as HTMLFormElement & {
       usernameInput: HTMLInputElement;
       passwordInput: HTMLInputElement;
@@ -329,9 +333,9 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
           </Box>
         </Box>
       </Box>
-      <Button type="submit" variant="Primary" size="500">
+      <Button type="submit" variant="Primary" size="500" disabled={!serverReady}>
         <Text as="span" size="B500">
-          Login
+          {serverPending ? 'Connecting…' : 'Sign in'}
         </Text>
       </Button>
 

@@ -924,6 +924,7 @@ private struct NotificationSettingsView: View {
     @State private var isRegisteringPush = false
     @State private var showLockScreenMessagePreviews = SynaraSharedConstants.defaultLockScreenMessagePreviews
     @State private var timeSensitiveAgentApprovals = SynaraSharedConstants.defaultTimeSensitiveAgentApprovals
+    @State private var approvalNotificationDetails = SynaraSharedConstants.defaultApprovalNotificationDetails
     @State private var pushRules: SynaraPushRulesSnapshot?
     @State private var keywordDraft = ""
     @State private var pushRulesMessage: String?
@@ -985,10 +986,18 @@ private struct NotificationSettingsView: View {
                             for: SynaraSharedConstants.timeSensitiveAgentApprovalsKey
                         )
                     }
+                Toggle("Show approval details", isOn: $approvalNotificationDetails)
+                    .accessibilityIdentifier("ApprovalNotificationDetailsToggle")
+                    .onChange(of: approvalNotificationDetails) { value in
+                        environment.settings.set(
+                            value,
+                            for: SynaraSharedConstants.approvalNotificationDetailsKey
+                        )
+                    }
             } header: {
                 Text("Agent Approvals")
             } footer: {
-                Text("Fresh, locally verified approval prompts use Critical Alerts when this build supports them and you allow them in iOS; otherwise they use Time Sensitive alerts. Use Request Notification Permission to allow Critical Alerts in a supported build. Approve once and Deny require authentication. Always approval remains in-app only.")
+                Text("Fresh, locally verified approval prompts use Critical Alerts when this build supports them and you allow them in iOS; otherwise they use Time Sensitive alerts. Use Request Notification Permission to allow Critical Alerts in a supported build. Show approval details puts the reason and requested command on the notification, including the Lock Screen and Apple Watch, independent of message previews. Approve once and Deny require authentication. Always approval remains in-app only.")
             }
 
             Section {
@@ -1126,6 +1135,9 @@ private struct NotificationSettingsView: View {
             timeSensitiveAgentApprovals = environment.settings.bool(
                 for: SynaraSharedConstants.timeSensitiveAgentApprovalsKey
             )
+            approvalNotificationDetails = environment.settings.bool(
+                for: SynaraSharedConstants.approvalNotificationDetailsKey
+            )
             notificationStatus = await environment.notificationPermission.currentStatus()
             pushRules = await environment.matrix.pushRulesSnapshot()
             reloadNotificationDiagnostics()
@@ -1218,6 +1230,7 @@ private struct AppearanceSettingsView: View {
     @State private var persistTask: Task<Void, Never>?
     @State private var hour24Clock = false
     @State private var hideActivity = false
+    @State private var threadDisplay = ThreadDisplayMode.defaultMode
 
     var body: some View {
         Form {
@@ -1278,6 +1291,26 @@ private struct AppearanceSettingsView: View {
             }
 
             Section {
+                Picker("Thread Display", selection: $threadDisplay) {
+                    ForEach(ThreadDisplayMode.allCases) { mode in
+                        Text(mode.title)
+                            .tag(mode)
+                            .accessibilityIdentifier("AppearanceThreadDisplay-\(mode.rawValue)")
+                    }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+                .accessibilityIdentifier("AppearanceThreadDisplayPicker")
+                .onChange(of: threadDisplay) { value in
+                    environment.settings.setString(value.rawValue, for: ThreadDisplayMode.settingsKey)
+                }
+            } header: {
+                Text("Thread Display")
+            } footer: {
+                Text(threadDisplay.detail + " Matches desktop Settings → Appearance → Thread Display.")
+            }
+
+            Section {
                 Toggle("Hide Typing & Read Receipts", isOn: $hideActivity)
                     .accessibilityIdentifier("AppearanceHideActivityToggle")
                     .onChange(of: hideActivity) { value in
@@ -1309,6 +1342,9 @@ private struct AppearanceSettingsView: View {
             baseColor = Color(synaraHex: SynaraThemeRamp.resolve(stored))
             hour24Clock = environment.settings.bool(for: SynaraSharedConstants.hour24ClockKey)
             hideActivity = environment.settings.bool(for: SynaraSharedConstants.hideActivityKey)
+            threadDisplay = ThreadDisplayMode.resolve(
+                environment.settings.string(for: ThreadDisplayMode.settingsKey)
+            )
             DispatchQueue.main.async {
                 didLoadBaseColor = true
             }

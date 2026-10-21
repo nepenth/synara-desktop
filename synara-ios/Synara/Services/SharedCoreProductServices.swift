@@ -560,6 +560,53 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         return false
     }
 
+    /// One bounded store transaction for a background notification action
+    /// (for example Approve once tapped on a mirrored Apple Watch alert). It
+    /// joins the same serialized chain as foreground resume and background
+    /// pause, opens the session only for `operation`, and re-quiesces every
+    /// SQLite owner before returning unless UIKit became foreground meanwhile.
+    /// The caller must hold a UIKit background-task assertion throughout.
+    func performBackgroundMutation(
+        session: AuthenticatedSession,
+        _ operation: @escaping () async -> Bool
+    ) async -> Bool {
+        let queued: Task<Bool, Never> = applyLock.withLock {
+            let previous = applyChain
+            let next = Task<Bool, Never> { [weak self] in
+                await previous.value
+                guard let self else {
+                    return false
+                }
+                PerformanceTrace.event("MatrixBackgroundMutationBegin")
+                let alreadyLive = self.applyLock.withLock { self.foregroundActive }
+                    && Self.isLive(self.syncStatus)
+                if alreadyLive == false {
+                    await self.applyLiveSession(session)
+                }
+                let succeeded = Self.isLive(self.syncStatus) ? await operation() : false
+                if self.applyLock.withLock({ self.foregroundActive }) == false {
+                    self.stopStatusWatch()
+                    self.stopPathMonitor()
+                    await self.applyBackgroundPause(clearLastSession: false)
+                }
+                PerformanceTrace.event("MatrixBackgroundMutationComplete")
+                return succeeded
+            }
+            applyChain = Task { _ = await next.value }
+            return next
+        }
+        return await queued.value
+    }
+
+    private static func isLive(_ status: MatrixSyncStatus) -> Bool {
+        switch status {
+        case .starting, .syncing, .connected, .reconnecting:
+            return true
+        case .stopped, .disconnected, .restoreFailed, .failed:
+            return false
+        }
+    }
+
     func resetLocalState(for session: AuthenticatedSession?) async {
         _ = session
         // Keep the per-account crypto store so the next password login can
@@ -1133,6 +1180,8 @@ final class SharedCoreTimelineService: TimelineServicing {
     private let host: SharedCoreProductHost
     private let streamLock = NSLock()
     private let recoveryGate = SharedCoreTimelineRecoveryGate()
+    /// Keyed by `SharedCoreTimelineStreamKey`: a room's own stream and each of
+    /// its open thread streams live side by side and never evict each other.
     private var streams: [String: OpenStreamState] = [:]
 
     init(host: SharedCoreProductHost) {
@@ -1140,104 +1189,62 @@ final class SharedCoreTimelineService: TimelineServicing {
     }
 
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
-        do {
-            if let previous = takeStream(for: roomID) {
-                _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: previous)
-            }
-            let position = TimelineOpenPositionDto(
-                kind: focusedEventID == nil ? .liveBottom : .focused,
-                atBottom: focusedEventID == nil,
-                restoredAnchorEventId: nil,
-                liveTailEventId: nil,
-                updatedAtMs: nil,
-                eventId: focusedEventID
-            )
-            let opened = try await SharedCoreTimeline.timelineOpen(
-                core: host.core,
-                roomId: roomID,
-                position: position
-            )
-            storeStream(opened.streamId, visibleItemIDs: [], for: roomID)
-            return await resolveInitialSnapshot(
-                opened.snapshot,
-                roomID: roomID,
-                streamID: opened.streamId
-            )
-        } catch {
-            return .failed(Self.failure(from: error))
-        }
+        await openStream(
+            roomID: roomID,
+            key: SharedCoreTimelineStreamKey.room(roomID),
+            position: SharedCoreTimelineStreamKey.roomPosition(focusedEventID: focusedEventID)
+        )
+    }
+
+    func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome {
+        await openStream(
+            roomID: roomID,
+            key: SharedCoreTimelineStreamKey.thread(roomID: roomID, rootEventID: rootEventID),
+            position: SharedCoreTimelineStreamKey.threadPosition(rootEventID: rootEventID)
+        )
     }
 
     func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome {
         _ = eventID
-        guard let initialState = stream(for: roomID) else {
-            return .failed(Self.viewUnavailableFailure)
+        return await paginateOlder(roomID: roomID, key: SharedCoreTimelineStreamKey.room(roomID))
+    }
+
+    func loadOlderThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome {
+        await paginateOlder(
+            roomID: roomID,
+            key: SharedCoreTimelineStreamKey.thread(roomID: roomID, rootEventID: rootEventID)
+        )
+    }
+
+    func closeThreadTimeline(roomID: String, rootEventID: String) {
+        guard let streamID = takeStream(
+            for: SharedCoreTimelineStreamKey.thread(roomID: roomID, rootEventID: rootEventID)
+        ) else {
+            return
         }
-        var knownItemIDs = initialState.visibleItemIDs
-        var paginationProgress = SharedCoreTimelinePaginationProgress()
-        while Task.isCancelled == false {
-            guard paginationProgress.canRequestPage else {
-                return .failed(Self.temporarilyUnavailableFailure)
-            }
-            do {
-                let snapshot = try await SharedCoreTimeline.timelinePaginate(
-                    core: host.core,
-                    streamId: initialState.streamID,
-                    direction: .backwards
-                )
-                paginationProgress.recordPage(rowIDs: Self.nativeRowIDs(snapshot.rows))
-                let items = SharedCoreTimelineRows.items(from: snapshot.rows, visibleTailEventID: snapshot.visibleTailEventId, receiptTailEventID: snapshot.receiptTailEventId)
-                let itemIDs = Self.stableItemIDs(items)
-                let containsNewItems = itemIDs.isSubset(of: knownItemIDs) == false
-                knownItemIDs.formUnion(itemIDs)
-                updateVisibleItemIDs(
-                    knownItemIDs,
-                    roomID: roomID,
-                    streamID: initialState.streamID
-                )
-                if containsNewItems {
-                    return .loaded(items)
-                }
-                if snapshot.paginationBackward == .exhausted {
-                    return .empty
-                }
-                guard snapshot.paginationBackward == .available else {
-                    return .failed(Self.temporarilyUnavailableFailure)
-                }
-            } catch {
-                return .failed(Self.failure(from: error))
-            }
+        Task {
+            _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: streamID)
         }
-        return .failed(Self.temporarilyUnavailableFailure)
     }
 
     func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome> {
-        // Register before the task begins so an SDK update cannot be lost
-        // between the initial snapshot and the first live readback.
-        let signals = host.livePoller.timelineSignals(roomId: roomID)
-        return AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
-            let task = Task {
-                if SharedCoreTimelineUpdateBootstrap.shouldRefreshOpenStream(
-                    focusedEventID: focusedEventID
-                ) {
-                    continuation.yield(
-                        await refreshOpenTimeline(roomID: roomID, focusedEventID: focusedEventID)
-                    )
-                }
-                for await _ in signals {
-                    guard Task.isCancelled == false else {
-                        break
-                    }
-                    continuation.yield(
-                        await refreshOpenTimeline(roomID: roomID, focusedEventID: focusedEventID)
-                    )
-                }
-                continuation.finish()
-            }
-            continuation.onTermination = { _ in
-                task.cancel()
-            }
-        }
+        streamUpdates(
+            roomID: roomID,
+            key: SharedCoreTimelineStreamKey.room(roomID),
+            position: SharedCoreTimelineStreamKey.roomPosition(focusedEventID: focusedEventID),
+            refreshOnAttach: SharedCoreTimelineUpdateBootstrap.shouldRefreshOpenStream(
+                focusedEventID: focusedEventID
+            )
+        )
+    }
+
+    func threadTimelineUpdates(roomID: String, rootEventID: String) -> AsyncStream<TimelineLoadOutcome> {
+        streamUpdates(
+            roomID: roomID,
+            key: SharedCoreTimelineStreamKey.thread(roomID: roomID, rootEventID: rootEventID),
+            position: SharedCoreTimelineStreamKey.threadPosition(rootEventID: rootEventID),
+            refreshOnAttach: SharedCoreTimelineUpdateBootstrap.shouldRefreshThreadStream
+        )
     }
 
     func typingUsers(roomID: String) -> AsyncStream<[String]> {
@@ -1265,7 +1272,7 @@ final class SharedCoreTimelineService: TimelineServicing {
     }
 
     func retryDecryption(roomID: String) async -> CryptoActionResult {
-        guard let streamID = stream(for: roomID)?.streamID else {
+        guard let streamID = stream(for: SharedCoreTimelineStreamKey.room(roomID))?.streamID else {
             return .unavailable("Open this room to retry decryption.")
         }
         do {
@@ -1286,10 +1293,114 @@ final class SharedCoreTimelineService: TimelineServicing {
         }
     }
 
-    private func refreshOpenTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
+    private func openStream(
+        roomID: String,
+        key: String,
+        position: TimelineOpenPositionDto
+    ) async -> TimelineLoadOutcome {
+        do {
+            if let previous = takeStream(for: key) {
+                _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: previous)
+            }
+            let opened = try await SharedCoreTimeline.timelineOpen(
+                core: host.core,
+                roomId: roomID,
+                position: position
+            )
+            storeStream(opened.streamId, visibleItemIDs: [], for: key)
+            return await resolveInitialSnapshot(
+                opened.snapshot,
+                key: key,
+                streamID: opened.streamId
+            )
+        } catch {
+            return .failed(Self.failure(from: error))
+        }
+    }
+
+    private func paginateOlder(roomID: String, key: String) async -> TimelineLoadOutcome {
+        _ = roomID
+        guard let initialState = stream(for: key) else {
+            return .failed(Self.viewUnavailableFailure)
+        }
+        var knownItemIDs = initialState.visibleItemIDs
+        var paginationProgress = SharedCoreTimelinePaginationProgress()
+        while Task.isCancelled == false {
+            guard paginationProgress.canRequestPage else {
+                return .failed(Self.temporarilyUnavailableFailure)
+            }
+            do {
+                let snapshot = try await SharedCoreTimeline.timelinePaginate(
+                    core: host.core,
+                    streamId: initialState.streamID,
+                    direction: .backwards
+                )
+                paginationProgress.recordPage(rowIDs: Self.nativeRowIDs(snapshot.rows))
+                let items = SharedCoreTimelineRows.items(from: snapshot.rows, visibleTailEventID: snapshot.visibleTailEventId, receiptTailEventID: snapshot.receiptTailEventId)
+                let itemIDs = Self.stableItemIDs(items)
+                let containsNewItems = itemIDs.isSubset(of: knownItemIDs) == false
+                knownItemIDs.formUnion(itemIDs)
+                updateVisibleItemIDs(
+                    knownItemIDs,
+                    key: key,
+                    streamID: initialState.streamID
+                )
+                if containsNewItems {
+                    return .loaded(items)
+                }
+                if snapshot.paginationBackward == .exhausted {
+                    return .empty
+                }
+                guard snapshot.paginationBackward == .available else {
+                    return .failed(Self.temporarilyUnavailableFailure)
+                }
+            } catch {
+                return .failed(Self.failure(from: error))
+            }
+        }
+        return .failed(Self.temporarilyUnavailableFailure)
+    }
+
+    private func streamUpdates(
+        roomID: String,
+        key: String,
+        position: TimelineOpenPositionDto,
+        refreshOnAttach: Bool
+    ) -> AsyncStream<TimelineLoadOutcome> {
+        // Register before the task begins so an SDK update cannot be lost
+        // between the initial snapshot and the first live readback.
+        let signals = host.livePoller.timelineSignals(roomId: roomID)
+        return AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+            let task = Task {
+                if refreshOnAttach {
+                    continuation.yield(
+                        await refreshOpenTimeline(roomID: roomID, key: key, position: position)
+                    )
+                }
+                for await _ in signals {
+                    guard Task.isCancelled == false else {
+                        break
+                    }
+                    continuation.yield(
+                        await refreshOpenTimeline(roomID: roomID, key: key, position: position)
+                    )
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
+    private func refreshOpenTimeline(
+        roomID: String,
+        key: String,
+        position: TimelineOpenPositionDto
+    ) async -> TimelineLoadOutcome {
         let traceID = PerformanceTrace.begin("TimelineSnapshotRefresh")
         defer { PerformanceTrace.end("TimelineSnapshotRefresh", id: traceID) }
-        if let streamId = stream(for: roomID)?.streamID {
+        if let streamId = stream(for: key)?.streamID {
             do {
                 let snapshot = try await SharedCoreTimeline.timelineSnapshot(
                     core: host.core,
@@ -1297,41 +1408,38 @@ final class SharedCoreTimelineService: TimelineServicing {
                 )
                 return await resolveInitialSnapshot(
                     snapshot,
-                    roomID: roomID,
+                    key: key,
                     streamID: streamId
                 )
             } catch {
                 let failure = Self.failure(from: error)
                 if failure.kind == .viewUnavailable {
-                    return await recoveryGate.run(roomID: roomID) { [weak self] in
+                    return await recoveryGate.run(roomID: key) { [weak self] in
                         guard let self else {
                             return .failed(Self.temporarilyUnavailableFailure)
                         }
                         guard let staleStreamID = self.takeStream(
-                            for: roomID,
+                            for: key,
                             ifMatching: streamId
                         ) else {
-                            return await self.refreshCurrentTimelineAfterRecoveryRace(roomID: roomID)
+                            return await self.refreshCurrentTimelineAfterRecoveryRace(key: key)
                         }
                         _ = try? await SharedCoreTimeline.timelineClose(
                             core: self.host.core,
                             streamId: staleStreamID
                         )
-                        return await self.loadInitialTimeline(
-                            roomID: roomID,
-                            focusedEventID: focusedEventID
-                        )
+                        return await self.openStream(roomID: roomID, key: key, position: position)
                     }
                 }
                 return .failed(failure)
             }
         }
-        return await loadInitialTimeline(roomID: roomID, focusedEventID: focusedEventID)
+        return await openStream(roomID: roomID, key: key, position: position)
     }
 
     private func resolveInitialSnapshot(
         _ initialSnapshot: TimelineSnapshotDto,
-        roomID: String,
+        key: String,
         streamID: String
     ) async -> TimelineLoadOutcome {
         var snapshot = initialSnapshot
@@ -1341,7 +1449,7 @@ final class SharedCoreTimelineService: TimelineServicing {
             let items = SharedCoreTimelineRows.items(from: snapshot.rows, visibleTailEventID: snapshot.visibleTailEventId, receiptTailEventID: snapshot.receiptTailEventId)
             updateVisibleItemIDs(
                 Self.stableItemIDs(items),
-                roomID: roomID,
+                key: key,
                 streamID: streamID
             )
             if let outcome = SharedCoreTimelineRows.authoritativeOutcome(
@@ -1372,19 +1480,19 @@ final class SharedCoreTimelineService: TimelineServicing {
         return .failed(Self.temporarilyUnavailableFailure)
     }
 
-    private func stream(for roomID: String) -> OpenStreamState? {
+    private func stream(for key: String) -> OpenStreamState? {
         streamLock.lock()
         defer { streamLock.unlock() }
-        return streams[roomID]
+        return streams[key]
     }
 
     private func storeStream(
         _ streamID: String,
         visibleItemIDs: Set<String>,
-        for roomID: String
+        for key: String
     ) {
         streamLock.lock()
-        streams[roomID] = OpenStreamState(
+        streams[key] = OpenStreamState(
             streamID: streamID,
             visibleItemIDs: visibleItemIDs
         )
@@ -1393,35 +1501,35 @@ final class SharedCoreTimelineService: TimelineServicing {
 
     private func updateVisibleItemIDs(
         _ itemIDs: Set<String>,
-        roomID: String,
+        key: String,
         streamID: String
     ) {
         streamLock.lock()
         defer { streamLock.unlock() }
-        guard var state = streams[roomID], state.streamID == streamID else {
+        guard var state = streams[key], state.streamID == streamID else {
             return
         }
         state.visibleItemIDs.formUnion(itemIDs)
-        streams[roomID] = state
+        streams[key] = state
     }
 
-    private func takeStream(for roomID: String) -> String? {
+    private func takeStream(for key: String) -> String? {
         streamLock.lock()
         defer { streamLock.unlock() }
-        return streams.removeValue(forKey: roomID)?.streamID
+        return streams.removeValue(forKey: key)?.streamID
     }
 
-    private func takeStream(for roomID: String, ifMatching expectedStreamID: String) -> String? {
+    private func takeStream(for key: String, ifMatching expectedStreamID: String) -> String? {
         streamLock.lock()
         defer { streamLock.unlock() }
-        guard streams[roomID]?.streamID == expectedStreamID else {
+        guard streams[key]?.streamID == expectedStreamID else {
             return nil
         }
-        return streams.removeValue(forKey: roomID)?.streamID
+        return streams.removeValue(forKey: key)?.streamID
     }
 
-    private func refreshCurrentTimelineAfterRecoveryRace(roomID: String) async -> TimelineLoadOutcome {
-        guard let current = stream(for: roomID) else {
+    private func refreshCurrentTimelineAfterRecoveryRace(key: String) async -> TimelineLoadOutcome {
+        guard let current = stream(for: key) else {
             return .failed(Self.temporarilyUnavailableFailure)
         }
         do {
@@ -1431,7 +1539,7 @@ final class SharedCoreTimelineService: TimelineServicing {
             )
             return await resolveInitialSnapshot(
                 snapshot,
-                roomID: roomID,
+                key: key,
                 streamID: current.streamID
             )
         } catch {

@@ -11,6 +11,7 @@ import {
   AGENT_APPROVAL_REACTION_APPROVE_ONCE,
   AGENT_APPROVAL_REACTION_DENY,
   buildAgentApprovalNativeActionDedupeKey,
+  buildAgentApprovalNotificationText,
   createAgentApprovalNativeActionDedupeStore,
   executeAgentApprovalNativeActionOnce,
   formatCoreAgentApprovalPrompt,
@@ -292,5 +293,40 @@ test('native action dedupe persists only completed actions, permits restart retr
       execute: async () => undefined,
     }),
     true
+  );
+});
+
+test('approval notification text shows reason and command only with details enabled', () => {
+  const summary = { reason: 'find -delete', command: 'find /tmp/forge -delete' };
+  assert.deepEqual(
+    buildAgentApprovalNotificationText({ roomName: 'forge', summary, showDetails: true }),
+    {
+      title: 'forge: find -delete',
+      body: 'find /tmp/forge -delete',
+    }
+  );
+  assert.deepEqual(
+    buildAgentApprovalNotificationText({ roomName: 'forge', summary, showDetails: false }),
+    { title: 'Approval Required: Dangerous Command', body: 'forge: Review a request in Synara.' }
+  );
+  assert.deepEqual(
+    buildAgentApprovalNotificationText({
+      roomName: 'forge',
+      summary: { command: 'rm -rf build' },
+      showDetails: true,
+    }),
+    { title: 'forge: Approval required', body: 'rm -rf build' }
+  );
+  assert.deepEqual(
+    buildAgentApprovalNotificationText({
+      roomName: 'forge',
+      summary: { reason: 'cleanup' },
+      showDetails: true,
+    }),
+    { title: 'forge: cleanup', body: 'Review the command in Synara.' }
+  );
+  assert.deepEqual(
+    buildAgentApprovalNotificationText({ roomName: 'forge', summary: {}, showDetails: true }),
+    { title: 'Approval Required: Dangerous Command', body: 'forge: Review a request in Synara.' }
   );
 });

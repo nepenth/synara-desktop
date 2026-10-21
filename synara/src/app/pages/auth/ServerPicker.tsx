@@ -25,11 +25,13 @@ import { useDebounce } from '../../hooks/useDebounce';
 import { stopPropagation } from '../../utils/keyboard';
 
 export function ServerPicker({
+  id,
   server,
   serverList,
   allowCustomServer,
   onServerChange,
 }: {
+  id?: string;
   server: string;
   serverList: string[];
   allowCustomServer?: boolean;
@@ -79,7 +81,11 @@ export function ServerPicker({
 
   return (
     <Input
+      id={id}
       ref={serverInputRef}
+      autoComplete="off"
+      autoCapitalize="off"
+      spellCheck={false}
       style={{ paddingRight: config.space.S200 }}
       variant={allowCustomServer ? 'Background' : 'Surface'}
       outlined

@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react';
 import { Box, Text, color } from 'folds';
+import * as css from '../styles.css';
+import { usePickedAuthServer } from '../authServerResolution';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuthFlows } from '../../../hooks/useAuthFlows';
 import { useAuthServer } from '../../../hooks/useAuthServer';
@@ -19,6 +21,7 @@ const useLoginSearchParams = (searchParams: URLSearchParams): LoginPathSearchPar
 
 export function Login() {
   const server = useAuthServer();
+  const pickedServer = usePickedAuthServer(server);
   const { loginFlows } = useAuthFlows();
   const [searchParams] = useSearchParams();
   const loginSearchParams = useLoginSearchParams(searchParams);
@@ -26,9 +29,14 @@ export function Login() {
 
   return (
     <Box direction="Column" gap="500">
-      <Text size="H2" priority="400">
-        Login
-      </Text>
+      <div className={css.AuthHeading}>
+        <Text as="h2" size="H3" priority="400">
+          Welcome back
+        </Text>
+        <Text size="T300" priority="300">
+          Sign in to your account on {pickedServer}.
+        </Text>
+      </div>
       {parsedFlows.password && (
         <>
           <PasswordLoginForm
@@ -47,7 +55,7 @@ export function Login() {
         </>
       )}
       <Text align="Center">
-        Do not have an account? <Link to={getRegisterPath(server)}>Register</Link>
+        New to {pickedServer}? <Link to={getRegisterPath(server)}>Create an account</Link>
       </Text>
     </Box>
   );

@@ -384,6 +384,10 @@ import SwiftUI
         let replyPreview: TimelineReplyPreview?
         let replyCount: Int
         let availability: EventActionAvailability
+        /// Part of the row value so expanding or collapsing an inline thread
+        /// reconfigures the cell; cells only redraw when their row changes.
+        var isInlineThreadMode: Bool = false
+        var isThreadExpanded: Bool = false
     }
 
     struct StableTimelineViewportRow: Equatable, Identifiable {

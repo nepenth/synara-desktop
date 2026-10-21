@@ -1,0 +1,1 @@
+Returning to the room list after opening a room from a notification now shows your rooms instead of placeholder rows. This update also includes desktop improvements: a redesigned Settings layout, a choice of how threads open, and fixes for the Linux window controls and timeline scrollbar.

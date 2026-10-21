@@ -2,16 +2,43 @@
 
 ## Unreleased
 
-- iOS: going back to the room list after opening a room from a notification shows the rooms again instead of loading placeholders forever; the list restarts its updates every time it appears.
-- Linux: the title strip and its Minimize, Maximize and Close controls render and drag again (the page never reported the strip to the native drag hook), and the three controls share one size.
-- Threads: Settings → Appearance → Thread Display opens threads in full view (as before), in a resizable side panel beside the live room with its own composer, or inline beneath their first message with Show earlier replies and Reply in thread.
-- Settings: the app and room/space settings navigation use one compact rhythm, setting controls stay beside their descriptions instead of dropping below long text, every pair of settings keeps the same spacing, theme pickers share one dropdown style, color controls align on one edge, and segmented choices no longer shift when the selection changes.
-- Settings: App, Room and Space settings are redesigned around one layout: a larger dialog, grouped navigation with section labels and a settings search, a centred reading column with a short description per page, and each section shown as one card with divided rows. Room and space upgrade now sits in a Danger Zone section.
-- Fix opening a space: its lobby no longer crashes reading guest access.
-- Menus: room and space context menus (including the room header menu) use one flat item style, so Invite no longer looks different from the other items.
-- Timeline: a normal, always-visible scrollbar replaces the 7-day date rail, which covered the scrollbar and placed its dots by a fixed time axis instead of the scroll position; the room no longer auto-loads seven days of history on open.
-- Timeline: hovering a message shows a steady tint (about a third of the old surface change) with no border, lift, shadow or fade.
-- Fix the error screen when opening the room Call menu while calls are unavailable: focus traps with only disabled controls now fall back to their own container instead of throwing.
+- iOS: opening a room from a notification loads its earlier messages and keeps receiving new ones, the same as opening it from the room list. You no longer need to leave the room or relaunch Synara to see its history.
+
+## [2.2.6] - 2026-10-12
+
+- Approvals: Approve once and Deny on agent approval notifications work from the iPhone lock screen and from Apple Watch. They run in the background without unlocking or opening Synara; Synara opens its stores for one bounded decision and closes them before suspension, and shows "Approval not sent" if the decision could not be sent. Approve always remains in-app only.
+- macOS: the first approval after launch no longer arrives without Approve and Deny buttons; Synara waits for the notification category to register before posting.
+- Desktop: approval alerts are no longer withdrawn when the agent room is selected and the window gains focus.
+- Linux: approval alerts say to open Synara when the notification server cannot show action buttons.
+- Dependencies: update quinn-proto to 0.11.19 for RUSTSEC-2026-0338 through RUSTSEC-2026-0342.
+
+## [2.2.5] - 2026-10-11
+
+- iOS: threads work. Opening a thread loads its replies from the thread itself instead of showing only the first message, earlier replies load on request, and sent replies stay visible. Messages have Reply in Thread. Settings → Appearance → Thread Display matches desktop: Inline (the default) expands the latest replies beneath the first message, Sheet opens the thread over the room, and Full Screen opens it on its own screen. Opening a thread no longer resets the room's timeline.
+
+## [2.2.4] - 2026-10-09
+
+- Sign-in: the Synara mark is centered over the name, the "y" in Synara is no longer clipped, and the background grid no longer moves.
+
+## [2.2.3] - 2026-10-09
+
+- Sign-in: redesigned login, registration and password reset with an animated Synara mark, a brand panel and a glass card that follow your light or dark system theme and stack on narrow windows. Changing the homeserver no longer makes the username and password fields blink or clears what you typed: the form stays in place, a status line under the server field shows Connecting, Connected or a short error with Retry, and Sign in stays disabled until the new server is ready.
+- Approvals: agent approval notifications on macOS, Linux and iOS show what is being approved, for example "forge: find -delete" with the requested command below it, alongside Approve once and Deny. Secret-like values are redacted. Turn off Show Approval Details in notification settings to show only the room or agent name. This setting is separate from message previews.
+
+## [2.2.2] - 2026-10-09
+
+- Settings: search finds individual settings, not just page names. Results show the setting and its description grouped by page; choosing one opens the page and scrolls to that row. Room and Space settings search their own rows too.
+- Threads: Inline is now the default thread display. A choice made in Settings → Appearance is kept; until you choose, the default applies.
+
+## [2.2.1] - 2026-10-08
+
+- Linux: the title strip with Minimize, Maximize and Close renders and drags again, and the three controls share one size.
+- iOS: going back to the room list after opening a room from a notification shows the rooms instead of loading placeholders forever.
+- Timeline: a normal, always-visible scrollbar replaces the 7-day date rail, which covered the scrollbar and placed its dots by time rather than scroll position; hovering a message shows a steady tint with no border, lift, shadow or fade.
+- Threads: Settings → Appearance → Thread Display opens threads in full view (as before), in a resizable side panel beside the live room, or inline beneath their first message.
+- Settings: App, Room and Space settings share one redesigned layout: a larger dialog, grouped navigation with settings search, a centered column with one card per section, aligned controls and a Danger Zone for room upgrades.
+- Menus: room and space context menus use one flat item style, so Invite matches the other items.
+- Fix the error screen when opening the room Call menu while calls are unavailable, and the crash when opening a space.
 
 ## [2.2.0] - 2026-10-08
 

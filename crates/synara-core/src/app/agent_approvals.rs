@@ -238,7 +238,7 @@ fn is_known_secret_literal(token: &str) -> bool {
         || lower.starts_with("xox")
 }
 
-fn redact_assignment(token: &str) -> Option<String> {
+fn redact_assignment(token: &str, redact_paths: bool) -> Option<String> {
     let (name, value) = token.split_once('=')?;
     if name.is_empty() || value.is_empty() {
         return None;
@@ -246,13 +246,19 @@ fn redact_assignment(token: &str) -> Option<String> {
     if looks_like_secret_name(name) {
         return Some(format!("{name}=<redacted>"));
     }
-    if is_path_arg(value) {
+    if redact_paths && is_path_arg(value) {
         return Some(format!("{name}=<path>"));
     }
     None
 }
 
 fn redact_agent_approval_history_preview(value: &str) -> String {
+    redact_agent_approval_preview(value, true)
+}
+
+/// Secret-like values are always redacted. Paths are replaced only for
+/// server-readable account data; on-device notifications keep them.
+fn redact_agent_approval_preview(value: &str, redact_paths: bool) -> String {
     let tokens: Vec<&str> = value.split_whitespace().collect();
     if tokens.is_empty() {
         return String::new();
@@ -261,7 +267,7 @@ fn redact_agent_approval_history_preview(value: &str) -> String {
     let mut redact_next = false;
     for token in tokens {
         if redact_next {
-            out.push(if is_path_arg(token) {
+            out.push(if redact_paths && is_path_arg(token) {
                 "<path>".to_owned()
             } else {
                 "<redacted>".to_owned()
@@ -269,7 +275,7 @@ fn redact_agent_approval_history_preview(value: &str) -> String {
             redact_next = false;
             continue;
         }
-        if let Some(redacted) = redact_assignment(token) {
+        if let Some(redacted) = redact_assignment(token, redact_paths) {
             out.push(redacted);
             continue;
         }
@@ -282,7 +288,7 @@ fn redact_agent_approval_history_preview(value: &str) -> String {
             out.push("<redacted>".to_owned());
             continue;
         }
-        if is_path_arg(token) {
+        if redact_paths && is_path_arg(token) {
             out.push("<path>".to_owned());
             continue;
         }
@@ -295,21 +301,20 @@ fn redact_agent_approval_history_preview(value: &str) -> String {
 /// control characters. Account data is server-readable plaintext, so path-like
 /// args and secret-like assignments are replaced with placeholders.
 pub(crate) fn sanitize_agent_approval_history_summary(value: &str) -> String {
-    let display = first_display_line(value);
-    let mut cleaned = String::new();
-    for ch in display.chars() {
-        if ch == '\u{2028}' || ch == '\u{2029}' {
-            break;
-        }
-        if is_disallowed_summary_char(ch) {
-            continue;
-        }
-        cleaned.push(ch);
-    }
-    redact_agent_approval_history_preview(&collapse_whitespace(&cleaned))
+    redact_agent_approval_history_preview(&clean_display_line(value))
         .chars()
         .take(AGENT_APPROVAL_HISTORY_SUMMARY_MAX_CHARS)
         .collect()
+}
+
+/// First display line with bidi/override/control characters removed and
+/// whitespace collapsed.
+fn clean_display_line(value: &str) -> String {
+    let cleaned: String = first_display_line(value)
+        .chars()
+        .filter(|ch| !is_disallowed_summary_char(*ch))
+        .collect();
+    collapse_whitespace(&cleaned)
 }
 
 fn preview_from_line(value: &str) -> Option<String> {
@@ -335,15 +340,22 @@ fn first_useful_command_line(block: &str) -> Option<String> {
     })
 }
 
-fn extract_fenced_command_preview(body: &str) -> Option<String> {
+fn fenced_command_block(body: &str) -> Option<&str> {
     let start = body.find("```")?;
     let after_ticks = body.get(start + 3..)?;
     let after_info = after_ticks.split_once('\n')?.1;
-    let block = after_info.split("```").next().unwrap_or(after_info);
-    first_useful_command_line(block)
+    Some(after_info.split("```").next().unwrap_or(after_info))
+}
+
+fn extract_fenced_command_preview(body: &str) -> Option<String> {
+    first_useful_command_line(fenced_command_block(body)?)
 }
 
 fn extract_labeled_command_preview(body: &str) -> Option<String> {
+    preview_from_line(first_display_line(extract_labeled_command_line(body)?))
+}
+
+fn extract_labeled_command_line(body: &str) -> Option<&str> {
     let mut lines = body.lines().peekable();
     while let Some(line) = lines.next() {
         let lowered = line.trim().to_ascii_lowercase();
@@ -364,7 +376,7 @@ fn extract_labeled_command_preview(body: &str) -> Option<String> {
             {
                 break;
             }
-            return preview_from_line(first_display_line(trimmed));
+            return Some(trimmed);
         }
         break;
     }
@@ -413,6 +425,109 @@ pub fn agent_approval_history_summary(body: &str) -> String {
         .or_else(|| extract_reason_preview(body))
         .or_else(|| extract_fallback_preview(body))
         .unwrap_or_default()
+}
+
+pub const AGENT_APPROVAL_NOTIFICATION_REASON_MAX_CHARS: usize = 120;
+pub const AGENT_APPROVAL_NOTIFICATION_COMMAND_MAX_CHARS: usize = 240;
+const AGENT_APPROVAL_NOTIFICATION_LINE_SEPARATOR: &str = " ↵ ";
+
+/// What an OS notification may say about a prompt: the Reason line and the
+/// requested command. Both are display-safe and bounded; secret-like values
+/// are redacted, but paths stay because the text never leaves the device.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentApprovalNotificationSummary {
+    pub reason: Option<String>,
+    pub command: Option<String>,
+}
+
+fn truncate_with_ellipsis(value: &str, max_chars: usize) -> String {
+    if value.chars().count() <= max_chars {
+        return value.to_owned();
+    }
+    let mut out: String = value.chars().take(max_chars.saturating_sub(1)).collect();
+    out.truncate(out.trim_end().len());
+    out.push('…');
+    out
+}
+
+fn notification_text(value: &str, max_chars: usize) -> Option<String> {
+    let redacted = redact_agent_approval_preview(value, false);
+    if redacted.is_empty() {
+        None
+    } else {
+        Some(truncate_with_ellipsis(&redacted, max_chars))
+    }
+}
+
+fn is_env_assignment(token: &str) -> bool {
+    let Some((name, _)) = token.split_once('=') else {
+        return false;
+    };
+    let mut chars = name.chars();
+    chars
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
+        && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+}
+
+/// Leading `NAME=value` assignments are environment setup, not the command.
+fn strip_env_prefix(line: &str) -> &str {
+    let mut rest = line;
+    loop {
+        let Some((token, tail)) = rest.split_once(' ') else {
+            return rest;
+        };
+        if !is_env_assignment(token) {
+            return rest;
+        }
+        rest = tail.trim_start();
+    }
+}
+
+fn notification_command(body: &str) -> Option<String> {
+    let lines: Vec<String> = match fenced_command_block(body) {
+        Some(block) => block
+            .lines()
+            .map(clean_display_line)
+            .filter(|line| !line.is_empty())
+            .collect(),
+        None => extract_labeled_command_line(body)
+            .map(|line| vec![clean_display_line(line)])
+            .unwrap_or_default(),
+    };
+    let joined = lines
+        .iter()
+        .map(|line| strip_env_prefix(line))
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join(AGENT_APPROVAL_NOTIFICATION_LINE_SEPARATOR);
+    notification_text(&joined, AGENT_APPROVAL_NOTIFICATION_COMMAND_MAX_CHARS)
+}
+
+fn notification_reason(body: &str) -> Option<String> {
+    body.lines().find_map(|line| {
+        let trimmed = line.trim();
+        let rest = trimmed
+            .strip_prefix("Reason:")
+            .or_else(|| trimmed.strip_prefix("reason:"))?;
+        notification_text(
+            &clean_display_line(rest),
+            AGENT_APPROVAL_NOTIFICATION_REASON_MAX_CHARS,
+        )
+    })
+}
+
+/// Callers must classify the prompt first; this only extracts display text.
+pub fn agent_approval_notification_summary(body: &str) -> AgentApprovalNotificationSummary {
+    if body.chars().count() > AGENT_APPROVAL_MAX_BODY_CHARS {
+        return AgentApprovalNotificationSummary::default();
+    }
+    AgentApprovalNotificationSummary {
+        reason: notification_reason(body),
+        command: notification_command(body),
+    }
 }
 
 #[cfg(test)]
@@ -643,6 +758,61 @@ mod tests {
                 "Approval Required: Dangerous Command\n```\nrm file\n```"
             ),
             "rm file"
+        );
+    }
+
+    const HERMES_FORGE_PROMPT: &str = "⚠️ **Dangerous command requires approval**\nReason: find -delete\n\n```\nHOME=/home/nepenthe HERMES_HOME=/home/nepenthe/.hermes/profiles/forge /home/nepenthe/.hermes/hermes-agent/venv/bin/python -m hermes_cli.main approvals test -- find /tmp/forge-approval-test-dir -delete; echo EXIT:$?\n```\n\nReply `!approve session` for this session, `!approve always` permanently. `!approve` once · `!deny` cancel.\n\nReactions: ✅ once · 🌀 session · ♾️ always · ❌ deny";
+
+    #[test]
+    fn notification_summary_shows_reason_and_command_with_paths() {
+        assert!(is_agent_approval_prompt(HERMES_FORGE_PROMPT));
+        let summary = agent_approval_notification_summary(HERMES_FORGE_PROMPT);
+        assert_eq!(summary.reason.as_deref(), Some("find -delete"));
+        assert_eq!(
+            summary.command.as_deref(),
+            Some(
+                "/home/nepenthe/.hermes/hermes-agent/venv/bin/python -m hermes_cli.main approvals test -- find /tmp/forge-approval-test-dir -delete; echo EXIT:$?"
+            )
+        );
+        assert_eq!(
+            agent_approval_notification_summary(HERMES_MATRIX_PROMPT),
+            AgentApprovalNotificationSummary {
+                reason: Some("dangerous".to_owned()),
+                command: Some("rm -rf /tmp/test".to_owned()),
+            }
+        );
+    }
+
+    #[test]
+    fn notification_summary_joins_lines_and_redacts_secrets() {
+        let summary = agent_approval_notification_summary(
+            "Approval Required: Dangerous Command\n```bash\nexport TOKEN=secret\ncurl --token abcdef https://x.test\n\u{202E}rm -rf ./build\n```",
+        );
+        assert_eq!(
+            summary.command.as_deref(),
+            Some(
+                "export TOKEN=<redacted> ↵ curl --token <redacted> https://x.test ↵ rm -rf ./build"
+            )
+        );
+        assert_eq!(summary.reason, None);
+
+        let labeled = agent_approval_notification_summary(
+            "Approval Required: Dangerous Command\nCode\nAPI_KEY=sk-1 rm file\nReason: clean up",
+        );
+        assert_eq!(labeled.command.as_deref(), Some("rm file"));
+        assert_eq!(labeled.reason.as_deref(), Some("clean up"));
+
+        let long = agent_approval_notification_summary(&format!(
+            "Approval Required: Dangerous Command\n```\n{}\n```",
+            "x ".repeat(400)
+        ));
+        let command = long.command.unwrap();
+        assert!(command.chars().count() <= AGENT_APPROVAL_NOTIFICATION_COMMAND_MAX_CHARS);
+        assert!(command.ends_with('…'));
+
+        assert_eq!(
+            agent_approval_notification_summary(&"x".repeat(AGENT_APPROVAL_MAX_BODY_CHARS + 1)),
+            AgentApprovalNotificationSummary::default()
         );
     }
 

@@ -1,0 +1,1 @@
+Threads now work: replies load in the thread, earlier replies load on request, and messages have Reply in Thread. Choose how threads open in Settings → Appearance → Thread Display: Inline, Sheet or Full Screen.

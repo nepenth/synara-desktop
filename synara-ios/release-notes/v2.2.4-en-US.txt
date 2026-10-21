@@ -1,0 +1,1 @@
+This update polishes the desktop sign-in screen and keeps the iOS app in step with the desktop release.

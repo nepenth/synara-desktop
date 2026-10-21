@@ -22,5 +22,7 @@ public struct NsePreviewDto: Equatable, Hashable
   public var body: String?
   public var messageType: String?
   public var isAgentApproval: Bool
+  public var approvalReason: String?
+  public var approvalCommand: String?
   public var originServerTs: UInt64
-  public init(eventType: String, senderId: String?, body: String?, messageType: String?, isAgentApproval: Bool, originServerTs: UInt64)
+  public init(eventType: String, senderId: String?, body: String?, messageType: String?, isAgentApproval: Bool, approvalReason: String?, approvalCommand: String?, originServerTs: UInt64)

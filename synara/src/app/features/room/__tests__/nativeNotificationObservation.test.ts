@@ -24,8 +24,14 @@ const OBSERVATION: NativeNotificationObservation = {
   sender: '@bob:example.org',
   eventType: 'm.room.message',
   originServerTs: 1_700_000_000_000,
-  agentApproval: { expiresAt: 1_700_000_300_000, expired: false },
+  agentApproval: {
+    expiresAt: 1_700_000_300_000,
+    expired: false,
+    summary: { reason: 'find -delete', command: 'find /tmp/x -delete' },
+  },
 };
+
+const APPROVAL = OBSERVATION.agentApproval!;
 
 test('observation parser accepts identity plus bounded facts and rejects verdicts', () => {
   assert.deepEqual(parseNativeNotificationObservation(OBSERVATION), OBSERVATION);
@@ -34,6 +40,14 @@ test('observation parser accepts identity plus bounded facts and rejects verdict
   delete bare.agentApproval;
   assert.deepEqual(parseNativeNotificationObservation({ ...bare, agentApproval: null }), bare);
   assert.deepEqual(parseNativeNotificationObservation(bare), bare);
+  // Core sends absent summary fields as null.
+  assert.deepEqual(
+    parseNativeNotificationObservation({
+      ...OBSERVATION,
+      agentApproval: { ...APPROVAL, summary: { reason: null, command: 'ls' } },
+    }),
+    { ...OBSERVATION, agentApproval: { ...APPROVAL, summary: { command: 'ls' } } }
+  );
 
   // A policy verdict or any unknown key fails closed so the wire cannot grow
   // one silently; identity must be well-formed; the type vocabulary is closed.
@@ -50,8 +64,12 @@ test('observation parser accepts identity plus bounded facts and rejects verdict
     { ...OBSERVATION, originServerTs: 'now' },
     { ...OBSERVATION, agentApproval: 42 },
     { ...OBSERVATION, body: 'retired plaintext parser input' },
-    { ...OBSERVATION, agentApproval: { expiresAt: 123, expired: false, body: 'raw prompt' } },
-    { ...OBSERVATION, agentApproval: { expiresAt: -1, expired: false } },
+    { ...OBSERVATION, agentApproval: { ...APPROVAL, body: 'raw prompt' } },
+    { ...OBSERVATION, agentApproval: { ...APPROVAL, expiresAt: -1 } },
+    { ...OBSERVATION, agentApproval: { expiresAt: 123, expired: false } },
+    { ...OBSERVATION, agentApproval: { ...APPROVAL, summary: { reason: 'r', body: 'raw' } } },
+    { ...OBSERVATION, agentApproval: { ...APPROVAL, summary: { command: 42 } } },
+    { ...OBSERVATION, agentApproval: { ...APPROVAL, summary: { command: 'x'.repeat(513) } } },
     null,
     [],
     'observation',
@@ -191,8 +209,8 @@ test('late approval promotion uses the shared actionable presentation and exact 
   const presentation = buildNativeObservedNotificationPresentation(candidate, source);
   assert.equal(presentation.title, candidate.title);
   assert.equal(presentation.body, candidate.body);
+  // Room focus must not withdraw a pending approval decision.
   assert.deepEqual(presentation.dismissKeys, [
-    `room:${source.roomId}`,
     `event:${source.eventId}`,
     `candidate:${candidate.candidateId}`,
   ]);
@@ -222,7 +240,11 @@ test('late approval promotion uses the shared actionable presentation and exact 
   );
   assert.equal(ordinary.actions, undefined);
   assert.equal(ordinary.actionContext, undefined);
-  assert.deepEqual(ordinary.dismissKeys, presentation.dismissKeys);
+  assert.deepEqual(ordinary.dismissKeys, [
+    `room:${source.roomId}`,
+    `event:${source.eventId}`,
+    `candidate:${candidate.candidateId}`,
+  ]);
   assert.equal(ordinary.sound, 'silent');
 
   // Both mounted delivery paths use this tested adapter. A late promotion

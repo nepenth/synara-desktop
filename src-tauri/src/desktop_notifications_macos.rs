@@ -278,7 +278,54 @@ fn approval_interruption_level(
     }
 }
 
-fn register_category(actions: &[DesktopNotificationAction]) -> Retained<NSString> {
+/// Registers the action set's category and, when it is new, waits until the
+/// notification center reports it. `setNotificationCategories` applies
+/// asynchronously; a request posted before that completes is delivered with
+/// an unknown category and therefore without any action buttons.
+async fn ensure_category(actions: &[DesktopNotificationAction]) -> String {
+    let (identifier, newly_registered) = register_category(actions);
+    if newly_registered {
+        for _ in 0..20 {
+            if registered_category_identifiers()
+                .await
+                .contains(&identifier)
+            {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+    }
+    identifier
+}
+
+async fn registered_category_identifiers() -> Vec<String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    {
+        let tx = Mutex::new(Some(tx));
+        let completion = RcBlock::new(
+            move |categories: std::ptr::NonNull<NSSet<UNNotificationCategory>>| {
+                // The set is valid for the duration of this callback only.
+                let categories = unsafe { categories.as_ref() };
+                let identifiers = categories
+                    .iter()
+                    .map(|category| category.identifier().to_string())
+                    .collect::<Vec<_>>();
+                if let Some(tx) = tx.lock().unwrap_or_else(|p| p.into_inner()).take() {
+                    let _ = tx.send(identifiers);
+                }
+            },
+        );
+        UNUserNotificationCenter::currentNotificationCenter()
+            .getNotificationCategoriesWithCompletionHandler(&completion);
+    }
+    tokio::time::timeout(std::time::Duration::from_secs(2), rx)
+        .await
+        .ok()
+        .and_then(Result::ok)
+        .unwrap_or_default()
+}
+
+fn register_category(actions: &[DesktopNotificationAction]) -> (String, bool) {
     let mut hash = std::collections::hash_map::DefaultHasher::new();
     for action in actions {
         action.id.hash(&mut hash);
@@ -286,6 +333,9 @@ fn register_category(actions: &[DesktopNotificationAction]) -> Retained<NSString
     }
     let identifier = format!("synara-actions-{:x}", hash.finish());
     let mut categories = CATEGORIES.lock().unwrap_or_else(|p| p.into_inner());
+    if categories.contains_key(&identifier) {
+        return (identifier, false);
+    }
     categories.insert(identifier.clone(), actions.to_vec());
     if categories.len() > 64 {
         if let Some(oldest) = categories.keys().find(|key| **key != identifier).cloned() {
@@ -301,7 +351,11 @@ fn register_category(actions: &[DesktopNotificationAction]) -> Retained<NSString
                     UNNotificationAction::actionWithIdentifier_title_options(
                         &NSString::from_str(&action.id),
                         &NSString::from_str(&action.label),
-                        UNNotificationActionOptions::empty(),
+                        if action.id == "agent-approval.deny" {
+                            UNNotificationActionOptions::Destructive
+                        } else {
+                            UNNotificationActionOptions::empty()
+                        },
                     )
                 })
                 .collect::<Vec<_>>();
@@ -315,7 +369,7 @@ fn register_category(actions: &[DesktopNotificationAction]) -> Retained<NSString
         .collect::<Vec<_>>();
     UNUserNotificationCenter::currentNotificationCenter()
         .setNotificationCategories(&NSSet::from_retained_slice(&native_categories));
-    NSString::from_str(&identifier)
+    (identifier, true)
 }
 
 fn remove_requests(identifiers: &[String]) {
@@ -367,6 +421,11 @@ pub(super) async fn show<R: Runtime>(
     } else {
         UNNotificationSetting::NotSupported
     };
+    let category = if actions.is_empty() {
+        None
+    } else {
+        Some(ensure_category(actions).await)
+    };
     let (rx, identifier) = {
         let content = UNMutableNotificationContent::new();
         content.setTitle(&NSString::from_str(title));
@@ -393,8 +452,8 @@ pub(super) async fn show<R: Runtime>(
             }
             content.setInterruptionLevel(level);
         }
-        if !actions.is_empty() {
-            content.setCategoryIdentifier(&register_category(actions));
+        if let Some(category) = category.as_deref() {
+            content.setCategoryIdentifier(&NSString::from_str(category));
         }
         let context = serde_json::to_string(&ResponseContext {
             session_generation: notification.session_generation,

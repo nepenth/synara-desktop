@@ -15,15 +15,36 @@ import { inlineThreadReplies } from '../nativeInlineThreadModel';
 import { defaultSettings, splitSettings } from '../../../state/settings';
 import type { NativeTimelineViewRow } from '../nativeTimelineView';
 
-test('thread display defaults to full view and rejects unknown modes', () => {
-  assert.equal(DEFAULT_THREAD_DISPLAY, 'full');
-  assert.equal(defaultSettings.threadDisplay, 'full');
+test('thread display defaults to inline and rejects unknown modes', () => {
+  assert.equal(DEFAULT_THREAD_DISPLAY, 'inline');
+  assert.equal(defaultSettings.threadDisplay, 'inline');
+  assert.equal(defaultSettings.threadDisplayChosen, false);
   assert.equal(normalizeThreadDisplay('side'), 'side');
-  assert.equal(normalizeThreadDisplay('inline'), 'inline');
-  assert.equal(normalizeThreadDisplay('sideways'), 'full');
-  assert.equal(normalizeThreadDisplay(undefined), 'full');
-  const stored = splitSettings({ ...defaultSettings, threadDisplay: 'bogus' as never });
-  assert.equal(stored.shared.threadDisplay, 'full');
+  assert.equal(normalizeThreadDisplay('full'), 'full');
+  assert.equal(normalizeThreadDisplay('sideways'), 'inline');
+  assert.equal(normalizeThreadDisplay(undefined), 'inline');
+  const stored = splitSettings({
+    ...defaultSettings,
+    threadDisplay: 'bogus' as never,
+    threadDisplayChosen: true,
+  });
+  assert.equal(stored.shared.threadDisplay, 'inline');
+});
+
+test('a stored thread display counts only once the user has chosen one', () => {
+  // Every save writes the whole snapshot, so 'full' stored by 2.2.1 without a
+  // choice is the old default, not a preference.
+  const unchosen = splitSettings({ ...defaultSettings, threadDisplay: 'full' });
+  assert.equal(unchosen.shared.threadDisplay, 'inline');
+  assert.equal(unchosen.shared.threadDisplayChosen, false);
+
+  const chosen = splitSettings({
+    ...defaultSettings,
+    threadDisplay: 'full',
+    threadDisplayChosen: true,
+  });
+  assert.equal(chosen.shared.threadDisplay, 'full');
+  assert.equal(chosen.shared.threadDisplayChosen, true);
 });
 
 test('the pane width stays within its bounds and 60% of the room', () => {

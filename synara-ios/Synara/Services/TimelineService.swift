@@ -797,11 +797,22 @@ protocol TimelineServicing: AnyObject {
     func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome>
     func typingUsers(roomID: String) -> AsyncStream<[String]>
     func threadTimelineUpdates(roomID: String, rootEventID: String) -> AsyncStream<TimelineLoadOutcome>
+    /// Older replies for an open thread stream. `.empty` means the thread's
+    /// start (its root) is already loaded.
+    func loadOlderThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome
+    /// Releases a thread stream opened by `loadThreadTimeline`.
+    func closeThreadTimeline(roomID: String, rootEventID: String)
     func clearSessionCaches()
 }
 
 extension TimelineServicing {
     func clearSessionCaches() {}
+
+    func loadOlderThreadTimeline(roomID _: String, rootEventID _: String) async -> TimelineLoadOutcome {
+        .empty
+    }
+
+    func closeThreadTimeline(roomID _: String, rootEventID _: String) {}
 
     func loadInitialTimeline(roomID: String) async -> TimelineLoadOutcome {
         await loadInitialTimeline(roomID: roomID, focusedEventID: nil)

@@ -47,6 +47,8 @@ pub struct NsePreviewDto {
     pub body: Option<String>,
     pub message_type: Option<String>,
     pub is_agent_approval: bool,
+    pub approval_reason: Option<String>,
+    pub approval_command: Option<String>,
     pub origin_server_ts: u64,
 }
 
@@ -152,6 +154,8 @@ impl NsePreviewRequest {
                 body: preview.body,
                 message_type: preview.message_type,
                 is_agent_approval: preview.is_agent_approval,
+                approval_reason: preview.approval_reason,
+                approval_command: preview.approval_command,
                 origin_server_ts: preview.origin_server_ts,
             })
         })

@@ -23,6 +23,7 @@ final class NotificationService: UNNotificationServiceExtension {
 
         let showPreview = SynaraNotificationPreviewPreference.isEnabled()
         let timeSensitiveApprovals = SynaraTimeSensitiveAgentApprovalPreference.isEnabled()
+        let approvalDetails = SynaraApprovalNotificationDetailsPreference.isEnabled()
         let payload: SynaraNotificationPreviewPayload
         switch SynaraNotificationPreviewPayloadParser.parse(request.content.userInfo) {
         case .success(let reference):
@@ -71,6 +72,7 @@ final class NotificationService: UNNotificationServiceExtension {
             let resolved = await resolver.resolve(
                 for: payload,
                 retainMessageBody: showPreview,
+                retainApprovalDetails: approvalDetails,
                 onRequest: { request in
                     coordinator.installCoreCancellation(
                         { request.cancel() },
@@ -103,7 +105,8 @@ final class NotificationService: UNNotificationServiceExtension {
                     approvalAlertsEnabled: timeSensitiveApprovals,
                     isAgentApproval: resolved.isAgentApproval,
                     originServerTimestampMS: resolved.originServerTimestampMS,
-                    criticalAlertsAuthorized: criticalAlertsAuthorized
+                    criticalAlertsAuthorized: criticalAlertsAuthorized,
+                    approvalSummary: resolved.approvalSummary
                 )
                 logger.info("preview stage=resolved")
                 SynaraNotificationDiagnostics.record(diagnosticStage, runID: requestID)
@@ -214,6 +217,7 @@ private struct MatrixNotificationPreviewResolver {
     func resolve(
         for payload: SynaraNotificationPreviewPayload,
         retainMessageBody: Bool,
+        retainApprovalDetails: Bool,
         onRequest: (NsePreviewRequest) -> Void,
         recordStage: (SynaraNotificationDiagnostics.Stage) -> Void
     ) async -> NotificationPreviewResolution {
@@ -271,6 +275,13 @@ private struct MatrixNotificationPreviewResolver {
                     messageType: event.messageType
                 )),
                 isAgentApproval: event.isAgentApproval,
+                approvalSummary: event.isAgentApproval && retainApprovalDetails
+                    ? SynaraAgentApprovalSummary(
+                        sender: event.senderId,
+                        reason: event.approvalReason,
+                        command: event.approvalCommand
+                    )
+                    : nil,
                 originServerTimestampMS: event.originServerTs
             ))
         } catch {
@@ -299,6 +310,7 @@ private enum NotificationPreviewResolution {
 private struct ResolvedNotificationEvent {
     let preview: SynaraNotificationPreview?
     let isAgentApproval: Bool
+    let approvalSummary: SynaraAgentApprovalSummary?
     let originServerTimestampMS: UInt64
 }
 

@@ -1,10 +1,24 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { isSynaraDesktop } from '../../utils/desktop';
-import type { NativeNotificationObservation as WireNativeNotificationObservation } from '../matrix-dto/generated';
+import type {
+  AgentApprovalNotificationSummary as WireAgentApprovalNotificationSummary,
+  NativeAgentApprovalObservation as WireNativeAgentApprovalObservation,
+  NativeNotificationObservation as WireNativeNotificationObservation,
+} from '../matrix-dto/generated';
 import type { NullsToOptional } from '../matrix-dto/wireTypes';
 
+export type AgentApprovalNotificationSummary =
+  NullsToOptional<WireAgentApprovalNotificationSummary>;
+
+export type NativeAgentApprovalObservation = Omit<WireNativeAgentApprovalObservation, 'summary'> & {
+  summary: AgentApprovalNotificationSummary;
+};
+
 /** Parsed form of Core's `NativeNotificationObservation`: absent instead of `null`. */
-export type NativeNotificationObservation = NullsToOptional<WireNativeNotificationObservation>;
+export type NativeNotificationObservation = Omit<
+  NullsToOptional<WireNativeNotificationObservation>,
+  'agentApproval'
+> & { agentApproval?: NativeAgentApprovalObservation };
 
 /**
  * A9 Core→renderer notification observation stream.
@@ -44,6 +58,37 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isSafeGeneration = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 
+const APPROVAL_KEYS = new Set(['expiresAt', 'expired', 'summary']);
+const SUMMARY_KEYS = new Set(['reason', 'command']);
+// Core bounds these far lower; this only rejects a malformed wire.
+const MAX_SUMMARY_FIELD_CHARS = 512;
+
+const parseSummaryField = (value: unknown): string | undefined | false => {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string' || value.length > MAX_SUMMARY_FIELD_CHARS) return false;
+  return value;
+};
+
+const parseAgentApproval = (value: unknown): NativeAgentApprovalObservation | undefined => {
+  if (!isRecord(value) || !Object.keys(value).every((key) => APPROVAL_KEYS.has(key)))
+    return undefined;
+  const { expiresAt, expired, summary } = value;
+  if (!isSafeGeneration(expiresAt) || typeof expired !== 'boolean') return undefined;
+  if (!isRecord(summary) || !Object.keys(summary).every((key) => SUMMARY_KEYS.has(key)))
+    return undefined;
+  const reason = parseSummaryField(summary.reason);
+  const command = parseSummaryField(summary.command);
+  if (reason === false || command === false) return undefined;
+  return {
+    expiresAt,
+    expired,
+    summary: {
+      ...(reason !== undefined ? { reason } : {}),
+      ...(command !== undefined ? { command } : {}),
+    },
+  };
+};
+
 const isEventType = (value: unknown): value is NativeNotificationObservationEventType =>
   value === 'm.room.message' || value === 'm.room.encrypted' || value === 'm.sticker';
 
@@ -61,14 +106,10 @@ export const parseNativeNotificationObservation = (
   if (typeof sender !== 'string' || !sender.startsWith('@')) return undefined;
   if (!isEventType(eventType)) return undefined;
   if (!isSafeGeneration(originServerTs)) return undefined;
+  let parsedApproval: NativeAgentApprovalObservation | undefined;
   if (agentApproval !== undefined && agentApproval !== null) {
-    if (
-      !isRecord(agentApproval) ||
-      Object.keys(agentApproval).some((key) => key !== 'expiresAt' && key !== 'expired')
-    )
-      return undefined;
-    if (!isSafeGeneration(agentApproval.expiresAt) || typeof agentApproval.expired !== 'boolean')
-      return undefined;
+    parsedApproval = parseAgentApproval(agentApproval);
+    if (!parsedApproval) return undefined;
   }
   return {
     sessionGeneration,
@@ -77,14 +118,7 @@ export const parseNativeNotificationObservation = (
     sender,
     eventType,
     originServerTs,
-    ...(isRecord(agentApproval)
-      ? {
-          agentApproval: {
-            expiresAt: agentApproval.expiresAt as number,
-            expired: agentApproval.expired as boolean,
-          },
-        }
-      : {}),
+    ...(parsedApproval ? { agentApproval: parsedApproval } : {}),
   };
 };
 

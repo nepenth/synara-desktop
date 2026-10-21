@@ -1,0 +1,1 @@
+Agent approval notifications now show the reason and requested command with Approve once and Deny, with a new Show Approval Details setting in Notifications. This update also keeps the iOS app in step with the desktop release.
