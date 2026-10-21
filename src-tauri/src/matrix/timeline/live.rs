@@ -17,8 +17,8 @@ pub use synara_core::app::timeline::NativeTimelineDirection;
 pub use synara_core::app::timeline::{
     NativeReactionMutationResult, NativeTimelineCloseRequest, NativeTimelineEventReadback,
     NativeTimelineJumpLatestRequest, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
-    NativeTimelineOwner, NativeTimelineReadAction, NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest, NativeTimelineViewPaginationRequest, TimelineViewUpdateEmit,
+    NativeTimelineOwner, NativeTimelineReadAction, NativeTimelineReadStateRequest,
+    NativeTimelineViewPaginationRequest, TimelineViewUpdateEmit,
     NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
 };
 

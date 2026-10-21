@@ -79,7 +79,7 @@ pub async fn matrix_timeline_timestamp_to_event(
 pub async fn matrix_timeline_paginate(
     core: State<'_, Arc<synara_core::Core>>,
     request: NativeTimelineViewPaginationRequest,
-) -> Result<crate::matrix::timeline::TimelineViewSnapshot, MatrixAuthCommandError> {
+) -> Result<synara_core::app::timeline::TimelineViewMetadata, MatrixAuthCommandError> {
     crate::bridge::timeline_paginate::timeline_paginate(
         core.inner().as_ref(),
         request.stream_id,
@@ -97,19 +97,27 @@ pub async fn matrix_timeline_retry_decryption(
         .await
 }
 
+/// `knownRevision` turns the read into a cheap probe: `{ revision }` while
+/// the stream is still at that revision, else the full snapshot.
 #[tauri::command]
 pub async fn matrix_timeline_snapshot(
     core: State<'_, Arc<synara_core::Core>>,
     stream_id: String,
-) -> Result<crate::matrix::timeline::TimelineViewSnapshot, MatrixAuthCommandError> {
-    crate::bridge::timeline_snapshot::timeline_snapshot(core.inner().as_ref(), stream_id).await
+    known_revision: Option<u64>,
+) -> Result<crate::bridge::timeline_snapshot::TimelineSnapshotReply, MatrixAuthCommandError> {
+    crate::bridge::timeline_snapshot::timeline_snapshot(
+        core.inner().as_ref(),
+        stream_id,
+        known_revision,
+    )
+    .await
 }
 
 #[tauri::command]
 pub async fn matrix_timeline_set_read_state(
     core: State<'_, Arc<synara_core::Core>>,
     request: NativeTimelineReadStateRequest,
-) -> Result<NativeTimelineReadStateReadback, MatrixAuthCommandError> {
+) -> Result<crate::bridge::timeline_set_read_state::TimelineReadStateAck, MatrixAuthCommandError> {
     crate::bridge::timeline_set_read_state::timeline_set_read_state(
         core.inner().as_ref(),
         request.stream_id,

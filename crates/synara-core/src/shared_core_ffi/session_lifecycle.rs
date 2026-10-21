@@ -971,7 +971,7 @@ impl SharedCore {
             owner_attach: Mutex::new(OwnerAttachSlot::Empty),
             sync_lifecycle: tokio::sync::Mutex::new(()),
             suspension: SessionSuspension::new(),
-            timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
+            timeline_view_updates: Arc::new(Mutex::new(Default::default())),
             owner_updates: Arc::new(Mutex::new(Vec::new())),
             room_list_updates: Arc::new(Mutex::new(Vec::new())),
             room_list_live: Arc::new(Mutex::new(None)),
@@ -1728,10 +1728,7 @@ impl SharedCore {
         let timeline_updates = Arc::clone(&self.timeline_view_updates);
         let timeline_emit: TimelineViewUpdateEmit = Arc::new(move |batch| {
             if let Ok(mut guard) = timeline_updates.lock() {
-                if guard.len() >= TIMELINE_VIEW_UPDATE_QUEUE_CAP {
-                    guard.remove(0);
-                }
-                guard.push(batch);
+                guard.mark(batch);
             }
         });
         // iOS closes a room's stream when its view stops listening; the TTL
@@ -1797,9 +1794,18 @@ impl SharedCore {
         let client = self.retained_client().map_err(|_| {
             sync_start_failed(CLIENT_RESUME_FAILED_CODE, CLIENT_RESUME_FAILED_DESCRIPTION)
         })?;
+        let was_suspended = self.suspension.is_suspended();
         client.resume().await.map_err(|_| {
             sync_start_failed(CLIENT_RESUME_FAILED_CODE, CLIENT_RESUME_FAILED_DESCRIPTION)
         })?;
+        if was_suspended {
+            // Before any waiting export runs: timelines cached across the
+            // suspension are rebuilt on their next open, and streams do not
+            // expire over batches nobody could read while suspended.
+            if let Some(timelines) = self.core.attached_timeline_owner() {
+                timelines.resumed().await;
+            }
+        }
         // Stores are open again: release exports waiting out the suspension,
         // even if SyncService itself fails to start below.
         self.suspension.resume();

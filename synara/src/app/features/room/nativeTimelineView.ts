@@ -529,11 +529,33 @@ export type NativeTimelineViewController = {
 
 export type NativeTimelineStreamGap = 'none' | 'resyncing' | 'failed';
 
+/**
+ * Stream metadata without rows. Pagination and read-state replies carry only
+ * this: the rows (and the page or read state itself) reach the presenter as
+ * delta batches, so a reply never ships the window across IPC again.
+ */
+export type NativeTimelineViewMetadata = Omit<NativeTimelineViewSnapshot, 'rows'>;
+
 type NativeTimelineReadStateReadback = {
   receiptSent?: boolean;
   acknowledgedEventId?: string;
-  snapshot: NativeTimelineViewSnapshot;
+  view: NativeTimelineViewMetadata;
 };
+
+/** A safety-net probe that found the stream still at the revision it named. */
+type NativeTimelineSnapshotUnchanged = { revision: number };
+
+/** Whether a reply's metadata belongs to the stream the presenter shows. */
+const isSameNativeTimelineStream = (
+  current: NativeTimelineViewSnapshot | undefined,
+  metadata: NativeTimelineViewMetadata
+): boolean =>
+  Boolean(
+    current &&
+    metadata.schemaVersion === TIMELINE_VIEW_SCHEMA_VERSION &&
+    metadata.sessionGeneration === current.sessionGeneration &&
+    metadata.roomId === current.roomId
+  );
 
 const isValidIndex = (index: number, length: number, allowEnd = false): boolean =>
   Number.isInteger(index) && index >= 0 && index < length + (allowEnd ? 1 : 0);
@@ -1035,48 +1057,46 @@ export const useNativeTimelineView = (
     return true;
   }, []);
 
-  const paginate = useCallback(
-    async (direction: 'backwards' | 'forwards') => {
-      const streamId = streamIdRef.current;
-      const snapshot = snapshotRef.current;
-      const permitted =
-        direction === 'backwards'
-          ? snapshot?.capabilities.paginateBackward
-          : snapshot?.capabilities.paginateForward;
-      if (!streamId || !snapshot || !permitted) {
-        throw new Error('Native timeline pagination is unavailable.');
-      }
-      const revision = navigationRevisionRef.current;
-      const navigationRequest = navigationRequestRef.current;
-      const superseded = () =>
-        streamIdRef.current !== streamId ||
-        navigationRevisionRef.current !== revision ||
-        navigationRequestRef.current !== navigationRequest;
-      let result: DesktopInvokeResult<NativeTimelineViewSnapshot>;
-      try {
-        result = await invokeDesktopWithAvailability<NativeTimelineViewSnapshot>(
-          'matrix_timeline_paginate',
-          { request: { streamId, direction } }
-        );
-      } catch (error) {
-        if (superseded()) return;
-        throw error;
-      }
+  const paginate = useCallback(async (direction: 'backwards' | 'forwards') => {
+    const streamId = streamIdRef.current;
+    const snapshot = snapshotRef.current;
+    const permitted =
+      direction === 'backwards'
+        ? snapshot?.capabilities.paginateBackward
+        : snapshot?.capabilities.paginateForward;
+    if (!streamId || !snapshot || !permitted) {
+      throw new Error('Native timeline pagination is unavailable.');
+    }
+    const revision = navigationRevisionRef.current;
+    const navigationRequest = navigationRequestRef.current;
+    const superseded = () =>
+      streamIdRef.current !== streamId ||
+      navigationRevisionRef.current !== revision ||
+      navigationRequestRef.current !== navigationRequest;
+    let result: DesktopInvokeResult<NativeTimelineViewMetadata>;
+    try {
+      result = await invokeDesktopWithAvailability<NativeTimelineViewMetadata>(
+        'matrix_timeline_paginate',
+        { request: { streamId, direction } }
+      );
+    } catch (error) {
       if (superseded()) return;
-      if (!result.available || !result.value) {
-        throw new Error('Native timeline pagination is unavailable.');
-      }
-      if (isNativeTimelineReadbackStale(snapshotRef.current, result.value)) return;
-      if (!acceptSnapshot(result.value)) {
-        setState({
-          status: 'error',
-          error: new Error('Native timeline pagination lost synchronization.'),
-        });
-        throw new Error('Native timeline pagination lost synchronization.');
-      }
-    },
-    [acceptSnapshot]
-  );
+      throw error;
+    }
+    if (superseded()) return;
+    if (!result.available || !result.value) {
+      throw new Error('Native timeline pagination is unavailable.');
+    }
+    // The page's rows and state arrive as delta batches; the reply only
+    // confirms the page ran on this stream.
+    if (!isSameNativeTimelineStream(snapshotRef.current, result.value)) {
+      setState({
+        status: 'error',
+        error: new Error('Native timeline pagination lost synchronization.'),
+      });
+      throw new Error('Native timeline pagination lost synchronization.');
+    }
+  }, []);
 
   const setReadState = useCallback(
     async (request: {
@@ -1113,23 +1133,16 @@ export const useNativeTimelineView = (
       if (!result.available || !result.value) {
         throw new Error('Native timeline read action is unavailable.');
       }
-      const next = result.value.snapshot;
-      if (isNativeTimelineReadbackStale(snapshotRef.current, next)) {
-        return;
-      }
-      if (acceptSnapshot(next)) {
-        return;
-      }
-      if (isNativeTimelineReadbackStale(snapshotRef.current, next)) {
-        return;
-      }
+      // The read state reaches the presenter as a delta batch; the reply only
+      // confirms the action ran on this stream.
+      if (isSameNativeTimelineStream(snapshotRef.current, result.value.view)) return;
       setState({
         status: 'error',
         error: new Error('Native timeline read state lost synchronization.'),
       });
       throw new Error('Native timeline read state lost synchronization.');
     },
-    [acceptSnapshot]
+    []
   );
 
   const followLive = useCallback(
@@ -1228,12 +1241,20 @@ export const useNativeTimelineView = (
       });
       throw new Error('Native timeline jump-to-latest lost synchronization.');
     }
+    // Core keeps a stream that already shows the live bottom and answers
+    // with that same stream: its deltas kept flowing to this presenter, so
+    // the readback must not roll back rows newer than its revision.
+    const kept =
+      result.value.streamId === streamId &&
+      snapshotRef.current !== undefined &&
+      snapshotRef.current.revision >= snapshot.revision;
+    const adopted = kept && snapshotRef.current ? snapshotRef.current : snapshot;
     streamIdRef.current = result.value.streamId;
     selectedPositionRef.current = result.value.position;
-    snapshotRef.current = snapshot;
+    snapshotRef.current = adopted;
     setState({
       status: 'ready',
-      snapshot,
+      snapshot: adopted,
       selectedPosition: result.value.position,
     });
     return true;
@@ -1399,15 +1420,23 @@ export const useNativeTimelineView = (
       coalesceFrame = window.requestAnimationFrame(flushCoalescedBatches);
     };
 
-    /** True when the snapshot was adopted (or already current). */
-    const pollSnapshot = async (): Promise<boolean> => {
+    /**
+     * True when the snapshot was adopted (or already current). The safety-net
+     * poll names the revision it shows, and Core answers `{ revision }` with
+     * no rows while the stream has not moved; a gap resync always asks for
+     * the full snapshot.
+     */
+    const pollSnapshot = async (probe: boolean): Promise<boolean> => {
       const streamId = streamIdRef.current;
       if (!streamId || disposed) return false;
       const revision = navigationRevisionRef.current;
       const navigationRequest = navigationRequestRef.current;
-      const result = await invokeDesktopWithAvailability<NativeTimelineViewSnapshot>(
+      const knownRevision = probe ? snapshotRef.current?.revision : undefined;
+      const result = await invokeDesktopWithAvailability<
+        NativeTimelineViewSnapshot | NativeTimelineSnapshotUnchanged
+      >(
         'matrix_timeline_snapshot',
-        { streamId }
+        knownRevision === undefined ? { streamId } : { streamId, knownRevision }
       ).catch(() => undefined);
       if (
         disposed ||
@@ -1418,6 +1447,10 @@ export const useNativeTimelineView = (
         !result.value
       )
         return false;
+      if (!('rows' in result.value)) {
+        // Unchanged: still current only if no batch moved the presenter since.
+        return result.value.revision === snapshotRef.current?.revision;
+      }
       const snapshot = result.value;
       if (
         snapshot.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
@@ -1444,7 +1477,7 @@ export const useNativeTimelineView = (
       if (resyncInFlight) return;
       resyncInFlight = true;
       const streamId = streamIdRef.current;
-      void pollSnapshot().then((adopted) => {
+      void pollSnapshot(false).then((adopted) => {
         resyncInFlight = false;
         if (!adopted && !disposed && streamIdRef.current === streamId) setStreamGap('failed');
       });
@@ -1518,7 +1551,7 @@ export const useNativeTimelineView = (
           const deltasLive = Boolean(unlisten);
           stopPoll = startVisibleOnlyPoll(
             () => {
-              if (!disposed) void pollSnapshot();
+              if (!disposed) void pollSnapshot(true);
             },
             (firstPoll) => nativeTimelinePollDelay(deltasLive, firstPoll)
           );

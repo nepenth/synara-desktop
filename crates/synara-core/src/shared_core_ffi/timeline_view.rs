@@ -39,6 +39,57 @@ pub(super) fn timeline_view_poll_failed(
     }
 }
 
+/// The newest unread update summary of each view stream, in the order the
+/// streams first changed since the last poll.
+///
+/// Swift reads an update only as "this stream moved past revision N" and then
+/// fetches the stream's snapshot, so one summary per stream is all it needs.
+/// Unlike a bounded batch queue, a busy stream cannot push another stream's
+/// invalidation out, and no row payload is held until the next poll.
+#[derive(Default)]
+pub(super) struct TimelineViewDirtyStreams {
+    order: Vec<String>,
+    latest: std::collections::HashMap<String, TimelineViewUpdateDto>,
+}
+
+impl TimelineViewDirtyStreams {
+    /// Record one emitted batch. Its ops count toward the stream's summary.
+    pub(super) fn mark(&mut self, batch: TimelineViewDeltaBatch) {
+        let update = timeline_view_update_dto(batch);
+        match self.latest.get_mut(&update.stream_id) {
+            Some(current) => {
+                let op_count = current.op_count.saturating_add(update.op_count);
+                if update.revision >= current.revision {
+                    *current = update;
+                }
+                current.op_count = op_count;
+            }
+            None => {
+                if self.order.len() >= TIMELINE_VIEW_DIRTY_STREAM_CAP {
+                    // Only reached when nobody polls: drop the stalest stream.
+                    let stalest = self.order.remove(0);
+                    self.latest.remove(&stalest);
+                }
+                self.order.push(update.stream_id.clone());
+                self.latest.insert(update.stream_id.clone(), update);
+            }
+        }
+    }
+
+    pub(super) fn drain(&mut self) -> Vec<TimelineViewUpdateDto> {
+        let mut latest = std::mem::take(&mut self.latest);
+        std::mem::take(&mut self.order)
+            .into_iter()
+            .filter_map(|stream_id| latest.remove(&stream_id))
+            .collect()
+    }
+
+    pub(super) fn clear(&mut self) {
+        self.order.clear();
+        self.latest.clear();
+    }
+}
+
 pub(super) fn timeline_view_update_dto(batch: TimelineViewDeltaBatch) -> TimelineViewUpdateDto {
     TimelineViewUpdateDto {
         schema_version: batch.schema_version,
@@ -465,9 +516,18 @@ pub(super) fn map_timeline_open_core_error(error: MatrixIpcError) -> TimelineErr
             TIMELINE_VIEW_NOT_OPEN_CODE,
             TIMELINE_VIEW_NOT_OPEN_DESCRIPTION,
         ),
+        // Retryable: the room has not arrived by sync yet.
+        Some(TIMELINE_ROOM_NOT_YET_SYNCED_CODE) => timeline_failed(
+            TIMELINE_ROOM_NOT_YET_SYNCED_CODE,
+            TIMELINE_ROOM_NOT_YET_SYNCED_DESCRIPTION,
+        ),
         _ => timeline_failed(TIMELINE_OPEN_FAILED_CODE, TIMELINE_OPEN_FAILED_DESCRIPTION),
     }
 }
+
+const TIMELINE_ROOM_NOT_YET_SYNCED_CODE: &str = "v-timeline-room-not-yet-synced";
+const TIMELINE_ROOM_NOT_YET_SYNCED_DESCRIPTION: &str =
+    "This room is still syncing. Try again shortly.";
 
 pub(super) fn map_timeline_close_core_error(error: MatrixIpcError) -> TimelineError {
     match error.diagnostic_id.as_deref() {
@@ -1306,10 +1366,7 @@ impl SharedCore {
             pinned_event_ids: None,
         };
         if let Ok(mut guard) = self.timeline_view_updates.lock() {
-            if guard.len() >= TIMELINE_VIEW_UPDATE_QUEUE_CAP {
-                guard.remove(0);
-            }
-            guard.push(batch);
+            guard.mark(batch);
         }
     }
 
@@ -1330,7 +1387,8 @@ impl SharedCore {
 
 #[uniffi::export(async_runtime = "tokio")]
 impl SharedCore {
-    /// Drain queued timeline view-delta summaries. Not `Core.command`.
+    /// Drain the newest update summary of every stream that changed since
+    /// the last poll. Not `Core.command`.
     ///
     /// NSE forbids this. An empty queue returns an empty list. This is
     /// not Platform::emit. Failed errors stay static.
@@ -1343,7 +1401,7 @@ impl SharedCore {
                 TIMELINE_VIEW_POLL_FAILED_DESCRIPTION,
             )
         })?;
-        Ok(guard.drain(..).map(timeline_view_update_dto).collect())
+        Ok(guard.drain())
     }
 
     pub async fn timeline_open(
@@ -1590,5 +1648,55 @@ impl SharedCore {
             position: view_position_dto(readback.position),
             snapshot: timeline_snapshot_dto(readback.snapshot),
         })
+    }
+}
+
+#[cfg(test)]
+mod dirty_stream_tests {
+    use super::*;
+
+    fn batch(stream_id: &str, revision: u64, ops: usize) -> TimelineViewDeltaBatch {
+        TimelineViewDeltaBatch {
+            schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+            session_generation: 1,
+            stream_id: stream_id.to_owned(),
+            room_id: "!room:example.org".to_owned(),
+            revision,
+            ops: (0..ops)
+                .map(|_| crate::app::timeline::TimelineViewDeltaOp::Clear)
+                .collect(),
+            read_state: None,
+            pagination: None,
+            pinned_event_ids: None,
+        }
+    }
+
+    #[test]
+    fn a_busy_stream_never_pushes_out_another_streams_update() {
+        let mut dirty = TimelineViewDirtyStreams::default();
+        dirty.mark(batch("quiet", 4, 1));
+        // Far more batches than the old 32-entry queue held.
+        for revision in 1..=100 {
+            dirty.mark(batch("busy", revision, 2));
+        }
+        let drained = dirty.drain();
+        assert_eq!(drained.len(), 2);
+        assert_eq!(drained[0].stream_id, "quiet");
+        assert_eq!(drained[0].revision, 4);
+        assert_eq!(drained[1].stream_id, "busy");
+        assert_eq!(drained[1].revision, 100);
+        assert_eq!(drained[1].op_count, 200);
+        assert!(dirty.drain().is_empty());
+    }
+
+    #[test]
+    fn the_dirty_map_is_bounded_when_nobody_polls() {
+        let mut dirty = TimelineViewDirtyStreams::default();
+        for index in 0..=TIMELINE_VIEW_DIRTY_STREAM_CAP {
+            dirty.mark(batch(&format!("stream-{index}"), 1, 0));
+        }
+        let drained = dirty.drain();
+        assert_eq!(drained.len(), TIMELINE_VIEW_DIRTY_STREAM_CAP);
+        assert_eq!(drained[0].stream_id, "stream-1");
     }
 }

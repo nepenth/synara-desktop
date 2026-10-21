@@ -1,13 +1,15 @@
-//! P5.1–P5.4 + P5.10 — Timeline registry, diffs, pagination, focus, UTD (harness).
+//! Native timeline: the live SDK owner, its view projection, and UTD state.
 //!
-//! Per-room (and optional thread) timeline owners stamped with session
-//! generation, pure ordered-diff projection over Synara [`TimelineItem`] DTOs,
-//! a pagination state machine, live/unread/focused open navigation, and
-//! UTD/decryption update propagation.
-//! D0.3 adds a live SDK adapter for the product desktop session while retaining
-//! these pure foundations. No dual backend and no session keys in errors.
+//! [`NativeTimelineRegistry`] / [`NativeTimelineOwner`] in `live.rs` own every
+//! production timeline: SDK timelines per room, thread and event focus, view
+//! streams with their published rows, pagination and read state.
 //!
-//! Authoritative design notes:
+//! The P5.1–P5.4 harness (a registry lifecycle, ordered-diff projection over
+//! Synara `TimelineItem` DTOs, a pagination state machine and a focus
+//! navigator) predates `live.rs` and is compiled for tests only. It does not
+//! describe what the live owner does; read `live.rs` for that.
+//!
+//! Original design notes:
 //! - `docs/matrix-rust-sdk/p5.1-timeline-registry.md`
 //! - `docs/matrix-rust-sdk/p5.2-timeline-diffs.md`
 //! - `docs/matrix-rust-sdk/p5.3-timeline-pagination.md`
@@ -16,16 +18,23 @@
 
 mod actions;
 mod composer;
+#[cfg(test)]
 mod delta;
 mod error;
+#[cfg(test)]
 mod focus;
+#[cfg(test)]
+mod harness_tests;
 mod live;
 mod media;
 mod native;
+#[cfg(test)]
 mod pagination;
 mod pins;
+#[cfg(test)]
 mod projection;
 mod reactions;
+#[cfg(test)]
 mod registry;
 mod shield;
 mod utd;
@@ -47,8 +56,10 @@ pub use composer::{
     NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION,
 };
 
+#[cfg(test)]
 pub use delta::{TimelineDeltaBatch, TimelineDeltaOp, TimelineSnapshot};
 pub use error::TimelineError;
+#[cfg(test)]
 pub use focus::{
     ContextWindow, FocusOpenOutcome, FocusOpenRequest, NavigationPhase, TimelineFocus, TimelineMode,
 };
@@ -71,8 +82,9 @@ pub use native::{
     NativeTimelineReadAction, NativeTimelineReadIntent, NativeTimelineReadStateReadback,
     NativeTimelineReadStateRequest, NativeTimelineSnapshot, NativeTimelineTimestampToEventReadback,
     NativeTimelineViewPaginationRequest, NativeTimelineViewportHint, NativeUtdPhase,
-    NativeUtdStatus, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+    NativeUtdStatus, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
 };
+#[cfg(test)]
 pub use pagination::{
     DirectionStatus, PaginationDirection, PaginationOutcome, PaginationPhase, PaginationRequest,
     TimelinePagination,
@@ -81,7 +93,9 @@ pub use pins::{
     project_pinned_items, reactions_for_target, snapshot_pinned_events, NativePinnedEventsRequest,
     PinnedEventItem, PinnedEventsSnapshot, PINNED_EVENTS_SCHEMA_VERSION,
 };
+#[cfg(test)]
 pub use projection::{reconstruct, TimelineProjection};
+#[cfg(test)]
 pub use registry::{TimelineEntry, TimelineKey, TimelineLifecycle, TimelineRegistry};
 pub use shield::{
     project_encryption_shield, TimelineEncryptionShield, TimelineShieldCode, TimelineShieldTone,
@@ -100,7 +114,7 @@ pub use view::{
     TimelineReaction, TimelineReactionSender, TimelineReadState, TimelineRedactedRow,
     TimelineReplyPreview, TimelineRoomActionAuthority, TimelineRowCapabilities, TimelineStateRow,
     TimelineThreadSummary, TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewDeltaOp,
-    TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot,
+    TimelineViewMetadata, TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot,
     NATIVE_TIMELINE_VIEW_UPDATED_EVENT, TIMELINE_VIEW_SCHEMA_VERSION,
 };
 pub use view_emit::{TimelineViewUpdateEmit, ViewDeltaEmitter};

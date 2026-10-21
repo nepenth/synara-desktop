@@ -197,6 +197,16 @@ impl Core {
         timeline_snapshot(&self.state, request).await
     }
 
+    /// Typed `matrix_timeline_snapshot` probe for a presenter that already
+    /// holds `known_revision`: `None` (no rows copied) while it is current.
+    pub async fn timeline_snapshot_after(
+        &self,
+        request: MatrixTimelineSnapshotRequest,
+        known_revision: u64,
+    ) -> Result<Option<TimelineViewSnapshot>, MatrixIpcError> {
+        timeline_snapshot_after(&self.state, request, known_revision).await
+    }
+
     /// Typed `matrix_timeline_event_readback`.
     pub async fn timeline_event_readback(
         &self,

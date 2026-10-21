@@ -1,6 +1,9 @@
 //! Desktop bridge for `matrix_timeline_paginate` through `Core::command`.
+//!
+//! The page's rows reach the renderer as delta batches, so the reply carries
+//! only the stream's metadata: no rows cross IPC twice.
 
-use synara_core::app::timeline::{NativeTimelineDirection, TimelineViewSnapshot};
+use synara_core::app::timeline::{NativeTimelineDirection, TimelineViewMetadata};
 use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
@@ -10,7 +13,7 @@ pub(crate) async fn timeline_paginate(
     core: &Core,
     stream_id: String,
     direction: NativeTimelineDirection,
-) -> Result<TimelineViewSnapshot, MatrixAuthCommandError> {
+) -> Result<TimelineViewMetadata, MatrixAuthCommandError> {
     let response = core
         .timeline_paginate(synara_core::core_api::MatrixTimelinePaginateRequest {
             stream_id,
@@ -18,7 +21,7 @@ pub(crate) async fn timeline_paginate(
         })
         .await
         .map_err(map_timeline_paginate_core_error)?;
-    Ok(response)
+    Ok(response.into())
 }
 
 fn map_timeline_paginate_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {

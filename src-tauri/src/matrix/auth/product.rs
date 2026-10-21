@@ -129,9 +129,9 @@ use crate::matrix::timeline::{
     NativeTimelineEventReadback, NativeTimelineForwardMediaRequest,
     NativeTimelineForwardTextRequest, NativeTimelineJumpLatestRequest, NativeTimelineOpenReadback,
     NativeTimelineOpenRequest, NativeTimelineOwner, NativeTimelinePinRequest,
-    NativeTimelinePollVoteRequest, NativeTimelineReadAction, NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest, NativeTimelineRedactRequest, NativeTimelineReportRequest,
-    NativeTimelineViewPaginationRequest, PinnedEventsSnapshot, TimelineMediaSource,
+    NativeTimelinePollVoteRequest, NativeTimelineReadAction, NativeTimelineReadStateRequest,
+    NativeTimelineRedactRequest, NativeTimelineReportRequest, NativeTimelineViewPaginationRequest,
+    PinnedEventsSnapshot, TimelineMediaSource,
 };
 
 use crate::matrix::typing::{NativeTypingOwner, NativeTypingSnapshot};
