@@ -140,6 +140,30 @@ wire_enum_from!(MatrixCrossSigningReadinessResponse => CrossSigningReadinessDto 
     Unavailable, SetupRequired, RecoveryRequired, VerificationRequired, Ready
 });
 
+impl From<crate::app::cross_signing::NativeCrossSigningReadiness> for CrossSigningReadinessDto {
+    fn from(readiness: crate::app::cross_signing::NativeCrossSigningReadiness) -> Self {
+        use crate::app::cross_signing::NativeCrossSigningReadiness as Readiness;
+        match readiness {
+            Readiness::Unavailable => Self::Unavailable,
+            Readiness::SetupRequired => Self::SetupRequired,
+            Readiness::RecoveryRequired => Self::RecoveryRequired,
+            Readiness::VerificationRequired => Self::VerificationRequired,
+            Readiness::Ready => Self::Ready,
+        }
+    }
+}
+
+wire_enum! {
+    pub enum CrossSigningSetupOutcomeDto {
+        Complete => "complete",
+        AlreadyConfigured => "already_configured",
+        AuthenticationRequired => "authentication_required",
+    }
+}
+wire_enum_from!(crate::app::cross_signing::NativeCrossSigningSetupOutcome => CrossSigningSetupOutcomeDto {
+    Complete, AlreadyConfigured, AuthenticationRequired
+});
+
 wire_enum! {
     pub enum RoomKeyTransferPhaseDto {
         Idle => "idle",
@@ -199,6 +223,25 @@ pub struct CryptoStatusDto {
 pub struct CrossSigningStatusDto {
     pub session_generation: u64,
     pub readiness: CrossSigningReadinessDto,
+}
+
+/// Cross-signing setup step result. `AuthenticationRequired` means the
+/// homeserver asked for the account password; no keys or UIA session here.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CrossSigningSetupDto {
+    pub session_generation: u64,
+    pub outcome: CrossSigningSetupOutcomeDto,
+    pub readiness: CrossSigningReadinessDto,
+}
+
+impl From<crate::app::cross_signing::NativeCrossSigningSetupResult> for CrossSigningSetupDto {
+    fn from(result: crate::app::cross_signing::NativeCrossSigningSetupResult) -> Self {
+        Self {
+            session_generation: result.status.session_generation,
+            outcome: result.outcome.into(),
+            readiness: result.status.readiness.into(),
+        }
+    }
 }
 
 /// Privacy-safe leftover room-key transfer status. No passphrase or path.
@@ -364,6 +407,31 @@ impl SharedCore {
             .session_status_command(self.core.secret_storage_status())
             .await?;
         secret_storage_status_dto(payload)
+    }
+
+    /// Start cross-signing setup for this account (Security → Set Up
+    /// Recovery). Creates and publishes an identity only when the account has
+    /// none; `AuthenticationRequired` asks Swift for the account password.
+    pub async fn cross_signing_setup(&self) -> Result<CrossSigningSetupDto, SessionStatusError> {
+        self.core
+            .cross_signing_setup()
+            .await
+            .map(CrossSigningSetupDto::from)
+            .map_err(map_session_status_core_error)
+    }
+
+    /// Answer the password stage of a pending setup. The password is a
+    /// dedicated zeroizing argument and never leaves this call.
+    pub async fn cross_signing_setup_password(
+        &self,
+        password: String,
+    ) -> Result<CrossSigningSetupDto, SessionStatusError> {
+        let secret = Zeroizing::new(password);
+        self.core
+            .cross_signing_setup_password(secret.as_str())
+            .await
+            .map(CrossSigningSetupDto::from)
+            .map_err(map_session_status_core_error)
     }
 
     /// Typed recovery arguments bypass generic command envelopes. Returned keys

@@ -21,6 +21,12 @@ const operations = [
   ],
   ["backup_setup", "passphrase", "BackupStatusDto", "LeftoverCommandError"],
   [
+    "cross_signing_setup_password",
+    "password",
+    "CrossSigningSetupDto",
+    "SessionStatusError",
+  ],
+  [
     "backup_repair",
     "recovery_secret",
     "BackupStatusDto",
@@ -69,6 +75,18 @@ export function inspectTypedRecoveryBoundaries({ udl, ffi }) {
   ) {
     errors.push(
       "SecretStorageSetupDto must expose only status and the explicit once-displayed recovery key"
+    );
+  }
+  // The password stage's result never echoes the password or a UIA session.
+  const crossSigningSetup = udl.match(
+    /dictionary CrossSigningSetupDto\s*\{([^}]+)\}/
+  )?.[1];
+  if (
+    crossSigningSetup?.trim() !==
+    "u64 session_generation;\n  CrossSigningSetupOutcomeDto outcome;\n  CrossSigningReadinessDto readiness;"
+  ) {
+    errors.push(
+      "CrossSigningSetupDto must expose only the generation, outcome and readiness"
     );
   }
   return { ok: errors.length === 0, errors };

@@ -372,6 +372,64 @@ impl NativeDeviceOwner {
         crate::app::cross_signing::complete(&self.client, self.session_generation).await
     }
 
+    /// Answer the password stage of the pending setup. The password stays a
+    /// method argument; a rejected password re-arms the server's new session.
+    pub async fn authenticate_cross_signing_password(
+        &self,
+        password: &str,
+    ) -> Result<crate::app::cross_signing::NativeCrossSigningSetupResult, &'static str> {
+        use crate::app::cross_signing::CrossSigningPasswordError;
+        if password.is_empty() {
+            return Err("v-crypto.2-cross-signing-password-empty");
+        }
+        let auth_session = self.pending_cross_signing_auth()?;
+        match crate::app::cross_signing::authenticate_password(
+            &self.client,
+            self.session_generation,
+            auth_session,
+            password,
+        )
+        .await
+        {
+            Ok(result) => {
+                self.set_pending_cross_signing(None)?;
+                Ok(result)
+            }
+            Err(CrossSigningPasswordError::Rejected { auth_session }) => {
+                if auth_session.is_some() {
+                    self.set_pending_cross_signing(auth_session)?;
+                }
+                Err("v-crypto.2-cross-signing-password-rejected")
+            }
+            Err(CrossSigningPasswordError::Failed(diagnostic)) => Err(diagnostic),
+        }
+    }
+
+    /// Core's `crypto_status` for this session; a local read.
+    pub async fn crypto_status(
+        &self,
+    ) -> Result<crate::platform::PlatformCryptoStatus, crate::platform::PlatformCryptoStatusError>
+    {
+        crate::app::cross_signing::crypto_status_projection(&self.client, self.session_generation)
+            .await
+    }
+
+    /// Core's `cross_signing_status` for this session. Shares the own-user
+    /// `/keys/query` gate with `snapshot`.
+    pub async fn cross_signing_status(
+        &self,
+    ) -> Result<
+        crate::platform::PlatformCrossSigningStatus,
+        crate::platform::PlatformCrossSigningStatusError,
+    > {
+        crate::app::cross_signing::cross_signing_status_projection(
+            &self.client,
+            self.session_generation,
+            &self.own_keys_query,
+        )
+        .await
+    }
+
     /// Rename a device, then re-snapshot the live list.
     pub async fn rename(
         &self,

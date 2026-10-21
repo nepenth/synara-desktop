@@ -578,7 +578,8 @@ fn restore_rejects_wrong_length_store_key_without_replacing_it() {
             root.to_string_lossy().into_owned(),
         ))
         .expect_err("corrupt store key");
-    assert!(format!("{error:?}").contains(RESTORE_FAILED_CODE));
+    // A key that cannot open the store asks for a reset; it is never replaced.
+    assert!(format!("{error:?}").contains(STORE_RESET_REQUIRED_CODE));
     let stored = map
         .lock()
         .expect("vault")
@@ -1760,4 +1761,138 @@ fn vault_session_entries_are_empty(
         .account()
         .to_owned();
     !entries.lock().expect("vault").contains_key(&key)
+}
+
+fn store_key_entry(
+    entries: &Mutex<HashMap<String, Vec<u8>>>,
+    identity: &AccountIdentity,
+) -> Option<Vec<u8>> {
+    let key = StoreKeyId::from_identity(identity).account().to_owned();
+    entries.lock().expect("vault").get(&key).cloned()
+}
+
+/// L23: a store restored to a new device (app-group data backed up, Keychain
+/// item `ThisDeviceOnly` not) must not get a fresh key that can never open
+/// it. Sign-in and restore ask for a reset; the reset removes only that
+/// account's store and key; a fresh key is created once and then reused.
+#[tokio::test]
+async fn ios_existing_store_without_its_key_asks_for_reset_instead_of_a_new_key() {
+    let identity = alice();
+    let bob = AccountIdentity::new("@bob:example.org", "https://matrix.example.org").unwrap();
+    let entries = Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries.clone())));
+    let root = temp_root("store-key-missing");
+    let root_path = root.to_string_lossy().into_owned();
+    let alice_paths = StorePaths::derive(&root, &identity).unwrap();
+    alice_paths.ensure_dirs().unwrap();
+    let bob_paths = StorePaths::derive(&root, &bob).unwrap();
+    bob_paths.ensure_dirs().unwrap();
+
+    let login = shared
+        .login_with_password_inner(
+            identity.user_id(),
+            identity.homeserver_url(),
+            &root_path,
+            "fixture-password",
+        )
+        .await
+        .expect_err("no key for an existing store");
+    match login {
+        SessionLoginError::Failed { code, .. } => {
+            assert_eq!(code, LOGIN_STORE_RESET_REQUIRED_CODE)
+        }
+    }
+    assert!(store_key_entry(&entries, &identity).is_none());
+
+    let material =
+        SessionMaterial::from_matrix_tokens(&identity, "IOSDEVICE", "syt_s3b_restore", None)
+            .unwrap();
+    let session_vault = SecretStoreSessionVault {
+        store: Arc::clone(&shared.secret_store),
+    };
+    persist_session_material(&session_vault, &identity, &material).unwrap();
+    let restore = shared
+        .restore_persisted_session(
+            identity.user_id().to_owned(),
+            identity.homeserver_url().to_owned(),
+            root_path.clone(),
+        )
+        .await
+        .expect_err("restore asks for the same reset");
+    assert!(format!("{restore:?}").contains(STORE_RESET_REQUIRED_CODE));
+    assert!(store_key_entry(&entries, &identity).is_none());
+
+    let reset = shared
+        .reset_local_account_store(
+            identity.user_id().to_owned(),
+            identity.homeserver_url().to_owned(),
+            root_path.clone(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(reset.status, LeftoverAckStatusDto::Wiped);
+    assert!(!alice_paths.account_root().exists());
+    assert!(bob_paths.account_root().exists(), "other accounts stay");
+
+    let created = store_key_for(&shared.secret_store, &root, &identity).unwrap();
+    let reused = store_key_for(&shared.secret_store, &root, &identity).unwrap();
+    assert_eq!(created.as_bytes(), reused.as_bytes());
+    assert_eq!(
+        store_key_entry(&entries, &identity).as_deref(),
+        Some(created.as_bytes().as_slice())
+    );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn ios_existing_store_reuses_its_stored_key() {
+    let identity = alice();
+    let entries = Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries.clone())));
+    let root = temp_root("store-key-reuse");
+    let first = store_key_for(&shared.secret_store, &root, &identity).unwrap();
+    StorePaths::derive(&root, &identity)
+        .unwrap()
+        .ensure_dirs()
+        .unwrap();
+    let again = store_key_for(&shared.secret_store, &root, &identity).unwrap();
+    assert_eq!(first.as_bytes(), again.as_bytes());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn ios_store_reset_is_refused_while_a_session_is_retained() {
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    let server = MatrixMockServer::new().await;
+    let entries = Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries.clone())));
+    let root = temp_root("store-reset-live");
+    let root_path = root.to_string_lossy().into_owned();
+    shared
+        .persist_planted_session_for_test(
+            "@alice:example.org".into(),
+            server.server().uri(),
+            root_path.clone(),
+            "DEVICE".into(),
+            "fixture-token".into(),
+            None,
+        )
+        .await
+        .unwrap();
+    let identity = AccountIdentity::new("@alice:example.org", &server.server().uri()).unwrap();
+    assert!(shared
+        .reset_local_account_store(
+            identity.user_id().to_owned(),
+            identity.homeserver_url().to_owned(),
+            root_path,
+        )
+        .await
+        .is_err());
+    assert!(StorePaths::derive(&root, &identity)
+        .unwrap()
+        .account_root()
+        .exists());
+    assert!(store_key_entry(&entries, &identity).is_some());
+    drop(shared);
+    let _ = fs::remove_dir_all(root);
 }

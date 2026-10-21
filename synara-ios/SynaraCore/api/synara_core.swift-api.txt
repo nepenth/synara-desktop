@@ -25,6 +25,8 @@ extension ComposerReplyDraftDto: Sendable
 extension ComposerReplyDraftError: Sendable
 extension ComposerReplyDraftPreviewDto: Sendable
 extension CrossSigningReadinessDto: Sendable
+extension CrossSigningSetupDto: Sendable
+extension CrossSigningSetupOutcomeDto: Sendable
 extension CrossSigningStateDto: Sendable
 extension CrossSigningStatusDto: Sendable
 extension CryptoStatusDto: Sendable
@@ -303,6 +305,8 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func composerClearReplyDraft(roomId: String) async throws -> ComposerReplyDraftDto
   open func composerGetReplyDraft(roomId: String) async throws -> ComposerReplyDraftDto
   open func composerSetReplyDraft(roomId: String, eventId: String, startThread: Bool) async throws -> ComposerReplyDraftDto
+  open func crossSigningSetup() async throws -> CrossSigningSetupDto
+  open func crossSigningSetupPassword(password: String) async throws -> CrossSigningSetupDto
   open func crossSigningStatus() async throws -> CrossSigningStatusDto
   open func cryptoStatus() async throws -> CryptoStatusDto
   open func deleteHttpPusher(pushKey: String, appId: String) async throws -> PusherWriteDto
@@ -365,6 +369,7 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func reactionRedact(roomId: String, targetEventId: String, reactionEventId: String, key: String) async throws -> TimelineReactionMutationDto
   open func recover(recoveryKey: String) async throws -> LeftoverAckDto
   open func registerHttpPusher(pushKey: String, appId: String, gatewayUrl: String, appDisplayName: String, lang: String) async throws -> PusherWriteDto
+  open func resetLocalAccountStore(userId: String, homeserverUrl: String, storeRoot: String) async throws -> LeftoverAckDto
   open func resolveRoomIdentityWarning(roomId: String, userId: String, action: IdentityWarningActionDto) async throws -> RoomIdentityWarningsDto
   open func restartSync() async throws -> SyncStartDto
   open func restoreBackup(recoverySecret: String) async throws -> RestoreBackupDto
@@ -538,6 +543,10 @@ public enum CrossSigningReadinessDto: Equatable, Hashable
   case recoveryRequired
   case verificationRequired
   case ready
+public enum CrossSigningSetupOutcomeDto: Equatable, Hashable
+  case complete
+  case alreadyConfigured
+  case authenticationRequired
 public enum CrossSigningStateDto: Equatable, Hashable
   case unavailable
   case notSetUp
@@ -970,6 +979,8 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func composerClearReplyDraft(roomId: String) async throws -> ComposerReplyDraftDto
   func composerGetReplyDraft(roomId: String) async throws -> ComposerReplyDraftDto
   func composerSetReplyDraft(roomId: String, eventId: String, startThread: Bool) async throws -> ComposerReplyDraftDto
+  func crossSigningSetup() async throws -> CrossSigningSetupDto
+  func crossSigningSetupPassword(password: String) async throws -> CrossSigningSetupDto
   func crossSigningStatus() async throws -> CrossSigningStatusDto
   func cryptoStatus() async throws -> CryptoStatusDto
   func deleteHttpPusher(pushKey: String, appId: String) async throws -> PusherWriteDto
@@ -1032,6 +1043,7 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func reactionRedact(roomId: String, targetEventId: String, reactionEventId: String, key: String) async throws -> TimelineReactionMutationDto
   func recover(recoveryKey: String) async throws -> LeftoverAckDto
   func registerHttpPusher(pushKey: String, appId: String, gatewayUrl: String, appDisplayName: String, lang: String) async throws -> PusherWriteDto
+  func resetLocalAccountStore(userId: String, homeserverUrl: String, storeRoot: String) async throws -> LeftoverAckDto
   func resolveRoomIdentityWarning(roomId: String, userId: String, action: IdentityWarningActionDto) async throws -> RoomIdentityWarningsDto
   func restartSync() async throws -> SyncStartDto
   func restoreBackup(recoverySecret: String) async throws -> RestoreBackupDto
@@ -1229,6 +1241,11 @@ public struct ComposerReplyDraftPreviewDto: Equatable, Hashable
   public var formattedBody: String?
   public var threadRootEventId: String?
   public init(eventId: String, senderId: String, body: String, formattedBody: String?, threadRootEventId: String?)
+public struct CrossSigningSetupDto: Equatable, Hashable
+  public var sessionGeneration: UInt64
+  public var outcome: CrossSigningSetupOutcomeDto
+  public var readiness: CrossSigningReadinessDto
+  public init(sessionGeneration: UInt64, outcome: CrossSigningSetupOutcomeDto, readiness: CrossSigningReadinessDto)
 public struct CrossSigningStatusDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var readiness: CrossSigningReadinessDto

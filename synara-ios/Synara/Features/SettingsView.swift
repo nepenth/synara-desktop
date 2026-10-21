@@ -2,6 +2,7 @@ import PhotosUI
 import SwiftUI
 import SynaraCore
 import UIKit
+import UniformTypeIdentifiers
 import UserNotifications
 
 /// Log Out confirmation copy, including the last-device warning.
@@ -1481,12 +1482,139 @@ final class SessionCryptoStatusObserver: ObservableObject {
     }
 }
 
+/// The generated recovery key stays on this device's pasteboard only, and
+/// only briefly: no Universal Clipboard hand-off, gone after two minutes.
+enum RecoveryKeyPasteboard {
+    static let lifetime: TimeInterval = 120
+
+    static func copy(_ key: String, to pasteboard: UIPasteboard = .general) {
+        pasteboard.setItems(
+            [[UTType.plainText.identifier: key]],
+            options: [
+                .localOnly: true,
+                .expirationDate: Date().addingTimeInterval(lifetime),
+            ]
+        )
+    }
+}
+
+/// Security → Set Up Recovery, in desktop's order: publish the account's
+/// cross-signing identity (asking for the account password when the
+/// homeserver wants it), then enrol secret storage and key backup with a
+/// recovery passphrase and show the generated recovery key once.
+///
+/// Core refuses partial or existing prior state, so a repeated tap never
+/// enrols twice; an already-enabled account reports `.finished` with no key.
+@MainActor
+final class RecoverySetupFlow: ObservableObject {
+    enum Phase: Equatable {
+        case idle
+        case working
+        case passwordRequired
+        case showingKey(String)
+        case finished
+    }
+
+    @Published private(set) var phase: Phase = .idle
+    @Published private(set) var errorMessage: String?
+    /// Held only between the passphrase step and the password step.
+    private var pendingPassphrase: String?
+
+    var isWorking: Bool { phase == .working }
+
+    func start(passphrase: String, confirmation: String, crypto: CryptoStatusServicing) async {
+        guard phase == .idle else { return }
+        guard passphrase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+            errorMessage = "Choose a recovery passphrase."
+            return
+        }
+        guard passphrase == confirmation else {
+            errorMessage = "Recovery passphrases do not match."
+            return
+        }
+        errorMessage = nil
+        phase = .working
+        switch await crypto.startCrossSigningSetup() {
+        case .ready:
+            await enrol(passphrase: passphrase, crypto: crypto)
+        case .passwordRequired, .passwordRejected:
+            pendingPassphrase = passphrase
+            phase = .passwordRequired
+        case .failed(let message):
+            fail(message)
+        }
+    }
+
+    func authenticate(password: String, crypto: CryptoStatusServicing) async {
+        guard phase == .passwordRequired, let passphrase = pendingPassphrase else { return }
+        guard password.isEmpty == false else {
+            errorMessage = "Enter your account password."
+            return
+        }
+        errorMessage = nil
+        phase = .working
+        switch await crypto.authenticateCrossSigningSetup(password: password) {
+        case .ready:
+            await enrol(passphrase: passphrase, crypto: crypto)
+        case .passwordRequired, .passwordRejected:
+            phase = .passwordRequired
+            errorMessage = RecoverySetupCopy.passwordRejected
+        case .failed(let message):
+            fail(message)
+        }
+    }
+
+    /// Leave the password step; nothing is enrolled.
+    func cancel() {
+        guard phase == .passwordRequired else { return }
+        pendingPassphrase = nil
+        errorMessage = nil
+        phase = .idle
+    }
+
+    /// The user copied or noted the key. It is dropped from memory.
+    func acknowledgeKey() {
+        guard case .showingKey = phase else { return }
+        phase = .finished
+    }
+
+    private func enrol(passphrase: String, crypto: CryptoStatusServicing) async {
+        pendingPassphrase = nil
+        switch await crypto.enableRecovery(passphrase: passphrase) {
+        case .enabled(let recoveryKey):
+            phase = .showingKey(recoveryKey)
+        case .alreadyEnabled:
+            phase = .finished
+        case .failed(let message):
+            fail(message)
+        }
+    }
+
+    private func fail(_ message: String) {
+        pendingPassphrase = nil
+        errorMessage = message
+        phase = .idle
+    }
+}
+
 private struct SecuritySettingsView: View {
     @Environment(\.appEnvironment) private var environment
     @StateObject private var sessionCrypto = SessionCryptoStatusObserver()
+    @StateObject private var recoverySetup = RecoverySetupFlow()
     @State private var recoveryKey = ""
+    @State private var recoveryPassphrase = ""
+    @State private var recoveryPassphraseConfirmation = ""
+    @State private var accountPassword = ""
+    @State private var copiedRecoveryKey = false
     @State private var cryptoActionMessage: String?
     @State private var isRunningCryptoAction = false
+
+    /// Shown while the account has no recovery, and kept while a setup is in
+    /// progress or its key is on screen, even after status refreshes.
+    private var showsRecoverySetup: Bool {
+        sessionCrypto.status.recoverySetupAvailable == true
+            || (recoverySetup.phase != .idle && recoverySetup.phase != .finished)
+    }
 
     var body: some View {
         Form {
@@ -1497,6 +1625,8 @@ private struct SecuritySettingsView: View {
                     .accessibilityIdentifier("SecurityMatrixSDKRow")
                 SettingsInfoRow(title: "Device Verification", value: sessionCrypto.status.verification.settingsDisplayName)
                     .accessibilityIdentifier("SecurityDeviceVerificationRow")
+                SettingsInfoRow(title: "Cross-Signing", value: sessionCrypto.status.crossSigning.settingsDisplayName)
+                    .accessibilityIdentifier("SecurityCrossSigningRow")
                 SettingsInfoRow(title: "Key Recovery", value: sessionCrypto.status.recovery.settingsDisplayName)
                     .accessibilityIdentifier("SecurityKeyRecoveryRow")
                 SettingsInfoRow(title: "Key Backup", value: sessionCrypto.status.backup.settingsDisplayName)
@@ -1531,26 +1661,30 @@ private struct SecuritySettingsView: View {
                 }
             }
 
-            Section {
-                SecureField("Recovery key", text: $recoveryKey)
-                    .textContentType(.oneTimeCode)
-                    .accessibilityIdentifier("RecoveryKeyField")
-                Button {
-                    let key = recoveryKey
-                    runCryptoAction {
-                        await environment.crypto.recover(recoveryKey: key)
-                    } onComplete: {
-                        recoveryKey = ""
+            if showsRecoverySetup {
+                recoverySetupSection
+            } else {
+                Section {
+                    SecureField("Recovery key", text: $recoveryKey)
+                        .textContentType(.oneTimeCode)
+                        .accessibilityIdentifier("RecoveryKeyField")
+                    Button {
+                        let key = recoveryKey
+                        runCryptoAction {
+                            await environment.crypto.recover(recoveryKey: key)
+                        } onComplete: {
+                            recoveryKey = ""
+                        }
+                    } label: {
+                        cryptoActionLabel("Recover Keys")
                     }
-                } label: {
-                    cryptoActionLabel("Recover Keys")
+                    .disabled(isRunningCryptoAction || recoveryKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .accessibilityIdentifier("RecoverKeysButton")
+                } header: {
+                    Text("Recovery")
+                } footer: {
+                    Text("Recovery keys are used only for this request and are not stored by Synara.")
                 }
-                .disabled(isRunningCryptoAction || recoveryKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .accessibilityIdentifier("RecoverKeysButton")
-            } header: {
-                Text("Recovery")
-            } footer: {
-                Text("Recovery keys are used only for this request and are not stored by Synara.")
             }
 
             if let cryptoActionMessage {
@@ -1576,6 +1710,116 @@ private struct SecuritySettingsView: View {
             ProgressView()
         } else {
             Text(title)
+        }
+    }
+
+    /// Desktop's bootstrap steps and wording (Setup Device Verification, then
+    /// Set Up Recovery), on the existing Form controls.
+    @ViewBuilder
+    private var recoverySetupSection: some View {
+        Section {
+            switch recoverySetup.phase {
+            case .idle, .working, .finished:
+                SecureField("Recovery Passphrase", text: $recoveryPassphrase)
+                    .textContentType(.newPassword)
+                    .accessibilityIdentifier("RecoveryPassphraseField")
+                SecureField("Confirm Recovery Passphrase", text: $recoveryPassphraseConfirmation)
+                    .textContentType(.newPassword)
+                    .accessibilityIdentifier("RecoveryPassphraseConfirmField")
+                Button {
+                    let passphrase = recoveryPassphrase
+                    let confirmation = recoveryPassphraseConfirmation
+                    Task {
+                        await recoverySetup.start(
+                            passphrase: passphrase,
+                            confirmation: confirmation,
+                            crypto: environment.crypto
+                        )
+                        await finishRecoverySetupStep()
+                    }
+                } label: {
+                    recoverySetupLabel("Set Up Recovery")
+                }
+                .disabled(recoverySetup.isWorking || recoveryPassphrase.isEmpty)
+                .accessibilityIdentifier("SetUpRecoveryButton")
+            case .passwordRequired:
+                Text("Synara will create and securely store your cross-signing identity on this device. Enter your account password to continue.")
+                    .font(SynaraTypography.supporting)
+                SecureField("Account Password", text: $accountPassword)
+                    .textContentType(.password)
+                    .accessibilityIdentifier("RecoveryAccountPasswordField")
+                Button {
+                    let password = accountPassword
+                    Task {
+                        await recoverySetup.authenticate(password: password, crypto: environment.crypto)
+                        accountPassword = ""
+                        await finishRecoverySetupStep()
+                    }
+                } label: {
+                    recoverySetupLabel("Authenticate")
+                }
+                .disabled(accountPassword.isEmpty)
+                .accessibilityIdentifier("RecoveryAuthenticateButton")
+                Button("Cancel", role: .cancel) {
+                    accountPassword = ""
+                    recoverySetup.cancel()
+                }
+                .accessibilityIdentifier("RecoveryCancelButton")
+            case .showingKey(let key):
+                Text("Recovery is ready. Copy this key now. Synara does not save it.")
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.primaryText)
+                    .accessibilityIdentifier("RecoveryKeyReadyText")
+                Text(key)
+                    .font(.system(.body, design: .monospaced))
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("GeneratedRecoveryKeyText")
+                Button {
+                    RecoveryKeyPasteboard.copy(key)
+                    copiedRecoveryKey = true
+                } label: {
+                    Label(copiedRecoveryKey ? "Copied" : "Copy Recovery Key", systemImage: "doc.on.doc")
+                }
+                .accessibilityIdentifier("CopyRecoveryKeyButton")
+                Button("Done") {
+                    copiedRecoveryKey = false
+                    recoverySetup.acknowledgeKey()
+                }
+                .accessibilityIdentifier("RecoveryKeyDoneButton")
+            }
+            if let message = recoverySetup.errorMessage {
+                Text(message)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("RecoverySetupErrorText")
+            }
+        } header: {
+            Text("Set Up Recovery")
+        } footer: {
+            Text("Choose a recovery passphrase. Synara sets up device verification for this account, then protects it and your message keys with secret storage and key backup. The recovery key is shown once.")
+        }
+    }
+
+    @ViewBuilder
+    private func recoverySetupLabel(_ title: String) -> some View {
+        if recoverySetup.isWorking {
+            ProgressView()
+        } else {
+            Text(title)
+        }
+    }
+
+    /// Clear typed secrets once a step leaves the form, and re-read status
+    /// after anything was set up.
+    @MainActor
+    private func finishRecoverySetupStep() async {
+        switch recoverySetup.phase {
+        case .showingKey, .finished:
+            recoveryPassphrase = ""
+            recoveryPassphraseConfirmation = ""
+            sessionCrypto.apply(await environment.sessionCrypto.refresh())
+        case .idle, .working, .passwordRequired:
+            break
         }
     }
 
@@ -1678,6 +1922,23 @@ private extension SynaraCryptoRecoveryStatus {
         case .disabled:
             return "Disabled"
         case .incomplete:
+            return "Needs Recovery"
+        case .unknown:
+            return "Unknown"
+        }
+    }
+}
+
+extension SynaraCryptoCrossSigningStatus {
+    var settingsDisplayName: String {
+        switch self {
+        case .ready:
+            return "Ready"
+        case .notSetUp:
+            return "Not Set Up"
+        case .needsVerification:
+            return "Needs Verification"
+        case .needsRecovery:
             return "Needs Recovery"
         case .unknown:
             return "Unknown"

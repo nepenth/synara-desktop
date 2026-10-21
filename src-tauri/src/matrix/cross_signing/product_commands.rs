@@ -43,49 +43,20 @@ pub(super) async fn matrix_cross_signing_setup_password_inner(
 
     let mut session = state.session.lock().await;
     let active = require_cross_signing_session_mut(session.as_mut())?;
-    let auth_session = active
-        .devices
-        .pending_cross_signing_auth()
-        .map_err(map_cross_signing_setup_owner_error)?;
-    let user_id = active.client.user_id().ok_or_else(|| {
-        MatrixAuthCommandError::new(
-            "Forbidden",
-            "No native Matrix session is active.",
-            "v-crypto.2-cross-signing-user-missing",
-        )
-    })?;
-    let mut auth = uiaa::Password::new(user_id.to_owned().into(), password.to_owned());
-    auth.session = Some(auth_session);
-
-    if let Err(error) = active
-        .client
-        .encryption()
-        .bootstrap_cross_signing(Some(uiaa::AuthData::Password(auth)))
-        .await
-    {
-        if let Some(info) = error.as_uiaa_response() {
-            if let Some(auth_session) = info.session.clone() {
-                active
-                    .devices
-                    .set_pending_cross_signing(Some(auth_session))
-                    .map_err(map_cross_signing_setup_owner_error)?;
-            }
-            return Err(MatrixAuthCommandError::new(
-                "Forbidden",
-                "Cross-signing setup authentication failed. Check your password and try again.",
-                "v-crypto.2-cross-signing-password-rejected",
-            ));
-        }
-        return Err(cross_signing_setup_error(
-            "v-crypto.2-cross-signing-auth-failed",
-        ));
-    }
-
+    // Core owns the password stage (shared with iOS): it re-checks that no
+    // identity was published meanwhile and refuses a partial private identity.
     active
         .devices
-        .finish_cross_signing_setup()
+        .authenticate_cross_signing_password(password)
         .await
-        .map_err(map_cross_signing_setup_owner_error)
+        .map_err(|diagnostic_id| match diagnostic_id {
+            "v-crypto.2-cross-signing-password-rejected" => MatrixAuthCommandError::new(
+                "Forbidden",
+                "Cross-signing setup authentication failed. Check your password and try again.",
+                diagnostic_id,
+            ),
+            _ => map_cross_signing_setup_owner_error(diagnostic_id),
+        })
 }
 
 fn map_cross_signing_setup_owner_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
