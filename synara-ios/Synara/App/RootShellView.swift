@@ -173,7 +173,7 @@ struct RootShellView: View {
                 cryptoVerificationActionError = nil
             }
         } message: {
-            Text(cryptoVerificationActionError ?? "Try the verification step again.")
+            Text(cryptoVerificationActionError ?? String(localized: "Try the verification step again."))
         }
         // On the shell, not the banner: the banner may hide while it is open.
         .signOutConfirmation(
@@ -182,7 +182,7 @@ struct RootShellView: View {
         ) {
             signOut()
         }
-        .alert("Could not sign out", isPresented: signOutErrorBinding) {
+        .alert("Could not log out", isPresented: signOutErrorBinding) {
             Button("Try Again") {
                 signOutError = nil
                 signOut()
@@ -560,8 +560,14 @@ private struct CryptoVerificationSheet: View {
         switch state {
         case .requestReceived(let request):
             VStack(alignment: .leading, spacing: SynaraSpacing.small) {
-                CryptoVerificationInfoRow(title: "User", value: request.displayName ?? request.userID)
-                CryptoVerificationInfoRow(title: "Device", value: request.deviceDisplayName ?? request.deviceID)
+                CryptoVerificationInfoRow(
+                    title: String(localized: "User"),
+                    value: request.displayName ?? request.userID
+                )
+                CryptoVerificationInfoRow(
+                    title: String(localized: "Device"),
+                    value: request.deviceDisplayName ?? request.deviceID
+                )
                 Text("Only accept if you recognize this request. You’ll compare codes on both devices next.")
                     .font(SynaraTypography.supporting)
                     .foregroundStyle(SynaraColor.secondaryText)
@@ -612,7 +618,7 @@ private struct CryptoVerificationSheet: View {
                     .font(.system(size: 40, weight: .semibold))
                     .foregroundStyle(terminalTint)
                 CryptoVerificationInfoRow(
-                    title: "This device",
+                    title: String(localized: "This device"),
                     value: sessionCrypto.status.verification.settingsDisplayName
                 )
                 .accessibilityIdentifier("VerificationOwnDeviceStatus")
@@ -631,18 +637,26 @@ private struct CryptoVerificationSheet: View {
         VStack(spacing: SynaraSpacing.small) {
             switch state {
             case .requestReceived:
-                primaryButton("Accept", identifier: "AcceptDeviceVerificationButton", action: onAccept)
-                secondaryButton("Decline", role: .cancel, action: onDecline)
+                primaryButton(String(localized: "Accept"), identifier: "AcceptDeviceVerificationButton", action: onAccept)
+                secondaryButton(String(localized: "Decline"), role: .cancel, action: onDecline)
             case .requestSent, .sasStarted, .keysExchanging, .confirmed:
-                secondaryButton("Cancel Verification", role: .cancel, action: onCancel)
+                secondaryButton(String(localized: "Cancel Verification"), role: .cancel, action: onCancel)
             case .accepted:
-                primaryButton("Start Comparison", identifier: "StartDeviceVerificationSasButton", action: onStartSas)
-                secondaryButton("Cancel", role: .cancel, action: onCancel)
+                primaryButton(
+                    String(localized: "Start Comparison"),
+                    identifier: "StartDeviceVerificationSasButton",
+                    action: onStartSas
+                )
+                secondaryButton(String(localized: "Cancel"), role: .cancel, action: onCancel)
             case .emojis, .decimals:
-                primaryButton("They Match", identifier: "ConfirmDeviceVerificationButton", action: onApprove)
-                secondaryButton("They Do Not Match", role: .destructive, action: onDecline)
+                primaryButton(String(localized: "They Match"), identifier: "ConfirmDeviceVerificationButton", action: onApprove)
+                secondaryButton(String(localized: "They Do Not Match"), role: .destructive, action: onDecline)
             case .finished, .cancelled, .failed, .mismatched:
-                primaryButton(isDismissing ? "Closing…" : "Done", identifier: "DismissDeviceVerificationButton", action: onDismissTerminal)
+                primaryButton(
+                    isDismissing ? String(localized: "Closing…") : String(localized: "Done"),
+                    identifier: "DismissDeviceVerificationButton",
+                    action: onDismissTerminal
+                )
             }
         }
     }
@@ -667,56 +681,58 @@ private struct CryptoVerificationSheet: View {
     private var title: String {
         switch state {
         case .requestReceived:
-            return "Verification request"
+            return String(localized: "Verification request")
         case .requestSent:
-            return "Request sent"
+            return String(localized: "Request sent")
         case .accepted:
-            return "Ready to compare"
+            return String(localized: "Ready to compare")
         case .sasStarted:
-            return "Waiting"
+            return String(localized: "Waiting")
         case .keysExchanging:
-            return "Exchanging keys"
+            return String(localized: "Exchanging keys")
         case .emojis, .decimals:
-            return "Compare on both devices"
+            return String(localized: "Compare on both devices")
         case .confirmed:
-            return "Waiting for the other device"
+            return String(localized: "Waiting for the other device")
         case .finished:
-            return sessionCrypto.status.verification == .verified ? "Device verified" : "Verification complete"
+            return sessionCrypto.status.verification == .verified
+                ? String(localized: "Device verified")
+                : String(localized: "Verification complete")
         case .cancelled:
-            return "Verification cancelled"
+            return String(localized: "Verification cancelled")
         case .failed:
-            return "Verification failed"
+            return String(localized: "Verification failed")
         case .mismatched:
-            return "Codes did not match"
+            return String(localized: "Codes did not match")
         }
     }
 
     private var detail: String {
         switch state {
         case .requestReceived:
-            return "Another session wants to verify this device."
+            return String(localized: "Another session wants to verify this device.")
         case .requestSent:
-            return "Approve the request from one of your already trusted sessions."
+            return String(localized: "Approve the request from one of your already trusted sessions.")
         case .accepted:
-            return "Start a secure emoji or number comparison. Only this device should start."
+            return String(localized: "Start a secure emoji or number comparison. Only this device should start.")
         case .sasStarted:
-            return "Waiting for the other device to start comparison, or for codes to appear."
+            return String(localized: "Waiting for the other device to start comparison, or for codes to appear.")
         case .keysExchanging:
-            return "Both devices accepted the comparison. Secure codes will appear when the key exchange completes."
+            return String(localized: "Both devices accepted the comparison. Secure codes will appear when the key exchange completes.")
         case .emojis, .decimals:
-            return "Only approve if the values match exactly on both devices."
+            return String(localized: "Only approve if the values match exactly on both devices.")
         case .confirmed:
-            return "This device accepted the codes. Wait for the other session to finish."
+            return String(localized: "This device accepted the codes. Wait for the other session to finish.")
         case .finished:
             return sessionCrypto.status.verification == .verified
-                ? "The codes matched on both devices. This device is verified for encrypted conversations."
-                : "The codes matched on both devices. This device’s verified status is not confirmed yet. Check Security settings if it does not update."
+                ? String(localized: "The codes matched on both devices. This device is verified for encrypted conversations.")
+                : String(localized: "The codes matched on both devices. This device’s verified status is not confirmed yet. Check Security settings if it does not update.")
         case .cancelled:
-            return "The verification flow was cancelled."
+            return String(localized: "The verification flow was cancelled.")
         case .failed:
-            return "The verification flow could not be completed."
+            return String(localized: "The verification flow could not be completed.")
         case .mismatched:
-            return "The security codes did not match. Verification was cancelled safely."
+            return String(localized: "The security codes did not match. Verification was cancelled safely.")
         }
     }
 

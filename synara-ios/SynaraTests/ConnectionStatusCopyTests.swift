@@ -72,7 +72,7 @@ final class ConnectionStatusCopyTests: XCTestCase {
         XCTAssertEqual(ConnectionStatusCopy.banner(.disconnected), "Connection Lost!")
         XCTAssertEqual(
             ConnectionStatusCopy.banner(.restoreFailed),
-            "Couldn't restore this session. Sign out and sign in again."
+            "Couldn't restore this session. Log out and sign in again."
         )
         XCTAssertEqual(ConnectionStatusCopy.banner(.starting), "Connecting…")
         XCTAssertEqual(ConnectionStatusCopy.banner(.stopped), "Not connected")

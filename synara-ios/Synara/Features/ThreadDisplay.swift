@@ -16,17 +16,17 @@ enum ThreadDisplayMode: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .inline: "Inline"
-        case .sheet: "Sheet"
-        case .full: "Full Screen"
+        case .inline: String(localized: "Inline")
+        case .sheet: String(localized: "Sheet")
+        case .full: String(localized: "Full Screen")
         }
     }
 
     var detail: String {
         switch self {
-        case .inline: "Replies expand beneath their first message in the room."
-        case .sheet: "Threads open in a sheet over the room."
-        case .full: "Threads open on their own screen."
+        case .inline: String(localized: "Replies expand beneath their first message in the room.")
+        case .sheet: String(localized: "Threads open in a sheet over the room.")
+        case .full: String(localized: "Threads open on their own screen.")
         }
     }
 

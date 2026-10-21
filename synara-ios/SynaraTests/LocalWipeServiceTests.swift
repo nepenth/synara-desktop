@@ -5,7 +5,7 @@ final class LocalWipeServiceTests: XCTestCase {
     func testLogoutFailurePresentationPreservesActionableKindsAndRedactsUnknownErrors() {
         XCTAssertEqual(
             LocalWipeError.displayMessage(for: LocalWipeError.pusherCleanupFailed),
-            "Could not remove this device's push registration. Try signing out again."
+            "Could not remove this device's push registration. Try logging out again."
         )
         XCTAssertEqual(
             LocalWipeError.displayMessage(for: LocalWipeError.sessionDeleteFailed),
@@ -21,7 +21,7 @@ final class LocalWipeServiceTests: XCTestCase {
     func testTimedOutSignOutHasRetryCopy() {
         XCTAssertEqual(
             LocalWipeError.displayMessage(for: LocalWipeError.timedOut),
-            "Signing out is taking too long. Try signing out again."
+            "Logging out is taking too long. Try logging out again."
         )
     }
 

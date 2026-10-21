@@ -14,6 +14,12 @@ settings:
     CURRENT_PROJECT_VERSION: "2.2.6"
     SYNARA_CRITICAL_ALERTS_ENABLED: "NO"
     SYNARA_NOTIFICATION_FILTERING_ENABLED: "NO"
+    # User-facing copy lives in String Catalogs: Synara/Resources/Localizable.xcstrings
+    # (app) and SynaraShared/SynaraShared.xcstrings (app and notification
+    # service, table "SynaraShared"). The compiler extracts String(localized:)
+    # and SwiftUI LocalizedStringKey literals so the catalogs stay in sync.
+    SWIFT_EMIT_LOC_STRINGS: YES
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
 packages:
   SynaraCore:
     path: SynaraCore

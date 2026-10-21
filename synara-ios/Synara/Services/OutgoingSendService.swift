@@ -87,7 +87,7 @@ enum TimelineRowAccessibility {
     }
 
     static func retryActionTitle(deliveryStatus: TimelineDeliveryStatus?) -> String? {
-        deliveryStatus == .failed ? "Retry" : nil
+        deliveryStatus == .failed ? String(localized: "Retry") : nil
     }
 }
 

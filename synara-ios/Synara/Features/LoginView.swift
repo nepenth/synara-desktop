@@ -36,8 +36,10 @@ enum LoginFormField: Hashable {
 
 /// Neutral sign-in copy: the same screen serves first-time users.
 enum LoginCopy {
-    static let title = "Sign In"
-    static let subtitle = "Sign in to your Matrix homeserver for your rooms, secure sessions, and agent workflows."
+    static let title = String(localized: "Sign In")
+    static let subtitle = String(
+        localized: "Sign in to your Matrix homeserver for your rooms, secure sessions, and agent workflows."
+    )
 }
 
 struct LoginView: View {
@@ -162,7 +164,7 @@ struct LoginView: View {
                 try await environment.auth.resetLocalData(for: request)
             } catch {
                 await MainActor.run {
-                    state = .failed("Synara could not reset local data. Try again.")
+                    state = .failed(String(localized: "Synara could not reset local data. Try again."))
                     environment.logger.error("Local data reset failed", category: .auth)
                 }
                 return

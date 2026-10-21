@@ -743,8 +743,8 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
 
     private func postAgentApprovalNotSentNotice(userInfo: [AnyHashable: Any]) async {
         let content = UNMutableNotificationContent()
-        content.title = "Approval not sent"
-        content.body = "Open Synara to review the command. It may have expired."
+        content.title = String(localized: "Approval not sent")
+        content.body = String(localized: "Open Synara to review the command. It may have expired.")
         content.sound = .default
         if let target = SynaraForegroundNotificationPolicy.target(from: userInfo) {
             content.userInfo = ["room_id": target.roomID, "event_id": target.eventID]

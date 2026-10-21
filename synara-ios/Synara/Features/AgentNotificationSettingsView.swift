@@ -12,9 +12,9 @@ final class AgentNotificationPreferencesEditor: ObservableObject {
     @Published private(set) var isSaving = false
     @Published private(set) var message: String?
 
-    static let savedMessage = "Saved to your account."
-    static let saveFailedMessage = "Settings were not saved. Check your connection and agent IDs, then try again."
-    static let loadFailedMessage = "Agent notification settings could not be loaded. Check your connection and try again."
+    static let savedMessage = String(localized: "Saved to your account.")
+    static let saveFailedMessage = String(localized: "Settings were not saved. Check your connection and agent IDs, then try again.")
+    static let loadFailedMessage = String(localized: "Agent notification settings could not be loaded. Check your connection and try again.")
 
     /// The account's last confirmed preferences.
     private var saved: Preferences?

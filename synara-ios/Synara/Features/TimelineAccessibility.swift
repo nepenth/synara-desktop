@@ -24,31 +24,33 @@ extension TimelineRowAccessibility {
         var title: String {
             switch self {
             case .reply:
-                return "Reply"
+                return String(localized: "Reply")
             case .replyInThread:
-                return "Reply in Thread"
+                return String(localized: "Reply in Thread")
             case .openThread:
-                return "Open Thread"
+                return String(localized: "Open Thread")
             case .react:
-                return "React"
+                return String(localized: "React")
             case let .toggleReaction(key, isOwn):
-                return isOwn ? "Remove \(key) reaction" : "React with \(key)"
+                return isOwn
+                    ? String(localized: "Remove \(key) reaction")
+                    : String(localized: "React with \(key)")
             case .edit:
-                return "Edit"
+                return String(localized: "Edit")
             case .copy:
-                return "Copy"
+                return String(localized: "Copy")
             case .selectText:
-                return "Select Text"
+                return String(localized: "Select Text")
             case .forward:
-                return "Forward"
+                return String(localized: "Forward")
             case .pinToNotes:
-                return "Pin to Notes"
+                return String(localized: "Pin to Notes")
             case .declineCall:
-                return "Decline Call"
+                return String(localized: "Decline Call")
             case .report:
-                return "Report"
+                return String(localized: "Report")
             case .redact:
-                return "Redact"
+                return String(localized: "Redact")
             }
         }
     }
@@ -122,19 +124,20 @@ extension TimelineRowAccessibility {
         ownReactions: TimelineReactionOwnership = .unknown,
         replyCount: Int = 0
     ) -> String {
-        let senderAndTime = "\(sender) at \(time)"
+        let senderAndTime = String(localized: "\(sender) at \(time)")
         var parts = [body(senderAndTime: senderAndTime, kind: kind)]
         if case .systemNotice = kind {
             return parts[0]
         }
         if isEdited {
-            parts.append("Edited")
+            parts.append(String(localized: "Edited"))
         }
         let reactionLabels = reactions.keys.sorted().map { key in
             reactionLabel(key: key, count: reactions[key] ?? 0, isOwn: ownReactions.contains(key))
         }
         if reactionLabels.isEmpty == false {
-            parts.append("Reactions: " + reactionLabels.joined(separator: "; "))
+            let reactionList = reactionLabels.joined(separator: "; ")
+            parts.append(String(localized: "Reactions: \(reactionList)"))
         }
         if replyCount > 0 {
             parts.append(replyCountLabel(replyCount))
@@ -143,44 +146,44 @@ extension TimelineRowAccessibility {
     }
 
     static func reactionLabel(key: String, count: Int, isOwn: Bool) -> String {
-        isOwn ? "\(key) \(count), you reacted" : "\(key) \(count)"
+        isOwn ? String(localized: "\(key) \(count), you reacted") : String(localized: "\(key) \(count)")
     }
 
     static func reactionToggleHint(isOwn: Bool) -> String {
-        isOwn ? "Removes your reaction" : "Adds your reaction"
+        isOwn ? String(localized: "Removes your reaction") : String(localized: "Adds your reaction")
     }
 
     static func replyCountLabel(_ count: Int) -> String {
-        count == 1 ? "1 reply" : "\(count) replies"
+        String(localized: "\(count) replies")
     }
 
     private static func body(senderAndTime: String, kind: TimelineItem.Kind) -> String {
         switch kind {
         case let .text(body):
-            return "\(senderAndTime): \(body)"
+            return String(localized: "\(senderAndTime): \(body)")
         case let .formattedText(body, _):
-            return "\(senderAndTime): \(body)"
+            return String(localized: "\(senderAndTime): \(body)")
         case let .mediaPlaceholder(resource):
             if resource.isEncrypted {
-                return "\(senderAndTime) sent encrypted media that cannot be opened until keys are available"
+                return String(localized: "\(senderAndTime) sent encrypted media that cannot be opened until keys are available")
             }
             if let caption = resource.caption {
-                return "\(senderAndTime) sent \(resource.safeDescription): \(caption)"
+                return String(localized: "\(senderAndTime) sent \(resource.safeDescription): \(caption)")
             }
-            return "\(senderAndTime) sent \(resource.safeDescription)"
+            return String(localized: "\(senderAndTime) sent \(resource.safeDescription)")
         case .redacted:
-            return "\(senderAndTime): message deleted"
+            return String(localized: "\(senderAndTime): message deleted")
         case .encryptedPlaceholder:
-            return "\(senderAndTime): encrypted message unavailable"
+            return String(localized: "\(senderAndTime): encrypted message unavailable")
         case .unknown:
-            return "\(senderAndTime): \(TimelineUnavailableMessageCopy.text)"
+            return String(localized: "\(senderAndTime): \(TimelineUnavailableMessageCopy.text)")
         case let .systemNotice(text):
             return text
         case let .agentCard(card):
-            let status = card.status.map { ", status \($0)" } ?? ""
+            let status = card.status.map { String(localized: ", status \($0)") } ?? ""
             let primaryAction = card.actions.first(where: SynaraAgentCardActionResolver.shouldRender)
-                .map { ", primary action \($0.title)" } ?? ""
-            return "\(senderAndTime): agent card: \(card.title)\(status)\(primaryAction)"
+                .map { String(localized: ", primary action \($0.title)") } ?? ""
+            return String(localized: "\(senderAndTime): agent card: \(card.title)\(status)\(primaryAction)")
         }
     }
 }

@@ -56,11 +56,20 @@ enum OwnProfileWriteStatus: Equatable {
     case rateLimited
     case failed
 
-    func message(for field: String) -> String {
-        switch self {
-        case .updated: return "\(field) updated."
-        case .rateLimited: return "The homeserver is limiting profile changes. Please try again shortly."
-        case .failed: return "Could not update \(field.lowercased())."
+    /// The profile field a write changed; each has whole-sentence copy.
+    enum Field {
+        case avatar
+        case displayName
+    }
+
+    func message(for field: Field) -> String {
+        switch (self, field) {
+        case (.updated, .avatar): return String(localized: "Avatar updated.")
+        case (.updated, .displayName): return String(localized: "Display name updated.")
+        case (.rateLimited, _):
+            return String(localized: "The homeserver is limiting profile changes. Please try again shortly.")
+        case (.failed, .avatar): return String(localized: "Could not update avatar.")
+        case (.failed, .displayName): return String(localized: "Could not update display name.")
         }
     }
 }
@@ -308,17 +317,17 @@ enum NotificationPermissionStatus: Equatable {
     var displayName: String {
         switch self {
         case .notDetermined:
-            return "Not Requested"
+            return String(localized: "Not Requested")
         case .denied:
-            return "Denied"
+            return String(localized: "Denied")
         case .authorized:
-            return "Authorized"
+            return String(localized: "Authorized")
         case .provisional:
-            return "Provisional"
+            return String(localized: "Provisional")
         case .ephemeral:
-            return "Ephemeral"
+            return String(localized: "Ephemeral")
         case .unavailable:
-            return "Unavailable"
+            return String(localized: "Unavailable")
         }
     }
 
@@ -334,17 +343,17 @@ enum NotificationPermissionStatus: Equatable {
     var detail: String {
         switch self {
         case .notDetermined:
-            return "Notifications can be enabled for room and agent alerts."
+            return String(localized: "Notifications can be enabled for room and agent alerts.")
         case .denied:
-            return "Enable notifications in iOS Settings to receive alerts."
+            return String(localized: "Enable notifications in iOS Settings to receive alerts.")
         case .authorized:
-            return "Notifications are enabled."
+            return String(localized: "Notifications are enabled.")
         case .provisional:
-            return "Notifications can be delivered quietly."
+            return String(localized: "Notifications can be delivered quietly.")
         case .ephemeral:
-            return "Notifications are temporarily available for this session."
+            return String(localized: "Notifications are temporarily available for this session.")
         case .unavailable:
-            return "Notifications are unavailable on this device."
+            return String(localized: "Notifications are unavailable on this device.")
         }
     }
 
@@ -380,13 +389,13 @@ enum SynaraRoomEncryptionStatus: Equatable {
     var roomDetailsLabel: String {
         switch self {
         case .encrypted:
-            return "Encrypted"
+            return String(localized: "Encrypted")
         case .notEncrypted:
-            return "Not encrypted"
+            return String(localized: "Not encrypted")
         case .unknown:
-            return "Unknown"
+            return String(localized: "Unknown")
         case .unavailable:
-            return "Unavailable"
+            return String(localized: "Unavailable")
         }
     }
 }
@@ -469,35 +478,35 @@ struct RoomCryptoStatus: Equatable {
     }
 
     var cryptoBannerTitle: String {
-        if unableToDecryptCount > 0 { return "Encrypted history needs attention" }
-        if recovery == .incomplete { return "Key recovery needs attention" }
-        return "Verify this device"
+        if unableToDecryptCount > 0 { return String(localized: "Encrypted history needs attention") }
+        if recovery == .incomplete { return String(localized: "Key recovery needs attention") }
+        return String(localized: "Verify this device")
     }
 
     var cryptoBannerDetail: String {
         if unableToDecryptCount > 0 {
-            return "Some messages could not be decrypted. Retry after keys arrive, or review verification and key recovery in Settings."
+            return String(localized: "Some messages could not be decrypted. Retry after keys arrive, or review verification and key recovery in Settings.")
         }
         if recovery == .incomplete {
-            return "Key recovery is incomplete. Review Security to protect access to encrypted history."
+            return String(localized: "Key recovery is incomplete. Review Security to protect access to encrypted history.")
         }
-        return "This device is not verified. Compare emoji or number codes with another verified session in Settings. This does not mean messages failed to decrypt."
+        return String(localized: "This device is not verified. Compare emoji or number codes with another verified session in Settings. This does not mean messages failed to decrypt.")
     }
 
     var roomHeaderLabel: String? {
         guard isEncrypted else {
-            return encryption == .unavailable ? "Encryption Unavailable" : nil
+            return encryption == .unavailable ? String(localized: "Encryption Unavailable") : nil
         }
         if unableToDecryptCount > 0 || recovery == .incomplete || recovery == .disabled {
-            return "Recovery Needed"
+            return String(localized: "Recovery Needed")
         }
         if backup == .unavailable {
-            return "No Key Backup"
+            return String(localized: "No Key Backup")
         }
         if verification == .unverified {
-            return "Unverified"
+            return String(localized: "Unverified")
         }
-        return "Encrypted"
+        return String(localized: "Encrypted")
     }
 
     var roomHeaderSystemImage: String {
@@ -531,8 +540,8 @@ struct SessionCryptoStatus: Equatable {
     // Session crypto metadata does not scan message history. A missing count
     // must never be presented as proof that every encrypted event decrypted.
     var decryptionIssuesLabel: String {
-        guard let count = unableToDecryptCount else { return "Check room history" }
-        return count == 0 ? "None observed" : "\(count) observed"
+        guard let count = unableToDecryptCount else { return String(localized: "Check room history") }
+        return count == 0 ? String(localized: "None observed") : String(localized: "\(count) observed")
     }
 
     static let unknown = SessionCryptoStatus(
@@ -664,11 +673,11 @@ enum RecoveryEnrollmentResult: Equatable {
 }
 
 enum RecoverySetupCopy {
-    static let setupFailed = "Synara could not set up cross-signing. Try again."
-    static let enrollmentFailed = "Synara could not update secret storage. Try again."
+    static let setupFailed = String(localized: "Synara could not set up cross-signing. Try again.")
+    static let enrollmentFailed = String(localized: "Synara could not update secret storage. Try again.")
     static let passwordRejected =
-        "Cross-signing setup authentication failed. Check your password and try again."
-    static let unavailable = "Recovery setup is unavailable."
+        String(localized: "Cross-signing setup authentication failed. Check your password and try again.")
+    static let unavailable = String(localized: "Recovery setup is unavailable.")
 }
 
 /// One Reset Identity step (Security, or the "Verify This Device" prompt).
@@ -689,45 +698,45 @@ enum IdentityResetResult: Equatable {
 /// Desktop's wording, word for word
 /// (`synara/src/app/features/cross-signing/nativeIdentityReset.ts`).
 enum IdentityResetCopy {
-    static let title = "Reset Identity"
+    static let title = String(localized: "Reset Identity")
     static let settingsDescription =
-        "If you have lost your recovery key and all your other devices, start over with a new identity."
+        String(localized: "If you have lost your recovery key and all your other devices, start over with a new identity.")
     static let warningIntro =
-        "Only reset your identity if you have lost your recovery key and are not signed in on any other device you can verify with."
+        String(localized: "Only reset your identity if you have lost your recovery key and are not signed in on any other device you can verify with.")
     static let warnings = [
-        "People you talk to will see that your identity changed.",
-        "You will need to verify your other devices and contacts again.",
-        "Messages that only your old keys can read may be lost, unless another device still has them.",
-        "Starting the reset removes your key backup and recovery key right away, even if you cancel before it finishes.",
+        String(localized: "People you talk to will see that your identity changed."),
+        String(localized: "You will need to verify your other devices and contacts again."),
+        String(localized: "Messages that only your old keys can read may be lost, unless another device still has them."),
+        String(localized: "Starting the reset removes your key backup and recovery key right away, even if you cancel before it finishes."),
     ]
-    static let password = "Enter your account password to confirm the reset."
+    static let password = String(localized: "Enter your account password to confirm the reset.")
     static let approval =
-        "Your homeserver asks you to approve the reset on your account page. Approve it in your browser, then select Continue."
-    static let openAccountPage = "Open Account Page"
-    static let recovery = "Your identity was reset. Set up recovery now to get a new recovery key."
-    static let configured = "Device verification and account recovery are configured for this session."
+        String(localized: "Your homeserver asks you to approve the reset on your account page. Approve it in your browser, then select Continue.")
+    static let openAccountPage = String(localized: "Open Account Page")
+    static let recovery = String(localized: "Your identity was reset. Set up recovery now to get a new recovery key.")
+    static let configured = String(localized: "Device verification and account recovery are configured for this session.")
     static let cancelled =
-        "Reset cancelled. Your key backup and recovery key were removed when it started. Set up recovery in Settings once this device is verified, or reset your identity to finish."
+        String(localized: "Reset cancelled. Your key backup and recovery key were removed when it started. Set up recovery in Settings once this device is verified, or reset your identity to finish.")
     static let recoveryMayBeOff =
-        "Your key backup and recovery key may already be removed. Set up recovery in Settings once this device is verified, or reset your identity to finish."
-    static let failed = "Synara could not reset your identity. Try again."
-    static let passwordRejected = "Identity reset authentication failed. Check your password and try again."
+        String(localized: "Your key backup and recovery key may already be removed. Set up recovery in Settings once this device is verified, or reset your identity to finish.")
+    static let failed = String(localized: "Synara could not reset your identity. Try again.")
+    static let passwordRejected = String(localized: "Identity reset authentication failed. Check your password and try again.")
     static let approvalPending =
-        "Synara has not seen your approval yet. Approve the reset in your browser, then select Continue."
-    static let network = "Synara could not reach your homeserver. Check your connection and try again."
+        String(localized: "Synara has not seen your approval yet. Approve the reset in your browser, then select Continue.")
+    static let network = String(localized: "Synara could not reach your homeserver. Check your connection and try again.")
     static let authUnsupported =
-        "This homeserver asks for a sign-in step Synara cannot complete for an identity reset."
+        String(localized: "This homeserver asks for a sign-in step Synara cannot complete for an identity reset.")
 }
 
 /// Desktop's "Verify This Device" prompt wording.
 enum VerifyDevicePromptCopy {
-    static let title = "Verify This Device"
+    static let title = String(localized: "Verify This Device")
     static let description =
-        "Your account already has a cross-signing identity. Verify this device to read your encrypted messages and so others can trust it."
-    static let verifyWithDevice = "Verify from Another Device"
-    static let recoveryKey = "Use Recovery Key"
-    static let cantVerify = "Lost your recovery key and all your other devices?"
-    static let later = "Later"
+        String(localized: "Your account already has a cross-signing identity. Verify this device to read your encrypted messages and so others can trust it.")
+    static let verifyWithDevice = String(localized: "Verify from Another Device")
+    static let recoveryKey = String(localized: "Use Recovery Key")
+    static let cantVerify = String(localized: "Lost your recovery key and all your other devices?")
+    static let later = String(localized: "Later")
 }
 
 protocol CryptoStatusServicing {
@@ -814,14 +823,14 @@ struct RoomIdentityWarning: Equatable, Identifiable {
     }
 
     var actionTitle: String {
-        kind == .verificationViolation ? "Withdraw verification" : "Dismiss"
+        kind == .verificationViolation ? String(localized: "Withdraw verification") : String(localized: "Dismiss")
     }
 
     var message: String {
         let name = displayName ?? userID
         return kind == .verificationViolation
-            ? "\(name)'s verified identity changed."
-            : "\(name)'s identity changed."
+            ? String(localized: "\(name)'s verified identity changed.")
+            : String(localized: "\(name)'s identity changed.")
     }
 
     /// The most serious warning first: verification violations outrank pin violations.
@@ -902,11 +911,11 @@ extension CryptoStatusServicing {
     func signOutSession(deviceId: String, password: String) async -> CryptoActionResult {
         _ = deviceId
         _ = password
-        return .unavailable("Session sign-out is unavailable.")
+        return .unavailable(String(localized: "Session logout is unavailable."))
     }
 
     func dismissVerification(flowID: String) async -> CryptoActionResult {
-        .completed("Verification closed.")
+        .completed(String(localized: "Verification closed."))
     }
 
 }
@@ -1096,21 +1105,21 @@ enum RoomManagementError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .signedOut:
-            return "Sign in before managing rooms."
+            return String(localized: "Sign in before managing rooms.")
         case .missingRoomName:
-            return "Enter a room name."
+            return String(localized: "Enter a room name.")
         case .missingUserID:
-            return "Enter a valid Matrix ID."
+            return String(localized: "Enter a valid Matrix ID.")
         case .missingRoomReference:
-            return "Enter a room ID or alias."
+            return String(localized: "Enter a room ID or alias.")
         case .invalidMatrixID:
-            return "Matrix IDs must look like @name:server."
+            return String(localized: "Matrix IDs must look like @name:server.")
         case .invalidRoomAlias:
-            return "Room aliases must look like #room:server."
+            return String(localized: "Room aliases must look like #room:server.")
         case .noProfileChanges:
-            return "Change the room name or topic before saving."
+            return String(localized: "Change the room name or topic before saving.")
         case .failed:
-            return "Room action failed. Try again."
+            return String(localized: "Room action failed. Try again.")
         case .directoryFailed(let description):
             return description
         }
@@ -1286,7 +1295,7 @@ final class PlaceholderPushService: PushServicing {
     let isRegistrationAvailable = false
     let isRegistered = false
     let tokenSnippet: String? = nil
-    let registrationStateDescription = "Push unavailable"
+    let registrationStateDescription = String(localized: "Push unavailable")
     let pushGatewayURL: String? = nil
 
     func beginRegistration() {}

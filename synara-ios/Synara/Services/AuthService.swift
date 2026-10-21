@@ -42,33 +42,33 @@ enum LoginError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .missingUsername:
-            return "Enter your username."
+            return String(localized: "Enter your username.")
         case .missingPassword:
-            return "Enter your password."
+            return String(localized: "Enter your password.")
         case .invalidCredentials:
-            return "The username or password is incorrect."
+            return String(localized: "The username or password is incorrect.")
         case .networkFailure:
-            return "Could not reach the homeserver. Try again."
+            return String(localized: "Could not reach the homeserver. Try again.")
         case .cancelled:
-            return "Login was cancelled."
+            return String(localized: "Login was cancelled.")
         case .unsupported:
-            return "Password login is not supported for this homeserver yet."
+            return String(localized: "Password login is not supported for this homeserver yet.")
         case .slidingSyncUnsupported:
             return ServerCompatibilityCopy.slidingSyncUnsupported
         case .sessionPersistenceFailed:
-            return "Could not save the session securely."
+            return String(localized: "Could not save the session securely.")
         case .localDataUnreadable:
-            return "Synara can't open this account's saved data on this device, for example after restoring from a backup. Reset local data to sign in again."
+            return String(localized: "Synara can't open this account's saved data on this device, for example after restoring from a backup. Reset local data to sign in again.")
         case .serverUnavailable:
-            return "The homeserver is having problems. Try again later."
+            return String(localized: "The homeserver is having problems. Try again later.")
         case .rateLimited:
-            return "Too many sign-in attempts. Wait a moment, then try again."
+            return String(localized: "Too many sign-in attempts. Wait a moment, then try again.")
         case .accountDeactivated:
-            return "This account has been deactivated."
+            return String(localized: "This account has been deactivated.")
         case .localDataInUse:
-            return "This account's saved data is in use. Close other copies of Synara, then try again."
+            return String(localized: "This account's saved data is in use. Close other copies of Synara, then try again.")
         case .signInFailed:
-            return "Sign-in failed. Try again."
+            return String(localized: "Sign-in failed. Try again.")
         }
     }
 }

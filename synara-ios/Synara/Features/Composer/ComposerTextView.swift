@@ -110,8 +110,8 @@ struct ComposerTextView: UIViewRepresentable {
         textView.isScrollEnabled = false
         textView.keyboardDismissMode = .interactive
         textView.accessibilityIdentifier = "ComposerTextField"
-        textView.accessibilityLabel = "Message"
-        textView.accessibilityHint = "Enter a message for this room"
+        textView.accessibilityLabel = String(localized: "Message")
+        textView.accessibilityHint = String(localized: "Enter a message for this room")
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         container.placeholderLabel.text = placeholder
         container.placeholderLabel.font = textView.font

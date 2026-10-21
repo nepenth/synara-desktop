@@ -12,14 +12,14 @@ protocol SparsePushRouteResolving {
 /// Settings copy for agent approval alerts. It must describe the action
 /// options `SynaraNotificationActionContract` registers in either state.
 enum SynaraApprovalNotificationSettingsCopy {
-    static let approveOnceWithoutUnlockTitle = "Approve once without unlocking"
+    static let approveOnceWithoutUnlockTitle = String(localized: "Approve once without unlocking")
 
     static func footer(approveOnceWithoutUnlock: Bool) -> String {
-        let delivery = "Fresh, locally verified approval prompts use Critical Alerts when this build supports them and you allow them in iOS; otherwise they use Time Sensitive alerts. Use Request Notification Permission to allow Critical Alerts in a supported build. Show approval details puts the reason and requested command on the notification, including the Lock Screen and Apple Watch, independent of message previews."
+        let delivery = String(localized: "Fresh, locally verified approval prompts use Critical Alerts when this build supports them and you allow them in iOS; otherwise they use Time Sensitive alerts. Use Request Notification Permission to allow Critical Alerts in a supported build. Show approval details puts the reason and requested command on the notification, including the Lock Screen and Apple Watch, independent of message previews.")
         let actions = approveOnceWithoutUnlock
-            ? "Approve once and Deny work from the Lock Screen and Apple Watch without unlocking your iPhone."
-            : "Approve once requires unlocking your iPhone first. Deny works without unlocking."
-        return "\(delivery) \(actions) Always approval remains in-app only."
+            ? String(localized: "Approve once and Deny work from the Lock Screen and Apple Watch without unlocking your iPhone.")
+            : String(localized: "Approve once requires unlocking your iPhone first. Deny works without unlocking.")
+        return String(localized: "\(delivery) \(actions) Always approval remains in-app only.")
     }
 }
 
@@ -58,7 +58,7 @@ enum SynaraNotificationActionContract {
         [
             UNNotificationAction(
                 identifier: approveOnceIdentifier,
-                title: "Approve once",
+                title: String(localized: "Approve once"),
                 // Background actions, so the app delegate decides in a bounded
                 // background transaction without foregrounding. By default iOS
                 // first asks to unlock the iPhone, because approving runs an
@@ -71,13 +71,13 @@ enum SynaraNotificationActionContract {
             ),
             UNNotificationAction(
                 identifier: denyIdentifier,
-                title: "Deny",
+                title: String(localized: "Deny"),
                 // Denying cannot run anything, so it never needs an unlock.
                 options: [.destructive]
             ),
             UNNotificationAction(
                 identifier: reviewIdentifier,
-                title: "Review",
+                title: String(localized: "Review"),
                 options: [.foreground]
             )
         ]
@@ -248,7 +248,7 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
     }
 
     static let registeredWithoutEditSuppressionDescription =
-        "Pusher registration complete; edited messages may notify"
+        String(localized: "Pusher registration complete; edited messages may notify")
 
     private(set) var isRegistered = false
     private(set) var fullDeviceToken: String?
@@ -257,7 +257,7 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
     var tokenSnippet: String? {
         fullDeviceToken?.prefix(10).description
     }
-    private(set) var registrationStateDescription = "Waiting for APNs token"
+    private(set) var registrationStateDescription = String(localized: "Waiting for APNs token")
     private(set) var currentSession: AuthenticatedSession?
     private var currentPusherOwner: MatrixPusherAccountServicing?
 
@@ -302,7 +302,7 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
         self.isRegistrationAvailable = isRegistrationAvailable ?? defaultAvailability
         if self.isRegistrationAvailable == false,
            isSimulator {
-            registrationStateDescription = "Simulator: APNs unavailable"
+            registrationStateDescription = String(localized: "Simulator: APNs unavailable")
         }
     }
 
@@ -339,14 +339,14 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
     private func acceptDeviceToken(_ token: String) {
         let tokenChanged = fullDeviceToken.map { $0 != token } ?? false
         if tokenChanged {
-            registrationStateDescription = "Token changed, re-registering"
+            registrationStateDescription = String(localized: "Token changed, re-registering")
             registrationDiagnosticRunID = UUID()
         }
 
         fullDeviceToken = token
         registrationStateDescription = pusherService.isGatewayConfigured
-            ? "Token captured for APNs"
-            : "Push gateway not configured"
+            ? String(localized: "Token captured for APNs")
+            : String(localized: "Push gateway not configured")
         logger.info("APNs token captured", category: .push)
         let runID = registrationDiagnosticRunID ?? UUID()
         registrationDiagnosticRunID = runID
@@ -360,8 +360,8 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
         registrationDiagnosticRunID = runID
         SynaraNotificationDiagnostics.record(.apnsRegistrationFailed, runID: runID)
         registrationStateDescription = isRegistered
-            ? "APNs registration failed; existing pusher retained"
-            : "APNs registration failed"
+            ? String(localized: "APNs registration failed; existing pusher retained")
+            : String(localized: "APNs registration failed")
     }
 
     @discardableResult
@@ -384,7 +384,7 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
                     .pusherUnregistrationFailed,
                     runID: diagnosticRunID
                 )
-                registrationStateDescription = "Push cleanup unavailable; finishing local sign out"
+                registrationStateDescription = String(localized: "Push cleanup unavailable; finishing local logout")
                 return false
             }
         }
@@ -415,14 +415,14 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
                 isRegistered = false
                 // Keep registration quiescent while local credentials are
                 // removed. Only a failed local deletion may resume this owner.
-                registrationStateDescription = "Push cleanup failed; finishing local sign out"
+                registrationStateDescription = String(localized: "Push cleanup failed; finishing local logout")
                 return false
             }
         }
 
         registeredBinding = nil
         isRegistered = false
-        registrationStateDescription = "Pusher cleanup complete, finishing sign out"
+        registrationStateDescription = String(localized: "Pusher cleanup complete, finishing logout")
         return true
     }
 
@@ -436,7 +436,7 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
         fullDeviceToken = nil
         pendingDeviceTokenDuringTeardown = nil
         registrationDiagnosticRunID = nil
-        registrationStateDescription = isSimulator ? "Simulator: APNs unavailable" : "Waiting for APNs token"
+        registrationStateDescription = isSimulator ? String(localized: "Simulator: APNs unavailable") : String(localized: "Waiting for APNs token")
         // Stay gated while signed out. SessionCoordinator explicitly resumes
         // registration before a later authenticated session is configured.
     }
@@ -444,7 +444,7 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
     func cancelRegistrationTeardown() {
         guard isRegistrationTeardownInProgress else { return }
         abortRegistrationTeardown(
-            statusDescription: "Sign out cancelled, restoring push registration"
+            statusDescription: String(localized: "Logout cancelled, restoring push registration")
         )
     }
 
@@ -470,7 +470,7 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
         let nextSignature = sessionSignature(for: session)
         let previousSignature = currentSessionSignature
         if let previousSignature = currentSessionSignature, previousSignature != nextSignature {
-            registrationStateDescription = "Session changed, updating push registration"
+            registrationStateDescription = String(localized: "Session changed, updating push registration")
             registrationDiagnosticRunID = UUID()
         }
 
@@ -486,7 +486,7 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
             currentSessionSignature = nextSignature
             if currentPusherOwner == nil {
                 isRegistered = false
-                registrationStateDescription = "Pusher owner unavailable"
+                registrationStateDescription = String(localized: "Pusher owner unavailable")
             }
             logger.error("Push owner binding failed", category: .push)
         }
@@ -599,7 +599,7 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
             registrationDiagnosticRunID = diagnosticRunID
         }
         guard pusherService.isGatewayConfigured else {
-            registrationStateDescription = "Push gateway not configured"
+            registrationStateDescription = String(localized: "Push gateway not configured")
             SynaraNotificationDiagnostics.record(
                 .pusherGatewayUnavailable,
                 runID: diagnosticRunID
@@ -619,7 +619,7 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
         }
 
         if let previousBinding = registeredBinding {
-            registrationStateDescription = "Replacing previous push registration"
+            registrationStateDescription = String(localized: "Replacing previous push registration")
             SynaraNotificationDiagnostics.record(
                 .pusherUnregistrationStarted,
                 runID: diagnosticRunID
@@ -637,7 +637,7 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
             } catch {
                 logger.error("Push unregister failed during rotation", category: .push)
                 isRegistered = false
-                registrationStateDescription = "Previous pusher cleanup failed"
+                registrationStateDescription = String(localized: "Previous pusher cleanup failed")
                 SynaraNotificationDiagnostics.record(
                     .pusherUnregistrationFailed,
                     runID: diagnosticRunID
@@ -657,7 +657,7 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
         }
         guard let owner = currentPusherOwner else {
             isRegistered = false
-            registrationStateDescription = "Pusher owner unavailable"
+            registrationStateDescription = String(localized: "Pusher owner unavailable")
             return
         }
         let desiredBinding = PusherBinding(
@@ -695,7 +695,7 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
                         runID: diagnosticRunID
                     )
                 } else {
-                    registrationStateDescription = "Pusher registration complete"
+                    registrationStateDescription = String(localized: "Pusher registration complete")
                 }
             } else {
                 // The target changed while registration was in flight. Remove
@@ -719,7 +719,7 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
                     logger.error("Stale push registration cleanup failed", category: .push)
                     registeredBinding = desiredBinding
                     isRegistered = false
-                    registrationStateDescription = "Stale pusher cleanup failed"
+                    registrationStateDescription = String(localized: "Stale pusher cleanup failed")
                     SynaraNotificationDiagnostics.record(
                         .pusherUnregistrationFailed,
                         runID: diagnosticRunID
@@ -729,7 +729,7 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
         } catch {
             logger.error("Push registration failed", category: .push)
             isRegistered = false
-            registrationStateDescription = "Pusher registration failed"
+            registrationStateDescription = String(localized: "Pusher registration failed")
             SynaraNotificationDiagnostics.record(
                 .pusherRegistrationFailed,
                 runID: diagnosticRunID

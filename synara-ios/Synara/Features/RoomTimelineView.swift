@@ -121,7 +121,7 @@ enum RoomTimelineTitlePolicy {
         if let routeTitle, routeTitle.isEmpty == false {
             return resolved ?? routeTitle
         }
-        return resolved ?? roomListName ?? "Room"
+        return resolved ?? roomListName ?? String(localized: "Room")
     }
 
     static func shouldAdoptRoomListName(routeTitle: String?) -> Bool {
@@ -527,11 +527,11 @@ enum RoomTypingPresentation {
         case 0:
             return nil
         case 1:
-            return "\(names[0]) is typing..."
+            return String(localized: "\(names[0]) is typing...")
         case 2:
-            return "\(names[0]) and \(names[1]) are typing..."
+            return String(localized: "\(names[0]) and \(names[1]) are typing...")
         default:
-            return "\(names[0]), \(names[1]), and \(names.count - 2) more are typing..."
+            return String(localized: "\(names[0]), \(names[1]), and \(names.count - 2) more are typing...")
         }
     }
 }
@@ -578,6 +578,7 @@ struct RoomTimelineView: View {
     @State private var roomNotesActionMessage: String?
     @State private var timelineActionMessage: String?
     @State private var reportTarget: TimelineItem?
+    @State private var redactConfirmation = TimelineRedactConfirmation<TimelineItem>()
     @State private var reportReason = ""
     @State private var forwardTarget: TimelineItem?
     @State private var threadDisplay: ThreadDisplayMode = ThreadDisplayMode.defaultMode
@@ -795,6 +796,9 @@ struct RoomTimelineView: View {
                 }
             )
         }
+        .timelineRedactConfirmation($redactConfirmation) { item in
+            applyAction(.redact, to: item)
+        }
         .alert("Report Message", isPresented: Binding(
             get: { reportTarget != nil },
             set: {
@@ -820,7 +824,7 @@ struct RoomTimelineView: View {
                 applyAction(
                     .report(reason: trimmedReason.isEmpty ? nil : trimmedReason),
                     to: item,
-                    successMessage: "Message reported."
+                    successMessage: String(localized: "Message reported.")
                 )
             }
         } message: {
@@ -1052,9 +1056,13 @@ struct RoomTimelineView: View {
             .background(isAgentRoom ? SynaraChrome.agentReview : SynaraChrome.chat)
             .accessibilityIdentifier("TimelineLoading")
         case .empty:
-            SynaraEmptyState(title: "No Messages", systemImage: "text.bubble", message: "Messages will appear here.")
+            SynaraEmptyState(
+                title: String(localized: "No Messages"),
+                systemImage: "text.bubble",
+                message: String(localized: "Messages will appear here.")
+            )
         case let .failed(message):
-            SynaraErrorState(title: "Could Not Load Timeline", message: message) {
+            SynaraErrorState(title: String(localized: "Could Not Load Timeline"), message: message) {
                 Task {
                     await loadTimeline()
                 }
@@ -1134,7 +1142,7 @@ struct RoomTimelineView: View {
                                         )
                                     ),
                                     onEdit: { beginEdit(item) },
-                                    onRedact: { applyAction(.redact, to: item) },
+                                    onRedact: { redactConfirmation.request(item) },
                                     onToggleReaction: { key in toggleReaction(key, on: item) },
                                     quickReactions: quickReactions,
                                     onReport: { beginReport(item) },
@@ -1143,14 +1151,14 @@ struct RoomTimelineView: View {
                                         await performAction(
                                             .pollVote(answerIDs: answerIDs),
                                             to: item,
-                                            successMessage: "Vote submitted."
+                                            successMessage: String(localized: "Vote submitted.")
                                         )
                                     },
                                     onDeclineCall: {
                                         await performAction(
                                             .declineCall,
                                             to: item,
-                                            successMessage: "Call declined."
+                                            successMessage: String(localized: "Call declined.")
                                         )
                                     },
                                     onPinToNotes: { pinToNotes(item) },
@@ -1477,7 +1485,7 @@ struct RoomTimelineView: View {
                 isThreadExpanded: eventRow.isThreadExpanded,
                 inlineThread: inlineThread(for: eventRow.item, replyCount: eventRow.replyCount),
                 onEdit: { beginEdit(eventRow.item) },
-                onRedact: { applyAction(.redact, to: eventRow.item) },
+                onRedact: { redactConfirmation.request(eventRow.item) },
                 onToggleReaction: { key in toggleReaction(key, on: eventRow.item) },
                 quickReactions: quickReactions,
                 onReport: { beginReport(eventRow.item) },
@@ -1486,14 +1494,14 @@ struct RoomTimelineView: View {
                     await performAction(
                         .pollVote(answerIDs: answerIDs),
                         to: eventRow.item,
-                        successMessage: "Vote submitted."
+                        successMessage: String(localized: "Vote submitted.")
                     )
                 },
                 onDeclineCall: {
                     await performAction(
                         .declineCall,
                         to: eventRow.item,
-                        successMessage: "Call declined."
+                        successMessage: String(localized: "Call declined.")
                     )
                 },
                 onPinToNotes: { pinToNotes(eventRow.item) },
@@ -1821,9 +1829,9 @@ struct RoomTimelineView: View {
             await MainActor.run {
                 switch result {
                 case .success:
-                    roomNotesActionMessage = "Message pinned to your private notes."
+                    roomNotesActionMessage = String(localized: "Message pinned to your private notes.")
                 case .failure(let error):
-                    roomNotesActionMessage = error.errorDescription ?? "Could not pin this message."
+                    roomNotesActionMessage = error.errorDescription ?? String(localized: "Could not pin this message.")
                 }
             }
         }
@@ -1838,19 +1846,19 @@ struct RoomTimelineView: View {
 
     private var timelineSubtitle: String {
         guard case let .loaded(items, _) = state else {
-            return "Matrix room"
+            return String(localized: "Matrix room")
         }
 
         let participantCount = Set(items.map(\.senderID)).count
         guard participantCount > 0 else {
-            return "Matrix room"
+            return String(localized: "Matrix room")
         }
         if SynaraLaunchEnvironment.isUITest,
            roomID == "!project:matrix.org"
         {
             return "21 members"
         }
-        return "\(participantCount) members"
+        return String(localized: "\(participantCount) members")
     }
 
     /// Agent rooms read dark; every other room follows the system.
@@ -1872,9 +1880,13 @@ struct RoomTimelineView: View {
 
     private var composerPlaceholder: String {
         if let editTarget = editSession?.editTarget {
-            return editTarget.isLocalPending ? "Edit unsent message..." : "Edit message..."
+            return editTarget.isLocalPending
+                ? String(localized: "Edit unsent message...")
+                : String(localized: "Edit message...")
         }
-        return isAgentRoom ? "Reply to the agent workflow..." : "Send a message..."
+        return isAgentRoom
+            ? String(localized: "Reply to the agent workflow...")
+            : String(localized: "Send a message...")
     }
 
     private func isGroupedWithPrevious(index: Int, items: [TimelineItem]) -> Bool {
@@ -2669,7 +2681,7 @@ struct RoomTimelineView: View {
                     // Already sent: the row becomes the sent message.
                     break
                 case .none:
-                    sendError = "The unsent message could not be discarded."
+                    sendError = String(localized: "The unsent message could not be discarded.")
                     SynaraHaptics.trigger(.warning)
                 }
             }
@@ -2877,7 +2889,7 @@ struct RoomTimelineView: View {
     #if canImport(UIKit)
         private func draftCameraImage(_ image: UIImage) {
             guard let data = MediaAttachmentSupport.jpegData(from: image) else {
-                uploadState = .failed("Attachment could not be loaded. Try again.")
+                uploadState = .failed(String(localized: "Attachment could not be loaded. Try again."))
                 return
             }
             applyIncomingDrafts([
@@ -2908,7 +2920,7 @@ struct RoomTimelineView: View {
                 )
             }
             if incoming.isEmpty {
-                uploadState = .failed("Attachment could not be loaded. Try again.")
+                uploadState = .failed(String(localized: "Attachment could not be loaded. Try again."))
                 return
             }
             applyIncomingDrafts(incoming)
@@ -2946,7 +2958,7 @@ struct RoomTimelineView: View {
                 selectedPhotos = []
                 applyIncomingDrafts(incoming)
                 if incoming.isEmpty, loadFailed {
-                    uploadState = .failed("Attachment could not be loaded. Try again.")
+                    uploadState = .failed(String(localized: "Attachment could not be loaded. Try again."))
                 }
             }
         }
@@ -3877,7 +3889,7 @@ struct RoomTimelineView: View {
                 roomID: roomID
             )
             replace(updated)
-            timelineActionMessage = "Message forwarded."
+            timelineActionMessage = String(localized: "Message forwarded.")
             return nil
         } catch let error as EventActionError {
             return error
@@ -3955,13 +3967,13 @@ struct RoomTimelineView: View {
         case let .failure(error):
             switch error {
             case let .unsupportedKind(unsupported):
-                agentActionMessage = "Unsupported action: \(unsupported)"
+                agentActionMessage = String(localized: "Unsupported action: \(unsupported)")
             case .missingPayload:
-                agentActionMessage = "Action payload is missing"
+                agentActionMessage = String(localized: "Action payload is missing")
             case .unsafeURL:
-                agentActionMessage = "Action link is not allowed"
+                agentActionMessage = String(localized: "Action link is not allowed")
             case .encodingFailure:
-                agentActionMessage = "Could not copy action payload"
+                agentActionMessage = String(localized: "Could not copy action payload")
             }
         }
     }
@@ -3987,15 +3999,18 @@ struct RoomTimelineView: View {
                     } else {
                         SynaraHaptics.trigger(.lightImpact)
                     }
-                    agentActionMessage = decision == .approve ? "Agent action approved" : "Agent action rejected"
+                    agentActionMessage = decision == .approve
+                        ? String(localized: "Agent action approved")
+                        : String(localized: "Agent action rejected")
                 }
             } catch let error as SynaraAgentApprovalError {
                 await MainActor.run {
-                    agentActionMessage = error.errorDescription ?? "Agent action could not be submitted"
+                    agentActionMessage = error.errorDescription
+                        ?? String(localized: "Agent action could not be submitted")
                 }
             } catch {
                 await MainActor.run {
-                    agentActionMessage = "Agent action could not be submitted"
+                    agentActionMessage = String(localized: "Agent action could not be submitted")
                 }
             }
         }
@@ -4018,16 +4033,17 @@ struct RoomTimelineView: View {
                         SynaraHaptics.trigger(.success)
                     }
                     agentActionMessage = outcome == .alreadyDecided
-                        ? "This approval was already decided on this account."
-                        : "Approval decision sent."
+                        ? String(localized: "This approval was already decided on this account.")
+                        : String(localized: "Approval decision sent.")
                 }
             } catch let error as SynaraAgentApprovalError {
                 await MainActor.run {
-                    agentActionMessage = error.errorDescription ?? "Approval decision could not be submitted."
+                    agentActionMessage = error.errorDescription
+                        ?? String(localized: "Approval decision could not be submitted.")
                 }
             } catch {
                 await MainActor.run {
-                    agentActionMessage = "Approval decision could not be submitted."
+                    agentActionMessage = String(localized: "Approval decision could not be submitted.")
                 }
             }
         }
@@ -4330,7 +4346,7 @@ private struct TimelineHeader: View {
                     if let cryptoLabel {
                         Label(cryptoLabel, systemImage: cryptoSystemImage)
                             .foregroundStyle(
-                                cryptoLabel == "Encrypted"
+                                cryptoLabel == String(localized: "Encrypted")
                                     ? SynaraColor.secondaryText
                                     : SynaraColor.warningText
                             )
@@ -4417,16 +4433,16 @@ private struct TimelineSearchSheet: View {
 
                 if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     SynaraEmptyState(
-                        title: "Search Messages",
+                        title: String(localized: "Search Messages"),
                         systemImage: "magnifyingglass",
-                        message: "Filter messages currently loaded in this room."
+                        message: String(localized: "Filter messages currently loaded in this room.")
                     )
                     .frame(maxHeight: .infinity)
                 } else if filteredItems.isEmpty {
                     SynaraEmptyState(
-                        title: "No Matching Messages",
+                        title: String(localized: "No Matching Messages"),
                         systemImage: "text.magnifyingglass",
-                        message: "Try another keyword from the loaded timeline."
+                        message: String(localized: "Try another keyword from the loaded timeline.")
                     )
                     .frame(maxHeight: .infinity)
                 } else {
@@ -4502,6 +4518,7 @@ struct ThreadTimelineView: View {
     @State private var notesActionMessage: String?
     @State private var timelineActionMessage: String?
     @State private var reportTarget: TimelineItem?
+    @State private var redactConfirmation = TimelineRedactConfirmation<TimelineItem>()
     @State private var reportReason = ""
     @State private var forwardTarget: TimelineItem?
     @State private var inFlightTimelineActionKeys: Set<String> = []
@@ -4517,7 +4534,7 @@ struct ThreadTimelineView: View {
     var body: some View {
         VStack(spacing: 0) {
             ThreadHeader(
-                subtitle: rootTitle ?? roomTitle ?? "Room message",
+                subtitle: rootTitle ?? roomTitle ?? String(localized: "Room message"),
                 onBack: { dismiss() }
             )
 
@@ -4528,7 +4545,9 @@ struct ThreadTimelineView: View {
             ComposerView(
                 roomID: roomID,
                 text: $draft,
-                placeholder: editSession == nil ? "Reply in thread..." : "Edit message...",
+                placeholder: editSession == nil
+                    ? String(localized: "Reply in thread...")
+                    : String(localized: "Edit message..."),
                 replyTarget: replyTarget,
                 editTarget: editSession?.editTarget,
                 uploadState: uploadState,
@@ -4585,7 +4604,7 @@ struct ThreadTimelineView: View {
         .alert("Personal Notes", isPresented: notesActionMessageBinding) {
             Button("OK", role: .cancel) { notesActionMessage = nil }
         } message: {
-            Text(notesActionMessage ?? "Try again.")
+            Text(notesActionMessage ?? String(localized: "Try again."))
         }
         .sheet(item: $forwardTarget) { item in
             TimelineForwardSheet(
@@ -4602,6 +4621,9 @@ struct ThreadTimelineView: View {
                     )
                 }
             )
+        }
+        .timelineRedactConfirmation($redactConfirmation) { item in
+            applyAction(.redact, to: item)
         }
         .alert("Report Message", isPresented: Binding(
             get: { reportTarget != nil },
@@ -4628,7 +4650,7 @@ struct ThreadTimelineView: View {
                 applyAction(
                     .report(reason: trimmedReason.isEmpty ? nil : trimmedReason),
                     to: item,
-                    successMessage: "Message reported."
+                    successMessage: String(localized: "Message reported.")
                 )
             }
         } message: {
@@ -4655,9 +4677,13 @@ struct ThreadTimelineView: View {
             }
             .accessibilityIdentifier("ThreadLoading")
         case .empty:
-            SynaraEmptyState(title: "No Thread Replies", systemImage: "bubble.left.and.bubble.right", message: "Replies will appear here.")
+            SynaraEmptyState(
+                title: String(localized: "No Thread Replies"),
+                systemImage: "bubble.left.and.bubble.right",
+                message: String(localized: "Replies will appear here.")
+            )
         case let .failed(message):
-            SynaraErrorState(title: "Could Not Load Thread", message: message) {
+            SynaraErrorState(title: String(localized: "Could Not Load Thread"), message: message) {
                 Task {
                     await loadThread()
                 }
@@ -4768,7 +4794,7 @@ struct ThreadTimelineView: View {
             isThreadExpanded: false,
             inlineThread: nil,
             onEdit: { beginEdit(item) },
-            onRedact: { applyAction(.redact, to: item) },
+            onRedact: { redactConfirmation.request(item) },
             onToggleReaction: { key in toggleReaction(key, on: item) },
             quickReactions: quickReactions,
             onReport: { beginReport(item) },
@@ -4777,14 +4803,14 @@ struct ThreadTimelineView: View {
                 await performAction(
                     .pollVote(answerIDs: answerIDs),
                     to: item,
-                    successMessage: "Vote submitted."
+                    successMessage: String(localized: "Vote submitted.")
                 )
             },
             onDeclineCall: {
                 await performAction(
                     .declineCall,
                     to: item,
-                    successMessage: "Call declined."
+                    successMessage: String(localized: "Call declined.")
                 )
             },
             onPinToNotes: { pinToNotes(item) },
@@ -5044,7 +5070,7 @@ struct ThreadTimelineView: View {
                 currentUserID: currentUserID,
                 roomID: roomID
             )
-            timelineActionMessage = "Message forwarded."
+            timelineActionMessage = String(localized: "Message forwarded.")
             return nil
         } catch let error as EventActionError {
             return error
@@ -5059,9 +5085,9 @@ struct ThreadTimelineView: View {
             await MainActor.run {
                 switch result {
                 case .success:
-                    notesActionMessage = "Message pinned to your private room notes."
+                    notesActionMessage = String(localized: "Message pinned to your private room notes.")
                 case .failure(let error):
-                    notesActionMessage = error.errorDescription ?? "The message could not be pinned."
+                    notesActionMessage = error.errorDescription ?? String(localized: "The message could not be pinned.")
                 }
             }
         }
@@ -5270,7 +5296,7 @@ struct ThreadTimelineView: View {
                 case .some(false):
                     break
                 case .none:
-                    sendError = "The unsent message could not be discarded."
+                    sendError = String(localized: "The unsent message could not be discarded.")
                     SynaraHaptics.trigger(.warning)
                 }
             }
@@ -5393,7 +5419,7 @@ struct ThreadTimelineView: View {
                 selectedPhotos = []
                 applyThreadIncomingDrafts(incoming)
                 if incoming.isEmpty, loadFailed {
-                    uploadState = .failed("Attachment could not be loaded. Try again.")
+                    uploadState = .failed(String(localized: "Attachment could not be loaded. Try again."))
                 }
             }
         }
@@ -5424,7 +5450,7 @@ struct ThreadTimelineView: View {
     #if canImport(UIKit)
         private func draftThreadCameraImage(_ image: UIImage) {
             guard let data = MediaAttachmentSupport.jpegData(from: image) else {
-                uploadState = .failed("Attachment could not be loaded. Try again.")
+                uploadState = .failed(String(localized: "Attachment could not be loaded. Try again."))
                 return
             }
             applyThreadIncomingDrafts([
@@ -5455,7 +5481,7 @@ struct ThreadTimelineView: View {
                 )
             }
             if incoming.isEmpty {
-                uploadState = .failed("Attachment could not be loaded. Try again.")
+                uploadState = .failed(String(localized: "Attachment could not be loaded. Try again."))
                 return
             }
             applyThreadIncomingDrafts(incoming)
@@ -5840,7 +5866,8 @@ func matrixInlineAttributedText(
                     )
                 )
             } else {
-                let label = block.reason.map { "[Spoiler: \($0) · Reveal]" } ?? "[Spoiler · Reveal]"
+                let label = block.reason.map { String(localized: "[Spoiler: \($0) · Reveal]") }
+                    ?? String(localized: "[Spoiler · Reveal]")
                 var placeholder = AttributedString(label)
                 placeholder.link = matrixInlineSpoilerURL(index: spoilerIndex)
                 placeholder.foregroundColor = SynaraColor.secondaryText
@@ -5912,7 +5939,10 @@ private struct MatrixSpoilerBlockView: View {
             Button {
                 isRevealed = true
             } label: {
-                Text(block.reason.map { "Spoiler: \($0) · Reveal" } ?? "Spoiler · Reveal")
+                Text(
+                    block.reason.map { String(localized: "Spoiler: \($0) · Reveal") }
+                        ?? String(localized: "Spoiler · Reveal")
+                )
                     .font(font)
                     .foregroundStyle(SynaraColor.secondaryText)
                     .padding(.horizontal, SynaraSpacing.small)
@@ -5925,7 +5955,7 @@ private struct MatrixSpoilerBlockView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(
-                block.reason.map { "Reveal spoiler: \($0)" } ?? "Reveal spoiler"
+                block.reason.map { String(localized: "Reveal spoiler: \($0)") } ?? String(localized: "Reveal spoiler")
             )
         }
     }
@@ -6067,14 +6097,14 @@ private struct MatrixTableBlockView: View {
         isHeader: Bool
     ) -> String {
         if isHeader {
-            return "Column \(cellIndex + 1), \(cell)"
+            return String(localized: "Column \(cellIndex + 1), \(cell)")
         }
         let headers = block.rows.first(where: \.isHeader)?.cells ?? []
         let header = headers.indices.contains(cellIndex) ? headers[cellIndex].plainText : nil
         if let header, header.isEmpty == false {
-            return "Row \(rowIndex + 1), \(header): \(cell)"
+            return String(localized: "Row \(rowIndex + 1), \(header): \(cell)")
         }
-        return "Row \(rowIndex + 1), column \(cellIndex + 1): \(cell)"
+        return String(localized: "Row \(rowIndex + 1), column \(cellIndex + 1): \(cell)")
     }
 }
 
@@ -6231,7 +6261,7 @@ private struct MatrixCodeBlockView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text(block.language ?? "Code")
+                Text(block.language ?? String(localized: "Code"))
                     .font(SynaraTypography.chipLabel)
                     .foregroundStyle(SynaraColor.primaryText)
 
@@ -6445,21 +6475,51 @@ private struct RoomDetailsView: View {
                             .foregroundStyle(SynaraColor.secondaryText)
                             .accessibilityIdentifier("RoomDetailsMessage")
                     }
-                    SettingsInfo(title: "Room ID", value: roomID)
-                    SettingsInfo(title: "Encryption", value: details?.encryptionLabel ?? "Unknown")
-                    SettingsInfo(title: "Members", value: "\(details?.memberCount ?? 0)")
-                    SettingsInfo(title: "Avatar", value: details?.avatarURL ?? "None")
+                    SettingsInfo(title: String(localized: "Room ID"), value: roomID)
+                    SettingsInfo(
+                        title: String(localized: "Encryption"),
+                        value: details?.encryptionLabel ?? String(localized: "Unknown")
+                    )
+                    SettingsInfo(title: String(localized: "Members"), value: "\(details?.memberCount ?? 0)")
+                    SettingsInfo(
+                        title: String(localized: "Avatar"),
+                        value: details?.avatarURL ?? String(localized: "None")
+                    )
                 }
 
                 if let powerLevels = details?.powerLevels {
                     Section("Permissions") {
-                        SettingsInfo(title: "Your level", value: "\(powerLevels.ownUserLevel)")
-                        PermissionInfo(title: "Send messages", threshold: powerLevels.eventsDefault, allowed: true)
-                        PermissionInfo(title: "Invite users", threshold: powerLevels.invite, allowed: powerLevels.canInvite)
-                        PermissionInfo(title: "Change name", threshold: powerLevels.roomName, allowed: powerLevels.canEditName)
-                        PermissionInfo(title: "Change topic", threshold: powerLevels.roomTopic, allowed: powerLevels.canEditTopic)
-                        PermissionInfo(title: "Change avatar", threshold: powerLevels.roomAvatar, allowed: powerLevels.canEditAvatar)
-                        PermissionInfo(title: "Moderate", threshold: powerLevels.kick, allowed: powerLevels.canKick || powerLevels.canBan || powerLevels.canRedactOther)
+                        SettingsInfo(title: String(localized: "Your level"), value: "\(powerLevels.ownUserLevel)")
+                        PermissionInfo(
+                            title: String(localized: "Send messages"),
+                            threshold: powerLevels.eventsDefault,
+                            allowed: true
+                        )
+                        PermissionInfo(
+                            title: String(localized: "Invite users"),
+                            threshold: powerLevels.invite,
+                            allowed: powerLevels.canInvite
+                        )
+                        PermissionInfo(
+                            title: String(localized: "Change name"),
+                            threshold: powerLevels.roomName,
+                            allowed: powerLevels.canEditName
+                        )
+                        PermissionInfo(
+                            title: String(localized: "Change topic"),
+                            threshold: powerLevels.roomTopic,
+                            allowed: powerLevels.canEditTopic
+                        )
+                        PermissionInfo(
+                            title: String(localized: "Change avatar"),
+                            threshold: powerLevels.roomAvatar,
+                            allowed: powerLevels.canEditAvatar
+                        )
+                        PermissionInfo(
+                            title: String(localized: "Moderate"),
+                            threshold: powerLevels.kick,
+                            allowed: powerLevels.canKick || powerLevels.canBan || powerLevels.canRedactOther
+                        )
                     }
                     .accessibilityIdentifier("RoomPermissionsSection")
                 }
@@ -6467,7 +6527,7 @@ private struct RoomDetailsView: View {
                 Section("Notifications") {
                     Picker("Mode", selection: $notificationMode) {
                         ForEach(SynaraRoomNotificationMode.allCases) { mode in
-                            Text(mode.rawValue).tag(mode)
+                            Text(mode.roomDetailsTitle).tag(mode)
                         }
                     }
                     .accessibilityIdentifier("RoomNotificationModePicker")
@@ -6658,7 +6718,7 @@ private struct RoomDetailsView: View {
                 )
                 await loadDetails()
                 await MainActor.run {
-                    message = "Profile updated."
+                    message = String(localized: "Profile updated.")
                     isLoading = false
                 }
             } catch let error as RoomManagementError {
@@ -6680,7 +6740,7 @@ private struct RoomDetailsView: View {
             do {
                 try await environment.roomManagement.setNotificationMode(mode, roomID: roomID)
                 await MainActor.run {
-                    message = "Notification mode updated."
+                    message = String(localized: "Notification mode updated.")
                 }
             } catch {
                 await MainActor.run {
@@ -6698,7 +6758,7 @@ private struct RoomDetailsView: View {
                 try await environment.roomManagement.inviteUser(roomID: roomID, userID: userID)
                 await MainActor.run {
                     inviteUserID = ""
-                    message = "Invitation sent."
+                    message = String(localized: "Invitation sent.")
                     isLoading = false
                 }
             } catch let error as RoomManagementError {
@@ -6733,7 +6793,7 @@ private struct RoomDetailsView: View {
                 await loadDetails()
                 await MainActor.run {
                     selectedAvatarPhoto = nil
-                    message = "Avatar updated."
+                    message = String(localized: "Avatar updated.")
                     isLoading = false
                 }
             } catch let error as RoomManagementError {
@@ -6766,7 +6826,7 @@ private struct RoomDetailsView: View {
                 )
                 await loadDetails()
                 await MainActor.run {
-                    message = "Avatar removed."
+                    message = String(localized: "Avatar removed.")
                     isLoading = false
                 }
             } catch {
@@ -6792,6 +6852,22 @@ private struct RoomDetailsView: View {
                     isLoading = false
                 }
             }
+        }
+    }
+}
+
+private extension SynaraRoomNotificationMode {
+    /// Picker copy; `rawValue` stays the stable identifier.
+    var roomDetailsTitle: String {
+        switch self {
+        case .default:
+            return String(localized: "Default")
+        case .allMessages:
+            return String(localized: "All")
+        case .mentionsOnly:
+            return String(localized: "Mentions")
+        case .mute:
+            return String(localized: "Mute")
         }
     }
 }
@@ -6872,7 +6948,7 @@ private struct PermissionInfo: View {
             Spacer()
 
             SynaraStatusChip(
-                title: allowed ? "Allowed" : "Restricted",
+                title: allowed ? String(localized: "Allowed") : String(localized: "Restricted"),
                 tint: allowed ? SynaraColor.success : SynaraColor.warning,
                 systemImage: allowed ? "checkmark.circle" : "lock"
             )
@@ -7199,9 +7275,9 @@ private struct TimelineRow: View {
 
     private var threadChipHint: String {
         guard isInlineThreadMode else {
-            return "Opens the thread."
+            return String(localized: "Opens the thread.")
         }
-        return isThreadExpanded ? "Collapses the replies." : "Shows the replies."
+        return isThreadExpanded ? String(localized: "Collapses the replies.") : String(localized: "Shows the replies.")
     }
 
     private var failedMessageEditButton: some View {
@@ -7578,26 +7654,26 @@ private struct TimelineRow: View {
     private var accessibilityHint: String {
         if approvalPrompt != nil {
             return item.agentApprovalDecision == nil
-                ? "Review available approval reactions"
-                : "You already decided this approval"
+                ? String(localized: "Review available approval reactions")
+                : String(localized: "You already decided this approval")
         }
 
         if item.presentedDeliveryStatus == .failed {
             guard OutgoingSendPolicy.canRetry(item) else {
-                return "This message was not sent. Use the Discard action to remove it"
+                return String(localized: "This message was not sent. Use the Discard action to remove it")
             }
             return availability.canEdit && item.isLocalPending
-                ? "Tap Retry to send this message again. Edit is also available."
-                : "Tap Retry to send this message again"
+                ? String(localized: "Tap Retry to send this message again. Edit is also available.")
+                : String(localized: "Tap Retry to send this message again")
         }
 
         switch item.kind {
         case .agentCard:
-            return "Review available agent actions"
+            return String(localized: "Review available agent actions")
         default:
             // A one-element row lists its actions in the VoiceOver actions rotor.
             return rowContainsAccessibleChildren
-                ? "Use the Message actions button or long press for message actions"
+                ? String(localized: "Use the Message actions button or long press for message actions")
                 : ""
         }
     }
@@ -7830,7 +7906,7 @@ private struct MediaAttachmentCard: View {
 /// What a row shows for an event this app cannot display. User copy: never
 /// the event's wire type.
 enum TimelineUnavailableMessageCopy {
-    static let text = "This message can't be shown in Synara."
+    static let text = String(localized: "This message can't be shown in Synara.")
 }
 
 /// The day the rows below belong to, in the unread divider's rule style.
@@ -8073,12 +8149,12 @@ private struct TimelinePollCard: View {
 
     private var pollFooter: String {
         if poll.isClosed {
-            return "Poll closed"
+            return String(localized: "Poll closed")
         }
         if poll.maximumSelections == 1 {
-            return "Choose one answer"
+            return String(localized: "Choose one answer")
         }
-        return "Choose up to \(poll.maximumSelections) answers"
+        return String(localized: "Choose up to \(poll.maximumSelections) answers")
     }
 }
 
@@ -8132,7 +8208,7 @@ private struct TimelineForwardSheet: View {
                     .padding(SynaraSpacing.large)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .failed(let message):
-                    SynaraErrorState(title: "Could Not Load Rooms", message: message) {
+                    SynaraErrorState(title: String(localized: "Could Not Load Rooms"), message: message) {
                         Task { await loadRooms() }
                     }
                 case .loaded:
@@ -8229,7 +8305,7 @@ private struct TimelineForwardSheet: View {
             return eligible.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         }
         return eligible
-            .filter { $0.name.localizedCaseInsensitiveContains(trimmed) }
+            .filter { $0.name.localizedStandardContains(trimmed) }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
@@ -8260,10 +8336,10 @@ private struct TimelineForwardSheet: View {
             case .some(.forwardEncryptionUnavailable):
                 forwardAlert = .blocked(
                     EventActionError.forwardEncryptionUnavailable.errorDescription
-                        ?? "Room encryption status is unavailable. Forwarding was not started."
+                        ?? String(localized: "Room encryption status is unavailable. Forwarding was not started.")
                 )
             case .some(let error):
-                forwardAlert = .blocked(error.errorDescription ?? "Forwarding was not completed.")
+                forwardAlert = .blocked(error.errorDescription ?? String(localized: "Forwarding was not completed."))
             }
         }
     }
@@ -8276,7 +8352,7 @@ private struct TimelineForwardSheet: View {
         ) {
         case .unavailable:
             forwardAlert = .blocked(
-                "Room encryption status is unavailable. Forwarding was not started."
+                String(localized: "Room encryption status is unavailable. Forwarding was not started.")
             )
             return
         case .confirmDowngrade:
@@ -8391,7 +8467,10 @@ private struct AgentApprovalPromptTimelineCard: View {
                     }
                     .frame(maxHeight: 160)
                 } label: {
-                    Text(prompt.commandPreview.map { "Command: \($0)" } ?? "Review command")
+                    Text(
+                        prompt.commandPreview.map { String(localized: "Command: \($0)") }
+                            ?? String(localized: "Review command")
+                    )
                         .font(SynaraTypography.messageMeta.weight(.medium))
                         .foregroundStyle(SynaraColor.primaryText)
                         .lineLimit(2)
@@ -8721,10 +8800,13 @@ private struct AgentApprovalDetails: View {
 
     var body: some View {
         VStack(spacing: SynaraSpacing.small) {
-            AgentDetailRow(title: "Target", value: card.artifacts.first?.title ?? "Synara workflow")
-            AgentDetailRow(title: "Changes", value: changeSummary)
-            AgentDetailRow(title: "Checks", value: checkSummary, valueTint: SynaraColor.success)
-            AgentDetailRow(title: "Summary", value: card.summary ?? card.title)
+            AgentDetailRow(
+                title: String(localized: "Target"),
+                value: card.artifacts.first?.title ?? String(localized: "Synara workflow")
+            )
+            AgentDetailRow(title: String(localized: "Changes"), value: changeSummary)
+            AgentDetailRow(title: String(localized: "Checks"), value: checkSummary, valueTint: SynaraColor.success)
+            AgentDetailRow(title: String(localized: "Summary"), value: card.summary ?? card.title)
         }
         .padding(SynaraSpacing.small)
         .synaraCard(
@@ -8736,14 +8818,14 @@ private struct AgentApprovalDetails: View {
 
     private var changeSummary: String {
         let count = card.artifacts.count + card.code.count + card.diffs.count
-        return count == 1 ? "1 item changed" : "\(max(count, 1)) items changed"
+        return String(localized: "\(max(count, 1)) items changed")
     }
 
     private var checkSummary: String {
         if card.logs.isEmpty {
-            return "Ready"
+            return String(localized: "Ready")
         }
-        return "\(card.logs.count) passed"
+        return String(localized: "\(card.logs.count) passed")
     }
 }
 
@@ -8980,7 +9062,7 @@ private struct ComposerView: View {
                         if CameraCaptureSupport.isAvailable {
                             isCameraPresented = true
                         } else {
-                            onUploadFailed("Camera is not available on this device.")
+                            onUploadFailed(String(localized: "Camera is not available on this device."))
                         }
                     #endif
                 },
@@ -9007,7 +9089,7 @@ private struct ComposerView: View {
                 }
                 onFileURL(url)
             case .failure:
-                onUploadFailed("Attachment could not be loaded. Try again.")
+                onUploadFailed(String(localized: "Attachment could not be loaded. Try again."))
             }
         }
         #if canImport(UIKit)
@@ -9144,18 +9226,22 @@ private struct ComposerView: View {
 
     private var resolvedPlaceholder: String {
         if let editTarget {
-            return editTarget.isLocalPending ? "Edit unsent message..." : "Edit message..."
+            return editTarget.isLocalPending
+                ? String(localized: "Edit unsent message...")
+                : String(localized: "Edit message...")
         }
         return placeholder
     }
 
     private var composerSendAccessibilityHint: String {
         if editTarget != nil {
-            return isSending ? "Saving the edited message" : "Saves the edited message"
+            return isSending
+                ? String(localized: "Saving the edited message")
+                : String(localized: "Saves the edited message")
         }
         return isSending
-            ? "Sending the current message and attachments"
-            : "Sends the current message and attachments"
+            ? String(localized: "Sending the current message and attachments")
+            : String(localized: "Sends the current message and attachments")
     }
 
     private var remainingAttachmentSlots: Int {
@@ -9192,10 +9278,16 @@ private struct ComposerView: View {
         max(1, currentText.components(separatedBy: .newlines).count)
     }
 
+    private var composerPromptMetricsText: String {
+        let characters = String(localized: "\(currentText.count) chars")
+        let lines = String(localized: "\(composerLineCount) lines")
+        return "\(characters) · \(lines)"
+    }
+
     private var composerPromptMetrics: some View {
         HStack(spacing: SynaraSpacing.small) {
             Spacer()
-            Text("\(currentText.count) chars · \(composerLineCount) line\(composerLineCount == 1 ? "" : "s")")
+            Text(composerPromptMetricsText)
                 .font(SynaraTypography.composerMetric)
                 .foregroundStyle(SynaraColor.tertiaryText)
                 .monospacedDigit()
@@ -9422,9 +9514,27 @@ private struct AttachmentOptionsSheet: View {
     var maxSelectionCount: Int
 
     private let options: [AttachmentOption] = [
-        AttachmentOption(title: "Photo or Video", systemImage: "photo", tint: SynaraColor.success, kind: .photo),
-        AttachmentOption(title: "File", systemImage: "doc", tint: SynaraColor.accent, kind: .file),
-        AttachmentOption(title: "Camera", systemImage: "camera", tint: SynaraColor.warning, kind: .camera),
+        AttachmentOption(
+            identifier: "Photo or Video",
+            title: String(localized: "Photo or Video"),
+            systemImage: "photo",
+            tint: SynaraColor.success,
+            kind: .photo
+        ),
+        AttachmentOption(
+            identifier: "File",
+            title: String(localized: "File"),
+            systemImage: "doc",
+            tint: SynaraColor.accent,
+            kind: .file
+        ),
+        AttachmentOption(
+            identifier: "Camera",
+            title: String(localized: "Camera"),
+            systemImage: "camera",
+            tint: SynaraColor.warning,
+            kind: .camera
+        ),
     ]
 
     private var isUITestEnvironment: Bool {
@@ -9461,7 +9571,7 @@ private struct AttachmentOptionsSheet: View {
                     AttachmentOptionLabel(option: option)
                 }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("AttachmentOption-\(option.title)")
+                .accessibilityIdentifier("AttachmentOption-\(option.identifier)")
             } else if maxSelectionCount > 0 {
                 PhotosPicker(
                     selection: $selectedPhotos,
@@ -9471,11 +9581,11 @@ private struct AttachmentOptionsSheet: View {
                     AttachmentOptionLabel(option: option)
                 }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("AttachmentOption-\(option.title)")
+                .accessibilityIdentifier("AttachmentOption-\(option.identifier)")
             } else {
                 AttachmentOptionLabel(option: option)
                     .opacity(0.45)
-                    .accessibilityIdentifier("AttachmentOption-\(option.title)")
+                    .accessibilityIdentifier("AttachmentOption-\(option.identifier)")
             }
         case .file:
             Button {
@@ -9493,7 +9603,7 @@ private struct AttachmentOptionsSheet: View {
             .buttonStyle(.plain)
             .disabled(maxSelectionCount == 0)
             .opacity(maxSelectionCount == 0 ? 0.45 : 1)
-            .accessibilityIdentifier("AttachmentOption-\(option.title)")
+            .accessibilityIdentifier("AttachmentOption-\(option.identifier)")
         case .camera:
             Button {
                 if maxSelectionCount == 0 {
@@ -9510,7 +9620,7 @@ private struct AttachmentOptionsSheet: View {
             .buttonStyle(.plain)
             .disabled(maxSelectionCount == 0)
             .opacity(maxSelectionCount == 0 ? 0.45 : 1)
-            .accessibilityIdentifier("AttachmentOption-\(option.title)")
+            .accessibilityIdentifier("AttachmentOption-\(option.identifier)")
         }
     }
 }
@@ -9581,12 +9691,14 @@ private struct AttachmentOption: Identifiable {
         case camera
     }
 
+    /// Stable English name for the accessibility identifier; `title` is localized.
+    let identifier: String
     let title: String
     let systemImage: String
     let tint: Color
     let kind: Kind
 
-    var id: String { title }
+    var id: String { identifier }
 }
 
 private struct AttachmentOptionLabel: View {
@@ -9672,7 +9784,7 @@ private struct ComposerRelationBanner: View {
             Spacer(minLength: SynaraSpacing.small)
             Button("Cancel", action: onCancel)
                 .disabled(isCancelDisabled)
-                .accessibilityLabel("Cancel \(target.kind == .edit ? "editing" : "reply")")
+                .accessibilityLabel(target.kind == .edit ? "Cancel editing" : "Cancel reply")
         }
         .padding(SynaraSpacing.small)
         .synaraCard(fill: SynaraColor.accent.opacity(0.08), stroke: SynaraColor.accent)
@@ -9706,7 +9818,7 @@ private struct MediaViewer: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    mediaErrorView(message: "Media could not be loaded.")
+                    mediaErrorView(message: String(localized: "Media could not be loaded."))
                 }
             }
             .padding(.horizontal, resource.isImageMedia ? 0 : SynaraSpacing.xLarge)
@@ -9749,12 +9861,12 @@ private struct MediaViewer: View {
         lastScale = 1
 
         guard resource.isEncrypted == false else {
-            errorMessage = "Encrypted media requires recovered keys before it can be opened."
+            errorMessage = String(localized: "Encrypted media requires recovered keys before it can be opened.")
             return
         }
 
         guard resource.authenticatedURL != nil else {
-            errorMessage = "Media is unavailable."
+            errorMessage = String(localized: "Media is unavailable.")
             return
         }
 
@@ -9764,7 +9876,7 @@ private struct MediaViewer: View {
         guard let data = await environment.mediaLoader.loadMediaData(for: resource),
               let loadedImage = UIImage(data: data)
         else {
-            errorMessage = "Media could not be loaded."
+            errorMessage = String(localized: "Media could not be loaded.")
             return
         }
 
@@ -10000,9 +10112,9 @@ private extension TimelineItem {
         case let .agentCard(card):
             return card.title
         case .redacted:
-            return "Deleted message"
+            return String(localized: "Deleted message")
         case .encryptedPlaceholder:
-            return "Encrypted message"
+            return String(localized: "Encrypted message")
         case let .systemNotice(text):
             return text
         case .unknown:

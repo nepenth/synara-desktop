@@ -43,11 +43,11 @@ enum MessageSendError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .emptyMessage:
-            return "Enter a message before sending."
+            return String(localized: "Enter a message before sending.")
         case .failed:
-            return "Message could not be sent. Try again."
+            return String(localized: "Message could not be sent. Try again.")
         case .notReady:
-            return "Message will be sent when Synara reconnects."
+            return String(localized: "Message will be sent when Synara reconnects.")
         }
     }
 }
