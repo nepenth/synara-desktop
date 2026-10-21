@@ -690,6 +690,7 @@ fn timeline_view_row_dto_carries_local_echo_transaction_id() {
         formatted_body: None,
         agent_card_json: None,
         is_agent_approval: false,
+        agent_approval_decision: None,
         message_type: Some("m.image".to_owned()),
         forward_transport: None,
         media_filename: Some("photo.jpg".to_owned()),
