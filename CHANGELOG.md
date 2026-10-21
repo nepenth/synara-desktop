@@ -3,6 +3,7 @@
 ## Unreleased
 
 - iOS: opening a room from a notification loads its earlier messages and keeps receiving new ones, the same as opening it from the room list. You no longer need to leave the room or relaunch Synara to see its history.
+- Dependencies: update rustls to 0.23.46, rustls-webpki to 0.103.16 and webpki-root-certs to 1.0.10 for RUSTSEC-2026-0346 through RUSTSEC-2026-0349, RUSTSEC-2026-0382 and RUSTSEC-2026-0383. The desktop updater is built without its Windows-only zip extraction, which removes zip 4.6.1 (RUSTSEC-2026-0367 through RUSTSEC-2026-0369).
 
 ## [2.2.6] - 2026-10-12
 
