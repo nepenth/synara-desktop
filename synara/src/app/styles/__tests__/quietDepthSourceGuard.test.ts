@@ -30,7 +30,9 @@ test('desktop hierarchy uses semantic depth while keeping text itself flat', () 
   const legacyMessage = source('src/app/features/room/message/styles.css.ts');
   const roomNav = source('src/app/features/room-nav/styles.css.ts');
 
-  assert.match(nav, /&\[aria-selected=true\]/);
+  // Selection is `data-selected` on the row; `aria-selected` is invalid on it (D58).
+  assert.match(nav, /&\[data-selected=true\]/);
+  assert.doesNotMatch(nav, /aria-selected/);
   assert.match(nav, /raisedShadow/);
   assert.match(editor, /raisedShadow/);
   assert.match(editor, /EditorFloatingOptions/);

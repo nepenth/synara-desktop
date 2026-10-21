@@ -21,13 +21,8 @@ function InvitesNavItem() {
   const inviteCount = allInvites.length;
 
   return (
-    <NavItem
-      variant="Surface"
-      radii="400"
-      highlight={inviteCount > 0}
-      aria-selected={invitesSelected}
-    >
-      <NavLink to={getInboxInvitesPath()}>
+    <NavItem variant="Surface" radii="400" highlight={inviteCount > 0} selected={invitesSelected}>
+      <NavLink aria-current={invitesSelected ? 'page' : undefined} to={getInboxInvitesPath()}>
         <NavItemContent>
           <Box as="span" grow="Yes" alignItems="Center" gap="200">
             <Avatar size="200" radii="400">
@@ -59,8 +54,8 @@ function LaterNavItem() {
     .join(' / ');
 
   return (
-    <NavItem variant="Surface" radii="400" highlight={laterCount > 0} aria-selected={laterSelected}>
-      <NavLink to={getInboxLaterPath()}>
+    <NavItem variant="Surface" radii="400" highlight={laterCount > 0} selected={laterSelected}>
+      <NavLink aria-current={laterSelected ? 'page' : undefined} to={getInboxLaterPath()}>
         <NavItemContent>
           <Box as="span" grow="Yes" alignItems="Center" gap="200">
             <Avatar size="200" radii="400">
@@ -91,7 +86,7 @@ export function Inbox() {
   const notificationsSelected = useInboxNotificationsSelected();
 
   return (
-    <PageNav>
+    <PageNav label="Inbox">
       <PageNavHeader>
         <Box grow="Yes" gap="300">
           <Box grow="Yes">
@@ -105,8 +100,11 @@ export function Inbox() {
       <PageNavContent>
         <Box direction="Column" gap="300">
           <NavCategory>
-            <NavItem variant="Surface" radii="400" aria-selected={notificationsSelected}>
-              <NavLink to={getInboxNotificationsPath()}>
+            <NavItem variant="Surface" radii="400" selected={notificationsSelected}>
+              <NavLink
+                aria-current={notificationsSelected ? 'page' : undefined}
+                to={getInboxNotificationsPath()}
+              >
                 <NavItemContent>
                   <Box as="span" grow="Yes" alignItems="Center" gap="200">
                     <Avatar size="200" radii="400">

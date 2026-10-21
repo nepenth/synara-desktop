@@ -34,7 +34,9 @@ import {
   NavEmptyLayout,
   NavItem,
   NavItemContent,
+  NavLoading,
 } from '../../../components/nav';
+import { useNativeRoomListLoaded } from '../../../state/room-list/roomList';
 import { getDirectCreatePath, getDirectRoomPath } from '../../pathUtils';
 import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
 import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
@@ -118,7 +120,7 @@ function DirectHeader() {
           </Box>
           <Box>
             <IconButton
-              aria-label="More options"
+              aria-label="Direct messages options"
               aria-pressed={!!menuAnchor}
               variant="Surface"
               onClick={handleOpenMenu}
@@ -193,6 +195,7 @@ export function Direct() {
   const createDirectSelected = useDirectCreateSelected();
 
   const selectedRoomId = useSelectedRoom();
+  const roomListLoaded = useNativeRoomListLoaded();
   const noRoomToDisplay = directs.length === 0;
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 
@@ -216,16 +219,23 @@ export function Direct() {
   );
 
   return (
-    <PageNav>
+    <PageNav label="Direct messages">
       <DirectHeader />
       {noRoomToDisplay ? (
-        <DirectEmpty />
+        roomListLoaded ? (
+          <DirectEmpty />
+        ) : (
+          <NavLoading label="Loading direct messages…" />
+        )
       ) : (
         <PageNavContent scrollRef={scrollRef}>
           <Box direction="Column" gap="300">
             <NavCategory>
-              <NavItem variant="Surface" radii="400" aria-selected={createDirectSelected}>
-                <NavButton onClick={() => navigate(getDirectCreatePath())}>
+              <NavItem variant="Surface" radii="400" selected={createDirectSelected}>
+                <NavButton
+                  aria-current={createDirectSelected ? 'page' : undefined}
+                  onClick={() => navigate(getDirectCreatePath())}
+                >
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">
                       <Avatar size="200" radii="400">

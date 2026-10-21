@@ -15,6 +15,12 @@ export const UnverifiedTab = style({
   animationDuration: '400ms',
   animationIterationCount: 30,
   animationDirection: 'alternate',
+  '@media': {
+    // The badge colour still says the session is unverified.
+    '(prefers-reduced-motion: reduce)': {
+      animation: 'none',
+    },
+  },
 });
 
 export const UnverifiedAvatar = style({

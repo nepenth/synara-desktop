@@ -10,6 +10,11 @@ export const SYNARA_PROJECT_URL = `${SYNARA_SOURCE_CODE_URL}#readme`;
 export const SYNARA_SUPPORT_URL = 'https://github.com/sponsors/nepenth';
 export const MATRIX_URL = 'https://matrix.org';
 export const DESKTOP_EXTERNAL_LINK_CLICK_OPTIONS: AddEventListenerOptions = { capture: true };
+/**
+ * Marks a link whose own click handler navigates inside Synara (a matrix.to
+ * mention in a message). The external interceptor leaves it alone.
+ */
+export const IN_APP_LINK_ATTRIBUTE = 'data-synara-in-app-link';
 
 export const openExternalUrl = async (url: string): Promise<boolean> => {
   if (isDesktopPlatform()) {
@@ -58,7 +63,7 @@ export const openDesktopExternalAnchorFromClick = (evt: MouseEvent): void => {
   if (!isDesktopPlatform() || shouldIgnoreAnchorClick(evt)) return;
 
   const anchor = getClickedAnchor(evt.target);
-  if (!anchor) return;
+  if (!anchor || anchor.hasAttribute(IN_APP_LINK_ATTRIBUTE)) return;
 
   const rawHref = anchor.getAttribute('href') ?? '';
   if (!rawHref || isAppRelativeHref(rawHref)) return;

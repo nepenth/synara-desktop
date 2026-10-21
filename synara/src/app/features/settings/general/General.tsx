@@ -1092,7 +1092,7 @@ function Editor() {
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
           title="Hide Typing & Read Receipts"
-          description="Hide automatic typing status and read receipts. Choosing Mark as Read still sends a private receipt."
+          description="Don't send typing status, and hide who is typing and who has read a room. Reading still marks rooms as read privately, so badges clear and your other devices stay in sync."
           after={<Switch variant="Primary" value={hideActivity} onChange={setHideActivity} />}
         />
       </SequenceCard>

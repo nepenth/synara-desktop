@@ -24,7 +24,7 @@ export function SidebarNav() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   return (
-    <Sidebar>
+    <Sidebar as="nav" aria-label="Spaces">
       <SidebarContent
         scrollable={
           <Scroll ref={scrollRef} variant="Background" size="0">

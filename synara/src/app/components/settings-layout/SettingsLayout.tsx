@@ -277,12 +277,7 @@ export function SettingsNav<T>({
                     {group.pageName}
                   </Text>
                   {group.results.map((result) => (
-                    <NavItem
-                      key={result.title ?? group.pageName}
-                      variant="Background"
-                      radii="400"
-                      aria-selected={false}
-                    >
+                    <NavItem key={result.title ?? group.pageName} variant="Background" radii="400">
                       <button
                         type="button"
                         className={css.SearchResultButton}
@@ -336,7 +331,7 @@ export function SettingsNav<T>({
                           key={item.name}
                           variant="Background"
                           radii="400"
-                          aria-selected={selected}
+                          selected={selected}
                         >
                           <button
                             type="button"

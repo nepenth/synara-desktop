@@ -97,6 +97,85 @@ export const MessageActionMenu = style([
   },
 ]);
 
+/**
+ * A notice above the timeline: an action that failed (`error`, same surface
+ * as the composer's send error) or why a routed message is not shown (`info`).
+ */
+export const TimelineNotice = recipe({
+  base: {
+    flexShrink: 0,
+    margin: `${config.space.S200} ${config.space.S300} 0`,
+    padding: `${config.space.S200} ${config.space.S300}`,
+    border: `${config.borderWidth.B300} solid`,
+    borderRadius: config.radii.R300,
+  },
+  variants: {
+    tone: {
+      error: {
+        borderColor: color.Critical.Main,
+        background: color.Critical.Container,
+        color: color.Critical.OnContainer,
+      },
+      info: {
+        borderColor: color.SurfaceVariant.ContainerLine,
+        background: color.SurfaceVariant.Container,
+        color: color.SurfaceVariant.OnContainer,
+      },
+    },
+  },
+  defaultVariants: { tone: 'error' },
+});
+
+// The rail clips its children (`overflow: hidden`), which hid the folds
+// outline on its buttons. An inset ring in Primary stays inside the clip and
+// reaches 3:1 on both themes.
+globalStyle(`${MessageActionRail} button:focus-visible`, {
+  outline: `${config.borderWidth.B500} solid ${color.Primary.Main}`,
+  outlineOffset: `calc(-1 * ${config.borderWidth.B500})`,
+});
+
+// The row itself takes focus so keyboard users can reach its actions.
+globalStyle(`${MessageActionSurface}:focus-visible`, {
+  outline: `${config.borderWidth.B500} solid ${color.Primary.Main}`,
+  outlineOffset: `calc(-1 * ${config.borderWidth.B500})`,
+  borderRadius: config.radii.R400,
+});
+
+/** Image or video that waits for a click while "Load Media Automatically" is off. */
+export const MediaLoadPlaceholder = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: config.space.S200,
+  maxWidth: '100%',
+  boxSizing: 'border-box',
+  border: `${config.borderWidth.B300} dashed ${color.SurfaceVariant.ContainerLine}`,
+  borderRadius: config.radii.R400,
+  background: color.SurfaceVariant.Container,
+  color: color.SurfaceVariant.OnContainer,
+  cursor: 'pointer',
+  selectors: {
+    '&:hover': { background: color.SurfaceVariant.ContainerHover },
+    '&:focus-visible': {
+      outline: `${config.borderWidth.B500} solid ${color.Primary.Main}`,
+      outlineOffset: config.borderWidth.B300,
+    },
+  },
+});
+
+/** Read by screen readers, not drawn. */
+export const VisuallyHidden = style({
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+  border: 0,
+});
+
 export const MessageActionDivider = style({
   margin: `${config.space.S100} ${config.space.S200}`,
   flexShrink: 0,
@@ -169,6 +248,12 @@ export const MessageRow = recipe({
     grouped: false,
     groupsNext: false,
   },
+});
+
+/** A message that mentions the signed-in user: an accent edge and a light tint. */
+export const MentionsMeRow = style({
+  boxShadow: `inset ${toRem(3)} 0 0 ${color.Primary.Main}`,
+  backgroundColor: `color-mix(in srgb, ${color.Primary.Container} 45%, transparent)`,
 });
 
 export const UnsentDelivery = style({
@@ -264,6 +349,30 @@ export const SpoilerContent = style({
       borderColor: 'var(--synara-rich-text-contrast-border)',
     },
   },
+});
+
+/** Custom emoji sit on the text line, capped to about one line high. */
+export const CustomEmoji = style({
+  display: 'inline-block',
+  height: '1.5em',
+  width: 'auto',
+  maxWidth: '4.5em',
+  verticalAlign: 'middle',
+  objectFit: 'contain',
+});
+
+/** The address of a link Synara cannot open (ftp, magnet), shown for copying. */
+export const LinkAddress = style({
+  color: 'var(--synara-content-secondary)',
+  wordBreak: 'break-all',
+});
+
+/** Where a link really goes when its text shows a different address. */
+export const LinkHostWarning = style({
+  // Critical text passes AA on both chat backgrounds; Warning does not in light.
+  color: color.Critical.Main,
+  fontWeight: config.fontWeight.W500,
+  whiteSpace: 'nowrap',
 });
 
 export const InlineImageFallback = style({

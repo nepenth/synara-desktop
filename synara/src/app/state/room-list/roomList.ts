@@ -83,6 +83,15 @@ export const sameNativeRoomListSnapshot = (
 
 const nativeRoomListSnapshotAtom = atom<NativeRoomListSnapshot>(emptyRoomListSnapshot);
 let latestNativeRoomListSnapshot = emptyRoomListSnapshot;
+/**
+ * False until the first room-list readback (or a signed-out session) since
+ * the app started, so an empty list before then reads as loading, not as
+ * "no rooms".
+ */
+const nativeRoomListLoadedAtom = atom(false);
+let loadedSessionGeneration: number | undefined;
+
+export const useNativeRoomListLoaded = (): boolean => useAtomValue(nativeRoomListLoadedAtom);
 
 const baseRoomsAtom = atom<string[]>([]);
 export const allRoomsAtom = atom<string[], [RoomsAction], undefined>(
@@ -169,6 +178,7 @@ export const useBindAllRoomsAtom = (
 ) => {
   const setRooms = useSetAtom(allRoomsAtom);
   const setSnapshot = useSetAtom(nativeRoomListSnapshotAtom);
+  const setLoaded = useSetAtom(nativeRoomListLoadedAtom);
 
   useEffect(() => {
     let disposed = false;
@@ -188,12 +198,18 @@ export const useBindAllRoomsAtom = (
           latestNativeRoomListSnapshot = emptyRoomListSnapshot;
           setSnapshot(emptyRoomListSnapshot);
           setRooms({ type: 'INITIALIZE', rooms: [] });
+          loadedSessionGeneration = undefined;
+          setLoaded(true);
           return;
         }
+        // A new sign-in has not listed its rooms yet.
+        if (loadedSessionGeneration !== session.sessionGeneration) setLoaded(false);
         const result = await invokeDesktopWithAvailability<unknown>('matrix_room_list_snapshot');
         if (disposed || !result.available || !result.value) return;
         const snapshot = parseNativeRoomListSnapshot(result.value);
         if (!snapshot || snapshot.sessionGeneration !== session.sessionGeneration) return;
+        loadedSessionGeneration = snapshot.sessionGeneration;
+        setLoaded(true);
         if (sameNativeRoomListSnapshot(latestNativeRoomListSnapshot, snapshot)) return;
         latestNativeRoomListSnapshot = snapshot;
         // Hydrate the synchronous facade before either atom setter can schedule
@@ -212,6 +228,7 @@ export const useBindAllRoomsAtom = (
       latestNativeRoomListSnapshot = emptyRoomListSnapshot;
       setSnapshot(emptyRoomListSnapshot);
       setRooms({ type: 'INITIALIZE', rooms: [] });
+      setLoaded(true);
       return undefined;
     }
 
@@ -221,5 +238,5 @@ export const useBindAllRoomsAtom = (
       disposed = true;
       stopPolling();
     };
-  }, [onSessionSnapshot, onSnapshot, setRooms, setSnapshot]);
+  }, [onSessionSnapshot, onSnapshot, setLoaded, setRooms, setSnapshot]);
 };

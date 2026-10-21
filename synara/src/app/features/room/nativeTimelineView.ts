@@ -516,7 +516,17 @@ export type NativeTimelineViewController = {
   restoreLastRead: (eventId: string) => Promise<string | undefined>;
   /** How the current `focused` open resolved its event, once it is ready. */
   focusRoute?: { eventId: string; route: NativeTimelineEventRoute };
+  /**
+   * A stream update was missed. The view keeps the rows it has (`resyncing`)
+   * while a snapshot is fetched at once; `failed` means that fetch did not
+   * come back, so the caller should offer `reload`.
+   */
+  streamGap: NativeTimelineStreamGap;
+  /** Close the current stream and open the same position again. */
+  reload: () => void;
 };
+
+export type NativeTimelineStreamGap = 'none' | 'resyncing' | 'failed';
 
 type NativeTimelineReadStateReadback = {
   receiptSent?: boolean;
@@ -983,6 +993,9 @@ export const useNativeTimelineView = (
   ]);
   const [state, setState] = useState<NativeTimelineViewState>({ status: 'unavailable' });
   const [focusRoute, setFocusRoute] = useState<NativeTimelineViewController['focusRoute']>();
+  const [streamGap, setStreamGap] = useState<NativeTimelineStreamGap>('none');
+  const [reloadToken, setReloadToken] = useState(0);
+  const reload = useCallback(() => setReloadToken((token) => token + 1), []);
   const streamIdRef = useRef<string | undefined>(undefined);
   const snapshotRef = useRef<NativeTimelineViewSnapshot | undefined>(undefined);
   const selectedPositionRef = useRef<NativeTimelinePosition | undefined>(undefined);
@@ -1318,6 +1331,7 @@ export const useNativeTimelineView = (
     snapshotRef.current = undefined;
     selectedPositionRef.current = undefined;
     setFocusRoute(undefined);
+    setStreamGap('none');
     pendingOpenRef.current?.cancel();
     pendingOpenRef.current = undefined;
     if (!nativeRequest || !isSynaraDesktop()) {
@@ -1328,6 +1342,9 @@ export const useNativeTimelineView = (
     let disposed = false;
     let unlisten: (() => void) | undefined;
     let pollTimer: number | undefined;
+    let resyncInFlight = false;
+    // Assigned below; a gap found while applying deltas asks for a snapshot.
+    let resyncAfterGap: () => void = () => undefined;
     const COALESCE_QUEUE_LIMIT = 128;
     let coalesceQueued: NativeTimelineViewDeltaBatch[] = [];
     let coalesceFrame = 0;
@@ -1348,13 +1365,18 @@ export const useNativeTimelineView = (
       if (!next || active.length === 0) return;
       const applied = applyNativeTimelineViewDeltaBatches(next, active);
       if (applied.gap) {
+        // Keep showing the rows that did apply, and fetch the full snapshot
+        // now rather than at the next safety-net poll. Later batches gap too
+        // until it lands; the snapshot's newer revision then supersedes them.
         if (applied.snapshot !== snapshotRef.current) {
           snapshotRef.current = applied.snapshot;
+          setState({
+            status: 'ready',
+            snapshot: applied.snapshot,
+            selectedPosition: selectedPositionRef.current ?? applied.snapshot.position,
+          });
         }
-        setState({
-          status: 'error',
-          error: new Error('Native timeline stream lost synchronization.'),
-        });
+        resyncAfterGap();
         return;
       }
       if (applied.snapshot === snapshotRef.current) return;
@@ -1383,9 +1405,10 @@ export const useNativeTimelineView = (
       coalesceFrame = window.requestAnimationFrame(flushCoalescedBatches);
     };
 
-    const pollSnapshot = async () => {
+    /** True when the snapshot was adopted (or already current). */
+    const pollSnapshot = async (): Promise<boolean> => {
       const streamId = streamIdRef.current;
-      if (!streamId || disposed) return;
+      if (!streamId || disposed) return false;
       const revision = navigationRevisionRef.current;
       const navigationRequest = navigationRequestRef.current;
       const result = await invokeDesktopWithAvailability<NativeTimelineViewSnapshot>(
@@ -1400,13 +1423,13 @@ export const useNativeTimelineView = (
         !result?.available ||
         !result.value
       )
-        return;
+        return false;
       const snapshot = result.value;
       if (
         snapshot.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
         snapshot.roomId !== nativeRequest.roomId
       ) {
-        return;
+        return false;
       }
       if (!snapshotRef.current) {
         snapshotRef.current = snapshot;
@@ -1415,9 +1438,22 @@ export const useNativeTimelineView = (
           snapshot,
           selectedPosition: selectedPositionRef.current ?? snapshot.position,
         });
-        return;
+        return true;
       }
-      acceptSnapshot(snapshot);
+      const accepted = acceptSnapshot(snapshot);
+      if (accepted) setStreamGap('none');
+      return accepted;
+    };
+
+    resyncAfterGap = () => {
+      setStreamGap((current) => (current === 'failed' ? current : 'resyncing'));
+      if (resyncInFlight) return;
+      resyncInFlight = true;
+      const streamId = streamIdRef.current;
+      void pollSnapshot().then((adopted) => {
+        resyncInFlight = false;
+        if (!adopted && !disposed && streamIdRef.current === streamId) setStreamGap('failed');
+      });
     };
 
     const open = async () => {
@@ -1525,9 +1561,20 @@ export const useNativeTimelineView = (
       if (pollTimer !== undefined) window.clearTimeout(pollTimer);
       unlisten?.();
     };
-  }, [acceptSnapshot, beginOpen, finishOpen, nativeRequest]);
+    // `reloadToken` reopens the same request on demand (Retry, Reload).
+  }, [acceptSnapshot, beginOpen, finishOpen, nativeRequest, reloadToken]);
 
-  return { state, paginate, setReadState, followLive, jumpLatest, restoreLastRead, focusRoute };
+  return {
+    state,
+    paginate,
+    setReadState,
+    followLive,
+    jumpLatest,
+    restoreLastRead,
+    focusRoute,
+    streamGap,
+    reload,
+  };
 };
 
 export const nativeTimelineMediaSrc = (handle: NativeTimelineMediaHandle): string | undefined =>

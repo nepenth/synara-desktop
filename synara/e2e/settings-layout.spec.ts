@@ -94,7 +94,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
     test('room header menu and room settings', async ({ page }) => {
       await page.goto(`${HARNESS}#/home/${ROOM}/`);
-      await page.getByRole('button', { name: 'More Options', exact: true }).click();
+      await page.getByRole('button', { name: 'More Options' }).click();
       await expect(page.getByText('Copy Link')).toBeVisible();
       const backgrounds = await page.evaluate(() =>
         ['Invite', 'Copy Link', 'Room Settings', 'Jump to Time'].map((label) => {
@@ -165,7 +165,7 @@ test('settings search finds individual settings and opens them', async ({ page }
 
 test('room settings search finds room rows', async ({ page }) => {
   await page.goto(`${HARNESS}#/home/${ROOM}/`);
-  await page.getByRole('button', { name: 'More Options', exact: true }).click();
+  await page.getByRole('button', { name: 'More Options' }).click();
   await page.getByRole('button', { name: 'Room Settings' }).click();
   const search = page.getByRole('textbox', { name: 'Search settings' });
   await search.fill('history');

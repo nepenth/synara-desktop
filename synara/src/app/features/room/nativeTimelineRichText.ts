@@ -1,4 +1,5 @@
 import sanitizeHtml, { type Transformer } from 'sanitize-html';
+import { isNativeCustomEmojiSource } from './nativeTimelineLinks';
 
 /**
  * Keep untrusted event HTML below the same bounded presentation budget used by
@@ -48,6 +49,8 @@ const MATRIX_V1_19_TAGS = [
   'ul',
 ] as const;
 
+// The shared format corpus keeps `ftp` and `magnet` links. The desktop opener
+// cannot open them, so the presenter shows their address instead of a link.
 const MATRIX_V1_19_SCHEMES = new Set(['https', 'http', 'ftp', 'mailto', 'magnet']);
 const MATRIX_COLOR_RE = /^#[0-9a-f]{6}$/i;
 const MATRIX_LANGUAGE_RE = /^language-[\w+.-]+$/;
@@ -96,7 +99,15 @@ const transformCurrentSpan: Transformer = (_tagName, attribs) => {
 
 const transformCurrentImage: Transformer = (_tagName, attribs) => {
   const fallback = attribs.alt?.trim() || attribs.title?.trim() || 'Inline image';
-  return { tagName: 'span', attribs: {}, text: fallback };
+  // A custom emoji (the composer sends `<img data-mx-emoticon src="mxc://…">`)
+  // keeps its source on an inert span. The presenter alone turns it into an
+  // image through Core's authenticated media protocol; the HTML never holds
+  // an `<img>`, so copying or other renderers cannot load it.
+  const next: Record<string, string> = {};
+  if ('data-mx-emoticon' in attribs && isNativeCustomEmojiSource(attribs.src)) {
+    next['data-mx-emoticon'] = attribs.src;
+  }
+  return { tagName: 'span', attribs: next, text: fallback };
 };
 
 export const sanitizeMatrixV119PresentationHtml = (html: string): string =>
@@ -110,7 +121,15 @@ export const sanitizeMatrixV119PresentationHtml = (html: string): string =>
       div: ['data-mx-maths'],
       ol: ['start'],
       font: ['color', 'data-mx-bg-color', 'data-mx-color'],
-      span: ['data-mx-bg-color', 'data-mx-color', 'data-mx-spoiler', 'data-mx-maths'],
+      // `data-mx-emoticon` only survives from a transformed custom emoji
+      // `<img>`: `transformCurrentSpan` rebuilds author spans without it.
+      span: [
+        'data-mx-bg-color',
+        'data-mx-color',
+        'data-mx-spoiler',
+        'data-mx-maths',
+        'data-mx-emoticon',
+      ],
     },
     allowedClasses: { code: ['language-*'] },
     transformTags: {
