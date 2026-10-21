@@ -545,6 +545,7 @@ fn timeline_view_row_dto_maps_message_without_token_echo() {
             sender_avatar_url: Some("mxc://example.org/alice".to_owned()),
             origin_server_ts: 1_700_000_000_000,
             local_echo_state: None,
+            send_failure: None,
             transaction_id: None,
             encryption_shield: None,
             capabilities: TimelineRowCapabilities {
@@ -672,6 +673,7 @@ fn timeline_view_row_dto_carries_local_echo_transaction_id() {
             sender_avatar_url: None,
             origin_server_ts: 1_700_000_000_001,
             local_echo_state: Some(LocalEchoState::Sending),
+            send_failure: None,
             transaction_id: Some("synara-attachment-1".to_owned()),
             encryption_shield: None,
             capabilities: TimelineRowCapabilities {
@@ -701,11 +703,14 @@ fn timeline_view_row_dto_carries_local_echo_transaction_id() {
         thread: None,
         reactions: vec![],
         media: None,
+        agent_approval_decision: None,
     }));
     let dto = timeline_view_row_dto(row);
     assert_eq!(dto.item_id, "local-item");
     assert!(dto.event_id.is_empty());
     assert_eq!(dto.transaction_id.as_deref(), Some("synara-attachment-1"));
+    assert_eq!(dto.local_echo_state.as_deref(), Some("sending"));
+    assert_eq!(dto.send_failure, None);
 }
 
 #[test]
@@ -724,6 +729,7 @@ fn timeline_view_row_dto_preserves_open_and_closed_poll_semantics() {
                 sender_avatar_url: None,
                 origin_server_ts: 1_700_000_000_002,
                 local_echo_state: None,
+                send_failure: None,
                 transaction_id: None,
                 encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
@@ -813,6 +819,7 @@ fn timeline_view_row_dto_preserves_incoming_sticker_media() {
             sender_avatar_url: Some("mxc://example.org/alice".to_owned()),
             origin_server_ts: 1_700_000_000_001,
             local_echo_state: None,
+            send_failure: None,
             transaction_id: None,
             encryption_shield: None,
             capabilities: TimelineRowCapabilities {
@@ -886,6 +893,7 @@ fn timeline_view_row_dto_preserves_base_metadata_for_non_message_events() {
         sender_avatar_url: Some("mxc://example.org/alice".to_owned()),
         origin_server_ts: 1_700_000_000_003,
         local_echo_state: None,
+        send_failure: None,
         transaction_id: None,
         encryption_shield: None,
         capabilities: TimelineRowCapabilities {

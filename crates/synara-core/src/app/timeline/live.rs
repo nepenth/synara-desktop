@@ -57,18 +57,18 @@ use crate::app::agent_approvals::{
 };
 use crate::app::send::{
     abort_queued_send, apply_poll_start_relations, edit_message_content,
-    enqueue_event_via_room_queue, message_content, normalize_poll, parse_edit_event_id,
-    parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id, parse_transaction_id,
-    poll_response_content, poll_start_content, queued_send_is_wedged, queued_send_outcome,
-    redact_via_room_queue, reenable_queued_send, send_event_via_room_queue, unwedge_queued_send,
-    wait_for_queued_send, MatrixPollRespondResult, MatrixSendPollResult, MatrixSendTextResult,
-    SendQueue,
+    enqueue_event_via_room_queue, is_wedged_send_diagnostic, message_content, normalize_poll,
+    parse_edit_event_id, parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id,
+    parse_transaction_id, poll_response_content, poll_start_content, queued_send_is_wedged,
+    queued_send_outcome, redact_via_room_queue, reenable_queued_send, send_event_via_room_queue,
+    unwedge_queued_send, wait_for_queued_send, MatrixPollRespondResult, MatrixSendPollResult,
+    MatrixSendTextResult, QueuedSendSession, SendQueue,
 };
 use crate::app::threads::{
     rebuild_thread_index, NativeThreadListSnapshot, ThreadIndex, ThreadListItemProjection,
 };
 use crate::app::utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind, MAX_EVENT_IDS_PER_BATCH};
-use crate::dto::{RoomEncryptionStatus, TimelineEncryptedUnavailableItem};
+use crate::dto::{LocalEchoState, RoomEncryptionStatus, TimelineEncryptedUnavailableItem};
 
 #[cfg(test)]
 use super::view::TimelineViewDeltaBatch;
@@ -152,6 +152,39 @@ const FOCUSED_BUILD_TIMEOUT: Duration = Duration::from_secs(10);
 /// Live and permalink Event timelines hide in-thread replies now that
 /// `NativeTimelineOpenPosition::Thread` owns the threaded stream.
 const HIDE_THREADED_EVENTS: bool = true;
+
+/// Follow one queued text send after `send_text` has returned, recording the
+/// SDK outcome so a repeat request with the same caller txn answers Sent with
+/// the event id. Recoverable failures and wedges keep following: the row's
+/// Retry or the recovery owner can still send it. Ends when the request is
+/// sent or discarded, or when the room queue closes with the client.
+fn spawn_queued_text_follower(
+    sends: Arc<tokio::sync::Mutex<SendQueue>>,
+    mut session: QueuedSendSession,
+) {
+    tokio::spawn(async move {
+        let txn = session.transaction_id.clone();
+        loop {
+            let result = wait_for_queued_send(&mut session).await;
+            let mut sends = sends.lock().await;
+            match result {
+                Ok(ack) => {
+                    let _ = sends.mark_sent_with_event(&txn, ack.event_id);
+                    break;
+                }
+                Err(error) if error.cancelled => {
+                    let _ = sends.cancel(&txn);
+                    break;
+                }
+                Err(error) if error.wedged => {
+                    let _ = sends.mark_wedged(&txn, error.diagnostic_id);
+                }
+                Err(error) if error.still_queued => {}
+                Err(_) => break,
+            }
+        }
+    });
+}
 
 fn permalink_event_thread_mode() -> TimelineEventFocusThreadMode {
     TimelineEventFocusThreadMode::Automatic {
@@ -772,7 +805,12 @@ pub struct NativeTimelineOwner {
     drafts: tokio::sync::Mutex<ComposerDraftRegistry>,
     thread_lists: tokio::sync::Mutex<HashMap<String, ThreadListService>>,
     thread_index: tokio::sync::Mutex<ThreadIndex>,
-    sends: tokio::sync::Mutex<SendQueue>,
+    /// Shared with the per-send followers that record the SDK outcome.
+    sends: Arc<tokio::sync::Mutex<SendQueue>>,
+    /// Held across caller-txn lookup, enqueue and record in `send_text`, so a
+    /// repeated caller txn cannot race into a second event and Core enqueues
+    /// in the order the shell asked.
+    send_enqueue: tokio::sync::Mutex<()>,
     approval_history_mutation: tokio::sync::Mutex<()>,
     approval_history_pending: Mutex<Option<(Instant, Vec<SynaraAgentApprovalHistoryItem>)>>,
     /// Local decisions whose reaction landed but whose account-data RMW did
@@ -806,7 +844,8 @@ impl NativeTimelineOwner {
             drafts: tokio::sync::Mutex::new(ComposerDraftRegistry::new()),
             thread_lists: tokio::sync::Mutex::new(HashMap::new()),
             thread_index: tokio::sync::Mutex::new(ThreadIndex::new(session_generation)),
-            sends: tokio::sync::Mutex::new(SendQueue::new(session_generation)),
+            sends: Arc::new(tokio::sync::Mutex::new(SendQueue::new(session_generation))),
+            send_enqueue: tokio::sync::Mutex::new(()),
             approval_history_mutation: tokio::sync::Mutex::new(()),
             approval_history_pending: Mutex::new(None),
             approval_history_unconfirmed: Mutex::new(HashMap::new()),
@@ -1508,7 +1547,7 @@ impl NativeTimelineOwner {
         let parsed_room = parse_send_room_id(&room_id)?;
         let reply_to = parse_reply_event_id(reply_to)?;
         let thread_root = parse_thread_root_event_id(thread_root)?;
-        let _txn_id = parse_transaction_id(txn_id)?;
+        let client_txn_id = parse_transaction_id(txn_id)?.map(|txn_id| txn_id.to_string());
         let content = message_content(
             body.clone(),
             msg_type,
@@ -1522,10 +1561,80 @@ impl NativeTimelineOwner {
             .client
             .get_room(&parsed_room)
             .ok_or("d0.4-send-room-not-found")?;
-        self.send_text_via_queue(room, parsed_room.to_string(), body, content)
+        let room_id = parsed_room.to_string();
+
+        let _enqueue = self.send_enqueue.lock().await;
+        if let Some(client_txn_id) = client_txn_id.as_deref() {
+            if let Some(existing) = self.repeated_text_send(&room_id, client_txn_id).await? {
+                return Ok(existing);
+            }
+        }
+        // Return once the SDK's persisted send queue holds the request: from
+        // here it survives a relaunch and the SDK retries it. The timeline
+        // row shows Sending / Failed with Retry and Discard (by this txn).
+        let session = enqueue_event_via_room_queue(&room, content.into())
             .await
+            .map_err(|error| error.diagnostic_id)?;
+        let local_txn_id = session.transaction_id.clone();
+        {
+            let mut sends = self.sends.lock().await;
+            sends
+                .enqueue_text_with_txn(room_id.clone(), body, local_txn_id.clone())
+                .map_err(|error| error.diagnostic_id())?;
+            if let Some(client_txn_id) = client_txn_id {
+                let _ = sends.set_client_txn_id(&local_txn_id, client_txn_id);
+            }
+        }
+        spawn_queued_text_follower(Arc::clone(&self.sends), session);
+        Ok(MatrixSendTextResult {
+            room_id,
+            event_id: String::new(),
+            local_txn_id,
+            status: crate::dto::SendStatus::Queued,
+        })
     }
 
+    /// The outcome of a send this session already enqueued for the caller's
+    /// transaction id (or for an SDK transaction id passed back), so a retry
+    /// or a second flush never creates a second event. `None` when unknown.
+    async fn repeated_text_send(
+        &self,
+        room_id: &str,
+        client_txn_id: &str,
+    ) -> Result<Option<MatrixSendTextResult>, &'static str> {
+        let sends = self.sends.lock().await;
+        let existing = sends
+            .find_by_client_txn(room_id, client_txn_id)
+            .or_else(|| {
+                sends
+                    .get(client_txn_id)
+                    .filter(|item| item.room_id == room_id)
+            });
+        let Some(existing) = existing else {
+            return Ok(None);
+        };
+        let (event_id, status) = match existing.state {
+            LocalEchoState::Sent => (
+                existing.event_id.clone().unwrap_or_default(),
+                crate::dto::SendStatus::Sent,
+            ),
+            LocalEchoState::Cancelled => return Err("d0.4-send-queue-cancelled"),
+            // Still the SDK's request: its row offers Retry and Discard.
+            LocalEchoState::Sending | LocalEchoState::Failed | LocalEchoState::Wedged => {
+                (String::new(), crate::dto::SendStatus::Queued)
+            }
+        };
+        Ok(Some(MatrixSendTextResult {
+            room_id: room_id.to_owned(),
+            event_id,
+            local_txn_id: existing.local_txn_id.clone(),
+            status,
+        }))
+    }
+
+    /// Enqueue and wait for the homeserver (edits, whose callers replace the
+    /// row with the acknowledged event). Composer sends use `send_text`,
+    /// which returns once the request is queued.
     async fn send_text_via_queue(
         &self,
         room: matrix_sdk::Room,
@@ -1752,7 +1861,7 @@ impl NativeTimelineOwner {
         self.send_text_via_queue(room, parsed_room.to_string(), body, content)
             .await
             .map_err(|diagnostic| {
-                if diagnostic == "d0.4-send-queue-wedged" {
+                if is_wedged_send_diagnostic(diagnostic) {
                     diagnostic
                 } else if diagnostic.starts_with("d0.4-") || diagnostic.starts_with("p6.1-") {
                     "v-send.r-edit-sdk-failed"
@@ -6567,7 +6676,8 @@ mod tests {
         let send_text_start = source.find("pub async fn send_text(").unwrap();
         let send_poll_start = source.find("pub async fn send_poll(").unwrap();
         let send_text = &source[send_text_start..send_poll_start];
-        assert!(send_text.contains("send_text_via_queue"));
+        assert!(send_text.contains("enqueue_event_via_room_queue"));
+        assert!(send_text.contains("repeated_text_send"));
         assert!(!send_text.contains(&format!("{}{}", "room.", "send(")));
         assert!(!send_text.contains("send_message_to_room"));
         assert!(!source.contains(&format!("{}{}", "send().", "with_extra")));

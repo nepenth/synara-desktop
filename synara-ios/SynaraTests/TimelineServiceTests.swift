@@ -2621,17 +2621,18 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(merged.filter { !$0.isLocalPending }.map(\.eventID), ["$one", "$two", "$three"])
     }
 
-    func testPendingReconcilerDropsMatchedLocalEchoes() {
-        let pending = TimelineItem.pendingMessage(
+    func testPendingReconcilerDropsTheSdkLocalEchoOfTheSameTransaction() {
+        var pending = TimelineItem.pendingMessage(
             localID: "$pending-test",
             body: "Ship it",
             senderID: "@alice:matrix.org",
             replyToEventID: nil,
             timestamp: TimelineFixtures.baseDate.addingTimeInterval(30)
         )
-        let confirmed = TimelineItem(
-            id: "$server:matrix.org",
-            eventID: "$server:matrix.org",
+        pending.transactionID = "sdk-txn-1"
+        var sdkEcho = TimelineItem(
+            id: "sdk-local-item",
+            eventID: "sdk-local-item",
             senderID: "@alice:matrix.org",
             timestamp: TimelineFixtures.baseDate.addingTimeInterval(31),
             kind: .text("Ship it"),
@@ -2639,28 +2640,37 @@ final class TimelineServiceTests: XCTestCase {
             isEdited: false,
             reactions: [:]
         )
+        sdkEcho.transactionID = "sdk-txn-1"
+        sdkEcho.localEcho = .sending
+        sdkEcho.serverEventID = nil
 
         let merged = TimelinePendingReconciler.merge(
-            streamItems: [confirmed],
+            streamItems: [sdkEcho],
             localItems: [pending],
             currentUserID: "@alice:matrix.org"
         )
 
-        XCTAssertEqual(merged.count, 1)
-        XCTAssertEqual(merged.first?.eventID, "$server:matrix.org")
+        XCTAssertEqual(merged.map(\.id), ["sdk-local-item"])
         XCTAssertNil(merged.first?.deliveryStatus)
+        XCTAssertEqual(merged.first?.presentedDeliveryStatus, .sending)
+        XCTAssertNil(merged.first?.serverEventID, "a local echo is not a server event")
     }
 
-    func testPendingReconcilerDropsMatchedSentLocalEchoes() {
-        let pending = TimelineItem.pendingMessage(
-            localID: "$pending-sent",
+    func testPendingReconcilerDropsTheRemoteEchoThatArrivedBeforeTheLocalEcho() {
+        let pending = OutgoingQueuedMessage(
+            id: "$pending-sent",
+            roomID: "!room:matrix.org",
             body: "Acknowledged locally",
-            senderID: "@alice:matrix.org",
+            formattedBody: nil,
             replyToEventID: nil,
-            deliveryStatus: .sent,
-            timestamp: TimelineFixtures.baseDate.addingTimeInterval(35)
-        )
-        let confirmed = TimelineItem(
+            threadRootEventID: nil,
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(35),
+            deliveryStatus: .sending,
+            transactionID: "sdk-txn-remote"
+        ).asTimelineItem()
+        // Core carries `unsigned.transaction_id` on this device's remote echo.
+        var remote = TimelineItem(
             id: "$server-sent:matrix.org",
             eventID: "$server-sent:matrix.org",
             senderID: "@alice:matrix.org",
@@ -2670,9 +2680,10 @@ final class TimelineServiceTests: XCTestCase {
             isEdited: false,
             reactions: [:]
         )
+        remote.transactionID = "sdk-txn-remote"
 
         let merged = TimelinePendingReconciler.merge(
-            streamItems: [confirmed],
+            streamItems: [remote],
             localItems: [pending],
             currentUserID: "@alice:matrix.org"
         )
@@ -2680,6 +2691,57 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(merged.count, 1)
         XCTAssertEqual(merged.first?.eventID, "$server-sent:matrix.org")
         XCTAssertNil(merged.first?.deliveryStatus)
+    }
+
+    func testAnEarlierIdenticalOkNeverResolvesANewInFlightOk() {
+        // The user sends "ok" twice. The first is on the server; the second
+        // is still in flight. Content must never stand in for identity.
+        var earlierOK = TimelineItem(
+            id: "$ok-1:matrix.org",
+            eventID: "$ok-1:matrix.org",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(10),
+            kind: .text("ok"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+        earlierOK.transactionID = "sdk-txn-ok-1"
+        var newOK = TimelineItem.pendingMessage(
+            localID: "$pending-ok-2",
+            body: "ok",
+            senderID: "@alice:matrix.org",
+            replyToEventID: nil,
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(11)
+        )
+        XCTAssertFalse(TimelinePendingReconciler.matchesPending(newOK, serverItem: earlierOK))
+        newOK.transactionID = "sdk-txn-ok-2"
+        XCTAssertFalse(TimelinePendingReconciler.matchesPending(newOK, serverItem: earlierOK))
+
+        let merged = TimelinePendingReconciler.merge(
+            streamItems: [earlierOK],
+            localItems: [newOK],
+            currentUserID: "@alice:matrix.org"
+        )
+        XCTAssertEqual(merged.map(\.id), ["$ok-1:matrix.org", "$pending-ok-2"])
+
+        var secondEcho = TimelineItem(
+            id: "$ok-2:matrix.org",
+            eventID: "$ok-2:matrix.org",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(12),
+            kind: .text("ok"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+        secondEcho.transactionID = "sdk-txn-ok-2"
+        let both = TimelinePendingReconciler.merge(
+            streamItems: [earlierOK, secondEcho],
+            localItems: merged,
+            currentUserID: "@alice:matrix.org"
+        )
+        XCTAssertEqual(both.map(\.id), ["$ok-1:matrix.org", "$ok-2:matrix.org"])
     }
 
     func testAcknowledgedUploadSurvivesLaggingSnapshotAndReconcilesExactServerEvent() async throws {
@@ -2803,8 +2865,8 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(merged.map(\.eventID), ["$other", "$ack"])
     }
 
-    func testPendingReconcilerRequiresMatchingThreadRoot() {
-        let pending = TimelineItem.pendingMessage(
+    func testPendingReconcilerMatchesThreadRepliesByTransactionOnly() {
+        var pending = TimelineItem.pendingMessage(
             localID: "$pending-thread-reply",
             body: "Same text",
             senderID: "@alice:matrix.org",
@@ -2812,7 +2874,8 @@ final class TimelineServiceTests: XCTestCase {
             threadRootEventID: "$root-a",
             timestamp: TimelineFixtures.baseDate.addingTimeInterval(35)
         )
-        let differentThread = TimelineItem(
+        pending.transactionID = "sdk-txn-thread"
+        var differentThread = TimelineItem(
             id: "$server-other-thread",
             eventID: "$server-other-thread",
             senderID: "@alice:matrix.org",
@@ -2823,7 +2886,8 @@ final class TimelineServiceTests: XCTestCase {
             isEdited: false,
             reactions: [:]
         )
-        let sameThread = TimelineItem(
+        differentThread.transactionID = "sdk-txn-other"
+        var sameThread = TimelineItem(
             id: "$server-same-thread",
             eventID: "$server-same-thread",
             senderID: "@alice:matrix.org",
@@ -2834,6 +2898,7 @@ final class TimelineServiceTests: XCTestCase {
             isEdited: false,
             reactions: [:]
         )
+        sameThread.transactionID = "sdk-txn-thread"
 
         XCTAssertFalse(TimelinePendingReconciler.matchesPending(pending, serverItem: differentThread))
         XCTAssertTrue(TimelinePendingReconciler.matchesPending(pending, serverItem: sameThread))
@@ -3062,14 +3127,15 @@ final class TimelineServiceTests: XCTestCase {
     }
 
     func testBoundedServerWindowKeepsOnlyUnmatchedLocalEchoes() {
-        let pending = TimelineItem.pendingMessage(
+        var pending = TimelineItem.pendingMessage(
             localID: "$pending-local",
             body: "Ship it",
             senderID: "@alice:matrix.org",
             replyToEventID: nil,
             timestamp: TimelineFixtures.baseDate.addingTimeInterval(30)
         )
-        let confirmed = TimelineItem(
+        pending.transactionID = "sdk-txn-window"
+        var confirmed = TimelineItem(
             id: "$server:matrix.org",
             eventID: "$server:matrix.org",
             senderID: "@alice:matrix.org",
@@ -3079,6 +3145,7 @@ final class TimelineServiceTests: XCTestCase {
             isEdited: false,
             reactions: [:]
         )
+        confirmed.transactionID = "sdk-txn-window"
 
         let merged = TimelinePendingReconciler.merge(
             streamItems: TimelineWindowPolicy.replacingServerWindow([confirmed]),

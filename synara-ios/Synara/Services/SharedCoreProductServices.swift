@@ -1791,6 +1791,60 @@ final class SharedCoreMessageSendService: MessageSending {
         }
     }
 
+    func sendText(_ request: MessageSendRequest) async throws -> MessageSendReceipt {
+        let body = request.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard body.isEmpty == false else {
+            throw MessageSendError.emptyMessage
+        }
+        do {
+            let result = try await SharedCoreSendText.sendText(
+                core: host.core,
+                roomId: request.roomID,
+                body: body,
+                msgType: nil,
+                formattedBody: request.formattedBody,
+                mentionUserIds: nil,
+                mentionRoom: nil,
+                replyTo: request.replyToEventID,
+                threadRoot: request.threadRootEventID,
+                txnId: request.transactionID
+            )
+            // `queued` is the normal answer: the SDK's persisted queue holds
+            // the message and its timeline row shows the send state.
+            return MessageSendReceipt(
+                transactionID: result.localTxnId.isEmpty ? nil : result.localTxnId,
+                eventID: result.eventId.isEmpty ? nil : result.eventId,
+                isQueued: result.status == .queued
+            )
+        } catch {
+            throw SharedCoreSendText.isNotReady(error) ? MessageSendError.notReady : MessageSendError.failed
+        }
+    }
+
+    func retryLocalEcho(roomID: String, transactionID: String) async throws {
+        do {
+            try await SharedCoreSendText.retryLocalEcho(
+                core: host.core,
+                roomId: roomID,
+                transactionId: transactionID
+            )
+        } catch {
+            throw MessageSendError.failed
+        }
+    }
+
+    func discardLocalEcho(roomID: String, transactionID: String) async throws -> Bool {
+        do {
+            return try await SharedCoreSendText.discardLocalEcho(
+                core: host.core,
+                roomId: roomID,
+                transactionId: transactionID
+            )
+        } catch {
+            throw MessageSendError.failed
+        }
+    }
+
     private func signedInUserID() -> String {
         if case .signedIn(let session) = host.sessionStore.currentState {
             return session.userID

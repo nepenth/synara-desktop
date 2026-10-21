@@ -378,3 +378,47 @@ fn attachment_filename_and_mime_reject_without_echo() {
     assert_eq!(invalid, "v-send.1-attachment-invalid-mime");
     assert!(!invalid.contains("not-a-mime"));
 }
+
+#[test]
+fn wedge_causes_are_closed_codes_and_survive_a_relaunch() {
+    use matrix_sdk::QueueWedgeError;
+
+    // After a relaunch the SDK only keeps the wedge's display text; the
+    // status prefix still tells a 413 from a 403.
+    let generic = |msg: &str| {
+        send_failure_cause(&matrix_sdk::Error::SendQueueWedgeError(Box::new(
+            QueueWedgeError::GenericApiError { msg: msg.into() },
+        )))
+    };
+    assert_eq!(
+        generic("the server returned an error: [413 / M_TOO_LARGE] Request body too large"),
+        "too_large"
+    );
+    assert_eq!(
+        generic("the server returned an error: [403 / M_FORBIDDEN] not allowed"),
+        "forbidden"
+    );
+    assert_eq!(generic("[502] <non-json bytes>"), "server_error");
+    assert_eq!(generic("no status in this text"), "unknown");
+    assert_eq!(
+        send_failure_cause(&matrix_sdk::Error::SendQueueWedgeError(Box::new(
+            QueueWedgeError::CrossVerificationRequired
+        ))),
+        "verification_required"
+    );
+
+    assert_eq!(
+        wedged_send_diagnostic("too_large"),
+        "d0.4-send-queue-wedged-too-large"
+    );
+    assert_ne!(
+        wedged_send_diagnostic("too_large"),
+        wedged_send_diagnostic("forbidden")
+    );
+    assert_eq!(wedged_send_diagnostic("network"), WEDGED_SEND_DIAGNOSTIC);
+    assert!(is_wedged_send_diagnostic(
+        "d0.4-send-queue-wedged-forbidden"
+    ));
+    assert!(is_wedged_send_diagnostic(WEDGED_SEND_DIAGNOSTIC));
+    assert!(!is_wedged_send_diagnostic("d0.4-send-queue-cancelled"));
+}

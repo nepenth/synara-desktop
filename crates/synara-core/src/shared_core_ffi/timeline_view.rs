@@ -216,10 +216,36 @@ pub struct TimelineViewRowDto {
     /// SDK authenticity shield for an event in an encrypted room. Absent when
     /// the event is trusted or no shield applies.
     pub encryption_shield: Option<TimelineViewEncryptionShieldDto>,
-    /// SDK transaction id while this row is still a local echo; absent on
-    /// remote rows. A shell that shows its own pending row for a queued send
-    /// matches it to this row by transaction id. Not a server event id.
+    /// Transaction id of this account's own send: the SDK id while the row is
+    /// a local echo (Retry and Discard address it), then the remote event's
+    /// `unsigned.transaction_id`. A shell that shows its own pending row for
+    /// a queued send matches it to this row by transaction id, also when the
+    /// remote echo arrives first. Not a server event id.
     pub transaction_id: Option<String>,
+    /// SDK send state of a local echo: `sending`, `sent`, `failed`
+    /// (recoverable; the SDK retries) or `wedged` (unrecoverable; needs Retry
+    /// or Discard). Absent on remote rows.
+    pub local_echo_state: Option<String>,
+    /// Closed cause of a `failed` or `wedged` echo when known: `too_large`,
+    /// `forbidden`, `rate_limited`, `auth`, `network`, `server_error`,
+    /// `rejected`, `encryption`, `insecure_devices`, `identity_violation`,
+    /// `verification_required`, `media`, `not_joined` or `unknown`.
+    pub send_failure: Option<String>,
+}
+
+fn view_local_echo_state(state: Option<crate::dto::LocalEchoState>) -> Option<String> {
+    use crate::dto::LocalEchoState;
+
+    state.map(|state| {
+        match state {
+            LocalEchoState::Sending => "sending",
+            LocalEchoState::Sent => "sent",
+            LocalEchoState::Failed => "failed",
+            LocalEchoState::Wedged => "wedged",
+            LocalEchoState::Cancelled => "cancelled",
+        }
+        .to_owned()
+    })
 }
 
 /// Closed authenticity shield. `tone` is `red` or `grey`; `code` is one of
@@ -688,6 +714,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                     .encryption_shield
                     .map(view_encryption_shield_dto),
                 transaction_id: message.event.transaction_id,
+                local_echo_state: view_local_echo_state(message.event.local_echo_state),
+                send_failure: message.event.send_failure,
             }
         }
         TimelineViewRow::Sticker {
@@ -740,6 +768,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 media_duration_ms,
                 encryption_shield: event.encryption_shield.map(view_encryption_shield_dto),
                 transaction_id: event.transaction_id,
+                local_echo_state: view_local_echo_state(event.local_echo_state),
+                send_failure: event.send_failure,
             }
         }
         TimelineViewRow::Poll(poll) => {
@@ -783,6 +813,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 media_duration_ms: None,
                 encryption_shield: poll.event.encryption_shield.map(view_encryption_shield_dto),
                 transaction_id: poll.event.transaction_id,
+                local_echo_state: view_local_echo_state(poll.event.local_echo_state),
+                send_failure: poll.event.send_failure,
             }
         }
         TimelineViewRow::Membership(membership) => TimelineViewRowDto {
@@ -819,6 +851,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_duration_ms: None,
             encryption_shield: None,
             transaction_id: membership.event.transaction_id,
+            local_echo_state: view_local_echo_state(membership.event.local_echo_state),
+            send_failure: membership.event.send_failure,
         },
         TimelineViewRow::State(state) => TimelineViewRowDto {
             kind: TimelineRowKindDto::State,
@@ -854,6 +888,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_duration_ms: None,
             encryption_shield: None,
             transaction_id: state.event.transaction_id,
+            local_echo_state: view_local_echo_state(state.event.local_echo_state),
+            send_failure: state.event.send_failure,
         },
         TimelineViewRow::Call(call) => TimelineViewRowDto {
             kind: TimelineRowKindDto::Call,
@@ -889,6 +925,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_duration_ms: None,
             encryption_shield: None,
             transaction_id: call.event.transaction_id,
+            local_echo_state: view_local_echo_state(call.event.local_echo_state),
+            send_failure: call.event.send_failure,
         },
         TimelineViewRow::Redacted(redacted) => TimelineViewRowDto {
             kind: TimelineRowKindDto::Redacted,
@@ -924,6 +962,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_duration_ms: None,
             encryption_shield: None,
             transaction_id: redacted.event.transaction_id,
+            local_echo_state: view_local_echo_state(redacted.event.local_echo_state),
+            send_failure: redacted.event.send_failure,
         },
         TimelineViewRow::EncryptedUnavailable(encrypted) => TimelineViewRowDto {
             kind: TimelineRowKindDto::Encrypted,
@@ -959,6 +999,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_duration_ms: None,
             encryption_shield: None,
             transaction_id: encrypted.event.transaction_id,
+            local_echo_state: view_local_echo_state(encrypted.event.local_echo_state),
+            send_failure: encrypted.event.send_failure,
         },
         TimelineViewRow::Other(other) => {
             let (
@@ -968,6 +1010,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 origin_server_ts,
                 capabilities,
                 transaction_id,
+                local_echo_state,
+                send_failure,
             ) = other
                 .event
                 .map(|event| {
@@ -978,9 +1022,22 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                         event.origin_server_ts,
                         Some(view_row_capabilities_dto(event.capabilities)),
                         event.transaction_id,
+                        view_local_echo_state(event.local_echo_state),
+                        event.send_failure,
                     )
                 })
-                .unwrap_or_else(|| (String::new(), String::new(), None, 0, None, None));
+                .unwrap_or_else(|| {
+                    (
+                        String::new(),
+                        String::new(),
+                        None,
+                        0,
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
+                });
             TimelineViewRowDto {
                 kind: TimelineRowKindDto::Other,
                 item_id: other.item_id,
@@ -1017,6 +1074,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 media_duration_ms: None,
                 encryption_shield: None,
                 transaction_id,
+                local_echo_state,
+                send_failure,
             }
         }
         TimelineViewRow::DateSeparator {
@@ -1056,6 +1115,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_duration_ms: None,
             encryption_shield: None,
             transaction_id: None,
+            local_echo_state: None,
+            send_failure: None,
         },
         TimelineViewRow::ReadMarker { item_id } => {
             virtual_row_dto(TimelineRowKindDto::ReadMarker, item_id)
@@ -1107,6 +1168,8 @@ pub(super) fn virtual_row_dto(kind: TimelineRowKindDto, item_id: String) -> Time
         media_duration_ms: None,
         encryption_shield: None,
         transaction_id: None,
+        local_echo_state: None,
+        send_failure: None,
     }
 }
 

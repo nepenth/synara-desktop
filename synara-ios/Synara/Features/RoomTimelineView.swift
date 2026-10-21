@@ -822,7 +822,6 @@ struct RoomTimelineView: View {
             startVerificationAutoRetry()
             await loadTimeline()
             applyOutgoingQueueToTimeline()
-            flushOutgoingSendsIfReady(environment.connectionStatus.status)
             _ = await initialCryptoStatus
             await ownAvatarLoad
             let openedStatus = await loadCryptoStatus()
@@ -883,9 +882,6 @@ struct RoomTimelineView: View {
         }
         .onReceive(environment.outgoingSends.queue.$items) { _ in
             applyOutgoingQueueToTimeline()
-        }
-        .onReceive(environment.connectionStatus.$status) { status in
-            flushOutgoingSendsIfReady(status)
         }
         .onChange(of: draft) { value in
             environment.drafts.setDraft(value, roomID: roomID)
@@ -1025,6 +1021,9 @@ struct RoomTimelineView: View {
                                     },
                                     onRetryFailedSend: {
                                         retryFailedMessage(item)
+                                    },
+                                    onDiscardFailedSend: {
+                                        discardFailedMessage(item)
                                     }
                                 )
                                 .id(item.eventID)
@@ -1347,7 +1346,8 @@ struct RoomTimelineView: View {
                 onAgentApprovalReaction: { actionIdentifier in
                     submitAgentApprovalDecision(actionIdentifier: actionIdentifier, sourceEventID: eventRow.item.eventID)
                 },
-                onRetryFailedSend: { retryFailedMessage(eventRow.item) }
+                onRetryFailedSend: { retryFailedMessage(eventRow.item) },
+                onDiscardFailedSend: { discardFailedMessage(eventRow.item) }
             )
             .padding(.horizontal, timelineHorizontalPadding)
             .padding(.bottom, SynaraSpacing.xSmall)
@@ -1909,7 +1909,7 @@ struct RoomTimelineView: View {
         }
 
         let storedPending = environment.outgoingSends.queue.timelineItems(in: roomID)
-        environment.outgoingSends.dropConfirmed(matching: streamItems, currentUserID: currentUserID)
+        environment.outgoingSends.dropConfirmed(matching: streamItems)
         return TimelinePendingReconciler.merge(
             streamItems: streamItems,
             localItems: TimelinePendingReconciler.combining(
@@ -2405,6 +2405,21 @@ struct RoomTimelineView: View {
     }
 
     private func retryFailedMessage(_ item: TimelineItem) {
+        guard item.isLocalPending else {
+            // An SDK local echo: Core retries the same request (unwedge or
+            // wake the room queue); it never sends a second event.
+            sendError = nil
+            Task {
+                let retried = await environment.outgoingSends.retryLocalEcho(item, roomID: roomID)
+                await MainActor.run {
+                    if retried == false {
+                        sendError = MessageSendError.failed.localizedDescription
+                        SynaraHaptics.trigger(.warning)
+                    }
+                }
+            }
+            return
+        }
         guard let queued = environment.outgoingSends.retry(
             item,
             roomID: roomID,
@@ -2419,6 +2434,36 @@ struct RoomTimelineView: View {
         Task {
             await transmitOutgoing(id: queued.id)
         }
+    }
+
+    /// Discard an unsent own message: a pending row Core never accepted, or
+    /// an SDK local echo (Core aborts it in the send queue).
+    private func discardFailedMessage(_ item: TimelineItem) {
+        sendError = nil
+        Task {
+            let discarded = await environment.outgoingSends.discard(item, roomID: roomID)
+            await MainActor.run {
+                switch discarded {
+                case .some(true):
+                    removeDiscardedRow(item)
+                case .some(false):
+                    // Already sent: the row becomes the sent message.
+                    break
+                case .none:
+                    sendError = "The unsent message could not be discarded."
+                    SynaraHaptics.trigger(.warning)
+                }
+            }
+        }
+    }
+
+    /// The SDK removes a discarded echo with its next timeline update; drop
+    /// the row now so it does not linger as Failed.
+    private func removeDiscardedRow(_ item: TimelineItem) {
+        guard case let .loaded(items, isPaginating) = state else {
+            return
+        }
+        state = .loaded(items.filter { $0.id != item.id }, isPaginating: isPaginating)
     }
 
     @MainActor
@@ -2466,8 +2511,12 @@ struct RoomTimelineView: View {
             return
         }
 
+        // The message is written to the durable outbox and the draft cleared
+        // in one write, then handed to Core at once (whatever the sync state).
+        let clientTransactionID = OutgoingQueuedMessage.newClientTransactionID()
         let queued = environment.outgoingSends.enqueue(
-            localID: failedItem?.id ?? "$pending-\(UUID().uuidString)",
+            localID: failedItem?.id ?? "$pending-\(clientTransactionID)",
+            clientTransactionID: clientTransactionID,
             roomID: roomID,
             body: body,
             formattedBody: request.formattedBody,
@@ -2475,7 +2524,8 @@ struct RoomTimelineView: View {
             threadRootEventID: threadRootEventID,
             senderID: currentUserID,
             senderAvatarURL: ownAvatarURL,
-            timestamp: failedItem?.timestamp ?? Date()
+            timestamp: failedItem?.timestamp ?? Date(),
+            clearingDraft: true
         )
         registerSendAnimation(for: queued.id, isRetry: failedItem != nil)
         applyOutgoingQueueToTimeline()
@@ -2486,7 +2536,6 @@ struct RoomTimelineView: View {
         }
 
         draft = ""
-        environment.drafts.clearDraft(roomID: roomID)
         completeComposerRelation()
         sendError = nil
 
@@ -2500,7 +2549,7 @@ struct RoomTimelineView: View {
         defer {
             PerformanceTrace.end("MessageSend", id: signpostID)
         }
-        await environment.outgoingSends.transmitIfNeeded(id: id)
+        await environment.outgoingSends.flush()
         await MainActor.run {
             applyOutgoingQueueToTimeline()
             guard let status = environment.outgoingSends.queue.item(id: id)?.deliveryStatus else {
@@ -2520,18 +2569,6 @@ struct RoomTimelineView: View {
                 SynaraHaptics.trigger(.warning)
             case .queued, .sending:
                 sendError = nil
-            }
-        }
-    }
-
-    private func flushOutgoingSendsIfReady(_ status: MatrixSyncStatus) {
-        guard OutgoingSendPolicy.isSendReady(status) else {
-            return
-        }
-        Task {
-            await environment.outgoingSends.flushWhenSendReady()
-            await MainActor.run {
-                applyOutgoingQueueToTimeline()
             }
         }
     }
@@ -6491,6 +6528,7 @@ private struct TimelineRow: View {
     let onAgentAction: (SynaraAgentCardAction) -> Void
     let onAgentApprovalReaction: (String) -> Void
     let onRetryFailedSend: () -> Void
+    var onDiscardFailedSend: () -> Void = {}
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var isSelectingText = false
     @State private var isDeclinePending = false
@@ -6594,15 +6632,45 @@ private struct TimelineRow: View {
 
     @ViewBuilder
     private func withFailedRetryAccessibilityAction<Content: View>(_ content: Content) -> some View {
-        if TimelineRowAccessibility.retryActionTitle(deliveryStatus: item.deliveryStatus) != nil {
+        let canRetry = TimelineRowAccessibility.retryActionTitle(
+            deliveryStatus: item.presentedDeliveryStatus
+        ) != nil && OutgoingSendPolicy.canRetry(item)
+        let canDiscard = isOutgoing && OutgoingSendPolicy.canDiscard(item)
+        if canRetry && canDiscard {
+            content
+                .accessibilityAction(named: Text("Retry"), onRetryFailedSend)
+                .accessibilityAction(named: Text("Discard"), onDiscardFailedSend)
+        } else if canRetry {
             content.accessibilityAction(named: Text("Retry"), onRetryFailedSend)
+        } else if canDiscard {
+            content.accessibilityAction(named: Text("Discard"), onDiscardFailedSend)
         } else {
             content
         }
     }
 
+    /// Retry for a failed own message whose cause can succeed on retry.
+    private var bubbleRetryAction: (() -> Void)? {
+        item.presentedDeliveryStatus == .failed && OutgoingSendPolicy.canRetry(item)
+            ? onRetryFailedSend
+            : nil
+    }
+
+    /// Discard for a failed own message (pending, or SDK local echo).
+    private var bubbleDiscardAction: (() -> Void)? {
+        item.presentedDeliveryStatus == .failed && isOutgoing && OutgoingSendPolicy.canDiscard(item)
+            ? onDiscardFailedSend
+            : nil
+    }
+
     @ViewBuilder
     private var messageActions: some View {
+        if isOutgoing, OutgoingSendPolicy.canDiscard(item) {
+            Button("Discard Unsent Message", systemImage: "trash", role: .destructive) {
+                onDiscardFailedSend()
+            }
+            .accessibilityIdentifier("TimelineItemDiscard-\(item.eventID)")
+        }
         if let copyPayload = TimelineMessageCopy.payload(for: item) {
             Button("Copy", systemImage: "doc.on.doc") {
                 TimelineMessageCopy.copyToPasteboard(copyPayload)
@@ -6782,9 +6850,10 @@ private struct TimelineRow: View {
                     text: body,
                     alignment: bubbleAlignment,
                     isGrouped: isGroupedWithPrevious,
-                    deliveryStatus: item.deliveryStatus,
+                    deliveryStatus: item.presentedDeliveryStatus,
                     statusEventID: item.eventID,
-                    onRetryFailedSend: item.deliveryStatus == .failed ? onRetryFailedSend : nil,
+                    onRetryFailedSend: bubbleRetryAction,
+                    onDiscardFailedSend: bubbleDiscardAction,
                     encryptionShield: item.encryptionShield
                 )
             case let .formattedText(body, html):
@@ -6794,9 +6863,10 @@ private struct TimelineRow: View {
                     depth: SynaraSurfaceDepthRole.standardMessage,
                     isGrouped: isGroupedWithPrevious,
                     showsBackground: SynaraSurfaceDepthRole.standardMessageShowsBackground,
-                    deliveryStatus: item.deliveryStatus,
+                    deliveryStatus: item.presentedDeliveryStatus,
                     statusEventID: item.eventID,
-                    onRetryFailedSend: item.deliveryStatus == .failed ? onRetryFailedSend : nil,
+                    onRetryFailedSend: bubbleRetryAction,
+                    onDiscardFailedSend: bubbleDiscardAction,
                     encryptionShield: item.encryptionShield
                 ) {
                     MatrixFormattedMessageView(
@@ -6927,7 +6997,7 @@ private struct TimelineRow: View {
         }
 
         return TimelineRowAccessibility.containsChildren(
-            deliveryStatus: item.deliveryStatus,
+            deliveryStatus: item.presentedDeliveryStatus,
             kind: item.kind,
             replyCount: replyCount,
             hasApprovalPrompt: approvalPrompt != nil,
@@ -6942,8 +7012,11 @@ private struct TimelineRow: View {
                 : "You already decided this approval"
         }
 
-        if item.deliveryStatus == .failed {
-            return availability.canEdit
+        if item.presentedDeliveryStatus == .failed {
+            guard OutgoingSendPolicy.canRetry(item) else {
+                return "This message was not sent. Use the Discard action to remove it"
+            }
+            return availability.canEdit && item.isLocalPending
                 ? "Tap Retry to send this message again. Edit is also available."
                 : "Tap Retry to send this message again"
         }

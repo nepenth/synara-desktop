@@ -51,6 +51,52 @@ enum TimelineDeliveryStatus: Equatable {
     case failed
 }
 
+/// SDK send state of an SDK local echo row, projected by Core. The SDK's
+/// persisted send queue owns the message; Retry and Discard go through Core
+/// by the row's transaction id.
+enum TimelineLocalEchoState: Equatable {
+    case sending
+    /// Recoverable: the SDK keeps the request and retries it on its own.
+    case failed(cause: String?)
+    /// Unrecoverable: later sends in the room wait until Retry or Discard.
+    case wedged(cause: String?)
+
+    /// Core's `local_echo_state` / `send_failure` pair. `sent` and unknown
+    /// states are not unsent, so they map to nil.
+    init?(coreState: String?, cause: String?) {
+        switch coreState {
+        case "sending":
+            self = .sending
+        case "failed":
+            self = .failed(cause: cause)
+        case "wedged":
+            self = .wedged(cause: cause)
+        default:
+            return nil
+        }
+    }
+
+    var deliveryStatus: TimelineDeliveryStatus {
+        switch self {
+        case .sending:
+            return .sending
+        case .failed, .wedged:
+            return .failed
+        }
+    }
+
+    /// Retry cannot succeed for these causes (the same request would be
+    /// refused again); the row offers Discard only.
+    var canRetry: Bool {
+        switch self {
+        case .sending:
+            return false
+        case let .failed(cause), let .wedged(cause):
+            return ["too_large", "media", "not_joined"].contains(cause ?? "") == false
+        }
+    }
+}
+
 /// Active-account ownership for aggregate reactions. `unknown` is distinct
 /// from a known empty set so the UI never presents an unproven "not mine".
 enum TimelineReactionOwnership: Equatable {
@@ -199,13 +245,18 @@ struct TimelineItem: Identifiable, Equatable {
     /// The homeserver event identifier that may safely be used for receipts and
     /// read markers. Local echoes and transaction identifiers intentionally leave
     /// this nil while continuing to use `eventID` as their stable presentation ID.
-    let serverEventID: String?
+    /// SDK local echo rows set this to nil after init: they have no server
+    /// event yet, so receipt and tail code must not treat them as one.
+    var serverEventID: String?
     /// Core's receipt frontier paired with this displayed remote tail.
     var readReceiptEventID: String? = nil
     /// Matrix transaction id of an own send. Core sets it on SDK local echo
-    /// rows; a pending attachment row carries the id it was sent with, so the
-    /// two are matched by transaction id rather than by content.
+    /// rows and on this device's remote echoes; a pending row carries the id
+    /// Core enqueued it under, so the two are matched by transaction id and
+    /// never by content.
     var transactionID: String? = nil
+    /// SDK send state while this row is an SDK local echo; nil otherwise.
+    var localEcho: TimelineLocalEchoState? = nil
     /// SDK authenticity shield for a message in an encrypted room; nil when trusted.
     var encryptionShield: TimelineEncryptionShield? = nil
     /// Core-projected decision this account already made on an approval prompt.
@@ -293,8 +344,29 @@ struct TimelineItem: Identifiable, Equatable {
         deliveryStatus != nil
     }
 
+    /// The state the bubble shows: a pending row's own status, else the SDK
+    /// local echo's send state.
+    var presentedDeliveryStatus: TimelineDeliveryStatus? {
+        deliveryStatus ?? localEcho?.deliveryStatus
+    }
+
+    /// Copies the send identity a fresh `init` cannot express: an SDK local
+    /// echo keeps a nil server event id.
+    private func carryingSendIdentity(into copy: TimelineItem) -> TimelineItem {
+        var copy = copy
+        copy.readReceiptEventID = readReceiptEventID
+        copy.encryptionShield = encryptionShield
+        copy.transactionID = transactionID
+        copy.localEcho = localEcho
+        copy.agentApprovalDecision = agentApprovalDecision
+        if localEcho != nil {
+            copy.serverEventID = serverEventID
+        }
+        return copy
+    }
+
     func withDeliveryStatus(_ deliveryStatus: TimelineDeliveryStatus?) -> TimelineItem {
-        var item = TimelineItem(
+        let item = TimelineItem(
             id: id,
             eventID: eventID,
             serverEventID: serverEventID,
@@ -318,15 +390,11 @@ struct TimelineItem: Identifiable, Equatable {
             deliveryStatus: deliveryStatus,
             hasCurrentUserReadReceipt: hasCurrentUserReadReceipt
         )
-        item.readReceiptEventID = readReceiptEventID
-        item.encryptionShield = encryptionShield
-        item.transactionID = transactionID
-        item.agentApprovalDecision = agentApprovalDecision
-        return item
+        return carryingSendIdentity(into: item)
     }
 
     func withSenderAvatarURL(_ senderAvatarURL: URL?) -> TimelineItem {
-        var item = TimelineItem(
+        let item = TimelineItem(
             id: id,
             eventID: eventID,
             serverEventID: serverEventID,
@@ -350,11 +418,7 @@ struct TimelineItem: Identifiable, Equatable {
             deliveryStatus: deliveryStatus,
             hasCurrentUserReadReceipt: hasCurrentUserReadReceipt
         )
-        item.readReceiptEventID = readReceiptEventID
-        item.encryptionShield = encryptionShield
-        item.transactionID = transactionID
-        item.agentApprovalDecision = agentApprovalDecision
-        return item
+        return carryingSendIdentity(into: item)
     }
 
     static func pendingMessage(
@@ -454,44 +518,24 @@ enum TimelinePendingReconciler {
         return combined
     }
 
+    /// A pending row is matched only by the identity Core gave its send: the
+    /// transaction id (on the SDK local echo and on this device's remote
+    /// echo) or the acknowledged server event id. Never by content: an
+    /// earlier identical "ok" must not resolve a new, still in-flight "ok".
     static func matchesPending(_ pending: TimelineItem, serverItem: TimelineItem) -> Bool {
-        guard pending.deliveryStatus == .sending || pending.deliveryStatus == .sent else {
+        guard serverItem.isLocalPending == false else {
             return false
         }
-        // The SDK local echo of the same request carries its transaction id
-        // before the server event id is known.
-        if let transactionID = pending.transactionID,
-           serverItem.isLocalPending == false,
-           serverItem.transactionID == transactionID {
+        if let transactionID = pending.transactionID, serverItem.transactionID == transactionID {
             return true
         }
         // A send acknowledgement identifies the event, but does not guarantee
         // that the timeline has observed it yet. Its eventual echo must match
         // that identity, including attachments and server-normalized content.
         if let serverEventID = pending.serverEventID {
-            return serverItem.isLocalPending == false && serverItem.serverEventID == serverEventID
+            return serverItem.serverEventID == serverEventID
         }
-        // A still-queued attachment is known only by its transaction id;
-        // matching it by content could drop it for an unrelated event.
-        guard pending.transactionID == nil else {
-            return false
-        }
-        guard pending.senderID == serverItem.senderID else {
-            return false
-        }
-        guard pending.replyToEventID == serverItem.replyToEventID else {
-            return false
-        }
-        guard pending.threadRootEventID == serverItem.threadRootEventID else {
-            return false
-        }
-        guard let pendingBody = messageBody(for: pending),
-              let serverBody = messageBody(for: serverItem),
-              pendingBody == serverBody
-        else {
-            return false
-        }
-        return abs(serverItem.timestamp.timeIntervalSince(pending.timestamp)) < 5 * 60
+        return false
     }
 
     static func merge(
@@ -509,8 +553,7 @@ enum TimelinePendingReconciler {
         var unmatchedPending = pendingItems
         for serverItem in streamItems {
             if let index = unmatchedPending.firstIndex(where: {
-                ($0.serverEventID != nil || $0.transactionID != nil || serverItem.senderID == currentUserID)
-                    && matchesPending($0, serverItem: serverItem)
+                matchesPending($0, serverItem: serverItem)
             }) {
                 unmatchedPending.remove(at: index)
             }

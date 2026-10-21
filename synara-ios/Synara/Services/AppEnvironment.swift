@@ -109,7 +109,9 @@ struct AppEnvironment {
             sparseRouteResolver: SharedCoreSparsePushRouteResolver()
         )
         let router = AppRouter()
-        let drafts = DraftStore()
+        // Drafts and messages Core has not accepted yet survive termination.
+        let composerStore = ComposerLocalStore.live()
+        let drafts = DraftStore(store: composerStore)
         let timeline = SharedCoreTimelineService(host: host)
         let roomList = SharedCoreRoomListService(host: host)
         let roomMembership = SharedCoreRoomMembershipService(host: host)
@@ -119,7 +121,8 @@ struct AppEnvironment {
         let messageSender = SharedCoreMessageSendService(host: host)
         let outgoingSends = OutgoingSendCoordinator(
             messageSender: messageSender,
-            connectionStatus: connectionStatus
+            connectionStatus: connectionStatus,
+            queue: OutgoingMessageQueue(store: composerStore)
         )
         return AppEnvironment(
             session: session,

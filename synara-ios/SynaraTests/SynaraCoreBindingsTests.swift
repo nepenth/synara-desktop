@@ -716,7 +716,9 @@ final class SynaraCoreBindingsTests: XCTestCase {
             mediaHeight: nil,
             mediaDurationMs: nil,
             encryptionShield: nil,
-            transactionId: nil
+            transactionId: nil,
+            localEchoState: nil,
+            sendFailure: nil
         )
     }
 
@@ -791,7 +793,9 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 mediaHeight: nil,
                 mediaDurationMs: nil,
                 encryptionShield: nil,
-                transactionId: nil
+                transactionId: nil,
+                localEchoState: nil,
+                sendFailure: nil
             )
         )
         XCTAssertEqual(mappedRow?.senderProfileDisplayName, "Alice Example")
@@ -816,12 +820,21 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 agentApprovalDecidedAt: nil, mediaFilename: nil,
                 mediaCaption: nil, reactions: [], mediaHandleId: nil, mediaMimeType: nil,
                 mediaWidth: nil, mediaHeight: nil, mediaDurationMs: nil,
-                encryptionShield: nil, transactionId: "synara-attachment-a"
+                encryptionShield: nil, transactionId: "synara-attachment-a",
+                localEchoState: "sending", sendFailure: nil
             )
         )
         XCTAssertEqual(localEcho?.eventID, "sdk-local-item")
         XCTAssertEqual(localEcho?.transactionID, "synara-attachment-a")
         XCTAssertEqual(localEcho?.withDeliveryStatus(nil).transactionID, "synara-attachment-a")
+        // The SDK send state reaches the bubble, and the item id is never
+        // mistaken for a server event id by receipt or tail code.
+        XCTAssertEqual(localEcho?.localEcho, .sending)
+        XCTAssertEqual(localEcho?.presentedDeliveryStatus, .sending)
+        XCTAssertEqual(localEcho?.isLocalPending, false)
+        XCTAssertNil(localEcho?.serverEventID)
+        XCTAssertNil(localEcho?.withDeliveryStatus(nil).serverEventID)
+        XCTAssertNil(localEcho?.withSenderAvatarURL(nil).serverEventID)
 
         let reply = SharedCoreTimelineRows.replyPreview(
             from: TimelineViewReplyPreviewDto(
@@ -978,7 +991,9 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 mediaHeight: nil,
                 mediaDurationMs: nil,
                 encryptionShield: nil,
-                transactionId: nil
+                transactionId: nil,
+                localEchoState: nil,
+                sendFailure: nil
             )
         }
 
