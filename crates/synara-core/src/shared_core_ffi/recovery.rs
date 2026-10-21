@@ -329,8 +329,9 @@ pub(super) fn secret_storage_status_dto(
     })
 }
 
-pub(super) fn map_recovery_backup_core_error(_error: MatrixIpcError) -> LeftoverCommandError {
+pub(super) fn map_recovery_backup_core_error(error: MatrixIpcError) -> LeftoverCommandError {
     LeftoverCommandError::Failed {
+        kind: CoreErrorKind::from_category(error.category),
         code: "recovery-backup-failed".to_owned(),
         description: "Encryption backup recovery could not be completed.".to_owned(),
     }

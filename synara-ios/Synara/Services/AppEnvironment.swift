@@ -85,7 +85,12 @@ struct AppEnvironment {
             environment: ProcessInfo.processInfo.environment,
             secureStore: secureStore,
         )
-        let core = SharedCore.newWithSecretStore(store: KeychainIosSecretVault())
+        // The bundle's short version names the app in every request
+        // (`Synara-iOS/<version>`), which the homeserver's device list shows.
+        let core = SharedCore.newForApp(
+            store: KeychainIosSecretVault(),
+            appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        )
         if let restoreFailure = session.restoreFailureLogDescription {
             logger.error("Session restore failed: \(restoreFailure)", category: .auth)
         } else if case .signedIn = session.currentState {

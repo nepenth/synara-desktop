@@ -515,10 +515,9 @@ pub(super) async fn revoke_uninstalled_registration(
         "synara-registration-compensation-metadata-{}",
         std::process::id()
     ));
-    let config =
-        ClientBuildConfig::product_default(&unused_root, account.clone(), None).map_err(|_| {
-            MatrixAuthCommandError::unavailable("v-auth.4b-register-compensation-build-failed")
-        })?;
+    let config = desktop_client_config(&unused_root, account.clone(), None).map_err(|_| {
+        MatrixAuthCommandError::unavailable("v-auth.4b-register-compensation-build-failed")
+    })?;
     let client = synara_core::app::client_builder::build_memory_only_client(&config)
         .await
         .map_err(|_| {
@@ -1456,27 +1455,44 @@ pub(super) fn map_room_join_rule_owner_error(
 
 use synara_core::app::lifecycle::session::is_recoverable_store_login_diagnostic;
 
-/// Archive-and-rebuild uses the existing non-destructive reset primitive. It
-/// intentionally does not consult, create, replace, or delete Keychain keys:
-/// #695's fresh-store-only generation policy remains untouched.
+/// Archive-and-rebuild uses the existing non-destructive reset primitive,
+/// then makes sure the rebuilt store has a key. An existing key is kept so
+/// the archive stays readable. The rebuilt account root still exists, so
+/// #695's fresh-store-only policy would refuse a new key at the next sign-in
+/// and a lost key would ask for the same reset forever; the user-confirmed
+/// reset is the one place that may create it (see
+/// `store_key_after_confirmed_reset`). Ordinary sign-in keeps the policy.
 fn archive_and_rebuild_store(
     app_data_root: &Path,
     identity: &AccountIdentity,
 ) -> Result<(), MatrixAuthCommandError> {
-    let paths = StorePaths::derive(app_data_root, identity).map_err(|_| {
+    archive_and_rebuild_store_with_vault(app_data_root, identity, &KeyringStoreKeyVault::new())
+}
+
+fn archive_and_rebuild_store_with_vault(
+    app_data_root: &Path,
+    identity: &AccountIdentity,
+    vault: &(impl StoreKeyVault + ?Sized),
+) -> Result<(), MatrixAuthCommandError> {
+    let recovery_failed = || {
         MatrixAuthCommandError::new(
             "Unknown",
             "Local Matrix store recovery could not be completed.",
             "p3.2-login-store-recovery-failed",
         )
-    })?;
-    reset_store_for_recovery(&paths).map(|_| ()).map_err(|_| {
-        MatrixAuthCommandError::new(
-            "Unknown",
-            "Local Matrix store recovery could not be completed.",
-            "p3.2-login-store-recovery-failed",
-        )
-    })
+    };
+    let paths = StorePaths::derive(app_data_root, identity).map_err(|_| recovery_failed())?;
+    reset_store_for_recovery(&paths).map_err(|_| recovery_failed())?;
+    store_key_after_confirmed_reset(vault, identity)
+        .map(|_| ())
+        .map_err(|error| match error {
+            // A locked keyring: the archive is done; the next confirmed
+            // reset (after the user unlocks it) finishes the key.
+            StoreKeyVaultError::BackendUnavailable { .. } => {
+                MatrixAuthCommandError::unavailable("p3.2-login-store-locked")
+            }
+            _ => recovery_failed(),
+        })
 }
 
 fn map_store_migration_error(error: StoreMigrationError) -> MatrixAuthCommandError {
@@ -1515,11 +1531,8 @@ async fn existing_login_device_id(
     let store_key =
         get_or_migrate_store_key(&KeyringStoreKeyVault::new(), identity, key_creation_policy)
             .map_err(map_store_key_vault_error)?;
-    let config =
-        ClientBuildConfig::product_default(app_data_root, identity.clone(), Some(store_key))
-            .map_err(|_| {
-                MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed")
-            })?;
+    let config = desktop_client_config(app_data_root, identity.clone(), Some(store_key))
+        .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed"))?;
     existing_sqlite_crypto_device_id(
         config.state_store_path(),
         config.store_passphrase_hex().as_deref(),
@@ -1568,10 +1581,9 @@ pub(super) async fn build_client(
     // SQLite. A corrupt/ahead/missing migration chain is a reset *decision*,
     // never an automatic wipe; only the static safe diagnostic crosses IPC.
     migrate_store_to_current(&store_paths).map_err(map_store_migration_error)?;
-    let config =
-        ClientBuildConfig::product_default(app_data_root, identity.clone(), Some(store_key))
-            .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed"))?
-            .with_indexed_message_search(indexed_message_search);
+    let config = desktop_client_config(app_data_root, identity.clone(), Some(store_key))
+        .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed"))?
+        .with_indexed_message_search(indexed_message_search);
     let client = build_unauthenticated_client(&config)
         .await
         .map_err(map_store_client_build_error)?;
@@ -1650,8 +1662,8 @@ pub(super) async fn build_password_reset_client(
     let store_key = StoreKeyMaterial::generate().map_err(|_| {
         MatrixAuthCommandError::unavailable("v-auth.4-password-reset-store-key-unavailable")
     })?;
-    let config = ClientBuildConfig::product_default(&app_data_root, identity, Some(store_key))
-        .map_err(|_| {
+    let config =
+        desktop_client_config(&app_data_root, identity, Some(store_key)).map_err(|_| {
             MatrixAuthCommandError::unavailable("v-auth.4-password-reset-client-config-failed")
         })?;
     build_unauthenticated_client(&config).await.map_err(|_| {
@@ -1675,8 +1687,8 @@ pub(super) async fn build_register_ephemeral_client(
     let store_key = StoreKeyMaterial::generate().map_err(|_| {
         MatrixAuthCommandError::unavailable("v-auth.4b-register-store-key-unavailable")
     })?;
-    let config = ClientBuildConfig::product_default(&app_data_root, identity, Some(store_key))
-        .map_err(|_| {
+    let config =
+        desktop_client_config(&app_data_root, identity, Some(store_key)).map_err(|_| {
             MatrixAuthCommandError::unavailable("v-auth.4b-register-client-config-failed")
         })?;
     build_unauthenticated_client(&config)
@@ -1898,6 +1910,55 @@ mod tests {
             diagnostic_id: "p3.2-login-unrecognized",
         });
         assert_eq!(other.code, "Unknown");
+    }
+
+    /// Crypto-batch follow-up: after archive-and-rebuild the account root
+    /// remains, so `key_creation_policy()` still refuses a new key. Recovery
+    /// from a lost key must finish: the next sign-in finds a key and builds
+    /// a client on the rebuilt store, while the policy itself is unchanged.
+    #[tokio::test]
+    async fn archive_and_rebuild_finishes_recovery_from_a_lost_store_key() {
+        use synara_core::app::store::{InMemoryStoreKeyVault, StoreKeyCreationPolicy};
+        let root = std::env::temp_dir().join(format!(
+            "synara-desktop-lost-key-reset-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        let identity =
+            AccountIdentity::new("@alice:example.org", "https://matrix.example.org").unwrap();
+        let paths = StorePaths::derive(&root, &identity).unwrap();
+        migrate_store_to_current(&paths).unwrap();
+        fs::write(paths.state_dir().join("matrix-sdk-state.sqlite3"), b"old").unwrap();
+        let vault = InMemoryStoreKeyVault::new();
+        // The lost key: sign-in fails closed and asks for the reset.
+        let policy = paths.key_creation_policy().unwrap();
+        assert_eq!(policy, StoreKeyCreationPolicy::ForbidForExistingStore);
+        assert_eq!(
+            map_store_key_vault_error(
+                get_or_migrate_store_key(&vault, &identity, policy).unwrap_err()
+            )
+            .diagnostic_id,
+            "p3.2-login-store-reset-required"
+        );
+
+        archive_and_rebuild_store_with_vault(&root, &identity, &vault).unwrap();
+
+        let policy = paths.key_creation_policy().unwrap();
+        assert_eq!(
+            policy,
+            StoreKeyCreationPolicy::ForbidForExistingStore,
+            "the rebuilt root keeps the protective policy"
+        );
+        let key = get_or_migrate_store_key(&vault, &identity, policy)
+            .expect("the next sign-in finds the reset's key");
+        migrate_store_to_current(&paths).unwrap();
+        let config = desktop_client_config(&root, identity.clone(), Some(key))
+            .unwrap()
+            .with_indexed_message_search(false);
+        build_unauthenticated_client(&config)
+            .await
+            .expect("the rebuilt store opens with its new key");
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[tokio::test]

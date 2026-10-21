@@ -323,9 +323,14 @@ impl SessionProjectionCore {
     }
 
     /// Clear Core's in-memory safe projection only. This never deletes a
-    /// Keychain item, SDK store, credential, or crypto material.
+    /// Keychain item, SDK store, credential, or crypto material, and never
+    /// touches the media cache the live `SharedCore` session reads through.
     pub async fn close(&self) -> Result<(), SessionProjectionError> {
-        self.core.close().await.map_err(|_| unavailable())
+        self.core
+            .close_projection()
+            .await
+            .map(|_| ())
+            .map_err(|_| unavailable())
     }
 }
 
@@ -354,6 +359,42 @@ mod tests {
 
         facade.close().await.unwrap();
         assert_eq!(facade.session_snapshot().await.unwrap(), None);
+    }
+
+    /// L21: the hot media cache is process-wide. Closing the mirror (which
+    /// shares the live session's account) must not wipe the live session's
+    /// bytes, and closing a real Core clears only its own account's.
+    #[test]
+    fn closing_a_core_clears_only_its_own_accounts_hot_media() {
+        use crate::app::media::{
+            hot_media_cache_contains_for_test, hot_media_cache_insert_for_test,
+            HOT_MEDIA_CACHE_TEST_LOCK,
+        };
+        let _serial = HOT_MEDIA_CACHE_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let mirrored = "@projection-media:matrix.org";
+        let other = "@projection-media-other:matrix.org";
+        hot_media_cache_insert_for_test(mirrored, "photo", vec![1; 8]);
+        hot_media_cache_insert_for_test(other, "photo", vec![2; 8]);
+
+        let facade = SessionProjectionCore::new();
+        let mut mirror = projection();
+        mirror.user_id = mirrored.to_owned();
+        rt.block_on(facade.open(mirror.clone())).unwrap();
+        rt.block_on(facade.close()).unwrap();
+        assert!(hot_media_cache_contains_for_test(mirrored, "photo"));
+
+        let core = Core::new(Arc::new(ProjectionOnlyPlatform));
+        rt.block_on(core.open(mirror.try_into().unwrap())).unwrap();
+        rt.block_on(core.close()).unwrap();
+        assert!(!hot_media_cache_contains_for_test(mirrored, "photo"));
+        assert!(hot_media_cache_contains_for_test(other, "photo"));
+        crate::app::media::clear_hot_media_cache_for_user(other);
     }
 
     #[tokio::test]

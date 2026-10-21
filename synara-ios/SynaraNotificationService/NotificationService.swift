@@ -257,7 +257,9 @@ private struct MatrixNotificationPreviewResolver {
                 homeserverUrl: session.homeserverURL.absoluteString,
                 storeRoot: storeRoot.path,
                 roomId: payload.roomID,
-                eventId: payload.eventID
+                eventId: payload.eventID,
+                // `Synara-iOS-NSE/<version>` in the extension's requests.
+                appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
             )
             onRequest(request)
             guard Task.isCancelled == false else {

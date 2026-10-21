@@ -237,6 +237,7 @@ async fn prove(
         reader.store.clone(),
         created.room_id,
         sent_event_id,
+        "2.2.6".to_owned(),
     );
     let start = Instant::now();
     let result = request.resolve().await;

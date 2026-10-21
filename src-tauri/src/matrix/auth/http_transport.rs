@@ -1,14 +1,14 @@
 #[cfg(test)]
 use super::error::AuthError;
 #[cfg(test)]
-use crate::matrix::client_builder::default_user_agent;
+use crate::matrix::client_builder::desktop_user_agent;
 #[cfg(test)]
 pub use synara_core::app::auth::{parse_well_known_client_json, HttpDiscoveryTransport};
 
 #[cfg(test)]
 /// Product well-known transport (desktop user-agent).
 pub fn product_http_discovery_transport() -> Result<HttpDiscoveryTransport, AuthError> {
-    HttpDiscoveryTransport::new_with_user_agent(default_user_agent())
+    HttpDiscoveryTransport::new_with_user_agent(desktop_user_agent())
 }
 
 #[cfg(test)]

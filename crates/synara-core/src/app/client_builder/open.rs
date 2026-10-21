@@ -153,10 +153,9 @@ async fn build_client(
         ClientStoreMode::Persistent => {
             // Keep state and cache paths separate in the product layout.
             let passphrase = config.store_passphrase_hex();
-            builder = builder.sqlite_store_with_cache_path(
-                config.state_store_path(),
-                config.cache_store_path(),
-                passphrase.as_deref(),
+            builder = builder.sqlite_store_with_config_and_cache_path(
+                config.sqlite_store_config(passphrase.as_deref()),
+                Some(config.cache_store_path()),
             );
             #[cfg(feature = "search-index")]
             {

@@ -16,7 +16,10 @@ use matrix_sdk_ui::notification_client::{
     NotificationClient, NotificationEvent, NotificationProcessSetup, NotificationStatus,
 };
 
-use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig, TimeoutPolicy};
+use crate::app::client_builder::{
+    build_unauthenticated_client, product_user_agent, ClientBuildConfig, ClientBuilderError,
+    ClientProduct, StoreFootprint, TimeoutPolicy,
+};
 use crate::app::lifecycle::{
     restore_session_onto_client_with_room_load_settings, SessionMaterial, SessionMaterialId,
 };
@@ -86,6 +89,7 @@ pub async fn resolve_event_preview(
     store_root: &str,
     room_id: &str,
     event_id: &str,
+    app_version: &str,
 ) -> Result<NseEventPreview, NsePreviewError> {
     tokio::time::timeout(RESOLUTION_TIMEOUT, async {
         resolve_event_preview_unbounded(
@@ -95,6 +99,7 @@ pub async fn resolve_event_preview(
             store_root,
             room_id,
             event_id,
+            app_version,
         )
         .await
     })
@@ -107,6 +112,35 @@ pub async fn resolve_event_preview(
     })?
 }
 
+/// The extension's client: short timeouts, its own store-lock holder, no
+/// search index, no refresh, the smallest SQLite pools and caches, and
+/// `Synara-iOS-NSE/<app version>` as its User-Agent.
+fn extension_client_config(
+    root: &Path,
+    identity: &AccountIdentity,
+    store_key: StoreKeyMaterial,
+    app_version: &str,
+) -> Result<ClientBuildConfig, ClientBuilderError> {
+    let mut config = ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))?
+        .with_timeouts(TimeoutPolicy {
+            request_timeout: REQUEST_TIMEOUT,
+            retry_limit: 0,
+        })?
+        .with_cross_process_store_lock_holder(STORE_LOCK_HOLDER)?
+        .with_user_agent(product_user_agent(
+            ClientProduct::IosNotificationExtension,
+            app_version,
+        ))?
+        .with_indexed_message_search(false)
+        .with_store_footprint(StoreFootprint::Extension);
+    // The extension's vault is read-only, so a refresh here would consume the
+    // app's refresh token without saving its replacement. iOS password
+    // sign-in therefore requests no refresh token; an expired token from an
+    // older session surfaces as `p4-s11-nse-session-rejected`.
+    config.handle_refresh_tokens = false;
+    Ok(config)
+}
+
 async fn resolve_event_preview_unbounded(
     secrets: &dyn NseSecretReader,
     user_id: &str,
@@ -114,6 +148,7 @@ async fn resolve_event_preview_unbounded(
     store_root: &str,
     room_id: &str,
     event_id: &str,
+    app_version: &str,
 ) -> Result<NseEventPreview, NsePreviewError> {
     if [user_id, homeserver_url, store_root, room_id, event_id]
         .iter()
@@ -163,26 +198,13 @@ async fn resolve_event_preview_unbounded(
     store_key_bytes.fill(0);
     let store_key = StoreKeyMaterial::from_bytes(key_array);
 
-    let mut config = ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))
-        .and_then(|config| {
-            config.with_timeouts(TimeoutPolicy {
-                request_timeout: REQUEST_TIMEOUT,
-                retry_limit: 0,
-            })
-        })
-        .and_then(|config| config.with_cross_process_store_lock_holder(STORE_LOCK_HOLDER))
-        .map_err(|_| {
+    let config =
+        extension_client_config(root, &identity, store_key, app_version).map_err(|_| {
             failed(
                 "p4-s3b-restore-failed",
                 "The notification store is unavailable.",
             )
         })?;
-    config = config.with_indexed_message_search(false);
-    // The extension's vault is read-only, so a refresh here would consume the
-    // app's refresh token without saving its replacement. iOS password
-    // sign-in therefore requests no refresh token; an expired token from an
-    // older session surfaces as `p4-s11-nse-session-rejected`.
-    config.handle_refresh_tokens = false;
 
     let client = build_unauthenticated_client(&config).await.map_err(|_| {
         failed(
@@ -507,6 +529,7 @@ mod tests {
             "/tmp/synara-nse-test-store",
             "!room:example.org",
             "$event:example.org",
+            "2.2.6",
         )
         .await
         .expect_err("missing session must fail closed");
@@ -519,6 +542,27 @@ mod tests {
         assert!(!error.to_string().contains("matrix.example.org"));
     }
 
+    #[test]
+    fn extension_client_is_small_and_names_itself() {
+        let identity =
+            AccountIdentity::new("@alice:example.org", "https://matrix.example.org").unwrap();
+        let config = extension_client_config(
+            Path::new("/tmp/synara-nse-config-test"),
+            &identity,
+            StoreKeyMaterial::from_bytes([7; STORE_KEY_LEN]),
+            "2.2.6",
+        )
+        .expect("extension config");
+        assert_eq!(config.store_footprint(), StoreFootprint::Extension);
+        assert!(config
+            .plan()
+            .user_agent
+            .starts_with("Synara-iOS-NSE/2.2.6 (matrix-sdk/"));
+        assert!(!config.handle_refresh_tokens);
+        assert!(!config.indexed_message_search());
+        assert_eq!(config.cross_process_store_lock_holder(), STORE_LOCK_HOLDER);
+    }
+
     #[tokio::test]
     async fn invalid_identifiers_never_touch_the_secret_store() {
         let reader = RecordingReader::default();
@@ -529,6 +573,7 @@ mod tests {
             "/tmp/synara-nse-test-store",
             "not-a-room",
             "$event:example.org",
+            "2.2.6",
         )
         .await
         .expect_err("invalid room must fail closed");

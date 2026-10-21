@@ -251,21 +251,35 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
 /// the durable outbox, so a message sent while the app is terminated is
 /// handed over on the next launch; accepted ones belong to the SDK and stay
 /// here only until their timeline row appears. Cleared on wipe.
-final class OutgoingMessageQueue: ObservableObject {
+///
+/// The send coordinator reads and changes it from the cooperative thread
+/// pool and SwiftUI from the main thread, so the authoritative list lives
+/// behind `lock` and is read through `currentItems`. `items` is the copy
+/// SwiftUI observes: set on the main thread, one main-queue hop after a
+/// change made elsewhere.
+final class OutgoingMessageQueue: ObservableObject, @unchecked Sendable {
     @Published private(set) var items: [OutgoingQueuedMessage] = []
     private let store: ComposerLocalStore
+    private let lock = NSLock()
+    private var storage: [OutgoingQueuedMessage]
 
     init(store: ComposerLocalStore = ComposerLocalStore(fileURL: nil)) {
         self.store = store
-        items = store.current.outbox.map(OutgoingQueuedMessage.init(restoring:))
+        storage = store.current.outbox.map(OutgoingQueuedMessage.init(restoring:))
+        items = storage
+    }
+
+    /// The current list, from any thread.
+    var currentItems: [OutgoingQueuedMessage] {
+        lock.withLock { storage }
     }
 
     func item(id: String) -> OutgoingQueuedMessage? {
-        items.first(where: { $0.id == id })
+        currentItems.first(where: { $0.id == id })
     }
 
     func items(in roomID: String) -> [OutgoingQueuedMessage] {
-        items.filter { $0.roomID == roomID }
+        currentItems.filter { $0.roomID == roomID }
     }
 
     func timelineItems(in roomID: String) -> [TimelineItem] {
@@ -282,7 +296,7 @@ final class OutgoingMessageQueue: ObservableObject {
     }
 
     func handoffItems() -> [OutgoingQueuedMessage] {
-        items.filter(OutgoingSendPolicy.needsHandoff)
+        currentItems.filter(OutgoingSendPolicy.needsHandoff)
     }
 
     /// Adds or replaces a message and writes the outbox before returning.
@@ -322,7 +336,7 @@ final class OutgoingMessageQueue: ObservableObject {
     }
 
     func hydrateSenderAvatarURL(senderID: String, avatarURL: URL) {
-        let changed = items.contains { $0.senderID == senderID && $0.senderAvatarURL != avatarURL }
+        let changed = currentItems.contains { $0.senderID == senderID && $0.senderAvatarURL != avatarURL }
         guard changed else {
             return
         }
@@ -340,7 +354,7 @@ final class OutgoingMessageQueue: ObservableObject {
     }
 
     func remove(where predicate: (OutgoingQueuedMessage) -> Bool) {
-        guard items.contains(where: predicate) else {
+        guard currentItems.contains(where: predicate) else {
             return
         }
         mutate { items in
@@ -366,34 +380,41 @@ final class OutgoingMessageQueue: ObservableObject {
         }
     }
 
+    /// Changes the list and writes the outbox under `lock`, from any thread,
+    /// so messages Core has not accepted are durable before this returns. It
+    /// never blocks on the main thread (it used to `DispatchQueue.main.sync`
+    /// from the cooperative pool).
     private func mutate(
         clearingDraftOf draftRoomID: String? = nil,
         _ body: (inout [OutgoingQueuedMessage]) -> Void
     ) {
-        if Thread.isMainThread {
-            apply(clearingDraftOf: draftRoomID, body)
-        } else {
-            DispatchQueue.main.sync {
-                apply(clearingDraftOf: draftRoomID, body)
+        lock.withLock {
+            body(&storage)
+            let outbox = storage.filter { $0.transactionID == nil }.map(\.outboxMessage)
+            guard outbox != store.current.outbox || draftRoomID != nil else {
+                return
+            }
+            store.update(durable: true) { snapshot in
+                snapshot.outbox = outbox
+                if let draftRoomID {
+                    snapshot.drafts.removeValue(forKey: draftRoomID)
+                }
             }
         }
+        publish()
     }
 
-    /// Main thread only. Messages Core has not accepted are written to the
-    /// outbox before this returns.
-    private func apply(
-        clearingDraftOf draftRoomID: String?,
-        _ body: (inout [OutgoingQueuedMessage]) -> Void
-    ) {
-        body(&items)
-        let outbox = items.filter { $0.transactionID == nil }.map(\.outboxMessage)
-        guard outbox != store.current.outbox || draftRoomID != nil else {
-            return
-        }
-        store.update(durable: true) { snapshot in
-            snapshot.outbox = outbox
-            if let draftRoomID {
-                snapshot.drafts.removeValue(forKey: draftRoomID)
+    /// Copies the latest list into `items` on the main thread. Reading it at
+    /// delivery time means a late hop can never publish an older list.
+    private func publish() {
+        if Thread.isMainThread {
+            items = currentItems
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.items = self.currentItems
             }
         }
     }

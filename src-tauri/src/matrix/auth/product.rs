@@ -64,7 +64,7 @@ use crate::matrix::backup::live::{
 };
 
 use crate::matrix::client_builder::{
-    build_unauthenticated_client, ClientBuildConfig, ClientBuilderError,
+    build_unauthenticated_client, desktop_client_config, ClientBuilderError,
 };
 
 use crate::matrix::cross_signing::live::{NativeCrossSigningSetupResult, NativeCrossSigningStatus};
@@ -111,8 +111,9 @@ use crate::matrix::spaces::{
 };
 
 use crate::matrix::store::{
-    get_or_migrate_store_key, migrate_store_to_current, reset_store_for_recovery, AccountIdentity,
-    KeyringStoreKeyVault, StoreKeyMaterial, StoreKeyVaultError, StoreMigrationError, StorePaths,
+    get_or_migrate_store_key, migrate_store_to_current, reset_store_for_recovery,
+    store_key_after_confirmed_reset, AccountIdentity, KeyringStoreKeyVault, StoreKeyMaterial,
+    StoreKeyVault, StoreKeyVaultError, StoreMigrationError, StorePaths,
 };
 
 use crate::matrix::sync::{

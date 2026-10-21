@@ -241,11 +241,32 @@ fn sync_stop_closes_retained_client_stores_and_start_reopens_them() {
     rt.block_on(shared.attach_session_owners())
         .expect("attach retained session owners");
     let client = shared.retained_client().expect("retained Client");
+    let _serial = crate::app::media::HOT_MEDIA_CACHE_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let other_account = "@sync-stop-other:example.org";
+    crate::app::media::hot_media_cache_insert_for_test(identity.user_id(), "photo", vec![1; 8]);
+    crate::app::media::hot_media_cache_insert_for_test(other_account, "photo", vec![2; 8]);
 
     let stopped = rt
         .block_on(shared.stop_sync())
         .expect("stop must complete the full store quiescence boundary");
     assert!(stopped.stopped);
+    // L14: suspension drops this account's decrypted media, nobody else's.
+    assert!(!crate::app::media::hot_media_cache_contains_for_test(
+        identity.user_id(),
+        "photo"
+    ));
+    assert!(crate::app::media::hot_media_cache_contains_for_test(
+        other_account,
+        "photo"
+    ));
+    // A memory warning drops every account's.
+    shared.release_cached_memory();
+    assert!(!crate::app::media::hot_media_cache_contains_for_test(
+        other_account,
+        "photo"
+    ));
     let paused_store_access = rt.block_on(client.event_cache_store().lock());
     assert!(
         paused_store_access.is_err(),
@@ -1205,11 +1226,8 @@ fn failed_rotation_save_is_retried_with_backoff_and_stops_after_logout() {
     ))
     .expect("planted session");
     let start = Instant::now();
-    assert_eq!(
-        shared.retry_failed_session_save(start),
-        None,
-        "nothing to retry after a good save"
-    );
+    let retry = |now| rt.block_on(shared.retry_failed_session_save(now));
+    assert_eq!(retry(start), None, "nothing to retry after a good save");
 
     let lease = match &*shared.restored_client.lock().expect("client") {
         RestoredClientSlot::Ready(_, persistence) => persistence.callback_lease(),
@@ -1224,19 +1242,16 @@ fn failed_rotation_save_is_retried_with_backoff_and_stops_after_logout() {
     assert!(lease.save_failed());
 
     fail_puts.store(true, Ordering::Relaxed);
-    assert_eq!(shared.retry_failed_session_save(start), Some(false));
+    assert_eq!(retry(start), Some(false));
     assert_eq!(
-        shared.retry_failed_session_save(start + Duration::from_secs(4)),
+        retry(start + Duration::from_secs(4)),
         None,
         "backoff holds the next attempt"
     );
 
     fail_puts.store(false, Ordering::Relaxed);
     map.lock().expect("vault").clear();
-    assert_eq!(
-        shared.retry_failed_session_save(start + Duration::from_secs(5)),
-        Some(true)
-    );
+    assert_eq!(retry(start + Duration::from_secs(5)), Some(true));
     assert!(!lease.save_failed());
     assert!(map
         .lock()
@@ -1251,7 +1266,7 @@ fn failed_rotation_save_is_retried_with_backoff_and_stops_after_logout() {
     });
     rt.block_on(shared.logout()).expect("logout");
     assert_eq!(
-        shared.retry_failed_session_save(start + Duration::from_secs(120)),
+        retry(start + Duration::from_secs(120)),
         None,
         "logout ends retries"
     );
@@ -1457,7 +1472,12 @@ fn ios_logout_and_attach_use_the_shared_core_policies() {
             .split(&format!("async fn {restore_or_login}("))
             .nth(1)
             .expect("restore/login body");
-        let prepare = body.find("prepare_session_store(root, &identity)").unwrap();
+        // Restore migrates inline on the blocking pool; sign-in through
+        // `prepare_login_store`, which does the same off the async threads.
+        let prepare = body
+            .find("prepare_session_store(&root, &identity)")
+            .or_else(|| body.find("self.prepare_login_store(root, &identity)"))
+            .unwrap();
         let build = body.find("build_unauthenticated_client(&config)").unwrap();
         assert!(
             prepare < build,

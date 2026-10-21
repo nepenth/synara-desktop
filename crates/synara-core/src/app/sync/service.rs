@@ -1669,8 +1669,12 @@ mod liveness_tests {
         assert_eq!(owner.observe().readiness, SyncReadiness::Idle);
     }
 
+    /// Generous: a loaded test machine can take seconds to send the first
+    /// request. Only the upper bound grows; every count check is unchanged.
+    const SLIDING_SYNC_WAIT: Duration = Duration::from_secs(20);
+
     async fn wait_for_sliding_syncs(server: &MatrixMockServer, what: &str, more_than: usize) {
-        tokio::time::timeout(Duration::from_secs(3), async {
+        tokio::time::timeout(SLIDING_SYNC_WAIT, async {
             while sliding_sync_requests(&server.server().received_requests().await.unwrap())
                 <= more_than
             {
@@ -1679,6 +1683,28 @@ mod liveness_tests {
         })
         .await
         .unwrap_or_else(|_| panic!("timed out waiting for {what}"));
+    }
+
+    /// The sliding-sync request count once it has stopped moving for
+    /// `quiet`. `SyncService` runs two loops (room list and encryption), and
+    /// the second one's long-poll, or one already sent when `stop()`
+    /// returned, can reach the server after the first is counted.
+    async fn settled_sliding_syncs(server: &MatrixMockServer, quiet: Duration) -> usize {
+        tokio::time::timeout(SLIDING_SYNC_WAIT, async {
+            let mut count =
+                sliding_sync_requests(&server.server().received_requests().await.unwrap());
+            loop {
+                tokio::time::sleep(quiet).await;
+                let now =
+                    sliding_sync_requests(&server.server().received_requests().await.unwrap());
+                if now == count {
+                    return count;
+                }
+                count = now;
+            }
+        })
+        .await
+        .expect("sliding-sync requests settle")
     }
 
     #[tokio::test]
@@ -1707,8 +1733,10 @@ mod liveness_tests {
         assert_eq!(owner.observe().readiness, SyncReadiness::Idle);
 
         owner.start().await.unwrap();
-        wait_for_sliding_syncs(&server, "the first long-poll", 0).await;
-        let before = sliding_syncs().await;
+        // Both loops' (room list, encryption) long-polls are open before the
+        // baseline is taken.
+        wait_for_sliding_syncs(&server, "both first long-polls", 1).await;
+        let before = settled_sliding_syncs(&server, Duration::from_millis(500)).await;
         owner.start().await.unwrap();
         tokio::time::sleep(Duration::from_millis(200)).await;
         assert_eq!(
@@ -1721,10 +1749,10 @@ mod liveness_tests {
         assert_eq!(restarted.readiness, SyncReadiness::Running);
         wait_for_sliding_syncs(&server, "a replacement long-poll", before).await;
 
-        // Stopped by the shell (iOS suspension): it stays stopped.
+        // Stopped by the shell (iOS suspension): it stays stopped. Requests
+        // sent before stop() returned are counted before the restart.
         owner.stop().await.unwrap();
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let stopped = sliding_syncs().await;
+        let stopped = settled_sliding_syncs(&server, Duration::from_millis(300)).await;
         owner.restart_live().await.unwrap();
         tokio::time::sleep(Duration::from_millis(200)).await;
         assert_eq!(owner.observe().readiness, SyncReadiness::Idle);

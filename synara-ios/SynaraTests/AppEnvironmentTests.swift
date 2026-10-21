@@ -166,6 +166,7 @@ final class AppEnvironmentTests: XCTestCase {
     func testSharedCoreLoginErrorMappingDoesNotMislabelVaultFailureAsBadCredentials() {
         XCTAssertEqual(
             SharedCoreLoginErrorMapping.loginError(for: SessionLoginError.Failed(
+                kind: .terminal,
                 code: "p4-s3c-secret-vault-unavailable",
                 description: "The secret store is unavailable."
             )),
@@ -173,6 +174,7 @@ final class AppEnvironmentTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreLoginErrorMapping.loginError(for: SessionLoginError.Failed(
+                kind: .terminal,
                 code: "p4-s3c-login-failed",
                 description: "The session could not be authenticated."
             )),
@@ -182,6 +184,7 @@ final class AppEnvironmentTests: XCTestCase {
 
     func testSharedCoreLoginErrorMappingNamesAServerWithoutSlidingSync() {
         let error = SharedCoreLoginErrorMapping.loginError(for: SessionLoginError.Failed(
+                kind: .terminal,
             code: "p4-s3c-sliding-sync-unsupported",
             description: "The homeserver does not support simplified sliding sync (MSC4186)."
         ))

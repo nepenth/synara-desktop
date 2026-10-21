@@ -53,6 +53,39 @@ final class OutgoingSendServiceTests: XCTestCase {
         )
     }
 
+    /// I23: the queue changed itself with `DispatchQueue.main.sync` from the
+    /// cooperative pool, which deadlocks while the main thread waits on that
+    /// work, and its list was read off-main without a lock.
+    @MainActor
+    func testQueueChangesFromOtherThreadsNeverWaitOnTheMainThread() async {
+        let sender = RecordingMessageSendService()
+        let coordinator = coordinator(sender)
+        let queue = coordinator.queue
+        // The main thread blocks until a background change finishes. The old
+        // main-queue hop would never return here.
+        DispatchQueue.global().sync {
+            enqueue(coordinator, id: "local-blocked", body: "from a worker")
+        }
+        XCTAssertEqual(queue.currentItems.map(\.id), ["local-blocked"])
+
+        await withTaskGroup(of: Void.self) { group in
+            for index in 0..<50 {
+                group.addTask {
+                    queue.updateDeliveryStatus(id: "local-blocked", index.isMultiple(of: 2) ? .queued : .sending)
+                    _ = queue.item(id: "local-blocked")
+                    _ = queue.handoffItems()
+                }
+            }
+        }
+        XCTAssertEqual(queue.currentItems.count, 1)
+        // SwiftUI's copy catches up on the main queue.
+        await Task.yield()
+        let published = expectation(description: "published")
+        DispatchQueue.main.async { published.fulfill() }
+        await fulfillment(of: [published], timeout: 2)
+        XCTAssertEqual(queue.items.map(\.id), ["local-blocked"])
+    }
+
     @MainActor
     func testSendWhileNotSendReadyIsHandedToCoreImmediately() async throws {
         // A send during launch, reconnect or offline goes to Core's
@@ -168,7 +201,7 @@ final class OutgoingSendServiceTests: XCTestCase {
         await coordinator.flush()
 
         XCTAssertTrue(sender.requests.isEmpty)
-        XCTAssertTrue(coordinator.queue.items.isEmpty)
+        XCTAssertTrue(coordinator.queue.currentItems.isEmpty)
     }
 
     @MainActor
@@ -263,7 +296,7 @@ final class OutgoingSendServiceTests: XCTestCase {
 
         // Accepted by Core: the SDK owns it, so it leaves the durable outbox.
         let third = coordinator(RecordingMessageSendService(), store: ComposerLocalStore(fileURL: url))
-        XCTAssertTrue(third.queue.items.isEmpty)
+        XCTAssertTrue(third.queue.currentItems.isEmpty)
     }
 
     @MainActor
@@ -562,7 +595,7 @@ final class OutgoingSendServiceTests: XCTestCase {
             "one row for the reply"
         )
         coordinator.dropConfirmed(matching: snapshot)
-        XCTAssertTrue(coordinator.queue.items.isEmpty)
+        XCTAssertTrue(coordinator.queue.currentItems.isEmpty)
     }
 
     private static func repositoryRoot() -> String {

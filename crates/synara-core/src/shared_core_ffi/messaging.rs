@@ -143,18 +143,12 @@ impl std::error::Error for AgentApprovalSendError {}
 /// Static fail-closed send-text error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SendTextError {
-    Failed { code: String, description: String },
+    Failed {
+        kind: CoreErrorKind,
+        code: String,
+        description: String,
+    },
 }
-
-impl std::fmt::Display for SendTextError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Failed { description, .. } => formatter.write_str(description),
-        }
-    }
-}
-
-impl std::error::Error for SendTextError {}
 
 /// Privacy-safe send-poll write ack from the registered Core command.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -558,6 +552,7 @@ pub(super) fn composer_reply_draft_dto(
 
 pub(super) fn send_text_failed(code: &str, description: &'static str) -> SendTextError {
     SendTextError::Failed {
+        kind: CoreErrorKind::for_code(code),
         code: code.to_owned(),
         description: description.to_owned(),
     }
@@ -577,9 +572,15 @@ pub(super) fn map_send_text_core_error(
     no_session: &'static str,
     error: MatrixIpcError,
 ) -> SendTextError {
+    let wrapped = CoreErrorKind::from_category(error.category);
     match error.diagnostic_id.as_deref() {
         Some(code) if code == no_session => {
             send_text_failed(code, SEND_TEXT_NO_SESSION_DESCRIPTION)
+                .with_kind(CoreErrorKind::NotReady)
+        }
+        // The room is not known yet while a restored session loads rooms.
+        Some(SEND_ROOM_NOT_FOUND_CODE) => {
+            send_text_failed(SEND_ROOM_NOT_FOUND_CODE, SEND_TEXT_OWNER_DESCRIPTION)
         }
         Some(code)
             if code.starts_with("p2-send-text-")
@@ -588,9 +589,11 @@ pub(super) fn map_send_text_core_error(
                 || code.starts_with("v-send.5-")
                 || code.starts_with("p6.1-") =>
         {
-            send_text_failed(code, SEND_TEXT_OWNER_DESCRIPTION)
+            send_text_failed(code, SEND_TEXT_OWNER_DESCRIPTION).with_kind(wrapped)
         }
-        _ => send_text_failed(SEND_TEXT_FAILED_CODE, SEND_TEXT_FAILED_DESCRIPTION),
+        _ => {
+            send_text_failed(SEND_TEXT_FAILED_CODE, SEND_TEXT_FAILED_DESCRIPTION).with_kind(wrapped)
+        }
     }
 }
 

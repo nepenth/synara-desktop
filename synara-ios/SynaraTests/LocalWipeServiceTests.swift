@@ -139,7 +139,7 @@ final class LocalWipeServiceTests: XCTestCase {
         XCTAssertEqual(push.completeRegistrationTeardownCallCount, 1)
         XCTAssertEqual(secureStore.deleteCallCount, 1)
         XCTAssertEqual(drafts.draft(roomID: "!room:matrix.org"), "")
-        XCTAssertTrue(outgoingSends.queue.items.isEmpty)
+        XCTAssertTrue(outgoingSends.queue.currentItems.isEmpty)
         XCTAssertNil(
             LocalUploadPreviewStore.shared.data(for: previewURL),
             "picked attachment bytes must not outlive the account"

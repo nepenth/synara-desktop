@@ -71,6 +71,13 @@
 - iOS: Settings → Security can set up recovery on an account's first device. Set Up Recovery creates the cross-signing identity (asking for your account password when the server wants it), then turns on secret storage and key backup with a recovery passphrase and shows the recovery key once, with a Copy button; the copy stays on this iPhone and expires after two minutes. Security now shows Cross-Signing, and both apps refuse to enrol again over a partial or existing setup. A cancelled or refused password step can be finished later from the same screen.
 - iOS: after restoring an iPhone backup to a new device, signing in no longer fails with "The username or password is incorrect". Synara says it can't open this account's saved data and offers Reset Local Data, which removes only that account's local data and signs in again.
 - Verification: closing a session no longer leaves its verification listeners behind, so a re-opened session no longer handles each verification event twice.
+- iOS memory: the notification extension opens its databases with two connections each and a small page cache, and the app uses the SDK's low-memory database settings, so a busy notification is less likely to hit the extension's memory limit. The app keeps at most 24 MB of decrypted images in memory (desktop 64 MB), drops them when it goes to the background or gets a memory warning, and reloads them from the encrypted media store.
+- The homeserver's device list names the app and its version: `Synara-iOS/2.2.6`, `Synara-iOS-NSE/2.2.6` for notification previews and `Synara-Desktop/2.2.6`. iOS used to send `Synara-Desktop/0.1.0` and desktop its core library's version.
+- iOS: Keychain reads and writes, store setup and local-data wipes no longer run on the threads that drive sync and the UI, including the token save after a refresh, which used to block one of them.
+- Desktop: after "Reset local data" for an account whose store key was lost, signing in works again instead of asking for the same reset every time. An existing key is kept, so the archived data stays readable with it.
+- iOS: Synara's core tells the app whether a failure is worth retrying, needs the user, or is final. A message sent during a brief network failure stays queued and goes out when the connection is back instead of showing as failed.
+- iOS: fixed data races in the connection state (read by the UI while background work updated it), the app delegate's notification handling and the outgoing message queue, which also no longer blocks a background thread on the main thread.
+- Signing out of one account, or closing the session mirror, no longer clears another account's cached images.
 
 ## [2.2.6] - 2026-10-12
 
