@@ -94,7 +94,10 @@ export function SystemNotification() {
                     : 'Notifications are not supported by the system.'}
               </Text>
             ) : (
-              <span>Show desktop notifications when message arrive.</span>
+              <span>
+                Show desktop notifications when messages arrive. Approval requests alert even when
+                this is off.
+              </span>
             )
           }
           after={
