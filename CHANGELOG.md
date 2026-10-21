@@ -86,6 +86,13 @@
 - iOS: fixed data races in the connection state (read by the UI while background work updated it), the app delegate's notification handling and the outgoing message queue, which also no longer blocks a background thread on the main thread.
 - Signing out of one account, or closing the session mirror, no longer clears another account's cached images.
 - Dependencies: update rustls to 0.23.46, rustls-webpki to 0.103.16 and webpki-root-certs to 1.0.10 for RUSTSEC-2026-0346 through RUSTSEC-2026-0349, RUSTSEC-2026-0382 and RUSTSEC-2026-0383. The desktop updater is built without its Windows-only zip extraction, which removes zip 4.6.1 (RUSTSEC-2026-0367 through RUSTSEC-2026-0369).
+- Timeline: a reply to an older message shows the message it answers instead of "Jump to original", on desktop and iOS; Synara fetches the original once (a few at a time per room).
+- Timeline: after approving from a notification or reacting to an older message, opening that message from a link or notification shows the messages around it instead of the message alone. Reacting to or reading back a message that is already loaded no longer asks the server for its context at all, and a link's message window is released when you leave it.
+- Pinned messages: images in the pinned-messages panel load, and refreshing the panel no longer asks the server for each pinned message's reactions.
+- Opening a room you just joined on another device, or one a notification names before it has synced, waits up to 10 seconds for it to arrive instead of failing at once as "not available"; if it still hasn't arrived, the error says to try again.
+- Desktop: a message opened from further back becomes the live room once you have scrolled down to its newest message, as on iOS, instead of keeping Jump to latest on screen. Jump to latest in a room that is already live no longer reloads it, loading older messages and marking a room read no longer send the whole timeline back to the window, and the background safety check sends only a revision number while nothing changed.
+- iOS: after Synara has been in the background, rooms it had cached but not shown are rebuilt on their next open, a room left open is not dropped because of updates that arrived while it was suspended, and messages keep their Redact and Pin actions while the app is suspending. Many updates in one room can no longer push out another room's pending refresh.
+- Threads list: unread counts are read for the 32 newest threads only, and only the 4 most recently listed rooms keep a thread list open, so large thread lists no longer build a cache for every thread.
 
 ## [2.2.6] - 2026-10-12
 

@@ -3738,6 +3738,32 @@ export function NativeTimelinePresenter({
     [roomId, threadRootId, showLatestAfterSend, showThreadTail]
   );
 
+  // An event-focused window (a permalink or an unread backlog outside the
+  // live window) never follows sync, and Follow live cannot promote it. Once
+  // it has paged forward to the room's newest event, the user at its bottom
+  // is at the live edge: hand over to the live provider, as iOS does when it
+  // reaches the bottom. Only a window that started with newer events to load
+  // qualifies; a live-provider stream reports the end from its first frame.
+  const forwardPageState = readyState?.snapshot.pagination.forward;
+  const [forwardPagesNavigation, setForwardPagesNavigation] = useState<typeof input>();
+  useEffect(() => {
+    if (forwardPageState === 'available') setForwardPagesNavigation(input);
+  }, [forwardPageState, input]);
+  const reachedForwardEnd =
+    !threadRootId &&
+    forwardPageState === 'exhausted' &&
+    readyState !== undefined &&
+    readyState.selectedPosition.kind !== 'live_bottom' &&
+    readyState.selectedPosition.kind !== 'thread' &&
+    forwardPagesNavigation === input;
+  const forwardEndHandoffRef = useRef<typeof input | undefined>(undefined);
+  useEffect(() => {
+    if (!reachedForwardEnd || !atLiveBottom || !documentActive) return;
+    if (forwardEndHandoffRef.current === input) return;
+    forwardEndHandoffRef.current = input;
+    jumpToLatest();
+  }, [atLiveBottom, documentActive, input, jumpToLatest, reachedForwardEnd]);
+
   const jumpToLastRead = useCallback(() => {
     if (!pendingLastRead) return;
     const navigation = input;

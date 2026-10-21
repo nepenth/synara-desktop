@@ -40,9 +40,11 @@ pub mod polls;
 pub mod presence;
 #[cfg(feature = "full-app")]
 pub mod raw_content;
-#[cfg(feature = "full-app")]
+// Pre-live harness, compiled for tests only (see `app::timeline`).
+#[cfg(all(test, feature = "full-app"))]
 pub mod receipts;
-#[cfg(feature = "full-app")]
+// Pre-live harness, compiled for tests only (see `app::timeline`).
+#[cfg(all(test, feature = "full-app"))]
 pub mod relations;
 #[cfg(feature = "full-app")]
 pub mod room_directory;
@@ -77,7 +79,8 @@ pub mod threads;
 pub mod timeline;
 #[cfg(feature = "full-app")]
 pub mod typing;
-#[cfg(feature = "full-app")]
+// Pre-live harness, compiled for tests only (see `app::timeline`).
+#[cfg(all(test, feature = "full-app"))]
 pub mod unread;
 #[cfg(feature = "full-app")]
 pub mod user_profile;

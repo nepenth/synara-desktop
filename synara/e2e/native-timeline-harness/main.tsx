@@ -77,6 +77,8 @@ let sequence = polish
 const MEDIA_IMAGE_HANDLE = `timeline-media-${'1a'.repeat(32)}`;
 const MEDIA_VIDEO_HANDLE = `timeline-media-${'2b'.repeat(32)}`;
 const MEDIA_BROKEN_HANDLE = `timeline-media-${'3c'.repeat(32)}`;
+// `eventWindow` serves an unread position from an event-focused window: it
+// cannot follow live, and its first forward page reaches the newest event.
 // Thread fixtures: `failThreadOpen` rejects the first thread open,
 // `failThreadPaginate` the first thread pagination, `threadMore` leaves older
 // replies on the server and `holdThreadReopen` holds every later thread open.
@@ -234,6 +236,9 @@ const emitCandidateUpdate = (body: string, skipRevision = false, remove = false)
     revision: batch.revision,
     rows: remove ? current.rows.slice(1) : [row, ...current.rows.slice(1)],
   });
+  emitBatch(batch);
+};
+const emitBatch = (batch: NativeTimelineViewDeltaBatch) => {
   for (const [id, listener] of eventListeners) {
     if (listener.event === 'matrix-timeline-view-updated') {
       eventCallbacks.get(listener.handler)?.({ event: listener.event, id, payload: batch });
@@ -297,6 +302,11 @@ const openSnapshot = (selectedPosition: NativeTimelinePosition, includeLastRead 
   return { schemaVersion: 1, streamId, position: selectedPosition, snapshot: result };
 };
 update();
+// Pagination and read-state replies carry stream metadata only, as in Core.
+const withoutRows = <S extends { rows: unknown }>(snapshot: S): Omit<S, 'rows'> => {
+  const { rows: _rows, ...metadata } = snapshot;
+  return metadata;
+};
 window.__SYNARA_DESKTOP__ = {
   platform: 'tauri',
   invoke: async <T,>(command: string, args?: Record<string, unknown>): Promise<T> => {
@@ -332,11 +342,10 @@ window.__SYNARA_DESKTOP__ = {
       if (params.get('operationResult') === 'reject')
         throw new Error('Superseded operation rejected');
       if (params.get('operationResult') === 'unavailable') return undefined as T;
-      return (
-        command === 'matrix_timeline_set_read_state'
-          ? { snapshot: oldSnapshot, receiptSent: true }
-          : oldSnapshot
-      ) as T;
+      if (command === 'matrix_timeline_set_read_state')
+        return { view: withoutRows(oldSnapshot), receiptSent: true } as T;
+      if (command === 'matrix_timeline_paginate') return withoutRows(oldSnapshot) as T;
+      return oldSnapshot as T;
     }
     if (command === 'matrix_session_snapshot') return { status: 'logged_in' } as T;
     if (command === 'matrix_edit_message') {
@@ -468,6 +477,8 @@ window.__SYNARA_DESKTOP__ = {
       ) as T;
     }
     if (command === 'matrix_timeline_follow_live') {
+      // An event-focused window cannot be promoted in place.
+      if (params.has('eventWindow')) throw new Error('v-timeline-follow-live-tail-not-loaded');
       if (args?.observedLiveTailEventId !== rows.at(-1)?.eventId) throw new Error('Unseen tail');
       const current = snapshots.get(args?.streamId as string);
       if (!current) throw new Error('Unknown stream');
@@ -482,13 +493,26 @@ window.__SYNARA_DESKTOP__ = {
     if (command === 'matrix_timeline_set_read_state') {
       const current = snapshots.get(request?.streamId ?? '');
       if (!current) throw new Error('Unknown stream');
+      // Core publishes the new read state as a delta before it replies; the
+      // reply carries metadata only. Without a delta channel the fixture
+      // leaves the stream as it was, as a dropped batch would.
+      if (eventListeners.size === 0) return { view: withoutRows(current), receiptSent: true } as T;
       const next = {
         ...current,
         revision: current.revision + 1,
         readState: { ...current.readState, ownReadEventId: request?.observedLiveTailEventId },
       };
       snapshots.set(request?.streamId ?? '', next);
-      return { snapshot: next, receiptSent: true } as T;
+      emitBatch({
+        schemaVersion: 1,
+        sessionGeneration: next.sessionGeneration,
+        roomId: next.roomId,
+        streamId: request?.streamId ?? '',
+        revision: next.revision,
+        ops: [],
+        readState: next.readState,
+      });
+      return { view: withoutRows(next), receiptSent: true } as T;
     }
     if (command === 'matrix_timeline_jump_latest') {
       const opened = openSnapshot({ kind: 'live_bottom' });
@@ -513,7 +537,29 @@ window.__SYNARA_DESKTOP__ = {
         failThreadPaginate = false;
         throw new Error('Thread history is temporarily unavailable');
       }
-      return snapshots.get(request?.streamId ?? '') as T;
+      const current = snapshots.get(request?.streamId ?? '');
+      const direction = (args?.request as { direction?: string } | undefined)?.direction;
+      if (current && params.has('eventWindow') && direction === 'forwards') {
+        // The event-focused window reached the room's newest event; Core
+        // publishes the page state as its own batch before replying.
+        const next = {
+          ...current,
+          revision: current.revision + 1,
+          pagination: { ...current.pagination, forward: 'exhausted' as const },
+        };
+        snapshots.set(request?.streamId ?? '', next);
+        emitBatch({
+          schemaVersion: 1,
+          sessionGeneration: next.sessionGeneration,
+          roomId: next.roomId,
+          streamId: request?.streamId ?? '',
+          revision: next.revision,
+          ops: [],
+          pagination: next.pagination,
+        });
+        return withoutRows(next) as T;
+      }
+      return (current ? withoutRows(current) : undefined) as T;
     }
     if (command === 'matrix_media_text_preview') {
       return { text: FILE_MD_BYTES } as T;

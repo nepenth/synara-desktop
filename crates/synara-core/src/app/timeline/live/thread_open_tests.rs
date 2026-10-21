@@ -503,6 +503,32 @@ async fn reacting_to_a_thread_reply_uses_the_thread_timeline() {
     .expect("toggle should finish")
     .expect("a thread reply must be reactable from the thread view");
     assert_eq!(added.mutation, NativeReactionMutation::Added);
+    // The readback reads the thread timeline in place (no `/context`), so it
+    // returns before the send queue has sent the annotation. Wait for it.
+    timeout(Duration::from_secs(8), async {
+        loop {
+            let sent = server
+                .server()
+                .received_requests()
+                .await
+                .unwrap_or_default()
+                .iter()
+                .any(|request| request.url.path().contains("/send/m.reaction/"));
+            if sent {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the queued annotation is sent");
+    assert!(server
+        .server()
+        .received_requests()
+        .await
+        .unwrap_or_default()
+        .iter()
+        .all(|request| !request.url.path().contains("/context/")));
 }
 
 #[tokio::test]

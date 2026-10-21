@@ -517,18 +517,32 @@ test('native timeline open maps a thread root to a distinct Core position', () =
   assert.match(source, /positionKind === 'thread' && threadRootEventId/);
 });
 
-test('setReadState keeps the current snapshot when a successful mark_read readback is stale', () => {
+test('read-state and pagination replies never replace the rows the deltas built', () => {
   const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
   const setReadState = source
     .split('const setReadState = useCallback(')[1]
-    ?.split('const jumpLatest = useCallback')[0];
+    ?.split('const followLive = useCallback')[0];
+  const paginate = source
+    .split('const paginate = useCallback(')[1]
+    ?.split('const setReadState = useCallback(')[0];
   assert.ok(setReadState);
-  assert.match(setReadState, /isNativeTimelineReadbackStale\(snapshotRef\.current, next\)/);
-  assert.match(setReadState, /if \(acceptSnapshot\(next\)\) \{\s*return;/);
-  assert.doesNotMatch(
+  assert.ok(paginate);
+  // Core replies with stream metadata only; rows and state arrive as deltas.
+  assert.match(
     setReadState,
-    /if \(!result\.available \|\| !result\.value \|\| !acceptSnapshot\(result\.value\.snapshot\)\)/
+    /isSameNativeTimelineStream\(snapshotRef\.current, result\.value\.view\)/
   );
+  assert.match(paginate, /isSameNativeTimelineStream\(snapshotRef\.current, result\.value\)/);
+  assert.doesNotMatch(setReadState, /acceptSnapshot\(/);
+  assert.doesNotMatch(paginate, /acceptSnapshot\(/);
+});
+
+test('the safety-net poll probes the revision and a gap resync fetches the snapshot', () => {
+  const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
+  assert.match(source, /void pollSnapshot\(true\)/);
+  assert.match(source, /void pollSnapshot\(false\)/);
+  assert.match(source, /\{ streamId, knownRevision \}/);
+  assert.match(source, /if \(!\('rows' in result\.value\)\)/);
 });
 
 test('identical snapshots are recognised so polling does not re-render rows', () => {

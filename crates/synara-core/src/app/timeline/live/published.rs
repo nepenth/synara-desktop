@@ -167,6 +167,13 @@ impl PublishedView {
         self.lock().action_authority
     }
 
+    /// The published rows and metadata, unless the stream is still at
+    /// `known_revision`: a presenter that applied every batch up to it has
+    /// them already, so the rows are not copied again.
+    pub(super) fn snapshot_after(&self, known_revision: u64) -> Option<TimelineViewSnapshot> {
+        (self.emitter.revision() != known_revision).then(|| self.snapshot())
+    }
+
     /// The published rows and metadata at one revision.
     pub(super) fn snapshot(&self) -> TimelineViewSnapshot {
         let state = self.lock();

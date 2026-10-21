@@ -14,13 +14,15 @@ use super::view::{TimelineViewPosition, TimelineViewSnapshot};
 
 /// Version of the bounded native timeline-open contract.
 pub const NATIVE_TIMELINE_OPEN_SCHEMA_VERSION: u32 = 1;
-pub const NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS: u64 = 10 * 60 * 1000;
 
 /// Requested initial position for one native timeline view.
 ///
 /// `Normal` is the native owner route for an ordinary room open. It resolves
-/// shared unread state before considering the optional, UI-held restore hint;
-/// the hint is neither sync state nor a server-side viewport command.
+/// shared unread state first; the optional, UI-held hint only says whether the
+/// user left the room at the bottom of an unchanged live tail. A restored
+/// history anchor stays the presenter's own concern (it parks rows of the
+/// live window it renders), so Core never opens an event-focused window for
+/// it. The hint is neither sync state nor a server-side viewport command.
 #[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]

@@ -323,6 +323,23 @@ test('superseded last-read open retains recovery and cannot move the newer focus
   await expect.poll(() => activeStreamCount(page)).toBe(1);
 });
 
+test('an event-focused window that pages forward to the newest event hands over to the live room', async ({
+  page,
+}) => {
+  await open(page, 'unread&nativeEvents=1&eventWindow=1');
+  await page.locator('#native-timeline').hover();
+  await expect
+    .poll(async () => {
+      await page.mouse.wheel(0, 4000);
+      return commandCount(page, 'matrix_timeline_jump_latest');
+    })
+    .toBe(1);
+  expect(await commandCount(page, 'matrix_timeline_paginate')).toBeGreaterThan(0);
+  await expect(page.getByRole('button', { name: 'Jump to latest', exact: true })).toBeHidden();
+  await page.waitForTimeout(300);
+  expect(await commandCount(page, 'matrix_timeline_jump_latest')).toBe(1);
+});
+
 test('a send clears a missing last-read action after passive promotion retained it', async ({
   page,
 }) => {

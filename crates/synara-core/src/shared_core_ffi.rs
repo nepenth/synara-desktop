@@ -196,7 +196,8 @@ const SESSION_SUSPENDED_DESCRIPTION: &str =
     "The session is paused while the app is in the background.";
 const TIMELINE_VIEW_POLL_FAILED_CODE: &str = "p4-s14-timeline-view-poll-failed";
 const TIMELINE_VIEW_POLL_FAILED_DESCRIPTION: &str = "Timeline view updates could not be polled.";
-const TIMELINE_VIEW_UPDATE_QUEUE_CAP: usize = 32;
+/// Streams with an unpolled update; reached only when nobody polls.
+const TIMELINE_VIEW_DIRTY_STREAM_CAP: usize = 256;
 const OWNER_UPDATE_POLL_FAILED_CODE: &str = "p4-s17-owner-update-poll-failed";
 const OWNER_UPDATE_POLL_FAILED_DESCRIPTION: &str = "Owner updates could not be polled.";
 const OWNER_UPDATE_QUEUE_CAP: usize = 32;
@@ -654,7 +655,7 @@ pub struct SharedCore {
     sync_lifecycle: tokio::sync::Mutex<()>,
     /// Closed between `stop_sync` and the next `start_sync` (iOS suspension).
     suspension: SessionSuspension,
-    timeline_view_updates: Arc<Mutex<Vec<TimelineViewDeltaBatch>>>,
+    timeline_view_updates: Arc<Mutex<timeline_view::TimelineViewDirtyStreams>>,
     owner_updates: Arc<Mutex<Vec<OwnerUpdateDto>>>,
     room_list_updates: Arc<Mutex<Vec<RoomListUpdateDto>>>,
     room_list_live: Arc<Mutex<Option<NativeRoomListOwner>>>,

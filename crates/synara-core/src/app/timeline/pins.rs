@@ -14,10 +14,7 @@ use serde::{Deserialize, Serialize};
 use tokio::time::timeout;
 
 use super::media::TimelineMediaRegistry;
-use super::reactions::{
-    annotation_from_timeline_event, fill_sender_event_id, recover_missing_annotation_ids,
-    RecoveredAnnotation,
-};
+use super::reactions::{annotation_from_timeline_event, RecoveredAnnotation};
 use super::view::{
     project_message_type_and_media, TimelineMediaHandle, TimelineReaction, TimelineReactionSender,
 };
@@ -83,24 +80,10 @@ pub async fn snapshot_pinned_events(
         .collect();
     let events = wait_for_pinned_cache_events(&cache, &event_ids).await?;
     let own_user_id = room.client().user_id().map(|user_id| user_id.to_string());
-    let mut items = project_pinned_items(&event_ids, &events, own_user_id.as_deref(), media);
-    let targets: HashSet<String> = event_ids.iter().cloned().collect();
-    if !targets.is_empty() {
-        let recovered = recover_missing_annotation_ids(room, &targets, true).await;
-        for item in &mut items {
-            for reaction in &mut item.reactions {
-                for sender in &mut reaction.senders {
-                    fill_sender_event_id(
-                        &item.event_id,
-                        &reaction.key,
-                        &sender.user_id,
-                        &mut sender.reaction_event_id,
-                        &recovered,
-                    );
-                }
-            }
-        }
-    }
+    // Every sender already carries its annotation's event id: the reactions
+    // are projected from the annotation events themselves, so no relations
+    // lookup can add one.
+    let items = project_pinned_items(&event_ids, &events, own_user_id.as_deref(), media);
     Ok(PinnedEventsSnapshot {
         schema_version: PINNED_EVENTS_SCHEMA_VERSION,
         room_id: room.room_id().to_string(),
@@ -265,7 +248,9 @@ mod tests {
         let source = include_str!("pins.rs");
         assert!(source.contains("pinned_events("));
         assert!(source.contains("PinnedEventsCache"));
-        assert!(source.contains("recover_missing_annotation_ids"));
+        // Reactions come from the annotation events themselves; no
+        // relations recovery (and no network page) runs per pinned event.
+        assert!(!source.contains(concat!("recover_missing", "_annotation_ids")));
         let invented_focus = concat!("TimelineFocus::", "PinnedEvents");
         assert!(!source.contains(invented_focus));
     }

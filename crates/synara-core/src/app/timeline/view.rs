@@ -53,6 +53,9 @@ pub enum TimelineViewPosition {
     Focused {
         target_event_id: EventId,
     },
+    /// Wire-compatible placement Core no longer selects: a normal open lands
+    /// on the live provider at the unread frontier or the bottom, and the
+    /// presenter restores its own parked rows within that window.
     Restored {
         anchor_event_id: Option<EventId>,
     },
@@ -1381,6 +1384,51 @@ pub struct TimelineViewSnapshot {
     pub pinned_event_ids: Vec<EventId>,
     pub rows: Vec<TimelineViewRow>,
     pub capabilities: TimelineViewCapabilities,
+}
+
+/// A [`TimelineViewSnapshot`] without its rows: what a command's readback
+/// needs when the rows already reach the presenter as delta batches.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimelineViewMetadata {
+    pub schema_version: u32,
+    pub session_generation: u64,
+    pub room_id: RoomId,
+    pub revision: u64,
+    pub position: TimelineViewPosition,
+    pub pagination: TimelinePaginationState,
+    pub read_state: TimelineReadState,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pinned_event_ids: Vec<EventId>,
+    pub capabilities: TimelineViewCapabilities,
+}
+
+impl From<TimelineViewSnapshot> for TimelineViewMetadata {
+    fn from(snapshot: TimelineViewSnapshot) -> Self {
+        let TimelineViewSnapshot {
+            schema_version,
+            session_generation,
+            room_id,
+            revision,
+            position,
+            pagination,
+            read_state,
+            pinned_event_ids,
+            rows: _,
+            capabilities,
+        } = snapshot;
+        Self {
+            schema_version,
+            session_generation,
+            room_id,
+            revision,
+            position,
+            pagination,
+            read_state,
+            pinned_event_ids,
+            capabilities,
+        }
+    }
 }
 
 /// One ordered native update to a `TimelineViewSnapshot` row list. This mirrors

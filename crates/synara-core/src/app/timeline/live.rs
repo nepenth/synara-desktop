@@ -98,7 +98,7 @@ use super::{
     TimelinePageState, TimelinePaginationState, TimelineReadState, TimelineRoomActionAuthority,
     TimelineViewPosition, TimelineViewSnapshot, TimelineViewUpdateEmit, UtdIndex, UtdPhase,
     UtdReasonCode, ViewDeltaEmitter, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
-    NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+    NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
 };
 
 #[cfg(test)]
@@ -106,6 +106,8 @@ mod agent_approval_history_overlay_tests;
 mod approval_history;
 #[cfg(test)]
 mod approval_history_tests;
+#[cfg(test)]
+mod cache_paths_tests;
 #[cfg(test)]
 mod eviction_tests;
 #[cfg(test)]
@@ -126,6 +128,7 @@ use approval_history::{ApprovalHistory, HistoryProtection};
 mod approval_inbox;
 mod published;
 mod recency;
+mod reply_details;
 use approval_inbox::ApprovalInboxOwner;
 pub use approval_inbox::{
     NativeAgentApprovalInboxCoverage, NativeAgentApprovalInboxItem,
@@ -133,6 +136,7 @@ pub use approval_inbox::{
 };
 use published::{PublishedView, PublishedViewInit, SettleRequest, ViewChange, ViewFocus};
 use recency::{RecencyMap, UseStamp};
+use reply_details::ReplyDetailFetches;
 
 const PAGINATION_BATCH_SIZE: u16 = 30;
 const REDACTED_PLACEHOLDER: &str = "Message removed";
@@ -143,6 +147,14 @@ const MAX_FOCUSED_EVENT_READBACKS: usize = 256;
 /// timeline with its own items, so the cache is far smaller than the
 /// decision-dedup window above.
 const MAX_FOCUSED_TIMELINES: usize = 32;
+/// Rooms whose thread-list service stays open between list reads.
+const MAX_THREAD_LIST_ROOMS: usize = 4;
+/// Threads per list read that get an unread count, newest first. Each count
+/// creates an SDK thread event cache that is never evicted.
+const MAX_THREAD_UNREAD_COUNTS: usize = 32;
+const THREAD_UNREAD_COUNT_CONCURRENCY: usize = 4;
+/// Rooms whose pin-panel media handles stay resolvable.
+const MAX_PIN_MEDIA_ROOMS: usize = 4;
 /// Live room timelines kept after their last use. Rooms with an open view
 /// stream are never evicted, so this bounds only idle rooms.
 const MAX_LIVE_TIMELINES: usize = 16;
@@ -874,7 +886,9 @@ pub struct NativeTimelineOwner {
     approval_decisions: Arc<std::sync::Mutex<ApprovalDecisionRegistry>>,
     approval_inbox: tokio::sync::Mutex<ApprovalInboxOwner>,
     drafts: tokio::sync::Mutex<ComposerDraftRegistry>,
-    thread_lists: tokio::sync::Mutex<HashMap<String, ThreadListService>>,
+    /// Thread-list services of the most recently listed rooms. Each one runs
+    /// an event-cache listener task, which ends when it is evicted.
+    thread_lists: tokio::sync::Mutex<RecencyMap<String, ThreadListService>>,
     thread_index: tokio::sync::Mutex<ThreadIndex>,
     /// Shared with the per-send followers that record the SDK outcome.
     sends: Arc<tokio::sync::Mutex<SendQueue>>,
@@ -888,7 +902,9 @@ pub struct NativeTimelineOwner {
     /// not. `AlreadyDecided` retries drain this map so a failed history write
     /// is not stranded by completed-decision memory.
     approval_history_unconfirmed: Mutex<HashMap<(String, String), SynaraAgentApprovalHistoryItem>>,
-    pin_media: AsyncMutex<TimelineMediaRegistry>,
+    /// Media handles of each room's latest pin-panel snapshot, for the few
+    /// most recently read rooms. Each snapshot keeps only its current pins.
+    pin_media: Mutex<RecencyMap<String, TimelineMediaRegistry>>,
 }
 
 impl NativeTimelineOwner {
@@ -913,14 +929,14 @@ impl NativeTimelineOwner {
                 approval_history,
             )),
             drafts: tokio::sync::Mutex::new(ComposerDraftRegistry::new()),
-            thread_lists: tokio::sync::Mutex::new(HashMap::new()),
+            thread_lists: tokio::sync::Mutex::new(RecencyMap::new(MAX_THREAD_LIST_ROOMS)),
             thread_index: tokio::sync::Mutex::new(ThreadIndex::new(session_generation)),
             sends: Arc::new(tokio::sync::Mutex::new(SendQueue::new(session_generation))),
             send_enqueue: tokio::sync::Mutex::new(()),
             approval_history_mutation: tokio::sync::Mutex::new(()),
             approval_history_pending: Mutex::new(None),
             approval_history_unconfirmed: Mutex::new(HashMap::new()),
-            pin_media: AsyncMutex::new(TimelineMediaRegistry::new(session_generation, "pinned")),
+            pin_media: Mutex::new(RecencyMap::new(MAX_PIN_MEDIA_ROOMS)),
         }
     }
 
@@ -1082,12 +1098,20 @@ impl NativeTimelineOwner {
             })
     }
 
-    /// Resolve an opaque media handle of any open view stream. Never waits
-    /// for the timeline registry.
+    /// Resolve an opaque media handle of any open view stream, else of a
+    /// pin-panel snapshot. Never waits for the timeline registry.
     pub async fn resolve_media(&self, handle_id: &str) -> Option<TimelineMediaSource> {
-        self.media_index
+        if let Some(source) = self
+            .media_index
             .resolve(self.session_generation, handle_id)
             .await
+        {
+            return Some(source);
+        }
+        self.pin_media_rooms()
+            .iter()
+            .filter(|(_, media)| media.session_generation() == self.session_generation)
+            .find_map(|(_, media)| media.resolve(handle_id).cloned())
     }
 
     pub async fn event_readback(
@@ -1330,26 +1354,22 @@ impl NativeTimelineOwner {
         // another event with similar text. The timeout owns builder, initial
         // subscribe, and update wait—not just the final stream read.
         let (item, plan, own_decision) = timeout(Duration::from_secs(3), async {
-            let timeline = TimelineBuilder::new(&room)
-                .with_focus(TimelineFocus::Event {
-                    target: event_id.clone(),
-                    num_context_events: 0,
-                    thread_mode: permalink_event_thread_mode(),
-                })
-                .build()
+            // A timeline that already renders the prompt (the open room, a
+            // thread, a permalink window) answers without `/context`; else
+            // its focused window is built at the one permalink context size.
+            let (timeline, _) = Slots::Shared(self)
+                .rendered_event(&room, &room_id, &event_id)
                 .await
-                .map_err(|_| "v-crypto.6-event-open-failed")?;
-            let (mut items, mut updates) = timeline.subscribe().await;
+                .ok_or("v-crypto.6-event-open-failed")?;
+            let (_, mut updates) = timeline.subscribe().await;
             loop {
-                let found = items.iter().find_map(|raw| {
-                    let item = project_item(raw, self.client.user_id())?;
-                    (item.event_id == event_id.as_str()).then(|| {
-                        (
-                            item,
-                            own_recorded_approval_decision(raw, self.client.user_id()),
-                        )
-                    })
-                });
+                let found = find_rendered_item(std::slice::from_ref(&timeline), &event_id)
+                    .await
+                    .and_then(|(_, raw)| {
+                        let item = project_item(&raw, self.client.user_id())?;
+                        let own = own_recorded_approval_decision(&raw, self.client.user_id());
+                        Some((item, own))
+                    });
                 if let Some((item, own_decision)) = found {
                     match plan_agent_approval(
                         &request.action_id,
@@ -1367,13 +1387,9 @@ impl NativeTimelineOwner {
                         Err(_) => {}
                     }
                 }
-                match updates.next().await {
-                    Some(diffs) => {
-                        for diff in diffs {
-                            diff.apply(&mut items);
-                        }
-                    }
-                    None => break Err("v-crypto.6-event-not-found"),
+                // Any update may be the decryption; the next pass re-reads.
+                if updates.next().await.is_none() {
+                    break Err("v-crypto.6-event-not-found");
                 }
             }
         })
@@ -1537,6 +1553,24 @@ impl NativeTimelineOwner {
         .await
     }
 
+    /// Wait, bounded, for a room this client does not know yet: a room just
+    /// joined or created on another device, or a notification that outran
+    /// sync. The caller has already subscribed the room, so the next sync
+    /// response brings it in. A known room returns at once.
+    ///
+    /// Fails with the retryable `v-timeline-room-not-yet-synced` when the
+    /// room does not arrive within `bound`; an invalid id fails as before.
+    pub async fn await_room(&self, room_id: &str, bound: Duration) -> Result<(), &'static str> {
+        let room_id = parse_room_id(room_id)?;
+        if self.client.get_room(&room_id).is_some() {
+            return Ok(());
+        }
+        timeout(bound, self.client.await_room_remote_echo(&room_id))
+            .await
+            .map(|_| ())
+            .map_err(|_| "v-timeline-room-not-yet-synced")
+    }
+
     /// The build gate for one room's live timeline.
     fn live_build_gate(&self, room_id: &str) -> Arc<AsyncMutex<()>> {
         let mut builds = self
@@ -1629,7 +1663,13 @@ impl NativeTimelineOwner {
         &self,
         request: NativeTimelineJumpLatestRequest,
     ) -> Result<NativeTimelineOpenReadback, &'static str> {
-        let room_id = self.registry.lock().await.jump_latest_room(&request)?;
+        let room_id = {
+            let registry = self.registry.lock().await;
+            if let Some(readback) = registry.already_live_readback(&request)? {
+                return Ok(readback);
+            }
+            registry.jump_latest_room(&request)?
+        };
         let opened = self
             .open_at(NativeTimelineOpenRequest {
                 room_id,
@@ -1645,11 +1685,29 @@ impl NativeTimelineOwner {
         Ok(opened)
     }
 
+    /// The Client's stores reopened after a suspension (iOS background).
+    /// See [`NativeTimelineRegistry::resumed`].
+    pub async fn resumed(&self) {
+        self.registry.lock().await.resumed();
+    }
+
     /// The published rows and metadata of one stream. The registry lock
     /// covers only the lookup; the snapshot copies published rows.
     pub async fn snapshot(&self, stream_id: &str) -> Result<TimelineViewSnapshot, &'static str> {
         let view = self.registry.lock().await.published_view(stream_id)?;
         Ok(view.snapshot())
+    }
+
+    /// A safety-net probe: the stream's snapshot, or `None` while it is
+    /// still at `known_revision` (no rows are copied). Reads the stream like
+    /// [`Self::snapshot`], so a polled stream stays claimed.
+    pub async fn snapshot_after(
+        &self,
+        stream_id: &str,
+        known_revision: u64,
+    ) -> Result<Option<TimelineViewSnapshot>, &'static str> {
+        let view = self.registry.lock().await.published_view(stream_id)?;
+        Ok(view.snapshot_after(known_revision))
     }
 
     /// Request SDK-owned decryption on this exact open view. Completion only
@@ -2183,8 +2241,23 @@ impl NativeTimelineOwner {
             .client
             .get_room(&room_id)
             .ok_or("v-timeline-pinned-room-not-found")?;
-        let mut media = self.pin_media.lock().await;
-        snapshot_pinned_events(&room, &mut media).await
+        // A fresh registry per snapshot holds exactly the current pins. Handles
+        // derive from the media source, so a pin kept across snapshots keeps
+        // its handle, and the previous snapshot's handles resolve until this
+        // one replaces them.
+        let mut media =
+            TimelineMediaRegistry::new(self.session_generation, format!("pinned:{room_id}"));
+        let snapshot = snapshot_pinned_events(&room, &mut media).await?;
+        self.pin_media_rooms().insert(room_id.to_string(), media);
+        Ok(snapshot)
+    }
+
+    fn pin_media_rooms(
+        &self,
+    ) -> std::sync::MutexGuard<'_, RecencyMap<String, TimelineMediaRegistry>> {
+        self.pin_media
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     async fn set_pinned(
@@ -2536,8 +2609,12 @@ impl NativeTimelineOwner {
                     .get_room(&room_id)
                     .ok_or("v-thread-list-room-not-found")?;
                 let mut lists = self.thread_lists.lock().await;
-                if !lists.contains_key(&room_id_string) {
-                    lists.insert(room_id_string.clone(), room.thread_list_service());
+                if lists.get(&room_id_string).is_none() {
+                    if let Some(evicted) =
+                        lists.insert(room_id_string.clone(), room.thread_list_service())
+                    {
+                        self.thread_index.lock().await.clear_room(&evicted);
+                    }
                 }
                 let service = lists
                     .get(&room_id_string)
@@ -2570,9 +2647,25 @@ impl NativeTimelineOwner {
                     rebuild_thread_index(&mut index, &room_id_string, projections);
                 drop(index);
                 drop(lists);
-                for summary in &mut threads {
-                    summary.unread_count =
-                        thread_unread_count(&self.client, &room_id, &summary.root_event_id).await;
+                // Each count opens (and the SDK keeps for the session) one
+                // thread event cache. Count only the newest threads, a few
+                // at a time; older ones report no count.
+                let mut roots = Vec::with_capacity(MAX_THREAD_UNREAD_COUNTS);
+                for summary in threads.iter().take(MAX_THREAD_UNREAD_COUNTS) {
+                    roots.push(summary.root_event_id.clone());
+                }
+                let client = self.client.clone();
+                let counts: Vec<Option<u32>> = stream::iter(roots)
+                    .map(move |root| {
+                        let client = client.clone();
+                        let room_id = room_id.clone();
+                        async move { thread_unread_count(&client, &room_id, &root).await }
+                    })
+                    .buffered(THREAD_UNREAD_COUNT_CONCURRENCY)
+                    .collect()
+                    .await;
+                for (summary, count) in threads.iter_mut().zip(counts) {
+                    summary.unread_count = count;
                 }
                 Ok(NativeThreadListSnapshot {
                     schema_version: crate::app::threads::NATIVE_THREAD_LIST_SCHEMA_VERSION,
@@ -2627,6 +2720,34 @@ impl NativeTimelineRegistry {
             };
             self.entries.remove(&room_id);
         }
+    }
+
+    /// Recover from a suspension, during which the stores were closed.
+    ///
+    /// - Unread batches emitted while suspended do not count toward the
+    ///   unclaimed-stream TTL: the consumer could not read them, and the
+    ///   first batch after resume must not expire the stream it shows.
+    /// - Cached timelines no open stream uses are dropped. An SDK timeline
+    ///   whose event-cache listener lagged while its store reads failed
+    ///   stops for good and would be handed to every later open; the next
+    ///   open builds a fresh one from the event cache instead.
+    pub fn resumed(&mut self) {
+        for stream in self.view_streams.values() {
+            if !stream.view.is_expired() {
+                stream.view.claim();
+            }
+        }
+        let open: Vec<Arc<Timeline>> = self
+            .view_streams
+            .values()
+            .map(|stream| stream.timeline.clone())
+            .collect();
+        let in_use = |timeline: &Arc<Timeline>| open.iter().any(|open| Arc::ptr_eq(open, timeline));
+        let streams = &self.view_streams;
+        self.entries
+            .retain(|room_id, _| streams.values().any(|stream| &stream.room_id == room_id));
+        self.focused_entries.retain(|_, timeline| in_use(timeline));
+        self.thread_entries.retain(|_, timeline| in_use(timeline));
     }
 
     /// Close the least recently used view streams so a new one fits under
@@ -2907,12 +3028,15 @@ impl NativeTimelineRegistry {
     }
 
     pub fn close_view(&mut self, request: NativeTimelineCloseRequest) -> bool {
-        let removed = self.view_streams.remove(&request.stream_id).is_some();
+        let removed = self.view_streams.remove(&request.stream_id);
         self.media_index.remove(&request.stream_id);
         if let Some(task) = self.view_update_tasks.remove(&request.stream_id) {
             task.abort();
         }
-        removed
+        if let Some(stream) = &removed {
+            self.forget_idle_focused(&stream.timeline);
+        }
+        removed.is_some()
     }
 
     /// The room of the stream Jump to latest replaces.
@@ -2929,6 +3053,34 @@ impl NativeTimelineRegistry {
             .clone())
     }
 
+    /// The readback of a stream that already shows the live bottom of the
+    /// room's live provider. Jump to latest keeps it (same stream id, its
+    /// published rows) instead of closing it and projecting a new stream.
+    fn already_live_readback(
+        &self,
+        request: &NativeTimelineJumpLatestRequest,
+    ) -> Result<Option<NativeTimelineOpenReadback>, &'static str> {
+        let stream = self
+            .view_streams
+            .get(&request.stream_id)
+            .ok_or("v-timeline-view-not-open")?
+            .claim()?;
+        let position = stream.view.position();
+        let on_live_provider = self
+            .cached_live(&stream.room_id)
+            .is_some_and(|live| Arc::ptr_eq(&live, &stream.timeline));
+        if position != TimelineViewPosition::LiveBottom || !on_live_provider {
+            return Ok(None);
+        }
+        Ok(Some(NativeTimelineOpenReadback {
+            schema_version: NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
+            stream_id: request.stream_id.clone(),
+            position,
+            snapshot: stream.view.snapshot(),
+            focus_route: None,
+        }))
+    }
+
     /// Rebind an opened stream to the live bottom and return a fresh stream
     /// ownership packet. The previous stream is closed only once the new one
     /// is open, so a failed open leaves the caller its old stream; on success
@@ -2939,6 +3091,9 @@ impl NativeTimelineRegistry {
         client: &Client,
         request: NativeTimelineJumpLatestRequest,
     ) -> Result<NativeTimelineOpenReadback, &'static str> {
+        if let Some(readback) = self.already_live_readback(&request)? {
+            return Ok(readback);
+        }
         let room_id = self.jump_latest_room(&request)?;
         let opened = self
             .open_at(
@@ -3033,10 +3188,20 @@ impl NativeTimelineRegistry {
     /// Every timeline of a room that may render a reaction target: the live
     /// provider first, then view streams, threads and focused windows.
     fn reaction_candidates(&self, room_id: &str) -> Result<Vec<Arc<Timeline>>, &'static str> {
-        let live = self
+        if !self.entries.contains_key(room_id) {
+            return Err("v-send.2-reaction-timeline-not-open");
+        }
+        Ok(self.room_timelines(room_id))
+    }
+
+    /// Every timeline of a room the registry holds, without building one:
+    /// the cached live provider first (marked as used), then view streams,
+    /// threads and event-focused windows. Each timeline once.
+    fn room_timelines(&self, room_id: &str) -> Vec<Arc<Timeline>> {
+        let mut timelines: Vec<Arc<Timeline>> = Vec::new();
+        let candidates = self
             .cached_live(room_id)
-            .ok_or("v-send.2-reaction-timeline-not-open")?;
-        Ok(std::iter::once(live)
+            .into_iter()
             .chain(
                 self.view_streams
                     .values()
@@ -3049,8 +3214,28 @@ impl NativeTimelineRegistry {
                     .chain(self.focused_entries.iter())
                     .filter(|((entry_room_id, _), _)| entry_room_id == room_id)
                     .map(|(_, timeline)| timeline.clone()),
-            )
-            .collect())
+            );
+        for timeline in candidates {
+            if !timelines.iter().any(|known| Arc::ptr_eq(known, &timeline)) {
+                timelines.push(timeline);
+            }
+        }
+        timelines
+    }
+
+    /// Drop an event-focused window no open stream presents any more. The
+    /// SDK keeps the event's cache, so reopening the permalink rebuilds the
+    /// window from memory without another `/context` request.
+    fn forget_idle_focused(&mut self, timeline: &Arc<Timeline>) {
+        if self
+            .view_streams
+            .values()
+            .any(|stream| Arc::ptr_eq(&stream.timeline, timeline))
+        {
+            return;
+        }
+        self.focused_entries
+            .retain(|_, focused| !Arc::ptr_eq(focused, timeline));
     }
 
     /// See [`ensure_reaction_in`].
@@ -3297,19 +3482,28 @@ impl Slots<'_> {
             .await
     }
 
+    /// Every timeline of `room_id` the registry already holds. Never builds.
+    async fn room_timelines(&mut self, room_id: &str) -> Vec<Arc<Timeline>> {
+        self.with(|registry| registry.room_timelines(room_id)).await
+    }
+
     /// Build an event-focused timeline (`/context`) outside the registry lock
     /// and install it. `None` when the SDK cannot build it in time.
+    ///
+    /// Always [`FOCUSED_CONTEXT_EVENT_COUNT`]: the SDK memoizes one cache
+    /// per event and thread mode whatever context size first built it, and
+    /// never evicts it, so a smaller window here would be the one every later
+    /// permalink of that event reuses.
     async fn build_focused(
         &mut self,
         room: &Room,
         room_id: &str,
         event_id: &OwnedEventId,
-        num_context_events: u16,
     ) -> Option<Arc<Timeline>> {
         let build = TimelineBuilder::new(room)
             .with_focus(TimelineFocus::Event {
                 target: event_id.clone(),
-                num_context_events,
+                num_context_events: FOCUSED_CONTEXT_EVENT_COUNT,
                 thread_mode: permalink_event_thread_mode(),
             })
             .build();
@@ -3326,15 +3520,28 @@ impl Slots<'_> {
         room: &Room,
         room_id: &str,
         event_id: &OwnedEventId,
-        num_context_events: u16,
     ) -> Option<Arc<Timeline>> {
         match self.cached_focused(room_id, event_id).await {
             Some(timeline) => Some(timeline),
-            None => {
-                self.build_focused(room, room_id, event_id, num_context_events)
-                    .await
-            }
+            None => self.build_focused(room, room_id, event_id).await,
         }
+    }
+
+    /// The rendered item for `event_id` in a timeline the registry already
+    /// holds, else in the event's focused window (built on a miss). `None`
+    /// when no window can be built or none renders the event.
+    async fn rendered_event(
+        &mut self,
+        room: &Room,
+        room_id: &str,
+        event_id: &OwnedEventId,
+    ) -> Option<(Arc<Timeline>, Arc<SdkTimelineItem>)> {
+        let open = self.room_timelines(room_id).await;
+        if let Some(found) = find_rendered_item(&open, event_id).await {
+            return Some(found);
+        }
+        let timeline = self.focused(room, room_id, event_id).await?;
+        find_rendered_item(std::slice::from_ref(&timeline), event_id).await
     }
 
     async fn forget_focused(&mut self, room_id: &str, event_id: &EventId) {
@@ -3502,46 +3709,17 @@ async fn open_view(
                 || unread_frontier
                     .as_deref()
                     .is_some_and(|anchor| Some(anchor) != current_live_tail.as_deref());
-            let now_ms = unix_time_ms();
+            // Both available and unavailable unread markers keep this live
+            // provider. The presenter restores only an available row; an
+            // unavailable target remains an explicit user action.
             let selected_position = resolve_normal_open_position(
                 has_unread,
                 unread_frontier,
                 current_live_tail.as_deref(),
-                now_ms,
                 viewport,
-            )?;
-            match selected_position {
-                TimelineViewPosition::LiveBottom => {
-                    let pagination = live_pagination_state(&live).await;
-                    (live, TimelineViewPosition::LiveBottom, pagination)
-                }
-                TimelineViewPosition::Unread { .. } => {
-                    // Both available and unavailable markers keep this live
-                    // provider. The presenter restores only an available row;
-                    // an unavailable target remains an explicit user action.
-                    let pagination = live_pagination_state(&live).await;
-                    (live, selected_position, pagination)
-                }
-                TimelineViewPosition::Restored {
-                    anchor_event_id: Some(ref anchor_event_id),
-                } => {
-                    open_focused_unread(
-                        slots,
-                        &room,
-                        &room_id_string,
-                        &live,
-                        anchor_event_id,
-                        "v-timeline-normal-anchor-invalid",
-                        "v-timeline-normal-open-failed",
-                    )
-                    .await?
-                }
-                TimelineViewPosition::Focused { .. }
-                | TimelineViewPosition::Thread { .. }
-                | TimelineViewPosition::Restored {
-                    anchor_event_id: None,
-                } => unreachable!("normal open only selects live, unread, or anchored restore"),
-            }
+            );
+            let pagination = live_pagination_state(&live).await;
+            (live, selected_position, pagination)
         }
         NativeTimelineOpenPosition::LiveBottom => {
             let (live, _) = slots.live(client, &room_id_string).await?;
@@ -3757,10 +3935,7 @@ async fn open_focused(
         }
         FocusedOpenPlan::EventFocused => {}
     }
-    let Some(timeline) = slots
-        .focused(room, room_id, event_id, FOCUSED_CONTEXT_EVENT_COUNT)
-        .await
-    else {
+    let Some(timeline) = slots.focused(room, room_id, event_id).await else {
         // `/context` failed. Keep the room usable at its live bottom
         // rather than failing the whole open.
         let pagination = live_pagination_state(&live).await;
@@ -3813,7 +3988,7 @@ async fn open_focused_unread(
 ) -> Result<(Arc<Timeline>, TimelineViewPosition, TimelinePaginationState), &'static str> {
     let event_id = parse_event_id(anchor_event_id).map_err(|_| invalid_id)?;
     let timeline = slots
-        .focused(room, room_id, &event_id, FOCUSED_CONTEXT_EVENT_COUNT)
+        .focused(room, room_id, &event_id)
         .await
         .ok_or(open_failed)?;
     if timeline.is_threaded() {
@@ -4051,27 +4226,17 @@ async fn event_readback_in(
 ) -> Result<NativeTimelineEventReadback, &'static str> {
     let room_id = parse_room_id(room_id)?.to_string();
     let event_id = parse_event_id(event_id)?;
-    let timeline = match slots.cached_focused(&room_id, &event_id).await {
-        Some(timeline) => timeline,
-        None => {
-            let room = client
-                .get_room(parse_room_id(&room_id)?.as_ref())
-                .ok_or("v-crypto.6-event-room-not-found")?;
-            slots
-                .build_focused(&room, &room_id, &event_id, 0)
-                .await
-                .ok_or("v-crypto.6-event-open-failed")?
-        }
-    };
-    let (items, _updates) = timeline.subscribe().await;
-    let mut item = items
-        .iter()
-        .filter_map(|item| project_item(item, client.user_id()))
-        .find(|item| item.event_id == event_id.as_str())
-        .ok_or("v-crypto.6-event-not-found")?;
-    if let Some(room) = client.get_room(parse_room_id(&room_id)?.as_ref()) {
-        enrich_native_reactions(&room, event_id.as_str(), &mut item.reactions, true).await;
-    }
+    let room = client
+        .get_room(parse_room_id(&room_id)?.as_ref())
+        .ok_or("v-crypto.6-event-room-not-found")?;
+    // A row any open timeline renders (including older live rows outside a
+    // view's skip window) is read in place, with no `/context` request.
+    let (_, raw) = slots
+        .rendered_event(&room, &room_id, &event_id)
+        .await
+        .ok_or("v-crypto.6-event-open-failed")?;
+    let mut item = project_item(&raw, client.user_id()).ok_or("v-crypto.6-event-not-found")?;
+    enrich_native_reactions(&room, event_id.as_str(), &mut item.reactions, true).await;
     Ok(NativeTimelineEventReadback {
         session_generation: slots.session_generation(),
         room_id,
@@ -4228,72 +4393,29 @@ async fn reaction_readback(
     key: &str,
     network: bool,
 ) -> Result<Option<NativeTimelineReaction>, &'static str> {
-    let (live, _) = slots.live(client, room_id).await?;
-    let (items, _updates) = live.subscribe().await;
-    if let Some(item) = items
-        .iter()
-        .filter_map(|item| project_item(item, client.user_id()))
-        .find(|item| item.event_id == target_event_id.as_str())
-    {
-        // Live viewport owns this event. After toggle-remove the live item
-        // can correctly omit the key while a focused Event timeline still
-        // projects the previous aggregation (event-cache / local Sent echo).
-        // Falling through made `ensure_reaction` report AlreadyPresent and
-        // skip the re-add. Keep the focused timeline; dropping it here
-        // desyncs the live room timeline's local annotation echo.
-        let mut reaction = item
-            .reactions
-            .into_iter()
-            .find(|reaction| reaction.key == key);
-        if let (Some(reaction), Some(room)) = (
-            reaction.as_mut(),
-            client.get_room(parse_room_id(room_id)?.as_ref()),
-        ) {
-            enrich_native_reactions(
-                &room,
-                target_event_id.as_str(),
-                std::slice::from_mut(reaction),
-                network,
-            )
-            .await;
-        }
-        return Ok(reaction);
-    }
-
-    // Notifications may target a message outside the currently open
-    // viewport. A focused native timeline is the same authoritative owner
-    // used for event readback; no JS relation inspection is involved.
-    let timeline = match slots.cached_focused(room_id, target_event_id).await {
-        Some(timeline) => timeline,
-        None => {
-            let room = client
-                .get_room(parse_room_id(room_id)?.as_ref())
-                .ok_or("v-send.2-reaction-room-not-found")?;
-            let Some(timeline) = slots
-                .build_focused(&room, room_id, target_event_id, 0)
-                .await
-            else {
-                // Toggle/ensure already applied. Missing focused history must
-                // not fail the mutation; viewer open uses event_readback.
-                return Ok(None);
-            };
-            timeline
-        }
+    // The live provider is installed first, so it is searched first: after a
+    // toggle-remove its item correctly omits the key while a focused Event
+    // window may still project the previous aggregation (event-cache / local
+    // Sent echo), which would make `ensure_reaction` report AlreadyPresent
+    // and skip the re-add. Every item is searched, not a view's skip window,
+    // so reacting to an older loaded row never builds a `/context` window.
+    slots.live(client, room_id).await?;
+    let room = client
+        .get_room(parse_room_id(room_id)?.as_ref())
+        .ok_or("v-send.2-reaction-room-not-found")?;
+    // Notifications may target a message outside every open timeline. Its
+    // focused window is the same authoritative owner event readback uses.
+    // Toggle/ensure already applied, so a window that cannot be built does
+    // not fail the mutation; viewer open uses event_readback.
+    let Some((_, raw)) = slots.rendered_event(&room, room_id, target_event_id).await else {
+        return Ok(None);
     };
-    let (items, _updates) = timeline.subscribe().await;
-    let mut reaction = items
-        .iter()
-        .filter_map(|item| project_item(item, client.user_id()))
-        .find(|item| item.event_id == target_event_id.as_str())
-        .and_then(|item| {
-            item.reactions
-                .into_iter()
-                .find(|reaction| reaction.key == key)
-        });
-    if let (Some(reaction), Some(room)) = (
-        reaction.as_mut(),
-        client.get_room(parse_room_id(room_id)?.as_ref()),
-    ) {
+    let mut reaction = project_item(&raw, client.user_id()).and_then(|item| {
+        item.reactions
+            .into_iter()
+            .find(|reaction| reaction.key == key)
+    });
+    if let Some(reaction) = reaction.as_mut() {
         enrich_native_reactions(
             &room,
             target_event_id.as_str(),
@@ -4305,11 +4427,25 @@ async fn reaction_readback(
     Ok(reaction)
 }
 
-fn unix_time_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
+/// The item for `event_id` in the first of `timelines` that renders it.
+///
+/// Reads all items, not a view subscription: a live provider's subscription
+/// sees only its skip window (about the newest 20 rows until it pages back),
+/// so an older loaded row would otherwise look missing.
+async fn find_rendered_item(
+    timelines: &[Arc<Timeline>],
+    event_id: &EventId,
+) -> Option<(Arc<Timeline>, Arc<SdkTimelineItem>)> {
+    for timeline in timelines {
+        let items = timeline.items().await;
+        if let Some(item) = items
+            .iter()
+            .find(|item| item.as_event().and_then(|event| event.event_id()) == Some(event_id))
+        {
+            return Some((timeline.clone(), item.clone()));
+        }
+    }
+    None
 }
 
 fn newest_frontier_in_live<'a>(
@@ -4647,70 +4783,31 @@ async fn live_pagination_state(live: &Timeline) -> TimelinePaginationState {
     pagination_state_from_hit_start(live_hit_start(live).await)
 }
 
-fn should_restore_viewport(
-    has_unread: bool,
-    now_ms: u64,
-    current_live_tail_event_id: Option<&str>,
-    viewport: &NativeTimelineViewportHint,
-) -> bool {
-    if has_unread {
-        return viewport.at_bottom
-            && viewport.live_tail_event_id.as_deref().is_some()
-            && current_live_tail_event_id.is_some()
-            && viewport.live_tail_event_id.as_deref() == current_live_tail_event_id;
-    }
-    if viewport.at_bottom {
-        return true;
-    }
-    let Some(updated_at_ms) = viewport.updated_at_ms else {
-        return false;
-    };
-    if now_ms.saturating_sub(updated_at_ms) > NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS {
-        return false;
-    }
-    viewport
-        .restored_anchor_event_id
-        .as_deref()
-        .and_then(|event_id| parse_event_id(event_id).ok())
-        .is_some()
-}
-
+/// Place an ordinary room open on the live provider: at the unread frontier
+/// when the room has unread, else at the bottom. A user who left the room at
+/// the bottom of the same live tail it still has returns to the bottom even
+/// when the room's counts lag. A restored history anchor never selects an
+/// event-focused window here (see [`NativeTimelineViewportHint`]).
 fn resolve_normal_open_position(
     has_unread: bool,
     fully_read_event_id: Option<String>,
     current_live_tail_event_id: Option<&str>,
-    now_ms: u64,
     viewport: &NativeTimelineViewportHint,
-) -> Result<TimelineViewPosition, &'static str> {
-    let can_restore =
-        should_restore_viewport(has_unread, now_ms, current_live_tail_event_id, viewport);
-    if can_restore && viewport.at_bottom {
-        return Ok(TimelineViewPosition::LiveBottom);
+) -> TimelineViewPosition {
+    let left_at_current_tail = viewport.at_bottom
+        && current_live_tail_event_id.is_some()
+        && viewport.live_tail_event_id.as_deref() == current_live_tail_event_id;
+    if !has_unread || left_at_current_tail {
+        return TimelineViewPosition::LiveBottom;
     }
-    if has_unread {
-        // A supported room can be unread without a frontier already present in
-        // the live graph (never-opened channel, or only a stale `m.fully_read`
-        // outside the bounded live window). With no comparable live frontier,
-        // open live instead of focused-opening historical months.
-        let anchor_event_id = match fully_read_event_id {
-            Some(anchor_event_id) => anchor_event_id,
-            None => return Ok(TimelineViewPosition::LiveBottom),
-        };
-        return Ok(TimelineViewPosition::Unread { anchor_event_id });
+    // A supported room can be unread without a frontier already present in
+    // the live graph (never-opened channel, or only a stale `m.fully_read`
+    // outside the bounded live window). With no comparable live frontier,
+    // open live instead of focused-opening historical months.
+    match fully_read_event_id {
+        Some(anchor_event_id) => TimelineViewPosition::Unread { anchor_event_id },
+        None => TimelineViewPosition::LiveBottom,
     }
-    if can_restore {
-        if let Some(anchor_event_id) = viewport
-            .restored_anchor_event_id
-            .as_deref()
-            .and_then(|event_id| parse_event_id(event_id).ok())
-            .map(|event_id| event_id.to_string())
-        {
-            return Ok(TimelineViewPosition::Restored {
-                anchor_event_id: Some(anchor_event_id),
-            });
-        }
-    }
-    Ok(TimelineViewPosition::LiveBottom)
 }
 
 fn view_subscription_key(room_id: &str, position: &TimelineViewPosition) -> String {
@@ -4830,6 +4927,8 @@ fn spawn_view_update_owner(
         };
         tokio::pin!(member_hydration);
         let mut members_hydrated = !hydrate_sender_profiles;
+        let mut reply_details = ReplyDetailFetches::new(timeline.clone());
+        reply_details.request_items(items.iter());
 
         futures_util::pin_mut!(updates);
 
@@ -4843,6 +4942,7 @@ fn spawn_view_update_owner(
                     for diff in diffs.iter().cloned() {
                         diff.apply(&mut items);
                     }
+                    reply_details.request_diffs(&diffs);
                     // The SDK clears a live room's linked chunk after a gappy
                     // sync, which reopens history this stream may have
                     // reached. Its status stream is deduplicated, so a stream
@@ -4886,11 +4986,15 @@ fn spawn_view_update_owner(
                 () = &mut member_hydration, if !members_hydrated => {
                     members_hydrated = true;
                 }
+                // A fetched parent arrives through `updates` as a `Set`.
+                Some(()) = reply_details.next_done(), if reply_details.is_busy() => {}
                 Some(_) = room_info.next() => {
                     let position = view.position();
                     let read_state = project_live_read_state(&timeline, &position, own_user_id).await;
                     let pinned_event_ids = project_pinned_event_ids(room);
-                    let action_authority = room_action_authority(room, own_user_id).await;
+                    let action_authority = known_room_action_authority(room, own_user_id)
+                        .await
+                        .unwrap_or_else(|| view.action_authority());
                     let read_changed = read_state != view.read_state();
                     let pins_changed = pinned_event_ids != view.pinned_event_ids();
                     let authority_changed = action_authority != view.action_authority();
@@ -4921,7 +5025,11 @@ fn spawn_view_update_owner(
                     });
                 }
                 Some(()) = power_authority_rx.recv() => {
-                    let action_authority = room_action_authority(room, own_user_id).await;
+                    let Some(action_authority) =
+                        known_room_action_authority(room, own_user_id).await
+                    else {
+                        continue;
+                    };
                     if action_authority == view.action_authority() {
                         continue;
                     }
@@ -5041,17 +5149,28 @@ async fn room_action_authority(
     room: &Room,
     own_user_id: Option<&UserId>,
 ) -> TimelineRoomActionAuthority {
+    known_room_action_authority(room, own_user_id)
+        .await
+        .unwrap_or_default()
+}
+
+/// The account's room actions, or `None` when the power levels cannot be
+/// read right now (the stores are closed while iOS is suspended). A stream
+/// keeps the authority it has instead of dropping every row's redact and
+/// pin capability until the next change.
+async fn known_room_action_authority(
+    room: &Room,
+    own_user_id: Option<&UserId>,
+) -> Option<TimelineRoomActionAuthority> {
     let Some(user_id) = own_user_id else {
-        return TimelineRoomActionAuthority::default();
+        return Some(TimelineRoomActionAuthority::default());
     };
-    let Ok(levels) = room.power_levels().await else {
-        return TimelineRoomActionAuthority::default();
-    };
-    TimelineRoomActionAuthority {
+    let levels = room.power_levels().await.ok()?;
+    Some(TimelineRoomActionAuthority {
         can_pin_events: levels.user_can_send_state(user_id, StateEventType::RoomPinnedEvents),
         can_redact_own: levels.user_can_redact_own_event(user_id),
         can_redact_other: levels.user_can_redact_event_of_other(user_id),
-    }
+    })
 }
 
 fn reaction_contains_event_id(
@@ -5828,14 +5947,12 @@ mod tests {
             true,
             Some("$fully-read:example.org".into()),
             None,
-            1_700_000_000_000,
             &NativeTimelineViewportHint {
                 restored_anchor_event_id: Some("$restored:example.org".into()),
                 updated_at_ms: Some(1_700_000_000_000),
                 ..NativeTimelineViewportHint::default()
             },
-        )
-        .unwrap();
+        );
         assert_eq!(
             selected,
             TimelineViewPosition::Unread {
@@ -5845,37 +5962,33 @@ mod tests {
     }
 
     #[test]
-    fn normal_open_uses_a_validated_restored_anchor_only_when_no_unread_frontier_exists() {
+    fn normal_open_never_selects_a_history_window_for_a_restored_anchor() {
+        // The presenter parks rows of the live window itself. Core keeps the
+        // live provider at the bottom instead of building `/context` for a
+        // remembered anchor (which would not follow sync or reach the tail).
         assert_eq!(
             resolve_normal_open_position(
                 false,
                 None,
                 None,
-                1_700_000_000_000,
                 &NativeTimelineViewportHint {
                     restored_anchor_event_id: Some("$restored:example.org".into()),
                     updated_at_ms: Some(1_700_000_000_000),
                     ..NativeTimelineViewportHint::default()
                 },
-            )
-            .unwrap(),
-            TimelineViewPosition::Restored {
-                anchor_event_id: Some("$restored:example.org".into()),
-            }
+            ),
+            TimelineViewPosition::LiveBottom
         );
         assert_eq!(
             resolve_normal_open_position(
                 false,
                 None,
                 None,
-                1_700_000_000_000,
                 &NativeTimelineViewportHint {
-                    restored_anchor_event_id: Some("not-an-event".into()),
-                    updated_at_ms: Some(1_700_000_000_000),
+                    restored_anchor_event_id: Some("$restored:example.org".into()),
                     ..NativeTimelineViewportHint::default()
                 },
-            )
-            .unwrap(),
+            ),
             TimelineViewPosition::LiveBottom
         );
     }
@@ -5889,14 +6002,13 @@ mod tests {
                 true,
                 None,
                 None,
-                1_700_000_000_000,
                 &NativeTimelineViewportHint {
                     restored_anchor_event_id: Some("$restored:example.org".into()),
                     updated_at_ms: Some(1_700_000_000_000),
                     ..NativeTimelineViewportHint::default()
                 },
             ),
-            Ok(TimelineViewPosition::LiveBottom)
+            TimelineViewPosition::LiveBottom
         );
     }
 
@@ -5907,14 +6019,12 @@ mod tests {
                 true,
                 Some("$fully-read:example.org".into()),
                 None,
-                1_700_000_000_000,
                 &NativeTimelineViewportHint {
                     restored_anchor_event_id: Some("$restored:example.org".into()),
                     updated_at_ms: Some(1_700_000_000_000),
                     ..NativeTimelineViewportHint::default()
                 },
-            )
-            .unwrap(),
+            ),
             TimelineViewPosition::Unread {
                 anchor_event_id: "$fully-read:example.org".into(),
             }
@@ -5928,14 +6038,12 @@ mod tests {
                 true,
                 Some("$fully-read:example.org".into()),
                 Some("$tail:example.org"),
-                1_700_000_000_000,
                 &NativeTimelineViewportHint {
                     at_bottom: true,
                     live_tail_event_id: Some("$tail:example.org".into()),
                     ..NativeTimelineViewportHint::default()
                 },
-            )
-            .unwrap(),
+            ),
             TimelineViewPosition::LiveBottom
         );
     }
@@ -6049,33 +6157,7 @@ mod tests {
     #[test]
     fn normal_open_falls_back_to_live_when_unread_frontier_is_outside_live_graph() {
         assert_eq!(
-            resolve_normal_open_position(
-                true,
-                None,
-                None,
-                1_700_000_000_000,
-                &NativeTimelineViewportHint::default(),
-            ),
-            Ok(TimelineViewPosition::LiveBottom)
-        );
-    }
-
-    #[test]
-    fn normal_open_ignores_stale_historical_restore_hints() {
-        let now = 1_700_000_000_000_u64;
-        assert_eq!(
-            resolve_normal_open_position(
-                false,
-                None,
-                None,
-                now,
-                &NativeTimelineViewportHint {
-                    restored_anchor_event_id: Some("$restored:example.org".into()),
-                    updated_at_ms: Some(now - NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS - 1),
-                    ..NativeTimelineViewportHint::default()
-                },
-            )
-            .unwrap(),
+            resolve_normal_open_position(true, None, None, &NativeTimelineViewportHint::default(),),
             TimelineViewPosition::LiveBottom
         );
     }

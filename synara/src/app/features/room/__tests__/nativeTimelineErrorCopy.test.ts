@@ -18,6 +18,16 @@ test('timeline load errors use the Core diagnostic, never "native" wording (D12,
     diagnosticId: 'd0.3-timeline-room-not-found',
   });
   assert.match(nativeTimelineLoadErrorMessage(roomGone), /This room is not available any more/);
+  // A room sync has not delivered yet is retryable, not gone.
+  const notYetSynced = nativeTimelineCommandError({
+    code: 'Unknown',
+    message: 'The native Matrix timeline is unavailable.',
+    diagnosticId: 'v-timeline-room-not-yet-synced',
+  });
+  assert.equal(
+    nativeTimelineLoadErrorMessage(notYetSynced),
+    'Synara is still loading this room. Try again in a moment.'
+  );
   const noSession = { diagnosticId: 'd0.3-timeline-requires-session' };
   assert.match(nativeTimelineLoadErrorMessage(noSession), /Sign in again/);
   // An unknown Core failure keeps its code for a bug report.

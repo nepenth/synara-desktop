@@ -102,6 +102,11 @@ impl<K: Eq + Hash + Clone, V> RecencyMap<K, V> {
         self.entries.remove(key).map(|(value, _)| value)
     }
 
+    /// Keep only the entries `keep` accepts.
+    pub(super) fn retain(&mut self, mut keep: impl FnMut(&K, &V) -> bool) {
+        self.entries.retain(|key, (value, _)| keep(key, value));
+    }
+
     /// Iterate without changing recency.
     pub(super) fn iter(&self) -> impl Iterator<Item = (&K, &V)> {
         self.entries.iter().map(|(key, (value, _))| (key, value))

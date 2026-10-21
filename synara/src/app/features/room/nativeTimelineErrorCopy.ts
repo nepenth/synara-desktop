@@ -13,6 +13,9 @@ const TIMELINE_DIAGNOSTIC_MESSAGES: Record<string, string> = {
   'd0.3-timeline-room-not-found': ROOM_UNAVAILABLE,
   'v-timeline-normal-room-not-found': ROOM_UNAVAILABLE,
   'v-timeline-thread-room-not-found': ROOM_UNAVAILABLE,
+  // Retryable: a room joined elsewhere (or named by a notification) that sync
+  // has not delivered within Core's wait.
+  'v-timeline-room-not-yet-synced': 'Synara is still loading this room. Try again in a moment.',
   'v-timeline-thread-root-invalid': 'Synara could not find the start of this thread.',
   'v-timeline-thread-open-failed': 'Synara could not open this thread. Try again.',
   'v-timeline-view-not-open': 'This view was closed. Try again.',
