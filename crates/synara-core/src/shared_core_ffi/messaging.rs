@@ -1900,7 +1900,7 @@ impl SharedCore {
                 )
             })?;
         }
-        let client = self.retained_client().map_err(|_| {
+        let client = self.retained_client().await.map_err(|_| {
             agent_approval_failed(
                 AGENT_APPROVAL_NO_SESSION_CODE,
                 AGENT_APPROVAL_NO_SESSION_DESCRIPTION,

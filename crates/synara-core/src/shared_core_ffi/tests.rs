@@ -134,7 +134,7 @@ async fn session_logout_revokes_exact_device_and_cannot_restore_after_forget() {
         .await
         .unwrap();
     assert!(shared.core.session_snapshot().unwrap().is_none());
-    assert!(shared.retained_client().is_err());
+    assert!(shared.retained_client().await.is_err());
     let relaunched = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries)));
     let error = relaunched
         .restore_persisted_session(
@@ -240,7 +240,9 @@ fn sync_stop_closes_retained_client_stores_and_start_reopens_them() {
     .expect("planted persist retains a SQLite-backed Client");
     rt.block_on(shared.attach_session_owners())
         .expect("attach retained session owners");
-    let client = shared.retained_client().expect("retained Client");
+    let client = rt
+        .block_on(shared.retained_client())
+        .expect("retained Client");
     let _serial = crate::app::media::HOT_MEDIA_CACHE_TEST_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -451,6 +453,41 @@ fn restore_without_vault_fails_closed_without_echoing_identity() {
 }
 
 #[test]
+fn a_restore_or_login_in_flight_answers_a_second_attempt_at_once() {
+    let shared = SharedCore::new();
+    let root = temp_root("install-in-flight");
+    let rt = test_runtime();
+    let restore = || {
+        rt.block_on(shared.restore_persisted_session(
+            "@alice:example.org".to_owned(),
+            "https://matrix.example.org".to_owned(),
+            root.to_string_lossy().into_owned(),
+        ))
+        .expect_err("no restorable session")
+    };
+    // Another install holds the lifecycle owner's transition gate.
+    let in_flight = shared
+        .lifecycle
+        .try_begin_detached_install()
+        .expect("gate free");
+    assert!(format!("{:?}", restore()).contains(RESTORE_FAILED_CODE));
+    let login = rt
+        .block_on(shared.login_with_password(
+            "@alice:example.org".to_owned(),
+            "https://matrix.example.org".to_owned(),
+            root.to_string_lossy().into_owned(),
+            "password".to_owned(),
+        ))
+        .expect_err("sign-in waits for nothing");
+    assert!(format!("{login:?}").contains(LOGIN_FAILED_CODE));
+    // Ordinary commands keep failing closed on the empty slot meanwhile.
+    assert!(!rt.block_on(shared.has_retained_client()));
+    drop(in_flight);
+    assert!(format!("{:?}", restore()).contains(VAULT_UNAVAILABLE_CODE));
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
 fn restore_rejects_hostile_identity_without_echo() {
     let store = Box::new(MemoryCallbackVault(std::sync::Arc::new(Mutex::new(
         HashMap::new(),
@@ -510,10 +547,7 @@ fn restore_from_vault_installs_session_without_password_or_token_leak() {
     assert!(!dbg.contains("password"));
     let snapshot = shared.core.session_snapshot().expect("projection");
     assert!(snapshot.is_some());
-    assert!(matches!(
-        *shared.restored_client.lock().expect("client"),
-        RestoredClientSlot::Ready(..)
-    ));
+    assert!(rt.block_on(shared.has_retained_client()));
     let keys: Vec<String> = map.lock().expect("vault").keys().cloned().collect();
     assert!(keys.iter().any(|key| key.starts_with("store-key:")));
     assert!(keys.iter().any(|key| key.starts_with("matrix-session:")));
@@ -527,10 +561,7 @@ fn restore_from_vault_installs_session_without_password_or_token_leak() {
         .expect_err("second restore");
     assert!(format!("{second:?}").contains(ALREADY_RESTORED_CODE));
     assert!(!format!("{second:?}").contains(RESTORE_FAILED_CODE));
-    assert!(matches!(
-        *shared.restored_client.lock().expect("client"),
-        RestoredClientSlot::Ready(..)
-    ));
+    assert!(rt.block_on(shared.has_retained_client()));
     // "Already restored" means success to the shells, so another account,
     // or the same user id on another homeserver, must not get it.
     for (user_id, homeserver_url) in [
@@ -556,10 +587,7 @@ fn restore_from_vault_installs_session_without_password_or_token_leak() {
         ))
         .expect_err("same account, trailing slash");
     assert!(format!("{same:?}").contains(ALREADY_RESTORED_CODE));
-    assert!(matches!(
-        *shared.restored_client.lock().expect("client"),
-        RestoredClientSlot::Ready(..)
-    ));
+    assert!(rt.block_on(shared.has_retained_client()));
     drop(shared);
     drop(_enter);
     drop(rt);
@@ -1149,10 +1177,11 @@ fn logout_fences_late_token_rotation_saves_out_of_the_vault() {
     .expect("planted session");
 
     // The SDK save callback holds this lease; capture it like the callback does.
-    let lease = match &*shared.restored_client.lock().expect("client") {
-        RestoredClientSlot::Ready(_, persistence) => persistence.callback_lease(),
-        _ => panic!("planted session is retained"),
-    };
+    let lease = rt
+        .block_on(shared.with_installed_session(|active| {
+            active.map(|active| active.persistence.callback_lease())
+        }))
+        .expect("planted session is retained");
     assert!(!lease.is_revoked());
 
     rt.block_on(shared.logout()).expect("logout");
@@ -1234,10 +1263,11 @@ fn failed_rotation_save_is_retried_with_backoff_and_stops_after_logout() {
     let retry = |now| rt.block_on(shared.retry_failed_session_save(now));
     assert_eq!(retry(start), None, "nothing to retry after a good save");
 
-    let lease = match &*shared.restored_client.lock().expect("client") {
-        RestoredClientSlot::Ready(_, persistence) => persistence.callback_lease(),
-        _ => panic!("planted session is retained"),
-    };
+    let lease = rt
+        .block_on(shared.with_installed_session(|active| {
+            active.map(|active| active.persistence.callback_lease())
+        }))
+        .expect("planted session is retained");
     // A rotation save fails (vault unavailable).
     let _ = lease.save(|| {
         Err::<(), _>(crate::app::lifecycle::session::SessionFault::unavailable(
@@ -1463,6 +1493,26 @@ fn ios_logout_and_attach_use_the_shared_core_policies() {
     assert!(logout.contains("session_policy::LogoutPolicy::IOS"));
     assert!(logout.contains("session_policy::run_local_logout("));
     assert!(!logout.contains("matrix_auth().logout()"));
+    // One slot, transition gate and recover gate with desktop (review L21).
+    assert!(logout.contains("self.lifecycle\n            .logout_in_place("));
+    let restart = source
+        .split("pub async fn restart_sync(&self)")
+        .nth(1)
+        .and_then(|rest| rest.split("pub async fn wipe_persisted_stores(").next())
+        .expect("restart body");
+    assert!(restart.contains(".recover_live("));
+    for install in [
+        "restore_persisted_session_with_policy(",
+        "login_with_password_inner(",
+        "persist_planted_session_for_test(",
+    ] {
+        let body = source
+            .split(&format!("async fn {install}"))
+            .nth(1)
+            .expect("install body");
+        let body = body.split("\n    }\n").next().expect("install body end");
+        assert!(body.contains("begin_session_install(&self.lifecycle, &identity)"));
+    }
     let attach = source
         .split("pub async fn attach_session_owners(&self)")
         .nth(1)
@@ -1577,6 +1627,7 @@ async fn ios_password_login_requests_no_refresh_token_and_restores_without_one()
     assert_eq!(restored.device_id, "IOSDEVICE");
     let tokens = relaunched
         .retained_client()
+        .await
         .unwrap()
         .session_tokens()
         .expect("tokens");
@@ -1658,6 +1709,7 @@ async fn ios_restore_keeps_refreshing_and_saving_an_existing_refresh_token_sessi
 
     shared
         .retained_client()
+        .await
         .unwrap()
         .whoami()
         .await
@@ -1726,7 +1778,7 @@ async fn ios_password_login_refuses_a_server_without_simplified_sliding_sync() {
         vault_session_entries_are_empty(&entries, &identity),
         "no session saved"
     );
-    assert!(!shared.has_retained_client());
+    assert!(!shared.has_retained_client().await);
     let _ = fs::remove_dir_all(root);
 }
 
@@ -1771,7 +1823,12 @@ async fn ios_password_login_ignores_a_login_response_well_known() {
     assert_eq!(dto.homeserver_url, identity.homeserver_url());
     assert_eq!(dto.device_id, "IOSWELLKNOWN");
     assert_eq!(
-        shared.retained_client().unwrap().homeserver().as_str(),
+        shared
+            .retained_client()
+            .await
+            .unwrap()
+            .homeserver()
+            .as_str(),
         format!("{}/", server.uri())
     );
     drop(shared);
