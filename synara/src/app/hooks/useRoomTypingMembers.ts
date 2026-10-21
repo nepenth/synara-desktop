@@ -1,6 +1,6 @@
 import { useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   IRoomIdToTypingMembers,
   TypingReceipt,
@@ -21,6 +21,10 @@ export const useRoomTypingMember = (roomId: string) => {
     [roomId]
   );
 
-  const typing = useAtomValue(selectAtom(roomIdToTypingMembersAtom, selector, equalTypingMembers));
-  return typing;
+  // A new selectAtom per render would re-subscribe every render (D10).
+  const typingAtom = useMemo(
+    () => selectAtom(roomIdToTypingMembersAtom, selector, equalTypingMembers),
+    [selector]
+  );
+  return useAtomValue(typingAtom);
 };

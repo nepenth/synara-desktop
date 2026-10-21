@@ -20,6 +20,7 @@ import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desk
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { stopPropagation } from '../../utils/keyboard';
 import { leaveRoomWithNativeOwner } from '../nativeRoomLeaveOwner';
+import { composerErrorMessage } from '../../features/room/composerSendError';
 
 type LeaveRoomPromptProps = {
   roomId: string;
@@ -76,7 +77,10 @@ export function LeaveRoomPrompt({ roomId, onDone, onCancel }: LeaveRoomPromptPro
                 <Text priority="400">Are you sure you want to leave this room?</Text>
                 {leaveState.status === AsyncStatus.Error && (
                   <Text style={{ color: color.Critical.Main }} size="T300">
-                    Failed to leave room! {leaveState.error.message}
+                    {composerErrorMessage(
+                      leaveState.error,
+                      'Synara could not leave the room. Try again.'
+                    )}
                   </Text>
                 )}
               </Box>

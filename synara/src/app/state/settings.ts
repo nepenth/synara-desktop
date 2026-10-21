@@ -61,7 +61,6 @@ export interface SharedSettings {
   gifSearchEnabled: boolean;
   indexedMessageSearch: boolean;
   gifOnboardingDismissed: boolean;
-  timelineVirtualizationEnabled: boolean;
   showHiddenEvents: boolean;
   legacyUsernameColor: boolean;
 
@@ -145,7 +144,6 @@ export const defaultSharedSettings: SharedSettings = {
   gifSearchEnabled: false,
   indexedMessageSearch: true,
   gifOnboardingDismissed: false,
-  timelineVirtualizationEnabled: true,
   showHiddenEvents: false,
   legacyUsernameColor: false,
 

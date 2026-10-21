@@ -1,11 +1,21 @@
-import { atom, useAtomValue, useSetAtom } from 'jotai';
+import { atom, useAtomValue, useSetAtom, type Atom } from 'jotai';
+import { selectAtom } from 'jotai/utils';
 import { useEffect } from 'react';
+import type { Unread } from '../../../types/matrix/room';
 import { parseRoomSummary, type RoomSummary } from '../../features/matrix-dto/room';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { RoomsAction } from './utils';
 import { startRoomListUpdateDrivenPoll } from '../../utils/nativeRoomListUpdates';
+import {
+  createCoalescedRefresh,
+  readNativeSessionSnapshotShared,
+} from '../../utils/nativeListRefresh';
 import type { RoomListPresentation } from '../../features/matrix-dto/generated';
-import { EMPTY_ROOM_LIST_PRESENTATION, parseRoomListPresentation } from './roomListPresentation';
+import {
+  EMPTY_ROOM_LIST_PRESENTATION,
+  parseRoomListPresentation,
+  unreadFromPresentation,
+} from './roomListPresentation';
 
 export type NativeRoomListSnapshot = {
   sessionGeneration: number;
@@ -53,6 +63,12 @@ const sameRoomSummary = (left: RoomSummary, right: RoomSummary): boolean =>
   left.isDirect === right.isDirect &&
   left.isSpace === right.isSpace &&
   left.encryptionStatus === right.encryptionStatus &&
+  left.stateEncrypted === right.stateEncrypted &&
+  left.isEncrypted === right.isEncrypted &&
+  left.isCall === right.isCall &&
+  left.canonicalAlias === right.canonicalAlias &&
+  left.lastMessageIsAgentApproval === right.lastMessageIsAgentApproval &&
+  left.tombstoneSuccessorRoomId === right.tombstoneSuccessorRoomId &&
   left.joinRule === right.joinRule &&
   sameHeroes(left.heroes, right.heroes);
 
@@ -65,9 +81,24 @@ const sameHeroes = (left: RoomSummary['heroes'], right: RoomSummary['heroes']): 
       (hero, index) =>
         hero.userId === rightHeroes[index]?.userId &&
         hero.inCall === rightHeroes[index]?.inCall &&
-        hero.displayName === rightHeroes[index]?.displayName
+        hero.displayName === rightHeroes[index]?.displayName &&
+        hero.statusEmoji === rightHeroes[index]?.statusEmoji
     )
   );
+};
+
+export const sameOptionalRoomSummary = (
+  left: RoomSummary | undefined,
+  right: RoomSummary | undefined
+): boolean => left === right || (!!left && !!right && sameRoomSummary(left, right));
+
+const sameUnread = (left: Unread | undefined, right: Unread | undefined): boolean => {
+  if (left === right) return true;
+  if (!left || !right) return false;
+  if (left.highlight !== right.highlight || left.total !== right.total) return false;
+  if (left.from === right.from) return true;
+  if (!left.from || !right.from || left.from.size !== right.from.size) return false;
+  return [...left.from].every((roomId) => right.from?.has(roomId));
 };
 
 export const sameNativeRoomListSnapshot = (
@@ -81,7 +112,8 @@ export const sameNativeRoomListSnapshot = (
   return left.rooms.every((room, index) => sameRoomSummary(room, right.rooms[index]));
 };
 
-const nativeRoomListSnapshotAtom = atom<NativeRoomListSnapshot>(emptyRoomListSnapshot);
+/** Written only by `useBindAllRoomsAtom`; exported for tests. */
+export const nativeRoomListSnapshotAtom = atom<NativeRoomListSnapshot>(emptyRoomListSnapshot);
 let latestNativeRoomListSnapshot = emptyRoomListSnapshot;
 /**
  * False until the first room-list readback (or a signed-out session) since
@@ -111,8 +143,60 @@ export const allRoomsAtom = atom<string[], [RoomsAction], undefined>(
   }
 );
 
+/**
+ * The whole projection. Every room's activity changes it, so a component that
+ * needs one room should use `useNativeRoomSummary` / `useNativeRoomUnread`.
+ */
 export const useNativeRoomListSnapshot = (): NativeRoomListSnapshot =>
   useAtomValue(nativeRoomListSnapshotAtom);
+
+/** Summaries by room id, built once per published snapshot. */
+const nativeRoomSummaryByIdAtom = atom(
+  (get) => new Map(get(nativeRoomListSnapshotAtom).rooms.map((room) => [room.roomId, room]))
+);
+
+/** Per-room atoms, so every row of one room shares a single subscription. */
+const roomSummaryAtoms = new Map<string, Atom<RoomSummary | undefined>>();
+const roomUnreadAtoms = new Map<string, Atom<Unread | undefined>>();
+
+export const nativeRoomSummaryAtom = (roomId: string): Atom<RoomSummary | undefined> => {
+  let summaryAtom = roomSummaryAtoms.get(roomId);
+  if (!summaryAtom) {
+    summaryAtom = selectAtom(
+      nativeRoomSummaryByIdAtom,
+      (rooms) => rooms.get(roomId),
+      sameOptionalRoomSummary
+    );
+    roomSummaryAtoms.set(roomId, summaryAtom);
+  }
+  return summaryAtom;
+};
+
+export const nativeRoomUnreadAtom = (roomId: string): Atom<Unread | undefined> => {
+  let unreadAtom = roomUnreadAtoms.get(roomId);
+  if (!unreadAtom) {
+    unreadAtom = selectAtom(
+      nativeRoomListSnapshotAtom,
+      (snapshot) => unreadFromPresentation(snapshot.presentation, roomId),
+      sameUnread
+    );
+    roomUnreadAtoms.set(roomId, unreadAtom);
+  }
+  return unreadAtom;
+};
+
+const NO_ROOM_ATOM = atom<undefined>(undefined);
+
+/**
+ * One room's summary. Re-renders only when that room's summary changes, not on
+ * every other room's activity (D10).
+ */
+export const useNativeRoomSummary = (roomId: string | undefined): RoomSummary | undefined =>
+  useAtomValue(roomId ? nativeRoomSummaryAtom(roomId) : NO_ROOM_ATOM);
+
+/** One room's (or space's) unread attention from Core's presentation. */
+export const useNativeRoomUnread = (roomId: string | undefined): Unread | undefined =>
+  useAtomValue(roomId ? nativeRoomUnreadAtom(roomId) : NO_ROOM_ATOM);
 
 /**
  * Read the latest native snapshot outside React, for synchronous widget APIs.
@@ -182,47 +266,46 @@ export const useBindAllRoomsAtom = (
 
   useEffect(() => {
     let disposed = false;
-    let inFlight = false;
 
-    const refresh = async () => {
-      if (inFlight) return;
-      inFlight = true;
-      try {
-        const sessionResult =
-          await invokeDesktopWithAvailability<unknown>('matrix_session_snapshot');
-        if (disposed || !sessionResult.available) return;
-        const session = parseNativeSessionSnapshot(sessionResult.value);
-        if (!session) return;
-        onSessionSnapshot?.(session);
-        if (session.status !== 'logged_in') {
-          latestNativeRoomListSnapshot = emptyRoomListSnapshot;
-          setSnapshot(emptyRoomListSnapshot);
-          setRooms({ type: 'INITIALIZE', rooms: [] });
-          loadedSessionGeneration = undefined;
+    // A wake during a refresh re-runs it once it finishes (D8), so the last
+    // change of a burst is never left for the safety poll.
+    const refresh = createCoalescedRefresh(
+      async () => {
+        try {
+          const sessionResult = await readNativeSessionSnapshotShared<unknown>();
+          if (disposed || !sessionResult.available) return;
+          const session = parseNativeSessionSnapshot(sessionResult.value);
+          if (!session) return;
+          onSessionSnapshot?.(session);
+          if (session.status !== 'logged_in') {
+            latestNativeRoomListSnapshot = emptyRoomListSnapshot;
+            setSnapshot(emptyRoomListSnapshot);
+            setRooms({ type: 'INITIALIZE', rooms: [] });
+            loadedSessionGeneration = undefined;
+            setLoaded(true);
+            return;
+          }
+          // A new sign-in has not listed its rooms yet.
+          if (loadedSessionGeneration !== session.sessionGeneration) setLoaded(false);
+          const result = await invokeDesktopWithAvailability<unknown>('matrix_room_list_snapshot');
+          if (disposed || !result.available || !result.value) return;
+          const snapshot = parseNativeRoomListSnapshot(result.value);
+          if (!snapshot || snapshot.sessionGeneration !== session.sessionGeneration) return;
+          loadedSessionGeneration = snapshot.sessionGeneration;
           setLoaded(true);
-          return;
+          if (sameNativeRoomListSnapshot(latestNativeRoomListSnapshot, snapshot)) return;
+          latestNativeRoomListSnapshot = snapshot;
+          // Hydrate the synchronous facade before either atom setter can schedule
+          // selectors that combine a fresh room id with getNativeRoom().
+          onSnapshot?.(snapshot);
+          setSnapshot(snapshot);
+          setRooms({ type: 'INITIALIZE', rooms: snapshot.orderedRoomIds });
+        } catch {
+          // Preserve the last known snapshot during a transient sync/protocol failure.
         }
-        // A new sign-in has not listed its rooms yet.
-        if (loadedSessionGeneration !== session.sessionGeneration) setLoaded(false);
-        const result = await invokeDesktopWithAvailability<unknown>('matrix_room_list_snapshot');
-        if (disposed || !result.available || !result.value) return;
-        const snapshot = parseNativeRoomListSnapshot(result.value);
-        if (!snapshot || snapshot.sessionGeneration !== session.sessionGeneration) return;
-        loadedSessionGeneration = snapshot.sessionGeneration;
-        setLoaded(true);
-        if (sameNativeRoomListSnapshot(latestNativeRoomListSnapshot, snapshot)) return;
-        latestNativeRoomListSnapshot = snapshot;
-        // Hydrate the synchronous facade before either atom setter can schedule
-        // selectors that combine a fresh room id with getNativeRoom().
-        onSnapshot?.(snapshot);
-        setSnapshot(snapshot);
-        setRooms({ type: 'INITIALIZE', rooms: snapshot.orderedRoomIds });
-      } catch {
-        // Preserve the last known snapshot during a transient sync/protocol failure.
-      } finally {
-        inFlight = false;
-      }
-    };
+      },
+      () => disposed
+    );
 
     if (!isSynaraDesktop()) {
       latestNativeRoomListSnapshot = emptyRoomListSnapshot;

@@ -23,11 +23,10 @@ import {
 } from '../../utils/matrix';
 import type { MatrixError } from '../../utils/matrix';
 import type { RoomReading } from '../../utils/room';
-import { millisecondsToMinutes, replaceSpaceWithDash } from '../../utils/common';
+import { replaceSpaceWithDash } from '../../utils/common';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { useCapabilities } from '../../hooks/useCapabilities';
 import { useAlive } from '../../hooks/useAlive';
-import { ErrorCode } from '../../cs-errorcode';
 import {
   AdditionalCreatorInput,
   createRoom,
@@ -39,6 +38,7 @@ import {
   useAdditionalCreators,
 } from '../../components/create-room';
 import { RoomType } from '../../../types/matrix/room';
+import { composerErrorMessage } from '../room/composerSendError';
 
 const getCreateSpaceAccessToIcon = (access: CreateRoomAccess) => {
   if (access === CreateRoomAccess.Private) return Icons.SpaceLock;
@@ -251,14 +251,7 @@ export function CreateSpaceForm({ defaultAccess, space, onCreate }: CreateSpaceF
         <Box style={{ color: color.Critical.Main }} alignItems="Center" gap="200">
           <Icon src={Icons.Warning} filled size="100" />
           <Text size="T300" style={{ color: color.Critical.Main }}>
-            <b>
-              {(error as { name?: string } | null)?.name === ErrorCode.M_LIMIT_EXCEEDED
-                ? `Server rate-limited your request for ${millisecondsToMinutes(
-                    ((error as { data?: { retry_after_ms?: unknown } }).data?.retry_after_ms as
-                      number | undefined) ?? 0
-                  )} minutes!`
-                : error.message}
-            </b>
+            <b>{composerErrorMessage(error, 'Synara could not create the space. Try again.')}</b>
           </Text>
         </Box>
       )}

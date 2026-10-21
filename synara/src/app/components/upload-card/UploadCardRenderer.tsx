@@ -1,4 +1,4 @@
-import React, { ReactNode, useEffect, useRef } from 'react';
+import React, { ReactNode, useEffect } from 'react';
 import { Box, Chip, Icon, IconButton, Icons, Spinner, Text, color, config, toRem } from 'folds';
 import { UploadCard, UploadCardError, UploadCardProgress } from './UploadCard';
 import {
@@ -22,6 +22,7 @@ import {
   effectiveNativeAttachmentLimit,
   mediaConfigUploadLimit,
 } from '../../utils/nativeMediaLimits';
+import { composerErrorMessage } from '../../features/room/composerSendError';
 
 type PreviewImageProps = {
   fileItem: TUploadItem;
@@ -115,8 +116,9 @@ function MediaPreview({ fileItem, onSpoiler, children }: MediaPreviewProps) {
 export type NativeUploadSendState = 'waiting' | 'uploading';
 
 type UploadCardRendererProps = {
+  /** Unused: Core encrypts attachments in encrypted rooms. */
   isEncrypted?: boolean;
-  /** When true, skip JS uploadContent; native Rust owns upload+send. */
+  /** Core can send attachments; until then the card waits. */
   nativeComposerSend?: boolean;
   /** Set while a composer send owns this file. */
   sendState?: NativeUploadSendState;
@@ -126,7 +128,6 @@ type UploadCardRendererProps = {
   onComplete?: (upload: UploadSuccess) => void;
 };
 export function UploadCardRenderer({
-  isEncrypted,
   nativeComposerSend = false,
   sendState,
   fileItem,
@@ -142,14 +143,10 @@ export function UploadCardRenderer({
 
   const uploadAtom = roomUploadAtomFamily(fileItem.file);
   const { metadata } = fileItem;
-  const { upload, startUpload, cancelUpload, markNativeStaged, setUpload } = useBindUploadAtom(
-    uploadAtom,
-    isEncrypted
-  );
+  const { upload, cancelUpload, markNativeStaged, setUpload } = useBindUploadAtom(uploadAtom);
   const { file } = upload;
   const fileSizeExceeded = file.size > allowSize;
   const nativeStaged = isNativeStagedUpload(upload);
-  const legacyUploadStarted = useRef(false);
 
   useEffect(() => {
     // An oversized native file can never be sent. Mark it failed so the board
@@ -163,13 +160,11 @@ export function UploadCardRenderer({
       }
       return;
     }
-    if (upload.status !== UploadStatus.Idle || fileSizeExceeded) return;
-    if (nativeComposerSend) {
-      markNativeStaged();
-    } else if (!legacyUploadStarted.current) {
-      legacyUploadStarted.current = true;
-      startUpload();
-    }
+    // Until Core confirms it can send attachments (on mount and after a room
+    // switch) the card waits. It never uploads from the renderer: that path
+    // always failed and showed a Retry that failed again (D85).
+    if (upload.status !== UploadStatus.Idle || fileSizeExceeded || !nativeComposerSend) return;
+    markNativeStaged();
   }, [
     allowSize,
     file,
@@ -179,7 +174,6 @@ export function UploadCardRenderer({
     nativeStaged,
     sendState,
     setUpload,
-    startUpload,
     upload.status,
   ]);
 
@@ -204,20 +198,6 @@ export function UploadCardRenderer({
       before={<Icon src={getFileTypeIcon(Icons, file.type)} />}
       after={
         <>
-          {/* A native file fails here only when it can never be sent (too
-              large); retrying would take the retired renderer upload path. */}
-          {upload.status === UploadStatus.Error && !nativeComposerSend && (
-            <Chip
-              as="button"
-              onClick={startUpload}
-              aria-label="Retry Upload"
-              variant="Critical"
-              radii="Pill"
-              outlined
-            >
-              <Text size="B300">Retry</Text>
-            </Chip>
-          )}
           {sendState === 'uploading' ? (
             <Box alignItems="Center" gap="100" role="status">
               <Spinner variant="Secondary" size="100" />
@@ -250,9 +230,6 @@ export function UploadCardRenderer({
               <PreviewVideo fileItem={fileItem} />
             </MediaPreview>
           )}
-          {upload.status === UploadStatus.Idle && !fileSizeExceeded && !nativeComposerSend && (
-            <UploadCardProgress sentBytes={0} totalBytes={file.size} />
-          )}
           {nativeStaged && (
             // Core uploads the file when it is sent and reports no progress,
             // so the card states that instead of showing a finished upload.
@@ -269,7 +246,12 @@ export function UploadCardRenderer({
           )}
           {upload.status === UploadStatus.Error && (
             <UploadCardError>
-              <Text size="T200">{upload.error.message}</Text>
+              <Text size="T200">
+                {composerErrorMessage(
+                  upload.error,
+                  'Synara could not upload this file. Try again.'
+                )}
+              </Text>
             </UploadCardError>
           )}
           {upload.status === UploadStatus.Idle && fileSizeExceeded && (

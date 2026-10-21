@@ -13,10 +13,10 @@ import {
   NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS,
   NATIVE_TIMELINE_SAFETY_NET_POLL_MS,
   nativeTimelinePollDelay,
+  shouldPlaceLatestLocally,
   canAcceptNativeTimelineFollowReadback,
   nativeThreadFocusEventId,
   nativeTimelineCommandError,
-  editedFormattedBodyForSubmit,
   nativeForwardEncryptionDecision,
   shouldAttachFormattedBody,
   type NativeTimelineViewRow,
@@ -454,21 +454,6 @@ test('pin and forward pure helpers gate native presenter UX', () => {
   assert.equal(nativeForwardEncryptionDecision('encrypted', undefined), 'unavailable');
 });
 
-test('editing plain text cannot silently reuse stale Matrix HTML', () => {
-  assert.equal(
-    editedFormattedBodyForSubmit('old', 'new', '<strong>old</strong>', false),
-    undefined
-  );
-  assert.equal(
-    editedFormattedBodyForSubmit('old', 'new', '<strong>new</strong>', true),
-    '<strong>new</strong>'
-  );
-  assert.equal(
-    editedFormattedBodyForSubmit('old', 'old', '<strong>old</strong>', false),
-    '<strong>old</strong>'
-  );
-});
-
 test('timeline open is not aborted when event listen is unavailable', () => {
   const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
   assert.match(source, /listenTauriEvent/);
@@ -571,6 +556,19 @@ test('the snapshot poll checks once early, then is a slow safety net while delta
   assert.equal(nativeTimelinePollDelay(false, true), NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS);
   assert.equal(nativeTimelinePollDelay(false, false), NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS);
   const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
-  assert.match(source, /nativeTimelinePollDelay\(Boolean\(unlisten\), firstPoll\)/);
+  assert.match(source, /const deltasLive = Boolean\(unlisten\);/);
+  assert.match(source, /nativeTimelinePollDelay\(deltasLive, firstPoll\)/);
+  // D11: the safety-net poll pauses while the window is hidden.
+  assert.match(source, /stopPoll = startVisibleOnlyPoll\(/);
   assert.match(source, /if \(isUnchangedNativeTimelineSnapshot\(current, next\)\)/);
+});
+
+test('D9: after a send only a live-bottom view places its tail without Core', () => {
+  assert.equal(shouldPlaceLatestLocally({ kind: 'live_bottom' }), true);
+  assert.equal(shouldPlaceLatestLocally({ kind: 'restored', anchor_event_id: '$a' }), false);
+  assert.equal(shouldPlaceLatestLocally({ kind: 'focused', target_event_id: '$a' }), false);
+  assert.equal(shouldPlaceLatestLocally({ kind: 'unread', anchor_event_id: '$a' }), false);
+  assert.equal(shouldPlaceLatestLocally(undefined), false);
+  const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');
+  assert.match(presenter, /threadRootId \? showThreadTail : showLatestAfterSend/);
 });

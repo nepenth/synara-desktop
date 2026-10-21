@@ -2,7 +2,7 @@
  * Synara-owned Matrix domain DTOs (P1.4).
  *
  * Product-oriented projections for Matrix IPC snapshot/delta bodies.
- * Sibling of `matrix-ipc` (transport). Not a matrix-js-sdk / Ruma clone.
+ * Not a matrix-js-sdk / Ruma clone.
  *
  * Not wired into production session bootstrap. Product Matrix runtime remains
  * matrix-js-sdk until later cutover phases.

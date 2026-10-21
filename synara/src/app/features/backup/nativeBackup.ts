@@ -11,7 +11,7 @@ import type {
 export const NATIVE_BACKUP_CHANGED = 'synara-native-backup-changed';
 
 export const nativeBackupErrorMessage = (): string =>
-  'Native encryption backup is unavailable. Restart Synara and try again.';
+  'Synara could not reach encryption backup. Restart Synara and try again.';
 
 const invokeNativeBackup = async <T>(
   command: string,

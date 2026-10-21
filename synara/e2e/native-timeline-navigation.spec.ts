@@ -109,7 +109,7 @@ for (const earlyOpen of ['initial', 'latest']) {
     await open(page, `live&nativeEvents=1&earlyOpen=${earlyOpen}&earlyDeltas=1`);
     if (earlyOpen === 'latest') {
       await scrollToHistory(page);
-      await fixture(page, 'send');
+      await page.getByRole('button', { name: 'Jump to latest', exact: true }).click();
       await expect.poll(() => commandCount(page, 'matrix_timeline_jump_latest')).toBe(1);
     }
     await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
@@ -323,7 +323,7 @@ test('superseded last-read open retains recovery and cannot move the newer focus
   await expect.poll(() => activeStreamCount(page)).toBe(1);
 });
 
-test('explicit latest clears a missing last-read action after passive promotion retained it', async ({
+test('a send clears a missing last-read action after passive promotion retained it', async ({
   page,
 }) => {
   await open(page, 'missing');
@@ -331,9 +331,25 @@ test('explicit latest clears a missing last-read action after passive promotion 
   const recovery = page.getByRole('button', { name: 'Jump to Last Read' });
   await expect(recovery).toBeVisible();
   await fixture(page, 'send');
-  await expect.poll(() => commandCount(page, 'matrix_timeline_jump_latest')).toBe(1);
   await expect(recovery).toBeHidden();
   await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
+  // The promoted view is live, so the send places the tail without asking
+  // Core to reopen the stream (D9).
+  expect(await commandCount(page, 'matrix_timeline_jump_latest')).toBe(0);
+});
+
+test('a send from history in a live view returns to the tail without a Core jump', async ({
+  page,
+}) => {
+  await open(page, 'live&nativeEvents=1');
+  await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
+  await scrollToHistory(page);
+  const opens = await commandCount(page, 'matrix_timeline_open');
+  await fixture(page, 'send');
+  await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
+  await expect(page.getByRole('button', { name: 'Jump to latest', exact: true })).toBeHidden();
+  expect(await commandCount(page, 'matrix_timeline_jump_latest')).toBe(0);
+  expect(await commandCount(page, 'matrix_timeline_open')).toBe(opens);
 });
 
 test('a single wheel step off the live tail releases follow-live before the next snapshot', async ({
@@ -428,13 +444,13 @@ test('missing last read retains the mounted location when later data arrives', a
   await expect(page.getByRole('button', { name: 'Jump to Last Read' })).toBeVisible();
 });
 
-test('send intent waits for new live provider and layout before hiding latest control', async ({
+test('jump intent waits for new live provider and layout before hiding latest control', async ({
   page,
 }) => {
   await open(page, 'live&delayJump=1');
   await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
   await scrollToHistory(page);
-  await fixture(page, 'send');
+  await page.getByRole('button', { name: 'Jump to latest', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Jump to latest', exact: true })).toBeVisible();
   await expect
     .poll(() =>
@@ -458,7 +474,7 @@ test('delayed latest result cannot scroll a newer focused event in the same room
 }) => {
   await open(page, 'live&delayJump=1');
   await scrollToHistory(page);
-  await fixture(page, 'send');
+  await page.getByRole('button', { name: 'Jump to latest', exact: true }).click();
   await expect
     .poll(() =>
       page.evaluate(

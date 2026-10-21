@@ -49,10 +49,9 @@ test('modernization opt-in settings default off', () => {
   assert.deepEqual(store.getSettings().agentWidgetEntries, []);
   assert.equal(defaultSettings.indexedMessageSearch, true);
   assert.equal(defaultSettings.gifOnboardingDismissed, false);
-  assert.equal(defaultSettings.timelineVirtualizationEnabled, true);
   assert.equal(store.getSettings().gifSearchEnabled, false);
   assert.equal(store.getSettings().indexedMessageSearch, true);
-  assert.equal(store.getSettings().timelineVirtualizationEnabled, true);
+  assert.equal('timelineVirtualizationEnabled' in store.getSettings(), false);
   assert.equal(defaultSettings.desktopDiagnosticsEnabled, false);
   assert.equal(defaultSettings.desktopDiagnosticsPerformance, false);
   assert.equal(defaultSettings.desktopDiagnosticsSession, false);
@@ -82,7 +81,8 @@ test('settings store reads legacy desktop shortcuts from the shared settings blo
   );
 
   assert.equal(store.getSharedSettings().themeId, 'aurora');
-  assert.equal(store.getSharedSettings().timelineVirtualizationEnabled, false);
+  // A retired key in the stored blob is ignored, not carried forward.
+  assert.equal('timelineVirtualizationEnabled' in store.getSharedSettings(), false);
   assert.equal('desktopShortcutShow' in store.getSharedSettings(), false);
   assert.deepEqual(store.getPlatformSettings(), {
     desktopShortcutShow: 'CmdOrCtrl+1',

@@ -10,6 +10,7 @@ import {
   type AgentNotificationPreferences,
 } from './nativeAgentNotificationPreferences';
 import { SettingsSection } from '../../../components/settings-layout';
+import { composerErrorMessage } from '../../room/composerSendError';
 
 const categories = [
   ['notifyToolActivity', 'Notify for tool activity', 'Messages starting with “🛠 Tool activity”.'],
@@ -40,7 +41,10 @@ export function AgentNotifications() {
       setMessage(null);
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : 'Agent notification settings could not be loaded.'
+        composerErrorMessage(
+          error,
+          'Synara could not load your agent notification settings. Try again.'
+        )
       );
     } finally {
       setLoading(false);
@@ -89,7 +93,10 @@ export function AgentNotifications() {
       setMessage('Saved to your account.');
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : 'Agent notification settings were not saved.'
+        composerErrorMessage(
+          error,
+          'Synara could not save your agent notification settings. Try again.'
+        )
       );
     } finally {
       savingRef.current = false;

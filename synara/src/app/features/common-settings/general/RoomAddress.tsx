@@ -33,6 +33,7 @@ import { StateEvent } from '../../../../types/matrix/room';
 import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
 import { getMxIdServer } from '../../../utils/matrix';
 import { getSafeMyUserId } from '../../../state/nativeIdentity';
+import { composerErrorMessage, coreDiagnosticId } from '../../room/composerSendError';
 
 type RoomPublishedAddressesProps = {
   permissions: RoomPermissionsAPI;
@@ -116,7 +117,10 @@ export function RoomPublishedAddresses({ permissions }: RoomPublishedAddressesPr
 
             {mainState.status === AsyncStatus.Error && (
               <Text size="T200" style={{ color: color.Critical.Main }}>
-                {(mainState.error as MatrixError).message}
+                {composerErrorMessage(
+                  mainState.error,
+                  'Synara could not change the main address. Try again.'
+                )}
               </Text>
             )}
           </Box>
@@ -184,9 +188,9 @@ function LocalAddressInput({ addLocalAlias }: { addLocalAlias: (alias: string) =
       </Box>
       {addState.status === AsyncStatus.Error && (
         <Text style={{ color: color.Critical.Main }} size="T200">
-          {(addState.error as MatrixError).httpStatus === 409
-            ? 'Address is already in use!'
-            : (addState.error as MatrixError).message}
+          {coreDiagnosticId(addState.error) === 'v-rooms-alias-taken'
+            ? 'That address is already in use. Choose another one.'
+            : composerErrorMessage(addState.error, 'Synara could not add the address. Try again.')}
         </Text>
       )}
     </Box>
@@ -347,7 +351,7 @@ function LocalAddressesList({
       })}
       {error && (
         <Text size="T200" style={{ color: color.Critical.Main }}>
-          {error.message}
+          {composerErrorMessage(error, 'Synara could not update the addresses. Try again.')}
         </Text>
       )}
     </Box>
@@ -414,7 +418,10 @@ export function RoomLocalAddresses({ permissions }: { permissions: RoomPermissio
           {localAliasesState.status === AsyncStatus.Error && (
             <Box gap="100">
               <Text size="T200" style={{ color: color.Critical.Main }}>
-                {localAliasesState.error.message}
+                {composerErrorMessage(
+                  localAliasesState.error,
+                  'Synara could not load the local addresses. Try again.'
+                )}
               </Text>
             </Box>
           )}

@@ -21,6 +21,7 @@ import {
   type GifResult,
 } from '../../../utils/gifProvider';
 import * as depthCss from '../../../styles/Depth.css';
+import { composerErrorMessage } from '../composerSendError';
 
 type GifPickerProps = {
   config?: GifPickerConfig;
@@ -61,7 +62,7 @@ export function GifPicker({
         if (searchSeq.current === seq) setResults(nextResults);
       } catch (err) {
         if (searchSeq.current === seq) {
-          setError(err instanceof Error ? err.message : 'Failed to search GIFs.');
+          setError(composerErrorMessage(err, 'Synara could not search GIFs. Try again.'));
         }
       } finally {
         if (searchSeq.current === seq) setLoading(false);

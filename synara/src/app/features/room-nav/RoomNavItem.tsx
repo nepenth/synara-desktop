@@ -27,7 +27,6 @@ import { NavItem, NavItemContent, NavItemOptions, NavLink } from '../../componen
 import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { copyToClipboard } from '../../utils/dom';
-import { unreadFromPresentation } from '../../state/room-list/roomListPresentation';
 import { setRoomReadStateWithNativeOwner } from '../../utils/nativeRoomReadStateOwner';
 import { markAsReadFromExplicitUserAction } from '../../utils/notifications';
 import { UseStateProvider } from '../../components/UseStateProvider';
@@ -49,7 +48,7 @@ import { RoomNotificationModeSwitcher } from '../../components/RoomNotificationS
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { useRoomName } from '../../hooks/useRoomMeta';
-import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
+import { useNativeRoomSummary, useNativeRoomUnread } from '../../state/room-list/roomList';
 import { setRoomFavoriteWithNativeOwner } from '../../components/nativeRoomFavoriteOwner';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { LiveCallChip } from './LiveCallChip';
@@ -65,9 +64,8 @@ type RoomNavItemMenuProps = {
 };
 const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
   ({ room, requestClose, notificationMode }, ref) => {
-    const nativeRooms = useNativeRoomListSnapshot();
-    const nativeRoom = nativeRooms.rooms.find((summary) => summary.roomId === room.roomId);
-    const unread = unreadFromPresentation(nativeRooms.presentation, room.roomId);
+    const nativeRoom = useNativeRoomSummary(room.roomId);
+    const unread = useNativeRoomUnread(room.roomId);
     const isFavorite = nativeRoom?.isFavorite === true;
     const [favoriteError, setFavoriteError] = useState<string>();
     const [favoriteBusy, setFavoriteBusy] = useState(false);
@@ -324,9 +322,11 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
   // the row's focus-within, so it must stay mounted while focus returns to it.
   const [returningFocus, setReturningFocus] = useState(false);
   const linkRef = useRef<HTMLAnchorElement>(null);
-  const nativeRooms = useNativeRoomListSnapshot();
-  const nativeRoom = nativeRooms.rooms.find((summary) => summary.roomId === room.roomId);
-  const unread = unreadFromPresentation(nativeRooms.presentation, room.roomId);
+  // Per-room subscriptions: a row re-renders when its own summary or unread
+  // state changes, not on every other room's activity (D10). A new summary
+  // also refreshes the reads that go through the in-place room facade.
+  const nativeRoom = useNativeRoomSummary(room.roomId);
+  const unread = useNativeRoomUnread(room.roomId);
   const dmPeerId =
     nativeRoom?.isDirect === true &&
     typeof nativeRoom.directUserId === 'string' &&

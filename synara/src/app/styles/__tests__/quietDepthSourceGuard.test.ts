@@ -27,7 +27,6 @@ test('desktop hierarchy uses semantic depth while keeping text itself flat', () 
   const nav = source('src/app/components/nav/styles.css.ts');
   const editor = source('src/app/components/editor/Editor.css.ts');
   const timeline = source('src/app/features/room/nativeTimelineHtml.css.ts');
-  const legacyMessage = source('src/app/features/room/message/styles.css.ts');
   const roomNav = source('src/app/features/room-nav/styles.css.ts');
 
   // Selection is `data-selected` on the row; `aria-selected` is invalid on it (D58).
@@ -50,10 +49,6 @@ test('desktop hierarchy uses semantic depth while keeping text itself flat', () 
   assert.match(timeline, /synara-depth-contrast-edge/);
   assert.match(timeline, /TimelineAvatar = style\(\[avatarSurface\]\)/);
   assert.match(timeline, /ReplySurface/);
-  assert.match(legacyMessage, /MessageOptionsBar = style\(\[\s*DefaultReset,\s*floatingSurface/);
-  assert.match(legacyMessage, /MessageBase = style\(\{/);
-  assert.match(legacyMessage, /boxShadow: 'none'/);
-  assert.match(legacyMessage, /synara-depth-contrast-edge/);
   assert.match(roomNav, /RoomSurface = style/);
   assert.match(roomNav, /boxShadow: 'none'/);
   assert.doesNotMatch(roomNav, /restingInnerEdge/);
@@ -230,7 +225,6 @@ test('quiet-depth restyle covers new settings, explore, notes, approvals, and su
   const notes = source('src/app/features/room/room-notes/RoomNotesPanel.tsx');
   const notesCss = source('src/app/features/room/room-notes/RoomNotesPanel.css.ts');
   const approvals = source('src/app/features/approvals/Approvals.tsx');
-  const editor = source('src/app/features/room/message/MessageEditor.tsx');
   const toolbar = source('src/app/components/editor/Toolbar.tsx');
   const welcome = source('src/app/pages/client/WelcomePage.tsx');
 
@@ -260,8 +254,6 @@ test('quiet-depth restyle covers new settings, explore, notes, approvals, and su
   assert.match(approvals, /role="listitem"/);
   assert.match(approvals, /<time dateTime=/);
   assert.match(approvals, /dir="auto"/);
-  assert.match(editor, /aria-controls=\{toolbar \? 'message-formatting-toolbar' : undefined\}/);
-  assert.match(editor, /aria-haspopup="dialog"/);
   assert.match(toolbar, /filled=\{isMarkActive\(editor, format\)\}/);
   assert.match(welcome, /openExternalUrlFromClick\(evt, SYNARA_SUPPORT_URL\)/);
 });

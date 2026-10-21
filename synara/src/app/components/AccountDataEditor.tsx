@@ -22,6 +22,7 @@ import { useAlive } from '../hooks/useAlive';
 import { SequenceCard } from './sequence-card';
 import { TextViewerContent } from './text-viewer';
 import { useTextAreaCodeEditor } from '../hooks/useTextAreaCodeEditor';
+import { composerErrorMessage } from '../features/room/composerSendError';
 
 const EDITOR_INTENT_SPACE_COUNT = 2;
 
@@ -158,7 +159,12 @@ function AccountDataEdit({
 
         {submitState.status === AsyncStatus.Error && (
           <Text size="T200" style={{ color: color.Critical.Main }}>
-            <b>{submitState.error.message}</b>
+            <b>
+              {composerErrorMessage(
+                submitState.error,
+                'Synara could not save the account data. Try again.'
+              )}
+            </b>
           </Text>
         )}
       </Box>

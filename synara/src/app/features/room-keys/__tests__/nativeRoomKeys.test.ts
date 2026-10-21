@@ -35,7 +35,8 @@ test('native room-key result contains counts and labels but no secret material',
 
 test('native room-key unavailable copy is privacy safe', () => {
   const message = nativeRoomKeyErrorMessage().toLowerCase();
-  assert.equal(message.includes('native room-key transfer'), true);
+  assert.equal(message.includes('room keys'), true);
+  assert.equal(message.includes('native'), false);
   for (const forbidden of ['token', 'ciphertext', 'password']) {
     assert.equal(message.includes(forbidden), false);
   }

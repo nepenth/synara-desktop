@@ -32,7 +32,8 @@ test('native backup status contains projection data only', () => {
 
 test('native backup failure copy is privacy safe', () => {
   const message = nativeBackupErrorMessage().toLowerCase();
-  assert.equal(message.includes('native encryption backup'), true);
+  assert.equal(message.includes('encryption backup'), true);
+  assert.equal(message.includes('native'), false);
   assert.equal(message.includes('secret'), false);
   assert.equal(message.includes('token'), false);
 });

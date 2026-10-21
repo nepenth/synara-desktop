@@ -83,3 +83,54 @@ test('mark read and unread report failures in the menu that started them', () =>
     /markAsReadFromExplicitUserActionInBackground/
   );
 });
+
+test('D86: create and address errors read the Core diagnostic, not js-sdk fields', () => {
+  for (const path of [
+    'features/create-room/CreateRoom.tsx',
+    'features/create-space/CreateSpace.tsx',
+    'features/create-chat/CreateChat.tsx',
+    'features/common-settings/general/RoomAddress.tsx',
+  ]) {
+    const source = read(path);
+    assert.doesNotMatch(source, /M_LIMIT_EXCEEDED|retry_after_ms|httpStatus/, path);
+    assert.match(source, /composerErrorMessage\(/, path);
+  }
+  assert.match(
+    read('features/common-settings/general/RoomAddress.tsx'),
+    /coreDiagnosticId\(addState\.error\) === 'v-rooms-alias-taken'/
+  );
+});
+
+test('D24: action failures no longer show raw error.message', () => {
+  for (const path of [
+    'components/AccountDataEditor.tsx',
+    'components/SecretStorage.tsx',
+    'components/invite-user-prompt/InviteUserPrompt.tsx',
+    'components/leave-room-prompt/LeaveRoomPrompt.tsx',
+    'components/leave-space-prompt/LeaveSpacePrompt.tsx',
+    'components/upload-card/CompactUploadCardRenderer.tsx',
+    'components/upload-card/UploadCardRenderer.tsx',
+    'components/user-profile/PowerChip.tsx',
+    'components/user-profile/UserModeration.tsx',
+    'features/common-settings/developer-tools/SendRoomEvent.tsx',
+    'features/common-settings/developer-tools/StateEventEditor.tsx',
+    'features/common-settings/emojis-stickers/RoomPacks.tsx',
+    'features/common-settings/general/RoomPublish.tsx',
+    'features/lobby/RoomItem.tsx',
+    'features/room/RoomTombstone.tsx',
+    'features/room/gif/GifPicker.tsx',
+    'features/room/jump-to-time/JumpToTime.tsx',
+    'features/settings/devices/DeviceTile.tsx',
+    'features/settings/devices/LocalBackup.tsx',
+    'features/settings/devices/Verification.tsx',
+    'features/settings/notifications/AgentNotifications.tsx',
+    'pages/client/ClientRoot.tsx',
+    'pages/client/inbox/Invites.tsx',
+    'pages/client/space/Space.tsx',
+  ]) {
+    const source = read(path);
+    assert.doesNotMatch(source, /[Ss]tate\.error\.message|\.error as any\)\?\.message/, path);
+    assert.doesNotMatch(source, /instanceof Error \? \w+\.message/, path);
+  }
+  assert.doesNotMatch(read('features/room/RoomInput.tsx'), /err instanceof Error \? err\.message/);
+});

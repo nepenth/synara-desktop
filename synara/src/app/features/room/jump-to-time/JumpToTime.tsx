@@ -31,6 +31,7 @@ import { getToday, getYesterday, timeDayMonthYear, timeHourMinute } from '../../
 import { DatePicker, TimePicker } from '../../../components/time-date';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
+import { composerErrorMessage } from '../composerSendError';
 
 type JumpToTimeProps = {
   onCancel: () => void;
@@ -231,7 +232,10 @@ export function JumpToTime({ onCancel, onSubmit }: JumpToTimeProps) {
               </Box>
               {timestampState.status === AsyncStatus.Error && (
                 <Text style={{ color: color.Critical.Main }} size="T300">
-                  {timestampState.error.message}
+                  {composerErrorMessage(
+                    timestampState.error,
+                    'Synara could not find a message at that time. Try again.'
+                  )}
                 </Text>
               )}
               <Button

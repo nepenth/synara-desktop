@@ -1,6 +1,7 @@
 import type { RoomSummary } from '../features/matrix-dto/room';
-import type { MatrixEventReading, MemberReading, RoomReading } from '../utils/room';
+import type { MatrixEventReading, RoomReading } from '../utils/room';
 import { invokeDesktopWithAvailability } from '../utils/desktop';
+import { startVisibilityAwarePoll, type VisibilityPollEnvironment } from '../utils/visibilityPoll';
 import { RoomType } from '../../types/matrix/room';
 import { setNativeIdentity } from '../state/nativeIdentity';
 import {
@@ -36,10 +37,8 @@ import {
 export type NativeRoom = RoomReading & {
   on(event: string, listener: (...args: unknown[]) => void): void;
   removeListener(event: string, listener: (...args: unknown[]) => void): void;
-  getUsersReadUpTo(event: MatrixEventReading): string[];
   hasEncryptionStateEvent(): boolean;
   findEventById(eventId: string): MatrixEventReading | undefined;
-  getJoinedMembers(): MemberReading[];
 };
 
 type EmptyStateReading = {
@@ -108,10 +107,9 @@ const createNativeRoom = (summaryRef: RoomSummaryRef): NativeRoom => {
     hasMembershipState: () => summary().membership === 'join',
     on: noListener,
     removeListener: noListener,
-    getUsersReadUpTo: () => [],
-    hasEncryptionStateEvent: () => false,
+    // Core's encryption projection; the room has no state events here.
+    hasEncryptionStateEvent: () => summary().encryptionStatus === 'encrypted',
     findEventById: () => undefined,
-    getJoinedMembers: () => [],
   };
 };
 
@@ -130,6 +128,9 @@ export type NativeSessionEvent = keyof NativeSessionEvents;
 type Listener<E extends NativeSessionEvent> = (payload: NativeSessionEvents[E]) => void;
 
 const FORBIDDEN_READINESS = new Set(['offline', 'failed']);
+
+/** Sync-status cadence while the window is hidden (closed to the tray). */
+export const SYNC_STATUS_HIDDEN_POLL_MS = 15_000;
 
 export const createNativeSession = (invoke: NativeInvoke) => {
   const listeners: { [E in NativeSessionEvent]: Set<Listener<E>> } = {
@@ -343,6 +344,11 @@ export const createNativeSession = (invoke: NativeInvoke) => {
       if (typeof roomId !== 'string') return null;
       return roomEntries.get(roomId)?.room ?? null;
     },
+    /** Core's latest summary for a room, for reads the room facade does not carry. */
+    getRoomSummary(roomId: string | null | undefined): RoomSummary | undefined {
+      if (typeof roomId !== 'string') return undefined;
+      return roomEntries.get(roomId)?.summaryRef.current;
+    },
 
     /** Ask native to recover sync now, then refresh the cached reads. */
     async retrySyncNow(): Promise<void> {
@@ -380,8 +386,16 @@ export const createNativeSession = (invoke: NativeInvoke) => {
       }
     },
 
-    /** Poll native sync readiness and emit only transitions; returns unsubscribe. */
-    watchSync(pollMs = 1500): () => void {
+    /**
+     * Poll native sync readiness and emit only transitions; returns
+     * unsubscribe. A hidden window polls every `hiddenPollMs` instead (D11);
+     * showing it again polls at once.
+     */
+    watchSync(
+      pollMs = 1500,
+      hiddenPollMs = SYNC_STATUS_HIDDEN_POLL_MS,
+      environment?: VisibilityPollEnvironment
+    ): () => void {
       let watchStopped = false;
       let inFlight = false;
       let last: NativeSyncState | null = syncState;
@@ -403,11 +417,15 @@ export const createNativeSession = (invoke: NativeInvoke) => {
         }
       };
       void tick();
-      const timer = setInterval(() => void tick(), pollMs);
-      timer.unref?.();
+      const stopPoll = startVisibilityAwarePoll(
+        () => void tick(),
+        pollMs,
+        hiddenPollMs,
+        environment
+      );
       return () => {
         watchStopped = true;
-        clearInterval(timer);
+        stopPoll();
       };
     },
   });
@@ -430,6 +448,10 @@ export const setNativeSessionForTests = (session: NativeSession): void => {
 /** The room the native room list knows by this id, or `null`. */
 export const getNativeRoom = (roomId: string | null | undefined): NativeRoom | null =>
   activeSession.getRoom(roomId);
+
+/** Core's latest summary for a room id, or `undefined`. */
+export const getNativeRoomSummary = (roomId: string | null | undefined): RoomSummary | undefined =>
+  activeSession.getRoomSummary(roomId);
 
 /** Every room in the latest native room-list snapshot. */
 export const getNativeRooms = (): NativeRoom[] => activeSession.getRooms();

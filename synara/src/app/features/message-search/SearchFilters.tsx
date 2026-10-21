@@ -50,7 +50,7 @@ import {
 import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 import * as depthCss from '../../styles/Depth.css';
 
-import { getNativeRoom, getNativeRooms } from '../../native/nativeSession';
+import { getNativeRoom, getNativeRooms, getNativeRoomSummary } from '../../native/nativeSession';
 type OrderButtonProps = {
   order?: string;
   onChange: (order?: string) => void;
@@ -411,12 +411,14 @@ export function SearchFilters({
     setToText(toDate ?? '');
   }, [fromDate, toDate]);
 
+  // The room facade carries no members (D15); suggest the people Core's room
+  // summaries name instead: direct-message peers and room heroes.
   const senderSuggestions = useMemo(() => {
     const suggestions = new Set<string>();
     getNativeRooms().forEach((room) => {
-      room.getMembers().forEach((member) => {
-        if (member.userId) suggestions.add(member.userId);
-      });
+      const summary = getNativeRoomSummary(room.roomId);
+      if (summary?.directUserId) suggestions.add(summary.directUserId);
+      summary?.heroes?.forEach((hero) => suggestions.add(hero.userId));
     });
     return Array.from(suggestions).sort().slice(0, 250);
   }, []);

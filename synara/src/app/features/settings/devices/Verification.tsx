@@ -28,6 +28,7 @@ import {
 import { PasswordInput } from '../../../components/password-input';
 import { NativeSecretStorageGate } from '../../../components/SecretStorage';
 import { currentDeviceVerificationAvailabilityMessage } from './deviceVerificationStatus';
+import { composerErrorMessage } from '../../room/composerSendError';
 
 type VerificationStatusBadgeProps = {
   verificationStatus: VerificationStatus;
@@ -161,7 +162,7 @@ function NativeEnableVerification({
   if (loading && !status) return <Spinner size="200" variant="Secondary" />;
   if (error || status?.readiness === 'unavailable') {
     return (
-      <Text size="T200">Native cross-signing is unavailable. Restart Synara and try again.</Text>
+      <Text size="T200">Synara could not check cross-signing. Restart Synara and try again.</Text>
     );
   }
   if (status?.bootstrap === 'not_needed') {
@@ -215,7 +216,9 @@ function NativeCrossSigningSetup({ onCancel }: { onCancel: () => void }) {
         setCrossSigningComplete(true);
       }
     } catch (error) {
-      setSetupError(error instanceof Error ? error.message : 'Cross-signing setup failed.');
+      setSetupError(
+        composerErrorMessage(error, 'Synara could not set up cross-signing. Try again.')
+      );
     } finally {
       setWorking(false);
     }
@@ -233,7 +236,9 @@ function NativeCrossSigningSetup({ onCancel }: { onCancel: () => void }) {
       await authenticateNativeCrossSigningSetup(password);
       setCrossSigningComplete(true);
     } catch (error) {
-      setSetupError(error instanceof Error ? error.message : 'Cross-signing setup failed.');
+      setSetupError(
+        composerErrorMessage(error, 'Synara could not set up cross-signing. Try again.')
+      );
     } finally {
       if (passwordInput) passwordInput.value = '';
       setWorking(false);

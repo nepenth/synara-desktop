@@ -22,6 +22,7 @@ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { VoiceRoom } from './VoiceRoom';
 import { useRoom } from '../../hooks/useRoom';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
+import { useNativeRoomSummary } from '../../state/room-list/roomList';
 import type { ThreadDisplayMode } from '../../utils/threadDisplay';
 
 const FN_KEYS_REGEX = /^F\d+$/;
@@ -76,7 +77,12 @@ export function RoomView({
   const editor = useEditor();
   const { navigateRoom, navigateThread } = useRoomNavigate();
 
+  // The native room facade has no state events, so the upgrade comes from
+  // Core's room summary (D15). Core does not fill it yet; see the batch notes.
   const tombstoneEvent = useStateEvent(room, StateEvent.RoomTombstone);
+  const tombstoneSuccessorRoomId =
+    useNativeRoomSummary(roomId)?.tombstoneSuccessorRoomId ??
+    tombstoneEvent?.getContent().replacement_room;
   const powerLevels = usePowerLevelsContext();
 
   const permissions = useRoomPermissions(powerLevels);
@@ -117,11 +123,11 @@ export function RoomView({
       </Box>
       <Box shrink="No" direction="Column">
         <div style={{ padding: `0 ${config.space.S400}` }}>
-          {tombstoneEvent ? (
+          {tombstoneSuccessorRoomId ? (
             <RoomTombstone
               roomId={roomId}
-              body={tombstoneEvent.getContent().body}
-              replacementRoomId={tombstoneEvent.getContent().replacement_room}
+              body={tombstoneEvent?.getContent().body}
+              replacementRoomId={tombstoneSuccessorRoomId}
             />
           ) : (
             <>
@@ -141,7 +147,7 @@ export function RoomView({
             </>
           )}
         </div>
-        {hideActivity ? <RoomViewFollowingPlaceholder /> : <RoomViewFollowing room={room} />}
+        {hideActivity ? <RoomViewFollowingPlaceholder /> : <RoomViewFollowing />}
       </Box>
     </Page>
   );

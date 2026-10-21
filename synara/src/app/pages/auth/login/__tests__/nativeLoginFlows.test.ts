@@ -57,16 +57,7 @@ test('getPasswordFlow selects password kind from native DTOs', () => {
   assert.equal(getPasswordFlow([{ kind: 'token', matrixType: 'm.login.token' }]), undefined);
 });
 
-test('V-AUTH.3: AuthFlowsLoader has no live matrix-js-sdk client', () => {
-  const loader = readFileSync(
-    path.join(packageRoot, 'src/app/components/AuthFlowsLoader.tsx'),
-    'utf8'
-  );
-  assert.doesNotMatch(loader, /from ['"]matrix-js-sdk['"]/);
-  assert.doesNotMatch(loader, /createClient/);
-  assert.doesNotMatch(loader, /\.loginFlows\s*\(/);
-  assert.match(loader, /discoverLoginFlows|matrix_login_flows/);
-
+test('V-AUTH.3: login flows have no live matrix-js-sdk client', () => {
   const useAuthFlows = readFileSync(
     path.join(packageRoot, 'src/app/hooks/useAuthFlows.ts'),
     'utf8'

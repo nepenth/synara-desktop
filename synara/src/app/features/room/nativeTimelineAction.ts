@@ -6,7 +6,6 @@
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { notifyNativePinnedEventsChanged } from './nativePinnedEvents';
 import {
-  editTextWithNativeTimelineOwner,
   forwardMediaWithNativeTimelineOwner,
   forwardTextWithNativeTimelineOwner,
   pinWithNativeTimelineOwner,
@@ -15,7 +14,6 @@ import {
   reportWithNativeTimelineOwner,
   unpinWithNativeTimelineOwner,
   type NativeTimelineActionReadback,
-  type NativeTimelineEditTextInput,
   type NativeTimelineForwardMediaInput,
   type NativeTimelineForwardTextInput,
   type NativeTimelinePinInput,
@@ -34,11 +32,6 @@ const requireNative = async <T>(result: Promise<T | 'unavailable'>): Promise<T> 
   }
   return value;
 };
-
-export const editTextWithNativeTimelineAction = (
-  input: NativeTimelineEditTextInput
-): Promise<NativeTimelineActionReadback> =>
-  requireNative(editTextWithNativeTimelineOwner(input, isSynaraDesktop(), invoke));
 
 export const redactWithNativeTimelineAction = (
   input: NativeTimelineRedactInput

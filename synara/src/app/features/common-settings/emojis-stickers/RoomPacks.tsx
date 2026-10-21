@@ -42,6 +42,7 @@ import { setRoomImagePackNative } from '../../room/nativeImagePack';
 
 import { sendNativeStateEvent } from '../../../native/nativeCommands';
 import { SettingsSection } from '../../../components/settings-layout';
+import { composerErrorMessage } from '../../room/composerSendError';
 type CreatePackTileProps = {
   packs: ImagePack[];
   roomId: string;
@@ -123,7 +124,7 @@ function CreatePackTile({ packs, roomId }: CreatePackTileProps) {
             />
             {addState.status === AsyncStatus.Error && (
               <Text style={{ color: color.Critical.Main }} size="T300">
-                {addState.error.message}
+                {composerErrorMessage(addState.error, 'Synara could not add the pack. Try again.')}
               </Text>
             )}
           </Box>

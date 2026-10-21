@@ -20,6 +20,7 @@ import {
   type RoomJoinRulePresentation,
 } from '../features/matrix-dto/roomJoinRule';
 import { startRoomListUpdateDrivenPoll } from '../utils/nativeRoomListUpdates';
+import { createCoalescedRefresh } from '../utils/nativeListRefresh';
 
 export type HierarchyItemSpace = {
   roomId: string;
@@ -176,28 +177,34 @@ const useNativeSpaceChildEdgeMap = (): SpaceChildEdgeMap => {
 
   useEffect(() => {
     let disposed = false;
-    let inFlight = false;
+    let lastEdgesKey: string | undefined;
 
-    const refresh = async () => {
-      if (inFlight) return;
-      inFlight = true;
-      try {
-        if (!isSynaraDesktop()) {
-          if (!disposed) setEdgeMap(new Map());
-          return;
+    const refresh = createCoalescedRefresh(
+      async () => {
+        try {
+          if (!isSynaraDesktop()) {
+            if (!disposed) {
+              lastEdgesKey = undefined;
+              setEdgeMap(new Map());
+            }
+            return;
+          }
+          const snapshot = await readSpaceChildrenWithNativeOwner(true, (command, args) =>
+            invokeDesktopWithAvailability(command, args)
+          );
+          if (!disposed) {
+            // Keep an unchanged graph so the hierarchy is not rebuilt per wake.
+            const key = JSON.stringify(snapshot.edges);
+            if (key === lastEdgesKey) return;
+            lastEdgesKey = key;
+            setEdgeMap(spaceChildEdgeMapFromNative(snapshot.edges));
+          }
+        } catch {
+          // Keep the last known graph during transient failures.
         }
-        const snapshot = await readSpaceChildrenWithNativeOwner(true, (command, args) =>
-          invokeDesktopWithAvailability(command, args)
-        );
-        if (!disposed) {
-          setEdgeMap(spaceChildEdgeMapFromNative(snapshot.edges));
-        }
-      } catch {
-        // Keep the last known graph during transient failures.
-      } finally {
-        inFlight = false;
-      }
-    };
+      },
+      () => disposed
+    );
 
     void refresh();
     const stopPolling = startRoomListUpdateDrivenPoll(() => void refresh());

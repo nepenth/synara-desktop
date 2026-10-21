@@ -86,7 +86,10 @@ import { markAsReadFromExplicitUserAction } from '../../../utils/notifications';
 import { ContainerColor } from '../../../styles/ContainerColor.css';
 import { VirtualTile } from '../../../components/virtualizer';
 import { UserAvatar } from '../../../components/user-avatar';
-import { NativeEventContent, type NativeEventSource } from '../../../features/room/message';
+import {
+  NativeEventContent,
+  type NativeEventSource,
+} from '../../../features/room/message/NativeEventContent';
 import { useMentionClickHandler } from '../../../hooks/useMentionClickHandler';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../../components/BackRouteHandler';
