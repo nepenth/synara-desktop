@@ -2150,7 +2150,7 @@ mod tests {
     }
 
     #[test]
-    fn archive_and_rebuild_store_moves_all_local_components_without_key_operations() {
+    fn archive_and_rebuild_store_moves_all_local_components_without_copying_live_files() {
         let root = std::env::temp_dir().join(format!(
             "synara-store-recovery-command-{}",
             std::process::id()
@@ -2166,7 +2166,11 @@ mod tests {
         fs::write(paths.cache_dir().join("cache.sqlite"), b"cache").expect("cache fixture");
         fs::write(paths.media_dir().join("media.bin"), b"media").expect("media fixture");
 
-        archive_and_rebuild_store(&root, &identity).expect("archive-and-rebuild should succeed");
+        // An in-memory vault: the confirmed reset now ensures a store key, and
+        // unit tests must never reach the user's real keychain.
+        let vault = synara_core::app::store::InMemoryStoreKeyVault::new();
+        archive_and_rebuild_store_with_vault(&root, &identity, &vault)
+            .expect("archive-and-rebuild should succeed");
 
         for directory in [
             paths.state_dir(),
