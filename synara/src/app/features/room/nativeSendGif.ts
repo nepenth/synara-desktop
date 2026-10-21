@@ -1,5 +1,6 @@
-import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { isSynaraDesktop } from '../../utils/desktop';
 import type { GifResult } from '../../utils/gifProvider';
+import { nativeAttachmentInvoke } from './nativeSendAttachment';
 import { sendGifWithNativeOwner } from './nativeSendGifOwner';
 
 export const sendComposerGifWithNativeOwner = (
@@ -8,6 +9,8 @@ export const sendComposerGifWithNativeOwner = (
   replyTo?: string,
   threadRoot?: string
 ): Promise<'native'> =>
-  sendGifWithNativeOwner({ roomId, gif, replyTo, threadRoot }, isSynaraDesktop(), (command, args) =>
-    invokeDesktopWithAvailability(command, args)
+  sendGifWithNativeOwner(
+    { roomId, gif, replyTo, threadRoot },
+    isSynaraDesktop(),
+    nativeAttachmentInvoke
   );

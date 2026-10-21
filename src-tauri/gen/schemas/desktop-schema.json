@@ -435,6 +435,12 @@
           "markdownDescription": "Enables the desktop_play_notification_sound command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_quit command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-quit",
+          "markdownDescription": "Enables the desktop_quit command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_read_diagnostics command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-read-diagnostics",
@@ -601,6 +607,12 @@
           "type": "string",
           "const": "allow-matrix-agent-notification-preferences-snapshot",
           "markdownDescription": "Enables the matrix_agent_notification_preferences_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_attachment_stage command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-attachment-stage",
+          "markdownDescription": "Enables the matrix_attachment_stage command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_backup_repair command without any pre-configured scope.",
@@ -1905,6 +1917,12 @@
           "markdownDescription": "Denies the desktop_play_notification_sound command without any pre-configured scope."
         },
         {
+          "description": "Denies the desktop_quit command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-quit",
+          "markdownDescription": "Denies the desktop_quit command without any pre-configured scope."
+        },
+        {
           "description": "Denies the desktop_read_diagnostics command without any pre-configured scope.",
           "type": "string",
           "const": "deny-desktop-read-diagnostics",
@@ -2071,6 +2089,12 @@
           "type": "string",
           "const": "deny-matrix-agent-notification-preferences-snapshot",
           "markdownDescription": "Denies the matrix_agent_notification_preferences_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_attachment_stage command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-attachment-stage",
+          "markdownDescription": "Denies the matrix_attachment_stage command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_backup_repair command without any pre-configured scope.",

@@ -171,7 +171,8 @@ test('native window chrome matches the in-app titlebar contract', () => {
   assert.match(lib, /desktop::desktop_window_close/);
   assert.match(lib, /desktop::desktop_play_notification_sound/);
   assert.match(lib, /tauri_plugin_single_instance/);
-  assert.match(lib, /desktop::hide_main_window\(window\.app_handle\(\)\)/);
+  // Close hides to the tray, or quits when no tray host can show it (Linux).
+  assert.match(lib, /desktop::close_main_window\(window\.app_handle\(\)\)/);
   assert.match(lib, /matrix::auth::product::matrix_timeline_follow_live/);
   const build = source('../src-tauri/build.rs');
   assert.match(build, /"desktop_window_minimize"/);
@@ -182,7 +183,7 @@ test('native window chrome matches the in-app titlebar contract', () => {
   const desktop = source('../src-tauri/src/desktop.rs');
   assert.match(desktop, /pub fn desktop_window_close/);
   assert.match(desktop, /hide_main_window/);
-  // Close hides to the tray like macOS; Quit is the tray menu's job.
+  // Close hides to the tray like macOS (quits only without a tray host).
   const hideMain =
     desktop.split('pub fn hide_main_window')[1]?.split('pub fn navigate_main_window')[0] ?? '';
   assert.match(hideMain, /window\.hide\(\)/);

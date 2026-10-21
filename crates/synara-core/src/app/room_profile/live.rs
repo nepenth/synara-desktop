@@ -40,8 +40,9 @@ use crate::app::members::{
 };
 use crate::app::room_ops::{
     build_room_create_request, encrypted_state_events_setting_enabled,
-    power_level_tags_readback_source, room_encryption_enable_write, MatrixRoomCreateRequest,
-    PowerLevelTagsReadbackSource, RoomEncryptionEnableWrite,
+    power_level_tags_readback_source, room_create_failure, room_encryption_enable_write,
+    MatrixRoomCreateRequest, PowerLevelTagsReadbackSource, RoomCreateFailure,
+    RoomEncryptionEnableWrite,
 };
 use crate::app::spaces::{
     remove_space_child, reparent_restricted_join_allow, set_space_child, snapshot_space_children,
@@ -671,16 +672,16 @@ impl NativeRoomJoinRuleOwner {
     pub async fn create_room(
         &self,
         input: MatrixRoomCreateRequest,
-    ) -> Result<String, &'static str> {
+    ) -> Result<String, RoomCreateFailure> {
         if self.retired.load(Ordering::Acquire) {
-            return Err("v-send.r-room-profile-join-rule-requires-session");
+            return Err("v-send.r-room-profile-join-rule-requires-session".into());
         }
         let request = build_room_create_request(input)?;
         self.client
             .create_room(request)
             .await
             .map(|room| room.room_id().to_string())
-            .map_err(|_| "v-rooms-room-create-failed")
+            .map_err(|error| room_create_failure(error.client_api_error_kind()))
     }
 
     pub async fn directory_search(

@@ -159,6 +159,13 @@ pub fn desktop_get_integration_status<R: Runtime>(app: AppHandle<R>) -> DesktopI
             supported: true,
             message: "Tray is available.".to_string(),
         }
+    } else if desktop_tray::tray_host_state() == desktop_tray::TrayHostState::Absent {
+        DesktopIntegrationCheck {
+            name: "Tray".to_string(),
+            ready: false,
+            supported: false,
+            message: "No tray host is running, so the tray icon is hidden. Closing the window quits Synara; Ctrl+Q also quits.".to_string(),
+        }
     } else {
         DesktopIntegrationCheck {
             name: "Tray".to_string(),

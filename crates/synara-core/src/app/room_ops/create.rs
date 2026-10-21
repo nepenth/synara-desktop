@@ -21,6 +21,53 @@ use super::{
     MatrixRoomCreateRequest, MatrixRoomCreateVisibility,
 };
 
+/// Why a room create failed: a static, privacy-safe diagnostic and, for a
+/// rate limit, the server's retry hint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RoomCreateFailure {
+    pub diagnostic_id: &'static str,
+    pub retry_after_ms: Option<u64>,
+}
+
+impl From<&'static str> for RoomCreateFailure {
+    fn from(diagnostic_id: &'static str) -> Self {
+        Self {
+            diagnostic_id,
+            retry_after_ms: None,
+        }
+    }
+}
+
+/// Map the server's error for `createRoom`. Rate limits and refusals keep
+/// their own endings (`…-rate-limited`, `…-forbidden`) so the shells can say
+/// what happened; everything else stays `v-rooms-room-create-failed`.
+pub fn room_create_failure(
+    kind: Option<&matrix_sdk::ruma::api::error::ErrorKind>,
+) -> RoomCreateFailure {
+    use matrix_sdk::ruma::api::error::ErrorKind;
+    match kind {
+        Some(ErrorKind::LimitExceeded(data)) => RoomCreateFailure {
+            diagnostic_id: "v-rooms-room-create-rate-limited",
+            retry_after_ms: data.retry_after.as_ref().and_then(retry_after_ms),
+        },
+        Some(ErrorKind::Forbidden | ErrorKind::GuestAccessForbidden) => {
+            "v-rooms-room-create-forbidden".into()
+        }
+        _ => "v-rooms-room-create-failed".into(),
+    }
+}
+
+fn retry_after_ms(retry_after: &matrix_sdk::ruma::api::error::RetryAfter) -> Option<u64> {
+    use matrix_sdk::ruma::api::error::RetryAfter;
+    let delay = match retry_after {
+        RetryAfter::Delay(delay) => *delay,
+        RetryAfter::DateTime(at) => at
+            .duration_since(std::time::SystemTime::now())
+            .unwrap_or_default(),
+    };
+    u64::try_from(delay.as_millis()).ok()
+}
+
 pub fn build_room_create_request(
     input: MatrixRoomCreateRequest,
 ) -> Result<create_room::v3::Request, &'static str> {
@@ -390,6 +437,38 @@ mod tests {
         assert!(content
             .get("io.element.msc4362.encrypt_state_events")
             .is_none());
+    }
+
+    #[test]
+    fn room_create_failures_keep_rate_limit_and_forbidden_endings() {
+        use matrix_sdk::ruma::api::error::{ErrorKind, LimitExceededErrorData, RetryAfter};
+
+        let mut limited = LimitExceededErrorData::new();
+        limited.retry_after = Some(RetryAfter::Delay(std::time::Duration::from_millis(2_500)));
+        assert_eq!(
+            room_create_failure(Some(&ErrorKind::LimitExceeded(limited))),
+            RoomCreateFailure {
+                diagnostic_id: "v-rooms-room-create-rate-limited",
+                retry_after_ms: Some(2_500),
+            }
+        );
+        let unhinted = room_create_failure(Some(&ErrorKind::LimitExceeded(
+            LimitExceededErrorData::new(),
+        )));
+        assert_eq!(unhinted.diagnostic_id, "v-rooms-room-create-rate-limited");
+        assert_eq!(unhinted.retry_after_ms, None);
+        assert_eq!(
+            room_create_failure(Some(&ErrorKind::Forbidden)).diagnostic_id,
+            "v-rooms-room-create-forbidden"
+        );
+        assert_eq!(
+            room_create_failure(Some(&ErrorKind::NotFound)).diagnostic_id,
+            "v-rooms-room-create-failed"
+        );
+        assert_eq!(
+            room_create_failure(None),
+            RoomCreateFailure::from("v-rooms-room-create-failed")
+        );
     }
 
     #[test]

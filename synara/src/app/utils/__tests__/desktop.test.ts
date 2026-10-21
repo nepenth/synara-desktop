@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildDesktopNotificationRoomRoute,
   createDebouncedTrayStateUpdater,
+  DESKTOP_DROPPED_FILE_READ_CHUNK_SIZE,
   DESKTOP_FILE_IPC_CHUNK_SIZE,
   DESKTOP_FILE_IPC_INLINE_THRESHOLD,
   DESKTOP_TRAY_DND_TOGGLE_EVENT,
@@ -1182,8 +1183,8 @@ test('desktop dropped file read rejects truncated streamed transfers', async () 
   };
 
   try {
-    const files = await readDesktopDroppedFiles(['/tmp/truncated-drop.bin']);
-    assert.deepEqual(files, []);
+    const dropped = await readDesktopDroppedFiles(['/tmp/truncated-drop.bin']);
+    assert.deepEqual(dropped, { files: [], tooLarge: [] });
   } finally {
     (globalThis as any).window = originalWindow;
   }
@@ -1214,12 +1215,10 @@ test('desktop dropped file read streams large transfers through chunk commands',
           ];
         }
         if (command === 'desktop_read_dropped_file_chunk') {
+          // Rust answers with a raw `ipc::Response`: an ArrayBuffer.
           const offset = Number(args?.offset ?? 0);
           const length = Number(args?.length ?? 0);
-          if (offset === 0) {
-            return Array.from({ length }, () => 7);
-          }
-          return Array.from({ length }, () => 8);
+          return new Uint8Array(length).fill(offset === 0 ? 7 : 8).buffer;
         }
         return true;
       },
@@ -1227,13 +1226,13 @@ test('desktop dropped file read streams large transfers through chunk commands',
   };
 
   try {
-    const files = await readDesktopDroppedFiles(['/tmp/large-drop.bin']);
+    const { files } = await readDesktopDroppedFiles(['/tmp/large-drop.bin']);
     assert.equal(files.length, 1);
     assert.equal(files[0]?.name, 'large-drop.bin');
     assert.equal(files[0]?.size, totalSize);
     const content = new Uint8Array(await files[0]!.arrayBuffer());
     assert.equal(content[0], 7);
-    assert.equal(content[DESKTOP_FILE_IPC_INLINE_THRESHOLD], 8);
+    assert.equal(content[DESKTOP_DROPPED_FILE_READ_CHUNK_SIZE], 8);
     assert.equal(content.at(-1), 8);
   } finally {
     (globalThis as any).window = originalWindow;
@@ -1241,16 +1240,65 @@ test('desktop dropped file read streams large transfers through chunk commands',
 
   assert.deepEqual(calls[0], {
     command: 'desktop_read_dropped_files',
-    args: { paths: ['/tmp/large-drop.bin'] },
+    args: { paths: ['/tmp/large-drop.bin'], maxFileBytes: undefined },
   });
+  // 8 MiB raw chunks: one full chunk and the 2-byte rest.
   assert.equal(
     calls.filter((call) => call.command === 'desktop_read_dropped_file_chunk').length,
-    9
+    2
   );
   assert.deepEqual(calls.at(-1), {
     command: 'desktop_read_dropped_file_end',
     args: { transferId: 'drop-transfer-1' },
   });
+});
+
+test('desktop dropped files over the upload limit are reported without being read', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        if (command === 'desktop_read_dropped_files') {
+          return [
+            { name: 'small.txt', transferId: 'drop-small', size: 2 },
+            { name: 'movie.mov', size: 200 * 1024 * 1024, tooLarge: true },
+          ];
+        }
+        if (command === 'desktop_read_dropped_file_chunk') {
+          return new Uint8Array([111, 107]).buffer;
+        }
+        return true;
+      },
+    },
+  };
+
+  try {
+    const dropped = await readDesktopDroppedFiles(
+      ['/tmp/small.txt', '/tmp/movie.mov'],
+      32 * 1024 * 1024
+    );
+    assert.equal(dropped.files.length, 1);
+    assert.equal(dropped.files[0]?.name, 'small.txt');
+    assert.deepEqual(dropped.tooLarge, [{ name: 'movie.mov', size: 200 * 1024 * 1024 }]);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(calls[0], {
+    command: 'desktop_read_dropped_files',
+    args: { paths: ['/tmp/small.txt', '/tmp/movie.mov'], maxFileBytes: 32 * 1024 * 1024 },
+  });
+  // Only the accepted file is read.
+  assert.deepEqual(
+    calls
+      .filter((call) => call.command === 'desktop_read_dropped_file_chunk')
+      .map((call) => call.args?.transferId),
+    ['drop-small']
+  );
 });
 
 test('desktop clipboard image read converts native RGBA into an attachable PNG file', async () => {

@@ -1,14 +1,23 @@
-import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import {
+  invokeDesktopBodyWithAvailability,
+  invokeDesktopWithAvailability,
+  isSynaraDesktop,
+} from '../../utils/desktop';
 import {
   isNativeMatrixLoggedIn,
   sendAttachmentWithNativeOwner,
+  type NativeInvoke,
   type NativeSendAttachmentInput,
 } from './nativeSendAttachmentOwner';
 
+/** Desktop invoke for the attachment owners: bytes go as a raw body. */
+export const nativeAttachmentInvoke: NativeInvoke = (command, args) =>
+  args instanceof Uint8Array
+    ? invokeDesktopBodyWithAvailability(command, args)
+    : invokeDesktopWithAvailability(command, args);
+
 export const nativeComposerAttachmentReady = (): Promise<boolean> =>
-  isNativeMatrixLoggedIn(isSynaraDesktop(), (command, args) =>
-    invokeDesktopWithAvailability(command, args)
-  );
+  isNativeMatrixLoggedIn(isSynaraDesktop(), nativeAttachmentInvoke);
 
 /**
  * Send one composer file. The composer converts and sends files one at a
@@ -17,11 +26,9 @@ export const nativeComposerAttachmentReady = (): Promise<boolean> =>
 export const sendComposerAttachmentWithNativeOwner = (
   input: NativeSendAttachmentInput
 ): Promise<'native' | 'legacy'> =>
-  sendAttachmentWithNativeOwner(input, isSynaraDesktop(), (command, args) =>
-    invokeDesktopWithAvailability(command, args)
-  );
+  sendAttachmentWithNativeOwner(input, isSynaraDesktop(), nativeAttachmentInvoke);
 
-export async function fileToNativeAttachmentBytes(file: Blob): Promise<number[]> {
-  const buffer = await file.arrayBuffer();
-  return Array.from(new Uint8Array(buffer));
+/** The file's bytes for the raw-body attachment stage (no number array). */
+export async function fileToNativeAttachmentBytes(file: Blob): Promise<Uint8Array> {
+  return new Uint8Array(await file.arrayBuffer());
 }

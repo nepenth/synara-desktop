@@ -908,7 +908,10 @@ pub(super) fn room_members_snapshot_owner_error(diagnostic_id: &'static str) -> 
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
-pub(super) fn room_create_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+pub(super) fn room_create_owner_error(
+    failure: crate::app::room_ops::RoomCreateFailure,
+) -> MatrixIpcError {
+    let diagnostic_id = failure.diagnostic_id;
     let category = match diagnostic_id {
         "v-rooms-room-create-invalid-name"
         | "v-rooms-room-create-invalid-topic"
@@ -922,9 +925,16 @@ pub(super) fn room_create_owner_error(diagnostic_id: &'static str) -> MatrixIpcE
         | "v-rooms-room-create-missing-restricted-parent"
         | "v-rooms-room-create-invalid-power-level" => MatrixIpcErrorCategory::SdkInvariant,
         "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        "v-rooms-room-create-rate-limited" => MatrixIpcErrorCategory::RateLimited,
+        // A server refusal stays apart from Forbidden, which the shells read
+        // as "no session".
         _ => MatrixIpcErrorCategory::Unknown,
     };
-    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+    let error = MatrixIpcError::new(category).with_diagnostic(diagnostic_id);
+    match failure.retry_after_ms {
+        Some(retry_after_ms) => error.with_retry_after_ms(retry_after_ms),
+        None => error,
+    }
 }
 
 /// Typed `matrix_space_parents_snapshot`.

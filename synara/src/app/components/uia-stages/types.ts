@@ -5,6 +5,8 @@ export type RegisterAuthDict =
   | { type: 'm.login.terms'; session?: string }
   | { type: 'm.login.registration_token'; token: string; session?: string }
   | { type: 'm.login.recaptcha'; response: string; session?: string }
+  /** Retry after a stage was completed on the homeserver's fallback page. */
+  | { type: 'session_only'; session: string }
   | {
       type: 'm.login.email.identity';
       sid: string;

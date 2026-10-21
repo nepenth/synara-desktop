@@ -97,6 +97,7 @@ export function ThreadSidePanel({
       aria-label="Thread"
       role="complementary"
       data-thread-side-panel={rootEventId}
+      data-file-drop-region="thread"
     >
       <button
         type="button"

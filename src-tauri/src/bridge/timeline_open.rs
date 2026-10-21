@@ -71,16 +71,29 @@ fn map_timeline_open_core_error(error: MatrixIpcError) -> MatrixAuthCommandError
                 "The native Matrix timeline is unavailable.",
                 "v-timeline-thread-open-failed",
             ),
-            _ => MatrixAuthCommandError::new(
+            // Any other Core diagnostic (`v-timeline-focused-open-failed`,
+            // pagination or decoration failures, …) passes through unchanged
+            // so the renderer can name what failed; Core diagnostics are
+            // static, privacy-safe codes.
+            Some(diagnostic) => MatrixAuthCommandError::new(
+                "Unknown",
+                "The native Matrix timeline is unavailable.",
+                diagnostic,
+            ),
+            None => MatrixAuthCommandError::new(
                 "InvalidRequest",
                 "The native Matrix timeline request is invalid.",
                 "d0.3-timeline-invalid-room-id",
             ),
         },
+        // Core files `v-timeline-focused-open-failed` and other open
+        // failures under Unknown; keep their id instead of a generic one.
         _ => MatrixAuthCommandError::new(
             "Unknown",
             "The native Matrix timeline is unavailable.",
-            "d0.3-timeline-open-failed",
+            error
+                .diagnostic_id
+                .unwrap_or_else(|| "d0.3-timeline-open-failed".to_owned()),
         ),
     }
 }
@@ -102,6 +115,37 @@ mod tests {
             assert_eq!(error.code, "NotFound");
             assert_eq!(error.diagnostic_id, diagnostic);
         }
+    }
+
+    #[test]
+    fn unknown_core_diagnostics_pass_through_instead_of_reading_as_invalid_room() {
+        // As Core files it (`timeline_open_owner_error`): category Unknown.
+        let focused = map_timeline_open_core_error(
+            MatrixIpcError::new(MatrixIpcErrorCategory::Unknown)
+                .with_diagnostic("v-timeline-focused-open-failed"),
+        );
+        assert_eq!(focused.diagnostic_id, "v-timeline-focused-open-failed");
+        assert_eq!(focused.code, "Unknown");
+        let invariant = map_timeline_open_core_error(
+            MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
+                .with_diagnostic("v-timeline-focused-open-failed"),
+        );
+        assert_eq!(invariant.diagnostic_id, "v-timeline-focused-open-failed");
+        let unexplained =
+            map_timeline_open_core_error(MatrixIpcError::new(MatrixIpcErrorCategory::Unknown));
+        assert_eq!(unexplained.diagnostic_id, "d0.3-timeline-open-failed");
+
+        let other = map_timeline_open_core_error(
+            MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
+                .with_diagnostic("v-timeline-some-future-failure"),
+        );
+        assert_eq!(other.diagnostic_id, "v-timeline-some-future-failure");
+
+        // Only a rejection without any diagnostic keeps the generic id.
+        let bare =
+            map_timeline_open_core_error(MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant));
+        assert_eq!(bare.diagnostic_id, "d0.3-timeline-invalid-room-id");
+        assert_eq!(bare.code, "InvalidRequest");
     }
 
     #[test]

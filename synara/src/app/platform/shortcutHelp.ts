@@ -4,8 +4,10 @@ import type { PlatformShortcutApplyResult } from './shortcuts';
 export const BASELINE_SHORTCUT_HELP =
   'Check the session permissions for global shortcuts and try again.';
 
+// Carbon hot keys need no Input Monitoring permission; on macOS a failed
+// registration means another app already holds the combination.
 export const MACOS_SHORTCUT_HELP =
-  'On macOS, grant Synara Input Monitoring permission in System Settings > Privacy & Security.';
+  'On macOS, another app may already use this shortcut. Choose a different combination or leave it empty to turn it off.';
 
 export const KDE_WAYLAND_SHORTCUT_HELP =
   'On KDE Plasma Wayland, global shortcut capture can require manual registration in System Settings > Shortcuts.';

@@ -178,39 +178,39 @@ Target boundary:
 
 ## Content-Security-Policy Exceptions
 
-Synara Desktop sets its CSP in `src-tauri/tauri.conf.json`. The baseline is
-`default-src 'self'` with hardening directives (`base-uri 'none'`,
-`object-src 'none'`, `form-action 'none'`). The following sources deviate from
-that baseline and are required for Matrix federation, desktop shell integration,
-or embedded call UI.
+Synara Desktop sets its CSP in `src-tauri/tauri.conf.json` (`app.security.csp`;
+`devCsp` adds the Vite dev server's loopback HTTP and WebSocket sources and is
+used only by `tauri dev`). The baseline is `default-src 'self'` with hardening
+directives (`base-uri 'none'`, `object-src 'none'`, `frame-src 'none'`,
+`form-action 'none'`). The renderer no longer talks to homeservers after
+sign-in: sync, media and every Matrix request go through Rust commands and the
+`synara-media:` protocol. The following sources deviate from the baseline.
+`src-tauri/src/lib.rs` (`csp_tests`) pins them.
 
 | Directive | Exception | Justification |
 | --- | --- | --- |
-| `script-src` | `'wasm-unsafe-eval'` | `matrix-js-sdk` initializes the Rust crypto backend via `initRustCrypto()` in `synara/src/client/initMatrix.ts`. WebAssembly compilation requires this CSP keyword; without it E2EE, verification, and encrypted media fail. |
-| `style-src` | `'unsafe-inline'` | Runtime theme and layout code sets inline styles (`ThemeManager.tsx`, `ClientNonUIFeatures.tsx`, `CallEmbed.ts`). UI libraries also emit inline style attributes. A nonce/hash-only policy would require a large refactor. |
-| `img-src` | `data:` | Inline data-URI avatars, placeholders, and generated thumbnails in the message timeline. |
-| `img-src` | `blob:` | Object URLs created by the media domain (`synara/src/app/matrix/media.ts`) for decrypted attachments and local previews before upload. |
-| `img-src` | `filesystem:` | Legacy Chromium/Tauri file-picker preview URLs for local image selection flows. |
-| `img-src` | `http:` `https:` | Matrix federation media: MXC URLs resolve to arbitrary homeserver and CDN hosts (`/_matrix/media/...`). Users connect to any federated homeserver; host allowlists are not practical. |
+| `script-src` | `'wasm-unsafe-eval'` | pdf.js (`synara/src/app/plugins/pdfjs-*.ts`) can compile its bundled WebAssembly image decoders (JBIG2, OpenJPEG) when rendering PDF attachments. |
+| `style-src` | `'unsafe-inline'` | Runtime theme and layout code sets inline styles (`ThemeManager.tsx`, `ClientNonUIFeatures.tsx`). UI libraries also emit inline style attributes. A nonce/hash-only policy would require a large refactor. |
+| `img-src` | `data:` | Inline data-URI avatars, placeholders, QR codes and generated thumbnails. |
+| `img-src` | `blob:` | Object URLs for local previews before upload and for decrypted media. |
+| `img-src` `media-src` `connect-src` | `synara-media:` | The Rust media protocol (`src-tauri/src/lib.rs`) serves every Matrix image, video, audio and PDF, decrypted by the SDK. |
+| `img-src` | `https://media.tenor.com` `https://*.giphy.com` | GIF search previews from the built-in Tenor and Giphy providers (off unless `config.json` configures `gifPicker`). A custom GIF endpoint also needs its media host added here. |
 | `font-src` | `data:` | Embedded icon and font data URIs shipped with the bundled frontend assets. |
-| `media-src` | `data:` `blob:` | Local and decrypted audio/video playback via object URLs and inline media previews in the timeline. |
-| `media-src` | `http:` `https:` | Matrix federation media playback (voice messages, video, call recordings) from homeserver media endpoints. |
-| `connect-src` | `blob:` | Fetch/XHR against blob URLs produced by the media and crypto layers (e.g. decrypted attachment buffers). |
-| `connect-src` | `ipc:` `http://ipc.localhost` | Tauri v2 IPC custom protocol for native command invocation (`@tauri-apps/api`). Required for desktop shell features (session persistence, filesystem, notifications). |
-| `connect-src` | `ws:` `wss:` | Matrix sync long-polling fallback and live sync WebSockets to the connected homeserver and federated endpoints. |
-| `connect-src` | `http:` `https:` | Matrix Client-Server API, identity lookups, push gateways, Element Call widget API traffic, and authenticated media fetches via the service worker (`synara/src/sw.ts`). Homeserver host is user-configured and federated. |
-| `worker-src` | `blob:` | Service worker and module-worker bootstrap paths used by the authenticated media fetch worker (`synara/src/sw.ts`) and bundler-generated worker chunks. |
-| `frame-src` | `'self'` | Element Call is embedded from the same-origin bundled path `/public/element-call/index.html` via `CallEmbed.ts`; no remote iframe origins are used. |
-| `frame-src` | `blob:` | Retained for blob-backed iframe/worker fallbacks inside the Element Call embed; same-origin `'self'` covers the primary call surface. |
+| `media-src` | `data:` `blob:` | Local audio/video previews and object-URL playback. |
+| `connect-src` | `blob:` | `fetch` of object URLs (image viewer download, pdf.js). |
+| `connect-src` | `ipc:` `http://ipc.localhost` | Tauri v2 IPC custom protocol for native command invocation (`@tauri-apps/api`). |
+| `connect-src` | `https:` | Sign-in still resolves the homeserver from the renderer (`synara/src/app/cs-api.ts`: `/.well-known/matrix/client` and `/_matrix/client/versions` on the server the user types), and GIF search calls the configured provider. |
+| `connect-src` | `http://localhost:*/…` `http://127.0.0.1:*/…` `http://[::1]:*/…` | The same two discovery paths only, for a homeserver on this machine (plain HTTP is allowed only for loopback hosts). Other loopback services stay unreachable from the webview. |
+| `worker-src` | `'self'` `blob:` | The pdf.js worker and bundler-generated worker chunks. |
 
 ### Residual risk
 
-`http:` and `https:` wildcards on `img-src`, `media-src`, and `connect-src`
-remain because Matrix clients must reach arbitrary federated homeservers and
-their media CDNs. Tightening these further would break login, sync, media, and
-calls for non-default servers. `frame-src` was narrowed from `http: https:` to
-`'self' blob:` because call embeds load only from the bundled Element Call
-assets (see `synara/src/app/plugins/call/CallEmbed.ts`).
+`connect-src https:` remains until sign-in discovery moves to Core
+(`synara_core::app::auth::resolve_homeserver` already does it for iOS); then the
+directive can shrink to the GIF provider hosts. Images and media no longer
+accept arbitrary `https:` sources, so a renderer bug cannot load remote
+tracking images, and loopback services (agent dashboards, dev servers) are not
+reachable from the webview.
 
 ## External URL policy (MIP1 remediation)
 

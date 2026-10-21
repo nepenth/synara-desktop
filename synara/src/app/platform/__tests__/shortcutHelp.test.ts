@@ -10,6 +10,7 @@ import {
   buildShortcutFailureMessage,
   selectShortcutPermissionHelp,
 } from '../shortcutHelp';
+import { desktopShortcutConfigProblem } from '../shortcuts';
 import type { PlatformIntegrationStatus } from '../diagnostics';
 
 const baseStatus: PlatformIntegrationStatus = {
@@ -77,6 +78,28 @@ test('buildShortcutFailureMessage appends platform-specific helper text', () => 
   assert.ok(message.includes('Shortcut registration needs permission'));
   assert.ok(message.includes('macOS'));
   assert.ok(!message.toLowerCase().includes('kde plasma wayland'));
+});
+
+test('macOS shortcut help does not send users to Input Monitoring', () => {
+  assert.ok(!MACOS_SHORTCUT_HELP.includes('Input Monitoring'));
+  assert.ok(MACOS_SHORTCUT_HELP.includes('turn it off'));
+});
+
+test('an empty shortcut is off and never a duplicate; enabled ones must differ', () => {
+  assert.equal(desktopShortcutConfigProblem(['', '', '']), undefined);
+  assert.equal(desktopShortcutConfigProblem(['CmdOrCtrl+Alt+Shift+M', '', ' ']), undefined);
+  assert.equal(
+    desktopShortcutConfigProblem(['CmdOrCtrl+Alt+Shift+M', '', 'cmdorctrl+alt+shift+m']),
+    'duplicate'
+  );
+  assert.equal(
+    desktopShortcutConfigProblem([
+      'CmdOrCtrl+Alt+Shift+M',
+      'CmdOrCtrl+Alt+Shift+L',
+      'CmdOrCtrl+Alt+Shift+N',
+    ]),
+    undefined
+  );
 });
 
 test('shortcut help falls back to baseline for unknown platforms', () => {

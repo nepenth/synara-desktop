@@ -7,7 +7,8 @@ type NativeSessionSnapshot = {
 export type NativeSendAttachmentFile = {
   filename: string;
   mimeType: string;
-  bytes: number[];
+  /** Sent as a raw IPC body, never as a JSON number array. */
+  bytes: Uint8Array;
 };
 
 export type NativeSendAttachmentInput = {
@@ -35,10 +36,24 @@ export type NativeSendAttachmentResult = {
   status: 'sent' | 'queued';
 };
 
+/** `args` may be a `Uint8Array`, which Tauri sends as the raw request body. */
 export type NativeInvoke = (
   command: string,
-  args?: Record<string, unknown>
+  args?: Record<string, unknown> | Uint8Array
 ) => Promise<DesktopInvokeResult<unknown>>;
+
+/**
+ * Hand the file bytes to Rust as one raw binary IPC body; the returned id
+ * names them in `matrix_send_attachment`. A 30 MB file used to become a
+ * 30-million-element JSON array on the UI thread.
+ */
+async function stageAttachmentBytes(bytes: Uint8Array, invoke: NativeInvoke): Promise<string> {
+  const staged = await invoke('matrix_attachment_stage', bytes);
+  if (!staged.available || typeof staged.value !== 'string' || !staged.value) {
+    throw new Error('Native Matrix attachment send is unavailable.');
+  }
+  return staged.value;
+}
 
 export async function isNativeMatrixLoggedIn(
   desktopAvailable: boolean,
@@ -64,11 +79,12 @@ export async function sendAttachmentWithNativeOwner(
     return 'legacy';
   }
 
+  const stagedId = await stageAttachmentBytes(input.file.bytes, invoke);
   const send = await invoke('matrix_send_attachment', {
     roomId: input.roomId,
     filename: input.file.filename,
     mimeType: input.file.mimeType,
-    bytes: input.file.bytes,
+    stagedId,
     transactionId: input.transactionId,
     caption: input.caption,
     formattedCaption: input.formattedCaption,

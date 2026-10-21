@@ -88,8 +88,90 @@ pub async fn matrix_edit_message(
     .await
 }
 
-/// V-SEND.1 sole composer attachment upload+send owner. Bytes cross IPC once;
-/// encrypted rooms are encrypted by the managed SDK (no JS dual-encrypt).
+/// Composer attachment bytes waiting for `matrix_send_attachment`. They
+/// arrive as one raw IPC body; a JSON number array cost about three bytes of
+/// JSON and one JS number per byte on the UI thread.
+struct StagedAttachment {
+    bytes: Vec<u8>,
+    staged_at: std::time::Instant,
+}
+
+/// The composer sends files one at a time; a few slots cover overlap.
+const MAX_STAGED_ATTACHMENTS: usize = 4;
+/// Unclaimed bytes (a renderer that failed between the two calls) expire.
+const STAGED_ATTACHMENT_TTL: std::time::Duration = std::time::Duration::from_secs(120);
+
+type StagedAttachments = std::sync::Mutex<std::collections::HashMap<String, StagedAttachment>>;
+
+fn staged_attachments() -> &'static StagedAttachments {
+    static STAGED: std::sync::OnceLock<StagedAttachments> = std::sync::OnceLock::new();
+    STAGED.get_or_init(Default::default)
+}
+
+/// The bytes of a stage request: the raw body, or (from Tauri's
+/// `postMessage` fallback IPC, which cannot carry raw bodies) a JSON array.
+fn attachment_stage_bytes(
+    body: &tauri::ipc::InvokeBody,
+) -> Result<Vec<u8>, MatrixAuthCommandError> {
+    let bytes = match body {
+        tauri::ipc::InvokeBody::Raw(bytes) => bytes.clone(),
+        tauri::ipc::InvokeBody::Json(value) => serde_json::from_value::<Vec<u8>>(value.clone())
+            .map_err(|_| map_attachment_error("v-send.1-attachment-empty"))?,
+    };
+    if bytes.is_empty() {
+        return Err(map_attachment_error("v-send.1-attachment-empty"));
+    }
+    if bytes.len() > MAX_ATTACHMENT_IPC_BYTES {
+        return Err(map_attachment_error("v-send.1-attachment-too-large"));
+    }
+    Ok(bytes)
+}
+
+fn stage_attachment(bytes: Vec<u8>) -> Result<String, MatrixAuthCommandError> {
+    let mut staged = staged_attachments()
+        .lock()
+        .map_err(|_| map_attachment_error("p7.4-active-attachment-cap"))?;
+    let now = std::time::Instant::now();
+    staged.retain(|_, entry| now.duration_since(entry.staged_at) <= STAGED_ATTACHMENT_TTL);
+    if staged.len() >= MAX_STAGED_ATTACHMENTS {
+        return Err(map_attachment_error("p7.4-active-attachment-cap"));
+    }
+    let id = crate::desktop_file_transfer::new_file_transfer_id("attachment");
+    staged.insert(
+        id.clone(),
+        StagedAttachment {
+            bytes,
+            staged_at: now,
+        },
+    );
+    Ok(id)
+}
+
+/// Take staged bytes once; an unknown or expired id reads as an empty file.
+fn take_staged_attachment(staged_id: &str) -> Result<Vec<u8>, MatrixAuthCommandError> {
+    let entry = staged_attachments()
+        .lock()
+        .map_err(|_| map_attachment_error("p7.4-active-attachment-cap"))?
+        .remove(staged_id);
+    entry
+        .filter(|entry| entry.staged_at.elapsed() <= STAGED_ATTACHMENT_TTL)
+        .map(|entry| entry.bytes)
+        .ok_or_else(|| map_attachment_error("v-send.1-attachment-empty"))
+}
+
+/// Stage one composer attachment from a raw binary IPC body
+/// (`invoke('matrix_attachment_stage', uint8Array)`). Returns the id that
+/// `matrix_send_attachment` takes as `staged_id`.
+#[tauri::command]
+pub async fn matrix_attachment_stage(
+    request: tauri::ipc::Request<'_>,
+) -> Result<String, MatrixAuthCommandError> {
+    stage_attachment(attachment_stage_bytes(request.body())?)
+}
+
+/// V-SEND.1 sole composer attachment upload+send owner. The bytes were
+/// staged by `matrix_attachment_stage` (raw IPC body); encrypted rooms are
+/// encrypted by the managed SDK (no JS dual-encrypt).
 /// V-SEND.5 extends the same command with optional `thread_root` so native
 /// sessions can start / continue threads without JS relation ownership.
 #[tauri::command]
@@ -99,7 +181,7 @@ pub async fn matrix_send_attachment(
     room_id: String,
     filename: String,
     mime_type: String,
-    bytes: Vec<u8>,
+    staged_id: String,
     caption: Option<String>,
     formatted_caption: Option<String>,
     reply_to: Option<String>,
@@ -121,6 +203,7 @@ pub async fn matrix_send_attachment(
     .map_err(map_attachment_error)?;
     let filename = validate_attachment_filename(&filename)?;
     let mime_type = validate_attachment_mime(&mime_type)?;
+    let bytes = take_staged_attachment(&staged_id)?;
     if bytes.is_empty() {
         return Err(map_attachment_error("v-send.1-attachment-empty"));
     }
@@ -470,4 +553,66 @@ pub(crate) fn message_content(
         ),
         _ => map_send_error(diagnostic),
     })
+}
+
+#[cfg(test)]
+mod attachment_staging_tests {
+    use super::*;
+
+    #[test]
+    fn attachment_bytes_arrive_as_a_raw_body_and_are_taken_once() {
+        let body = tauri::ipc::InvokeBody::Raw(vec![0x89, b'P', b'N', b'G']);
+        let id =
+            stage_attachment(attachment_stage_bytes(&body).expect("raw body")).expect("staged");
+        assert!(id.starts_with("attachment-"));
+        assert_eq!(
+            take_staged_attachment(&id).expect("staged bytes"),
+            vec![0x89, b'P', b'N', b'G']
+        );
+        // A second send with the same id finds nothing.
+        assert_eq!(
+            take_staged_attachment(&id)
+                .expect_err("taken once")
+                .diagnostic_id,
+            "v-send.1-attachment-empty"
+        );
+    }
+
+    #[test]
+    fn attachment_stage_accepts_the_json_fallback_and_rejects_bad_bodies() {
+        // Tauri's postMessage IPC fallback cannot carry raw bodies.
+        let json = tauri::ipc::InvokeBody::Json(serde_json::json!([1, 2, 3]));
+        assert_eq!(
+            attachment_stage_bytes(&json).expect("json bytes"),
+            vec![1, 2, 3]
+        );
+        let empty = tauri::ipc::InvokeBody::Raw(Vec::new());
+        assert_eq!(
+            attachment_stage_bytes(&empty)
+                .expect_err("empty")
+                .diagnostic_id,
+            "v-send.1-attachment-empty"
+        );
+        let object = tauri::ipc::InvokeBody::Json(serde_json::json!({ "bytes": [1] }));
+        assert!(attachment_stage_bytes(&object).is_err());
+        let too_large = tauri::ipc::InvokeBody::Raw(vec![0; MAX_ATTACHMENT_IPC_BYTES + 1]);
+        assert_eq!(
+            attachment_stage_bytes(&too_large)
+                .expect_err("too large")
+                .diagnostic_id,
+            "v-send.1-attachment-too-large"
+        );
+    }
+
+    #[test]
+    fn send_attachment_takes_a_staged_id_not_a_byte_array() {
+        let source = include_str!("product_commands.rs");
+        let send = source
+            .split("pub async fn matrix_send_attachment(")
+            .nth(1)
+            .and_then(|rest| rest.split(") -> Result").next())
+            .expect("matrix_send_attachment arguments");
+        assert!(send.contains("staged_id: String"));
+        assert!(!send.contains("Vec<u8>"));
+    }
 }

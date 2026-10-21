@@ -80,11 +80,79 @@ fn image_content_type(bytes: &[u8]) -> Option<&'static str> {
     }
 }
 
+/// Brands of an ISO base media file (`ftyp` box): the major brand at 8..12
+/// and the compatible brands after the minor version, within the box.
+fn iso_media_brands(bytes: &[u8]) -> Vec<&[u8]> {
+    if bytes.len() < 12 || &bytes[4..8] != b"ftyp" {
+        return Vec::new();
+    }
+    let box_len = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
+    let end = box_len.clamp(12, bytes.len().min(256));
+    let mut brands = vec![&bytes[8..12]];
+    let mut offset = 16;
+    while offset + 4 <= end {
+        brands.push(&bytes[offset..offset + 4]);
+        offset += 4;
+    }
+    brands
+}
+
+/// The types an `ftyp` file may be served as, most specific first.
+fn iso_media_candidates(bytes: &[u8]) -> &'static [&'static str] {
+    let brands = iso_media_brands(bytes);
+    let major = brands.first().copied().unwrap_or_default();
+    let has = |names: &[&[u8; 4]]| {
+        brands
+            .iter()
+            .any(|brand| names.iter().any(|name| *brand == &name[..]))
+    };
+    // HEIF stills (iPhone camera photos). WebKit on macOS decodes them; a
+    // webview that cannot shows the row's file fallback instead.
+    if matches!(major, b"heic" | b"heix" | b"heim" | b"heis") {
+        return &["image/heic", "image/heif"];
+    }
+    if matches!(major, b"mif1" | b"msf1" | b"hevc" | b"hevx") || has(&[b"heic", b"mif1"]) {
+        return &["image/heif", "image/heic"];
+    }
+    // QuickTime movies (iPhone camera videos) share the MP4 container.
+    if major == b"qt  " {
+        return &["video/quicktime", "video/mp4"];
+    }
+    if matches!(major, b"M4A " | b"M4B ") {
+        return &["audio/mp4", "video/mp4"];
+    }
+    &["video/mp4", "audio/mp4", "video/quicktime"]
+}
+
+/// Common non-standard names senders use for types the protocol serves.
+fn canonical_media_type(essence: &str) -> &str {
+    match essence {
+        "image/jpg" | "image/pjpeg" => "image/jpeg",
+        "image/x-png" => "image/png",
+        "audio/x-m4a" | "audio/m4a" | "audio/x-mp4" => "audio/mp4",
+        "video/x-m4v" | "video/m4v" => "video/mp4",
+        "audio/x-wav" | "audio/wave" | "audio/vnd.wave" => "audio/wav",
+        "audio/x-flac" => "audio/flac",
+        "audio/mp3" | "audio/x-mp3" | "audio/mpeg3" => "audio/mpeg",
+        "audio/x-aac" | "audio/aacp" => "audio/aac",
+        "audio/opus" | "audio/x-opus+ogg" | "audio/x-ogg" => "audio/ogg",
+        "image/heic-sequence" => "image/heic",
+        "image/heif-sequence" => "image/heif",
+        other => other,
+    }
+}
+
+/// The type to serve a timeline file as, or `None` (415). The bytes must
+/// sniff as an allowlisted format and the sender's declared type must name
+/// that format; only its essence counts (`audio/ogg; codecs=opus`).
 fn timeline_media_content_type(bytes: &[u8], declared: Option<&str>) -> Option<&'static str> {
     let candidates: &[&'static str] = if let Some(image) = image_content_type(bytes) {
         &[image]
     } else if bytes.starts_with(b"%PDF-") {
         &["application/pdf"]
+    } else if matches!(bytes, [0xff, second, ..] if second & 0xf6 == 0xf0) {
+        // ADTS AAC: MPEG sync with layer bits 00.
+        &["audio/aac"]
     } else if bytes.starts_with(b"ID3")
         || matches!(bytes, [0xff, second, ..] if second & 0xe0 == 0xe0)
     {
@@ -96,21 +164,110 @@ fn timeline_media_content_type(bytes: &[u8], declared: Option<&str>) -> Option<&
     } else if bytes.starts_with(b"OggS") {
         &["audio/ogg", "video/ogg", "application/ogg"]
     } else if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" {
-        &["video/mp4", "audio/mp4"]
+        iso_media_candidates(bytes)
     } else if bytes.starts_with(&[0x1a, 0x45, 0xdf, 0xa3]) {
         &["video/webm", "audio/webm"]
     } else {
         return None;
     };
-    let declared = declared.map(str::trim).filter(|value| !value.is_empty());
-    match declared {
+    let essence = declared
+        .and_then(|value| value.split(';').next())
+        .map(|value| value.trim().to_ascii_lowercase())
+        .filter(|value| !value.is_empty());
+    match essence.as_deref() {
         None | Some("application/octet-stream") => candidates.first().copied(),
-        Some("image/jpg") if candidates.contains(&"image/jpeg") => Some("image/jpeg"),
-        Some(value) => candidates
-            .iter()
-            .copied()
-            .find(|candidate| candidate.eq_ignore_ascii_case(value)),
+        Some(value) => {
+            let value = canonical_media_type(value);
+            candidates
+                .iter()
+                .copied()
+                .find(|candidate| candidate.eq_ignore_ascii_case(value))
+        }
     }
+}
+
+/// A single satisfiable byte range of a `total`-byte body: `(start, end)`
+/// inclusive. `Err(())` is unsatisfiable (416); `Ok(None)` serves the whole
+/// body (no header, a multi-range, or a malformed one, as RFC 9110 allows).
+fn requested_byte_range(header: Option<&str>, total: usize) -> Result<Option<(usize, usize)>, ()> {
+    let Some(spec) = header.and_then(|value| value.trim().strip_prefix("bytes=")) else {
+        return Ok(None);
+    };
+    if spec.contains(',') {
+        return Ok(None);
+    }
+    let Some((start, end)) = spec.trim().split_once('-') else {
+        return Ok(None);
+    };
+    let (start, end) = (start.trim(), end.trim());
+    let parse = |value: &str| value.parse::<usize>().ok();
+    let range = match (start.is_empty(), end.is_empty()) {
+        // `bytes=-N`: the last N bytes.
+        (true, false) => {
+            let Some(suffix) = parse(end) else {
+                return Ok(None);
+            };
+            if suffix == 0 || total == 0 {
+                return Err(());
+            }
+            (total.saturating_sub(suffix), total - 1)
+        }
+        (false, _) => {
+            let Some(first) = parse(start) else {
+                return Ok(None);
+            };
+            if first >= total {
+                return Err(());
+            }
+            let last = if end.is_empty() {
+                total - 1
+            } else {
+                let Some(last) = parse(end) else {
+                    return Ok(None);
+                };
+                if last < first {
+                    return Ok(None);
+                }
+                last.min(total - 1)
+            };
+            (first, last)
+        }
+        (true, true) => return Ok(None),
+    };
+    Ok(Some(range))
+}
+
+/// Answer a media request from a fully buffered body, honouring `Range` so
+/// WebKit can seek audio and video (it asks for ranges and expects 206).
+fn synara_media_body_response(
+    bytes: Vec<u8>,
+    content_type: &str,
+    range: Option<&str>,
+) -> tauri::http::Response<Vec<u8>> {
+    let total = bytes.len();
+    let (status, body, content_range) = match requested_byte_range(range, total) {
+        Ok(None) => (tauri::http::StatusCode::OK, bytes, None),
+        Ok(Some((start, end))) => (
+            tauri::http::StatusCode::PARTIAL_CONTENT,
+            bytes[start..=end].to_vec(),
+            Some(format!("bytes {start}-{end}/{total}")),
+        ),
+        Err(()) => (
+            tauri::http::StatusCode::RANGE_NOT_SATISFIABLE,
+            Vec::new(),
+            Some(format!("bytes */{total}")),
+        ),
+    };
+    let mut response = synara_media_response(status, body, Some(content_type));
+    let headers = response.headers_mut();
+    headers.insert(
+        tauri::http::header::ACCEPT_RANGES,
+        tauri::http::HeaderValue::from_static("bytes"),
+    );
+    if let Some(value) = content_range.and_then(|value| value.parse().ok()) {
+        headers.insert(tauri::http::header::CONTENT_RANGE, value);
+    }
+    response
 }
 
 fn decode_synara_media_path(path: &str) -> Option<String> {
@@ -243,6 +400,7 @@ async fn synara_original_response(
     client: &matrix_sdk::Client,
     source: matrix_sdk::ruma::events::room::MediaSource,
     declared_mime_type: Option<&str>,
+    range: Option<&str>,
 ) -> tauri::http::Response<Vec<u8>> {
     let request = matrix_sdk::media::MediaRequestParameters {
         source,
@@ -257,12 +415,13 @@ async fn synara_original_response(
     let Some(content_type) = timeline_media_content_type(&bytes, declared_mime_type) else {
         return synara_media_status(tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE);
     };
-    synara_media_response(tauri::http::StatusCode::OK, bytes, Some(content_type))
+    synara_media_body_response(bytes, content_type, range)
 }
 
 async fn synara_media_for_path<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     path: &str,
+    range: Option<&str>,
 ) -> tauri::http::Response<Vec<u8>> {
     let Some((hint, handle)) = split_thumbnail_hint(path) else {
         return synara_media_status(tauri::http::StatusCode::NOT_FOUND);
@@ -279,6 +438,7 @@ async fn synara_media_for_path<R: tauri::Runtime>(
             &client,
             source.source,
             source.declared_mime_type.as_deref(),
+            range,
         )
         .await;
     }
@@ -290,7 +450,7 @@ async fn synara_media_for_path<R: tauri::Runtime>(
         if let Some(response) = synara_thumbnail_response(&client, &source, hint).await {
             return response;
         }
-        return synara_original_response(&client, source, None).await;
+        return synara_original_response(&client, source, None, range).await;
     }
     if handle.len() != 64 || !handle.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return synara_media_status(tauri::http::StatusCode::NOT_FOUND);
@@ -346,6 +506,11 @@ fn register_synara_media_protocol<R: tauri::Runtime>(
             };
             let app = context.app_handle().clone();
             let handle = handle.to_owned();
+            let range = request
+                .headers()
+                .get(tauri::http::header::RANGE)
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_owned);
             tauri::async_runtime::spawn(async move {
                 let Some(handle) = decode_synara_media_path(&handle) else {
                     responder.respond(synara_media_response(
@@ -355,7 +520,7 @@ fn register_synara_media_protocol<R: tauri::Runtime>(
                     ));
                     return;
                 };
-                let response = synara_media_for_path(&app, &handle).await;
+                let response = synara_media_for_path(&app, &handle, range.as_deref()).await;
                 responder.respond(response);
             });
         },
@@ -378,19 +543,32 @@ fn native_drop_paths(paths: &[PathBuf]) -> Vec<String> {
         .collect()
 }
 
+const NATIVE_FILE_DROP_EVENT: &str = "synara-native-file-drop";
+
+/// Drag position in CSS pixels: the event reports physical pixels and the
+/// renderer hit-tests with `document.elementFromPoint`.
+fn native_drop_position(position: tauri::PhysicalPosition<f64>, scale_factor: f64) -> (f64, f64) {
+    let logical = position.to_logical::<f64>(scale_factor);
+    (logical.x, logical.y)
+}
+
+/// One Tauri event per drag phase. The renderer routes it to the one
+/// composer under the pointer; it is not also dispatched as a DOM event.
 fn emit_native_file_drop(window: &tauri::Window, payload: NativeFileDropPayload) {
     let Some(webview) = window.get_webview_window(desktop::MAIN_WINDOW_LABEL) else {
         return;
     };
-    let _ = webview.emit("synara-native-file-drop", payload.clone());
-    let Ok(payload_json) = serde_json::to_string(&payload) else {
-        return;
-    };
-    let script = format!(
-        "window.dispatchEvent(new CustomEvent('synara-native-file-drop', {{ detail: {} }}));",
-        payload_json
-    );
-    let _ = webview.eval(script);
+    let _ = webview.emit(NATIVE_FILE_DROP_EVENT, payload);
+}
+
+fn native_drop_payload(
+    window: &tauri::Window,
+    phase: &'static str,
+    paths: Vec<String>,
+    position: tauri::PhysicalPosition<f64>,
+) -> NativeFileDropPayload {
+    let (x, y) = native_drop_position(position, window.scale_factor().unwrap_or(1.0));
+    NativeFileDropPayload { phase, paths, x, y }
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -439,6 +617,7 @@ pub fn run() {
             desktop::desktop_window_minimize,
             desktop::desktop_window_toggle_maximize,
             desktop::desktop_window_close,
+            desktop::desktop_quit,
             desktop::desktop_render_markdown,
             desktop::desktop_navigate,
             desktop::desktop_set_badge_count,
@@ -634,6 +813,7 @@ pub fn run() {
             matrix::auth::product::matrix_local_echo_retry,
             matrix::auth::product::matrix_edit_message,
             matrix::auth::product::matrix_send_attachment,
+            matrix::auth::product::matrix_attachment_stage,
             matrix::auth::product::matrix_send_poll,
             matrix::auth::product::matrix_poll_respond,
             matrix::auth::product::matrix_set_own_display_name,
@@ -710,42 +890,23 @@ pub fn run() {
             match event {
                 WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
-                    let _ = desktop::hide_main_window(window.app_handle());
+                    let _ = desktop::close_main_window(window.app_handle());
                 }
                 WindowEvent::DragDrop(DragDropEvent::Enter { paths, position }) => {
                     desktop_file_transfer::reset_drag_drop_session();
-                    emit_native_file_drop(
-                        window,
-                        NativeFileDropPayload {
-                            phase: "enter",
-                            paths: native_drop_paths(paths),
-                            x: position.x,
-                            y: position.y,
-                        },
-                    );
+                    let payload =
+                        native_drop_payload(window, "enter", native_drop_paths(paths), *position);
+                    emit_native_file_drop(window, payload);
                 }
                 WindowEvent::DragDrop(DragDropEvent::Over { position }) => {
-                    emit_native_file_drop(
-                        window,
-                        NativeFileDropPayload {
-                            phase: "over",
-                            paths: Vec::new(),
-                            x: position.x,
-                            y: position.y,
-                        },
-                    );
+                    let payload = native_drop_payload(window, "over", Vec::new(), *position);
+                    emit_native_file_drop(window, payload);
                 }
                 WindowEvent::DragDrop(DragDropEvent::Drop { paths, position }) => {
                     desktop_file_transfer::remember_dropped_paths(paths);
-                    emit_native_file_drop(
-                        window,
-                        NativeFileDropPayload {
-                            phase: "drop",
-                            paths: native_drop_paths(paths),
-                            x: position.x,
-                            y: position.y,
-                        },
-                    );
+                    let payload =
+                        native_drop_payload(window, "drop", native_drop_paths(paths), *position);
+                    emit_native_file_drop(window, payload);
                 }
                 WindowEvent::DragDrop(DragDropEvent::Leave) => {
                     desktop_file_transfer::clear_dropped_file_allowlist_on_drag_leave();
@@ -786,6 +947,7 @@ pub fn run() {
             }
 
             desktop_tray::create_tray(app.handle())?;
+            desktop_tray::start_tray_host_watch();
 
             // WebviewUrl::App follows Tauri's dev cfg: http://localhost:8080 while
             // `tauri dev` is running, and the private asset origin tauri://localhost
@@ -961,10 +1123,234 @@ mod exit_tests {
 }
 
 #[cfg(test)]
+mod command_manifest_tests {
+    use std::collections::BTreeSet;
+
+    fn registered_commands() -> BTreeSet<String> {
+        let source = include_str!("lib.rs");
+        let handler = source
+            .split("generate_handler![")
+            .nth(1)
+            .and_then(|rest| rest.split("])").next())
+            .expect("generate_handler! list");
+        handler
+            .split(',')
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .map(|path| path.rsplit("::").next().unwrap_or(path).to_owned())
+            .collect()
+    }
+
+    fn manifest_commands() -> BTreeSet<String> {
+        let build = include_str!("../build.rs");
+        let list = build
+            .split("const DESKTOP_COMMANDS: &[&str] = &[")
+            .nth(1)
+            .and_then(|rest| rest.split("];").next())
+            .expect("DESKTOP_COMMANDS list");
+        list.split(',')
+            .map(|entry| entry.trim().trim_matches('"'))
+            .filter(|entry| !entry.is_empty())
+            .map(str::to_owned)
+            .collect()
+    }
+
+    fn granted_commands(capability: &str) -> BTreeSet<String> {
+        let value: serde_json::Value = serde_json::from_str(capability).expect("capability json");
+        value["permissions"]
+            .as_array()
+            .expect("permissions")
+            .iter()
+            .filter_map(|permission| permission.as_str())
+            .filter(|permission| !permission.contains(':'))
+            .filter_map(|permission| permission.strip_prefix("allow-"))
+            .map(|permission| permission.replace('-', "_"))
+            .collect()
+    }
+
+    #[test]
+    fn the_build_manifest_lists_exactly_the_registered_commands() {
+        let registered = registered_commands();
+        let manifest = manifest_commands();
+        assert!(
+            registered.len() > 200,
+            "parsed {} commands",
+            registered.len()
+        );
+        let unlisted: Vec<_> = registered.difference(&manifest).collect();
+        let stale: Vec<_> = manifest.difference(&registered).collect();
+        assert!(unlisted.is_empty(), "missing from build.rs: {unlisted:?}");
+        assert!(stale.is_empty(), "not registered: {stale:?}");
+    }
+
+    #[test]
+    fn capabilities_grant_only_registered_commands_and_every_one_once() {
+        let registered = registered_commands();
+        let main = granted_commands(include_str!("../capabilities/main.json"));
+        let widget = granted_commands(include_str!("../capabilities/widget.json"));
+        assert_eq!(widget.iter().collect::<Vec<_>>(), ["widget_bridge_post"]);
+        let granted: BTreeSet<String> = main.union(&widget).cloned().collect();
+        let ungranted: Vec<_> = registered.difference(&granted).collect();
+        let unknown: Vec<_> = granted.difference(&registered).collect();
+        assert!(
+            ungranted.is_empty(),
+            "registered but not granted: {ungranted:?}"
+        );
+        assert!(
+            unknown.is_empty(),
+            "granted but not registered: {unknown:?}"
+        );
+        assert!(!main.contains("widget_bridge_post"));
+    }
+
+    #[test]
+    fn every_registered_command_has_its_generated_permission_file() {
+        let dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("permissions/autogenerated");
+        let files: BTreeSet<String> = std::fs::read_dir(&dir)
+            .expect("autogenerated permissions")
+            .filter_map(|entry| entry.ok())
+            .filter_map(|entry| {
+                entry
+                    .file_name()
+                    .to_str()
+                    .and_then(|name| name.strip_suffix(".toml"))
+                    .map(str::to_owned)
+            })
+            .collect();
+        let missing: Vec<_> = registered_commands().difference(&files).cloned().collect();
+        assert!(missing.is_empty(), "no permission file: {missing:?}");
+    }
+}
+
+#[cfg(test)]
+mod file_drop_tests {
+    use super::native_drop_position;
+
+    #[test]
+    fn drag_positions_reach_the_renderer_in_css_pixels() {
+        assert_eq!(
+            native_drop_position(tauri::PhysicalPosition::new(200.0, 100.0), 2.0),
+            (100.0, 50.0)
+        );
+        assert_eq!(
+            native_drop_position(tauri::PhysicalPosition::new(30.0, 40.0), 1.0),
+            (30.0, 40.0)
+        );
+    }
+
+    #[test]
+    fn each_drag_phase_is_sent_once_on_one_channel() {
+        let source = include_str!("lib.rs");
+        let emit = source
+            .split("fn emit_native_file_drop")
+            .nth(1)
+            .and_then(|rest| rest.split("\nfn ").next())
+            .expect("emit_native_file_drop");
+        assert_eq!(emit.matches(".emit(").count(), 1);
+        assert!(!emit.contains(".eval("));
+        assert!(!emit.contains("dispatchEvent"));
+        let hook = include_str!("../../synara/src/app/hooks/useFileDrop.ts");
+        assert!(!hook.contains("addEventListener('synara-native-file-drop'"));
+    }
+}
+
+#[cfg(test)]
+mod csp_tests {
+    fn csp(key: &str) -> String {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
+        config["app"]["security"][key]
+            .as_str()
+            .unwrap_or_else(|| panic!("app.security.{key}"))
+            .to_owned()
+    }
+
+    fn directive(policy: &str, name: &str) -> Vec<String> {
+        policy
+            .split(';')
+            .map(str::trim)
+            .find_map(|part| part.strip_prefix(name).map(str::trim))
+            .unwrap_or_else(|| panic!("{name} directive"))
+            .split_whitespace()
+            .map(str::to_owned)
+            .collect()
+    }
+
+    #[test]
+    fn production_csp_loads_media_only_through_the_app() {
+        let policy = csp("csp");
+        // Images and media come from the bundle, blobs and synara-media:; the
+        // only remote images are the built-in GIF providers' CDNs.
+        assert_eq!(
+            directive(&policy, "img-src"),
+            [
+                "'self'",
+                "data:",
+                "blob:",
+                "synara-media:",
+                "https://media.tenor.com",
+                "https://*.giphy.com"
+            ]
+        );
+        assert_eq!(
+            directive(&policy, "media-src"),
+            ["'self'", "data:", "blob:", "synara-media:"]
+        );
+        assert_eq!(directive(&policy, "frame-src"), ["'none'"]);
+        assert_eq!(directive(&policy, "form-action"), ["'none'"]);
+        assert_eq!(directive(&policy, "object-src"), ["'none'"]);
+        assert_eq!(
+            directive(&policy, "script-src"),
+            ["'self'", "'wasm-unsafe-eval'"]
+        );
+    }
+
+    #[test]
+    fn production_csp_reaches_loopback_only_for_homeserver_discovery() {
+        let connect = directive(&csp("csp"), "connect-src");
+        // Sign-in still discovers the homeserver from the renderer, so https:
+        // stays; nothing opens WebSockets any more.
+        assert!(connect.iter().any(|source| source == "https:"));
+        assert!(!connect
+            .iter()
+            .any(|source| source.starts_with("ws") || source == "http:"));
+        for source in connect
+            .iter()
+            .filter(|source| source.starts_with("http://"))
+        {
+            if source == "http://ipc.localhost" {
+                continue;
+            }
+            assert!(
+                source.ends_with("/.well-known/matrix/client")
+                    || source.ends_with("/_matrix/client/versions"),
+                "unscoped loopback source {source}"
+            );
+        }
+        assert!(connect
+            .iter()
+            .any(|source| source == "http://localhost:*/_matrix/client/versions"));
+    }
+
+    #[test]
+    fn dev_csp_alone_allows_the_vite_dev_server() {
+        let dev = directive(&csp("devCsp"), "connect-src");
+        assert!(dev.iter().any(|source| source == "ws://localhost:*"));
+        assert!(dev.iter().any(|source| source == "http://localhost:*"));
+        let production = directive(&csp("csp"), "connect-src");
+        assert!(!production
+            .iter()
+            .any(|source| source == "http://localhost:*"));
+    }
+}
+
+#[cfg(test)]
 mod protocol_path_tests {
     use super::{
-        decode_synara_media_path, split_thumbnail_hint, thumbnail_bucket,
-        timeline_media_content_type, SynaraThumbnailHint,
+        decode_synara_media_path, requested_byte_range, split_thumbnail_hint,
+        synara_media_body_response, thumbnail_bucket, timeline_media_content_type,
+        SynaraThumbnailHint,
     };
 
     #[test]
@@ -982,6 +1368,154 @@ mod protocol_path_tests {
         assert_eq!(
             timeline_media_content_type(b"# heading\n", Some("text/markdown")),
             None
+        );
+    }
+
+    fn ftyp(major: &[u8; 4], compatible: &[&[u8; 4]]) -> Vec<u8> {
+        let len = 16 + 4 * compatible.len();
+        let mut bytes = (len as u32).to_be_bytes().to_vec();
+        bytes.extend_from_slice(b"ftyp");
+        bytes.extend_from_slice(major);
+        bytes.extend_from_slice(&[0, 0, 0, 0]);
+        for brand in compatible {
+            bytes.extend_from_slice(*brand);
+        }
+        bytes.extend_from_slice(b"\0\0\0\x08free");
+        bytes
+    }
+
+    #[test]
+    fn timeline_media_accepts_iphone_and_bridge_formats() {
+        // iPhone camera defaults: HEIC photos and QuickTime videos.
+        let heic = ftyp(b"heic", &[b"mif1", b"heic"]);
+        assert_eq!(
+            timeline_media_content_type(&heic, Some("image/heic")),
+            Some("image/heic")
+        );
+        assert_eq!(
+            timeline_media_content_type(&heic, Some("image/heif")),
+            Some("image/heif")
+        );
+        let mif1 = ftyp(b"mif1", &[b"heic"]);
+        assert_eq!(
+            timeline_media_content_type(&mif1, Some("image/heic")),
+            Some("image/heic")
+        );
+        let mov = ftyp(b"qt  ", &[b"qt  "]);
+        assert_eq!(
+            timeline_media_content_type(&mov, Some("video/quicktime")),
+            Some("video/quicktime")
+        );
+        assert_eq!(
+            timeline_media_content_type(&mov, Some("video/mp4")),
+            Some("video/mp4")
+        );
+        let mp4 = ftyp(b"isom", &[b"isom", b"mp41"]);
+        assert_eq!(
+            timeline_media_content_type(&mp4, Some("video/mp4")),
+            Some("video/mp4")
+        );
+        let m4a = ftyp(b"M4A ", &[b"M4A ", b"mp42"]);
+        assert_eq!(
+            timeline_media_content_type(&m4a, Some("audio/x-m4a")),
+            Some("audio/mp4")
+        );
+        // Parameters and case do not matter; only the essence does.
+        assert_eq!(
+            timeline_media_content_type(b"OggS\0\x02rest", Some("audio/ogg; codecs=opus")),
+            Some("audio/ogg")
+        );
+        assert_eq!(
+            timeline_media_content_type(b"OggS\0\x02rest", Some("Audio/OGG")),
+            Some("audio/ogg")
+        );
+        assert_eq!(
+            timeline_media_content_type(b"RIFF\0\0\0\0WAVEfmt ", Some("audio/x-wav")),
+            Some("audio/wav")
+        );
+        // ADTS AAC is no longer mistaken for MP3.
+        assert_eq!(
+            timeline_media_content_type(&[0xff, 0xf1, 0x50, 0x80], Some("audio/aac")),
+            Some("audio/aac")
+        );
+        assert_eq!(
+            timeline_media_content_type(&[0xff, 0xfb, 0x90, 0x00], Some("audio/mpeg")),
+            Some("audio/mpeg")
+        );
+        assert_eq!(
+            timeline_media_content_type(b"\xff\xd8\xff\xe0rest", Some("image/jpg")),
+            Some("image/jpeg")
+        );
+        // Still fail closed on a real mismatch.
+        assert_eq!(timeline_media_content_type(&heic, Some("video/mp4")), None);
+        assert_eq!(
+            timeline_media_content_type(&mp4, Some("text/html; charset=utf-8")),
+            None
+        );
+    }
+
+    #[test]
+    fn media_protocol_answers_byte_ranges() {
+        assert_eq!(requested_byte_range(None, 10), Ok(None));
+        assert_eq!(requested_byte_range(Some("bytes=0-"), 10), Ok(Some((0, 9))));
+        assert_eq!(
+            requested_byte_range(Some("bytes=0-1"), 10),
+            Ok(Some((0, 1)))
+        );
+        assert_eq!(
+            requested_byte_range(Some("bytes=4-99"), 10),
+            Ok(Some((4, 9)))
+        );
+        assert_eq!(requested_byte_range(Some("bytes=-3"), 10), Ok(Some((7, 9))));
+        assert_eq!(
+            requested_byte_range(Some("bytes=-30"), 10),
+            Ok(Some((0, 9)))
+        );
+        assert_eq!(requested_byte_range(Some("bytes=10-"), 10), Err(()));
+        assert_eq!(requested_byte_range(Some("bytes=-0"), 10), Err(()));
+        // Multi-range and malformed headers fall back to the whole body.
+        assert_eq!(requested_byte_range(Some("bytes=0-1,4-5"), 10), Ok(None));
+        assert_eq!(requested_byte_range(Some("bytes=5-2"), 10), Ok(None));
+        assert_eq!(requested_byte_range(Some("items=0-1"), 10), Ok(None));
+
+        let body: Vec<u8> = (0..10).collect();
+        let full = synara_media_body_response(body.clone(), "video/mp4", None);
+        assert_eq!(full.status(), tauri::http::StatusCode::OK);
+        assert_eq!(full.body().len(), 10);
+        assert_eq!(
+            full.headers()
+                .get(tauri::http::header::ACCEPT_RANGES)
+                .unwrap(),
+            "bytes"
+        );
+        let partial = synara_media_body_response(body.clone(), "video/mp4", Some("bytes=2-4"));
+        assert_eq!(partial.status(), tauri::http::StatusCode::PARTIAL_CONTENT);
+        assert_eq!(partial.body(), &vec![2, 3, 4]);
+        assert_eq!(
+            partial
+                .headers()
+                .get(tauri::http::header::CONTENT_RANGE)
+                .unwrap(),
+            "bytes 2-4/10"
+        );
+        assert_eq!(
+            partial
+                .headers()
+                .get(tauri::http::header::CONTENT_TYPE)
+                .unwrap(),
+            "video/mp4"
+        );
+        let unsatisfiable = synara_media_body_response(body, "video/mp4", Some("bytes=20-"));
+        assert_eq!(
+            unsatisfiable.status(),
+            tauri::http::StatusCode::RANGE_NOT_SATISFIABLE
+        );
+        assert_eq!(
+            unsatisfiable
+                .headers()
+                .get(tauri::http::header::CONTENT_RANGE)
+                .unwrap(),
+            "bytes */10"
         );
     }
 

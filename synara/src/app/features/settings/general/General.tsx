@@ -40,6 +40,7 @@ import { gifPickerEnabled } from '../../../utils/gifProvider';
 import {
   getPlatformIntegrationStatus,
   buildShortcutFailureMessage,
+  desktopShortcutConfigProblem,
   getPlatformSecretStoreSessionPersistence,
   getPlatformSecretStoreStatusDescription,
   getPlatformSecretStoreStatusLabel,
@@ -551,35 +552,22 @@ function DesktopShortcutsSection() {
   const normalizedShowShortcut = normalizeShortcut(showShortcut);
   const normalizedLaterShortcut = normalizeShortcut(laterShortcut);
   const normalizedNotificationsShortcut = normalizeShortcut(notificationsShortcut);
-  const hasValue =
-    normalizedShowShortcut.length > 0 &&
-    normalizedLaterShortcut.length > 0 &&
-    normalizedNotificationsShortcut.length > 0;
-
-  const uniqueShortcuts = new Set([
-    normalizedShowShortcut,
-    normalizedLaterShortcut,
-    normalizedNotificationsShortcut,
-  ]);
-  const hasDuplicate = uniqueShortcuts.size !== 3;
+  // An empty field turns that shortcut off; only enabled ones must differ.
+  const hasDuplicate =
+    desktopShortcutConfigProblem([
+      normalizedShowShortcut,
+      normalizedLaterShortcut,
+      normalizedNotificationsShortcut,
+    ]) === 'duplicate';
 
   const hasChanges =
     normalizedShowShortcut !== storedShowShortcut ||
     normalizedLaterShortcut !== storedLaterShortcut ||
     normalizedNotificationsShortcut !== storedNotificationsShortcut;
 
-  const applyError = (() => {
-    if (!hasValue) {
-      return t(
-        'modernization.settings.desktop_shortcuts.empty',
-        'All shortcut values are required.'
-      );
-    }
-    if (hasDuplicate) {
-      return t('modernization.settings.desktop_shortcuts.duplicate', 'Shortcuts must be unique.');
-    }
-    return undefined;
-  })();
+  const applyError = hasDuplicate
+    ? t('modernization.settings.desktop_shortcuts.duplicate', 'Shortcuts must be unique.')
+    : undefined;
 
   const handleSave = async (evt: React.FormEvent<HTMLFormElement>) => {
     evt.preventDefault();
@@ -618,7 +606,7 @@ function DesktopShortcutsSection() {
           shortcutsSupported
             ? t(
                 'modernization.settings.desktop_shortcuts.description',
-                'Open frequently used screens from anywhere with desktop shortcuts.'
+                'Open frequently used screens from anywhere with desktop shortcuts. These keys stop working in other apps while Synara runs; clear a field to turn that shortcut off.'
               )
             : t(
                 'modernization.settings.desktop_shortcuts.unavailable',
@@ -645,7 +633,7 @@ function DesktopShortcutsSection() {
             setShowShortcut(evt.currentTarget.value);
           }}
           disabled={!shortcutsSupported}
-          placeholder="CmdOrCtrl+Shift+C"
+          placeholder={t('modernization.settings.desktop_shortcuts.off_placeholder', 'Off')}
         />
         <Input
           aria-label={t(
@@ -658,7 +646,7 @@ function DesktopShortcutsSection() {
             setLaterShortcut(evt.currentTarget.value);
           }}
           disabled={!shortcutsSupported}
-          placeholder="CmdOrCtrl+Shift+L"
+          placeholder={t('modernization.settings.desktop_shortcuts.off_placeholder', 'Off')}
         />
         <Input
           aria-label={t(
@@ -671,7 +659,7 @@ function DesktopShortcutsSection() {
             setNotificationsShortcut(evt.currentTarget.value);
           }}
           disabled={!shortcutsSupported}
-          placeholder="CmdOrCtrl+Shift+N"
+          placeholder={t('modernization.settings.desktop_shortcuts.off_placeholder', 'Off')}
         />
         {(applyError || error) && (
           <Text size="T200" priority="500">

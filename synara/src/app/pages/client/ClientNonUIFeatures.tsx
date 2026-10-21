@@ -54,6 +54,7 @@ import {
 } from '../../utils/agentApprovals';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { dismissDesktopNotifications } from '../../utils/desktop';
+import { DesktopAppShortcuts } from '../../features/desktop-keyboard/DesktopAppShortcuts';
 import {
   createApprovalAlertWithdrawal,
   createInviteArrivalTracker,
@@ -987,6 +988,7 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
       <PlatformBadgeAndTrayUpdater />
       <ReadRoomNotificationCleanup />
       <DesktopShortcutSync />
+      <DesktopAppShortcuts />
       <PlatformAgentActionListener />
       <InviteNotifications />
       <AgentApprovalNotifications />

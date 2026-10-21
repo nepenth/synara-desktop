@@ -109,6 +109,8 @@ const toNativeAuthStage = (dict: RegisterAuthDict): NativeRegisterAuthStage => {
         clientSecret: dict.clientSecret,
         session: dict.session,
       };
+    case 'session_only':
+      return { type: 'session_only', session: dict.session };
     default:
       return { type: 'session_only' };
   }
@@ -123,6 +125,7 @@ type RegisterUIAFlowProps = {
   >[0];
   registerEmail: (email: string, clientSecret: string) => Promise<RegisterEmailTokenResult>;
   onRegisterStage: (dict: RegisterAuthDict) => void;
+  homeserverBaseUrl: string;
 };
 function RegisterUIAFlow({
   formData,
@@ -131,6 +134,7 @@ function RegisterUIAFlow({
   registerEmailState,
   registerEmail,
   onRegisterStage,
+  homeserverBaseUrl,
 }: RegisterUIAFlowProps) {
   const completed = useUIACompleted(authData);
   const { getStageToComplete } = useUIAFlow(authData, flow);
@@ -175,6 +179,7 @@ function RegisterUIAFlow({
           stageData={stageToComplete}
           submitAuthDict={handleAuthDict}
           onCancel={handleCancel}
+          homeserverBaseUrl={homeserverBaseUrl}
         />
       )}
       {stageToComplete.type === AuthStageType.Email && (
@@ -518,6 +523,7 @@ export function PasswordRegisterForm({
           registerEmail={registerEmail}
           registerEmailState={registerEmailState}
           onRegisterStage={handleStage}
+          homeserverBaseUrl={baseUrl}
         />
       )}
       {(registerState.status === AsyncStatus.Loading || (accountCreated && !handoffFailed)) && (

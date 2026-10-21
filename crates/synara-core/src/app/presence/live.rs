@@ -116,9 +116,7 @@ impl PresenceShared {
                 Ok(snapshot) => NativePresenceUpdateOutcome::Ready {
                     snapshot: NativePresenceSnapshot::from(snapshot.clone()),
                 },
-                Err(diagnostic_id) => NativePresenceUpdateOutcome::Unavailable {
-                    diagnostic_id: *diagnostic_id,
-                },
+                Err(diagnostic_id) => NativePresenceUpdateOutcome::Unavailable { diagnostic_id },
             };
             (self.emit)(NativePresenceUpdate {
                 subscription_id: subscription_id.clone(),

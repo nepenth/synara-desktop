@@ -72,7 +72,11 @@ import { EmojiBoard } from '../../components/emoji-board';
 import { TUploadContent, getMxIdLocalPart } from '../../utils/matrix';
 import { useTypingStatusUpdater } from '../../hooks/useTypingStatusUpdater';
 import { useFilePicker } from '../../hooks/useFilePicker';
-import { useFileDropZone } from '../../hooks/useFileDrop';
+import {
+  FILE_DROP_REGION_ATTRIBUTE,
+  useFileDropZone,
+  windowPasteTargetsComposer,
+} from '../../hooks/useFileDrop';
 import {
   TUploadItem,
   TUploadMetadata,
@@ -490,12 +494,26 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       },
       [editor, handleFiles, handleNativeClipboardImage]
     );
+    const dropAnchorRef = useRef<HTMLDivElement | null>(null);
+    const setRootRef = useCallback(
+      (node: HTMLDivElement | null) => {
+        dropAnchorRef.current = node;
+        if (typeof ref === 'function') ref(node);
+        else if (ref) ref.current = node;
+      },
+      [ref]
+    );
     useEffect(() => {
       const handleWindowPaste = (evt: ClipboardEvent) => {
         if (editableActiveElement()) return;
         const portalContainer = document.getElementById('portalContainer');
         if (portalContainer && portalContainer.children.length > 0) return;
         if (!evt.clipboardData) return;
+        // With the thread pane open both composers hear this; only one takes it.
+        const ownRegion = dropAnchorRef.current?.closest(`[${FILE_DROP_REGION_ATTRIBUTE}]`);
+        if (!windowPasteTargetsComposer(ownRegion, document.activeElement, !threadRootOverride)) {
+          return;
+        }
 
         const files = getDataTransferFiles(evt.clipboardData);
         if (!files) {
@@ -513,8 +531,25 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       return () => {
         window.removeEventListener('paste', handleWindowPaste);
       };
-    }, [handleFiles, handleNativeClipboardImage]);
-    const dropZoneVisible = useFileDropZone(handleFiles);
+    }, [handleFiles, handleNativeClipboardImage, threadRootOverride]);
+    const handleDroppedTooLarge = useCallback(
+      (rejected: { name: string; size: number }[]) => {
+        setSendError(
+          rejected
+            .map((file) => attachmentTooLargeMessage(file.name, file.size, attachmentLimit))
+            .join(' ')
+        );
+      },
+      [attachmentLimit]
+    );
+    // The thread pane's composer takes drops on the pane; the room composer
+    // takes the rest. Files over the upload limit are never read.
+    const dropZoneVisible = useFileDropZone(handleFiles, {
+      anchorRef: dropAnchorRef,
+      primary: !threadRootOverride,
+      maxFileBytes: attachmentLimit,
+      onTooLarge: handleDroppedTooLarge,
+    });
 
     const isComposing = useComposingCheck();
 
@@ -1123,7 +1158,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     };
 
     return (
-      <div ref={ref}>
+      <div ref={setRootRef}>
         {selectedFiles.length > 0 && (
           <UploadBoard
             header={
