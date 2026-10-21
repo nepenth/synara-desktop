@@ -490,10 +490,79 @@ final class OutgoingSendServiceTests: XCTestCase {
         XCTAssertTrue(bubble.contains("TimelineItemSending"))
         XCTAssertTrue(bubble.contains("accessibilityLabel(\"Queued\")"))
         XCTAssertTrue(bubble.contains("accessibilityLabel(\"Sending\")"))
-        // One flusher: the shell's send-ready edge, plus hand-off on send.
+        // One flusher: the shell's send-ready edge, plus hand-off on send
+        // (room and thread). The timeline's connection observer only retries
+        // a failed load; it never flushes.
         XCTAssertFalse(timeline.contains("flushWhenSendReady"))
-        XCTAssertFalse(timeline.contains("connectionStatus.$status"))
+        XCTAssertEqual(timeline.components(separatedBy: "outgoingSends.flush()").count - 1, 2)
         XCTAssertTrue(shell.contains("outgoingSends.flush()"))
+    }
+
+    @MainActor
+    func testThreadReplyShowsOnceAndOnlyInItsThread() async throws {
+        // I6: a thread reply goes through the outbox like a room message, so
+        // its queued row gives way to the SDK echo with the same transaction
+        // id instead of staying beside it.
+        let root = "$root:matrix.org"
+        let sender = RecordingMessageSendService()
+        let coordinator = coordinator(sender)
+        let reply = coordinator.enqueue(
+            localID: "$pending-thread",
+            roomID: "!room:matrix.org",
+            body: "In the thread",
+            formattedBody: nil,
+            replyToEventID: nil,
+            threadRootEventID: root,
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate
+        )
+        XCTAssertEqual(
+            coordinator.queue.timelineItems(in: "!room:matrix.org", threadRootEventID: nil),
+            [],
+            "the room timeline never shows a thread reply"
+        )
+        XCTAssertEqual(
+            coordinator.queue.timelineItems(in: "!room:matrix.org", threadRootEventID: root).map(\.id),
+            [reply.id]
+        )
+
+        await coordinator.flush()
+        XCTAssertEqual(sender.requests.first?.threadRootEventID, root)
+        let pending = coordinator.queue.timelineItems(in: "!room:matrix.org", threadRootEventID: root)
+        XCTAssertEqual(pending.first?.transactionID, "sdk-txn-1")
+
+        let rootItem = TimelineItem(
+            id: root,
+            eventID: root,
+            senderID: "@bob:matrix.org",
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(-60),
+            kind: .text("Root"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+        var sdkEcho = TimelineItem(
+            id: "sdk-local-1",
+            eventID: "sdk-local-1",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(1),
+            kind: .text("In the thread"),
+            replyToEventID: nil,
+            threadRootEventID: root,
+            isEdited: false,
+            reactions: [:]
+        )
+        sdkEcho.transactionID = "sdk-txn-1"
+        sdkEcho.serverEventID = nil
+        let snapshot = [rootItem, sdkEcho]
+
+        XCTAssertEqual(
+            ThreadTimelineMerge.merged(snapshot: snapshot, pending: pending).map(\.id),
+            [root, "sdk-local-1"],
+            "one row for the reply"
+        )
+        coordinator.dropConfirmed(matching: snapshot)
+        XCTAssertTrue(coordinator.queue.items.isEmpty)
     }
 
     private static func repositoryRoot() -> String {

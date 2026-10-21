@@ -85,18 +85,18 @@ use super::{
     NativeComposerReplyDraft, NativeComposerReplyDraftReadback, NativeDecryptionState,
     NativeReactionMutation, NativeReactionMutationResult, NativeTimelineActionKind,
     NativeTimelineActionReadback, NativeTimelineCloseRequest, NativeTimelineDirection,
-    NativeTimelineEventReadback, NativeTimelineEventRoute, NativeTimelineFollowLiveRequest,
-    NativeTimelineItem, NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition,
-    NativeTimelineOpenReadback, NativeTimelineOpenRequest, NativeTimelineReaction,
-    NativeTimelineReactionSender, NativeTimelineReadAction, NativeTimelineReadIntent,
-    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest, NativeTimelineSnapshot,
-    NativeTimelineTimestampToEventReadback, NativeTimelineViewPaginationRequest,
-    NativeTimelineViewportHint, NativeUtdPhase, NativeUtdStatus, PinnedEventsSnapshot,
-    TimelineMediaRegistry, TimelineMediaSource, TimelinePageState, TimelinePaginationState,
-    TimelineReadState, TimelineRoomActionAuthority, TimelineViewPosition, TimelineViewSnapshot,
-    TimelineViewUpdateEmit, UtdIndex, UtdPhase, UtdReasonCode, ViewDeltaEmitter,
-    NATIVE_TIMELINE_ACTION_SCHEMA_VERSION, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
-    NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+    NativeTimelineEventLocation, NativeTimelineEventReadback, NativeTimelineEventRoute,
+    NativeTimelineFollowLiveRequest, NativeTimelineItem, NativeTimelineJumpLatestRequest,
+    NativeTimelineOpenPosition, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
+    NativeTimelineReaction, NativeTimelineReactionSender, NativeTimelineReadAction,
+    NativeTimelineReadIntent, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
+    NativeTimelineSnapshot, NativeTimelineTimestampToEventReadback,
+    NativeTimelineViewPaginationRequest, NativeTimelineViewportHint, NativeUtdPhase,
+    NativeUtdStatus, PinnedEventsSnapshot, TimelineMediaRegistry, TimelineMediaSource,
+    TimelinePageState, TimelinePaginationState, TimelineReadState, TimelineRoomActionAuthority,
+    TimelineViewPosition, TimelineViewSnapshot, TimelineViewUpdateEmit, UtdIndex, UtdPhase,
+    UtdReasonCode, ViewDeltaEmitter, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+    NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
 };
 
 #[cfg(test)]
@@ -1487,6 +1487,36 @@ impl NativeTimelineOwner {
             .get_room(&room_id)
             .ok_or("d0.3-timeline-room-not-found")?;
         Ok(resolve_event_route(&room, &event_id).await)
+    }
+
+    /// The joined room that holds a routed event, and where in it the event
+    /// lives, from the local event cache only. A sparse push carries the
+    /// event id without its room, and no request looks an event up by id
+    /// alone, so this reads what sync already stored. `None` when no room's
+    /// cache holds it (yet).
+    pub async fn event_location(
+        &self,
+        event_id: &str,
+    ) -> Result<Option<NativeTimelineEventLocation>, &'static str> {
+        let event_id = parse_event_id(event_id)?;
+        let lookup = async {
+            for room in self.client.joined_rooms() {
+                let Ok((cache, _drop_handles)) = room.event_cache().await else {
+                    continue;
+                };
+                if let Ok(Some(event)) = cache.find_event(&event_id).await {
+                    return Some(NativeTimelineEventLocation {
+                        room_id: room.room_id().to_string(),
+                        route: event_route_for_thread_root(
+                            &event_id,
+                            matrix_sdk::serde_helpers::extract_thread_root(event.raw()),
+                        ),
+                    });
+                }
+            }
+            None
+        };
+        Ok(timeout(EVENT_ROUTE_TIMEOUT, lookup).await.unwrap_or(None))
     }
 
     #[cfg(test)]

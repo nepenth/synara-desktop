@@ -435,6 +435,9 @@ import SwiftUI
 
     enum StableTimelineViewportItemID: Hashable {
         case event(String)
+        /// Keyed by the day, so paging in more of the same day moves the
+        /// header instead of replacing it.
+        case dayHeader(String)
         case unreadDivider(String)
         case cryptoBanner
         case pagination
@@ -457,6 +460,7 @@ import SwiftUI
     struct StableTimelineViewportRow: Equatable, Identifiable {
         enum Content: Equatable {
             case event(StableTimelineViewportEventRow)
+            case dayHeader(Date)
             case unreadDivider
             case cryptoBanner(RoomCryptoStatus)
             case pagination
@@ -535,6 +539,12 @@ import SwiftUI
 
         func updateUIViewController(_ uiViewController: StableTimelineViewController, context: Context) {
             context.coordinator.update(parent: self)
+            // Rows are hosted by UIKit cells: carry a scoped color scheme
+            // (agent rooms are dark) into their trait collection.
+            let style: UIUserInterfaceStyle = context.environment.colorScheme == .dark ? .dark : .light
+            if uiViewController.overrideUserInterfaceStyle != style {
+                uiViewController.overrideUserInterfaceStyle = style
+            }
             uiViewController.update(
                 configuration: .init(
                     routeID: routeID,
@@ -1531,7 +1541,7 @@ import SwiftUI
                     return eventID == markerEventID
                 case .unreadDivider:
                     return true
-                case .cryptoBanner, .pagination:
+                case .dayHeader, .cryptoBanner, .pagination:
                     return false
                 }
             }

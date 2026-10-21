@@ -88,8 +88,10 @@ struct TimelineReplyPreview: Equatable {
             } else {
                 raw = card.title
             }
-        case .unknown(let type):
-            raw = "Unsupported message (\(type))"
+        case .systemNotice(let text):
+            raw = text
+        case .unknown:
+            raw = "Message unavailable"
         }
         return truncatedSnippet(raw)
     }

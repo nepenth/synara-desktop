@@ -345,6 +345,14 @@ pub struct TimelineEventRouteDto {
     pub thread_root_event_id: Option<String>,
 }
 
+/// The joined room that holds a routed event, for a sparse push that
+/// carries only the event id.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct TimelineEventLocationDto {
+    pub room_id: String,
+    pub route: TimelineEventRouteDto,
+}
+
 pub(super) fn event_route_dto(route: NativeTimelineEventRoute) -> TimelineEventRouteDto {
     match route {
         NativeTimelineEventRoute::Room => TimelineEventRouteDto {
@@ -1390,6 +1398,37 @@ impl SharedCore {
                 "d0.3-timeline-room-not-found",
                 TIMELINE_ROOM_NOT_FOUND_DESCRIPTION,
             )),
+            Err(_) => Err(timeline_failed(
+                TIMELINE_EVENT_ROUTE_INVALID_EVENT_CODE,
+                TIMELINE_EVENT_ROUTE_INVALID_EVENT_DESCRIPTION,
+            )),
+        }
+    }
+
+    /// Find the joined room whose local event cache holds `event_id`, and
+    /// where in it the event lives. `None` when no room's cache holds it.
+    ///
+    /// Dedicated UniFFI read for sparse push routes (event id, no room id).
+    /// It never fetches from the homeserver, which has no lookup by event id
+    /// alone. Errors stay static and never echo the event id.
+    pub async fn timeline_event_location(
+        &self,
+        event_id: String,
+    ) -> Result<Option<TimelineEventLocationDto>, TimelineError> {
+        let Some(owner) = self.core.attached_timeline_owner() else {
+            return Err(timeline_failed(
+                TIMELINE_OPEN_NO_SESSION_CODE,
+                TIMELINE_NO_SESSION_DESCRIPTION,
+            ));
+        };
+        self.await_open_stores()
+            .await
+            .map_err(|()| timeline_failed(SESSION_SUSPENDED_CODE, SESSION_SUSPENDED_DESCRIPTION))?;
+        match owner.event_location(&event_id).await {
+            Ok(location) => Ok(location.map(|location| TimelineEventLocationDto {
+                room_id: location.room_id,
+                route: event_route_dto(location.route),
+            })),
             Err(_) => Err(timeline_failed(
                 TIMELINE_EVENT_ROUTE_INVALID_EVENT_CODE,
                 TIMELINE_EVENT_ROUTE_INVALID_EVENT_DESCRIPTION,

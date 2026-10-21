@@ -24,6 +24,15 @@ enum SharedCoreTimeline {
         try await core.timelineEventRoute(roomId: roomId, eventId: eventId)
     }
 
+    /// The joined room whose local event cache holds `eventId`, for sparse
+    /// push routes that carry no room id.
+    static func timelineEventLocation(
+        core: SharedCore,
+        eventId: String
+    ) async throws -> TimelineEventLocationDto? {
+        try await core.timelineEventLocation(eventId: eventId)
+    }
+
     static func eventRoute(from dto: TimelineEventRouteDto) -> TimelineEventRoute {
         switch dto.kind {
         case .room:

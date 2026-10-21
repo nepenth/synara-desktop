@@ -2039,6 +2039,8 @@ final class SharedCoreTimelineService: TimelineServicing {
                 kind = .roomUnavailable
             case "v-timeline-view-not-open":
                 kind = .viewUnavailable
+            case SharedCoreSessionSuspension.code:
+                kind = .waitingToReconnect
             default:
                 kind = .temporarilyUnavailable
             }
@@ -3520,10 +3522,74 @@ final class SharedCoreMediaUploadService: MediaUploading {
     }
 }
 
+/// A sparse push carries an event id and no room. Core finds the joined room
+/// whose local event cache holds the event; the room screen then resolves
+/// where in the room it lives (a thread reply opens its thread).
 struct SharedCoreSparsePushRouteResolver: SparsePushRouteResolving {
+    typealias Lookup = @Sendable (String) async throws -> TimelineEventLocationDto?
+    typealias Pause = @Sendable (UInt64) async -> Void
+
+    private let lookup: Lookup
+    private let isReady: @Sendable () async -> Bool
+    private let pause: Pause
+    /// The tap can arrive before sync has stored the event: look a few times.
+    private let attempts: Int
+    private let retryDelayNanoseconds: UInt64
+
+    init(host: SharedCoreProductHost, sessionReadiness: SignedInSessionReadinessServicing) {
+        self.init(
+            lookup: { eventID in
+                try await SharedCoreTimeline.timelineEventLocation(core: host.core, eventId: eventID)
+            },
+            isReady: {
+                guard case let .signedIn(session) = host.sessionStore.currentState else {
+                    return false
+                }
+                return await sessionReadiness.waitUntilPrepared(for: session)
+            }
+        )
+    }
+
+    init(
+        lookup: @escaping Lookup,
+        isReady: @escaping @Sendable () async -> Bool = { true },
+        pause: @escaping Pause = { try? await Task.sleep(nanoseconds: $0) },
+        attempts: Int = 4,
+        retryDelayNanoseconds: UInt64 = 1_000_000_000
+    ) {
+        self.lookup = lookup
+        self.isReady = isReady
+        self.pause = pause
+        self.attempts = max(1, attempts)
+        self.retryDelayNanoseconds = retryDelayNanoseconds
+    }
+
     func resolveRoute(eventID: String) async -> AppRoute? {
-        _ = eventID
+        guard eventID.isEmpty == false, await isReady() else {
+            return nil
+        }
+        for attempt in 0 ..< attempts {
+            if attempt > 0 {
+                await pause(retryDelayNanoseconds)
+            }
+            guard Task.isCancelled == false else {
+                return nil
+            }
+            // A failed lookup (stores suspended, owner not attached) counts
+            // as not found yet.
+            if let location = (try? await lookup(eventID)) ?? nil,
+               let route = Self.route(eventID: eventID, location: location) {
+                return route
+            }
+        }
         return nil
+    }
+
+    static func route(eventID: String, location: TimelineEventLocationDto) -> AppRoute? {
+        guard location.roomId.isEmpty == false else {
+            return nil
+        }
+        return .room(id: location.roomId, eventID: eventID)
     }
 }
 

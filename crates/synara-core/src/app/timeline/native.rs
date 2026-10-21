@@ -103,6 +103,14 @@ pub enum NativeTimelineEventRoute {
     Unreachable,
 }
 
+/// The joined room that holds a routed event, for routes (sparse pushes)
+/// that carry only the event id.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeTimelineEventLocation {
+    pub room_id: String,
+    pub route: NativeTimelineEventRoute,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeTimelineDirection {

@@ -218,6 +218,7 @@ extension TimelineActionStatusDto: Sendable
 extension TimelineDirectionDto: Sendable
 extension TimelineError: Sendable
 extension TimelineEventItemDto: Sendable
+extension TimelineEventLocationDto: Sendable
 extension TimelineEventReadbackDto: Sendable
 extension TimelineEventRouteDto: Sendable
 extension TimelineEventRouteKindDto: Sendable
@@ -441,6 +442,7 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func timelineCallDecline(roomId: String, eventId: String) async throws -> TimelineVoteDeclineDto
   open func timelineClose(streamId: String) async throws -> Bool
   open func timelineEditText(roomId: String, eventId: String, body: String, formattedBody: String?) async throws -> TimelineMutateDto
+  open func timelineEventLocation(eventId: String) async throws -> TimelineEventLocationDto?
   open func timelineEventReadback(roomId: String, eventId: String) async throws -> TimelineEventReadbackDto
   open func timelineEventRoute(roomId: String, eventId: String) async throws -> TimelineEventRouteDto
   open func timelineForwardMedia(sourceRoomId: String, eventId: String, targetRoomId: String, confirmedEncryptionDowngrade: Bool) async throws -> TimelineForwardDto
@@ -1107,6 +1109,7 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func timelineCallDecline(roomId: String, eventId: String) async throws -> TimelineVoteDeclineDto
   func timelineClose(streamId: String) async throws -> Bool
   func timelineEditText(roomId: String, eventId: String, body: String, formattedBody: String?) async throws -> TimelineMutateDto
+  func timelineEventLocation(eventId: String) async throws -> TimelineEventLocationDto?
   func timelineEventReadback(roomId: String, eventId: String) async throws -> TimelineEventReadbackDto
   func timelineEventRoute(roomId: String, eventId: String) async throws -> TimelineEventRouteDto
   func timelineForwardMedia(sourceRoomId: String, eventId: String, targetRoomId: String, confirmedEncryptionDowngrade: Bool) async throws -> TimelineForwardDto
@@ -1883,6 +1886,10 @@ public struct TimelineEventItemDto: Equatable, Hashable
   public var originServerTs: UInt64
   public var decryptionState: String?
   public init(itemId: String, eventId: String, sender: String, eventType: String, body: String, originServerTs: UInt64, decryptionState: String?)
+public struct TimelineEventLocationDto: Equatable, Hashable
+  public var roomId: String
+  public var route: TimelineEventRouteDto
+  public init(roomId: String, route: TimelineEventRouteDto)
 public struct TimelineEventReadbackDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var roomId: String

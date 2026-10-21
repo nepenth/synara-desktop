@@ -392,3 +392,61 @@ async fn a_missing_target_opens_the_live_room_and_says_so() {
     assert_eq!(opened.position, TimelineViewPosition::LiveBottom);
     assert!(row_event_ids(&opened.snapshot.rows).contains(&live_id.as_str()));
 }
+
+#[tokio::test]
+async fn a_sparse_route_finds_the_room_and_thread_of_a_cached_event() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    client.event_cache().subscribe().unwrap();
+    let other_room_id = room_id!("!sparse-other:example.org");
+    let room_id = room_id!("!sparse-route:example.org");
+    let root_id = event_id!("$sparse-route-root");
+    let reply_id = event_id!("$sparse-route-reply");
+    let other = EventFactory::new().room(other_room_id);
+    let f = EventFactory::new().room(room_id);
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(other_room_id)
+                .add_state_event(other.create(client.user_id().unwrap(), RoomVersionId::V11))
+                .add_timeline_event(other.text_msg("elsewhere").sender(*BOB)),
+        )
+        .await;
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f.create(client.user_id().unwrap(), RoomVersionId::V11))
+                .add_timeline_event(f.text_msg("thread root").sender(*BOB).event_id(root_id))
+                .add_timeline_event(
+                    f.event(thread_reply(root_id, "sparse reply"))
+                        .sender(*BOB)
+                        .event_id(reply_id),
+                ),
+        )
+        .await;
+
+    let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 54);
+    assert_eq!(
+        owner.event_location(reply_id.as_str()).await.unwrap(),
+        Some(NativeTimelineEventLocation {
+            room_id: room_id.to_string(),
+            route: NativeTimelineEventRoute::Thread {
+                root_event_id: root_id.to_string()
+            },
+        })
+    );
+    assert_eq!(
+        owner.event_location(root_id.as_str()).await.unwrap(),
+        Some(NativeTimelineEventLocation {
+            room_id: room_id.to_string(),
+            route: NativeTimelineEventRoute::Room,
+        })
+    );
+    assert_eq!(
+        owner.event_location("$sparse-route-unknown").await.unwrap(),
+        None,
+        "an event no room has cached is not guessed"
+    );
+    assert!(owner.event_location("not-an-event-id").await.is_err());
+}

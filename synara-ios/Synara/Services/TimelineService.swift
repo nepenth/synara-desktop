@@ -19,6 +19,8 @@ enum TimelineSearchFilter {
             return "Deleted message"
         case .encryptedPlaceholder:
             return "Encrypted message"
+        case let .systemNotice(text):
+            return text
         case let .unknown(type):
             return type
         }
@@ -222,10 +224,74 @@ enum TimelineMessageGroupingPolicy {
         guard let previous, previous.senderID == current.senderID else {
             return false
         }
+        // A system line ("Ada joined the room") is not a message: the next
+        // message from the same person still shows who sent it.
+        if previous.isSystemNotice || current.isSystemNotice {
+            return false
+        }
         let elapsed = current.timestamp.timeIntervalSince(previous.timestamp)
         return elapsed >= 0
             && elapsed < maximumInterval
             && Calendar.current.isDate(previous.timestamp, inSameDayAs: current.timestamp)
+    }
+}
+
+/// Day headers between timeline rows. Core's date-separator rows are not
+/// mapped: every list that shows rows (room, thread, pending sends merged in)
+/// derives them from the rows it actually shows, in the device's calendar.
+enum TimelineDayHeaderPolicy {
+    /// Event ids of the rows that start a new day, keyed to the day label.
+    /// The first row always starts one.
+    static func headers(
+        for items: [TimelineItem],
+        calendar: Calendar = .current
+    ) -> [String: Date] {
+        var headers: [String: Date] = [:]
+        var previousDay: Date?
+        for item in items {
+            let day = calendar.startOfDay(for: item.timestamp)
+            if day != previousDay {
+                headers[item.eventID] = day
+                previousDay = day
+            }
+        }
+        return headers
+    }
+
+    /// A stable row identity for the day.
+    static func key(for day: Date) -> String {
+        String(Int(day.timeIntervalSince1970))
+    }
+
+    /// "Today", "Yesterday", the weekday within the last week, else the date
+    /// (with the year only when it is not this year).
+    static func label(
+        for day: Date,
+        now: Date = Date(),
+        calendar: Calendar = .current,
+        locale: Locale = .current
+    ) -> String {
+        if calendar.isDate(day, inSameDayAs: now) {
+            return "Today"
+        }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
+           calendar.isDate(day, inSameDayAs: yesterday) {
+            return "Yesterday"
+        }
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.locale = locale
+        let startOfToday = calendar.startOfDay(for: now)
+        if let lastWeek = calendar.date(byAdding: .day, value: -6, to: startOfToday),
+           day >= lastWeek, day < startOfToday {
+            formatter.setLocalizedDateFormatFromTemplate("EEEE")
+        } else if calendar.component(.year, from: day) == calendar.component(.year, from: now) {
+            formatter.setLocalizedDateFormatFromTemplate("EEEEMMMMd")
+        } else {
+            formatter.setLocalizedDateFormatFromTemplate("EEEEMMMMdyyyy")
+        }
+        return formatter.string(from: day)
     }
 }
 
@@ -237,7 +303,17 @@ struct TimelineItem: Identifiable, Equatable {
         case redacted
         case encryptedPlaceholder
         case agentCard(SynaraAgentCard)
+        /// A membership or room-state change, shown as a compact system line
+        /// rather than a message from its sender. Core writes the sentence.
+        case systemNotice(String)
         case unknown(type: String)
+    }
+
+    var isSystemNotice: Bool {
+        if case .systemNotice = kind {
+            return true
+        }
+        return false
     }
 
     let id: String
@@ -839,6 +915,9 @@ struct TimelineLoadFailure: Equatable {
         case roomUnavailable
         case viewUnavailable
         case temporarilyUnavailable
+        /// Core suspended the session's stores (the app went to the
+        /// background). Loads again once the connection is back.
+        case waitingToReconnect
     }
 
     let kind: Kind
@@ -874,6 +953,8 @@ struct TimelineLoadFailure: Equatable {
             return "This room is not available."
         case .viewUnavailable, .temporarilyUnavailable:
             return "Messages are temporarily unavailable. Try again."
+        case .waitingToReconnect:
+            return "Waiting to reconnect. Messages load when the connection is back."
         }
     }
 }

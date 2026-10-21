@@ -1079,4 +1079,222 @@ final class StableTimelineViewportTests: XCTestCase {
         cache.removeAll()
         XCTAssertEqual(cache.count, 0)
     }
+
+    // MARK: - B3a timeline correctness
+
+    private func b3aItem(
+        _ eventID: String,
+        sender: String = "@bob:matrix.org",
+        at date: Date = TimelineFixtures.baseDate,
+        kind: TimelineItem.Kind? = nil,
+        deliveryStatus: TimelineDeliveryStatus? = nil
+    ) -> TimelineItem {
+        TimelineItem(
+            id: eventID,
+            eventID: eventID,
+            senderID: sender,
+            timestamp: date,
+            kind: kind ?? .text(eventID),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:],
+            deliveryStatus: deliveryStatus
+        )
+    }
+
+    func testUnreadDividerSitsAboveTheFirstMessageSomeoneElseSent() {
+        let me = "@ada:matrix.org"
+        let items = [
+            b3aItem("$read"),
+            b3aItem("$mine", sender: me),
+            b3aItem("$pending", sender: me, deliveryStatus: .sending),
+            b3aItem("$theirs"),
+            b3aItem("$later"),
+        ]
+        XCTAssertEqual(
+            RoomTimelineUnreadDividerPolicy.dividerEventID(markerEventID: "$read", items: items, currentUserID: me),
+            "$theirs",
+            "own messages, sent or pending, are never marked unread"
+        )
+        XCTAssertNil(
+            RoomTimelineUnreadDividerPolicy.dividerEventID(
+                markerEventID: "$read",
+                items: [b3aItem("$read"), b3aItem("$mine", sender: me)],
+                currentUserID: me
+            ),
+            "only the user's own message after the marker: no divider"
+        )
+        XCTAssertNil(
+            RoomTimelineUnreadDividerPolicy.dividerEventID(markerEventID: "$gone", items: items, currentUserID: me)
+        )
+        XCTAssertNil(
+            RoomTimelineUnreadDividerPolicy.dividerEventID(markerEventID: nil, items: items, currentUserID: me)
+        )
+    }
+
+    func testUnreadDividerStaysUntilTheRoomIsLeft() throws {
+        // The divider is placed once, from the marker, and nothing that runs
+        // while the room stays open (the read receipt, following the live
+        // tail, jump to latest) moves or clears it.
+        let root = Self.b3aRepositoryRoot()
+        let source = try String(
+            contentsOfFile: "\(root)/synara-ios/Synara/Features/RoomTimelineView.swift",
+            encoding: .utf8
+        )
+        XCTAssertFalse(source.contains("initialReadMarkerEventID"))
+        XCTAssertEqual(source.components(separatedBy: "unreadDividerEventID = nil").count - 1, 2,
+                       "cleared only by a room reset or a fresh (non-preserving) load")
+        XCTAssertEqual(source.components(separatedBy: "placeUnreadDivider(markerEventID:").count - 1, 3,
+                       "placed by the unread-marker provider and Jump to Last Read only")
+    }
+
+    func testRoomReappearResumesOnlyTheSameLoadedRouteWithALiveStream() {
+        XCTAssertTrue(RoomTimelineReappearPolicy.canResume(
+            loadedTaskID: "!room", taskID: "!room", isStreamActive: true, hasPresentedTimeline: true
+        ))
+        XCTAssertFalse(RoomTimelineReappearPolicy.canResume(
+            loadedTaskID: "!room", taskID: "!room$event", isStreamActive: true, hasPresentedTimeline: true
+        ), "a routed event in the same room opens fresh")
+        XCTAssertFalse(RoomTimelineReappearPolicy.canResume(
+            loadedTaskID: nil, taskID: "!room", isStreamActive: true, hasPresentedTimeline: true
+        ), "a load that never finished starts over")
+        XCTAssertFalse(RoomTimelineReappearPolicy.canResume(
+            loadedTaskID: "!room", taskID: "!room", isStreamActive: false, hasPresentedTimeline: true
+        ))
+        XCTAssertFalse(RoomTimelineReappearPolicy.canResume(
+            loadedTaskID: "!room", taskID: "!room", isStreamActive: true, hasPresentedTimeline: false
+        ), "a failed timeline reloads")
+    }
+
+    func testCoveredRoomKeepsItsStreamAndALeftRoomEndsIt() {
+        let router = AppRouter()
+        router.roomsPath = [.room(id: "!room:matrix.org")]
+        XCTAssertTrue(router.holdsRoom(id: "!room:matrix.org", eventID: nil, in: .rooms))
+
+        // A full-screen thread pushed on top covers the room.
+        router.route(to: .thread(roomID: "!room:matrix.org", rootEventID: "$root"))
+        XCTAssertTrue(router.holdsRoom(id: "!room:matrix.org", eventID: nil, in: .rooms))
+
+        // Another tab covers it too.
+        router.selectedTab = .settings
+        XCTAssertTrue(router.holdsRoom(id: "!room:matrix.org", eventID: nil, in: .rooms))
+
+        // Back to the list: the room is left.
+        router.roomsPath = []
+        XCTAssertFalse(router.holdsRoom(id: "!room:matrix.org", eventID: nil, in: .rooms))
+        XCTAssertFalse(router.holdsRoom(id: "!room:matrix.org", eventID: nil, in: nil))
+
+        router.roomsPath = [.room(id: "!room:matrix.org", eventID: "$event")]
+        XCTAssertFalse(router.holdsRoom(id: "!room:matrix.org", eventID: nil, in: .rooms))
+        XCTAssertTrue(router.holdsRoom(id: "!room:matrix.org", eventID: "$event", in: .rooms))
+    }
+
+    func testFailedTimelineRetriesWhenTheConnectionOrTheRoomComesBack() {
+        XCTAssertTrue(RoomTimelineAutoRetryPolicy.shouldRetry(
+            afterConnection: .reconnecting, current: .syncing, hasFailedLoad: true
+        ))
+        XCTAssertFalse(RoomTimelineAutoRetryPolicy.shouldRetry(
+            afterConnection: .reconnecting, current: .syncing, hasFailedLoad: false
+        ))
+        XCTAssertFalse(RoomTimelineAutoRetryPolicy.shouldRetry(
+            afterConnection: .syncing, current: .connected, hasFailedLoad: true
+        ), "only the edge to live retries")
+        XCTAssertFalse(RoomTimelineAutoRetryPolicy.shouldRetry(
+            afterConnection: nil, current: .connected, hasFailedLoad: true
+        ))
+        XCTAssertTrue(RoomTimelineAutoRetryPolicy.shouldRetry(
+            afterRoomListed: false, isListed: true, hasFailedLoad: true
+        ))
+        XCTAssertFalse(RoomTimelineAutoRetryPolicy.shouldRetry(
+            afterRoomListed: true, isListed: true, hasFailedLoad: true
+        ))
+        XCTAssertFalse(RoomTimelineAutoRetryPolicy.shouldRetry(
+            afterRoomListed: false, isListed: false, hasFailedLoad: true
+        ))
+    }
+
+    func testDayHeadersStartEachDayInTheShownRows() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "UTC"))
+        let day = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 19, hour: 22)))
+        let items = [
+            b3aItem("$a", at: day),
+            b3aItem("$b", at: day.addingTimeInterval(60 * 60)),
+            b3aItem("$c", at: day.addingTimeInterval(3 * 60 * 60)),
+            b3aItem("$d", at: day.addingTimeInterval(3 * 24 * 60 * 60)),
+        ]
+        let headers = TimelineDayHeaderPolicy.headers(for: items, calendar: calendar)
+        XCTAssertEqual(Set(headers.keys), ["$a", "$c", "$d"])
+        XCTAssertEqual(headers["$c"], calendar.startOfDay(for: items[2].timestamp))
+        XCTAssertTrue(TimelineDayHeaderPolicy.headers(for: [], calendar: calendar).isEmpty)
+
+        let now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 21, hour: 9)))
+        let locale = Locale(identifier: "en_US")
+        XCTAssertEqual(TimelineDayHeaderPolicy.label(for: now, now: now, calendar: calendar, locale: locale), "Today")
+        XCTAssertEqual(
+            TimelineDayHeaderPolicy.label(
+                for: now.addingTimeInterval(-24 * 60 * 60), now: now, calendar: calendar, locale: locale
+            ),
+            "Yesterday"
+        )
+        XCTAssertEqual(
+            TimelineDayHeaderPolicy.label(
+                for: now.addingTimeInterval(-3 * 24 * 60 * 60), now: now, calendar: calendar, locale: locale
+            ),
+            "Sunday"
+        )
+        XCTAssertEqual(
+            TimelineDayHeaderPolicy.label(
+                for: now.addingTimeInterval(-30 * 24 * 60 * 60), now: now, calendar: calendar, locale: locale
+            ),
+            "Monday, September 21"
+        )
+        XCTAssertEqual(
+            TimelineDayHeaderPolicy.label(
+                for: now.addingTimeInterval(-400 * 24 * 60 * 60), now: now, calendar: calendar, locale: locale
+            ),
+            "Tuesday, September 16, 2025"
+        )
+    }
+
+    func testDayHeaderRowsUseStableDayIdentity() throws {
+        let day = Date(timeIntervalSince1970: 1_760_000_000)
+        XCTAssertEqual(TimelineDayHeaderPolicy.key(for: day), TimelineDayHeaderPolicy.key(for: day))
+        XCTAssertNotEqual(
+            StableTimelineViewportItemID.dayHeader(TimelineDayHeaderPolicy.key(for: day)),
+            StableTimelineViewportItemID.event(TimelineDayHeaderPolicy.key(for: day))
+        )
+    }
+
+    func testSystemLinesAreNeverGroupedWithTheirSendersMessages() {
+        let joined = b3aItem("$join", sender: "@ada:matrix.org", kind: .systemNotice("Ada joined the room"))
+        let message = b3aItem("$hi", sender: "@ada:matrix.org", at: TimelineFixtures.baseDate.addingTimeInterval(5))
+        XCTAssertFalse(TimelineMessageGroupingPolicy.shouldGroup(previous: joined, current: message))
+        XCTAssertFalse(TimelineMessageGroupingPolicy.shouldGroup(previous: message, current: joined))
+        XCTAssertTrue(joined.isSystemNotice)
+        XCTAssertEqual(TimelineSearchFilter.searchableText(for: joined), "Ada joined the room")
+    }
+
+    func testUserSurfacesCarryNoDeveloperCopy() throws {
+        let root = Self.b3aRepositoryRoot()
+        let source = try String(
+            contentsOfFile: "\(root)/synara-ios/Synara/Features/RoomTimelineView.swift",
+            encoding: .utf8
+        )
+        XCTAssertFalse(source.contains("Unsupported event"))
+        XCTAssertFalse(source.contains("does not define a session-approval reaction"))
+        XCTAssertFalse(source.contains(".preferredColorScheme("), "agent rooms must not force the window dark")
+        XCTAssertTrue(source.contains(".environment(\\.colorScheme, conversationColorScheme)"))
+    }
+
+    private static func b3aRepositoryRoot() -> String {
+        var url = URL(fileURLWithPath: #filePath)
+        while url.pathComponents.count > 1 {
+            url.deleteLastPathComponent()
+            if FileManager.default.fileExists(atPath: url.appendingPathComponent("synara-ios").path) {
+                return url.path
+            }
+        }
+        return url.path
+    }
 }

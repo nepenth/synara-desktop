@@ -272,6 +272,15 @@ final class OutgoingMessageQueue: ObservableObject {
         items(in: roomID).map { $0.asTimelineItem() }
     }
 
+    /// Pending rows of one timeline: the room's main timeline (`nil`) or one
+    /// thread. The room timeline never shows thread replies, so a thread's
+    /// sends are shown, and confirmed, by its thread screen.
+    func timelineItems(in roomID: String, threadRootEventID: String?) -> [TimelineItem] {
+        items(in: roomID)
+            .filter { $0.threadRootEventID == threadRootEventID }
+            .map { $0.asTimelineItem() }
+    }
+
     func handoffItems() -> [OutgoingQueuedMessage] {
         items.filter(OutgoingSendPolicy.needsHandoff)
     }
