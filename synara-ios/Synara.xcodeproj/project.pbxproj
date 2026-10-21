@@ -24,6 +24,7 @@
 		0F83781A780E53A7EE444F3C /* SharedCoreTypingPresence.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9D54A583885BB081BFF3B5C /* SharedCoreTypingPresence.swift */; };
 		10B69831512AEC7B8B8F64B8 /* SessionCryptoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28FA32A3CD948BF4B66E6E94 /* SessionCryptoStore.swift */; };
 		13974B028BA48477756A97D4 /* SharedCoreDevicesLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83CCF21D15E845BE04F4BB26 /* SharedCoreDevicesLive.swift */; };
+		151D3937A63F1AC89F83B6CD /* SettingsAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D59781A83B52E5A00C67B672 /* SettingsAccessibilityTests.swift */; };
 		1794B11F45DC4ACBA302F956 /* SynaraUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D0A5EA751CC5D570C324084 /* SynaraUITests.swift */; };
 		17EDA26AA8C46075FC6DE175 /* SharedCoreOwnProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48D83E5662BD400632FEC41E /* SharedCoreOwnProfile.swift */; };
 		186137E419A250964CD5F7D5 /* ThreadDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6986249FA7AA7E42D24E6A82 /* ThreadDisplay.swift */; };
@@ -51,6 +52,7 @@
 		30173F84FF6440BD2EE8E5CC /* SynaraNotificationPreviewSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 141CF4920753EE324F1B3AF0 /* SynaraNotificationPreviewSupport.swift */; };
 		30ADD2995785584629AC7AF0 /* SharedCoreImagePacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C5A1A5A848D9C043A64F128 /* SharedCoreImagePacks.swift */; };
 		320624F61BB768C4B7C9E705 /* SharedCoreRoomMembersSnapshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D8498844FC0DE506B3E82D0 /* SharedCoreRoomMembersSnapshots.swift */; };
+		32F6D221C229D808F0C21DAD /* TimelineAccessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D321FEADA71C48BAB6ABFD6 /* TimelineAccessibility.swift */; };
 		3321B54F4A9FFE147A737368 /* SignedInSessionReadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF389D46848BA1444F7035D0 /* SignedInSessionReadiness.swift */; };
 		3397141E30A00168F395FC72 /* NotificationPreviewSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB7C256708A8C6C4189DA5AB /* NotificationPreviewSupportTests.swift */; };
 		35321EEB56E2DB145A96303E /* ApprovalsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C7CADB8BA8642C2961DC08F /* ApprovalsView.swift */; };
@@ -324,6 +326,7 @@
 		69B679E7F5741D45B587B578 /* ComposerTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerTextView.swift; sourceTree = "<group>"; };
 		6C52DA3702D2B679BADE7408 /* SharedCoreHttpPusher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreHttpPusher.swift; sourceTree = "<group>"; };
 		6D1561F09029D684B9548B0F /* StableTimelineViewport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StableTimelineViewport.swift; sourceTree = "<group>"; };
+		6D321FEADA71C48BAB6ABFD6 /* TimelineAccessibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineAccessibility.swift; sourceTree = "<group>"; };
 		6F5EA675E70455412EE3A3C0 /* SharedCoreTimelineMediaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineMediaTests.swift; sourceTree = "<group>"; };
 		72E9B9C1E874AD8B6B90D9C3 /* ComposerMarkdownTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerMarkdownTests.swift; sourceTree = "<group>"; };
 		740E5CB751CAF56D84A66023 /* SharedCoreVerificationSas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreVerificationSas.swift; sourceTree = "<group>"; };
@@ -418,6 +421,7 @@
 		D3137E06580A1581467F3167 /* SharedCoreImagePackRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreImagePackRows.swift; sourceTree = "<group>"; };
 		D3219D555ED36F65BF9FE332 /* SynaraTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SynaraTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D3439FF6669F8DA8737528CD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		D59781A83B52E5A00C67B672 /* SettingsAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAccessibilityTests.swift; sourceTree = "<group>"; };
 		D8AFDF08C8140FD041C9DD20 /* SharedCoreTimelineMedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineMedia.swift; sourceTree = "<group>"; };
 		DB0A6ED03055F6B933AD36A6 /* SharedCoreRoomListRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomListRows.swift; sourceTree = "<group>"; };
 		DB7C256708A8C6C4189DA5AB /* NotificationPreviewSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPreviewSupportTests.swift; sourceTree = "<group>"; };
@@ -517,6 +521,7 @@
 				C0FBB16EA6FF93511B2EE8F0 /* SettingsView.swift */,
 				6D1561F09029D684B9548B0F /* StableTimelineViewport.swift */,
 				6986249FA7AA7E42D24E6A82 /* ThreadDisplay.swift */,
+				6D321FEADA71C48BAB6ABFD6 /* TimelineAccessibility.swift */,
 				8CF673C34A136F23E32F8EFB /* Composer */,
 			);
 			path = Features;
@@ -777,6 +782,7 @@
 				1C0070A890F80B56DD756D02 /* SecureSessionStoreTests.swift */,
 				26D5EAB60408E1F01AB36535 /* SessionCoordinatorTests.swift */,
 				C6111FDE94FF894CB640BD95 /* SessionCryptoStoreTests.swift */,
+				D59781A83B52E5A00C67B672 /* SettingsAccessibilityTests.swift */,
 				CCF5C110E4480E5EF6D833C8 /* SharedCoreSessionBootstrapTests.swift */,
 				6F5EA675E70455412EE3A3C0 /* SharedCoreTimelineMediaTests.swift */,
 				311E5731825808ADC48C05B4 /* StableTimelineViewportTests.swift */,
@@ -986,6 +992,7 @@
 				45DB0A08CF868FFA984A3B0D /* SecureSessionStoreTests.swift in Sources */,
 				7247DDD14FE03A17AEC96541 /* SessionCoordinatorTests.swift in Sources */,
 				756628B89DF39EECC04469D7 /* SessionCryptoStoreTests.swift in Sources */,
+				151D3937A63F1AC89F83B6CD /* SettingsAccessibilityTests.swift in Sources */,
 				E896CD56FB1B8BE599052590 /* SharedCoreSessionBootstrapTests.swift in Sources */,
 				AB8734D706993018EE6A43AD /* SharedCoreTimelineMediaTests.swift in Sources */,
 				1F2AE40317C7704B4ADD16F8 /* StableTimelineViewportTests.swift in Sources */,
@@ -1139,6 +1146,7 @@
 				6565433C651603C659B39B26 /* SynaraNotificationPreviewSupport.swift in Sources */,
 				919BCCE1F8A9D3525404023E /* SynaraRoomAvatar.swift in Sources */,
 				186137E419A250964CD5F7D5 /* ThreadDisplay.swift in Sources */,
+				32F6D221C229D808F0C21DAD /* TimelineAccessibility.swift in Sources */,
 				C8BCA6C5B2041510969B6EBC /* TimelineReplyPreview.swift in Sources */,
 				4A665A8695E281B0E96F0A54 /* TimelineService.swift in Sources */,
 				A6210FBA73E214D7B55DF9CA /* VerificationUITestService.swift in Sources */,

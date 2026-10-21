@@ -74,7 +74,7 @@ struct SheetPlaceholderView: View {
 private struct AccountMenuSheet: View {
     @Environment(\.appEnvironment) private var environment
     @Environment(\.dismiss) private var dismiss
-    @State private var isLogoutConfirmationPresented = false
+    @StateObject private var logoutConfirmation = SignOutConfirmationModel()
     @State private var isLoggingOut = false
     @State private var logoutError: String?
 
@@ -107,7 +107,7 @@ private struct AccountMenuSheet: View {
                     .accessibilityIdentifier("AccountMenuSettingsButton")
 
                     Button(role: .destructive) {
-                        isLogoutConfirmationPresented = true
+                        logoutConfirmation.request(using: environment.sessionCrypto)
                     } label: {
                         if isLoggingOut {
                             ProgressView()
@@ -122,7 +122,7 @@ private struct AccountMenuSheet: View {
                 if let logoutError {
                     Section {
                         Text(logoutError)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(SynaraColor.criticalText)
                             .accessibilityIdentifier("AccountMenuLogoutErrorText")
                     }
                 }
@@ -136,18 +136,9 @@ private struct AccountMenuSheet: View {
                     }
                 }
             }
-            .confirmationDialog(
-                "Log out of Synara?",
-                isPresented: $isLogoutConfirmationPresented,
-                titleVisibility: .visible
-            ) {
-                Button("Log Out", role: .destructive) {
-                    logout()
-                }
-                .accessibilityIdentifier("AccountMenuConfirmLogoutButton")
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This clears local session data, sync state, cached rooms, and push registration on this device.")
+            // Same confirmation as Settings, last-device warning included.
+            .signOutConfirmation(logoutConfirmation, confirmIdentifier: "AccountMenuConfirmLogoutButton") {
+                logout()
             }
         }
     }

@@ -23,13 +23,86 @@ enum SignOutCopy {
     }
 }
 
+/// The one Log Out confirmation behind every sign-out entry point (Settings,
+/// the account menu, the connection banner). A request only opens the dialog
+/// and reads the device list for the last-device warning; nothing signs out
+/// until `confirm`.
+@MainActor
+final class SignOutConfirmationModel: ObservableObject {
+    @Published var isPresented = false
+    @Published private(set) var isLastDevice: Bool?
+    private var requestGeneration = 0
+
+    var message: String {
+        SignOutCopy.message(isLastDevice: isLastDevice)
+    }
+
+    /// `known` is the crypto status already on hand; `refresh` reads the
+    /// current device list.
+    func request(
+        known: SessionCryptoStatus,
+        refresh: @escaping () async -> SessionCryptoStatus
+    ) {
+        requestGeneration += 1
+        let generation = requestGeneration
+        isLastDevice = known.isLastDevice
+        isPresented = true
+        Task { @MainActor in
+            let status = await refresh()
+            guard generation == requestGeneration else { return }
+            isLastDevice = status.isLastDevice
+        }
+    }
+
+    func request(using store: SessionCryptoStore) {
+        request(known: store.status, refresh: { await store.refresh() })
+    }
+
+    func confirm(_ signOut: () -> Void) {
+        isPresented = false
+        signOut()
+    }
+}
+
+private struct SignOutConfirmationDialog: ViewModifier {
+    @ObservedObject var model: SignOutConfirmationModel
+    let confirmIdentifier: String
+    let onConfirm: () -> Void
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(
+            "Log out of Synara?",
+            isPresented: $model.isPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Log Out", role: .destructive) {
+                model.confirm(onConfirm)
+            }
+            .accessibilityIdentifier(confirmIdentifier)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(model.message)
+        }
+    }
+}
+
+extension View {
+    /// Settings' Log Out confirmation, including the last-device warning.
+    func signOutConfirmation(
+        _ model: SignOutConfirmationModel,
+        confirmIdentifier: String,
+        onConfirm: @escaping () -> Void
+    ) -> some View {
+        modifier(SignOutConfirmationDialog(model: model, confirmIdentifier: confirmIdentifier, onConfirm: onConfirm))
+    }
+}
+
 struct SettingsView: View {
     @Environment(\.appEnvironment) private var environment
     @State private var state: SettingsState = .idle
     @State private var logoutAttempt = 0
     @State private var inFlightLogout: Task<Void, Error>?
-    @State private var isLogoutConfirmationPresented = false
-    @StateObject private var logoutCrypto = SessionCryptoStatusObserver()
+    @StateObject private var logoutConfirmation = SignOutConfirmationModel()
 
     var body: some View {
         Form {
@@ -108,9 +181,7 @@ struct SettingsView: View {
 
             Section("Danger Zone") {
                 Button(role: .destructive) {
-                    isLogoutConfirmationPresented = true
-                    // Read the device list for the last-device warning.
-                    Task { await logoutCrypto.refresh(store: environment.sessionCrypto) }
+                    logoutConfirmation.request(using: environment.sessionCrypto)
                 } label: {
                     if state.isLoading {
                         ProgressView()
@@ -121,25 +192,15 @@ struct SettingsView: View {
                 .disabled(state.isLoading)
                 .accessibilityIdentifier("LogoutButton")
                 .accessibilityHint("Requires confirmation and clears local session data from this device")
-                .confirmationDialog(
-                    "Log out of Synara?",
-                    isPresented: $isLogoutConfirmationPresented,
-                    titleVisibility: .visible
-                ) {
-                    Button("Log Out", role: .destructive) {
-                        logout()
-                    }
-                    .accessibilityIdentifier("ConfirmLogoutButton")
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text(SignOutCopy.message(isLastDevice: logoutCrypto.status.isLastDevice))
+                .signOutConfirmation(logoutConfirmation, confirmIdentifier: "ConfirmLogoutButton") {
+                    logout()
                 }
             }
 
             if case .failed(let message) = state {
                 Section {
                     Text(message)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(SynaraColor.criticalText)
                         .accessibilityIdentifier("LogoutErrorText")
                 }
             }
@@ -917,18 +978,107 @@ private struct SessionDeviceRow: View {
     }
 }
 
+/// Push rules on the Notifications screen. Toggles and pickers move at once
+/// and roll back with an inline message when the server refuses; they used
+/// to snap back until the round trip finished, and failures were silent.
+@MainActor
+final class PushRuleSettingsModel: ObservableObject {
+    @Published private(set) var snapshot: SynaraPushRulesSnapshot?
+    @Published private(set) var message: String?
+    /// Bumps per edit; an older write neither rolls back nor overwrites a
+    /// newer edit.
+    private var revision = 0
+
+    static let failureMessage = "Could not update push rules. Check your connection and try again."
+
+    func load(using matrix: PushRuleSettingsServicing) async {
+        let started = revision
+        let loaded = await matrix.pushRulesSnapshot()
+        guard started == revision else { return }
+        snapshot = loaded
+    }
+
+    func setMention(
+        _ keyPath: WritableKeyPath<SynaraPushRuleMentions, Bool>,
+        ruleID: String,
+        enabled: Bool,
+        using matrix: PushRuleSettingsServicing
+    ) async {
+        await apply({ $0.mentions[keyPath: keyPath] = enabled }, using: matrix) {
+            await matrix.setPushRuleMention(ruleID: ruleID, enabled: enabled)
+        }
+    }
+
+    func setDefault(
+        _ keyPath: WritableKeyPath<SynaraPushRulesSnapshot, String>,
+        encrypted: Bool,
+        oneToOne: Bool,
+        mode: String,
+        using matrix: PushRuleSettingsServicing
+    ) async {
+        await apply({ $0[keyPath: keyPath] = mode }, using: matrix) {
+            await matrix.setPushRuleDefault(encrypted: encrypted, oneToOne: oneToOne, mode: mode)
+        }
+    }
+
+    @discardableResult
+    func addKeyword(_ keyword: String, using matrix: PushRuleSettingsServicing) async -> Bool {
+        await apply({ snapshot in
+            if snapshot.keywords.contains(keyword) == false {
+                snapshot.keywords.append(keyword)
+            }
+        }, using: matrix) {
+            await matrix.addPushKeyword(keyword)
+        }
+    }
+
+    func removeKeyword(_ keyword: String, using matrix: PushRuleSettingsServicing) async {
+        await apply({ $0.keywords.removeAll { $0 == keyword } }, using: matrix) {
+            await matrix.removePushKeyword(keyword)
+        }
+    }
+
+    @discardableResult
+    private func apply(
+        _ change: (inout SynaraPushRulesSnapshot) -> Void,
+        using matrix: PushRuleSettingsServicing,
+        write: () async -> Bool
+    ) async -> Bool {
+        guard let previous = snapshot else { return false }
+        var next = previous
+        change(&next)
+        revision += 1
+        let edit = revision
+        snapshot = next
+        message = nil
+        guard await write() else {
+            if edit == revision {
+                snapshot = previous
+            }
+            message = Self.failureMessage
+            return false
+        }
+        // The server's rules, unless a newer edit is already showing.
+        let refreshed = await matrix.pushRulesSnapshot()
+        if edit == revision, let refreshed {
+            snapshot = refreshed
+        }
+        return true
+    }
+}
+
 private struct NotificationSettingsView: View {
     @Environment(\.appEnvironment) private var environment
     @State private var notificationStatus: NotificationPermissionStatus = .unavailable
     @State private var isRequestingNotifications = false
     @State private var isRegisteringPush = false
+    @State private var pushRegistrationStatus = ""
     @State private var showLockScreenMessagePreviews = SynaraSharedConstants.defaultLockScreenMessagePreviews
     @State private var timeSensitiveAgentApprovals = SynaraSharedConstants.defaultTimeSensitiveAgentApprovals
     @State private var approvalNotificationDetails = SynaraSharedConstants.defaultApprovalNotificationDetails
     @State private var approveOnceWithoutUnlock = SynaraSharedConstants.defaultApproveOnceWithoutUnlock
-    @State private var pushRules: SynaraPushRulesSnapshot?
+    @StateObject private var pushRuleSettings = PushRuleSettingsModel()
     @State private var keywordDraft = ""
-    @State private var pushRulesMessage: String?
     @State private var notificationDiagnostics: [SynaraNotificationDiagnosticEntry] = []
     @State private var notificationDiagnosticReport = ""
 
@@ -958,11 +1108,14 @@ private struct NotificationSettingsView: View {
             }
 
             Section {
-                SettingsInfoRow(title: "Status", value: environment.push.registrationStateDescription)
+                SettingsInfoRow(
+                    title: "Status",
+                    value: pushRegistrationStatus.isEmpty
+                        ? environment.push.registrationStateDescription
+                        : pushRegistrationStatus
+                )
                 Button {
-                    isRegisteringPush = true
-                    environment.push.beginRegistration()
-                    isRegisteringPush = false
+                    registerPush()
                 } label: {
                     if isRegisteringPush {
                         ProgressView()
@@ -1087,61 +1240,63 @@ private struct NotificationSettingsView: View {
                 Text("Copy or share a report after reproducing a missing preview. It includes app version, notification settings, push registration and shared-store readiness, up to 256 fixed stage codes and timestamps, and how many previews failed because the server rejected your session. Reports stay on this device until you share them and exclude message content, Matrix IDs, senders, push payloads, tokens, URLs and account secrets.")
             }
 
-            if let pushRules {
+            if let pushRules = pushRuleSettings.snapshot {
+                if let message = pushRuleSettings.message {
+                    Section {
+                        Text(message)
+                            .font(SynaraTypography.supporting)
+                            .foregroundStyle(SynaraColor.criticalText)
+                            .accessibilityIdentifier("PushRulesErrorText")
+                    }
+                }
                 Section("1-to-1 Chats") {
                     pushModePicker("Unencrypted", current: pushRules.dm) { mode in
-                        await updateDefault(encrypted: false, oneToOne: true, mode: mode)
+                        await updateDefault(\.dm, encrypted: false, oneToOne: true, mode: mode)
                     }
                     pushModePicker("Encrypted", current: pushRules.dmEncrypted) { mode in
-                        await updateDefault(encrypted: true, oneToOne: true, mode: mode)
+                        await updateDefault(\.dmEncrypted, encrypted: true, oneToOne: true, mode: mode)
                     }
                 }
                 Section("Rooms") {
                     pushModePicker("Unencrypted", current: pushRules.group) { mode in
-                        await updateDefault(encrypted: false, oneToOne: false, mode: mode)
+                        await updateDefault(\.group, encrypted: false, oneToOne: false, mode: mode)
                     }
                     pushModePicker("Encrypted", current: pushRules.groupEncrypted) { mode in
-                        await updateDefault(encrypted: true, oneToOne: false, mode: mode)
+                        await updateDefault(\.groupEncrypted, encrypted: true, oneToOne: false, mode: mode)
                     }
                 }
                 Section("Mentions") {
-                    mentionToggle("User ID", enabled: pushRules.mentions.userMention, ruleID: "userMention")
-                    mentionToggle("Display name", enabled: pushRules.mentions.displayName, ruleID: "displayName")
-                    mentionToggle("Username", enabled: pushRules.mentions.userName, ruleID: "userName")
-                    mentionToggle("@room mention", enabled: pushRules.mentions.roomMention, ruleID: "roomMention")
-                    mentionToggle("Contains @room", enabled: pushRules.mentions.atRoom, ruleID: "atRoom")
+                    mentionToggle("User ID", enabled: pushRules.mentions.userMention, keyPath: \.userMention, ruleID: "userMention")
+                    mentionToggle("Display name", enabled: pushRules.mentions.displayName, keyPath: \.displayName, ruleID: "displayName")
+                    mentionToggle("Username", enabled: pushRules.mentions.userName, keyPath: \.userName, ruleID: "userName")
+                    mentionToggle("@room mention", enabled: pushRules.mentions.roomMention, keyPath: \.roomMention, ruleID: "roomMention")
+                    mentionToggle("Contains @room", enabled: pushRules.mentions.atRoom, keyPath: \.atRoom, ruleID: "atRoom")
                 }
                 Section("Keywords") {
                     ForEach(pushRules.keywords, id: \.self) { keyword in
                         Button(role: .destructive) {
-                            Task {
-                                _ = await environment.matrix.removePushKeyword(keyword)
-                                self.pushRules = await environment.matrix.pushRulesSnapshot()
-                            }
+                            let matrix = environment.matrix
+                            Task { await pushRuleSettings.removeKeyword(keyword, using: matrix) }
                         } label: {
                             Text(keyword)
                         }
+                        .accessibilityHint("Removes this keyword")
                     }
                     TextField("Keyword", text: $keywordDraft)
                         .accessibilityIdentifier("NotificationKeywordField")
                     Button("Add Keyword") {
                         let keyword = keywordDraft.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard keyword.isEmpty == false else { return }
+                        let matrix = environment.matrix
                         Task {
-                            _ = await environment.matrix.addPushKeyword(keyword)
-                            keywordDraft = ""
-                            self.pushRules = await environment.matrix.pushRulesSnapshot()
+                            // Keep the draft when the server refuses it.
+                            if await pushRuleSettings.addKeyword(keyword, using: matrix) {
+                                keywordDraft = ""
+                            }
                         }
                     }
                     .disabled(keywordDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .accessibilityIdentifier("NotificationAddKeywordButton")
-                }
-                if let pushRulesMessage {
-                    Section {
-                        Text(pushRulesMessage)
-                            .font(SynaraTypography.supporting)
-                            .foregroundStyle(SynaraColor.secondaryText)
-                    }
                 }
             }
         }
@@ -1162,7 +1317,7 @@ private struct NotificationSettingsView: View {
                 for: SynaraSharedConstants.approveOnceWithoutUnlockKey
             )
             notificationStatus = await environment.notificationPermission.currentStatus()
-            pushRules = await environment.matrix.pushRulesSnapshot()
+            await pushRuleSettings.load(using: environment.matrix)
             reloadNotificationDiagnostics()
         }
     }
@@ -1204,27 +1359,54 @@ private struct NotificationSettingsView: View {
         }
     }
 
-    private func mentionToggle(_ title: String, enabled: Bool, ruleID: String) -> some View {
+    private func mentionToggle(
+        _ title: String,
+        enabled: Bool,
+        keyPath: WritableKeyPath<SynaraPushRuleMentions, Bool>,
+        ruleID: String
+    ) -> some View {
         Toggle(title, isOn: Binding(
             get: { enabled },
             set: { value in
+                let matrix = environment.matrix
                 Task {
-                    _ = await environment.matrix.setPushRuleMention(ruleID: ruleID, enabled: value)
-                    pushRules = await environment.matrix.pushRulesSnapshot()
+                    await pushRuleSettings.setMention(keyPath, ruleID: ruleID, enabled: value, using: matrix)
                 }
             }
         ))
+        .accessibilityIdentifier("PushRuleMention-\(ruleID)")
     }
 
-    private func updateDefault(encrypted: Bool, oneToOne: Bool, mode: String) async {
-        let ok = await environment.matrix.setPushRuleDefault(
+    private func updateDefault(
+        _ keyPath: WritableKeyPath<SynaraPushRulesSnapshot, String>,
+        encrypted: Bool,
+        oneToOne: Bool,
+        mode: String
+    ) async {
+        await pushRuleSettings.setDefault(
+            keyPath,
             encrypted: encrypted,
             oneToOne: oneToOne,
-            mode: mode
+            mode: mode,
+            using: environment.matrix
         )
-        pushRules = await environment.matrix.pushRulesSnapshot()
-        if ok == false {
-            pushRulesMessage = "Could not update push rules."
+    }
+
+    /// APNs and the pusher answer after `beginRegistration` returns, so the
+    /// spinner stays until the service's status moves (bounded).
+    private func registerPush() {
+        guard isRegisteringPush == false else { return }
+        isRegisteringPush = true
+        let push = environment.push
+        let before = push.registrationStateDescription
+        push.beginRegistration()
+        Task { @MainActor in
+            for _ in 0..<20 {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if push.registrationStateDescription != before { break }
+            }
+            pushRegistrationStatus = push.registrationStateDescription
+            isRegisteringPush = false
         }
     }
 
@@ -1262,8 +1444,9 @@ private struct AppearanceSettingsView: View {
                 SettingsInfoRow(title: "Appearance", value: "System")
                     .accessibilityIdentifier("AppearanceThemeRow")
                 themeRampPreview
-                HStack(spacing: SynaraSpacing.small) {
+                HStack(spacing: 0) {
                     ForEach(SynaraThemeRamp.presets, id: \.hex) { preset in
+                        let isSelected = SynaraThemeRamp.normalize(baseColor.synaraHexString()) == preset.hex
                         Button {
                             persistBaseColor(preset.hex)
                             baseColor = Color(synaraHex: preset.hex)
@@ -1273,17 +1456,22 @@ private struct AppearanceSettingsView: View {
                                 .frame(width: 22, height: 22)
                                 .overlay(
                                     Circle().stroke(
-                                        SynaraThemeRamp.normalize(baseColor.synaraHexString()) == preset.hex
+                                        isSelected
                                             ? SynaraColor.primaryText
                                             : SynaraColor.separator.opacity(0.5),
                                         lineWidth: 1.5
                                     )
                                 )
+                                .frame(width: SynaraHitTarget.minimum, height: SynaraHitTarget.minimum)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(preset.label)
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
+                        .accessibilityIdentifier("AppearancePreset-\(preset.label)")
                     }
                 }
+                .padding(.leading, -11)
                 ColorPicker("Custom", selection: $baseColor, supportsOpacity: false)
                     .accessibilityIdentifier("AppearanceBaseColorPicker")
                     .onChange(of: baseColor) { newValue in
@@ -1790,7 +1978,7 @@ private struct SecuritySettingsView: View {
             if let message = recoverySetup.errorMessage {
                 Text(message)
                     .font(SynaraTypography.supporting)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SynaraColor.criticalText)
                     .accessibilityIdentifier("RecoverySetupErrorText")
             }
         } header: {

@@ -28,6 +28,11 @@ struct HomeserverSelectionView: View {
                     .keyboardType(.URL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .submitLabel(.continue)
+                    .onSubmit {
+                        guard state.isLoading == false else { return }
+                        validateAndContinue()
+                    }
                     .accessibilityIdentifier("HomeserverAddressField")
 
                 Button {
@@ -73,7 +78,7 @@ struct HomeserverSelectionView: View {
             if case .failed(let message) = state {
                 Section {
                     Text(message)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(SynaraColor.criticalText)
                         .accessibilityIdentifier("HomeserverErrorText")
                 }
             }

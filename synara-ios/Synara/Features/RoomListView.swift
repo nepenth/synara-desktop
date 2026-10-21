@@ -79,7 +79,7 @@ struct RoomListView: View {
                     if let sessionRecoveryError {
                         Text(sessionRecoveryError)
                             .font(SynaraTypography.supporting)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(SynaraColor.criticalText)
                             .multilineTextAlignment(.center)
                             .accessibilityIdentifier("RoomListSessionRecoveryError")
                     }
@@ -267,7 +267,7 @@ struct RoomListView: View {
             if let membershipError {
                 Text(membershipError)
                     .font(SynaraTypography.supporting)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SynaraColor.criticalText)
                     .padding(SynaraSpacing.medium)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(SynaraColor.secondarySurface)
@@ -885,7 +885,7 @@ private struct RoomManagementSheet: View {
                 if case .failed(let message) = state {
                     Section {
                         Text(message)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(SynaraColor.criticalText)
                             .accessibilityIdentifier("RoomManagementErrorText")
                     }
                 }
@@ -1262,6 +1262,7 @@ private struct RoomSearchField: View {
 private struct RoomListRow: View {
     let room: RoomSummary
     @Environment(\.appEnvironment) private var environment
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var peerInCall = false
 
     private var accessibilityChildren: AccessibilityChildBehavior {
@@ -1303,7 +1304,7 @@ private struct RoomListRow: View {
                     Text(room.name)
                         .font(SynaraTypography.body.weight(hasUnreadActivity ? .semibold : .regular))
                         .foregroundStyle(SynaraColor.primaryText)
-                        .lineLimit(1)
+                        .lineLimit(SynaraDynamicTypeLayout.titleLineLimit(dynamicTypeSize))
                         .layoutPriority(1)
                         .accessibilityIdentifier("RoomRowTitle-\(room.id)")
 
@@ -1344,14 +1345,22 @@ private struct RoomListRow: View {
                     Spacer(minLength: 0)
                 }
 
-                HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.xSmall) {
+                // At accessibility sizes the metadata takes its own line so the
+                // preview keeps the row's width.
+                let stacksMetadata = SynaraDynamicTypeLayout.stacksRoomRowMetadata(dynamicTypeSize)
+                let previewLayout = stacksMetadata
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: SynaraSpacing.xSmall))
+                    : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: SynaraSpacing.xSmall))
+                previewLayout {
                     Text(room.lastMessagePreview)
                         .font(SynaraTypography.roomPreview.weight(hasUnreadActivity ? .medium : .regular))
                         .foregroundStyle(previewColor)
-                        .lineLimit(1)
+                        .lineLimit(SynaraDynamicTypeLayout.previewLineLimit(dynamicTypeSize))
                         .layoutPriority(1)
 
-                    Spacer(minLength: SynaraSpacing.xSmall)
+                    if stacksMetadata == false {
+                        Spacer(minLength: SynaraSpacing.xSmall)
+                    }
 
                     HStack(spacing: SynaraSpacing.xSmall) {
                         if room.hasHighlight {

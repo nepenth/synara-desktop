@@ -70,11 +70,14 @@ enum ConnectionStatusCopy {
         }
     }
 
+    /// Only where signing out is the remedy. A lost connection offers Retry
+    /// alone, so a mis-tap during a network blip cannot end the session;
+    /// Log Out stays in Settings.
     static func showsSignOutAction(_ status: MatrixSyncStatus) -> Bool {
         switch status {
-        case .restoreFailed, .disconnected, .failed:
+        case .restoreFailed:
             return true
-        case .connected, .syncing, .starting, .reconnecting, .stopped:
+        case .disconnected, .failed, .connected, .syncing, .starting, .reconnecting, .stopped:
             return false
         }
     }

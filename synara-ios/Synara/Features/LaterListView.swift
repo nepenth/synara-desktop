@@ -218,7 +218,7 @@ private struct LaterListRow: View {
                 if !item.canNavigate {
                     Text("Destination unavailable")
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(SynaraColor.criticalText)
                 }
             }
         }

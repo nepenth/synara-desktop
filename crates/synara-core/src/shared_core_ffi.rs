@@ -41,7 +41,7 @@ use crate::app::account_data::{
 };
 use crate::app::auth::{
     existing_sqlite_crypto_device_id, login_with_password as core_login_with_password,
-    require_native_sliding_sync, DevicePlatform, LoginOptions,
+    require_native_sliding_sync, AuthError, DevicePlatform, LoginOptions,
     LOGIN_SLIDING_SYNC_UNSUPPORTED_DIAGNOSTIC_ID,
 };
 use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig};
@@ -143,6 +143,22 @@ const LOGIN_STORE_ROOT_INVALID_CODE: &str = "p4-s3c-store-root-invalid";
 const LOGIN_STORE_ROOT_INVALID_DESCRIPTION: &str = "The session store root is invalid.";
 const LOGIN_FAILED_CODE: &str = "p4-s3c-login-failed";
 const LOGIN_FAILED_DESCRIPTION: &str = "The session could not be authenticated.";
+// Classified sign-in failures (review L8): each keeps its own code so the
+// shell does not report an outage or a rate limit as a wrong password.
+const LOGIN_CREDENTIALS_REJECTED_CODE: &str = "p4-s3c-credentials-rejected";
+const LOGIN_CREDENTIALS_REJECTED_DESCRIPTION: &str = "The homeserver rejected the credentials.";
+const LOGIN_NETWORK_UNAVAILABLE_CODE: &str = "p4-s3c-network-unavailable";
+const LOGIN_NETWORK_UNAVAILABLE_DESCRIPTION: &str = "The homeserver could not be reached.";
+const LOGIN_SERVER_UNAVAILABLE_CODE: &str = "p4-s3c-server-unavailable";
+const LOGIN_SERVER_UNAVAILABLE_DESCRIPTION: &str = "The homeserver is unavailable.";
+const LOGIN_RATE_LIMITED_CODE: &str = "p4-s3c-rate-limited";
+const LOGIN_RATE_LIMITED_DESCRIPTION: &str = "The homeserver is rate limiting sign-in.";
+const LOGIN_USER_DEACTIVATED_CODE: &str = "p4-s3c-user-deactivated";
+const LOGIN_USER_DEACTIVATED_DESCRIPTION: &str = "The account is deactivated.";
+const LOGIN_UNSUPPORTED_CODE: &str = "p4-s3c-login-unsupported";
+const LOGIN_UNSUPPORTED_DESCRIPTION: &str = "The homeserver requires an unsupported sign-in step.";
+const LOGIN_STORE_LOCKED_CODE: &str = "p4-s3c-store-locked";
+const LOGIN_STORE_LOCKED_DESCRIPTION: &str = "The local store is in use by another process.";
 const LOGIN_SLIDING_SYNC_UNSUPPORTED_CODE: &str = "p4-s3c-sliding-sync-unsupported";
 const LOGIN_SLIDING_SYNC_UNSUPPORTED_DESCRIPTION: &str =
     "The homeserver does not support simplified sliding sync (MSC4186).";

@@ -171,13 +171,44 @@ final class AppEnvironmentTests: XCTestCase {
             )),
             .sessionPersistenceFailed
         )
+        // Unclassified is a generic failure, not "incorrect password" (L8).
         XCTAssertEqual(
             SharedCoreLoginErrorMapping.loginError(for: SessionLoginError.Failed(
                 code: "p4-s3c-login-failed",
                 description: "The session could not be authenticated."
             )),
-            .invalidCredentials
+            .signInFailed
         )
+    }
+
+    func testSharedCoreLoginErrorMappingNamesEachSignInFailure() {
+        let cases: [(String, LoginError)] = [
+            ("p4-s3c-credentials-rejected", .invalidCredentials),
+            ("p4-s3c-network-unavailable", .networkFailure),
+            ("p4-s3c-server-unavailable", .serverUnavailable),
+            ("p4-s3c-rate-limited", .rateLimited),
+            ("p4-s3c-user-deactivated", .accountDeactivated),
+            ("p4-s3c-login-unsupported", .unsupported),
+            ("p4-s3c-store-reset-required", .localDataUnreadable),
+            ("p4-s3c-store-locked", .localDataInUse),
+            ("p4-s3c-sliding-sync-unsupported", .slidingSyncUnsupported),
+            ("p4-s3c-something-new", .signInFailed),
+        ]
+        for (code, expected) in cases {
+            let error = SharedCoreLoginErrorMapping.loginError(
+                for: SessionLoginError.Failed(code: code, description: "static")
+            )
+            XCTAssertEqual(error, expected, code)
+            if expected != .invalidCredentials {
+                XCTAssertNotEqual(
+                    error.errorDescription,
+                    LoginError.invalidCredentials.errorDescription,
+                    code
+                )
+            }
+        }
+        struct NotACoreError: Error {}
+        XCTAssertEqual(SharedCoreLoginErrorMapping.loginError(for: NotACoreError()), .signInFailed)
     }
 
     func testSharedCoreLoginErrorMappingNamesAServerWithoutSlidingSync() {

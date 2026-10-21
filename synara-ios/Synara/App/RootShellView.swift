@@ -15,6 +15,7 @@ struct RootShellView: View {
     @State private var cryptoVerificationSessionKey: String?
     @State private var cryptoVerificationActionError: String?
     @State private var signOutError: String?
+    @StateObject private var bannerSignOutConfirmation = SignOutConfirmationModel()
     @State private var tabBarScrollTailHeight: CGFloat = 0
     @ObservedObject private var themePaint = SynaraThemePaint.shared
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -87,7 +88,9 @@ struct RootShellView: View {
                     }
                 },
                 onSignOut: {
-                    signOut()
+                    // Only opens Settings' Log Out confirmation (with the
+                    // last-device warning); nothing is wiped on this tap.
+                    bannerSignOutConfirmation.request(using: environment.sessionCrypto)
                 }
             )
             TabView(selection: $router.selectedTab) {
@@ -150,6 +153,13 @@ struct RootShellView: View {
             }
         } message: {
             Text(cryptoVerificationActionError ?? "Try the verification step again.")
+        }
+        // On the shell, not the banner: the banner may hide while it is open.
+        .signOutConfirmation(
+            bannerSignOutConfirmation,
+            confirmIdentifier: "ConnectionStatusConfirmSignOutButton"
+        ) {
+            signOut()
         }
         .alert("Could not sign out", isPresented: signOutErrorBinding) {
             Button("Try Again") {
@@ -481,7 +491,7 @@ private struct CryptoVerificationSheet: View {
                 if let dismissalError {
                     Text(dismissalError)
                         .font(SynaraTypography.supporting)
-                        .foregroundStyle(SynaraColor.critical)
+                        .foregroundStyle(SynaraColor.criticalText)
                         .accessibilityIdentifier("VerificationDismissalError")
                 }
                 actions

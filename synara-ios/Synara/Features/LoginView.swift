@@ -1,5 +1,45 @@
 import SwiftUI
 
+/// Keyboard flow of the sign-in form: Return moves from the username to the
+/// password, and Return in the password signs in.
+enum LoginFormField: Hashable {
+    case username
+    case password
+
+    enum SubmitAction: Equatable {
+        case focus(LoginFormField)
+        case signIn
+    }
+
+    var submitAction: SubmitAction {
+        switch self {
+        case .username:
+            return .focus(.password)
+        case .password:
+            return .signIn
+        }
+    }
+
+    var submitLabel: SubmitLabel {
+        switch self {
+        case .username:
+            return .next
+        case .password:
+            return .go
+        }
+    }
+
+    /// Row kept above the keyboard while this field is focused: the Log In
+    /// button, so it is never hidden under the keyboard.
+    static let submitRowID = "LoginSubmitRow"
+}
+
+/// Neutral sign-in copy: the same screen serves first-time users.
+enum LoginCopy {
+    static let title = "Sign In"
+    static let subtitle = "Sign in to your Matrix homeserver for your rooms, secure sessions, and agent workflows."
+}
+
 struct LoginView: View {
     let homeserverURLString: String
     /// What the user typed on the server screen; shown instead of a delegated
@@ -13,13 +53,30 @@ struct LoginView: View {
     /// failure section then offers a confirmed reset.
     @State private var storeResetRequest: LoginRequest?
     @State private var confirmingStoreReset = false
+    @FocusState private var focusedField: LoginFormField?
 
     var body: some View {
+        ScrollViewReader { proxy in
+            form
+                .onChange(of: focusedField) { field in
+                    guard field != nil else { return }
+                    // Wait for the keyboard inset, then bring Log In above it.
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        withAnimation {
+                            proxy.scrollTo(LoginFormField.submitRowID, anchor: .bottom)
+                        }
+                    }
+                }
+        }
+    }
+
+    private var form: some View {
         Form {
             Section {
                 SynaraProductHeader(
-                    title: "Welcome Back",
-                    subtitle: "Sign in to your Matrix homeserver to restore rooms, secure sessions, and agent workflows.",
+                    title: LoginCopy.title,
+                    subtitle: LoginCopy.subtitle,
                     systemImage: "lock.shield"
                 )
                 .accessibilityIdentifier("LoginProductHeader")
@@ -36,10 +93,16 @@ struct LoginView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .textContentType(.username)
+                    .focused($focusedField, equals: .username)
+                    .submitLabel(LoginFormField.username.submitLabel)
+                    .onSubmit { submit(from: .username) }
                     .accessibilityIdentifier("LoginUsernameField")
 
                 SecureField("Password", text: $password)
                     .textContentType(.password)
+                    .focused($focusedField, equals: .password)
+                    .submitLabel(LoginFormField.password.submitLabel)
+                    .onSubmit { submit(from: .password) }
                     .accessibilityIdentifier("LoginPasswordField")
 
                 Button {
@@ -55,6 +118,7 @@ struct LoginView: View {
                 }
                 .disabled(state.isLoading)
                 .buttonStyle(.borderedProminent)
+                .id(LoginFormField.submitRowID)
                 .accessibilityIdentifier("LoginSubmitButton")
             } header: {
                 Text("Matrix Account")
@@ -63,7 +127,7 @@ struct LoginView: View {
             if case .failed(let message) = state {
                 Section {
                     Text(message)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(SynaraColor.criticalText)
                         .accessibilityIdentifier("LoginErrorText")
                     if storeResetRequest != nil {
                         Button("Reset Local Data", role: .destructive) {
@@ -74,6 +138,7 @@ struct LoginView: View {
                 }
             }
         }
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Login")
         .accessibilityIdentifier("LoginScreen")
         .confirmationDialog(
@@ -107,6 +172,17 @@ struct LoginView: View {
                 environment.logger.info("Local data reset before sign-in", category: .auth)
                 login()
             }
+        }
+    }
+
+    private func submit(from field: LoginFormField) {
+        switch field.submitAction {
+        case .focus(let next):
+            focusedField = next
+        case .signIn:
+            guard state.isLoading == false else { return }
+            focusedField = nil
+            login()
         }
     }
 

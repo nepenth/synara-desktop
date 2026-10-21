@@ -1896,3 +1896,199 @@ async fn ios_store_reset_is_refused_while_a_session_is_retained() {
     drop(shared);
     let _ = fs::remove_dir_all(root);
 }
+
+#[test]
+fn ios_login_errors_keep_their_cause_instead_of_wrong_credentials() {
+    let code = |error: AuthError| match login_auth_error(&error) {
+        SessionLoginError::Failed { code, .. } => code,
+    };
+    assert_eq!(
+        code(AuthError::AuthenticationRejected {
+            diagnostic_id: "p3.2-login-rejected"
+        }),
+        LOGIN_CREDENTIALS_REJECTED_CODE
+    );
+    assert_eq!(
+        code(AuthError::Connectivity {
+            diagnostic_id: "p3.2-login-http-connect"
+        }),
+        LOGIN_NETWORK_UNAVAILABLE_CODE
+    );
+    assert_eq!(
+        code(AuthError::HomeserverUnavailable {
+            diagnostic_id: "p3.2-login-homeserver-unavailable"
+        }),
+        LOGIN_SERVER_UNAVAILABLE_CODE
+    );
+    assert_eq!(
+        code(AuthError::RateLimited {
+            diagnostic_id: "p3.2-login-rate-limited",
+            retry_after_ms: Some(2_000),
+        }),
+        LOGIN_RATE_LIMITED_CODE
+    );
+    assert_eq!(
+        code(AuthError::UserDeactivated {
+            diagnostic_id: "p3.2-login-user-deactivated"
+        }),
+        LOGIN_USER_DEACTIVATED_CODE
+    );
+    for unsupported in [
+        AuthError::UnsupportedCapability {
+            diagnostic_id: "p3.2-login-unrecognized",
+        },
+        AuthError::InteractiveAuthRequired {
+            diagnostic_id: "p3.2-login-uiaa-required",
+        },
+    ] {
+        assert_eq!(code(unsupported), LOGIN_UNSUPPORTED_CODE);
+    }
+    assert_eq!(
+        code(AuthError::SdkInvariant {
+            diagnostic_id: "p3.2-login-store-reset-required"
+        }),
+        LOGIN_STORE_RESET_REQUIRED_CODE
+    );
+    assert_eq!(
+        code(AuthError::SdkInvariant {
+            diagnostic_id: "p3.2-login-store-locked"
+        }),
+        LOGIN_STORE_LOCKED_CODE
+    );
+    for unclassified in [
+        AuthError::SdkInvariant {
+            diagnostic_id: "p3.2-login-olm-unavailable",
+        },
+        AuthError::Unknown {
+            diagnostic_id: "p3.2-login-unknown",
+        },
+    ] {
+        assert_eq!(code(unclassified), LOGIN_FAILED_CODE);
+    }
+}
+
+#[tokio::test]
+async fn ios_password_login_reports_rejection_rate_limit_and_outage_distinctly() {
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, ResponseTemplate};
+    let cases = [
+        (
+            ResponseTemplate::new(403).set_body_json(serde_json::json!({
+                "errcode": "M_FORBIDDEN",
+                "error": "Invalid password",
+            })),
+            LOGIN_CREDENTIALS_REJECTED_CODE,
+        ),
+        (
+            ResponseTemplate::new(429).set_body_json(serde_json::json!({
+                "errcode": "M_LIMIT_EXCEEDED",
+                "error": "Too many requests",
+                "retry_after_ms": 2000,
+            })),
+            LOGIN_RATE_LIMITED_CODE,
+        ),
+        (
+            ResponseTemplate::new(403).set_body_json(serde_json::json!({
+                "errcode": "M_USER_DEACTIVATED",
+                "error": "This account has been deactivated",
+            })),
+            LOGIN_USER_DEACTIVATED_CODE,
+        ),
+    ];
+    for (index, (response, expected)) in cases.into_iter().enumerate() {
+        let server = MatrixMockServer::new().await;
+        server
+            .mock_versions()
+            .with_simplified_sliding_sync()
+            .ok()
+            .mount()
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/_matrix/client/v3/login"))
+            .respond_with(response)
+            .mount(server.server())
+            .await;
+        let identity = AccountIdentity::new("@alice:example.org", &server.uri()).unwrap();
+        let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(Arc::new(
+            Mutex::new(HashMap::new()),
+        ))));
+        let root = temp_root(&format!("ios-login-error-{index}"));
+        let error = shared
+            .login_with_password_inner(
+                identity.user_id(),
+                identity.homeserver_url(),
+                &root.to_string_lossy(),
+                "fixture-password",
+            )
+            .await
+            .expect_err("login fails");
+        match error {
+            SessionLoginError::Failed { code, description } => {
+                assert_eq!(code, expected, "case {index}");
+                assert!(!description.contains("fixture-password"));
+            }
+        }
+        drop(shared);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    // A proxy in front of a down homeserver: `/versions` answers 502.
+    let server = MatrixMockServer::new().await;
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/versions"))
+        .respond_with(ResponseTemplate::new(502).set_body_string("Bad Gateway"))
+        .mount(server.server())
+        .await;
+    let identity = AccountIdentity::new("@alice:example.org", &server.uri()).unwrap();
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(Arc::new(
+        Mutex::new(HashMap::new()),
+    ))));
+    let root = temp_root("ios-login-error-outage");
+    let error = shared
+        .login_with_password_inner(
+            identity.user_id(),
+            identity.homeserver_url(),
+            &root.to_string_lossy(),
+            "fixture-password",
+        )
+        .await
+        .expect_err("server down");
+    match error {
+        SessionLoginError::Failed { code, .. } => {
+            assert_eq!(code, LOGIN_SERVER_UNAVAILABLE_CODE)
+        }
+    }
+    drop(shared);
+    let _ = fs::remove_dir_all(root);
+
+    // Nothing listens on the homeserver port: the `/versions` probe fails as
+    // a connection error, not as wrong credentials.
+    let unreachable = {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        format!("http://127.0.0.1:{port}")
+    };
+    let identity = AccountIdentity::new("@alice:example.org", &unreachable).unwrap();
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(Arc::new(
+        Mutex::new(HashMap::new()),
+    ))));
+    let root = temp_root("ios-login-error-unreachable");
+    let error = shared
+        .login_with_password_inner(
+            identity.user_id(),
+            identity.homeserver_url(),
+            &root.to_string_lossy(),
+            "fixture-password",
+        )
+        .await
+        .expect_err("no server");
+    match error {
+        SessionLoginError::Failed { code, .. } => {
+            assert_eq!(code, LOGIN_NETWORK_UNAVAILABLE_CODE)
+        }
+    }
+    drop(shared);
+    let _ = fs::remove_dir_all(root);
+}

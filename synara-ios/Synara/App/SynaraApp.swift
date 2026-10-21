@@ -973,9 +973,20 @@ private extension AppEnvironment {
             )
         }
 
+        let matrix = MockMatrixClientService()
+        switch processEnvironment["SYNARA_UI_TEST_CONNECTION_STATUS"] {
+        case "restoreFailed":
+            matrix.statusAfterStart = .restoreFailed
+        case "disconnected":
+            matrix.statusAfterStart = .disconnected
+        default:
+            break
+        }
+
         return .mock(
             router: router,
             session: session,
+            matrix: matrix,
             roomList: roomList,
             timeline: timeline,
             later: later,
