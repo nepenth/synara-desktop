@@ -165,6 +165,11 @@ import { nativeFormattedBodyMentionsUser } from './nativeTimelineLinks';
 import { preferredScrollBehavior } from '../../utils/motion';
 import { nativeTimelineArrivals } from './nativeTimelineAnnouncements';
 import { NativeTimelineMessageEditor } from './NativeTimelineMessageEditor';
+import { NativeTimelineRedactConfirm } from './NativeTimelineRedactConfirm';
+import {
+  NativeTimelineRedactConfirmation,
+  type NativeTimelineRedactDecision,
+} from './nativeTimelineRedact';
 import { isNativeTextEditable } from './nativeTimelineEdit';
 import {
   nativeTimelineActionErrorMessage,
@@ -515,6 +520,8 @@ type NativeTimelineRowActionsProps = {
   onActionError: (message: string) => void;
   /** Close the transient row menu after a completed one-shot action. */
   onRequestClose?: () => void;
+  /** Ask before redacting; the row surface owns the confirmation. */
+  onRequestRedact: () => void;
   onViewReactions?: () => void;
   hasReactions?: boolean;
   /** Edit this message in place; set only for text messages Core lets us edit. */
@@ -535,6 +542,7 @@ const NativeTimelineRowActions = ({
   onOpenThread,
   onActionError,
   onRequestClose,
+  onRequestRedact,
   onViewReactions,
   hasReactions,
   onEdit,
@@ -734,13 +742,7 @@ const NativeTimelineRowActions = ({
         fill="None"
         radii="300"
         onClick={() => {
-          runNativeRowAction(
-            () => redactWithNativeTimelineAction({ roomId, eventId }),
-            onActionError,
-            TIMELINE_ACTION_FAILED.redact,
-            nativeTimelineActionFlightKey(sessionGeneration, roomId, eventId, 'redact'),
-            sessionGeneration
-          );
+          onRequestRedact();
           closeAfterOneShotAction();
         }}
       >
@@ -1093,7 +1095,7 @@ const NativeTimelineUnsentChrome = ({
 
 type NativeTimelineRowActionSurfaceProps = {
   children: React.ReactNode;
-  actionProps: Omit<NativeTimelineRowActionsProps, 'onRequestClose'>;
+  actionProps: Omit<NativeTimelineRowActionsProps, 'onRequestClose' | 'onRequestRedact'>;
   onReaction: (key: string) => void;
   unsent?: NativeTimelineUnsentDelivery;
   unsentPending?: boolean;
@@ -1135,12 +1137,17 @@ const NativeTimelineRowActionSurface = ({
   const [focusWithin, setFocusWithin] = useState(false);
   const [emojiBoardAnchor, setEmojiBoardAnchor] = useState<RectCords>();
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
+  // `closing` is the commit that unmounts the dialog; the rail stays for it so
+  // focus can go back to the menu button.
+  const [redactConfirm, setRedactConfirm] = useState<'open' | 'closing'>();
+  const [redactConfirmation] = useState(() => new NativeTimelineRedactConfirmation());
   const { hoverProps } = useHover({ onHoverChange: setHovered });
   const { focusWithinProps } = useFocusWithin({ onFocusWithinChange: setFocusWithin });
   const hasActionMenu = Boolean(eventId && capabilities);
   const menuOpen = Boolean(menuAnchor);
   const emojiBoardOpen = Boolean(emojiBoardAnchor);
-  const actionsActive = hovered || focusWithin || menuOpen || emojiBoardOpen;
+  const actionsActive =
+    hovered || focusWithin || menuOpen || emojiBoardOpen || redactConfirm !== undefined;
   const showActionRail = hasActionMenu && actionsActive;
 
   const closeMenu = () => setMenuAnchor(undefined);
@@ -1158,6 +1165,39 @@ const NativeTimelineRowActionSurface = ({
   // to the message itself instead of being dropped.
   const surfaceRef = useRef<HTMLDivElement>(null);
   const returnFocusToSurface = useMemo(() => returnFocusOrFallback(() => surfaceRef.current), []);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  // Redact asks first; the in-flight guard and error copy apply on Remove.
+  const requestRedact = () => {
+    if (!eventId) return;
+    const { sessionGeneration, roomId } = actionProps;
+    redactConfirmation.request({ sessionGeneration, roomId, eventId });
+    setRedactConfirm('open');
+  };
+  const settleRedact = (decision: NativeTimelineRedactDecision) => {
+    const settled = redactConfirmation.settle(decision, (target) =>
+      runNativeRowAction(
+        () => redactWithNativeTimelineAction({ roomId: target.roomId, eventId: target.eventId }),
+        actionProps.onActionError,
+        TIMELINE_ACTION_FAILED.redact,
+        nativeTimelineActionFlightKey(
+          target.sessionGeneration,
+          target.roomId,
+          target.eventId,
+          'redact'
+        ),
+        target.sessionGeneration
+      )
+    );
+    if (settled) setRedactConfirm('closing');
+  };
+  // The row returns focus, not the dialog's trap: the trap would move focus
+  // while React commits the unmount, when focus events do not reach React,
+  // so the rail would miss it and unmount the button that just took focus.
+  useLayoutEffect(() => {
+    if (redactConfirm !== 'closing') return;
+    (menuButtonRef.current ?? surfaceRef.current)?.focus({ preventScroll: true });
+    setRedactConfirm(undefined);
+  }, [redactConfirm]);
   // Edit opens the in-place editor as the menu closes; focus belongs there.
   const returnFocusFromMenu = useMemo(
     () => (previous: HTMLElement | SVGElement) =>
@@ -1240,12 +1280,17 @@ const NativeTimelineRowActionSurface = ({
                       className={htmlCss.MessageActionMenu}
                       data-native-timeline-action-menu="true"
                     >
-                      <NativeTimelineRowActions {...actionProps} onRequestClose={closeMenu} />
+                      <NativeTimelineRowActions
+                        {...actionProps}
+                        onRequestClose={closeMenu}
+                        onRequestRedact={requestRedact}
+                      />
                     </Menu>
                   </FocusTrap>
                 }
               >
                 <IconButton
+                  ref={menuButtonRef}
                   variant={actionsActive ? 'Surface' : 'SurfaceVariant'}
                   size="300"
                   radii="300"
@@ -1261,6 +1306,12 @@ const NativeTimelineRowActionSurface = ({
             </Box>
           </Menu>
         </div>
+      )}
+      {redactConfirm === 'open' && (
+        <NativeTimelineRedactConfirm
+          onRemove={() => settleRedact('remove')}
+          onCancel={() => settleRedact('cancel')}
+        />
       )}
       {unsent && onDiscardUnsent && onRetryUnsent ? (
         <NativeTimelineUnsentChrome
