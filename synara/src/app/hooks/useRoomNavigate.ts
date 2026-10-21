@@ -1,17 +1,9 @@
-import { useCallback, useTransition } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useTransition } from 'react';
 import { NavigateOptions, useLocation, useNavigate } from 'react-router-dom';
 import { useAtomValue } from 'jotai';
 import { getCanonicalAliasOrRoomId, getCanonicalAliasRoomId, isRoomAlias } from '../utils/matrix';
-import {
-  getDirectRoomPath,
-  getDirectRoomThreadPath,
-  getHomeRoomPath,
-  getHomeRoomThreadPath,
-  getSpacePath,
-  getSpaceRoomPath,
-  getSpaceRoomThreadPath,
-} from '../pages/pathUtils';
-import { getOrphanParents, guessPerfectParent } from '../utils/room';
+import { getSpacePath } from '../pages/pathUtils';
+import { guessPerfectParent } from '../utils/room';
 import { roomToParentsAtom } from '../state/room/roomToParents';
 import { useNativeNavigationScope } from '../state/hooks/navigationUnread';
 import { useSelectedSpace } from './router/useSelectedSpace';
@@ -19,6 +11,7 @@ import { settingsAtom } from '../state/settings';
 import { useSetting } from '../state/hooks/settings';
 import { getApprovalsOriginSpace } from '../routes/approvalsNavigation';
 import { parseSynaraRouteDestination } from '../routes/synaraRoutes';
+import { resolveRoomRoutePath, type RoomRouteScope, type RoomRouteTarget } from './roomRoutePath';
 
 export const useRoomNavigate = () => {
   const navigate = useNavigate();
@@ -36,6 +29,32 @@ export const useRoomNavigate = () => {
     (originSpace && isRoomAlias(originSpace) ? getCanonicalAliasRoomId(originSpace) : originSpace);
   const [developerTools] = useSetting(settingsAtom, 'developerTools');
 
+  const directRoomIdSet = useMemo(() => new Set(directRoomIds), [directRoomIds]);
+  const scope = useMemo<RoomRouteScope>(
+    () => ({
+      roomToParents,
+      directRoomIds: directRoomIdSet,
+      spaceSelectedId,
+      developerTools,
+      pickParent: guessPerfectParent,
+      toIdOrAlias: getCanonicalAliasOrRoomId,
+    }),
+    [roomToParents, directRoomIdSet, spaceSelectedId, developerTools]
+  );
+  // Every room-list snapshot builds a new direct-room list. The callbacks read
+  // the latest scope from a ref so their identity stays stable, and listeners
+  // that depend on them are not re-registered on each room-list update.
+  const scopeRef = useRef(scope);
+  useLayoutEffect(() => {
+    scopeRef.current = scope;
+  }, [scope]);
+
+  const roomPath = useCallback(
+    (roomId: string, target: RoomRouteTarget = {}) =>
+      resolveRoomRoutePath(roomId, target, scopeRef.current),
+    []
+  );
+
   const navigateSpace = useCallback(
     (roomId: string) => {
       const roomIdOrAlias = getCanonicalAliasOrRoomId(roomId);
@@ -46,76 +65,24 @@ export const useRoomNavigate = () => {
 
   const navigateRoom = useCallback(
     (roomId: string, eventId?: string, opts?: NavigateOptions) => {
-      const roomIdOrAlias = getCanonicalAliasOrRoomId(roomId);
-      const openSpaceTimeline = developerTools && spaceSelectedId === roomId;
-
-      const orphanParents = openSpaceTimeline ? [roomId] : getOrphanParents(roomToParents, roomId);
-      if (orphanParents.length > 0) {
-        let parentSpace: string;
-        if (spaceSelectedId && orphanParents.includes(spaceSelectedId)) {
-          parentSpace = spaceSelectedId;
-        } else {
-          parentSpace = guessPerfectParent(roomId, orphanParents) ?? orphanParents[0];
-        }
-
-        const pSpaceIdOrAlias = getCanonicalAliasOrRoomId(parentSpace);
-
-        startTransition(() =>
-          navigate(
-            getSpaceRoomPath(pSpaceIdOrAlias, openSpaceTimeline ? roomId : roomIdOrAlias, eventId),
-            opts
-          )
-        );
-        return;
-      }
-
-      if (directRoomIds.includes(roomId)) {
-        startTransition(() => navigate(getDirectRoomPath(roomIdOrAlias, eventId), opts));
-        return;
-      }
-
-      startTransition(() => navigate(getHomeRoomPath(roomIdOrAlias, eventId), opts));
+      const path = roomPath(roomId, { eventId });
+      startTransition(() => navigate(path, opts));
     },
-    [navigate, startTransition, spaceSelectedId, roomToParents, directRoomIds, developerTools]
+    [navigate, startTransition, roomPath]
   );
 
   const navigateThread = useCallback(
     (roomId: string, threadRootId: string, opts?: NavigateOptions) => {
-      const roomIdOrAlias = getCanonicalAliasOrRoomId(roomId);
-      const openSpaceTimeline = developerTools && spaceSelectedId === roomId;
-      const orphanParents = openSpaceTimeline ? [roomId] : getOrphanParents(roomToParents, roomId);
-      if (orphanParents.length > 0) {
-        let parentSpace: string;
-        if (spaceSelectedId && orphanParents.includes(spaceSelectedId)) {
-          parentSpace = spaceSelectedId;
-        } else {
-          parentSpace = guessPerfectParent(roomId, orphanParents) ?? orphanParents[0];
-        }
-        const pSpaceIdOrAlias = getCanonicalAliasOrRoomId(parentSpace);
-        startTransition(() =>
-          navigate(
-            getSpaceRoomThreadPath(
-              pSpaceIdOrAlias,
-              openSpaceTimeline ? roomId : roomIdOrAlias,
-              threadRootId
-            ),
-            opts
-          )
-        );
-        return;
-      }
-      if (directRoomIds.includes(roomId)) {
-        startTransition(() => navigate(getDirectRoomThreadPath(roomIdOrAlias, threadRootId), opts));
-        return;
-      }
-      startTransition(() => navigate(getHomeRoomThreadPath(roomIdOrAlias, threadRootId), opts));
+      const path = roomPath(roomId, { threadRootId });
+      startTransition(() => navigate(path, opts));
     },
-    [navigate, startTransition, spaceSelectedId, roomToParents, directRoomIds, developerTools]
+    [navigate, startTransition, roomPath]
   );
 
   return {
     navigateSpace,
     navigateRoom,
     navigateThread,
+    roomPath,
   };
 };

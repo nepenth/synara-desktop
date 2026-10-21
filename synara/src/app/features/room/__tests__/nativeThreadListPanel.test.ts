@@ -9,7 +9,8 @@ const sidePanel = readFileSync('src/app/features/room/RoomSidePanel.tsx', 'utf8'
 const router = readFileSync('src/app/pages/Router.tsx', 'utf8');
 const paths = readFileSync('src/app/pages/paths.ts', 'utf8');
 const roomView = readFileSync('src/app/features/room/RoomView.tsx', 'utf8');
-const navigate = readFileSync('src/app/hooks/useRoomNavigate.ts', 'utf8');
+// useRoomNavigate resolves every room and thread route through this module.
+const navigate = readFileSync('src/app/hooks/roomRoutePath.ts', 'utf8');
 
 test('native thread list command is ids-and-counts only', () => {
   assert.match(owner, /NATIVE_THREAD_LIST_SCHEMA_VERSION = 1/);

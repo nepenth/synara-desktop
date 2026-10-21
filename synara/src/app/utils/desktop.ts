@@ -993,16 +993,62 @@ export const setDesktopTrayState = async (state: DesktopTrayState): Promise<bool
 export const flushPendingDesktopTrayStateUpdate = (): Promise<boolean | undefined> =>
   debouncedSetDesktopTrayState.flush();
 
+/**
+ * The integration report's notification check reads the Tauri plugin, which
+ * reports Granted on every desktop. The notification permission command reads
+ * what the OS actually allows (UserNotifications on a bundled macOS build).
+ */
+export const desktopNotificationCheckFromPermission = (
+  permission: unknown
+): DesktopIntegrationCheck | undefined => {
+  const name = 'Notifications';
+  switch (typeof permission === 'string' ? permission.trim().toLowerCase() : undefined) {
+    case 'granted':
+      return {
+        name,
+        supported: true,
+        ready: true,
+        message: 'Notification permission is active.',
+      };
+    case 'denied':
+      return {
+        name,
+        supported: true,
+        ready: false,
+        message: 'Notifications are blocked by platform permission.',
+      };
+    case 'default':
+    case 'prompt':
+    case 'prompt-with-rationale':
+      return {
+        name,
+        supported: true,
+        ready: false,
+        message: 'Notification permission has not been requested yet.',
+      };
+    default:
+      return undefined;
+  }
+};
+
 export const getDesktopIntegrationStatus = async (): Promise<DesktopIntegrationStatus> => {
   if (!getBridge()?.supportsIntegrationStatus) {
     return normalizeDesktopIntegrationStatus(undefined);
   }
 
+  let status: DesktopIntegrationStatus;
   try {
     const result = await invokeDesktop<unknown>('desktop_get_integration_status');
-    return normalizeDesktopIntegrationStatus(result);
+    status = normalizeDesktopIntegrationStatus(result);
   } catch {
     return normalizeDesktopIntegrationStatus(undefined);
+  }
+  try {
+    const permission = await invokeDesktop<unknown>('desktop_get_notification_permission');
+    const notifications = desktopNotificationCheckFromPermission(permission);
+    return notifications ? { ...status, notifications } : status;
+  } catch {
+    return status;
   }
 };
 
@@ -1084,8 +1130,26 @@ export const showDesktopNotification = async (
   const result = await invokeDesktop<boolean>('desktop_notify', {
     notification: payload,
   });
+  if (result === true) payload.dismissKeys?.forEach(rememberPostedDismissKey);
   return result === true;
 };
+
+// Dismiss keys of banners this renderer posted, so sign-out can withdraw them.
+// The shell's dismiss index lives in the same process, so this covers every
+// banner the shell can still withdraw by key.
+const MAX_POSTED_DISMISS_KEYS = 1_024;
+const postedDismissKeys = new Set<string>();
+
+const rememberPostedDismissKey = (key: string) => {
+  postedDismissKeys.delete(key);
+  postedDismissKeys.add(key);
+  if (postedDismissKeys.size > MAX_POSTED_DISMISS_KEYS) {
+    const oldest = postedDismissKeys.values().next().value;
+    if (oldest !== undefined) postedDismissKeys.delete(oldest);
+  }
+};
+
+export const getPostedDesktopDismissKeys = (): string[] => [...postedDismissKeys];
 
 export async function dismissDesktopNotifications(keys: string[]): Promise<void> {
   if (!isSynaraDesktop() || keys.length === 0) return;
@@ -1094,7 +1158,43 @@ export async function dismissDesktopNotifications(keys: string[]): Promise<void>
     .filter((key): key is string => key !== undefined);
   if (sanitized.length === 0) return;
   await invokeDesktopWithAvailability('desktop_dismiss_notifications', { keys: sanitized });
+  sanitized.forEach((key) => postedDismissKeys.delete(key));
 }
+
+/**
+ * Sign-out cleanup: withdraw the banners this session posted, zero the app
+ * badge and clear the tray counts. The signed-out shell mounts no badge or
+ * tray updater, so without this the old account's counts would stay.
+ */
+export const clearDesktopNotificationSurfaces = async ({
+  doNotDisturb,
+}: {
+  doNotDisturb: boolean;
+}): Promise<void> => {
+  if (!isSynaraDesktop()) return;
+  const steps: Array<() => Promise<unknown>> = [
+    () => dismissDesktopNotifications(getPostedDesktopDismissKeys()),
+    () => setDesktopBadgeCount(0),
+    async () => {
+      const trayUpdate = setDesktopTrayState({
+        unreadCount: 0,
+        highlightCount: 0,
+        laterCount: 0,
+        notificationInboxCount: 0,
+        doNotDisturb,
+      });
+      await flushPendingDesktopTrayStateUpdate();
+      await trayUpdate;
+    },
+  ];
+  for (const step of steps) {
+    try {
+      await step();
+    } catch {
+      // Each surface is independent; a failed step must not keep the others.
+    }
+  }
+};
 
 export const getDesktopNotificationCount = (input: NotificationSummaryInput): number =>
   getBadgeCount(input);

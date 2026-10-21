@@ -1,4 +1,5 @@
 import {
+  MAX_AGENT_ACTION_TEXT_LENGTH,
   normalizeAgentActionPayload,
   planAgentActionExecution,
   type AgentActionPayload,
@@ -32,7 +33,43 @@ const rememberAgentActionId = (id: string): boolean => {
   return true;
 };
 
-export const sendPlatformAgentAction = sendDesktopAgentAction;
+let agentActionInvocationCounter = 0;
+
+/**
+ * Card action ids repeat (`action-0` on every card) and a click can repeat,
+ * but the event listener drops ids it has already run. Each send therefore
+ * carries a per-invocation id: a duplicated event of one click still runs
+ * once, while a second click or another card's action runs again.
+ */
+export const withAgentActionInvocationId = (
+  action: PlatformAgentActionPayload,
+  nonce: string
+): PlatformAgentActionPayload => {
+  const id = typeof action.id === 'string' ? action.id.trim() : '';
+  // An action without an id stays invalid; the nonce must not make it valid.
+  if (!id) return action;
+  const suffix = `#${nonce}`;
+  return { ...action, id: `${id.slice(0, MAX_AGENT_ACTION_TEXT_LENGTH - suffix.length)}${suffix}` };
+};
+
+const nextAgentActionNonce = (): string => {
+  agentActionInvocationCounter += 1;
+  return `${Date.now().toString(36)}-${agentActionInvocationCounter.toString(36)}`;
+};
+
+/**
+ * The shell answers `true` once it has either run the action or handed it to
+ * the listener below, which runs it with the same plan. An action that plan
+ * cannot run (an `open` without a URL) is reported as unhandled up front, so
+ * the caller's fallback runs instead of a silent no-op.
+ */
+export const sendPlatformAgentAction = async (
+  action: PlatformAgentActionPayload
+): Promise<boolean> => {
+  const normalized = normalizeAgentActionPayload(action);
+  if (normalized && planAgentActionExecution(normalized).type === 'unsupported') return false;
+  return sendDesktopAgentAction(withAgentActionInvocationId(action, nextAgentActionNonce()));
+};
 
 const openAgentActionUrl = async (url: string): Promise<boolean> => {
   const opened = await openPlatformExternalUrl(url);

@@ -107,6 +107,7 @@ export const HermesAgentCard = memo(({ payload }: HermesAgentCardProps) => {
   const markdown = hermesPayloadToMarkdown(payload);
   const [busyActionId, setBusyActionId] = useState<string>();
   const [actionErrorId, setActionErrorId] = useState<string>();
+  const [actionDoneId, setActionDoneId] = useState<string>();
   const [pendingUrlAction, setPendingUrlAction] = useState<ActionEntry>();
 
   const pendingActionTitle = pendingUrlAction?.title ?? '';
@@ -143,6 +144,7 @@ export const HermesAgentCard = memo(({ payload }: HermesAgentCardProps) => {
     async (action: ActionEntry) => {
       setBusyActionId(action.id);
       setActionErrorId(undefined);
+      setActionDoneId(undefined);
       try {
         const handled = await sendPlatformAgentAction({
           ...action,
@@ -152,6 +154,9 @@ export const HermesAgentCard = memo(({ payload }: HermesAgentCardProps) => {
           copyToClipboard(action.prompt ?? action.title);
           setActionErrorId(undefined);
         }
+        // Actions without a URL copy their text, whether the shell or the
+        // fallback above did it; say so, so a click never looks ignored.
+        setActionDoneId(action.id);
       } catch {
         setActionErrorId(action.id);
       } finally {
@@ -373,6 +378,11 @@ export const HermesAgentCard = memo(({ payload }: HermesAgentCardProps) => {
           {actionErrorId && (
             <Text size="T200" style={{ color: color.Critical.Main }}>
               {t('modernization.hermes.action_failed', 'Action failed')}
+            </Text>
+          )}
+          {!actionErrorId && actionDoneId && (
+            <Text size="T200" priority="300" role="status">
+              {t('modernization.hermes.action_copied', 'Copied')}
             </Text>
           )}
           <Box gap="100" wrap="Wrap">

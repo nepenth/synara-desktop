@@ -58,3 +58,13 @@ export const summarizeNotifications = ({
 /** The app-icon number alone. */
 export const getBadgeCount = (input: NotificationSummaryInput): number =>
   summarizeNotifications(input).appBadgeCount;
+
+/**
+ * The tray's "Notifications (N)" item opens Inbox → Notifications, which lists
+ * room notifications only, so it counts those. Later has its own tray item,
+ * and invites and approvals have their own pages; `inboxBadgeCount` (the
+ * cross-platform Inbox badge) would count them there, Later twice.
+ */
+export const getTrayNotificationListCount = (
+  summary: Pick<NotificationSummary, 'highlightCount' | 'unreadCount'>
+): number => summary.highlightCount + summary.unreadCount;

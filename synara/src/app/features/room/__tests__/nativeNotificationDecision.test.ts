@@ -198,8 +198,13 @@ test('the renderer acknowledges with the OS receipt after delivery and follows t
   assert.doesNotMatch(feature, /\}\)\.catch\(\(\) => undefined\);\s*return;/);
 
   // Ordinary message sound is the SDK push tweak Core echoed, gated by
-  // preference; promoted approvals use the shared approval sound ownership.
-  assert.match(feature, /notificationSound && readback\.sound === true && outcome !== 'failed'/);
+  // preference and by an accepted banner (notifications off or tray Do Not
+  // Disturb play nothing); promoted approvals use the approval sound ownership.
+  assert.match(
+    feature,
+    /shouldPlayNotificationSound\(\{\s*soundsEnabled: notificationSound,\s*requested: readback\.sound === true,\s*outcome,/
+  );
+  assert.doesNotMatch(feature, /outcome !== 'failed'/);
   // No renderer retry loop: a failed receipt is recorded by Core only.
   assert.doesNotMatch(feature, /retryNotification|setTimeout\([^)]*notify/);
 });

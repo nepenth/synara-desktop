@@ -72,6 +72,7 @@ const createLogoutDeps = () => {
       clearPersistedCalls.push(undefined);
     },
     clearSessionLocalStorage: () => undefined,
+    clearNotificationSurfaces: async () => undefined,
     logoutNativeSession: async () => {
       nativeLogoutCalls += 1;
     },
@@ -113,6 +114,40 @@ test('performLogout without matrix client clears the native and renderer session
   assert.equal(clearPersistedCalls.length, 1);
   assert.equal(getNativeLogoutCalls(), 1);
   assert.equal(getReloaded(), true);
+});
+
+test('performLogout withdraws notification surfaces only after native logout', async () => {
+  const steps: string[] = [];
+  const { deps } = createLogoutDeps();
+  await performLogout(undefined, {
+    ...deps,
+    logoutNativeSession: async () => {
+      steps.push('native');
+    },
+    clearNotificationSurfaces: async () => {
+      steps.push('surfaces');
+      throw new Error('tray unavailable');
+    },
+    reload: () => {
+      steps.push('reload');
+    },
+  });
+  // A failing surface step never keeps the signed-in document.
+  assert.deepEqual(steps, ['native', 'surfaces', 'reload']);
+
+  const failed: string[] = [];
+  await assert.rejects(
+    performLogout(undefined, {
+      ...deps,
+      logoutNativeSession: async () => {
+        throw new Error('native logout failed');
+      },
+      clearNotificationSurfaces: async () => {
+        failed.push('surfaces');
+      },
+    })
+  );
+  assert.deepEqual(failed, [], 'a retryable logout keeps the signed-in surfaces');
 });
 
 test('performLogout clears bounded notification caches', async () => {
