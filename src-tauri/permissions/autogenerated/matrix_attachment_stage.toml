@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-attachment-stage"
+description = "Enables the matrix_attachment_stage command without any pre-configured scope."
+commands.allow = ["matrix_attachment_stage"]
+
+[[permission]]
+identifier = "deny-matrix-attachment-stage"
+description = "Denies the matrix_attachment_stage command without any pre-configured scope."
+commands.deny = ["matrix_attachment_stage"]

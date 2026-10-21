@@ -12,12 +12,6 @@ pub(crate) const DESKTOP_FILE_IPC_CHUNK_SIZE: usize = 1024 * 1024;
 pub(crate) const MAX_SAVE_FILE_BYTES: u64 = 300 * 1024 * 1024;
 const MAX_ACTIVE_SAVE_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum DroppedFileReadMode {
-    Inline,
-    Streamed,
-}
-
 pub(crate) fn sanitize_download_filename(filename: &str) -> String {
     let safe_name = Path::new(filename)
         .file_name()
@@ -42,7 +36,14 @@ pub(crate) fn sanitize_download_filename(filename: &str) -> String {
     }
 }
 
+/// The user's Downloads folder: `XDG_DOWNLOAD_DIR` from `user-dirs.dirs` on
+/// Linux (localized desktops name it differently), the known folder on
+/// Windows, `~/Downloads` on macOS. Falls back to `~/Downloads`.
 pub(crate) fn downloads_dir() -> Result<PathBuf, String> {
+    if let Some(dir) = dirs::download_dir() {
+        return Ok(dir);
+    }
+
     #[cfg(target_os = "windows")]
     let home = env::var_os("USERPROFILE");
 
@@ -146,14 +147,6 @@ pub(crate) fn should_stream_file_ipc(byte_count: u64) -> bool {
     byte_count > DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64
 }
 
-pub(crate) fn dropped_file_read_mode(byte_count: u64) -> DroppedFileReadMode {
-    if should_stream_file_ipc(byte_count) {
-        DroppedFileReadMode::Streamed
-    } else {
-        DroppedFileReadMode::Inline
-    }
-}
-
 pub(crate) fn new_file_transfer_id(prefix: &str) -> String {
     let mut bytes = [0_u8; 16];
     getrandom::fill(&mut bytes).expect("cryptographic random bytes for file transfer id");
@@ -170,6 +163,11 @@ const MAX_DROPPED_FILES: usize = 32;
 const MAX_DROPPED_FILE_ALLOWLIST: usize = 256;
 const MAX_DROPPED_FILE_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_DROPPED_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
+/// Largest dropped-file chunk per read. Chunks cross IPC as raw bytes
+/// (`ipc::Response`), not JSON number arrays.
+pub(crate) const DROPPED_FILE_READ_CHUNK_SIZE: usize = 8 * 1024 * 1024;
+/// Every file of one drop is read through its own session.
+const MAX_DROPPED_READ_SESSIONS: usize = MAX_DROPPED_FILES * 2;
 
 #[cfg(not(test))]
 const DROPPED_FILE_ALLOWLIST_TTL: Option<Duration> = Some(Duration::from_secs(60));
@@ -185,16 +183,17 @@ pub struct DesktopSaveFilePayload {
     pub bytes: Vec<u8>,
 }
 
+/// One dropped file: a read session for its bytes, or `too_large` when it is
+/// over the caller's limit (nothing is opened or read then).
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopDroppedFilePayload {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bytes: Option<Vec<u8>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub transfer_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub size: Option<u64>,
+    pub size: u64,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub too_large: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -317,7 +316,7 @@ fn register_dropped_read_session(session: DroppedReadSession) -> Result<String, 
     let mut sessions = dropped_read_sessions()
         .lock()
         .map_err(|_| "Unable to access dropped file read sessions".to_owned())?;
-    if sessions.len() >= MAX_ACTIVE_FILE_TRANSFERS {
+    if sessions.len() >= MAX_DROPPED_READ_SESSIONS {
         return Err("Too many active dropped file read transfers".to_owned());
     }
     sessions.insert(transfer_id.clone(), session);
@@ -668,9 +667,13 @@ impl Drop for ClearDroppedFileAllowlistGuard {
     }
 }
 
+/// Open read sessions for the files of one drop. `max_file_bytes` is the
+/// composer's upload limit: a file over it is reported as `too_large` from
+/// its metadata, before anything is read into the webview.
 #[tauri::command]
 pub fn desktop_read_dropped_files(
     paths: Vec<String>,
+    max_file_bytes: Option<u64>,
 ) -> Result<Vec<DesktopDroppedFilePayload>, String> {
     let _clear_allowlist_guard = ClearDroppedFileAllowlistGuard;
 
@@ -680,6 +683,11 @@ pub fn desktop_read_dropped_files(
         ));
     }
 
+    let file_limit = max_file_bytes
+        .filter(|limit| *limit > 0)
+        .map_or(MAX_DROPPED_FILE_BYTES, |limit| {
+            limit.min(MAX_DROPPED_FILE_BYTES)
+        });
     let mut total_bytes = 0_u64;
     let mut files = Vec::with_capacity(paths.len());
 
@@ -691,75 +699,76 @@ pub fn desktop_read_dropped_files(
             return Err("Only files can be dropped into the composer".to_owned());
         }
 
+        let name = canonical
+            .file_name()
+            .and_then(|value| value.to_str())
+            .map(sanitize_download_filename)
+            .unwrap_or_else(|| "attachment".to_owned());
         let file_size = metadata.len();
-        if file_size > MAX_DROPPED_FILE_BYTES {
-            return Err("Dropped file is too large to attach from drag and drop".to_owned());
+        if file_size > file_limit {
+            files.push(DesktopDroppedFilePayload {
+                name,
+                transfer_id: None,
+                size: file_size,
+                too_large: true,
+            });
+            continue;
         }
         total_bytes = total_bytes.saturating_add(file_size);
         if total_bytes > MAX_DROPPED_TOTAL_BYTES {
             return Err("Dropped files are too large to attach together".to_owned());
         }
 
-        let name = canonical
-            .file_name()
-            .and_then(|value| value.to_str())
-            .map(sanitize_download_filename)
-            .unwrap_or_else(|| "attachment".to_owned());
-
-        match dropped_file_read_mode(file_size) {
-            DroppedFileReadMode::Inline => {
-                let bytes = fs::read(&canonical)
-                    .map_err(|err| format!("Unable to read dropped file: {err}"))?;
-                files.push(DesktopDroppedFilePayload {
-                    name,
-                    bytes: Some(bytes),
-                    transfer_id: None,
-                    size: None,
-                });
-            }
-            DroppedFileReadMode::Streamed => {
-                let transfer_id = register_dropped_read_session(DroppedReadSession {
-                    path: canonical,
-                    size: file_size,
-                    created_at: Instant::now(),
-                })?;
-                files.push(DesktopDroppedFilePayload {
-                    name,
-                    bytes: None,
-                    transfer_id: Some(transfer_id),
-                    size: Some(file_size),
-                });
-            }
-        }
+        let transfer_id = register_dropped_read_session(DroppedReadSession {
+            path: canonical,
+            size: file_size,
+            created_at: Instant::now(),
+        })?;
+        files.push(DesktopDroppedFilePayload {
+            name,
+            transfer_id: Some(transfer_id),
+            size: file_size,
+            too_large: false,
+        });
     }
 
     Ok(files)
 }
 
+/// The bytes at `offset`, at most `length` and [`DROPPED_FILE_READ_CHUNK_SIZE`],
+/// as a raw IPC body (an `ArrayBuffer` in the webview). Empty at the end.
 #[tauri::command]
 pub fn desktop_read_dropped_file_chunk(
     transfer_id: String,
+    offset: u64,
+    length: usize,
+) -> Result<tauri::ipc::Response, String> {
+    read_dropped_file_chunk(&transfer_id, offset, length).map(tauri::ipc::Response::new)
+}
+
+fn read_dropped_file_chunk(
+    transfer_id: &str,
     offset: u64,
     length: usize,
 ) -> Result<Vec<u8>, String> {
     if length == 0 {
         return Err("Dropped file chunk length must be positive".to_owned());
     }
-    let chunk_length = length.min(DESKTOP_FILE_IPC_CHUNK_SIZE);
+    let chunk_length = length.min(DROPPED_FILE_READ_CHUNK_SIZE);
 
     purge_stale_file_transfer_sessions(Instant::now());
     let now = Instant::now();
     let mut sessions = dropped_read_sessions()
         .lock()
         .map_err(|_| "Unable to access dropped file read sessions".to_owned())?;
-    if let Some(session) = sessions.get(&transfer_id) {
+    if let Some(session) = sessions.get(transfer_id) {
         if dropped_read_session_is_stale(session, now) {
-            sessions.remove(&transfer_id);
+            sessions.remove(transfer_id);
             return Err("Dropped file read transfer has expired".to_owned());
         }
     }
     let session = sessions
-        .get(&transfer_id)
+        .get(transfer_id)
         .ok_or_else(|| "Dropped file read transfer is not available".to_owned())?;
 
     if offset >= session.size {
@@ -775,10 +784,17 @@ pub fn desktop_read_dropped_file_chunk(
         .map_err(|err| format!("Unable to seek dropped file for streaming: {err}"))?;
 
     let mut buffer = vec![0_u8; read_length];
-    let read_bytes = file
-        .read(&mut buffer)
-        .map_err(|err| format!("Unable to read dropped file chunk: {err}"))?;
-    buffer.truncate(read_bytes);
+    let mut filled = 0;
+    while filled < read_length {
+        let read = file
+            .read(&mut buffer[filled..])
+            .map_err(|err| format!("Unable to read dropped file chunk: {err}"))?;
+        if read == 0 {
+            break;
+        }
+        filled += read;
+    }
+    buffer.truncate(filled);
 
     Ok(buffer)
 }
@@ -793,9 +809,8 @@ pub fn desktop_read_dropped_file_end(transfer_id: String) -> Result<bool, String
 #[cfg(test)]
 mod tests {
     use super::{
-        dropped_file_read_mode, new_file_transfer_id, sanitize_download_filename,
-        should_stream_file_ipc, unique_download_path, DroppedFileReadMode,
-        DESKTOP_FILE_IPC_INLINE_THRESHOLD,
+        downloads_dir, new_file_transfer_id, sanitize_download_filename, should_stream_file_ipc,
+        unique_download_path, DESKTOP_FILE_IPC_INLINE_THRESHOLD,
     };
 
     #[test]
@@ -832,14 +847,28 @@ mod tests {
         assert!(should_stream_file_ipc(
             DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64 + 1
         ));
-        assert_eq!(
-            dropped_file_read_mode(DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64),
-            DroppedFileReadMode::Inline
-        );
-        assert_eq!(
-            dropped_file_read_mode(DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64 + 1),
-            DroppedFileReadMode::Streamed
-        );
+    }
+
+    #[test]
+    fn downloads_follow_the_platform_user_directory() {
+        let dir = downloads_dir().expect("downloads dir");
+        if let Some(platform) = dirs::download_dir() {
+            assert_eq!(dir, platform);
+        }
+        #[cfg(target_os = "macos")]
+        assert!(dir.ends_with("Downloads"));
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn linux_downloads_use_the_localized_xdg_download_dir() {
+        let source = include_str!("desktop_file_transfer.rs");
+        assert!(source.contains("dirs::download_dir()"));
+        // `dirs` reads XDG_DOWNLOAD_DIR from user-dirs.dirs (e.g.
+        // "$HOME/Téléchargements" on a French desktop).
+        if let Some(dir) = dirs::download_dir() {
+            assert_eq!(downloads_dir().expect("downloads dir"), dir);
+        }
     }
 
     #[test]
@@ -918,22 +947,6 @@ mod command_tests {
     }
 
     #[test]
-    fn dropped_file_read_mode_selects_inline_or_streamed_transfer() {
-        assert_eq!(
-            dropped_file_read_mode(
-                crate::desktop_file_transfer::DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64
-            ),
-            DroppedFileReadMode::Inline
-        );
-        assert_eq!(
-            dropped_file_read_mode(
-                crate::desktop_file_transfer::DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64 + 1
-            ),
-            DroppedFileReadMode::Streamed
-        );
-    }
-
-    #[test]
     fn desktop_save_file_rejects_inline_payload_over_threshold() {
         let oversized =
             vec![0_u8; crate::desktop_file_transfer::DESKTOP_FILE_IPC_INLINE_THRESHOLD + 1];
@@ -965,7 +978,7 @@ mod command_tests {
             .lock()
             .expect("drop allowlist test lock should not be poisoned");
         clear_dropped_file_registry_for_tests();
-        let result = desktop_read_dropped_files(vec!["/etc/passwd".to_owned()]);
+        let result = desktop_read_dropped_files(vec!["/etc/passwd".to_owned()], None);
 
         assert!(result.is_err());
         assert!(result
@@ -977,9 +990,12 @@ mod command_tests {
     fn streaming_save_round_trip_writes_expected_bytes_without_inline_buffer() {
         let _guard = ENV_LOCK.lock().expect("env lock should not be poisoned");
         let original_home = std::env::var("HOME").ok();
+        let original_config = std::env::var("XDG_CONFIG_HOME").ok();
         let temp_home = std::env::temp_dir().join(new_file_transfer_id("save-home-test"));
         fs::create_dir_all(&temp_home).expect("temp home should be created");
         std::env::set_var("HOME", &temp_home);
+        // No user-dirs.dirs here, so the save falls back to $HOME/Downloads.
+        std::env::set_var("XDG_CONFIG_HOME", temp_home.join(".config"));
 
         let total_size =
             (crate::desktop_file_transfer::DESKTOP_FILE_IPC_INLINE_THRESHOLD + 1) as u64;
@@ -1013,6 +1029,11 @@ mod command_tests {
         } else {
             std::env::remove_var("HOME");
         }
+        if let Some(config) = original_config {
+            std::env::set_var("XDG_CONFIG_HOME", config);
+        } else {
+            std::env::remove_var("XDG_CONFIG_HOME");
+        }
         let _ = fs::remove_dir_all(temp_home);
     }
 
@@ -1032,24 +1053,23 @@ mod command_tests {
 
         remember_dropped_paths(std::slice::from_ref(&file_path));
         let descriptors =
-            desktop_read_dropped_files(vec![file_path.to_string_lossy().into_owned()])
+            desktop_read_dropped_files(vec![file_path.to_string_lossy().into_owned()], None)
                 .expect("dropped file metadata should be returned");
         assert_eq!(descriptors.len(), 1);
-        assert!(descriptors[0].bytes.is_none());
+        assert!(!descriptors[0].too_large);
         let transfer_id = descriptors[0]
             .transfer_id
             .clone()
             .expect("streamed transfer id should be present");
-        assert_eq!(descriptors[0].size, Some(total_size));
+        assert_eq!(descriptors[0].size, total_size);
 
-        let first_chunk =
-            desktop_read_dropped_file_chunk(transfer_id.clone(), 0, DESKTOP_FILE_IPC_CHUNK_SIZE)
-                .expect("first chunk should be readable");
+        let first_chunk = read_dropped_file_chunk(&transfer_id, 0, DESKTOP_FILE_IPC_CHUNK_SIZE)
+            .expect("first chunk should be readable");
         assert_eq!(first_chunk.len(), DESKTOP_FILE_IPC_CHUNK_SIZE);
         assert!(first_chunk.iter().all(|byte| *byte == 9));
 
-        let second_chunk = desktop_read_dropped_file_chunk(
-            transfer_id.clone(),
+        let second_chunk = read_dropped_file_chunk(
+            &transfer_id,
             crate::desktop_file_transfer::DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64,
             DESKTOP_FILE_IPC_CHUNK_SIZE,
         )
@@ -1144,7 +1164,8 @@ mod command_tests {
         remember_dropped_paths(std::slice::from_ref(&file_path));
         sleep(Duration::from_millis(10));
 
-        let result = desktop_read_dropped_files(vec![file_path.to_string_lossy().into_owned()]);
+        let result =
+            desktop_read_dropped_files(vec![file_path.to_string_lossy().into_owned()], None);
         assert!(result.is_err());
         assert!(result
             .expect_err("expired allowlist entry should be rejected")
@@ -1163,13 +1184,87 @@ mod command_tests {
         let (temp_dir, file_path) = write_temp_drop_fixture("consume.txt", b"payload");
 
         remember_dropped_paths(std::slice::from_ref(&file_path));
-        let files = desktop_read_dropped_files(vec![file_path.to_string_lossy().into_owned()])
-            .expect("authorized dropped file should be readable");
+        let files =
+            desktop_read_dropped_files(vec![file_path.to_string_lossy().into_owned()], None)
+                .expect("authorized dropped file should be readable");
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].name, "consume.txt");
-        assert_eq!(files[0].bytes.as_deref(), Some(b"payload".as_slice()));
+        let transfer_id = files[0].transfer_id.clone().expect("read session");
+        assert_eq!(
+            read_dropped_file_chunk(&transfer_id, 0, DROPPED_FILE_READ_CHUNK_SIZE)
+                .expect("chunk")
+                .as_slice(),
+            b"payload"
+        );
+        assert!(desktop_read_dropped_file_end(transfer_id).expect("transfer should end"));
         assert_eq!(dropped_file_allowlist_len_for_tests(), 0);
 
         let _ = fs::remove_dir_all(temp_dir);
+    }
+
+    #[test]
+    fn dropped_files_over_the_upload_limit_are_rejected_before_any_read() {
+        let _guard = DROPPED_FILE_ALLOWLIST_TEST_LOCK
+            .lock()
+            .expect("drop allowlist test lock should not be poisoned");
+        clear_dropped_file_registry_for_tests();
+        let temp_dir = std::env::temp_dir().join(new_file_transfer_id("drop-limit-test"));
+        fs::create_dir_all(&temp_dir).expect("temp drop dir should be created");
+        let small = temp_dir.join("small.txt");
+        let large = temp_dir.join("large.bin");
+        fs::write(&small, b"ok").expect("small fixture");
+        fs::write(&large, vec![1_u8; 64]).expect("large fixture");
+        // Unreadable: a read attempt would fail, so a too-large result proves
+        // the limit is applied from metadata alone.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&large, fs::Permissions::from_mode(0o000))
+                .expect("make fixture unreadable");
+        }
+
+        remember_dropped_paths(&[small.clone(), large.clone()]);
+        let sessions_before = dropped_read_sessions().lock().expect("sessions").len();
+        let files = desktop_read_dropped_files(
+            vec![
+                small.to_string_lossy().into_owned(),
+                large.to_string_lossy().into_owned(),
+            ],
+            Some(32),
+        )
+        .expect("drop should be described");
+        assert_eq!(files.len(), 2);
+        assert!(!files[0].too_large);
+        assert!(files[0].transfer_id.is_some());
+        assert!(files[1].too_large);
+        assert_eq!(files[1].size, 64);
+        assert!(files[1].transfer_id.is_none());
+        // Only the accepted file got a read session.
+        assert_eq!(
+            dropped_read_sessions().lock().expect("sessions").len(),
+            sessions_before + 1
+        );
+        let json = serde_json::to_value(&files[1]).expect("payload json");
+        assert_eq!(json["tooLarge"], true);
+        assert!(serde_json::to_value(&files[0]).expect("payload json")["tooLarge"].is_null());
+
+        if let Some(transfer_id) = files[0].transfer_id.clone() {
+            let _ = desktop_read_dropped_file_end(transfer_id);
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&large, fs::Permissions::from_mode(0o600));
+        }
+        let _ = fs::remove_dir_all(temp_dir);
+    }
+
+    #[test]
+    fn dropped_file_chunks_cross_ipc_as_raw_bytes() {
+        let source = include_str!("desktop_file_transfer.rs");
+        assert!(source.contains(
+            "read_dropped_file_chunk(&transfer_id, offset, length).map(tauri::ipc::Response::new)"
+        ));
+        assert!(!source.contains(concat!("pub bytes: Option<", "Vec<u8>>")));
     }
 }

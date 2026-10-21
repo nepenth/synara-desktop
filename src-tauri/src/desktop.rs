@@ -87,6 +87,19 @@ pub fn hide_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Close from the window chrome (native or the Linux strip). Without a tray
+/// host there is no icon to come back through and no Quit item, so close
+/// quits instead of leaving an unreachable hidden window.
+pub fn close_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+    match desktop_tray::main_window_close_action(desktop_tray::tray_host_state()) {
+        desktop_tray::MainWindowCloseAction::Hide => hide_main_window(app),
+        desktop_tray::MainWindowCloseAction::Quit => {
+            app.exit(0);
+            Ok(())
+        }
+    }
+}
+
 pub fn navigate_main_window<R: Runtime>(app: &AppHandle<R>, route: &str) -> tauri::Result<()> {
     show_main_window(app)?;
 
@@ -174,11 +187,19 @@ pub fn desktop_render_markdown(
     Ok(synara_core::render_composer_markdown(&source, &fragments))
 }
 
-/// Linux in-app Close must match native chrome: hide to tray.
-/// `Window::close()` can skip `CloseRequested` on some backends and quit.
+/// Linux in-app Close must match native chrome: hide to tray (or quit when
+/// no tray host is running). `Window::close()` can skip `CloseRequested` on
+/// some backends and quit.
 #[tauri::command]
 pub fn desktop_window_close(app: AppHandle) -> Result<(), String> {
-    hide_main_window(&app).map_err(|error| error.to_string())
+    close_main_window(&app).map_err(|error| error.to_string())
+}
+
+/// Quit from the renderer (Ctrl+Q on the Linux strip). Goes through the same
+/// exit path as the tray and app-menu Quit, including the bounded sync stop.
+#[tauri::command]
+pub fn desktop_quit(app: AppHandle) {
+    app.exit(0);
 }
 
 #[tauri::command]

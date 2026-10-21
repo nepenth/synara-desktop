@@ -6683,6 +6683,7 @@ name = "synara"
 version = "2.2.6"
 dependencies = [
  "block2",
+ "dirs",
  "getrandom 0.4.3",
  "hex",
  "hmac 0.13.0",

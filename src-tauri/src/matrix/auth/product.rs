@@ -164,6 +164,9 @@ pub struct MatrixAuthCommandError {
     /// Send-queue transaction id of a wedged send; absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_id: Option<String>,
+    /// The server's retry hint for a rate-limited request; absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retry_after_ms: Option<u64>,
 }
 
 pub use synara_core::app::media::{
@@ -210,7 +213,15 @@ impl MatrixAuthCommandError {
             message,
             diagnostic_id: diagnostic_id.into(),
             transaction_id: None,
+            retry_after_ms: None,
         }
+    }
+
+    /// Carries the homeserver's `retry_after_ms` so the renderer can say how
+    /// long to wait.
+    pub(crate) fn with_retry_after_ms(mut self, retry_after_ms: Option<u64>) -> Self {
+        self.retry_after_ms = retry_after_ms;
+        self
     }
 
     /// Names the send-queue request a rejection belongs to, so the shell can

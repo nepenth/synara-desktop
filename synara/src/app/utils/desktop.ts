@@ -8,7 +8,7 @@ import {
 } from '../agents/agentActions';
 
 type TauriInternals = {
-  invoke?: <T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>;
+  invoke?: <T = unknown>(command: string, args?: DesktopInvokeArgs) => Promise<T>;
   convertFileSrc?: (filePath: string, protocol?: string) => string;
   transformCallback?: <T>(callback: (response: T) => void, once?: boolean) => number;
 };
@@ -27,7 +27,7 @@ type SynaraDesktopBridge = {
   supportsMediaPermissions?: boolean;
   supportsSecureSecretStore?: boolean;
   supportsSpellcheck?: boolean;
-  invoke?: <T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>;
+  invoke?: <T = unknown>(command: string, args?: DesktopInvokeArgs) => Promise<T>;
   routes?: {
     later?: string;
     notifications?: string;
@@ -257,11 +257,24 @@ export type DesktopNativeFileDropPayload = {
 export const DESKTOP_FILE_IPC_INLINE_THRESHOLD = 8 * 1024 * 1024;
 export const DESKTOP_FILE_IPC_CHUNK_SIZE = 1024 * 1024;
 
+/** Rust's description of one dropped file; bytes are read through `transferId`. */
 type DesktopDroppedFilePayload = {
   name: string;
-  bytes?: number[];
   transferId?: string;
   size?: number;
+  /** Over the caller's `maxFileBytes`: nothing was opened or read. */
+  tooLarge?: boolean;
+};
+
+/** Dropped-file chunks are raw IPC bodies, so they can be larger than save chunks. */
+export const DESKTOP_DROPPED_FILE_READ_CHUNK_SIZE = 8 * 1024 * 1024;
+
+export type DesktopDroppedFileRejection = { name: string; size: number };
+
+export type DesktopDroppedFiles = {
+  files: File[];
+  /** Files over the limit, reported from their size before any read. */
+  tooLarge: DesktopDroppedFileRejection[];
 };
 
 type DesktopSaveFileBeginResult = {
@@ -311,8 +324,11 @@ const normalizeActionField = (
 
 const getBridge = (): SynaraDesktopBridge | undefined => window.__SYNARA_DESKTOP__;
 
+/** A `Uint8Array` as `args` is sent as the raw request body (Tauri 2 binary IPC). */
+export type DesktopInvokeArgs = Record<string, unknown> | Uint8Array;
+
 const getDesktopInvoke = ():
-  (<T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>) | undefined =>
+  (<T = unknown>(command: string, args?: DesktopInvokeArgs) => Promise<T>) | undefined =>
   window.__SYNARA_DESKTOP__?.invoke ?? window.__TAURI_INTERNALS__?.invoke;
 
 export const isDesktopBridgeAvailable = (): boolean => typeof getDesktopInvoke() === 'function';
@@ -538,10 +554,10 @@ export const formatDesktopInvokeError = (error: unknown): string => {
   return 'native command rejected';
 };
 
-export const invokeDesktopWithAvailability = async <T = unknown>(
+const invokeDesktopArgsWithAvailability = async <T = unknown>(
   command: string,
-  args?: Record<string, unknown>,
-  options: DesktopInvokeOptions = {}
+  args: DesktopInvokeArgs | undefined,
+  options: DesktopInvokeOptions
 ): Promise<DesktopInvokeResult<T>> => {
   const invoke = getDesktopInvoke();
   if (!invoke) {
@@ -557,6 +573,23 @@ export const invokeDesktopWithAvailability = async <T = unknown>(
     throw error;
   }
 };
+
+export const invokeDesktopWithAvailability = async <T = unknown>(
+  command: string,
+  args?: Record<string, unknown>,
+  options: DesktopInvokeOptions = {}
+): Promise<DesktopInvokeResult<T>> => invokeDesktopArgsWithAvailability<T>(command, args, options);
+
+/**
+ * Invoke with `body` as the raw request body (Tauri 2 binary IPC), for bytes
+ * that must not become a JSON number array. The Rust command reads it from
+ * `tauri::ipc::Request::body()`.
+ */
+export const invokeDesktopBodyWithAvailability = async <T = unknown>(
+  command: string,
+  body: Uint8Array,
+  options: DesktopInvokeOptions = {}
+): Promise<DesktopInvokeResult<T>> => invokeDesktopArgsWithAvailability<T>(command, body, options);
 
 export const invokeDesktop = async <T = unknown>(
   command: string,
@@ -774,18 +807,22 @@ const readDesktopDroppedFileStreamed = async (
   const chunks: BlobPart[] = [];
   let offset = 0;
   while (offset < size) {
-    const length = Math.min(DESKTOP_FILE_IPC_CHUNK_SIZE, size - offset);
-    const chunk = await invokeDesktop<number[]>('desktop_read_dropped_file_chunk', {
+    const length = Math.min(DESKTOP_DROPPED_FILE_READ_CHUNK_SIZE, size - offset);
+    // A raw `ipc::Response`: an ArrayBuffer (a number array only from mocks).
+    const chunk = await invokeDesktop<ArrayBuffer | number[]>('desktop_read_dropped_file_chunk', {
       transferId,
       offset,
       length,
     });
-    if (!chunk || chunk.length === 0) {
+    let bytes: Uint8Array<ArrayBuffer> | undefined;
+    if (chunk instanceof ArrayBuffer) bytes = new Uint8Array(chunk);
+    else if (Array.isArray(chunk)) bytes = new Uint8Array(chunk);
+    if (!bytes || bytes.length === 0) {
       await invokeDesktop('desktop_read_dropped_file_end', { transferId });
       return undefined;
     }
-    chunks.push(new Uint8Array(chunk));
-    offset += chunk.length;
+    chunks.push(bytes);
+    offset += bytes.length;
   }
 
   if (offset !== size) {
@@ -799,32 +836,41 @@ const readDesktopDroppedFileStreamed = async (
   });
 };
 
-export const readDesktopDroppedFiles = async (paths: string[]): Promise<File[]> => {
-  if (!isSynaraDesktop() || paths.length === 0) return [];
+/**
+ * Read the files of a native drop. Rust checks each size against
+ * `maxFileBytes` (the upload limit) first, so a file that cannot be sent is
+ * never copied into the webview.
+ */
+export const readDesktopDroppedFiles = async (
+  paths: string[],
+  maxFileBytes?: number
+): Promise<DesktopDroppedFiles> => {
+  const result: DesktopDroppedFiles = { files: [], tooLarge: [] };
+  if (!isSynaraDesktop() || paths.length === 0) return result;
   const droppedFiles = await invokeDesktop<DesktopDroppedFilePayload[]>(
     'desktop_read_dropped_files',
-    { paths }
+    {
+      paths,
+      maxFileBytes:
+        typeof maxFileBytes === 'number' && Number.isFinite(maxFileBytes) && maxFileBytes > 0
+          ? Math.floor(maxFileBytes)
+          : undefined,
+    }
   );
-  if (!droppedFiles) return [];
+  if (!droppedFiles) return result;
 
-  const files: File[] = [];
   for (const file of droppedFiles) {
-    if (Array.isArray(file.bytes) && file.bytes.length > 0) {
-      files.push(
-        new File([new Uint8Array(file.bytes)], file.name, {
-          type: inferFileMime(file.name),
-        })
-      );
+    if (file.tooLarge) {
+      result.tooLarge.push({ name: file.name, size: file.size ?? 0 });
       continue;
     }
-
     const streamed = await readDesktopDroppedFileStreamed(file);
     if (streamed) {
-      files.push(streamed);
+      result.files.push(streamed);
     }
   }
 
-  return files;
+  return result;
 };
 
 const isDesktopImageResourceSize = (value: unknown): value is DesktopImageResourceSize => {

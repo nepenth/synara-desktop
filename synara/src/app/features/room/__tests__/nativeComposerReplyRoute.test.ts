@@ -19,8 +19,12 @@ test('one Core reply draft supplies the exact relation to every composer send ow
     threadRootEventId: '$root:example.org',
   });
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
-  const invoke = async (command: string, args?: Record<string, unknown>) => {
-    calls.push({ command, args });
+  const invoke = async (command: string, args?: Record<string, unknown> | Uint8Array) => {
+    // Attachment bytes arrive as a raw body (Uint8Array) on the stage command.
+    if (command === 'matrix_attachment_stage') {
+      return { available: true as const, value: 'staged-attachment' };
+    }
+    calls.push({ command, args: args as Record<string, unknown> | undefined });
     if (command === 'matrix_session_snapshot') {
       return { available: true as const, value: { status: 'logged_in' } };
     }
@@ -65,7 +69,7 @@ test('one Core reply draft supplies the exact relation to every composer send ow
     {
       roomId: '!room:example.org',
       transactionId: 'attachment-txn',
-      file: { filename: 'note.txt', mimeType: 'text/plain', bytes: [1] },
+      file: { filename: 'note.txt', mimeType: 'text/plain', bytes: new Uint8Array([1]) },
       ...relation,
     },
     true,

@@ -125,7 +125,7 @@ export function Room() {
     <PowerLevelsContextProvider value={powerLevels}>
       <NativePermalinkProvider value={permalinkHandler}>
         <Box as="main" grow="Yes" ref={roomAreaRef}>
-          <Box grow="Yes" direction="Column" style={{ minWidth: 0 }}>
+          <Box grow="Yes" direction="Column" style={{ minWidth: 0 }} data-file-drop-region="room">
             <RoomViewHeader
               activeSidePanel={activeSidePanel}
               onToggleSidePanel={handleToggleSidePanel}

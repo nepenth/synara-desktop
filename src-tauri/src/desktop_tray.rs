@@ -341,26 +341,22 @@ fn build_tray_menu<R: Runtime>(
 ) -> tauri::Result<(Menu<R>, TrayMenuItems<R>)> {
     let route_labels = tray_route_labels(state);
 
-    let show = MenuItem::with_id(
-        app,
-        MENU_SHOW,
-        "Show Synara",
-        true,
-        Some("CmdOrCtrl+Shift+C"),
-    )?;
+    // No accelerators: the global shortcuts are user-set (or off), so a
+    // fixed hint here would be wrong.
+    let show = MenuItem::with_id(app, MENU_SHOW, "Show Synara", true, None::<&str>)?;
     let later = MenuItem::with_id(
         app,
         MENU_LATER,
         route_labels[1].as_str(),
         true,
-        Some("CmdOrCtrl+Shift+L"),
+        None::<&str>,
     )?;
     let notifications = MenuItem::with_id(
         app,
         MENU_NOTIFICATIONS,
         route_labels[2].as_str(),
         true,
-        Some("CmdOrCtrl+Shift+N"),
+        None::<&str>,
     )?;
     let separator = PredefinedMenuItem::separator(app)?;
     let build_item = MenuItem::with_id(
@@ -558,7 +554,93 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
 }
 
 pub(crate) fn tray_is_available<R: Runtime>(app: &AppHandle<R>) -> bool {
-    app.tray_by_id(TRAY_ICON_ID).is_some()
+    app.tray_by_id(TRAY_ICON_ID).is_some() && tray_host_state() != TrayHostState::Absent
+}
+
+/// Whether the desktop shows tray icons. Linux panels show one only through
+/// a StatusNotifier host (KDE, or GNOME with the AppIndicator extension); a
+/// stock GNOME session has none, so the icon and its Quit item are invisible.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TrayHostState {
+    /// Not probed yet, or not Linux: treated as present.
+    Unknown,
+    Present,
+    Absent,
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+static TRAY_HOST_STATE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+pub(crate) fn tray_host_state() -> TrayHostState {
+    match TRAY_HOST_STATE.load(Ordering::Acquire) {
+        1 => TrayHostState::Present,
+        2 => TrayHostState::Absent,
+        _ => TrayHostState::Unknown,
+    }
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn set_tray_host_state(present: bool) {
+    TRAY_HOST_STATE.store(if present { 1 } else { 2 }, Ordering::Release);
+}
+
+/// What closing the main window does: hide to the tray, or quit when there
+/// is no tray to come back from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MainWindowCloseAction {
+    Hide,
+    Quit,
+}
+
+pub(crate) fn main_window_close_action(host: TrayHostState) -> MainWindowCloseAction {
+    if host == TrayHostState::Absent {
+        MainWindowCloseAction::Quit
+    } else {
+        MainWindowCloseAction::Hide
+    }
+}
+
+/// How often the Linux tray host is re-checked; a host can start after
+/// Synara (session autostart) or go away (extension turned off).
+#[cfg(target_os = "linux")]
+const TRAY_HOST_PROBE_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Probe the StatusNotifier host now and then every
+/// [`TRAY_HOST_PROBE_INTERVAL`], off the main thread.
+#[cfg(target_os = "linux")]
+pub(crate) fn start_tray_host_watch() {
+    let spawned = std::thread::Builder::new()
+        .name("synara-tray-host-probe".to_owned())
+        .spawn(|| loop {
+            set_tray_host_state(status_notifier_host_registered());
+            std::thread::sleep(TRAY_HOST_PROBE_INTERVAL);
+        });
+    if spawned.is_err() {
+        eprintln!("[synara] Unable to start the tray host probe thread.");
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub(crate) fn start_tray_host_watch() {}
+
+/// `org.kde.StatusNotifierWatcher.IsStatusNotifierHostRegistered`. No session
+/// bus or no watcher means no host.
+#[cfg(target_os = "linux")]
+fn status_notifier_host_registered() -> bool {
+    let Ok(connection) = zbus::blocking::Connection::session() else {
+        return false;
+    };
+    let Ok(proxy) = zbus::blocking::Proxy::new(
+        &connection,
+        "org.kde.StatusNotifierWatcher",
+        "/StatusNotifierWatcher",
+        "org.kde.StatusNotifierWatcher",
+    ) else {
+        return false;
+    };
+    proxy
+        .get_property::<bool>("IsStatusNotifierHostRegistered")
+        .unwrap_or(false)
 }
 
 pub(crate) fn update_tray_state<R: Runtime>(
@@ -703,6 +785,58 @@ mod tests {
             "Synara — 10 (3 unread, 2 highlights, 5 later)"
         );
         assert_eq!(tray_title_for_badge(tray_badge_count(&state)), None);
+    }
+
+    #[test]
+    fn close_quits_only_when_no_tray_host_can_show_the_icon() {
+        assert_eq!(
+            main_window_close_action(TrayHostState::Absent),
+            MainWindowCloseAction::Quit
+        );
+        assert_eq!(
+            main_window_close_action(TrayHostState::Present),
+            MainWindowCloseAction::Hide
+        );
+        // Before the first probe (and on macOS/Windows) the tray is assumed.
+        assert_eq!(
+            main_window_close_action(TrayHostState::Unknown),
+            MainWindowCloseAction::Hide
+        );
+    }
+
+    #[test]
+    fn linux_quit_stays_reachable_without_a_tray_host() {
+        // Close quits without a host, Ctrl+Q quits from the in-app strip, and
+        // the integration panel reports the tray as unavailable.
+        let desktop = include_str!("desktop.rs");
+        let close_fn = desktop
+            .split("pub fn close_main_window")
+            .nth(1)
+            .and_then(|rest| rest.split("pub fn ").next())
+            .expect("close_main_window");
+        assert!(close_fn.contains("main_window_close_action(desktop_tray::tray_host_state())"));
+        assert!(close_fn.contains("app.exit(0)"));
+        assert!(desktop.contains("pub fn desktop_quit"));
+        let lib = include_str!("lib.rs");
+        assert!(lib.contains("desktop::close_main_window(window.app_handle())"));
+        assert!(lib.contains("desktop_tray::start_tray_host_watch()"));
+        let source = include_str!("desktop_tray.rs");
+        assert!(source.contains("\"IsStatusNotifierHostRegistered\""));
+        assert!(source.contains("tray_host_state() != TrayHostState::Absent"));
+        let titlebar =
+            include_str!("../../synara/src/app/features/desktop-titlebar/DesktopTitleBar.tsx");
+        assert!(titlebar.contains("'desktop_quit'"));
+    }
+
+    #[test]
+    fn tray_menu_items_carry_no_fixed_global_shortcut_hints() {
+        let source = include_str!("desktop_tray.rs");
+        let build = source
+            .split("fn build_tray_menu")
+            .nth(1)
+            .and_then(|rest| rest.split("fn tray_tooltip").next())
+            .expect("build_tray_menu");
+        assert!(!build.contains("Shift+"));
     }
 
     #[test]

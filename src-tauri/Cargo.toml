@@ -35,6 +35,8 @@ getrandom = { workspace = true }
 zeroize = { workspace = true }
 regex = "1"
 rfd = "0.17.2"
+# XDG user dirs (localized Downloads) and Windows known folders.
+dirs = "7"
 tauri-plugin-window-state = "2"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-notification = "2"
