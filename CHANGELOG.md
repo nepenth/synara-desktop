@@ -85,6 +85,7 @@
 - iOS: Synara's core tells the app whether a failure is worth retrying, needs the user, or is final. A message sent during a brief network failure stays queued and goes out when the connection is back instead of showing as failed.
 - iOS: fixed data races in the connection state (read by the UI while background work updated it), the app delegate's notification handling and the outgoing message queue, which also no longer blocks a background thread on the main thread.
 - Signing out of one account, or closing the session mirror, no longer clears another account's cached images.
+- Dependencies: update rustls to 0.23.46, rustls-webpki to 0.103.16 and webpki-root-certs to 1.0.10 for RUSTSEC-2026-0346 through RUSTSEC-2026-0349, RUSTSEC-2026-0382 and RUSTSEC-2026-0383. The desktop updater is built without its Windows-only zip extraction, which removes zip 4.6.1 (RUSTSEC-2026-0367 through RUSTSEC-2026-0369).
 
 ## [2.2.6] - 2026-10-12
 
