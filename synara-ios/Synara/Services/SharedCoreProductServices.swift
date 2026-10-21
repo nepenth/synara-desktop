@@ -1140,7 +1140,9 @@ final class SharedCoreRoomListService: RoomListServicing {
         do {
             let snapshot = try await SharedCoreRoomList.roomListSnapshot(core: host.core)
             let invites = (try? await SharedCoreInvites.invitesSnapshot(core: host.core))?.invites ?? []
-            let spaceParents = (try? await SharedCoreSpaces.spaceParentsSnapshot(core: host.core))?.entries ?? []
+            // The room-list snapshot carries the parent-space graph Core
+            // already built for it; no second graph scan per refresh.
+            let spaceParents = snapshot.spaceParents
             let rooms = SharedCoreRoomListRows.rooms(
                 rooms: snapshot.rooms.map {
                     SharedCoreRoomListRows.RoomRow(
@@ -1160,7 +1162,9 @@ final class SharedCoreRoomListService: RoomListServicing {
                         hasActiveCall: $0.hasActiveCall,
                         activeCallParticipantCount: Int($0.activeCallParticipantCount),
                         directUserId: $0.directUserId,
-                        encryptionStatus: SharedCoreRoomListRows.encryptionStatus($0.encryptionStatus)
+                        encryptionStatus: SharedCoreRoomListRows.encryptionStatus($0.encryptionStatus),
+                        isSpace: $0.isSpace,
+                        isLowPriority: $0.isLowPriority
                     )
                 },
                 invites: invites.map {
@@ -1182,7 +1186,7 @@ final class SharedCoreRoomListService: RoomListServicing {
                     )
                 }
             )
-            let state: RoomListState = rooms.isEmpty ? .empty : .loaded(rooms)
+            let state = Self.state(rooms: rooms, loading: snapshot.loading)
             stateLock.withLock {
                 cachedNames = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0.name) })
                 cachedRooms = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0) })
@@ -1195,6 +1199,21 @@ final class SharedCoreRoomListService: RoomListServicing {
     }
 
     static let loadFailedMessage = "Rooms could not be loaded. Try again."
+
+    /// An empty list before the first room-list response means "not synced
+    /// yet" (fresh login, cold start with an empty store): keep loading
+    /// rather than claiming the account has no rooms.
+    static func state(rooms: [RoomSummary], loading: RoomListLoadingDto) -> RoomListState {
+        if rooms.isEmpty == false {
+            return .loaded(rooms)
+        }
+        switch loading {
+        case .notLoaded:
+            return .loading
+        case .loaded:
+            return .empty
+        }
+    }
 
     /// A failed read must not look like an account without rooms, which also
     /// zeroed every unread badge: keep the last good list. Without one, a

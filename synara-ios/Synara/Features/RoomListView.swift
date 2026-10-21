@@ -86,19 +86,22 @@ struct RoomListView: View {
                 }
             case .loaded(let rooms):
                 let filteredRooms = filteredRooms(from: rooms)
-                let favoritesPartition = RoomListFavorites.partition(from: filteredRooms)
+                let sections = RoomListFavorites.sections(from: filteredRooms)
                 let favoriteRooms = RoomListFavorites.sorted(
-                    favoritesPartition.favorites,
+                    sections.favorites,
                     order: favoriteSort
                 )
-                let remainingRooms = favoritesPartition.remaining
                 let channelRooms = RoomListFavorites.sorted(
-                    remainingRooms.filter { $0.kind == .room },
+                    sections.channels,
                     order: roomsSort
                 )
                 let directRooms = RoomListFavorites.sorted(
-                    remainingRooms.filter { $0.kind == .directMessage },
+                    sections.directs,
                     order: directsSort
+                )
+                let lowPriorityRooms = RoomListFavorites.sorted(
+                    sections.lowPriority,
+                    order: roomsSort
                 )
                 let spaces = spaces(from: rooms)
                 let spaceUnreadCounts = RoomListSpaceGrouping.unreadCountsBySpaceID(from: rooms)
@@ -220,6 +223,20 @@ struct RoomListView: View {
                                     title: "Direct messages",
                                     count: directRooms.count,
                                     selectedSort: $directsSort
+                                )
+                            }
+                        }
+
+                        if lowPriorityRooms.isEmpty == false {
+                            Section {
+                                ForEach(lowPriorityRooms) { room in
+                                    roomRow(room)
+                                }
+                            } header: {
+                                RoomSectionHeader(
+                                    title: "Low priority",
+                                    count: lowPriorityRooms.count,
+                                    selectedSort: $roomsSort
                                 )
                             }
                         }
@@ -690,6 +707,8 @@ struct RoomListView: View {
     }
 
     private func filterBadges(from rooms: [RoomSummary]) -> [RoomListFilter: Int] {
+        // Spaces never carry attention of their own (Core's rule too).
+        let rooms = rooms.filter { $0.kind != .space }
         let pendingApprovals = AgentPendingInbox.pendingApprovals(from: rooms).count
         let agentRooms = rooms.filter(\.isAgentRoom).count
         return [

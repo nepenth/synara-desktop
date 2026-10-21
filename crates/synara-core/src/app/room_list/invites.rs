@@ -4,7 +4,10 @@
 //! semantics as the desktop's former `badwords-list` JavaScript owner. A
 //! substitute profanity list would silently change an invite-safety decision.
 
-use std::{collections::BTreeSet, sync::OnceLock};
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::OnceLock,
+};
 
 use matrix_sdk::{
     deserialized_responses::RawSyncOrStrippedState,
@@ -107,6 +110,7 @@ pub async fn snapshot_invites(
         .map(|content| content.ignored_users.into_keys().collect())
         .unwrap_or_default();
     let mut invites = Vec::new();
+    let mut sender_relations = HashMap::new();
     for room in rooms
         .into_iter()
         .filter(|room| room.state() == RoomState::Invited)
@@ -120,6 +124,7 @@ pub async fn snapshot_invites(
             &joined_rooms,
             &ignored_senders,
             avatar_handles,
+            &mut sender_relations,
         )
         .await
         {
@@ -141,6 +146,7 @@ async fn project_invite(
     joined_rooms: &[Room],
     ignored_senders: &BTreeSet<OwnedUserId>,
     avatar_handles: &mut InviteAvatarHandles,
+    sender_relations: &mut HashMap<OwnedUserId, SenderRelation>,
 ) -> Result<NativeInvite, &'static str> {
     let own_member = room
         .get_member_no_sync(current_user)
@@ -159,15 +165,16 @@ async fn project_invite(
         .unwrap_or_else(|| member_event.sender().localpart().to_owned());
     let room_name = invite_room_name(room);
     let room_topic = room_topic(room).await;
+    let relation = sender_relation(joined_rooms, member_event.sender(), sender_relations).await;
     let is_spam = contains_bad_word(&room_name)
         || room_topic.as_deref().is_some_and(contains_bad_word)
         || contains_bad_word(&sender_id)
         || contains_bad_word(&sender_name)
         || member_event.reason().is_some_and(contains_bad_word)
-        || sender_is_banned_in_joined_room(joined_rooms, member_event.sender()).await;
+        || relation.banned;
     let triage = if is_spam {
         NativeInviteTriage::Spam
-    } else if sender_shares_joined_room(joined_rooms, member_event.sender()).await {
+    } else if relation.shares_room {
         NativeInviteTriage::Known
     } else {
         NativeInviteTriage::Public
@@ -261,26 +268,48 @@ async fn room_topic(room: &Room) -> Option<String> {
     }
 }
 
-async fn sender_shares_joined_room(joined_rooms: &[Room], sender: &UserId) -> bool {
-    for room in joined_rooms {
-        if let Ok(Some(member)) = room.get_member_no_sync(sender).await {
-            if *member.membership() == MembershipState::Join {
-                return true;
-            }
-        }
-    }
-    false
+/// How an invite's sender relates to the user's joined rooms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct SenderRelation {
+    /// Banned in at least one joined room (triage: spam).
+    banned: bool,
+    /// Joined to at least one joined room (triage: known).
+    shares_room: bool,
 }
 
-async fn sender_is_banned_in_joined_room(joined_rooms: &[Room], sender: &UserId) -> bool {
+/// One pass over the joined rooms per sender per snapshot. Each invite used
+/// to read the sender's membership in every joined room twice (ban check,
+/// then shared-room check), on every room-list refresh. Not kept across
+/// snapshots, so a new ban is seen at the next refresh.
+async fn sender_relation(
+    joined_rooms: &[Room],
+    sender: &UserId,
+    seen: &mut HashMap<OwnedUserId, SenderRelation>,
+) -> SenderRelation {
+    if let Some(relation) = seen.get(sender) {
+        return *relation;
+    }
+    let relation = scan_sender_relation(joined_rooms, sender).await;
+    seen.insert(sender.to_owned(), relation);
+    relation
+}
+
+async fn scan_sender_relation(joined_rooms: &[Room], sender: &UserId) -> SenderRelation {
+    let mut relation = SenderRelation::default();
     for room in joined_rooms {
         if let Ok(Some(member)) = room.get_member_no_sync(sender).await {
-            if *member.membership() == MembershipState::Ban {
-                return true;
+            match member.membership() {
+                // A ban anywhere decides the triage; stop scanning.
+                MembershipState::Ban => {
+                    relation.banned = true;
+                    return relation;
+                }
+                MembershipState::Join => relation.shares_room = true,
+                _ => {}
             }
         }
     }
-    false
+    relation
 }
 
 fn bad_words() -> &'static Vec<String> {

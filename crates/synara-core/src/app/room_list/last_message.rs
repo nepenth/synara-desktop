@@ -7,6 +7,9 @@ use serde_json::Value as JsonValue;
 
 pub const LAST_MESSAGE_PREVIEW_MAX_CHARS: usize = 160;
 
+/// Preview for an event the client cannot decrypt yet.
+pub const ENCRYPTED_MESSAGE_PREVIEW: &str = "Encrypted message";
+
 /// Collapse whitespace, strip media URIs, and bound the preview.
 pub fn sanitize_last_message_preview(text: &str) -> Option<String> {
     let stripped = text.replace("**", "").replace("__", "").replace('`', "");
@@ -36,15 +39,6 @@ pub fn sanitize_last_message_preview(text: &str) -> Option<String> {
     Some(trimmed.to_owned())
 }
 
-pub fn last_message_preview_from_invite(inviter: Option<&str>) -> Option<String> {
-    match inviter.map(str::trim).filter(|value| !value.is_empty()) {
-        Some(user) if !user.contains("mxc://") && !user.contains("syt_") => {
-            sanitize_last_message_preview(&format!("Invited by {user}"))
-        }
-        _ => Some("Invited".to_owned()),
-    }
-}
-
 pub fn last_message_preview_from_event_json_str(raw: &str) -> Option<String> {
     serde_json::from_str(raw)
         .ok()
@@ -71,6 +65,21 @@ pub fn last_message_event_is_agent_approval(value: &JsonValue) -> bool {
 }
 
 pub fn last_message_preview_from_event_json(value: &JsonValue) -> Option<String> {
+    last_message_preview_for_user(value, None)
+}
+
+/// True for a membership event about `own_user_id` (its state key).
+pub fn is_own_membership_event(value: &JsonValue, own_user_id: &str) -> bool {
+    value.get("type").and_then(JsonValue::as_str) == Some("m.room.member")
+        && value.get("state_key").and_then(JsonValue::as_str) == Some(own_user_id)
+}
+
+/// Like [`last_message_preview_from_event_json`], but the signed-in user's
+/// own membership reads "You joined" rather than their display name.
+pub fn last_message_preview_for_user(
+    value: &JsonValue,
+    own_user_id: Option<&str>,
+) -> Option<String> {
     let event_type = value.get("type").and_then(JsonValue::as_str)?;
     let content = value.get("content").unwrap_or(&JsonValue::Null);
     match event_type {
@@ -80,7 +89,7 @@ pub fn last_message_preview_from_event_json(value: &JsonValue) -> Option<String>
         "m.poll.start" | "org.matrix.msc3381.poll.start" => {
             preview_from_poll(content).or_else(|| Some("Poll".to_owned()))
         }
-        "m.room.member" => preview_from_membership(value, content),
+        "m.room.member" => preview_from_membership(value, content, own_user_id),
         "m.call.invite" | "m.call.notify" => Some("Call".to_owned()),
         "m.room.topic" => content
             .get("topic")
@@ -102,7 +111,7 @@ fn encrypted_event_preview(value: &JsonValue) -> Option<String> {
         // stay off the preview.
         return Some("Encrypted room update".to_owned());
     }
-    Some("Encrypted message".to_owned())
+    Some(ENCRYPTED_MESSAGE_PREVIEW.to_owned())
 }
 
 fn preview_from_room_message(content: &JsonValue) -> Option<String> {
@@ -166,8 +175,23 @@ fn preview_from_poll(content: &JsonValue) -> Option<String> {
         .and_then(sanitize_last_message_preview)
 }
 
-fn preview_from_membership(event: &JsonValue, content: &JsonValue) -> Option<String> {
+fn preview_from_membership(
+    event: &JsonValue,
+    content: &JsonValue,
+    own_user_id: Option<&str>,
+) -> Option<String> {
     let membership = content.get("membership").and_then(JsonValue::as_str)?;
+    if own_user_id.is_some_and(|own| is_own_membership_event(event, own)) {
+        let own_verb = match membership {
+            "join" => "You joined",
+            "leave" => "You left",
+            "invite" => "You were invited",
+            "ban" => "You were banned",
+            "knock" => "You requested to join",
+            _ => return None,
+        };
+        return Some(own_verb.to_owned());
+    }
     let name = content
         .get("displayname")
         .and_then(JsonValue::as_str)
@@ -326,14 +350,6 @@ mod tests {
             .as_deref(),
             Some("Alice joined")
         );
-        assert_eq!(
-            last_message_preview_from_invite(Some("@alex:example.org")).as_deref(),
-            Some("Invited by @alex:example.org")
-        );
-        assert_eq!(
-            last_message_preview_from_invite(Some("syt_secret")).as_deref(),
-            Some("Invited")
-        );
         let raw = last_message_preview_from_event_json(&json!({
             "type": "m.room.message",
             "content": { "msgtype": "m.text", "body": "ok" }
@@ -342,6 +358,45 @@ mod tests {
         assert!(!raw.contains("mxc://"));
         assert!(!raw.contains("syt_"));
         assert!(!raw.contains("password"));
+    }
+
+    #[test]
+    fn own_membership_reads_as_you() {
+        let own_join = json!({
+            "type": "m.room.member",
+            "state_key": "@ada:example.org",
+            "sender": "@ada:example.org",
+            "content": { "membership": "join", "displayname": "Ada Lovelace" }
+        });
+        assert!(is_own_membership_event(&own_join, "@ada:example.org"));
+        assert_eq!(
+            last_message_preview_for_user(&own_join, Some("@ada:example.org")).as_deref(),
+            Some("You joined")
+        );
+        // Without a user (pins, other callers) the display name stays.
+        assert_eq!(
+            last_message_preview_from_event_json(&own_join).as_deref(),
+            Some("Ada Lovelace joined")
+        );
+        let other_join = json!({
+            "type": "m.room.member",
+            "state_key": "@bob:example.org",
+            "content": { "membership": "join", "displayname": "Bob" }
+        });
+        assert!(!is_own_membership_event(&other_join, "@ada:example.org"));
+        assert_eq!(
+            last_message_preview_for_user(&other_join, Some("@ada:example.org")).as_deref(),
+            Some("Bob joined")
+        );
+        let own_invite = json!({
+            "type": "m.room.member",
+            "state_key": "@ada:example.org",
+            "content": { "membership": "invite" }
+        });
+        assert_eq!(
+            last_message_preview_for_user(&own_invite, Some("@ada:example.org")).as_deref(),
+            Some("You were invited")
+        );
     }
 
     #[test]

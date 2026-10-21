@@ -44,6 +44,8 @@ enum SharedCoreRoomListRows {
     let activeCallParticipantCount: Int
     let directUserId: String?
     let encryptionStatus: SynaraRoomEncryptionStatus
+    var isSpace: Bool = false
+    var isLowPriority: Bool = false
     }
 
     struct InviteRow {
@@ -87,7 +89,7 @@ enum SharedCoreRoomListRows {
                 unreadCount: room.unreadCount,
                 hasHighlight: room.highlightCount > 0,
                 isMarkedUnread: room.markedUnread,
-                kind: room.isDirect ? .directMessage : .room,
+                kind: kind(isSpace: room.isSpace, isDirect: room.isDirect),
                 membership: isInvited(room.membership) ? .invited : .joined,
                 lastActivityAt: activityDate(millisecondsSince1970: room.lastActivityTs),
                 parentSpaces: parentSpaces(
@@ -96,6 +98,7 @@ enum SharedCoreRoomListRows {
                 ),
                 avatarURL: room.avatarUrl.flatMap(URL.init(string:)),
                 isFavorite: room.isFavorite,
+                isLowPriority: room.isLowPriority,
                 isCall: room.isCall,
                 hasActiveCall: room.hasActiveCall,
                 activeCallParticipantCount: room.activeCallParticipantCount,
@@ -129,6 +132,15 @@ enum SharedCoreRoomListRows {
                 )
             }
         return joinedRows + inviteRows
+    }
+
+    /// Core reports `is_space` from the room's create event; a space is never
+    /// a channel row.
+    static func kind(isSpace: Bool, isDirect: Bool) -> RoomSummary.RoomKind {
+        if isSpace {
+            return .space
+        }
+        return isDirect ? .directMessage : .room
     }
 
     private static func activityDate(millisecondsSince1970 timestamp: UInt64?) -> Date {

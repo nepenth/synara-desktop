@@ -44,6 +44,14 @@ pub(super) fn push_room_list_update(
     session_generation: u64,
 ) {
     if let Ok(mut guard) = queue.lock() {
+        // Every wake-up means "re-read the snapshot"; one pending wake-up per
+        // generation is enough, however many changes arrive before a poll.
+        if guard
+            .iter()
+            .any(|update| update.session_generation == session_generation)
+        {
+            return;
+        }
         if guard.len() >= ROOM_LIST_UPDATE_QUEUE_CAP {
             guard.remove(0);
         }
@@ -63,6 +71,37 @@ pub struct RoomListSnapshotDto {
     pub session_generation: u64,
     pub ordered_room_ids: Vec<String>,
     pub rooms: Vec<RoomListRoomDto>,
+    /// Until the list has loaded, empty `rooms` means "not synced yet".
+    pub loading: RoomListLoadingDto,
+    /// Child to parent-space entries (from `m.space.child` and legitimate
+    /// `m.space.parent` events), the same graph Core used for unread rollup.
+    /// Saves a separate `space_parents_snapshot` call per refresh.
+    pub space_parents: Vec<SpaceParentEntryDto>,
+}
+
+/// The SDK room-list loading state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum RoomListLoadingDto {
+    /// No room-list response yet: show loading, not an empty state.
+    NotLoaded,
+    /// A response arrived; `maximum_number_of_rooms` is the server's count
+    /// for the list when known.
+    Loaded {
+        maximum_number_of_rooms: Option<u32>,
+    },
+}
+
+impl From<crate::app::room_list::NativeRoomListLoading> for RoomListLoadingDto {
+    fn from(value: crate::app::room_list::NativeRoomListLoading) -> Self {
+        match value {
+            crate::app::room_list::NativeRoomListLoading::NotLoaded => Self::NotLoaded,
+            crate::app::room_list::NativeRoomListLoading::Loaded {
+                maximum_number_of_rooms,
+            } => Self::Loaded {
+                maximum_number_of_rooms,
+            },
+        }
+    }
 }
 
 super::wire_enum::wire_enum! {
@@ -91,6 +130,8 @@ pub struct RoomListRoomDto {
     pub direct_user_id: Option<String>,
     pub is_space: bool,
     pub is_favorite: bool,
+    /// Tagged `m.lowpriority`. Core's section orders put these rooms last.
+    pub is_low_priority: bool,
     pub is_call: bool,
     pub has_active_call: bool,
     pub active_call_participant_count: u32,
@@ -1405,6 +1446,7 @@ impl SharedCore {
                     direct_user_id: room.direct_user_id,
                     is_space: room.is_space,
                     is_favorite: room.is_favorite,
+                    is_low_priority: room.is_low_priority,
                     is_call: room.is_call,
                     has_active_call: room.has_active_call,
                     active_call_participant_count: room.active_call_participant_count,
@@ -1417,6 +1459,15 @@ impl SharedCore {
                     is_encrypted: room.encryption_status.is_encrypted(),
                     encryption_status: room.encryption_status,
                     notification_mode: room.notification_mode.map(|mode| mode.as_str().to_owned()),
+                })
+                .collect(),
+            loading: snapshot.loading.into(),
+            space_parents: snapshot
+                .space_parents
+                .into_iter()
+                .map(|entry| SpaceParentEntryDto {
+                    room_id: entry.room_id,
+                    parent_ids: entry.parent_ids,
                 })
                 .collect(),
         })

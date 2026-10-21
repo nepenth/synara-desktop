@@ -1,10 +1,11 @@
-//! Pin panel, mixed receipts, and automatic last-message back-pagination.
+//! Pin panel, mixed receipts, and the product's no-backfill event cache.
 //!
 //! Pin rows come from `PinnedEventsCache` (not `TimelineFocus::PinnedEvents`).
 //! Unpin of a non-final pin must keep the remaining row and its reactions.
 //! A thread receipt in the same sync must not starve the main/unthreaded
-//! receipt that drives live unread. Idle rooms with no displayable tail
-//! back-paginate through `BackPaginationQueue` without opening a timeline.
+//! receipt that drives live unread. Idle rooms with no displayable tail are
+//! not back-paginated in the background (`apply_event_cache_policy`); their
+//! preview comes from the synced window or when the room is opened.
 
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
@@ -23,7 +24,6 @@ use matrix_sdk::test_utils::mocks::{
     MatrixMockServer, RoomMessagesResponseTemplate, RoomRelationsResponseTemplate,
 };
 use matrix_sdk_test::{event_factory::EventFactory, JoinedRoomBuilder, BOB};
-use synara_core::app::room_list::last_message_preview_from_event_json_str;
 use synara_core::app::timeline::{NativeTimelineOwner, PINNED_EVENTS_SCHEMA_VERSION};
 
 #[tokio::test]
@@ -242,11 +242,11 @@ async fn mixed_thread_and_unthreaded_receipts_follow_main_unread() {
 }
 
 #[tokio::test]
-async fn automatic_back_pagination_fills_empty_last_message_preview() {
+async fn product_event_cache_never_backfills_an_empty_last_message_preview() {
     let server = MatrixMockServer::new().await;
     let client = server
         .client_builder()
-        .on_builder(|builder| builder.with_enable_automatic_back_pagination(true))
+        .on_builder(synara_core::app::client_builder::apply_event_cache_policy)
         .build()
         .await;
     client.event_cache().subscribe().unwrap();
@@ -282,19 +282,21 @@ async fn automatic_back_pagination_fills_empty_last_message_preview() {
         .await
         .expect("listen for automatic latest-event backfill");
 
-    let preview = tokio::time::timeout(Duration::from_secs(8), async {
-        loop {
-            if let LatestEventValue::Remote(event) = room.latest_event() {
-                return last_message_preview_from_event_json_str(event.raw().json().get());
-            }
-            tokio::time::sleep(Duration::from_millis(40)).await;
-        }
-    })
-    .await
-    .expect(
-        "automatic back-pagination must surface a remote last-message without opening the timeline",
+    // The SDK would page `/messages` here to find a displayable event.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let messages = server
+        .server()
+        .received_requests()
+        .await
+        .unwrap_or_default()
+        .iter()
+        .filter(|request| request.url.path().ends_with("/messages"))
+        .count();
+    assert_eq!(
+        messages, 0,
+        "the room list never back-paginates in the background"
     );
-    assert_eq!(preview.as_deref(), Some("hello from history"));
+    assert!(matches!(room.latest_event(), LatestEventValue::None));
 }
 
 #[test]
@@ -312,7 +314,7 @@ fn pin_and_pagination_source_uses_sdk_owners() {
         env!("CARGO_MANIFEST_DIR"),
         "/src/app/client_builder/open.rs"
     ));
-    assert!(open.contains("with_enable_automatic_back_pagination(true)"));
+    assert!(open.contains("with_enable_automatic_back_pagination(false)"));
 
     let live = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),

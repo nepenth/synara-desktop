@@ -76,6 +76,21 @@ pub async fn build_discovery_client(
         .map_err(map_build_error)
 }
 
+/// Event-cache policy shared by every product client (and by tests that
+/// build their client through `MatrixMockServer`).
+///
+/// Automatic back-pagination stays off, the SDK default. When on, the SDK
+/// back-paginates every room in a sliding-sync response that has no
+/// displayable latest event (unbounded, invites included, which the server
+/// rejects with 403) and every room whose read receipt is not loaded (up to
+/// 20 pages). At login that was about two `/messages` per room. Previews and
+/// client-side unread counts come instead from the room-list timeline window
+/// (`ROOM_LIST_TIMELINE_LIMIT`) and the recent-room subscriptions; the
+/// timeline still paginates when a room is opened or scrolled.
+pub fn apply_event_cache_policy(builder: matrix_sdk::ClientBuilder) -> matrix_sdk::ClientBuilder {
+    builder.with_enable_automatic_back_pagination(false)
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ClientStoreMode {
     Persistent,
@@ -165,7 +180,7 @@ async fn build_client(
         builder = builder.handle_refresh_tokens();
     }
 
-    builder = builder.with_enable_automatic_back_pagination(true);
+    builder = apply_event_cache_policy(builder);
 
     #[cfg(feature = "x509-identity")]
     {
@@ -704,9 +719,11 @@ mod privacy_tests {
     }
 
     #[test]
-    fn product_builder_enables_automatic_back_pagination() {
+    fn product_builder_keeps_automatic_back_pagination_off() {
         let source = include_str!("open.rs");
-        assert!(source.contains("with_enable_automatic_back_pagination(true)"));
+        assert!(source.contains("builder = apply_event_cache_policy(builder);"));
+        assert!(source.contains("with_enable_automatic_back_pagination(false)"));
+        assert!(!source.contains(concat!("with_enable_automatic_back_pagination(", "true)")));
         assert!(!source.contains(&format!("{}{}", "experimental", "-")));
     }
 }

@@ -6,12 +6,16 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use futures_util::StreamExt;
 use matrix_sdk::{
     deserialized_responses::RawSyncOrStrippedState,
+    room::ParentSpace,
     ruma::{
         api::client::space::get_hierarchy,
         events::{
-            room::join_rules::RoomJoinRulesEventContent, space::child::SpaceChildEventContent,
+            room::join_rules::RoomJoinRulesEventContent,
+            space::{child::SpaceChildEventContent, parent::SpaceParentEventContent},
+            StateEventType,
         },
         room::JoinRuleSummary,
         room::{AllowRule, JoinRule},
@@ -30,24 +34,43 @@ use super::{
 const HIERARCHY_PAGE_LIMIT: u64 = 100;
 const HIERARCHY_MAX_PAGES: usize = 50;
 
+/// Child to parent-space map for grouping and unread rollup.
+///
+/// Edges come from each joined space's `m.space.child` events and, as in
+/// Element, from a joined room's own `m.space.parent` events that the SDK
+/// (`Room::parent_spaces`, the spec algorithm) finds legitimate: the joined
+/// parent lists the room, or the parent event's sender may add children to
+/// that parent. The child list alone missed rooms that declare a parent the
+/// space does not list.
 pub async fn snapshot_space_parents(
     client: &Client,
     session_generation: u64,
 ) -> Result<NativeSpaceParentsSnapshot, &'static str> {
-    let edges = collect_valid_edges(client).await?;
+    let mut edges: Vec<(String, String)> = collect_valid_edges(client)
+        .await?
+        .into_iter()
+        .map(|edge| (edge.parent_id, edge.child_id))
+        .collect();
+    edges.extend(declared_parent_edges(client).await);
     let mut child_to_parents: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
 
-    for edge in edges {
-        if edge.child_id == edge.parent_id {
+    for (parent_id, child_id) in edges {
+        if child_id == parent_id {
             continue;
         }
-        if would_introduce_cycle(&child_to_parents, &edge.parent_id, &edge.child_id) {
+        if child_to_parents
+            .get(&child_id)
+            .is_some_and(|parents| parents.contains(&parent_id))
+        {
+            continue;
+        }
+        if would_introduce_cycle(&child_to_parents, &parent_id, &child_id) {
             continue;
         }
         child_to_parents
-            .entry(edge.child_id)
+            .entry(child_id)
             .or_default()
-            .insert(edge.parent_id);
+            .insert(parent_id);
     }
 
     let mut entries: Vec<NativeSpaceParentEntry> = child_to_parents
@@ -196,12 +219,41 @@ pub async fn remove_space_child(
     room.send_state_event_raw("m.space.child", child.as_str(), json!({}))
         .await
         .map_err(|_| "v-rooms.2c-space-child-remove-failed")?;
+    clear_space_parent(client, &child, &parent).await;
 
     Ok(NativeSpaceChildMutationResult {
         parent_id: parent.to_string(),
         child_id: child.to_string(),
         status: crate::dto::MutationStatus::Removed,
     })
+}
+
+/// Best effort, as the SDK's `SpaceService::remove_child_from_space` does:
+/// empty the child's `m.space.parent` for this space when the user may, so a
+/// stale parent link does not keep grouping the room under the space. The
+/// child edge is already removed, so a failure here is not reported.
+async fn clear_space_parent(client: &Client, child: &OwnedRoomId, parent: &OwnedRoomId) {
+    let Some(child_room) = client.get_room(child) else {
+        return;
+    };
+    let Some(user_id) = client.user_id() else {
+        return;
+    };
+    let can_send = child_room
+        .power_levels()
+        .await
+        .is_ok_and(|levels| levels.user_can_send_state(user_id, StateEventType::SpaceParent));
+    let has_parent = matches!(
+        child_room
+            .get_state_event_static_for_key::<SpaceParentEventContent, _>(parent)
+            .await,
+        Ok(Some(_))
+    );
+    if can_send && has_parent {
+        let _ = child_room
+            .send_state_event_raw("m.space.parent", parent.as_str(), json!({}))
+            .await;
+    }
 }
 
 /// Replace a restricted/knock_restricted allow membership when a room is
@@ -293,6 +345,47 @@ fn reparent_allow_list(
         next.push(AllowRule::room_membership(add_parent.clone()));
     }
     next
+}
+
+/// `(parent, child)` for every joined room's `m.space.parent` that names a
+/// joined space and that the SDK accepts. A reciprocal parent is already an
+/// `m.space.child` edge; one the parent does not list counts only when the
+/// event's sender has the power to add children there (`WithPowerlevel`).
+/// Unverifiable and illegitimate parents are ignored. A failed read skips
+/// that room rather than the whole graph.
+async fn declared_parent_edges(client: &Client) -> Vec<(String, String)> {
+    let mut edges = Vec::new();
+    for room in client.joined_rooms() {
+        let Ok(parents) = room.parent_spaces().await else {
+            continue;
+        };
+        futures_util::pin_mut!(parents);
+        while let Some(parent) = parents.next().await {
+            let parent = match parent {
+                Ok(ParentSpace::Reciprocal(parent)) => parent,
+                // The parent never listed the room. An `m.space.child` it
+                // emptied (Synara's and the SDK's remove path) is an explicit
+                // removal that a stale `m.space.parent` must not undo.
+                Ok(ParentSpace::WithPowerlevel(parent))
+                    if !matches!(
+                        parent
+                            .get_state_event_static_for_key::<SpaceChildEventContent, _>(
+                                room.room_id()
+                            )
+                            .await,
+                        Ok(Some(_))
+                    ) =>
+                {
+                    parent
+                }
+                _ => continue,
+            };
+            if parent.state() == RoomState::Joined && parent.is_space() {
+                edges.push((parent.room_id().to_string(), room.room_id().to_string()));
+            }
+        }
+    }
+    edges
 }
 
 async fn collect_valid_edges(client: &Client) -> Result<Vec<NativeSpaceChildEdge>, &'static str> {
@@ -416,5 +509,123 @@ mod tests {
         let allow = vec![AllowRule::room_membership(new.clone())];
         let next = reparent_allow_list(&allow, None, &new);
         assert_eq!(next, vec![AllowRule::room_membership(new)]);
+    }
+}
+
+#[cfg(test)]
+mod parent_tests {
+    use super::*;
+    use matrix_sdk::ruma::{
+        events::AnySyncStateEvent, room_id, serde::Raw, user_id, Int, RoomVersionId,
+    };
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use matrix_sdk_test::{event_factory::EventFactory, JoinedRoomBuilder};
+    use std::collections::BTreeMap;
+
+    fn raw_state(value: serde_json::Value) -> Raw<AnySyncStateEvent> {
+        Raw::from_json(serde_json::value::to_raw_value(&value).unwrap())
+    }
+
+    #[tokio::test]
+    async fn rooms_declaring_a_legitimate_parent_are_grouped_under_it() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        let own = user_id!("@example:localhost");
+        let bob = user_id!("@bob:example.org");
+        let carol = user_id!("@carol:example.org");
+        let space = room_id!("!b5-space:example.org");
+        let listed = room_id!("!b5-listed:example.org");
+        let declared = room_id!("!b5-declared:example.org");
+        let removed = room_id!("!b5-removed:example.org");
+        let unauthorised = room_id!("!b5-unauthorised:example.org");
+
+        let s = EventFactory::new().room(space);
+        server
+            .mock_get_members()
+            .ok(vec![
+                s.member(bob).into_raw(),
+                s.member(carol).into_raw(),
+                s.member(own).into_raw(),
+            ])
+            .mount()
+            .await;
+        server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(space)
+                    .add_state_event(s.create(bob, RoomVersionId::V11).with_space_type())
+                    .add_state_event(s.member(bob))
+                    .add_state_event(s.member(carol))
+                    .add_state_event(s.member(own))
+                    .add_state_event(
+                        s.power_levels(&mut BTreeMap::from([(bob.to_owned(), Int::from(100))]))
+                            .sender(bob),
+                    )
+                    .add_state_event(raw_state(serde_json::json!({
+                        "type": "m.space.child",
+                        "state_key": listed,
+                        "sender": bob,
+                        "event_id": "$child-listed",
+                        "origin_server_ts": 1,
+                        "content": { "via": ["example.org"] }
+                    })))
+                    // An emptied child event is how Synara and the SDK remove
+                    // a child.
+                    .add_state_event(raw_state(serde_json::json!({
+                        "type": "m.space.child",
+                        "state_key": removed,
+                        "sender": bob,
+                        "event_id": "$child-removed",
+                        "origin_server_ts": 2,
+                        "content": {}
+                    }))),
+            )
+            .await;
+        for (room_id, parent_sender) in [
+            (listed, None),
+            (declared, Some(bob)),
+            (removed, Some(bob)),
+            (unauthorised, Some(carol)),
+        ] {
+            let f = EventFactory::new().room(room_id);
+            let mut builder = JoinedRoomBuilder::new(room_id)
+                .add_state_event(f.create(bob, RoomVersionId::V11))
+                .add_state_event(f.member(own));
+            if let Some(sender) = parent_sender {
+                builder = builder.add_state_event(raw_state(serde_json::json!({
+                    "type": "m.space.parent",
+                    "state_key": space,
+                    "sender": sender,
+                    "event_id": format!("$parent-{}", room_id.as_str().len()),
+                    "origin_server_ts": 3,
+                    "content": { "via": ["example.org"] }
+                })));
+            }
+            server.sync_room(&client, builder).await;
+        }
+
+        let snapshot = snapshot_space_parents(&client, 1).await.expect("parents");
+        let parents: BTreeMap<String, Vec<String>> = snapshot
+            .entries
+            .into_iter()
+            .map(|entry| (entry.room_id, entry.parent_ids))
+            .collect();
+        let expected = vec![space.to_string()];
+        assert_eq!(parents.get(listed.as_str()), Some(&expected));
+        assert_eq!(
+            parents.get(declared.as_str()),
+            Some(&expected),
+            "a parent declared by someone allowed to add children counts"
+        );
+        assert_eq!(
+            parents.get(removed.as_str()),
+            None,
+            "an explicit child removal wins over a stale parent event"
+        );
+        assert_eq!(
+            parents.get(unauthorised.as_str()),
+            None,
+            "a parent declared without power in the space is ignored"
+        );
     }
 }

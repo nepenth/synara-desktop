@@ -5,6 +5,9 @@ struct RoomSummary: Identifiable, Equatable {
     enum RoomKind: Equatable {
         case room
         case directMessage
+        /// A space room. Spaces are navigation (the space chips), never a
+        /// channel row, matching desktop's room list.
+        case space
     }
 
     enum Membership: Equatable {
@@ -29,6 +32,8 @@ struct RoomSummary: Identifiable, Equatable {
     let latestAgentCardEventID: String?
     let pendingAgentApprovals: [PendingAgentCardRef]
     let isFavorite: Bool
+    /// Tagged `m.lowpriority`; listed in its own section after the others.
+    let isLowPriority: Bool
     let isCall: Bool
     let hasActiveCall: Bool
     let activeCallParticipantCount: Int
@@ -57,6 +62,7 @@ struct RoomSummary: Identifiable, Equatable {
         latestAgentCardEventID: String? = nil,
         pendingAgentApprovals: [PendingAgentCardRef] = [],
         isFavorite: Bool = false,
+        isLowPriority: Bool = false,
         isCall: Bool = false,
         hasActiveCall: Bool = false,
         activeCallParticipantCount: Int = 0,
@@ -81,6 +87,7 @@ struct RoomSummary: Identifiable, Equatable {
         self.latestAgentCardEventID = latestAgentCardEventID
         self.pendingAgentApprovals = pendingAgentApprovals
         self.isFavorite = isFavorite
+        self.isLowPriority = isLowPriority
         self.isCall = isCall
         self.hasActiveCall = hasActiveCall
         self.activeCallParticipantCount = activeCallParticipantCount
@@ -219,6 +226,29 @@ enum RoomListFavorites {
         let remaining: [RoomSummary]
     }
 
+    struct Sections: Equatable {
+        let favorites: [RoomSummary]
+        let channels: [RoomSummary]
+        let directs: [RoomSummary]
+        let lowPriority: [RoomSummary]
+    }
+
+    /// Rows per section, unsorted. Spaces are navigation (the space chips)
+    /// and get no row, as on desktop. Joined `m.lowpriority` rooms that are
+    /// not favourites get their own section after the others; Core's section
+    /// orders put them last on desktop too.
+    static func sections(from rooms: [RoomSummary]) -> Sections {
+        let partition = partition(from: rooms.filter { $0.kind != .space })
+        let lowPriority = partition.remaining.filter { $0.membership == .joined && $0.isLowPriority }
+        let rest = partition.remaining.filter { $0.membership != .joined || $0.isLowPriority == false }
+        return Sections(
+            favorites: partition.favorites,
+            channels: rest.filter { $0.kind == .room },
+            directs: rest.filter { $0.kind == .directMessage },
+            lowPriority: lowPriority
+        )
+    }
+
     static func partition(from rooms: [RoomSummary]) -> Partition {
         Partition(
             favorites: rooms.filter { $0.membership == .joined && $0.isFavorite },
@@ -246,7 +276,12 @@ enum RoomListFavorites {
         // latest-event time; Core sorts those rooms last.
         let seconds = room.lastActivityAt.timeIntervalSince1970
         let milliseconds = seconds > 0 ? UInt64(seconds * 1000) : nil
-        return RoomOrderInput(roomId: room.id, name: room.name, lastActivityMs: milliseconds)
+        return RoomOrderInput(
+            roomId: room.id,
+            name: room.name,
+            lastActivityMs: milliseconds,
+            isLowPriority: room.isLowPriority
+        )
     }
 }
 
@@ -262,62 +297,6 @@ enum RoomActivityTimestamp {
         case (nil, nil):
             return .distantPast
         }
-    }
-}
-
-enum RoomActivityEventKind {
-    case messageLike
-    case localEcho
-    case invite
-    case receipt
-    case typing
-    case state
-}
-
-enum RoomActivityQualification {
-    static func qualifies(_ kind: RoomActivityEventKind) -> Bool {
-        switch kind {
-        case .messageLike, .localEcho, .invite:
-            return true
-        case .receipt, .typing, .state:
-            return false
-        }
-    }
-}
-
-/// Recovers a room's newest message-like activity when the SDK's latest-event
-/// summary happens to be a state event. Recovery is deliberately cold-start
-/// only and bounded to one small SDK timeline page per affected room.
-enum RoomActivityRecoveryPolicy {
-    static let maximumTimelineEvents = 24
-
-    struct Candidate: Equatable {
-        let timestamp: Date
-        let kind: RoomActivityEventKind
-    }
-
-    static func shouldRecover(
-        latestRequiresRecovery: Bool,
-        previousActivityAt: Date?
-    ) -> Bool {
-        let previousState: SynaraCore.RoomActivityPreviousState
-        if previousActivityAt == nil || previousActivityAt == .distantPast {
-            previousState = .missing
-        } else {
-            previousState = .known
-        }
-        return SynaraCore.roomActivityRecoveryRequired(
-            latestRequiresRecovery: latestRequiresRecovery,
-            previousState: previousState
-        )
-    }
-
-    static func newestQualifyingTimestamp(from candidates: [Candidate]) -> Date? {
-        candidates
-            .suffix(maximumTimelineEvents)
-            .reversed()
-            .first { RoomActivityQualification.qualifies($0.kind) }?
-            .timestamp
     }
 }
 
