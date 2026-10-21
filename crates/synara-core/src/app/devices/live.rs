@@ -1023,7 +1023,6 @@ mod tests {
 
     #[tokio::test]
     async fn owner_start_does_not_echo_the_current_sdk_state() {
-        use futures_util::StreamExt;
         use matrix_sdk::test_utils::mocks::MatrixMockServer;
         use std::{sync::Arc, time::Duration};
 
