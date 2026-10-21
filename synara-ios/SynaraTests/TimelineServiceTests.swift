@@ -590,6 +590,41 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertTrue(RoomTimelineTitlePolicy.shouldAdoptRoomListName(routeTitle: nil))
     }
 
+    func testEventRouteForLiveTailStaysLive() {
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.liveModeForEventRoute(
+                focusedEventID: "$synthetic-3:matrix.org",
+                liveItems: focusPolicyItems(receiptIndex: nil)
+            ),
+            .live
+        )
+    }
+
+    func testEventRouteInsideLiveWindowFocusesOnLiveProvider() {
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.liveModeForEventRoute(
+                focusedEventID: "$synthetic-1:matrix.org",
+                liveItems: focusPolicyItems(receiptIndex: nil)
+            ),
+            .focused(eventID: "$synthetic-1:matrix.org")
+        )
+    }
+
+    func testEventRouteOutsideLiveWindowNeedsFocusedProvider() {
+        XCTAssertNil(
+            RoomTimelineFocusPolicy.liveModeForEventRoute(
+                focusedEventID: "$prior-day",
+                liveItems: focusPolicyItems(receiptIndex: nil)
+            )
+        )
+        XCTAssertNil(
+            RoomTimelineFocusPolicy.liveModeForEventRoute(
+                focusedEventID: "$synthetic-1:matrix.org",
+                liveItems: []
+            )
+        )
+    }
+
     func testRoomTimelineFocusPolicyOpensCaughtUpRoomsLive() {
         XCTAssertEqual(
             RoomTimelineFocusPolicy.initialMode(
