@@ -345,6 +345,8 @@ const GET_ROOM_IMAGE_PACKS_NO_SESSION_CODE: &str = "p2-room-image-packs-no-sessi
 const SET_USER_IMAGE_PACK_NO_SESSION_CODE: &str = "p2-set-user-image-pack-no-session";
 const SET_GLOBAL_IMAGE_PACKS_NO_SESSION_CODE: &str = "p2-set-global-image-packs-no-session";
 const SET_ROOM_IMAGE_PACK_NO_SESSION_CODE: &str = "p2-set-room-image-pack-no-session";
+/// The raw account-data owner's no-session diagnostic, which recent emoji use.
+const RECENT_EMOJI_NO_SESSION_CODE: &str = "v-account-data.requires-session";
 const IMAGE_PACK_NO_SESSION_DESCRIPTION: &str = "No image-pack session is available.";
 const IMAGE_PACK_FAILED_CODE: &str = "p4-s9-4-image-pack-failed";
 const IMAGE_PACK_FAILED_DESCRIPTION: &str = "The image-pack request could not be completed.";

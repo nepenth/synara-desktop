@@ -9,6 +9,9 @@ extension TimelineRowAccessibility {
         case replyInThread
         case openThread
         case react
+        /// Adds or removes the user's reaction with an existing key, as
+        /// tapping its pill does.
+        case toggleReaction(key: String, isOwn: Bool)
         case edit
         case copy
         case selectText
@@ -28,6 +31,8 @@ extension TimelineRowAccessibility {
                 return "Open Thread"
             case .react:
                 return "React"
+            case let .toggleReaction(key, isOwn):
+                return isOwn ? "Remove \(key) reaction" : "React with \(key)"
             case .edit:
                 return "Edit"
             case .copy:
@@ -54,14 +59,26 @@ extension TimelineRowAccessibility {
         availability: EventActionAvailability,
         replyCount: Int,
         canCopy: Bool,
-        canPinToNotes: Bool
+        canPinToNotes: Bool,
+        reactions: [String: Int] = [:],
+        ownReactions: TimelineReactionOwnership = .unknown,
+        quickReactions: [String] = []
     ) -> [Action] {
         var actions: [Action] = []
         if availability.canReply {
             actions.append(.reply)
         }
-        if availability.canReact {
+        let canToggle = TimelineReactionTogglePolicy.canToggle(availability: availability, ownership: ownReactions)
+        // The menu's quick reactions replace the plain React action.
+        if availability.canReact, canToggle == false || quickReactions.isEmpty {
             actions.append(.react)
+        }
+        if canToggle {
+            // Existing reactions first, then quick reactions not already shown.
+            let keys = reactions.keys.sorted() + quickReactions.filter { reactions[$0] == nil }
+            for key in keys {
+                actions.append(.toggleReaction(key: key, isOwn: ownReactions.contains(key)))
+            }
         }
         if availability.canReply {
             actions.append(.replyInThread)
@@ -129,6 +146,10 @@ extension TimelineRowAccessibility {
         isOwn ? "\(key) \(count), you reacted" : "\(key) \(count)"
     }
 
+    static func reactionToggleHint(isOwn: Bool) -> String {
+        isOwn ? "Removes your reaction" : "Adds your reaction"
+    }
+
     static func replyCountLabel(_ count: Int) -> String {
         count == 1 ? "1 reply" : "\(count) replies"
     }
@@ -161,6 +182,18 @@ extension TimelineRowAccessibility {
                 .map { ", primary action \($0.title)" } ?? ""
             return "\(senderAndTime): agent card: \(card.title)\(status)\(primaryAction)"
         }
+    }
+}
+
+/// Whether tapping a reaction pill can add or remove the user's reaction.
+/// Core's toggle needs to know which keys are the user's own, so an unknown
+/// ownership leaves the pills display-only.
+enum TimelineReactionTogglePolicy {
+    static func canToggle(availability: EventActionAvailability, ownership: TimelineReactionOwnership) -> Bool {
+        guard availability.canReact, case .known = ownership else {
+            return false
+        }
+        return true
     }
 }
 

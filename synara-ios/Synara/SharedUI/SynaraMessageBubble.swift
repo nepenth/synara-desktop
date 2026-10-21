@@ -29,31 +29,62 @@ struct SynaraMessageBubble<Content: View>: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
-        content()
-            .padding(showsBackground ? SynaraSpacing.small : 0)
-            .frame(maxWidth: .infinity, alignment: frameAlignment)
-            .background {
-                if showsBackground {
-                    bubbleShape
-                        .fill(resolvedFillColor)
-                }
-            }
-            .modifier(SynaraMessageBubbleClipModifier(showsBackground: showsBackground, shape: bubbleShape))
-            .synaraDepth(
-                showsBackground ? depth : .content,
-                shape: bubbleShape,
-                boundaryColor: boundaryColor
-            )
-            .opacity(deliveryStatusOpacity)
-            .overlay(alignment: overlayAlignment) {
+        // Status never covers text: the clock, check and spinner sit in a
+        // reserved trailing lane, and Retry / Discard get a row of their own.
+        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+            content()
+                .padding(.trailing, statusLane.reservesTrailingLane ? trailingLaneInset : 0)
+            if statusLane.showsFailedRow {
                 deliveryStatusIndicator
-                    .padding(.horizontal, SynaraSpacing.xSmall)
-                    .padding(.vertical, SynaraSpacing.xSmall)
             }
-            .overlay(alignment: .topTrailing) {
-                encryptionShieldBadge
+        }
+        .padding(showsBackground ? SynaraSpacing.small : 0)
+        .frame(maxWidth: .infinity, alignment: frameAlignment)
+        .background {
+            if showsBackground {
+                bubbleShape
+                    .fill(resolvedFillColor)
+            }
+        }
+        .modifier(SynaraMessageBubbleClipModifier(showsBackground: showsBackground, shape: bubbleShape))
+        .synaraDepth(
+            showsBackground ? depth : .content,
+            shape: bubbleShape,
+            boundaryColor: boundaryColor
+        )
+        .opacity(deliveryStatusOpacity)
+        .overlay(alignment: .bottomTrailing) {
+            if statusLane.showsCompactIndicator {
+                deliveryStatusIndicator
+                    .frame(
+                        width: SynaraMessageBubbleMetrics.statusIndicatorSize,
+                        height: SynaraMessageBubbleMetrics.statusIndicatorSize
+                    )
                     .padding(SynaraSpacing.xSmall)
             }
+        }
+        .overlay(alignment: .topTrailing) {
+            encryptionShieldBadge
+                .frame(
+                    width: SynaraMessageBubbleMetrics.statusIndicatorSize,
+                    height: SynaraMessageBubbleMetrics.statusIndicatorSize
+                )
+                .padding(SynaraSpacing.xSmall)
+        }
+    }
+
+    private var statusLane: SynaraMessageBubbleStatusLane {
+        SynaraMessageBubbleMetrics.statusLane(
+            deliveryStatus: deliveryStatus,
+            alignment: alignment,
+            hasEncryptionShield: encryptionShield != nil
+        )
+    }
+
+    /// Text stops short of the indicators, which sit `xSmall` in from the
+    /// bubble edge while the content sits `small` in.
+    private var trailingLaneInset: CGFloat {
+        SynaraMessageBubbleMetrics.trailingLaneInset(contentPadding: showsBackground ? SynaraSpacing.small : 0)
     }
 
     @ViewBuilder
@@ -168,12 +199,6 @@ struct SynaraMessageBubble<Content: View>: View {
             : .trailing
     }
 
-    private var overlayAlignment: Alignment {
-        SynaraMessageBubbleMetrics.usesLeadingStatusOverlay(alignment: alignment)
-            ? .bottomLeading
-            : .bottomTrailing
-    }
-
     private var bubbleShape: UnevenRoundedRectangle {
         let corners = SynaraMessageBubbleMetrics.cornerRadii(
             alignment: alignment,
@@ -237,6 +262,29 @@ struct SynaraMessageBubble<Content: View>: View {
 
 }
 
+enum SynaraMessageBubbleStatusLane: Equatable {
+    case none
+    /// Encryption shield at the top-trailing corner; no delivery status.
+    case shieldOnly
+    /// Clock, spinner or check at the bottom-trailing corner.
+    case compactTrailing
+    /// Retry / Discard chips on their own row under the content.
+    case failedRow
+    case failedRowWithShield
+
+    var reservesTrailingLane: Bool {
+        self == .shieldOnly || self == .compactTrailing || self == .failedRowWithShield
+    }
+
+    var showsCompactIndicator: Bool {
+        self == .compactTrailing
+    }
+
+    var showsFailedRow: Bool {
+        self == .failedRow || self == .failedRowWithShield
+    }
+}
+
 enum SynaraMessageBubbleMetrics {
     static let largeRadius: CGFloat = 16
     static let groupedRadius: CGFloat = 6
@@ -252,8 +300,33 @@ enum SynaraMessageBubbleMetrics {
         true
     }
 
-    static func usesLeadingStatusOverlay(alignment _: SynaraMessageBubbleAlignment) -> Bool {
-        true
+    /// The box the clock, check, spinner and shield are drawn in.
+    static let statusIndicatorSize: CGFloat = 16
+
+    /// Where a bubble shows its delivery status. Own messages only; the
+    /// shield shares the trailing lane at the top corner.
+    static func statusLane(
+        deliveryStatus: TimelineDeliveryStatus?,
+        alignment: SynaraMessageBubbleAlignment,
+        hasEncryptionShield: Bool
+    ) -> SynaraMessageBubbleStatusLane {
+        if alignment == .own {
+            switch deliveryStatus {
+            case .sending, .queued, .sent:
+                return .compactTrailing
+            case .failed:
+                return hasEncryptionShield ? .failedRowWithShield : .failedRow
+            default:
+                break
+            }
+        }
+        return hasEncryptionShield ? .shieldOnly : .none
+    }
+
+    /// Extra trailing inset for content so it ends before an indicator that
+    /// sits `xSmall` in from the bubble edge, with an `xSmall` gap.
+    static func trailingLaneInset(contentPadding: CGFloat) -> CGFloat {
+        max(0, SynaraSpacing.xSmall + statusIndicatorSize + SynaraSpacing.xSmall - contentPadding)
     }
 
     static func cornerRadii(
@@ -291,6 +364,64 @@ private struct SynaraMessageBubbleClipModifier: ViewModifier {
     }
 }
 
+/// Bare web links and email addresses in a plain-text body, made tappable.
+/// HTML bodies keep the links their sender wrote.
+enum SynaraPlainTextLinks {
+    static let allowedSchemes: Set<String> = ["http", "https", "mailto"]
+
+    private static let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+    private static let cache: NSCache<NSString, CachedText> = {
+        let cache = NSCache<NSString, CachedText>()
+        cache.countLimit = 512
+        return cache
+    }()
+
+    private final class CachedText {
+        let value: AttributedString
+
+        init(_ value: AttributedString) {
+            self.value = value
+        }
+    }
+
+    /// The links in `text`, in order, as (UTF-16 range, URL).
+    static func links(in text: String) -> [(range: NSRange, url: URL)] {
+        guard let detector, text.isEmpty == false else {
+            return []
+        }
+        let matches = detector.matches(in: text, range: NSRange(location: 0, length: (text as NSString).length))
+        return matches.compactMap { match in
+            guard let url = match.url,
+                  let scheme = url.scheme?.lowercased(),
+                  allowedSchemes.contains(scheme)
+            else {
+                return nil
+            }
+            return (match.range, url)
+        }
+    }
+
+    /// `text` with a `.link` on each detected link; cached by body.
+    static func attributedText(_ text: String) -> AttributedString {
+        let key = text as NSString
+        if let cached = cache.object(forKey: key) {
+            return cached.value
+        }
+        var attributed = AttributedString(text)
+        for link in links(in: text) {
+            guard let stringRange = Range(link.range, in: text),
+                  let lower = AttributedString.Index(stringRange.lowerBound, within: attributed),
+                  let upper = AttributedString.Index(stringRange.upperBound, within: attributed)
+            else {
+                continue
+            }
+            attributed[lower ..< upper].link = link.url
+        }
+        cache.setObject(CachedText(attributed), forKey: key)
+        return attributed
+    }
+}
+
 private func synaraMessageBubbleTextColor(for variant: SynaraMessageBubbleVariant) -> Color {
     switch variant {
     case .standard, .agent:
@@ -324,7 +455,7 @@ extension SynaraMessageBubble where Content == AnyView {
         self.encryptionShield = encryptionShield
         self.content = {
             AnyView(
-                Text(text)
+                Text(SynaraPlainTextLinks.attributedText(text))
                     .font(SynaraTypography.messageBody)
                     .foregroundStyle(synaraMessageBubbleTextColor(for: variant))
                     .lineSpacing(2.5)

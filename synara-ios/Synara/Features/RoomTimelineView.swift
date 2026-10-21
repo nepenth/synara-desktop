@@ -560,6 +560,9 @@ struct RoomTimelineView: View {
     @State private var resolvedRoomTitle: String?
     @State private var state: TimelineViewState = .idle
     @State private var draft: String = ""
+    @State private var sentDraft: ComposerSentDraft?
+    @State private var sentDraftSerial: UInt64 = 0
+    @StateObject private var quickReactions = TimelineQuickReactionStore()
     @State private var replyTarget: ComposerRelationTarget?
     @State private var editSession: ComposerEditSession?
     @State private var sendError: String?
@@ -676,6 +679,8 @@ struct RoomTimelineView: View {
             TimelineHeader(
                 title: displayRoomTitle,
                 subtitle: timelineSubtitle,
+                glyph: SynaraRoomGlyph.glyph(for: roomSummary),
+                avatarURL: roomSummary?.avatarURL,
                 cryptoLabel: cryptoStatus.observing(loadedTimelineItems).roomHeaderLabel,
                 cryptoSystemImage: cryptoStatus.observing(loadedTimelineItems).roomHeaderSystemImage,
                 showsBackButton: canvasLayout.showsConversationBackButton,
@@ -723,7 +728,8 @@ struct RoomTimelineView: View {
                 attachmentDrafts: $attachmentDrafts,
                 isSending: isSendingMessage,
                 onPasteImages: draftPastedImages,
-                isFocusedExternally: $isComposerFocused
+                isFocusedExternally: $isComposerFocused,
+                sentDraft: sentDraft
             )
             .padding(.bottom, canvasLayout == .stacked && !isComposerFocused ? SynaraSpacing.large : 0)
             .background { SynaraChrome.composer.ignoresSafeArea(edges: .bottom) }
@@ -855,6 +861,10 @@ struct RoomTimelineView: View {
             Button("OK") { roomNotesActionMessage = nil }
         } message: {
             Text(roomNotesActionMessage ?? "")
+        }
+        .task {
+            let matrix = environment.matrix
+            await quickReactions.refresh { await matrix.recentEmoji() }
         }
         .task(id: "room-title-\(currentUserID)-\(roomID)") {
             // Notification routes carry stable room/event IDs, not room metadata.
@@ -1080,6 +1090,8 @@ struct RoomTimelineView: View {
                             )
 
                             let dayHeaders = TimelineDayHeaderPolicy.headers(for: items)
+                            let userID = currentUserID
+                            let isInlineThreadMode = threadDisplay == .inline
                             ForEach(Array(items.enumerated()), id: \.element.eventID) { index, item in
                                 if let day = dayHeaders[item.eventID] {
                                     TimelineDayHeader(day: day)
@@ -1091,7 +1103,8 @@ struct RoomTimelineView: View {
                                 }
                                 TimelineRow(
                                     item: item,
-                                    currentUserID: currentUserID,
+                                    currentUserID: userID,
+                                    timeText: item.timestamp.timelineTime,
                                     isGroupedWithPrevious: isGroupedWithPrevious(index: index, items: items),
                                     isTimestampRevealed: false,
                                     animateSend: sendAnimationItemIDs.contains(item.id),
@@ -1105,13 +1118,13 @@ struct RoomTimelineView: View {
                                     ),
                                     availability: environment.eventActions.availability(
                                         for: item,
-                                        currentUserID: currentUserID,
+                                        currentUserID: userID,
                                         roomID: roomID
                                     ),
                                     onReply: { beginReply(item) },
                                     onReplyInThread: { replyInThread(item) },
                                     onOpenThread: { openThread(root: item) },
-                                    isInlineThreadMode: threadDisplay == .inline,
+                                    isInlineThreadMode: isInlineThreadMode,
                                     isThreadExpanded: isThreadExpanded(item),
                                     inlineThread: inlineThread(
                                         for: item,
@@ -1122,7 +1135,8 @@ struct RoomTimelineView: View {
                                     ),
                                     onEdit: { beginEdit(item) },
                                     onRedact: { applyAction(.redact, to: item) },
-                                    onReact: { applyAction(.react("👍"), to: item) },
+                                    onToggleReaction: { key in toggleReaction(key, on: item) },
+                                    quickReactions: quickReactions,
                                     onReport: { beginReport(item) },
                                     onForward: { forwardTarget = item },
                                     onPollVote: { answerIDs in
@@ -1409,8 +1423,18 @@ struct RoomTimelineView: View {
         }
     }
 
-    @ViewBuilder
+    /// Rows are hosted in UIKit cells (`UIHostingConfiguration`), outside this
+    /// view's SwiftUI tree. Carry the app environment and theme in
+    /// explicitly, as sheets do, so avatars, media and inline threads never
+    /// fall back to `AppEnvironment.mock()`.
     private func stableViewportRowContent(_ row: StableTimelineViewportRow) -> some View {
+        stableViewportRowBody(row)
+            .environment(\.appEnvironment, environment)
+            .environment(\.synaraThemeBaseHex, themeBaseHex)
+    }
+
+    @ViewBuilder
+    private func stableViewportRowBody(_ row: StableTimelineViewportRow) -> some View {
         switch row.content {
         case .pagination:
             ProgressView()
@@ -1439,6 +1463,7 @@ struct RoomTimelineView: View {
             TimelineRow(
                 item: eventRow.item,
                 currentUserID: currentUserID,
+                timeText: eventRow.timeText,
                 isGroupedWithPrevious: eventRow.isGroupedWithPrevious,
                 isTimestampRevealed: eventRow.isTimestampRevealed,
                 animateSend: eventRow.animateSend,
@@ -1453,7 +1478,8 @@ struct RoomTimelineView: View {
                 inlineThread: inlineThread(for: eventRow.item, replyCount: eventRow.replyCount),
                 onEdit: { beginEdit(eventRow.item) },
                 onRedact: { applyAction(.redact, to: eventRow.item) },
-                onReact: { applyAction(.react("👍"), to: eventRow.item) },
+                onToggleReaction: { key in toggleReaction(key, on: eventRow.item) },
+                quickReactions: quickReactions,
                 onReport: { beginReport(eventRow.item) },
                 onForward: { forwardTarget = eventRow.item },
                 onPollVote: { answerIDs in
@@ -1487,8 +1513,11 @@ struct RoomTimelineView: View {
     }
 
     private func stableViewportRows(items: [TimelineItem], isPaginating: Bool) -> [StableTimelineViewportRow] {
+        // Read once per pass, not once per row.
+        let userID = currentUserID
+        let isInlineThreadMode = threadDisplay == .inline
         let replyCounts = TimelineReplyCounter.replyCounts(for: items)
-        let previews = TimelineReplyPreview.previewsByEventID(in: items, currentUserID: currentUserID)
+        let previews = TimelineReplyPreview.previewsByEventID(in: items, currentUserID: userID)
         var rows: [StableTimelineViewportRow] = []
         rows.reserveCapacity(items.count + 3)
 
@@ -1529,11 +1558,12 @@ struct RoomTimelineView: View {
                             ),
                             availability: environment.eventActions.availability(
                                 for: item,
-                                currentUserID: currentUserID,
+                                currentUserID: userID,
                                 roomID: roomID
                             ),
-                            isInlineThreadMode: threadDisplay == .inline,
-                            isThreadExpanded: isThreadExpanded(item)
+                            isInlineThreadMode: isInlineThreadMode,
+                            isThreadExpanded: isThreadExpanded(item),
+                            timeText: item.timestamp.timelineTime
                         )
                     )
                 )
@@ -1815,7 +1845,7 @@ struct RoomTimelineView: View {
         guard participantCount > 0 else {
             return "Matrix room"
         }
-        if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1",
+        if SynaraLaunchEnvironment.isUITest,
            roomID == "!project:matrix.org"
         {
             return "21 members"
@@ -1830,6 +1860,10 @@ struct RoomTimelineView: View {
 
     private var isAgentRoom: Bool {
         environment.roomList.isAgentRoom(roomID: roomID)
+    }
+
+    private var roomSummary: RoomSummary? {
+        environment.roomList.roomSummary(roomID: roomID)
     }
 
     private var timelineHorizontalPadding: CGFloat {
@@ -1926,7 +1960,7 @@ struct RoomTimelineView: View {
     }
 
     private func shouldShowUnreadDivider(before item: TimelineItem, at index: Int, in items: [TimelineItem]) -> Bool {
-        if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1",
+        if SynaraLaunchEnvironment.isUITest,
            roomID == "!project:matrix.org",
            index > 0,
            item.eventID.contains("$security:")
@@ -2532,7 +2566,7 @@ struct RoomTimelineView: View {
         if drafts.isEmpty {
             attachmentSendTransaction = nil
             Task {
-                await performSend(composerIntent)
+                await performSend(composerIntent, sentText: rawBody)
                 await MainActor.run {
                     isSendingMessage = false
                 }
@@ -2569,12 +2603,11 @@ struct RoomTimelineView: View {
                     attachmentSendTransaction = nil
                 }
                 if let trailingText = ComposerAttachmentSendPlan.trailingText(in: plan) {
-                    await performSend(composerIntent.replacingBody(with: trailingText))
+                    await performSend(composerIntent.replacingBody(with: trailingText), sentText: rawBody)
                 } else {
                     await MainActor.run {
                         uploadState = .idle
-                        draft = ""
-                        environment.drafts.clearDraft(roomID: roomID)
+                        finishComposerSend(sentText: rawBody, persisting: true)
                         completeComposerRelation()
                         if StableScrollAnchoringFeatureFlag.isEnabled {
                             followLatestAfterSend()
@@ -2652,13 +2685,16 @@ struct RoomTimelineView: View {
         state = .loaded(items.filter { $0.id != item.id }, isPaginating: isPaginating)
     }
 
+    /// `sentText` is the composer text when the send began; only that is
+    /// cleared once the send is accepted.
     @MainActor
     private func performSend(
         body rawBody: String,
         replyToEventID: String?,
         threadRootEventID: String?,
         editEventID: String?,
-        retrying failedItem: TimelineItem? = nil
+        retrying failedItem: TimelineItem? = nil,
+        sentText: String
     ) async {
         let draftBody = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
         guard draftBody.isEmpty == false else {
@@ -2686,8 +2722,7 @@ struct RoomTimelineView: View {
                 }
                 let item = try await environment.messageSender.send(request)
                 replace(item)
-                draft = ""
-                environment.drafts.clearDraft(roomID: roomID)
+                finishComposerSend(sentText: sentText, persisting: true)
                 completeComposerRelation()
                 sendError = nil
             } catch {
@@ -2721,7 +2756,8 @@ struct RoomTimelineView: View {
             sendLatestRequest &+= 1
         }
 
-        draft = ""
+        // The outbox write above already cleared the stored draft.
+        finishComposerSend(sentText: sentText, persisting: false)
         completeComposerRelation()
         sendError = nil
 
@@ -2745,7 +2781,7 @@ struct RoomTimelineView: View {
             case .sent:
                 sendError = nil
                 SynaraHaptics.trigger(.lightImpact)
-                if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1",
+                if SynaraLaunchEnvironment.isUITest,
                    case let .loaded(items, _) = state,
                    let confirmed = items.first(where: { $0.id == id })
                 {
@@ -3732,14 +3768,47 @@ struct RoomTimelineView: View {
     }
 
     @MainActor
-    private func performSend(_ intent: ComposerSendIntent) async {
+    private func performSend(_ intent: ComposerSendIntent, sentText: String) async {
         await performSend(
             body: intent.body,
             replyToEventID: intent.replyToEventID,
             threadRootEventID: intent.threadRootEventID,
             editEventID: intent.editEventID,
-            retrying: intent.retrying
+            retrying: intent.retrying,
+            sentText: sentText
         )
+    }
+
+    /// A send that began with `sentText` was accepted. The composer drops
+    /// that text from its live contents and keeps anything typed since (the
+    /// keyboard stays up, so the user may have gone on typing during an
+    /// upload or edit save). `draft` is left to the composer: it lags the
+    /// editor by a debounce, and clearing it here would lose the newest
+    /// keystrokes.
+    private func finishComposerSend(sentText: String, persisting: Bool) {
+        if persisting {
+            let remaining = ComposerSentDraft.remainingText(current: draft, sent: sentText)
+            if remaining.isEmpty {
+                environment.drafts.clearDraft(roomID: roomID)
+            } else {
+                environment.drafts.setDraft(remaining, roomID: roomID)
+            }
+        }
+        sentDraftSerial &+= 1
+        sentDraft = ComposerSentDraft(id: sentDraftSerial, sentText: sentText)
+    }
+
+    /// A pill or quick reaction: toggles the user's reaction, and records
+    /// an added one in the recent-emoji list desktop shares.
+    private func toggleReaction(_ key: String, on item: TimelineItem) {
+        let isAdding = item.reactionOwnership.contains(key) == false
+        let matrix = environment.matrix
+        Task {
+            let succeeded = await performAction(.react(key), to: item)
+            if succeeded, isAdding {
+                await quickReactions.recordUse(key) { await matrix.recordRecentEmoji($0) }
+            }
+        }
     }
 
     private func applyAction(
@@ -4207,6 +4276,8 @@ struct JumpToLastReadButton: View {
 private struct TimelineHeader: View {
     let title: String
     let subtitle: String
+    var glyph: SynaraRoomGlyph = .channel
+    var avatarURL: URL?
     let cryptoLabel: String?
     let cryptoSystemImage: String
     var showsBackButton = true
@@ -4234,9 +4305,17 @@ private struct TimelineHeader: View {
                     // At accessibility sizes the glyph would take the
                     // title's width.
                     if dynamicTypeSize.isAccessibilitySize == false {
-                        Text("#")
-                            .foregroundStyle(SynaraColor.secondaryText)
-                            .accessibilityHidden(true)
+                        switch glyph {
+                        case .channel:
+                            Text("#")
+                                .foregroundStyle(SynaraColor.secondaryText)
+                                .accessibilityHidden(true)
+                        case let .person(initial):
+                            SynaraPersonGlyph(initial: initial, avatarURL: avatarURL, size: 22)
+                                .alignmentGuide(.firstTextBaseline) { dimensions in
+                                    dimensions[.bottom] - 4
+                                }
+                        }
                     }
                     Text(title)
                         .accessibilityIdentifier("TimelineRoomTitle")
@@ -4403,6 +4482,9 @@ struct ThreadTimelineView: View {
     @Environment(\.synaraCanvasLayout) private var canvasLayout
     @State private var state: TimelineViewState = .idle
     @State private var draft = ""
+    @State private var sentDraft: ComposerSentDraft?
+    @State private var sentDraftSerial: UInt64 = 0
+    @StateObject private var quickReactions = TimelineQuickReactionStore()
     @State private var sendError: String?
     @State private var uploadState: MediaUploadState = .idle
     @State private var selectedPhotos: [PhotosPickerItem] = []
@@ -4463,7 +4545,8 @@ struct ThreadTimelineView: View {
                 attachmentDrafts: $attachmentDrafts,
                 isSending: isSendingMessage,
                 onPasteImages: draftThreadPastedImages,
-                isFocusedExternally: $isComposerFocused
+                isFocusedExternally: $isComposerFocused,
+                sentDraft: sentDraft
             )
             .padding(.bottom, canvasLayout == .stacked ? SynaraSpacing.large : 0)
         }
@@ -4472,6 +4555,10 @@ struct ThreadTimelineView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(canvasLayout.hidesTabBarInConversation ? .hidden : .automatic, for: .tabBar)
+        .task {
+            let matrix = environment.matrix
+            await quickReactions.refresh { await matrix.recentEmoji() }
+        }
         .task(id: roomID + rootEventID) {
             async let status = environment.crypto.roomStatus(roomID: roomID)
             if ThreadComposerFocusRequests.shared.consume(roomID: roomID, rootEventID: rootEventID) {
@@ -4660,6 +4747,7 @@ struct ThreadTimelineView: View {
         TimelineRow(
             item: item,
             currentUserID: currentUserID,
+            timeText: item.timestamp.timelineTime,
             isGroupedWithPrevious: isGroupedWithPrevious,
             isTimestampRevealed: false,
             animateSend: false,
@@ -4681,7 +4769,8 @@ struct ThreadTimelineView: View {
             inlineThread: nil,
             onEdit: { beginEdit(item) },
             onRedact: { applyAction(.redact, to: item) },
-            onReact: { applyAction(.react("👍"), to: item) },
+            onToggleReaction: { key in toggleReaction(key, on: item) },
+            quickReactions: quickReactions,
             onReport: { beginReport(item) },
             onForward: { forwardTarget = item },
             onPollVote: { answerIDs in
@@ -4880,6 +4969,19 @@ struct ThreadTimelineView: View {
         reportTarget = item
     }
 
+    /// A pill or quick reaction: toggles the user's reaction, and records
+    /// an added one in the recent-emoji list desktop shares.
+    private func toggleReaction(_ key: String, on item: TimelineItem) {
+        let isAdding = item.reactionOwnership.contains(key) == false
+        let matrix = environment.matrix
+        Task {
+            let succeeded = await performAction(.react(key), to: item)
+            if succeeded, isAdding {
+                await quickReactions.recordUse(key) { await matrix.recordRecentEmoji($0) }
+            }
+        }
+    }
+
     private func applyAction(
         _ action: EventActionType,
         to item: TimelineItem,
@@ -5032,7 +5134,7 @@ struct ThreadTimelineView: View {
                 await MainActor.run {
                     attachmentSendSteps = nil
                     uploadState = .idle
-                    draft = ""
+                    finishComposerSend(sentText: rawBody)
                     isSendingMessage = false
                 }
                 return
@@ -5042,7 +5144,7 @@ struct ThreadTimelineView: View {
                 attachmentSendSteps = nil
                 isSendingMessage = false
             }
-            await sendThreadText(intent.replacingBody(with: trailingText))
+            await sendThreadText(intent.replacingBody(with: trailingText), sentText: rawBody)
         }
     }
 
@@ -5051,7 +5153,7 @@ struct ThreadTimelineView: View {
     /// and shows once: the queued row gives way to the SDK echo with the
     /// same transaction id.
     @MainActor
-    private func sendThreadText(_ intent: ComposerSendIntent) async {
+    private func sendThreadText(_ intent: ComposerSendIntent, sentText: String) async {
         let draftBody = intent.body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard draftBody.isEmpty == false else {
             sendError = MessageSendError.emptyMessage.localizedDescription
@@ -5076,7 +5178,7 @@ struct ThreadTimelineView: View {
                         threadRootEventID: rootEventID
                     )
                 )
-                draft = ""
+                finishComposerSend(sentText: sentText)
                 completeComposerRelation()
                 sendError = nil
             } catch {
@@ -5098,7 +5200,7 @@ struct ThreadTimelineView: View {
             senderID: currentUserID,
             timestamp: intent.retrying?.timestamp ?? Date()
         )
-        draft = ""
+        finishComposerSend(sentText: sentText)
         completeComposerRelation()
         sendError = nil
         refreshPendingReplies()
@@ -5217,6 +5319,12 @@ struct ThreadTimelineView: View {
         attachmentSendSteps = nil
         replyTarget = nil
         editSession = nil
+    }
+
+    /// As in the room composer: drop the sent text, keep what was typed since.
+    private func finishComposerSend(sentText: String) {
+        sentDraftSerial &+= 1
+        sentDraft = ComposerSentDraft(id: sentDraftSerial, sentText: sentText)
     }
 
     private func cancelEdit() {
@@ -6848,6 +6956,8 @@ private struct CryptoRecoveryBanner: View {
 private struct TimelineRow: View {
     let item: TimelineItem
     let currentUserID: String
+    /// The message's clock time, formatted once by the row builder.
+    let timeText: String
     let isGroupedWithPrevious: Bool
     let isTimestampRevealed: Bool
     let animateSend: Bool
@@ -6862,7 +6972,10 @@ private struct TimelineRow: View {
     let inlineThread: AnyView?
     let onEdit: () -> Void
     let onRedact: () -> Void
-    let onReact: () -> Void
+    /// Adds or removes the user's reaction with this key.
+    let onToggleReaction: (String) -> Void
+    /// The long-press menu's quick reactions (most-used emoji).
+    @ObservedObject var quickReactions: TimelineQuickReactionStore
     let onReport: () -> Void
     let onForward: () -> Void
     let onPollVote: ([String]) async -> Bool
@@ -6905,7 +7018,7 @@ private struct TimelineRow: View {
                                 .font(SynaraTypography.emphasis)
                                 .foregroundStyle(SynaraColor.headingText)
                                 .lineLimit(1)
-                            Text(item.timestamp.timelineTime)
+                            Text(timeText)
                                 .font(SynaraTypography.messageMeta)
                                 .foregroundStyle(SynaraColor.secondaryText)
                             if item.isEdited {
@@ -6969,7 +7082,7 @@ private struct TimelineRow: View {
         VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
             ZStack(alignment: .trailing) {
                 if isGroupedWithPrevious {
-                    Text(item.timestamp.timelineTime)
+                    Text(timeText)
                         .font(SynaraTypography.messageMeta)
                         .foregroundStyle(SynaraColor.secondaryText)
                         .opacity(timestampRevealProgress)
@@ -7052,8 +7165,8 @@ private struct TimelineRow: View {
         if availability.canEdit {
             Button("Edit", systemImage: "pencil", action: onEdit)
         }
-        if availability.canReact {
-            Button("React", systemImage: "face.smiling", action: onReact)
+        if TimelineReactionTogglePolicy.canToggle(availability: availability, ownership: item.reactionOwnership) {
+            quickReactionMenu
         }
         if availability.canForward {
             Button("Forward", systemImage: "arrowshape.turn.up.right", action: onForward)
@@ -7128,24 +7241,20 @@ private struct TimelineRow: View {
                 }
 
             if item.reactions.isEmpty == false {
+                let canToggleReactions = TimelineReactionTogglePolicy.canToggle(
+                    availability: availability,
+                    ownership: item.reactionOwnership
+                )
                 HStack(spacing: SynaraSpacing.xSmall) {
                     ForEach(Array(item.reactions.keys.sorted().enumerated()), id: \.element) { index, reaction in
                         ReactionPill(
                             title: reaction,
                             count: item.reactions[reaction] ?? 0,
                             isSelected: item.reactionOwnership.contains(reaction),
-                            animationIndex: index
+                            animationIndex: index,
+                            onToggle: canToggleReactions ? { onToggleReaction(reaction) } : nil
                         )
                     }
-                    // Decorative until reactions are interactive; the React
-                    // action is on the row.
-                    ReactionPill(
-                        title: "face.smiling",
-                        count: nil,
-                        isSystemImage: true,
-                        animationIndex: item.reactions.count
-                    )
-                    .accessibilityHidden(true)
                 }
             }
 
@@ -7341,7 +7450,7 @@ private struct TimelineRow: View {
     private var accessibilitySummary: String {
         TimelineRowAccessibility.summary(
             sender: senderDisplayName,
-            time: item.timestamp.timelineTime,
+            time: timeText,
             kind: item.kind,
             isEdited: item.isEdited,
             reactions: item.reactions,
@@ -7362,7 +7471,7 @@ private struct TimelineRow: View {
     /// reach the rendered body and the actions menu.
     private var combinesAccessibilityChildren: Bool {
         rowContainsAccessibleChildren == false
-            && ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] != "1"
+            && SynaraLaunchEnvironment.isUITest == false
     }
 
     private var rowContainsAccessibleChildren: Bool {
@@ -7375,13 +7484,54 @@ private struct TimelineRow: View {
         )
     }
 
+    /// The quick reactions as a row of emoji at the top of the menu (a
+    /// "React" submenu before iOS 17, which has no palette menus). Each one
+    /// toggles the user's reaction, as the pills do.
+    @ViewBuilder
+    private var quickReactionMenu: some View {
+        if #available(iOS 17.0, *) {
+            ControlGroup {
+                quickReactionButtons
+                    // Palette items keep the menu open by default; a
+                    // reaction is a finished choice, like any other action.
+                    .menuActionDismissBehavior(.enabled)
+            }
+            .controlGroupStyle(.palette)
+        } else {
+            Menu {
+                quickReactionButtons
+            } label: {
+                Label("React", systemImage: "face.smiling")
+            }
+        }
+    }
+
+    private var quickReactionButtons: some View {
+        ForEach(quickReactions.keys, id: \.self) { key in
+            let action = TimelineRowAccessibility.Action.toggleReaction(
+                key: key,
+                isOwn: item.reactionOwnership.contains(key)
+            )
+            Button {
+                onToggleReaction(key)
+            } label: {
+                Text(key)
+            }
+            .accessibilityLabel(action.title)
+            .accessibilityIdentifier("QuickReaction-\(key)")
+        }
+    }
+
     private var accessibilityActionList: [TimelineRowAccessibility.Action] {
         guard rowContainsAccessibleChildren == false else { return [] }
         return TimelineRowAccessibility.actions(
             availability: availability,
             replyCount: replyCount,
             canCopy: TimelineMessageCopy.payload(for: item) != nil,
-            canPinToNotes: TimelinePinActionAvailability.forItem(item).canPinToPrivateNotes
+            canPinToNotes: TimelinePinActionAvailability.forItem(item).canPinToPrivateNotes,
+            reactions: item.reactions,
+            ownReactions: item.reactionOwnership,
+            quickReactions: quickReactions.keys
         )
     }
 
@@ -7394,7 +7544,11 @@ private struct TimelineRow: View {
         case .openThread:
             onOpenThread()
         case .react:
-            onReact()
+            if let key = quickReactions.keys.first {
+                onToggleReaction(key)
+            }
+        case let .toggleReaction(key, _):
+            onToggleReaction(key)
         case .edit:
             onEdit()
         case .copy:
@@ -8137,37 +8291,43 @@ private struct TimelineForwardSheet: View {
 
 private struct ReactionPill: View {
     let title: String
-    let count: Int?
-    var isSystemImage = false
+    let count: Int
     var isSelected = false
     var animationIndex = 0
+    /// Adds or removes the user's reaction; nil when it cannot change.
+    var onToggle: (() -> Void)?
 
     private var reactionAnimationKey: String {
-        if let count {
-            return "\(title)-\(count)-\(isSystemImage)"
-        }
-        return "\(title)-\(isSystemImage)"
+        "\(title)-\(count)"
     }
 
     /// "👍 3, you reacted"; VoiceOver names the emoji.
     private var accessibilityLabel: String {
-        TimelineRowAccessibility.reactionLabel(key: title, count: count ?? 0, isOwn: isSelected)
+        TimelineRowAccessibility.reactionLabel(key: title, count: count, isOwn: isSelected)
     }
 
     var body: some View {
+        if let onToggle {
+            Button(action: onToggle) {
+                pill
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+            .accessibilityHint(TimelineRowAccessibility.reactionToggleHint(isOwn: isSelected))
+            .accessibilityIdentifier("ReactionPill-\(title)")
+        } else {
+            pill
+        }
+    }
+
+    private var pill: some View {
         HStack(spacing: SynaraSpacing.xSmall) {
-            if isSystemImage {
-                Image(systemName: title)
-                    .font(SynaraTypography.messageMeta)
-            } else {
-                Text(title)
-                    .font(SynaraTypography.messageMeta)
-            }
-            if let count {
-                Text("\(count)")
-                    .font(SynaraTypography.chipLabel)
-                    .monospacedDigit()
-            }
+            Text(title)
+                .font(SynaraTypography.messageMeta)
+            Text("\(count)")
+                .font(SynaraTypography.chipLabel)
+                .monospacedDigit()
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
@@ -8668,9 +8828,12 @@ private struct ComposerView: View {
         var onPasteImages: ([UIImage]) -> Void = { _ in }
     #endif
     @Binding var isFocusedExternally: Bool
+    /// The latest finished send; the composer drops what it sent and keeps
+    /// what was typed since.
+    var sentDraft: ComposerSentDraft?
     @Environment(\.appEnvironment) private var environment
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var lastOutgoingTyping = false
+    @State private var typingNotifier: ComposerTypingNotifier?
     @State private var isAttachmentSheetPresented = false
     @State private var isFileImporterPresented = false
     #if canImport(UIKit)
@@ -8769,9 +8932,21 @@ private struct ComposerView: View {
         .onChange(of: text) { value in
             reconcileExternalText(value)
         }
+        .onChange(of: sentDraft) { sent in
+            if let sent {
+                finishSentDraft(sent)
+            }
+        }
+        .onChange(of: roomID) { _ in
+            typingNotifier?.stop()
+            typingNotifier = makeTypingNotifier()
+        }
         .onAppear {
             if liveText == nil {
                 liveText = text
+            }
+            if typingNotifier == nil {
+                typingNotifier = makeTypingNotifier()
             }
             isFocusedExternally = isComposerFocused
             updateOutgoingTyping()
@@ -8779,7 +8954,7 @@ private struct ComposerView: View {
         .onDisappear {
             flushExternalText()
             isFocusedExternally = false
-            setOutgoingTyping(false)
+            typingNotifier?.stop()
         }
         .sheet(isPresented: $isAttachmentSheetPresented) {
             AttachmentOptionsSheet(
@@ -9100,11 +9275,12 @@ private struct ComposerView: View {
         guard isSending == false else {
             return
         }
+        // The keyboard stays up after a send, as in Messages; the cleared
+        // draft reaches the focused editor through `reconcileExternalText`.
         #if canImport(UIKit)
-            ComposerTextInputRegistry.dismissKeyboard()
+            ComposerTextInputRegistry.commitPendingInput()
         #endif
-        isComposerFocused = false
-        setOutgoingTyping(false)
+        typingNotifier?.stop()
         let messageBody = currentText
         text = messageBody
         onSend(messageBody)
@@ -9115,17 +9291,17 @@ private struct ComposerView: View {
             isComposerFocused
             && currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             && SynaraSharedConstants.boolSetting(SynaraSharedConstants.hideActivityKey) == false
-        setOutgoingTyping(shouldType)
+        typingNotifier?.update(isTyping: shouldType)
     }
 
-    private func setOutgoingTyping(_ typing: Bool) {
-        guard lastOutgoingTyping != typing else {
-            return
-        }
-        lastOutgoingTyping = typing
-        Task {
-            await environment.matrix.setOutgoingTyping(roomID: roomID, typing: typing)
-        }
+    private func makeTypingNotifier() -> ComposerTypingNotifier {
+        let matrix = environment.matrix
+        let roomID = roomID
+        return ComposerTypingNotifier(
+            send: ComposerTypingNotifier.serialSender { typing in
+                await matrix.setOutgoingTyping(roomID: roomID, typing: typing)
+            }
+        )
     }
 
     private var currentText: String {
@@ -9153,6 +9329,25 @@ private struct ComposerView: View {
         guard value != currentText else { return }
         draftPublishTask?.cancel()
         liveText = value
+        // A focused editor keeps its own text; a revision bump makes it take
+        // this one (a send clearing the draft, an edit loading its body).
+        composerSelection = ComposerTextSelection(location: (value as NSString).length, length: 0)
+        formattingRevision += 1
+    }
+
+    /// Works from the live editor text, not the debounced draft, so
+    /// keystrokes from the last moment before the send finished survive.
+    private func finishSentDraft(_ sent: ComposerSentDraft) {
+        let remaining = ComposerSentDraft.remainingText(current: currentText, sent: sent.sentText)
+        draftPublishTask?.cancel()
+        if remaining != currentText {
+            liveText = remaining
+            composerSelection = ComposerTextSelection(location: (remaining as NSString).length, length: 0)
+            formattingRevision += 1
+        }
+        if text != remaining {
+            text = remaining
+        }
     }
 
     private func flushExternalText() {
@@ -9233,7 +9428,7 @@ private struct AttachmentOptionsSheet: View {
     ]
 
     private var isUITestEnvironment: Bool {
-        ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1"
+        SynaraLaunchEnvironment.isUITest
     }
 
     var body: some View {
@@ -9789,14 +9984,7 @@ private struct InlineThreadReplyRow: View {
 
 private extension Date {
     var timelineTime: String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .none
-        if SynaraSharedConstants.boolSetting(SynaraSharedConstants.hour24ClockKey) {
-            formatter.dateFormat = "HH:mm"
-        } else {
-            formatter.timeStyle = .short
-        }
-        return formatter.string(from: self)
+        SynaraTimeFormatting.clockTime(self)
     }
 }
 

@@ -115,6 +115,10 @@ protocol MatrixClientServicing: PushRuleSettingsServicing {
     func uploadOwnAvatar(payload: Data, mimeType: String) async -> Bool
     func uploadOwnAvatarStatus(payload: Data, mimeType: String) async -> OwnProfileWriteStatus
     func setOutgoingTyping(roomID: String, typing: Bool) async
+    /// The `io.element.recent_emoji` list shared with desktop; nil on failure.
+    func recentEmoji() async -> [SharedCoreRecentEmojiEntry]?
+    /// Records one use the way desktop does; the list as written, nil on failure.
+    func recordRecentEmoji(_ emoji: String) async -> [SharedCoreRecentEmojiEntry]?
     func ignoredUserIDs() async -> [String]
     func ignoreUser(_ userID: String) async -> Bool
     func unignoreUser(_ userID: String) async -> Bool
@@ -214,6 +218,15 @@ extension MatrixClientServicing {
     func setOutgoingTyping(roomID: String, typing: Bool) async {
         _ = roomID
         _ = typing
+    }
+
+    func recentEmoji() async -> [SharedCoreRecentEmojiEntry]? {
+        nil
+    }
+
+    func recordRecentEmoji(_ emoji: String) async -> [SharedCoreRecentEmojiEntry]? {
+        _ = emoji
+        return nil
     }
 
     func ignoredUserIDs() async -> [String] { [] }

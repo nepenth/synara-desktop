@@ -59,6 +59,20 @@ enum ComposerTextInputRegistry {
         )
     }
 
+    /// Accepts a pending autocorrection and commits marked (IME) text without
+    /// resigning first responder, so a send keeps the keyboard up and still
+    /// reads the text the user sees.
+    static func commitPendingInput() {
+        guard let textView = activeTextView, textView.isFirstResponder else {
+            return
+        }
+        if textView.markedTextRange != nil {
+            textView.unmarkText()
+        }
+        textView.inputDelegate?.selectionWillChange(textView)
+        textView.inputDelegate?.selectionDidChange(textView)
+    }
+
     static func selectionForFormatting(
         _ format: ComposerMarkdownFormat,
         fallback: ComposerTextSelection

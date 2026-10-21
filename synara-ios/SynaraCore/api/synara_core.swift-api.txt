@@ -110,6 +110,8 @@ extension PushRulesSnapshotDto: Sendable
 extension PushRulesWriteDto: Sendable
 extension PusherCommandError: Sendable
 extension PusherWriteDto: Sendable
+extension RecentEmojiEntryDto: Sendable
+extension RecentEmojiSnapshotDto: Sendable
 extension RegisterFlowsDto: Sendable
 extension RegisterFlowsError: Sendable
 extension RegisterFlowsStatus: Sendable
@@ -377,6 +379,8 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func pusherSet(pushKey: String, appId: String, gatewayUrl: String, appDisplayName: String, deviceDisplayName: String, lang: String) async throws -> LeftoverAckDto
   open func reactionEnsure(roomId: String, eventId: String, key: String) async throws -> TimelineReactionMutationDto
   open func reactionRedact(roomId: String, targetEventId: String, reactionEventId: String, key: String) async throws -> TimelineReactionMutationDto
+  open func recentEmojiRecord(emoji: String) async throws -> RecentEmojiSnapshotDto
+  open func recentEmojiSnapshot() async throws -> RecentEmojiSnapshotDto
   open func recover(recoveryKey: String) async throws -> LeftoverAckDto
   open func registerHttpPusher(pushKey: String, appId: String, gatewayUrl: String, appDisplayName: String, lang: String) async throws -> PusherWriteDto
   open func releaseCachedMemory()
@@ -1068,6 +1072,8 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func pusherSet(pushKey: String, appId: String, gatewayUrl: String, appDisplayName: String, deviceDisplayName: String, lang: String) async throws -> LeftoverAckDto
   func reactionEnsure(roomId: String, eventId: String, key: String) async throws -> TimelineReactionMutationDto
   func reactionRedact(roomId: String, targetEventId: String, reactionEventId: String, key: String) async throws -> TimelineReactionMutationDto
+  func recentEmojiRecord(emoji: String) async throws -> RecentEmojiSnapshotDto
+  func recentEmojiSnapshot() async throws -> RecentEmojiSnapshotDto
   func recover(recoveryKey: String) async throws -> LeftoverAckDto
   func registerHttpPusher(pushKey: String, appId: String, gatewayUrl: String, appDisplayName: String, lang: String) async throws -> PusherWriteDto
   func releaseCachedMemory()
@@ -1525,6 +1531,14 @@ public struct PusherWriteDto: Equatable, Hashable
   public var status: WriteAckDto
   public var editSuppressionDiagnosticId: String?
   public init(status: WriteAckDto, editSuppressionDiagnosticId: String?)
+public struct RecentEmojiEntryDto: Equatable, Hashable
+  public var emoji: String
+  public var count: UInt64
+  public init(emoji: String, count: UInt64)
+public struct RecentEmojiSnapshotDto: Equatable, Hashable
+  public var sessionGeneration: UInt64
+  public var entries: [RecentEmojiEntryDto]
+  public init(sessionGeneration: UInt64, entries: [RecentEmojiEntryDto])
 public struct RegisterFlowsDto: Equatable, Hashable
   public var status: RegisterFlowsStatus
   public var session: String?

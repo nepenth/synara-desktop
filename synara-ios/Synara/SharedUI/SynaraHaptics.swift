@@ -40,7 +40,7 @@ enum SynaraHaptics {
 
     #if canImport(UIKit)
     private static var shouldPlayHaptics: Bool {
-        ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] != "1"
+        SynaraLaunchEnvironment.isUITest == false
     }
     #endif
 }

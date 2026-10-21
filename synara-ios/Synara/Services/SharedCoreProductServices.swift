@@ -1039,6 +1039,14 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         )
     }
 
+    func recentEmoji() async -> [SharedCoreRecentEmojiEntry]? {
+        try? await SharedCoreRecentEmoji.snapshot(core: host.core)
+    }
+
+    func recordRecentEmoji(_ emoji: String) async -> [SharedCoreRecentEmojiEntry]? {
+        try? await SharedCoreRecentEmoji.record(core: host.core, emoji: emoji)
+    }
+
     func ignoredUserIDs() async -> [String] {
         (try? await SharedCoreAccountSettings.ignoredUsersSnapshot(core: host.core))?.userIds ?? []
     }
@@ -1334,6 +1342,12 @@ final class SharedCoreRoomListService: RoomListServicing {
     func isAgentRoom(roomID: String) -> Bool {
         stateLock.withLock {
             cachedRooms[roomID]?.isAgentRoom ?? false
+        }
+    }
+
+    func roomSummary(roomID: String) -> RoomSummary? {
+        stateLock.withLock {
+            cachedRooms[roomID]
         }
     }
 
