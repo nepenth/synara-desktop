@@ -21,20 +21,24 @@ use matrix_sdk::ruma::serde::Raw;
 use matrix_sdk::ruma::{OwnedRoomId, RoomId};
 use matrix_sdk::sync::RoomUpdates;
 use matrix_sdk::{Client, EncryptionState, Room, RoomState};
-use matrix_sdk_ui::room_list_service::{filters, RoomListItem};
+use matrix_sdk_ui::room_list_service::{
+    filters, RoomListItem, RoomListLoadingState, State as RoomListServiceState,
+};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, mpsc};
-use tokio::task::JoinHandle;
 
 use crate::app::room_list::counts::{room_unread_presentation, RoomUnreadMembership};
 use crate::app::room_list::dm_avatar::dm_avatar_source;
 use crate::app::room_list::last_message::{
-    last_message_event_is_agent_approval, last_message_event_is_agent_approval_str,
-    last_message_preview_from_event_json, last_message_preview_from_event_json_str,
-    last_message_preview_from_invite,
+    is_own_membership_event, last_message_event_is_agent_approval,
+    last_message_event_is_agent_approval_str, last_message_preview_for_user,
+    ENCRYPTED_MESSAGE_PREVIEW,
 };
 use crate::app::room_list::presentation::{room_list_presentation, RoomListPresentation};
-use crate::app::sync::SyncServiceOwner;
+use crate::app::spaces::NativeSpaceParentEntry;
+use crate::app::sync::{
+    spawn_supervised, RestartPolicy, SupervisedTask, SyncServiceOwner, TaskHealth,
+};
 use crate::dto::{Membership, NotificationMode, RoomEncryptionStatus, RoomSummary};
 
 /// Privacy-safe room-list wake-up. No room ids, names, tokens, or password.
@@ -58,16 +62,29 @@ pub const ROOM_LIST_UPDATE_DEBOUNCE: Duration = Duration::from_millis(150);
 /// account data already wake the owner.
 pub const ROOM_LIST_SAFETY_PULSE: Duration = Duration::from_secs(60);
 
+/// Rooms at the top of the SDK room list (latest event, then recency) that
+/// get a full sliding-sync room subscription (timeline limit 20 plus extra
+/// state), so the rows a user sees first have full previews and client-side
+/// unread counts. Every other room relies on the list's
+/// `ROOM_LIST_TIMELINE_LIMIT` window; the open room is subscribed separately.
+/// Subscribing every joined room made the first sync heavier, grew every
+/// long-poll body, and restarted the request at each growth step.
+pub const ROOM_LIST_RECENT_SUBSCRIPTIONS: usize = 20;
+
 /// Owns one joined-room entries stream for an attached SyncService.
 ///
 /// Wakes consumers only when something they render can have changed:
 /// room-list diffs (the SDK turns every room-info notable update into a
 /// `Set` diff), invite/leave/knock sync updates, push-rule changes and
-/// account data. It also keeps the sliding-sync room subscriptions equal to
-/// the joined set, so encrypted rooms keep receiving events without a
-/// renderer poll.
+/// account data. Once the list has loaded it keeps the sliding-sync room
+/// subscriptions on the [`ROOM_LIST_RECENT_SUBSCRIPTIONS`] most recent rooms,
+/// updated at most once per debounce window.
+///
+/// The task is supervised: if it exits (a failed `all_rooms`, a rejected
+/// filter, an ended stream) or panics, it starts again with back-off instead
+/// of leaving the list without updates for the rest of the session.
 pub struct NativeRoomListOwner {
-    task: JoinHandle<()>,
+    task: SupervisedTask,
     client: Client,
     handlers: Vec<EventHandlerHandle>,
     revision: Arc<AtomicU64>,
@@ -97,40 +114,58 @@ impl NativeRoomListOwner {
                 }
             }),
         ];
-        let room_updates = client.subscribe_to_all_room_updates();
+        // Shared across restarts: the handlers above keep the senders.
+        let wakes = Arc::new(tokio::sync::Mutex::new(wakes));
+        let mut first_room_updates = Some(client.subscribe_to_all_room_updates());
         let task_revision = Arc::clone(&revision);
         let task_client = client.clone();
-        let task = tokio::spawn(async move {
-            let Ok(list) = service.all_rooms().await else {
-                return;
-            };
-            let (entries, controller) = list.entries_with_dynamic_adapters(usize::MAX);
-            if !controller.set_filter(Box::new(filters::new_filter_joined())) {
-                return;
+        let task = spawn_supervised(RestartPolicy::default(), move || {
+            let service = Arc::clone(&service);
+            let task_client = task_client.clone();
+            let sync_owner = Arc::clone(&sync_owner);
+            let wakes = Arc::clone(&wakes);
+            let room_updates = first_room_updates
+                .take()
+                .unwrap_or_else(|| task_client.subscribe_to_all_room_updates());
+            let task_revision = Arc::clone(&task_revision);
+            let emit = Arc::clone(&emit);
+            async move {
+                let mut wakes = wakes.lock_owned().await;
+                let Ok(list) = service.all_rooms().await else {
+                    return;
+                };
+                let (entries, controller) = list.entries_with_dynamic_adapters(usize::MAX);
+                if !controller.set_filter(Box::new(filters::new_filter_joined())) {
+                    return;
+                }
+                let settings = task_client.notification_settings().await;
+                let loaded = list
+                    .loading_state()
+                    .map(|state| matches!(state, RoomListLoadingState::Loaded { .. }));
+                run_room_list_updates(
+                    entries,
+                    RoomListWakeSources {
+                        wakes: &mut wakes,
+                        push_rules: settings.subscribe_to_changes(),
+                        room_updates,
+                        loaded,
+                    },
+                    |room_ids| {
+                        let sync_owner = Arc::clone(&sync_owner);
+                        async move { sync_owner.subscribe_to_room_list(&room_ids).await }
+                    },
+                    move || {
+                        let revision = task_revision.fetch_add(1, Ordering::AcqRel) + 1;
+                        emit(NativeRoomListUpdateSignal {
+                            session_generation,
+                            revision,
+                        });
+                    },
+                )
+                .await;
+                drop(settings);
+                drop(controller);
             }
-            let settings = task_client.notification_settings().await;
-            run_room_list_updates(
-                entries,
-                RoomListWakeSources {
-                    wakes,
-                    push_rules: settings.subscribe_to_changes(),
-                    room_updates,
-                },
-                |room_ids| {
-                    let sync_owner = Arc::clone(&sync_owner);
-                    async move { sync_owner.subscribe_to_room_list(&room_ids).await }
-                },
-                move || {
-                    let revision = task_revision.fetch_add(1, Ordering::AcqRel) + 1;
-                    emit(NativeRoomListUpdateSignal {
-                        session_generation,
-                        revision,
-                    });
-                },
-            )
-            .await;
-            drop(settings);
-            drop(controller);
         });
         Self {
             task,
@@ -144,6 +179,11 @@ impl NativeRoomListOwner {
     pub fn revision(&self) -> u64 {
         self.revision.load(Ordering::Acquire)
     }
+
+    /// Exits of the owner task so far; each was followed by a restart.
+    pub fn health(&self) -> &Arc<TaskHealth> {
+        self.task.health()
+    }
 }
 
 impl Drop for NativeRoomListOwner {
@@ -155,10 +195,24 @@ impl Drop for NativeRoomListOwner {
     }
 }
 
-struct RoomListWakeSources {
-    wakes: mpsc::UnboundedReceiver<()>,
+struct RoomListWakeSources<'a, L> {
+    wakes: &'a mut mpsc::UnboundedReceiver<()>,
     push_rules: broadcast::Receiver<()>,
     room_updates: broadcast::Receiver<RoomUpdates>,
+    /// `true` once the SDK room list has loaded (a first response arrived).
+    loaded: L,
+}
+
+/// Ids of the rooms that get a full room subscription: the first
+/// [`ROOM_LIST_RECENT_SUBSCRIPTIONS`] in SDK list order.
+fn recent_subscription_ids<'a>(
+    rooms: impl IntoIterator<Item = &'a RoomListItem>,
+) -> Vec<OwnedRoomId> {
+    rooms
+        .into_iter()
+        .take(ROOM_LIST_RECENT_SUBSCRIPTIONS)
+        .map(|room| room.room_id().to_owned())
+        .collect()
 }
 
 /// True when a sync update touches rooms outside the joined filter. Joined
@@ -167,23 +221,35 @@ fn room_updates_change_non_joined(update: &RoomUpdates) -> bool {
     !update.invited.is_empty() || !update.left.is_empty() || !update.knocked.is_empty()
 }
 
-/// Apply entry diffs, keep subscriptions equal to the joined set, and emit
-/// one debounced wake-up per burst of changes. Returns when the entries
-/// stream ends.
-async fn run_room_list_updates<S, Subscribe, SubscribeFuture, Emit>(
+/// Apply entry diffs and emit one debounced wake-up per burst of changes.
+/// At each wake-up after the list has loaded, point the room subscriptions at
+/// the most recent rooms if that set changed. Waiting for the load and the
+/// debounce keeps list growth from cancelling the sync request at every step.
+/// Returns when the entries stream ends.
+async fn run_room_list_updates<S, L, Subscribe, SubscribeFuture, Emit>(
     entries: S,
-    mut sources: RoomListWakeSources,
+    sources: RoomListWakeSources<'_, L>,
     subscribe: Subscribe,
     emit: Emit,
 ) where
     S: futures_util::Stream<Item = Vec<VectorDiff<RoomListItem>>>,
+    L: futures_util::Stream<Item = bool>,
     Subscribe: Fn(Vec<OwnedRoomId>) -> SubscribeFuture,
     SubscribeFuture: std::future::Future<Output = ()>,
     Emit: Fn(),
 {
+    let RoomListWakeSources {
+        wakes,
+        mut push_rules,
+        mut room_updates,
+        loaded,
+    } = sources;
     futures_util::pin_mut!(entries);
+    futures_util::pin_mut!(loaded);
     let mut rooms: Vector<RoomListItem> = Vector::new();
     let mut subscribed: HashSet<OwnedRoomId> = HashSet::new();
+    let mut is_loaded = false;
+    let mut loaded_open = true;
     let mut debounce = RoomListDebounce::default();
     let mut wakes_open = true;
     let mut push_rules_open = true;
@@ -204,24 +270,26 @@ async fn run_room_list_updates<S, Subscribe, SubscribeFuture, Emit>(
                 for diff in diffs {
                     diff.apply(&mut rooms);
                 }
-                let joined: HashSet<OwnedRoomId> =
-                    rooms.iter().map(|room| room.room_id().to_owned()).collect();
-                if joined != subscribed {
-                    let room_ids = rooms.iter().map(|room| room.room_id().to_owned()).collect();
-                    subscribe(room_ids).await;
-                    subscribed = joined;
-                }
                 debounce.mark();
             }
-            wake = sources.wakes.recv(), if wakes_open => match wake {
+            state = loaded.next(), if loaded_open => match state {
+                Some(state) => {
+                    if state && !is_loaded {
+                        debounce.mark();
+                    }
+                    is_loaded = state;
+                }
+                None => loaded_open = false,
+            },
+            wake = wakes.recv(), if wakes_open => match wake {
                 Some(()) => debounce.mark(),
                 None => wakes_open = false,
             },
-            changed = sources.push_rules.recv(), if push_rules_open => match changed {
+            changed = push_rules.recv(), if push_rules_open => match changed {
                 Ok(()) | Err(broadcast::error::RecvError::Lagged(_)) => debounce.mark(),
                 Err(broadcast::error::RecvError::Closed) => push_rules_open = false,
             },
-            update = sources.room_updates.recv(), if room_updates_open => match update {
+            update = room_updates.recv(), if room_updates_open => match update {
                 Ok(update) if room_updates_change_non_joined(&update) => debounce.mark(),
                 Ok(_) => {}
                 Err(broadcast::error::RecvError::Lagged(_)) => debounce.mark(),
@@ -229,6 +297,14 @@ async fn run_room_list_updates<S, Subscribe, SubscribeFuture, Emit>(
             },
             () = debounce.elapsed(), if debounce.is_pending() => {
                 debounce.clear();
+                if is_loaded {
+                    let recent = recent_subscription_ids(&rooms);
+                    let recent_set: HashSet<OwnedRoomId> = recent.iter().cloned().collect();
+                    if recent_set != subscribed {
+                        subscribe(recent).await;
+                        subscribed = recent_set;
+                    }
+                }
                 emit();
             }
             _ = pulse.tick() => debounce.mark(),
@@ -333,6 +409,54 @@ pub struct NativeRoomListSnapshot {
     /// renderer does not re-apply room rules.
     #[serde(default)]
     pub presentation: RoomListPresentation,
+    /// Whether the SDK room list has loaded. Until it has, an empty `rooms`
+    /// means "not synced yet", not "no rooms".
+    #[serde(default)]
+    pub loading: NativeRoomListLoading,
+    /// The child to parent-space graph `presentation` was built from. iOS
+    /// reads it from here instead of building it again with a second
+    /// snapshot; desktop keeps its own wire shape.
+    #[serde(skip)]
+    pub space_parents: Vec<NativeSpaceParentEntry>,
+}
+
+/// The SDK `RoomListLoadingState`, without SDK types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "state")]
+pub enum NativeRoomListLoading {
+    /// No room-list response yet in this session (and none cached).
+    #[default]
+    NotLoaded,
+    /// At least one response arrived. `maximum_number_of_rooms` is the
+    /// server's count for the list when known.
+    #[serde(rename_all = "camelCase")]
+    Loaded {
+        maximum_number_of_rooms: Option<u32>,
+    },
+}
+
+fn project_loading(
+    list_state: RoomListLoadingState,
+    service_state: &RoomListServiceState,
+) -> NativeRoomListLoading {
+    match list_state {
+        RoomListLoadingState::Loaded {
+            maximum_number_of_rooms,
+        } => NativeRoomListLoading::Loaded {
+            maximum_number_of_rooms,
+        },
+        // A list created for this snapshot starts `NotLoaded` and flips in a
+        // background task once the service state shows a response. Read the
+        // service state directly so the snapshot does not race that task.
+        RoomListLoadingState::NotLoaded => match service_state {
+            RoomListServiceState::SettingUp
+            | RoomListServiceState::Recovering
+            | RoomListServiceState::Running => NativeRoomListLoading::Loaded {
+                maximum_number_of_rooms: None,
+            },
+            _ => NativeRoomListLoading::NotLoaded,
+        },
+    }
 }
 
 pub async fn snapshot_from_sync_owner(
@@ -343,6 +467,7 @@ pub async fn snapshot_from_sync_owner(
         .all_rooms()
         .await
         .map_err(|_| "d0.2-room-list-open-failed")?;
+    let loading = project_loading(list.loading_state().get(), &service.state().get());
     let (entries, controller) = list.entries_with_dynamic_adapters(usize::MAX);
     if !controller.set_filter(Box::new(filters::new_filter_joined())) {
         return Err("d0.2-room-list-filter-failed");
@@ -361,16 +486,8 @@ pub async fn snapshot_from_sync_owner(
         })
         .ok_or("d0.2-room-list-reset-missing")?;
 
-    // Sliding-sync `set_room_subscriptions` makes the subscription set
-    // exactly these rooms and is how encrypted rooms receive events for
-    // client-side unread math. A 20-row viewport left every other room at
-    // server notification_count=0, which is typically zero for E2EE —
-    // Element (full /sync) still showed badges.
-    let subscribed_room_ids = values
-        .iter()
-        .map(|room| room.room_id().to_owned())
-        .collect::<Vec<_>>();
-    owner.subscribe_to_room_list(&subscribed_room_ids).await;
+    // Room subscriptions belong to `NativeRoomListOwner` (the most recent
+    // rooms); a snapshot only reads.
 
     // One push-rule read per snapshot. `Room::notification_mode` builds a new
     // `NotificationSettings` (a store read plus an event handler) per room.
@@ -384,16 +501,14 @@ pub async fn snapshot_from_sync_owner(
 
     // Space rollup needs the parent graph. A failed read leaves rollup empty
     // rather than failing the whole snapshot.
-    let parents = crate::app::spaces::snapshot_space_parents(service.client(), 0)
+    let space_parents = crate::app::spaces::snapshot_space_parents(service.client(), 0)
         .await
-        .map(|snapshot| {
-            snapshot
-                .entries
-                .into_iter()
-                .map(|entry| (entry.room_id, entry.parent_ids))
-                .collect::<std::collections::BTreeMap<_, _>>()
-        })
+        .map(|snapshot| snapshot.entries)
         .unwrap_or_default();
+    let parents = space_parents
+        .iter()
+        .map(|entry| (entry.room_id.clone(), entry.parent_ids.clone()))
+        .collect::<std::collections::BTreeMap<_, _>>();
     let presentation = room_list_presentation(&rooms, &parents);
 
     Ok(NativeRoomListSnapshot {
@@ -401,11 +516,69 @@ pub async fn snapshot_from_sync_owner(
         ordered_room_ids,
         rooms,
         presentation,
+        loading,
+        space_parents,
     })
 }
 
+/// Unread counts the SDK computes on the client from the events it holds.
+/// They skip reactions, edits, redactions and the user's own events, and
+/// see inside encrypted events.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct ClientUnreadCounts {
+    messages: u64,
+    notifications: u64,
+    mentions: u64,
+}
+
+/// The homeserver's push counts. For encrypted rooms they are computed on
+/// the encrypted envelope, so encrypted reactions and edits count too.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct ServerUnreadCounts {
+    notifications: u64,
+    highlights: u64,
+}
+
+/// The notification and mention counts one row shows, all from one source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RowUnreadCounts {
+    messages: u64,
+    notifications: u64,
+    mentions: u64,
+}
+
+/// The counts one row shows.
+///
+/// Encrypted rooms use only the client counts, as Element X does: the
+/// server cannot tell a reaction or an edit from a message inside an
+/// encrypted event, and it cannot see mentions, so its counts there turn
+/// encrypted reactions into badges. Unencrypted rooms take the larger of
+/// both: the server sees events the room-list window never delivered, and
+/// the client covers servers that send no counts at all (Synapse's
+/// simplified sliding sync always sends 0). `messages` is always the client
+/// count; the server has no equivalent.
+fn row_unread_counts(
+    encrypted: bool,
+    client: ClientUnreadCounts,
+    server: ServerUnreadCounts,
+) -> RowUnreadCounts {
+    if encrypted {
+        RowUnreadCounts {
+            messages: client.messages,
+            notifications: client.notifications,
+            mentions: client.mentions,
+        }
+    } else {
+        RowUnreadCounts {
+            messages: client.messages,
+            notifications: client.notifications.max(server.notifications),
+            mentions: client.mentions.max(server.highlights),
+        }
+    }
+}
+
 async fn project_room(room: &Room, settings: &NotificationSettings) -> RoomSummary {
-    let counts = room.unread_notification_counts();
+    let server_counts = room.unread_notification_counts();
     // `recency_stamp` is an opaque ordering value, not wall-clock time. Only
     // expose a timestamp when the SDK has an actual latest-event timestamp.
     let last_activity_ts = room
@@ -418,35 +591,42 @@ async fn project_room(room: &Room, settings: &NotificationSettings) -> RoomSumma
         .await
         .map(map_notification_mode);
     let membership = membership(room.state());
-    let last_message_preview = last_message_preview(room);
+    let last_message_preview = last_message_preview(room).await;
     // Classification uses the raw latest event, not the sanitized preview.
     let last_message_is_approval = last_message_is_agent_approval(room);
     // Approval prompts only promote unread/highlight while the SDK still
     // reports unread. Reading the room does not change the latest body, so
     // boosting from the last message alone would recreate badges after every
     // receipt that already zeroed the counters. Marked-unread is unread.
+    let counts = row_unread_counts(
+        latest_encryption
+            .as_ref()
+            .is_ok_and(|state| state.is_encrypted()),
+        ClientUnreadCounts {
+            messages: room.num_unread_messages(),
+            notifications: room.num_unread_notifications(),
+            mentions: room.num_unread_mentions(),
+        },
+        ServerUnreadCounts {
+            notifications: server_counts.notification_count,
+            highlights: server_counts.highlight_count,
+        },
+    );
     let has_unread = room_has_unread(
-        room.num_unread_messages(),
-        room.num_unread_notifications(),
-        room.num_unread_mentions(),
-        counts.notification_count,
-        counts.highlight_count,
+        counts.messages,
+        counts.notifications,
+        counts.mentions,
         room.is_marked_unread(),
     );
     let pending_approval = pending_approval_unread_boost(has_unread, last_message_is_approval);
-    let mention_count = room
-        .num_unread_mentions()
-        .max(counts.highlight_count)
-        .max(u64::from(pending_approval));
+    let mention_count = counts.mentions.max(u64::from(pending_approval));
     let unread = room_unread_presentation(
         match membership {
             Membership::Invite => RoomUnreadMembership::Invited,
             _ => RoomUnreadMembership::Joined,
         },
-        room.num_unread_messages(),
-        room.num_unread_notifications()
-            .max(counts.notification_count)
-            .max(u64::from(pending_approval)),
+        counts.messages,
+        counts.notifications.max(u64::from(pending_approval)),
         mention_count,
         room.is_marked_unread(),
     );
@@ -579,15 +759,26 @@ fn project_encryption_status<E>(result: Result<EncryptionState, E>) -> RoomEncry
     }
 }
 
-fn last_message_preview(room: &Room) -> Option<String> {
+async fn last_message_preview(room: &Room) -> Option<String> {
     use matrix_sdk::latest_events::LatestEventValue;
+    let own_user_id = room.own_user_id().as_str();
     match room.latest_event() {
-        LatestEventValue::None => None,
-        LatestEventValue::RemoteInvite { inviter, .. } => {
-            last_message_preview_from_invite(inviter.as_ref().map(|id| id.as_str()))
-        }
+        // The snapshot is joined-only, so `RemoteInvite` never reaches here;
+        // invite rows take their preview from the invite snapshot.
+        LatestEventValue::None | LatestEventValue::RemoteInvite { .. } => None,
         LatestEventValue::Remote(event) => {
-            last_message_preview_from_event_json_str(event.raw().json().get())
+            let value: serde_json::Value = serde_json::from_str(event.raw().json().get()).ok()?;
+            // The SDK falls back to the user's own membership when nothing
+            // newer is displayable, for example every newer event is still
+            // undecryptable on a new device. Say there is encrypted activity
+            // instead of "You joined" in that case.
+            if is_own_membership_event(&value, own_user_id) {
+                let event_id = value.get("event_id").and_then(serde_json::Value::as_str);
+                if has_newer_undecryptable_event(room, event_id).await {
+                    return Some(ENCRYPTED_MESSAGE_PREVIEW.to_owned());
+                }
+            }
+            last_message_preview_for_user(&value, Some(own_user_id))
         }
         LatestEventValue::LocalIsSending(local)
         | LatestEventValue::LocalHasBeenSent { value: local, .. }
@@ -595,28 +786,45 @@ fn last_message_preview(room: &Room) -> Option<String> {
             let Ok(content) = local.content.deserialize() else {
                 return None;
             };
-            last_message_preview_from_event_json(&serde_json::json!({
-                "type": content.event_type().to_string(),
-                "content": content,
-            }))
+            last_message_preview_for_user(
+                &serde_json::json!({
+                    "type": content.event_type().to_string(),
+                    "content": content,
+                }),
+                Some(own_user_id),
+            )
         }
     }
+}
+
+/// Whether the event cache holds an undecryptable event newer than
+/// `latest_event_id`. Looks at loaded events only; no I/O beyond opening the
+/// room's event cache.
+async fn has_newer_undecryptable_event(room: &Room, latest_event_id: Option<&str>) -> bool {
+    use matrix_sdk::deserialized_responses::TimelineEventKind;
+    let Ok((cache, _drop_handles)) = room.event_cache().await else {
+        return false;
+    };
+    cache
+        .rfind_map_event_in_memory_by(|event| {
+            if latest_event_id.is_some_and(|id| event.event_id().is_some_and(|own| own == id)) {
+                return Some(false);
+            }
+            matches!(event.kind, TimelineEventKind::UnableToDecrypt { .. }).then_some(true)
+        })
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or(false)
 }
 
 fn room_has_unread(
     unread_messages: u64,
     unread_notifications: u64,
     unread_mentions: u64,
-    notification_count: u64,
-    highlight_count: u64,
     is_marked_unread: bool,
 ) -> bool {
-    unread_messages > 0
-        || unread_notifications > 0
-        || unread_mentions > 0
-        || notification_count > 0
-        || highlight_count > 0
-        || is_marked_unread
+    unread_messages > 0 || unread_notifications > 0 || unread_mentions > 0 || is_marked_unread
 }
 
 /// Last-message approval must not manufacture unread after receipts clear.
@@ -714,15 +922,15 @@ mod tests {
 
     #[test]
     fn marked_unread_counts_as_unread_for_approval_boost() {
-        assert!(!room_has_unread(0, 0, 0, 0, 0, false));
-        assert!(room_has_unread(0, 0, 0, 0, 0, true));
-        assert!(room_has_unread(1, 0, 0, 0, 0, false));
+        assert!(!room_has_unread(0, 0, 0, false));
+        assert!(room_has_unread(0, 0, 0, true));
+        assert!(room_has_unread(1, 0, 0, false));
         assert!(pending_approval_unread_boost(
-            room_has_unread(0, 0, 0, 0, 0, true),
+            room_has_unread(0, 0, 0, true),
             true
         ));
         assert!(!pending_approval_unread_boost(
-            room_has_unread(0, 0, 0, 0, 0, false),
+            room_has_unread(0, 0, 0, false),
             true
         ));
     }
@@ -823,10 +1031,8 @@ mod tests {
     }
 
     #[test]
-    fn room_list_subscriptions_cover_the_full_joined_snapshot() {
+    fn room_list_projection_keeps_its_safeguards() {
         let source = include_str!("live.rs");
-        assert!(source.contains("subscribed_room_ids"));
-        assert!(source.contains("values.iter().map(|room| room.room_id().to_owned())"));
         assert!(source.contains("MissedTickBehavior::Skip"));
         assert!(source.contains("last_message_is_agent_approval"));
         assert!(source.contains("last_message_is_agent_approval: last_message_is_approval"));
@@ -835,11 +1041,97 @@ mod tests {
         assert!(source.contains("room.is_marked_unread()"));
         assert!(source.contains("dm_avatar_source"));
         assert!(source.contains("is_direct && room_avatar.is_none()"));
-        let truncated_viewport = concat!("ROOM_LIST_SUBSCRIPTION", "_LIMIT");
+        // A snapshot never changes the subscriptions; the owner does.
+        let snapshot = source
+            .split("pub async fn snapshot_from_sync_owner")
+            .nth(1)
+            .and_then(|rest| rest.split("\nasync fn project_room").next())
+            .unwrap();
+        assert!(!snapshot.contains("subscribe_to_room_list"));
+    }
+
+    #[test]
+    fn encrypted_rooms_use_client_counts_and_others_use_server_counts() {
+        let reactions_only = ClientUnreadCounts::default();
+        let server = ServerUnreadCounts {
+            notifications: 3,
+            highlights: 0,
+        };
+        // Encrypted reactions and edits count on the server only.
         assert_eq!(
-            source.matches(truncated_viewport).count(),
-            0,
-            "encrypted rooms only get client-side unreads after set_room_subscriptions"
+            row_unread_counts(true, reactions_only, server),
+            RowUnreadCounts {
+                messages: 0,
+                notifications: 0,
+                mentions: 0
+            }
+        );
+        // Unencrypted rooms keep the larger of both.
+        assert_eq!(
+            row_unread_counts(false, reactions_only, server),
+            RowUnreadCounts {
+                messages: 0,
+                notifications: 3,
+                mentions: 0
+            }
+        );
+        // Mentions in encrypted rooms are only visible to the client.
+        let mention = ClientUnreadCounts {
+            messages: 2,
+            notifications: 2,
+            mentions: 1,
+        };
+        assert_eq!(
+            row_unread_counts(true, mention, ServerUnreadCounts::default()),
+            RowUnreadCounts {
+                messages: 2,
+                notifications: 2,
+                mentions: 1
+            }
+        );
+        // Synapse's sliding sync sends zero counts; the client's still count.
+        assert_eq!(
+            row_unread_counts(false, mention, ServerUnreadCounts::default()),
+            RowUnreadCounts {
+                messages: 2,
+                notifications: 2,
+                mentions: 1
+            }
+        );
+    }
+
+    #[test]
+    fn loading_state_follows_the_sdk_list_and_service_state() {
+        assert_eq!(
+            project_loading(RoomListLoadingState::NotLoaded, &RoomListServiceState::Init),
+            NativeRoomListLoading::NotLoaded
+        );
+        assert_eq!(
+            project_loading(
+                RoomListLoadingState::NotLoaded,
+                &RoomListServiceState::Running
+            ),
+            NativeRoomListLoading::Loaded {
+                maximum_number_of_rooms: None
+            }
+        );
+        assert_eq!(
+            project_loading(
+                RoomListLoadingState::Loaded {
+                    maximum_number_of_rooms: Some(3)
+                },
+                &RoomListServiceState::Init
+            ),
+            NativeRoomListLoading::Loaded {
+                maximum_number_of_rooms: Some(3)
+            }
+        );
+        assert_eq!(
+            serde_json::to_value(NativeRoomListLoading::Loaded {
+                maximum_number_of_rooms: Some(2)
+            })
+            .unwrap(),
+            serde_json::json!({"state": "loaded", "maximumNumberOfRooms": 2})
         );
     }
 }
@@ -1017,5 +1309,387 @@ mod live_owner_tests {
         assert_eq!(live.revision(), signals.last().unwrap().revision);
         drop(live);
         owner.stop().await.expect("sync stops");
+    }
+}
+
+/// Room-list cost and projection rules against a mock homeserver: login
+/// requests, subscription scope, loading state, badge sources and previews.
+#[cfg(test)]
+mod room_list_cost_tests {
+    use super::*;
+    use crate::app::client_builder::apply_event_cache_policy;
+    use crate::app::sync::{build_sync_service, SyncServiceConfig, ROOM_LIST_TIMELINE_LIMIT};
+    use matrix_sdk::ruma::{event_id, room_id, user_id};
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use matrix_sdk_test::{event_factory::EventFactory, JoinedRoomBuilder, BOB};
+    use serde_json::json;
+    use wiremock::matchers::{body_partial_json, method, path, path_regex};
+    use wiremock::{Mock, ResponseTemplate};
+
+    const SLIDING_SYNC: &str = "/_matrix/client/unstable/org.matrix.simplified_msc3575/sync";
+    const JOINED: usize = 30;
+    const OWN: &str = "@example:localhost";
+    const INVITE: &str = "!b5-invite:example.org";
+
+    fn joined_room_id(index: usize) -> String {
+        format!("!b5-room-{index:02}:example.org")
+    }
+
+    /// A fresh login on a busy account: each room's window holds only a
+    /// reaction (nothing to preview, no read-receipt target) and is limited,
+    /// which is what made the SDK back-paginate every room. Bump stamps rise
+    /// with the index, so the SDK lists the highest index first.
+    fn many_rooms_response() -> serde_json::Value {
+        let mut rooms = serde_json::Map::new();
+        for index in 0..JOINED {
+            rooms.insert(
+                joined_room_id(index),
+                json!({
+                    "initial": true,
+                    "name": format!("Room {index:02}"),
+                    "bump_stamp": index + 1,
+                    "limited": true,
+                    "prev_batch": format!("prev-{index}"),
+                    "required_state": [{
+                        "type": "m.room.create",
+                        "state_key": "",
+                        "event_id": format!("$create-{index}"),
+                        "sender": "@bob:example.org",
+                        "origin_server_ts": 1,
+                        "content": { "room_version": "11" }
+                    }],
+                    "timeline": [{
+                        "type": "m.reaction",
+                        "event_id": format!("$reaction-{index}"),
+                        "sender": "@bob:example.org",
+                        "origin_server_ts": 1_000 + index,
+                        "content": { "m.relates_to": {
+                            "rel_type": "m.annotation",
+                            "event_id": format!("$gone-{index}"),
+                            "key": "+1"
+                        } }
+                    }]
+                }),
+            );
+        }
+        rooms.insert(
+            INVITE.to_owned(),
+            json!({
+                "initial": true,
+                "name": "Launch Party",
+                "bump_stamp": 1_000,
+                "invite_state": [{
+                    "type": "m.room.member",
+                    "state_key": OWN,
+                    "sender": "@eve:example.org",
+                    "content": { "membership": "invite" }
+                }, {
+                    "type": "m.room.name",
+                    "state_key": "",
+                    "sender": "@eve:example.org",
+                    "content": { "name": "Launch Party" }
+                }]
+            }),
+        );
+        json!({
+            "pos": "1",
+            "lists": { "all_rooms": { "count": JOINED + 1 } },
+            "rooms": rooms,
+            "extensions": {}
+        })
+    }
+
+    async fn mount_homeserver(server: &MatrixMockServer) {
+        Mock::given(method("GET"))
+            .and(path("/_matrix/client/versions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "versions": ["v1.12"],
+                "unstable_features": { "org.matrix.simplified_msc3575": true }
+            })))
+            .mount(server.server())
+            .await;
+        server.mock_upload_keys().ok().mount().await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"/state/m\.room\.encryption"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(json!({
+                "errcode": "M_NOT_FOUND", "error": "not found"
+            })))
+            .mount(server.server())
+            .await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"/rooms/[^/]+/messages$"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(json!({ "chunk": [], "start": "t0" })),
+            )
+            .mount(server.server())
+            .await;
+    }
+
+    async fn sliding_sync_bodies(server: &MatrixMockServer) -> Vec<serde_json::Value> {
+        server
+            .server()
+            .received_requests()
+            .await
+            .unwrap_or_default()
+            .iter()
+            .filter(|request| request.url.path() == SLIDING_SYNC)
+            .filter_map(|request| request.body_json::<serde_json::Value>().ok())
+            .filter(|body| body.get("conn_id").and_then(|id| id.as_str()) == Some("room-list"))
+            .collect()
+    }
+
+    fn subscribed_ids(body: &serde_json::Value) -> HashSet<String> {
+        body.get("room_subscriptions")
+            .and_then(|subscriptions| subscriptions.as_object())
+            .map(|subscriptions| subscriptions.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    async fn messages_requests(server: &MatrixMockServer) -> Vec<String> {
+        server
+            .server()
+            .received_requests()
+            .await
+            .unwrap_or_default()
+            .iter()
+            .filter(|request| request.url.path().ends_with("/messages"))
+            .map(|request| request.url.path().to_owned())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn login_on_many_rooms_sends_no_messages_and_subscribes_only_recent_rooms() {
+        let server = MatrixMockServer::new().await;
+        let client = server
+            .client_builder()
+            .on_builder(apply_event_cache_policy)
+            .build()
+            .await;
+        // Session start subscribes the event cache before the first sync
+        // (`NativeTimelineOwner::new`), which is what arms the SDK backfill.
+        client.event_cache().subscribe().unwrap();
+        mount_homeserver(&server).await;
+        Mock::given(method("POST"))
+            .and(path(SLIDING_SYNC))
+            .and(body_partial_json(json!({"conn_id": "room-list"})))
+            .respond_with(ResponseTemplate::new(200).set_body_json(many_rooms_response()))
+            .up_to_n_times(1)
+            .with_priority(1)
+            .mount(server.server())
+            .await;
+        Mock::given(method("POST"))
+            .and(path(SLIDING_SYNC))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!({
+                        "pos": "idle", "lists": {}, "rooms": {}, "extensions": {}
+                    }))
+                    .set_delay(Duration::from_millis(100)),
+            )
+            .mount(server.server())
+            .await;
+
+        let owner = Arc::new(
+            build_sync_service(&client, 9, SyncServiceConfig::default())
+                .await
+                .expect("sync service"),
+        );
+        // Not synced yet: an empty list must read as loading, not "no rooms".
+        let before = snapshot_from_sync_owner(&owner).await.expect("snapshot");
+        assert_eq!(before.loading, NativeRoomListLoading::NotLoaded);
+        assert!(before.rooms.is_empty());
+
+        let live = NativeRoomListOwner::start(&owner, Arc::new(|_| {}));
+        owner.start().await.expect("sync starts");
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                let bodies = sliding_sync_bodies(&server).await;
+                if bodies.iter().any(|body| !subscribed_ids(body).is_empty()) {
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("the owner subscribes the recent rooms once the list has loaded");
+        // Room for any background backfill to have started.
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+
+        let messages = messages_requests(&server).await;
+        assert!(
+            !messages.iter().any(|path| path.contains(INVITE)),
+            "an invited room must never be back-paginated (the server answers 403)"
+        );
+        assert!(
+            messages.is_empty(),
+            "a login sync must not back-paginate rooms, saw {messages:?}"
+        );
+
+        let bodies = sliding_sync_bodies(&server).await;
+        assert_eq!(
+            bodies[0]["lists"]["all_rooms"]["timeline_limit"],
+            json!(ROOM_LIST_TIMELINE_LIMIT),
+            "the room list asks for a preview window per room"
+        );
+        assert!(
+            subscribed_ids(&bodies[0]).is_empty(),
+            "nothing is subscribed before the list has loaded"
+        );
+        assert!(bodies
+            .iter()
+            .all(|body| subscribed_ids(body).len() <= ROOM_LIST_RECENT_SUBSCRIPTIONS));
+        let subscribed = subscribed_ids(bodies.last().unwrap());
+        let expected: HashSet<String> = (JOINED - ROOM_LIST_RECENT_SUBSCRIPTIONS..JOINED)
+            .map(joined_room_id)
+            .collect();
+        assert_eq!(
+            subscribed, expected,
+            "only the most recent rooms get a full subscription"
+        );
+        assert!(!subscribed.contains(INVITE));
+
+        let after = snapshot_from_sync_owner(&owner).await.expect("snapshot");
+        assert!(matches!(
+            after.loading,
+            NativeRoomListLoading::Loaded { .. }
+        ));
+        assert_eq!(after.rooms.len(), JOINED);
+        assert_eq!(live.health().restarts(), 0);
+        drop(live);
+        owner.stop().await.expect("sync stops");
+    }
+
+    #[tokio::test]
+    async fn invited_rooms_are_never_back_paginated() {
+        let server = MatrixMockServer::new().await;
+        let client = server
+            .client_builder()
+            .on_builder(apply_event_cache_policy)
+            .build()
+            .await;
+        client.event_cache().subscribe().unwrap();
+        mount_homeserver(&server).await;
+        let invite = room_id!("!b5-only-invite:example.org");
+        server
+            .sync_room(
+                &client,
+                matrix_sdk_test::InvitedRoomBuilder::new(invite).add_state_event(
+                    EventFactory::new()
+                        .room(invite)
+                        .sender(user_id!("@eve:example.org"))
+                        .member(user_id!("@example:localhost"))
+                        .membership(
+                            matrix_sdk::ruma::events::room::member::MembershipState::Invite,
+                        ),
+                ),
+            )
+            .await;
+        client
+            .latest_events()
+            .await
+            .listen_to_room(invite)
+            .await
+            .expect("listen to the invite's latest event");
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        assert!(messages_requests(&server).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn encrypted_badges_ignore_server_counted_reactions() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        client.event_cache().subscribe().unwrap();
+        mount_homeserver(&server).await;
+        let encrypted = room_id!("!b5-encrypted:example.org");
+        let plain = room_id!("!b5-plain:example.org");
+        for (room_id, is_encrypted) in [(encrypted, true), (plain, false)] {
+            let f = EventFactory::new().room(room_id).sender(*BOB);
+            let mut builder = JoinedRoomBuilder::new(room_id)
+                .add_timeline_event(f.text_msg("read already").event_id(event_id!("$read")))
+                .add_timeline_event(f.reaction(event_id!("$read"), "+1"))
+                .add_timeline_event(f.reaction(event_id!("$read"), "!"))
+                .add_timeline_event(f.reaction(event_id!("$read"), "?"))
+                .add_receipt(
+                    f.read_receipts()
+                        .add(
+                            event_id!("$read"),
+                            user_id!("@example:localhost"),
+                            matrix_sdk::ruma::events::receipt::ReceiptType::Read,
+                            matrix_sdk::ruma::events::receipt::ReceiptThread::Unthreaded,
+                        )
+                        .into_event(),
+                )
+                .set_unread_notifications_count(json!({
+                    "notification_count": 3,
+                    "highlight_count": 0
+                }));
+            if is_encrypted {
+                builder = builder.add_state_event(f.room_encryption());
+            }
+            server.sync_room(&client, builder).await;
+        }
+        let settings = client.notification_settings().await;
+        let encrypted_row = project_room(&client.get_room(encrypted).unwrap(), &settings).await;
+        let plain_row = project_room(&client.get_room(plain).unwrap(), &settings).await;
+        assert_eq!(
+            encrypted_row.encryption_status,
+            RoomEncryptionStatus::Encrypted
+        );
+        // The server counted three encrypted reactions; the client saw none
+        // worth a badge.
+        assert_eq!(encrypted_row.unread_count, 0);
+        assert_eq!(encrypted_row.highlight_count, 0);
+        // An unencrypted room keeps the server's count.
+        assert_eq!(plain_row.unread_count, 3);
+    }
+
+    #[tokio::test]
+    async fn own_join_previews_as_you_unless_newer_events_are_undecryptable() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        client.event_cache().subscribe().unwrap();
+        mount_homeserver(&server).await;
+        let own = user_id!("@example:localhost");
+        let joined_only = room_id!("!b5-joined-only:example.org");
+        let locked = room_id!("!b5-locked:example.org");
+        for room_id in [joined_only, locked] {
+            let f = EventFactory::new().room(room_id);
+            let mut builder = JoinedRoomBuilder::new(room_id)
+                .add_state_event(f.room_encryption().sender(*BOB))
+                .add_timeline_event(f.member(own).display_name("Ada Lovelace"));
+            if room_id == locked {
+                builder = builder.add_timeline_event(
+                    f.encrypted("ciphertext", "sender-key", "DEVICE", "missing-session")
+                        .sender(*BOB),
+                );
+            }
+            server.sync_room(&client, builder).await;
+            client
+                .latest_events()
+                .await
+                .listen_to_room(room_id)
+                .await
+                .expect("listen to the latest event");
+        }
+        let settings = client.notification_settings().await;
+        let preview_of = |room_id| {
+            let client = client.clone();
+            let settings = &settings;
+            async move {
+                tokio::time::timeout(Duration::from_secs(5), async {
+                    loop {
+                        let row = project_room(&client.get_room(room_id).unwrap(), settings).await;
+                        if let Some(preview) = row.last_message_preview {
+                            return preview;
+                        }
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                    }
+                })
+                .await
+                .expect("a preview")
+            }
+        };
+        assert_eq!(preview_of(joined_only).await, "You joined");
+        assert_eq!(preview_of(locked).await, ENCRYPTED_MESSAGE_PREVIEW);
     }
 }

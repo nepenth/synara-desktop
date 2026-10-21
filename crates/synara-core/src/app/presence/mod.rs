@@ -15,7 +15,10 @@ pub use index::{
     PresenceIndex, PresenceSnapshot, PresenceState, MAX_PRESENCE_TIMESTAMP_MS, MAX_PRESENCE_USERS,
     MAX_STATUS_MSG_CHARS,
 };
-pub use live::{NativePresenceOwner, PresenceUpdateEmit};
+pub use live::{
+    NativePresenceOwner, PresenceUpdateEmit, PRESENCE_FETCH_CONCURRENCY, PRESENCE_FETCH_TTL,
+    PRESENCE_REFRESH_INTERVAL,
+};
 pub use native::{
     subscription_id_generation, NativePresenceSnapshot, NativePresenceSnapshotResult,
     NativePresenceState, NativePresenceSubscription, NativePresenceUpdate,

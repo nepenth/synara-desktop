@@ -696,122 +696,6 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(RoomActivityTimestamp.resolve(latest: nil, previous: nil), .distantPast)
     }
 
-    func testRecentActivityQualificationExcludesEphemeralAndOrdinaryStateEvents() {
-        XCTAssertTrue(RoomActivityQualification.qualifies(.messageLike))
-        XCTAssertTrue(RoomActivityQualification.qualifies(.localEcho))
-        XCTAssertTrue(RoomActivityQualification.qualifies(.invite))
-        XCTAssertFalse(RoomActivityQualification.qualifies(.receipt))
-        XCTAssertFalse(RoomActivityQualification.qualifies(.typing))
-        XCTAssertFalse(RoomActivityQualification.qualifies(.state))
-    }
-
-    func testRecentColdStartRecoveryGatePreservesNilDistantPastAndKnownDateParity() {
-        let knownDate = RoomListFixtures.now
-
-        XCTAssertTrue(
-            RoomActivityRecoveryPolicy.shouldRecover(
-                latestRequiresRecovery: true,
-                previousActivityAt: nil
-            )
-        )
-        XCTAssertTrue(
-            RoomActivityRecoveryPolicy.shouldRecover(
-                latestRequiresRecovery: true,
-                previousActivityAt: .distantPast
-            )
-        )
-        XCTAssertFalse(
-            RoomActivityRecoveryPolicy.shouldRecover(
-                latestRequiresRecovery: true,
-                previousActivityAt: knownDate
-            )
-        )
-        XCTAssertFalse(
-            RoomActivityRecoveryPolicy.shouldRecover(
-                latestRequiresRecovery: false,
-                previousActivityAt: nil
-            )
-        )
-        XCTAssertFalse(
-            RoomActivityRecoveryPolicy.shouldRecover(
-                latestRequiresRecovery: false,
-                previousActivityAt: .distantPast
-            )
-        )
-        XCTAssertFalse(
-            RoomActivityRecoveryPolicy.shouldRecover(
-                latestRequiresRecovery: false,
-                previousActivityAt: knownDate
-            )
-        )
-    }
-
-    func testGeneratedCoreRecoveryGateBindingExecutesExhaustiveTruthTable() {
-        XCTAssertFalse(
-            SynaraCore.roomActivityRecoveryRequired(
-                latestRequiresRecovery: false,
-                previousState: .missing
-            )
-        )
-        XCTAssertFalse(
-            SynaraCore.roomActivityRecoveryRequired(
-                latestRequiresRecovery: false,
-                previousState: .known
-            )
-        )
-        XCTAssertTrue(
-            SynaraCore.roomActivityRecoveryRequired(
-                latestRequiresRecovery: true,
-                previousState: .missing
-            )
-        )
-        XCTAssertFalse(
-            SynaraCore.roomActivityRecoveryRequired(
-                latestRequiresRecovery: true,
-                previousState: .known
-            )
-        )
-    }
-
-    func testRecentColdStartRecoveryChoosesNewestQualifyingMessageBehindState() {
-        let messageTimestamp = RoomListFixtures.now.addingTimeInterval(-60)
-        let candidates = [
-            RoomActivityRecoveryPolicy.Candidate(
-                timestamp: messageTimestamp.addingTimeInterval(-60),
-                kind: .messageLike
-            ),
-            RoomActivityRecoveryPolicy.Candidate(timestamp: messageTimestamp, kind: .localEcho),
-            RoomActivityRecoveryPolicy.Candidate(
-                timestamp: RoomListFixtures.now,
-                kind: .state
-            ),
-        ]
-
-        XCTAssertEqual(
-            RoomActivityRecoveryPolicy.newestQualifyingTimestamp(from: candidates),
-            messageTimestamp
-        )
-    }
-
-    func testRecentColdStartRecoveryCannotInspectBeyondOneBoundedPage() {
-        let hiddenOutsideBound = RoomActivityRecoveryPolicy.Candidate(
-            timestamp: RoomListFixtures.now,
-            kind: .messageLike
-        )
-        let boundedStatePage = (0 ..< RoomActivityRecoveryPolicy.maximumTimelineEvents).map { offset in
-            RoomActivityRecoveryPolicy.Candidate(
-                timestamp: RoomListFixtures.now.addingTimeInterval(TimeInterval(offset + 1)),
-                kind: .state
-            )
-        }
-
-        XCTAssertNil(
-            RoomActivityRecoveryPolicy.newestQualifyingTimestamp(
-                from: [hiddenOutsideBound] + boundedStatePage
-            )
-        )
-    }
-
     func testFavoritesPartitionSeparatesTaggedJoinedRoomsFromRemaining() {
         let favorite = makeActivityRoom(id: "!fav:matrix.org", name: "Fav", activity: RoomListFixtures.now)
             .withFavorite(true)
@@ -844,10 +728,11 @@ final class RoomListServiceTests: XCTestCase {
             RoomListFavorites.sorted(rooms, order: .name).map(\.id),
             ["!a:matrix.org", "!b:matrix.org", "!z:matrix.org"]
         )
-        // Equal (missing) activity falls back to the same name order.
+        // Rooms with no latest event keep the snapshot order, which Core takes
+        // from the SDK's server-recency order, instead of going alphabetical.
         XCTAssertEqual(
             RoomListFavorites.sorted(rooms, order: .recent).map(\.id),
-            ["!a:matrix.org", "!b:matrix.org", "!z:matrix.org"]
+            ["!z:matrix.org", "!b:matrix.org", "!a:matrix.org"]
         )
     }
 
@@ -975,6 +860,146 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertFalse(view.contains("startRoomUpdatesIfReady(for: state)"))
         XCTAssertTrue(view.contains("liveUpdates.stop()"))
         XCTAssertTrue(view.contains("final class RoomListLiveUpdates"))
+    }
+
+    func testRowMappingCarriesSpacesAndLowPriorityFromCore() {
+        func row(_ id: String, isDirect: Bool = false, isSpace: Bool = false, isLowPriority: Bool = false)
+            -> SharedCoreRoomListRows.RoomRow {
+            SharedCoreRoomListRows.RoomRow(
+                roomId: id,
+                name: id,
+                avatarUrl: nil,
+                membership: .join,
+                isDirect: isDirect,
+                unreadCount: 0,
+                highlightCount: 0,
+                markedUnread: false,
+                lastActivityTs: nil,
+                lastMessagePreview: nil,
+                lastMessageIsAgentApproval: false,
+                isFavorite: false,
+                isCall: false,
+                hasActiveCall: false,
+                activeCallParticipantCount: 0,
+                directUserId: nil,
+                encryptionStatus: .unknown,
+                isSpace: isSpace,
+                isLowPriority: isLowPriority
+            )
+        }
+        let rooms = SharedCoreRoomListRows.rooms(
+            rooms: [
+                row("!space:example.org", isSpace: true),
+                row("!quiet:example.org", isLowPriority: true),
+                row("!dm:example.org", isDirect: true),
+                row("!room:example.org"),
+            ],
+            invites: [],
+            spaceParents: []
+        )
+        let byID = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0) })
+        XCTAssertEqual(byID["!space:example.org"]?.kind, .space)
+        XCTAssertEqual(byID["!dm:example.org"]?.kind, .directMessage)
+        XCTAssertEqual(byID["!room:example.org"]?.kind, .room)
+        XCTAssertEqual(byID["!quiet:example.org"]?.isLowPriority, true)
+        XCTAssertEqual(byID["!room:example.org"]?.isLowPriority, false)
+    }
+
+    func testSectionsKeepSpacesOutOfChannelsAndLowPriorityLast() {
+        let now = RoomListFixtures.now
+        let space = RoomSummary(
+            id: "!space:example.org",
+            name: "Synara Team",
+            lastMessagePreview: "",
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: .space,
+            membership: .joined,
+            lastActivityAt: now
+        )
+        let quiet = RoomSummary(
+            id: "!quiet:example.org",
+            name: "Quiet corner",
+            lastMessagePreview: "",
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: now,
+            isLowPriority: true
+        )
+        let quietDM = RoomSummary(
+            id: "!quiet-dm:example.org",
+            name: "Quiet DM",
+            lastMessagePreview: "",
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: .directMessage,
+            membership: .joined,
+            lastActivityAt: now,
+            isLowPriority: true
+        )
+        let favoriteQuiet = RoomSummary(
+            id: "!fav-quiet:example.org",
+            name: "Pinned",
+            lastMessagePreview: "",
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: now,
+            isFavorite: true,
+            isLowPriority: true
+        )
+        let channel = makeActivityRoom(id: "!channel:example.org", name: "Channel", activity: now)
+
+        let sections = RoomListFavorites.sections(from: [space, quiet, quietDM, favoriteQuiet, channel])
+
+        XCTAssertEqual(sections.favorites.map(\.id), ["!fav-quiet:example.org"], "favourite wins over low priority")
+        XCTAssertEqual(sections.channels.map(\.id), ["!channel:example.org"], "no space and no low-priority room")
+        XCTAssertEqual(sections.directs.map(\.id), [])
+        XCTAssertEqual(
+            Set(sections.lowPriority.map(\.id)),
+            ["!quiet:example.org", "!quiet-dm:example.org"]
+        )
+    }
+
+    func testCoreOrderPutsLowPriorityRoomsLast() {
+        let now = RoomListFixtures.now
+        let quiet = RoomSummary(
+            id: "!quiet:example.org",
+            name: "Aardvark",
+            lastMessagePreview: "",
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: now,
+            isLowPriority: true
+        )
+        let older = makeActivityRoom(id: "!older:example.org", name: "Zulu", activity: now.addingTimeInterval(-600))
+        XCTAssertEqual(
+            RoomListFavorites.sorted([quiet, older], order: .recent).map(\.id),
+            ["!older:example.org", "!quiet:example.org"]
+        )
+        XCTAssertEqual(
+            RoomListFavorites.sorted([quiet, older], order: .name).map(\.id),
+            ["!older:example.org", "!quiet:example.org"]
+        )
+    }
+
+    func testEmptyListBeforeTheFirstSyncIsLoadingNotEmpty() {
+        let room = makeActivityRoom(id: "!room:example.org", name: "Room", activity: RoomListFixtures.now)
+        XCTAssertEqual(SharedCoreRoomListService.state(rooms: [], loading: .notLoaded), .loading)
+        XCTAssertEqual(
+            SharedCoreRoomListService.state(rooms: [], loading: .loaded(maximumNumberOfRooms: 0)),
+            .empty
+        )
+        XCTAssertEqual(
+            SharedCoreRoomListService.state(rooms: [room], loading: .notLoaded),
+            .loaded([room]),
+            "cached rooms show while the first sync runs"
+        )
     }
 
     private func makeActivityRoom(id: String, name: String, activity: Date) -> RoomSummary {

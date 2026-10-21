@@ -134,6 +134,21 @@ impl PresenceSubscriptionRegistry {
             .collect()
     }
 
+    /// Distinct users with at least one live subscription, sorted.
+    pub fn user_ids(&self) -> Vec<String> {
+        if self.retired {
+            return Vec::new();
+        }
+        let mut users: Vec<String> = self
+            .subscriptions
+            .values()
+            .map(|subscription| subscription.user_id.clone())
+            .collect();
+        users.sort();
+        users.dedup();
+        users
+    }
+
     pub fn unsubscribe(&mut self, subscription_id: &str) -> Result<(), &'static str> {
         if self.retired {
             return Err("v-presence-session-not-live");

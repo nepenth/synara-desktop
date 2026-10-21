@@ -18,4 +18,7 @@ pub use features::{
     forbidden_requested_features, requested_cargo_features, APPROVED_MATRIX_SDK_FEATURES,
     FORBIDDEN_MATRIX_SDK_FEATURES, MATRIX_SDK_PIN_VERSION,
 };
-pub use open::{build_discovery_client, build_memory_only_client, build_unauthenticated_client};
+pub use open::{
+    apply_event_cache_policy, build_discovery_client, build_memory_only_client,
+    build_unauthenticated_client,
+};

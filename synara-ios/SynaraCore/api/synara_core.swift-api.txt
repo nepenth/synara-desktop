@@ -112,7 +112,6 @@ extension ResolvedHomeserverDto: Sendable
 extension RestoreBackupDto: Sendable
 extension RestoreBackupError: Sendable
 extension RestrictedJoinReparentDto: Sendable
-extension RoomActivityPreviousState: Sendable
 extension RoomBadgeSource: Sendable
 extension RoomCreateCommandError: Sendable
 extension RoomCreateDto: Sendable
@@ -134,6 +133,7 @@ extension RoomJoinRuleSnapshotDto: Sendable
 extension RoomJoinRuleWriteDto: Sendable
 extension RoomKeyTransferPhaseDto: Sendable
 extension RoomKeyTransferStatusDto: Sendable
+extension RoomListLoadingDto: Sendable
 extension RoomListOrder: Sendable
 extension RoomListRoomDto: Sendable
 extension RoomListSnapshotDto: Sendable
@@ -667,9 +667,6 @@ public enum RegisterFlowsStatus: Equatable, Hashable
 public enum RestoreBackupError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
-public enum RoomActivityPreviousState: Equatable, Hashable
-  case missing
-  case known
 public enum RoomCreateCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -687,6 +684,9 @@ public enum RoomKeyTransferPhaseDto: Equatable, Hashable
   case succeeded
   case failed
   case cancelled
+public enum RoomListLoadingDto: Equatable, Hashable
+  case notLoaded
+  case loaded(maximumNumberOfRooms: UInt32?)
 public enum RoomListOrder: Equatable, Hashable
   case recent
   case name
@@ -939,7 +939,6 @@ public func orderRoomIds(rooms: [RoomOrderInput], order: RoomListOrder) -> [Stri
 public func planMemberActions(context: MemberActionContext) -> MemberActionPlan
 public func registerFlows(homeserverUrl: String) async throws -> RegisterFlowsDto
 public func resolveHomeserver(serverNameOrUrl: String) async throws -> ResolvedHomeserverDto
-public func roomActivityRecoveryRequired(latestRequiresRecovery: Bool, previousState: RoomActivityPreviousState) -> Bool
 public func roomUnreadPresentation(membership: RoomUnreadMembership, numUnreadMessages: UInt64, numUnreadNotifications: UInt64, numUnreadMentions: UInt64, isMarkedUnread: Bool) -> RoomUnreadPresentationDto
 public func summarizeBadges(input: BadgeSummaryInput) -> BadgeSummary
 public protocol HttpPusherOwnerProtocol: AnyObject, Sendable
@@ -1601,6 +1600,7 @@ public struct RoomListRoomDto: Equatable, Hashable
   public var directUserId: String?
   public var isSpace: Bool
   public var isFavorite: Bool
+  public var isLowPriority: Bool
   public var isCall: Bool
   public var hasActiveCall: Bool
   public var activeCallParticipantCount: UInt32
@@ -1613,12 +1613,14 @@ public struct RoomListRoomDto: Equatable, Hashable
   public var isEncrypted: Bool
   public var encryptionStatus: RoomEncryptionStatus
   public var notificationMode: String?
-  public init(roomId: String, name: String?, canonicalAlias: String?, avatarUrl: String?, membership: RoomMembershipDto, isDirect: Bool, directUserId: String?, isSpace: Bool, isFavorite: Bool, isCall: Bool, hasActiveCall: Bool, activeCallParticipantCount: UInt32, unreadCount: UInt32, highlightCount: UInt32, markedUnread: Bool, lastActivityTs: UInt64?, lastMessagePreview: String?, lastMessageIsAgentApproval: Bool, isEncrypted: Bool, encryptionStatus: RoomEncryptionStatus, notificationMode: String?)
+  public init(roomId: String, name: String?, canonicalAlias: String?, avatarUrl: String?, membership: RoomMembershipDto, isDirect: Bool, directUserId: String?, isSpace: Bool, isFavorite: Bool, isLowPriority: Bool, isCall: Bool, hasActiveCall: Bool, activeCallParticipantCount: UInt32, unreadCount: UInt32, highlightCount: UInt32, markedUnread: Bool, lastActivityTs: UInt64?, lastMessagePreview: String?, lastMessageIsAgentApproval: Bool, isEncrypted: Bool, encryptionStatus: RoomEncryptionStatus, notificationMode: String?)
 public struct RoomListSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var orderedRoomIds: [String]
   public var rooms: [RoomListRoomDto]
-  public init(sessionGeneration: UInt64, orderedRoomIds: [String], rooms: [RoomListRoomDto])
+  public var loading: RoomListLoadingDto
+  public var spaceParents: [SpaceParentEntryDto]
+  public init(sessionGeneration: UInt64, orderedRoomIds: [String], rooms: [RoomListRoomDto], loading: RoomListLoadingDto, spaceParents: [SpaceParentEntryDto])
 public struct RoomListUpdateDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public init(sessionGeneration: UInt64)
@@ -1674,7 +1676,8 @@ public struct RoomOrderInput: Equatable, Hashable
   public var roomId: String
   public var name: String?
   public var lastActivityMs: UInt64?
-  public init(roomId: String, name: String?, lastActivityMs: UInt64?)
+  public var isLowPriority: Bool
+  public init(roomId: String, name: String?, lastActivityMs: UInt64?, isLowPriority: Bool)
 public struct RoomPermissionCapabilitiesDto: Equatable, Hashable
   public var ownPowerLevel: Int64?
   public var isCreator: Bool

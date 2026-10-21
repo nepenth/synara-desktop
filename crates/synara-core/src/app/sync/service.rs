@@ -24,6 +24,7 @@ use super::capability::probe_sliding_sync;
 use super::error::SyncError;
 use super::readiness::{snapshot_from_sdk_state, SyncReadiness, SyncReadinessSnapshot};
 use super::reconnect::{decide_reconnect, ReconnectAction, SyncIntent};
+use super::supervisor::{spawn_supervised, RestartPolicy, SupervisedTask};
 
 /// Configuration for building the product SyncService.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,6 +58,13 @@ const TERMINATED_RESTART_INITIAL: Duration = Duration::from_secs(5);
 const TERMINATED_RESTART_MAX: Duration = Duration::from_secs(60);
 /// Minimum spacing between classifier probes after `UnknownToken` broadcasts.
 const SESSION_CHANGE_PROBE_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Events per room in the room-list sliding-sync window (the SDK default is
+/// one). Automatic back-pagination is off (`apply_event_cache_policy`), so
+/// this window is what the SDK has for a room's latest-event preview and its
+/// client-side unread count until the room is subscribed or opened. One event
+/// was often a reaction, edit or state event with nothing to preview.
+pub const ROOM_LIST_TIMELINE_LIMIT: u32 = 5;
 
 /// Heartbeat thresholds; production uses the constants above.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -132,7 +140,7 @@ pub struct SyncServiceOwner {
     sliding_sync_capable: Arc<std::sync::OnceLock<bool>>,
     sliding_sync_probe: tokio::task::JoinHandle<()>,
     room_subscriptions: Arc<Mutex<RoomSubscriptions>>,
-    recovery_task: Option<tokio::task::JoinHandle<()>>,
+    recovery_task: Option<SupervisedTask>,
     /// Re-enables send queues after recoverable send errors; aborted with
     /// this owner so it never outlives the session generation.
     send_queue_recovery: tokio::task::JoinHandle<()>,
@@ -142,9 +150,9 @@ pub struct SyncServiceOwner {
     heartbeat: Arc<SyncHeartbeat>,
     heartbeat_policy: HeartbeatPolicy,
     /// Records successful room-list responses; aborted with this owner.
-    heartbeat_task: tokio::task::JoinHandle<()>,
+    heartbeat_task: SupervisedTask,
     /// Re-checks credentials after an SDK `UnknownToken` broadcast.
-    session_change_task: tokio::task::JoinHandle<()>,
+    session_change_task: SupervisedTask,
 }
 
 #[derive(Default)]
@@ -422,6 +430,7 @@ pub(crate) async fn build_sync_service_with_heartbeat(
     // the native owner recovers only non-terminal failures with bounded delay.
     let service = Arc::new(
         SyncService::builder(client.clone())
+            .with_room_list_timeline_limit(ROOM_LIST_TIMELINE_LIMIT)
             .build()
             .await
             .map_err(map_build_error)?,
@@ -691,14 +700,23 @@ impl TerminatedBackoff {
 /// sets its state after each successful sync (even `Running` → `Running`), and
 /// sets an `Error`/`Terminated` state instead when a sync fails.
 fn spawn_sync_heartbeat(
-    service: &SyncService,
+    service: &Arc<SyncService>,
     heartbeat: Arc<SyncHeartbeat>,
-) -> tokio::task::JoinHandle<()> {
-    let mut states = service.room_list_service().state();
-    tokio::spawn(async move {
-        while let Some(state) = states.next().await {
-            if is_successful_room_list_state(&state) {
-                heartbeat.record_success(Instant::now());
+) -> SupervisedTask {
+    let service = Arc::clone(service);
+    // The first run uses a subscription taken before spawning; a restarted
+    // run subscribes again and at worst misses one heartbeat.
+    let mut first = Some(service.room_list_service().state());
+    spawn_supervised(RestartPolicy::default(), move || {
+        let mut states = first
+            .take()
+            .unwrap_or_else(|| service.room_list_service().state());
+        let heartbeat = Arc::clone(&heartbeat);
+        async move {
+            while let Some(state) = states.next().await {
+                if is_successful_room_list_state(&state) {
+                    heartbeat.record_success(Instant::now());
+                }
             }
         }
     })
@@ -721,33 +739,46 @@ fn is_successful_room_list_state(state: &RoomListState) -> bool {
 fn spawn_session_change_classifier(
     client: Client,
     authentication_rejected: Arc<AtomicBool>,
-) -> tokio::task::JoinHandle<()> {
-    let mut changes = client.subscribe_to_session_changes();
-    tokio::spawn(async move {
-        let mut last_probe: Option<Instant> = None;
-        loop {
-            let change = match changes.recv().await {
-                Ok(change) => change,
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-            };
-            if !matches!(change, matrix_sdk::SessionChange::UnknownToken(_))
-                || authentication_rejected.load(Ordering::Acquire)
-            {
-                continue;
-            }
-            let now = Instant::now();
-            if last_probe.is_some_and(|probe| {
-                now.saturating_duration_since(probe) < SESSION_CHANGE_PROBE_INTERVAL
-            }) {
-                continue;
-            }
-            last_probe = Some(now);
-            if refresh_confirms_rejection(&client).await {
-                authentication_rejected.store(true, Ordering::Release);
-            }
-        }
+) -> SupervisedTask {
+    let mut first = Some(client.subscribe_to_session_changes());
+    spawn_supervised(RestartPolicy::default(), move || {
+        let changes = first
+            .take()
+            .unwrap_or_else(|| client.subscribe_to_session_changes());
+        let client = client.clone();
+        let authentication_rejected = Arc::clone(&authentication_rejected);
+        session_change_classifier_run(client, authentication_rejected, changes)
     })
+}
+
+async fn session_change_classifier_run(
+    client: Client,
+    authentication_rejected: Arc<AtomicBool>,
+    mut changes: tokio::sync::broadcast::Receiver<matrix_sdk::SessionChange>,
+) {
+    let mut last_probe: Option<Instant> = None;
+    loop {
+        let change = match changes.recv().await {
+            Ok(change) => change,
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+        };
+        if !matches!(change, matrix_sdk::SessionChange::UnknownToken(_))
+            || authentication_rejected.load(Ordering::Acquire)
+        {
+            continue;
+        }
+        let now = Instant::now();
+        if last_probe.is_some_and(|probe| {
+            now.saturating_duration_since(probe) < SESSION_CHANGE_PROBE_INTERVAL
+        }) {
+            continue;
+        }
+        last_probe = Some(now);
+        if refresh_confirms_rejection(&client).await {
+            authentication_rejected.store(true, Ordering::Release);
+        }
+    }
 }
 
 /// One explicit refresh, classified by type, never by text.
@@ -758,6 +789,7 @@ async fn refresh_confirms_rejection(client: &Client) -> bool {
     }
 }
 
+#[derive(Clone)]
 struct RecoveryContext {
     service: Arc<SyncService>,
     authentication_rejected: Arc<AtomicBool>,
@@ -789,81 +821,90 @@ impl RecoveryContext {
     }
 }
 
-fn spawn_network_recovery(
+fn spawn_network_recovery(context: RecoveryContext, policy: HeartbeatPolicy) -> SupervisedTask {
+    // Subscribe before spawning so a fast first sync failure cannot be missed.
+    // A restarted run starts from the current state, so it misses nothing.
+    let mut first = Some(context.service.state());
+    spawn_supervised(RestartPolicy::default(), move || {
+        let states = first.take().unwrap_or_else(|| context.service.state());
+        let initial = states.get();
+        network_recovery_run(context.clone(), policy, initial, states)
+    })
+}
+
+async fn network_recovery_run(
     context: RecoveryContext,
     policy: HeartbeatPolicy,
-) -> tokio::task::JoinHandle<()> {
-    // Subscribe before spawning so a fast first sync failure cannot be missed.
-    let mut states = context.service.state();
-    tokio::spawn(async move {
-        let mut pending = Some(states.get());
-        let mut terminated_backoff = TerminatedBackoff::default();
-        loop {
-            let state = match pending.take() {
-                Some(state) => state,
-                None => {
-                    tokio::select! {
-                        next = states.next() => match next {
-                            Some(state) => state,
-                            None => break,
-                        },
-                        _ = tokio::time::sleep(policy.check_interval) => {
-                            // A long-poll left dead by sleep keeps the SDK in
-                            // Running with no error; replace it.
-                            if context.may_restart()
-                                && context.heartbeat.is_stale(Instant::now(), policy)
-                            {
-                                context
-                                    .restart_if(true, |state| matches!(state, SdkSyncState::Running))
-                                    .await;
-                            }
-                            continue;
-                        }
-                    }
-                }
-            };
-            match state {
-                SdkSyncState::Error(error) if is_terminal_auth_error(error.as_ref()) => {
-                    context
-                        .authentication_rejected
-                        .store(true, Ordering::Release);
-                }
-                SdkSyncState::Error(error) if is_sliding_sync_unsupported_error(error.as_ref()) => {
-                    // Terminal until an explicit start: retrying a server without
-                    // MSC4186 repeats the same 404 every few seconds forever.
-                }
-                SdkSyncState::Error(error) if context.may_restart() => {
-                    let delay = restart_delay_for_error(error.as_ref());
-                    tokio::select! {
-                        next = states.next() => { pending = next; if pending.is_none() { break; } }
-                        _ = tokio::time::sleep(delay) => {
+    initial: SdkSyncState,
+    mut states: impl futures_util::Stream<Item = SdkSyncState> + Unpin,
+) {
+    let mut pending = Some(initial);
+    let mut terminated_backoff = TerminatedBackoff::default();
+    loop {
+        let state = match pending.take() {
+            Some(state) => state,
+            None => {
+                tokio::select! {
+                    next = states.next() => match next {
+                        Some(state) => state,
+                        None => break,
+                    },
+                    _ = tokio::time::sleep(policy.check_interval) => {
+                        // A long-poll left dead by sleep keeps the SDK in
+                        // Running with no error; replace it.
+                        if context.may_restart()
+                            && context.heartbeat.is_stale(Instant::now(), policy)
+                        {
                             context
-                                .restart_if(false, |state| {
-                                    matches!(state, SdkSyncState::Error(error) if !is_terminal_auth_error(error.as_ref())
-                                        && !is_sliding_sync_unsupported_error(error.as_ref()))
-                                })
+                                .restart_if(true, |state| matches!(state, SdkSyncState::Running))
                                 .await;
                         }
+                        continue;
                     }
                 }
-                SdkSyncState::Terminated if context.may_restart() => {
-                    // The SDK supervisor ended without our stop() while a
-                    // session is installed; bring it back with growing delays.
-                    let delay = terminated_backoff.next_delay();
-                    tokio::select! {
-                        next = states.next() => { pending = next; if pending.is_none() { break; } }
-                        _ = tokio::time::sleep(delay) => {
-                            context
-                                .restart_if(false, |state| matches!(state, SdkSyncState::Terminated))
-                                .await;
-                        }
-                    }
-                }
-                SdkSyncState::Running => terminated_backoff.reset(),
-                _ => {}
             }
+        };
+        match state {
+            SdkSyncState::Error(error) if is_terminal_auth_error(error.as_ref()) => {
+                context
+                    .authentication_rejected
+                    .store(true, Ordering::Release);
+            }
+            SdkSyncState::Error(error) if is_sliding_sync_unsupported_error(error.as_ref()) => {
+                // Terminal until an explicit start: retrying a server without
+                // MSC4186 repeats the same 404 every few seconds forever.
+            }
+            SdkSyncState::Error(error) if context.may_restart() => {
+                let delay = restart_delay_for_error(error.as_ref());
+                tokio::select! {
+                    next = states.next() => { pending = next; if pending.is_none() { break; } }
+                    _ = tokio::time::sleep(delay) => {
+                        context
+                            .restart_if(false, |state| {
+                                matches!(state, SdkSyncState::Error(error) if !is_terminal_auth_error(error.as_ref())
+                                    && !is_sliding_sync_unsupported_error(error.as_ref()))
+                            })
+                            .await;
+                    }
+                }
+            }
+            SdkSyncState::Terminated if context.may_restart() => {
+                // The SDK supervisor ended without our stop() while a
+                // session is installed; bring it back with growing delays.
+                let delay = terminated_backoff.next_delay();
+                tokio::select! {
+                    next = states.next() => { pending = next; if pending.is_none() { break; } }
+                    _ = tokio::time::sleep(delay) => {
+                        context
+                            .restart_if(false, |state| matches!(state, SdkSyncState::Terminated))
+                            .await;
+                    }
+                }
+            }
+            SdkSyncState::Running => terminated_backoff.reset(),
+            _ => {}
         }
-    })
+    }
 }
 
 #[cfg(test)]

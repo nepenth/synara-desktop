@@ -20,6 +20,7 @@ mod error;
 mod readiness;
 mod reconnect;
 mod service;
+mod supervisor;
 mod sync_phase;
 mod wake;
 
@@ -35,7 +36,8 @@ pub use readiness::{
 pub use reconnect::{decide_reconnect, is_restartable, ReconnectAction, SyncIntent};
 pub use service::{
     assert_generation, build_sync_service, readiness_of, unconfigured_snapshot, SyncServiceConfig,
-    SyncServiceOwner,
+    SyncServiceOwner, ROOM_LIST_TIMELINE_LIMIT,
 };
+pub use supervisor::{spawn_supervised, RestartPolicy, SupervisedTask, TaskExit, TaskHealth};
 pub use sync_phase::SyncPhase;
 pub use wake::{recover_cooldown_active, suspend_detected, RECOVER_COOLDOWN, SUSPEND_WALL_SKEW};
