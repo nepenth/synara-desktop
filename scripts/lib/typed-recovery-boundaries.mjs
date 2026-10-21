@@ -27,6 +27,12 @@ const operations = [
     "SessionStatusError",
   ],
   [
+    "identity_reset_password",
+    "password",
+    "IdentityResetStateDto",
+    "SessionStatusError",
+  ],
+  [
     "backup_repair",
     "recovery_secret",
     "BackupStatusDto",

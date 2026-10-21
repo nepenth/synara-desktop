@@ -87,12 +87,10 @@ async fn status_from(
             .map_err(|_| "v-crypto.4-status-default-key-failed")?,
         None => None,
     };
-    let default_key = default_key
-        .map(|raw| {
-            raw.deserialize()
-                .map_err(|_| "v-crypto.4-status-default-key-failed")
-        })
-        .transpose()?;
+    // Account data cannot be deleted: disabling recovery and an identity
+    // reset both write an empty default-key event. One that does not parse
+    // means no default key, as in the SDK's `SecretStorage::is_enabled`.
+    let default_key = default_key.and_then(|raw| raw.deserialize().ok());
     let default_key_set = default_key.is_some();
     let default_key_id = default_key.as_ref().map(|content| content.key_id.as_str());
     let (exists, passphrase_configured) = match default_key.as_ref() {
@@ -593,8 +591,10 @@ mod tests {
         )
         .await;
         assert!(mutated.get());
+        // A default key that does not parse reads as none (an empty event is
+        // how recovery is disabled), so the readback is incomplete.
         match result {
-            Err(error) => assert_eq!(error, "v-crypto.4-status-default-key-failed"),
+            Err(error) => assert_eq!(error, "v-crypto.4-operation-incomplete"),
             Ok(_) => panic!("malformed authoritative readback must not return a recovery key"),
         }
     }

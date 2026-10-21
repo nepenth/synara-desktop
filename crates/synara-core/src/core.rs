@@ -110,6 +110,7 @@ use crate::transport::{MatrixIpcError, MatrixIpcErrorCategory, MAX_WIRE_COUNTER}
 // and owner error mapping together. Only the parent registry imports them.
 mod account_data;
 use account_data::*;
+mod identity_reset;
 mod messaging;
 use messaging::*;
 mod native_extras;
@@ -154,6 +155,8 @@ pub struct CoreState {
     user_status: Mutex<Option<Arc<NativeUserStatusOwner>>>,
     verification: Mutex<Option<Arc<NativeVerificationOwner>>>,
     devices: Mutex<Option<Arc<NativeDeviceOwner>>>,
+    /// The post-sign-in "Verify this device" prompt for the open session.
+    verification_prompt: Mutex<Option<crate::app::cross_signing::DeviceVerificationPromptArm>>,
     dehydrated_devices: Mutex<Option<Arc<NativeDehydratedDevicesOwner>>>,
     join_rules: Mutex<Option<Arc<NativeRoomJoinRuleOwner>>>,
     image_packs: Mutex<Option<Arc<NativeImagePackOwner>>>,
@@ -322,6 +325,7 @@ impl Core {
                 user_status: Mutex::new(None),
                 verification: Mutex::new(None),
                 devices: Mutex::new(None),
+                verification_prompt: Mutex::new(None),
                 dehydrated_devices: Mutex::new(None),
                 join_rules: Mutex::new(None),
                 image_packs: Mutex::new(None),
@@ -384,6 +388,11 @@ impl Core {
     /// mirror that never read media and shares its account with the live
     /// session. Returns the user whose projection closed.
     pub(crate) async fn close_projection(&self) -> Result<Option<String>, MatrixIpcError> {
+        // Sign-out ends a pending identity reset even while a shell still
+        // holds the device owner; the SDK handle stops polling the homeserver.
+        if let Some(devices) = self.state.device_owner()? {
+            devices.identity_reset_abandon().await;
+        }
         let mut guard = self
             .state
             .session
@@ -433,6 +442,13 @@ impl Core {
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *devices = None;
         drop(devices);
+        let mut verification_prompt = self
+            .state
+            .verification_prompt
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *verification_prompt = None;
+        drop(verification_prompt);
         let mut dehydrated_devices = self
             .state
             .dehydrated_devices

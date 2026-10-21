@@ -68,6 +68,8 @@ pub struct NativeDeviceOwner {
     delete: Mutex<DeviceDeleteState>,
     room_keys: Arc<AsyncMutex<RoomKeyTransferFlow>>,
     pending_cross_signing: Mutex<Option<String>>,
+    /// A pending identity reset. Dropped, and cancelled, with the owner.
+    identity_reset: crate::app::cross_signing::IdentityResetFlow,
     own_keys_query: OwnKeysQueryGate,
     server_backup: crate::app::backup::ServerBackupCache,
 }
@@ -224,6 +226,7 @@ impl NativeDeviceOwner {
                 session_generation,
             ))),
             pending_cross_signing: Mutex::new(None),
+            identity_reset: crate::app::cross_signing::IdentityResetFlow::new(session_generation),
             own_keys_query: OwnKeysQueryGate::default(),
             server_backup: crate::app::backup::ServerBackupCache::default(),
         })
@@ -403,6 +406,68 @@ impl NativeDeviceOwner {
             }
             Err(CrossSigningPasswordError::Failed(diagnostic)) => Err(diagnostic),
         }
+    }
+
+    /// Start an identity reset (S5). The SDK deletes key backup and disables
+    /// secret storage before it asks for authentication.
+    pub async fn identity_reset_start(
+        &self,
+    ) -> Result<crate::app::cross_signing::NativeIdentityResetState, &'static str> {
+        let result = self.identity_reset.start(&self.client).await;
+        self.server_backup.invalidate().await;
+        result
+    }
+
+    /// Answer the password stage of the pending identity reset. The password
+    /// stays a method argument.
+    pub async fn identity_reset_password(
+        &self,
+        password: &str,
+    ) -> Result<crate::app::cross_signing::NativeIdentityResetState, &'static str> {
+        let result = self
+            .identity_reset
+            .authenticate_password(&self.client, password)
+            .await;
+        self.server_backup.invalidate().await;
+        result
+    }
+
+    /// Continue the pending identity reset after account-page approval.
+    pub async fn identity_reset_continue(
+        &self,
+    ) -> Result<crate::app::cross_signing::NativeIdentityResetState, &'static str> {
+        let result = self
+            .identity_reset
+            .continue_after_approval(&self.client)
+            .await;
+        self.server_backup.invalidate().await;
+        result
+    }
+
+    pub async fn identity_reset_cancel(&self) {
+        self.identity_reset.cancel(&self.client).await;
+    }
+
+    /// Sign-out: drop a pending reset without a homeserver request.
+    pub async fn identity_reset_abandon(&self) {
+        self.identity_reset.abandon().await;
+    }
+
+    pub fn identity_reset_pending(&self) -> bool {
+        self.identity_reset.is_pending()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn identity_reset_handle(
+        &self,
+    ) -> Option<std::sync::Weak<matrix_sdk::encryption::recovery::IdentityResetHandle>> {
+        self.identity_reset.pending_handle()
+    }
+
+    /// Whether this device still needs verification by the account's
+    /// existing identity (the post-sign-in prompt's live condition).
+    pub async fn device_needs_verification(&self) -> Result<bool, &'static str> {
+        crate::app::cross_signing::device_needs_verification(&self.client).await
     }
 
     /// Core's `crypto_status` for this session; a local read.

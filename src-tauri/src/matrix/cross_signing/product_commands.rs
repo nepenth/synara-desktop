@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use synara_core::app::cross_signing::{NativeDeviceVerificationPrompt, NativeIdentityResetState};
+
 use super::*;
 
 /// SNC-P3.6 — retain the existing payload-free cross-signing status wire DTO
@@ -83,4 +85,54 @@ pub(super) fn cross_signing_setup_error(diagnostic_id: &'static str) -> MatrixAu
         "Native cross-signing setup could not be completed.",
         diagnostic_id,
     )
+}
+
+/// S5 — start "Reset identity" for an account that lost its recovery key and
+/// every other device. Core keeps the SDK reset handle for the session.
+#[tauri::command]
+pub async fn matrix_identity_reset_start(
+    core: State<'_, Arc<synara_core::Core>>,
+) -> Result<NativeIdentityResetState, MatrixAuthCommandError> {
+    crate::bridge::identity_reset::identity_reset_start(core.inner().as_ref()).await
+}
+
+#[tauri::command]
+pub async fn matrix_identity_reset_password(
+    core: State<'_, Arc<synara_core::Core>>,
+    mut password: String,
+) -> Result<NativeIdentityResetState, MatrixAuthCommandError> {
+    let result =
+        crate::bridge::identity_reset::identity_reset_password(core.inner().as_ref(), &password)
+            .await;
+    password.zeroize();
+    result
+}
+
+#[tauri::command]
+pub async fn matrix_identity_reset_continue(
+    core: State<'_, Arc<synara_core::Core>>,
+) -> Result<NativeIdentityResetState, MatrixAuthCommandError> {
+    crate::bridge::identity_reset::identity_reset_continue(core.inner().as_ref()).await
+}
+
+#[tauri::command]
+pub async fn matrix_identity_reset_cancel(
+    core: State<'_, Arc<synara_core::Core>>,
+) -> Result<bool, MatrixAuthCommandError> {
+    crate::bridge::identity_reset::identity_reset_cancel(core.inner().as_ref()).await
+}
+
+/// S5 — whether to show "Verify This Device" once after sign-in.
+#[tauri::command]
+pub async fn matrix_device_verification_prompt(
+    core: State<'_, Arc<synara_core::Core>>,
+) -> Result<NativeDeviceVerificationPrompt, MatrixAuthCommandError> {
+    crate::bridge::identity_reset::device_verification_prompt(core.inner().as_ref()).await
+}
+
+#[tauri::command]
+pub async fn matrix_device_verification_prompt_dismiss(
+    core: State<'_, Arc<synara_core::Core>>,
+) -> Result<NativeDeviceVerificationPrompt, MatrixAuthCommandError> {
+    crate::bridge::identity_reset::device_verification_prompt_dismiss(core.inner().as_ref())
 }

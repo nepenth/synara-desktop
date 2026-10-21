@@ -4,7 +4,10 @@
  * Requested initial position for one native timeline view.
  *
  * `Normal` is the native owner route for an ordinary room open. It resolves
- * shared unread state before considering the optional, UI-held restore hint;
- * the hint is neither sync state nor a server-side viewport command.
+ * shared unread state first; the optional, UI-held hint only says whether the
+ * user left the room at the bottom of an unchanged live tail. A restored
+ * history anchor stays the presenter's own concern (it parks rows of the
+ * live window it renders), so Core never opens an event-focused window for
+ * it. The hint is neither sync state nor a server-side viewport command.
  */
 export type NativeTimelineViewportHint = { at_bottom: boolean, restored_anchor_event_id?: string, live_tail_event_id?: string, updated_at_ms?: number, };

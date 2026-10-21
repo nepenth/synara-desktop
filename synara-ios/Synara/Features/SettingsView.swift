@@ -1790,12 +1790,9 @@ private struct SecuritySettingsView: View {
     @StateObject private var sessionCrypto = SessionCryptoStatusObserver()
     @StateObject private var recoverySetup = RecoverySetupFlow()
     @State private var recoveryKey = ""
-    @State private var recoveryPassphrase = ""
-    @State private var recoveryPassphraseConfirmation = ""
-    @State private var accountPassword = ""
-    @State private var copiedRecoveryKey = false
     @State private var cryptoActionMessage: String?
     @State private var isRunningCryptoAction = false
+    @State private var showsIdentityReset = false
 
     /// Shown while the account has no recovery, and kept while a setup is in
     /// progress or its key is on screen, even after status refreshes.
@@ -1850,7 +1847,9 @@ private struct SecuritySettingsView: View {
             }
 
             if showsRecoverySetup {
-                recoverySetupSection
+                RecoverySetupSection(flow: recoverySetup) {
+                    sessionCrypto.apply(await environment.sessionCrypto.refresh())
+                }
             } else {
                 Section {
                     SecureField("Recovery key", text: $recoveryKey)
@@ -1883,6 +1882,23 @@ private struct SecuritySettingsView: View {
                         .accessibilityIdentifier("CryptoActionMessage")
                 }
             }
+
+            if sessionCrypto.status.crossSigning.offersIdentityReset {
+                Section {
+                    Button(IdentityResetCopy.title, role: .destructive) {
+                        showsIdentityReset = true
+                    }
+                    .accessibilityIdentifier("ResetIdentityButton")
+                } footer: {
+                    Text(IdentityResetCopy.settingsDescription)
+                }
+            }
+        }
+        .sheet(isPresented: $showsIdentityReset, onDismiss: {
+            Task { sessionCrypto.apply(await environment.sessionCrypto.refresh()) }
+        }) {
+            IdentityResetSheet()
+                .environment(\.appEnvironment, environment)
         }
         .navigationTitle("Security")
         .navigationBarTitleDisplayMode(.inline)
@@ -1901,12 +1917,41 @@ private struct SecuritySettingsView: View {
         }
     }
 
-    /// Desktop's bootstrap steps and wording (Setup Device Verification, then
-    /// Set Up Recovery), on the existing Form controls.
-    @ViewBuilder
-    private var recoverySetupSection: some View {
+    private func runCryptoAction(
+        _ action: @escaping () async -> CryptoActionResult,
+        onComplete: @escaping @MainActor () -> Void = {}
+    ) {
+        isRunningCryptoAction = true
+        cryptoActionMessage = nil
+        Task {
+            let result = await action()
+            let status = await environment.sessionCrypto.refresh()
+            await MainActor.run {
+                sessionCrypto.apply(status)
+                cryptoActionMessage = result.message
+                isRunningCryptoAction = false
+                onComplete()
+            }
+        }
+    }
+}
+
+/// Desktop's bootstrap steps and wording (Setup Device Verification, then
+/// Set Up Recovery), on the existing Form controls. Security shows it while
+/// the account has no recovery; Reset Identity shows it right after a reset.
+struct RecoverySetupSection: View {
+    @Environment(\.appEnvironment) private var environment
+    @ObservedObject var flow: RecoverySetupFlow
+    /// Re-read status after anything was set up.
+    var onSetUp: () async -> Void = {}
+    @State private var recoveryPassphrase = ""
+    @State private var recoveryPassphraseConfirmation = ""
+    @State private var accountPassword = ""
+    @State private var copiedRecoveryKey = false
+
+    var body: some View {
         Section {
-            switch recoverySetup.phase {
+            switch flow.phase {
             case .idle, .working, .finished:
                 SecureField("Recovery Passphrase", text: $recoveryPassphrase)
                     .textContentType(.newPassword)
@@ -1918,7 +1963,7 @@ private struct SecuritySettingsView: View {
                     let passphrase = recoveryPassphrase
                     let confirmation = recoveryPassphraseConfirmation
                     Task {
-                        await recoverySetup.start(
+                        await flow.start(
                             passphrase: passphrase,
                             confirmation: confirmation,
                             crypto: environment.crypto
@@ -1928,7 +1973,7 @@ private struct SecuritySettingsView: View {
                 } label: {
                     recoverySetupLabel("Set Up Recovery")
                 }
-                .disabled(recoverySetup.isWorking || recoveryPassphrase.isEmpty)
+                .disabled(flow.isWorking || recoveryPassphrase.isEmpty)
                 .accessibilityIdentifier("SetUpRecoveryButton")
             case .passwordRequired:
                 Text("Synara will create and securely store your cross-signing identity on this device. Enter your account password to continue.")
@@ -1939,7 +1984,7 @@ private struct SecuritySettingsView: View {
                 Button {
                     let password = accountPassword
                     Task {
-                        await recoverySetup.authenticate(password: password, crypto: environment.crypto)
+                        await flow.authenticate(password: password, crypto: environment.crypto)
                         accountPassword = ""
                         await finishRecoverySetupStep()
                     }
@@ -1950,7 +1995,7 @@ private struct SecuritySettingsView: View {
                 .accessibilityIdentifier("RecoveryAuthenticateButton")
                 Button("Cancel", role: .cancel) {
                     accountPassword = ""
-                    recoverySetup.cancel()
+                    flow.cancel()
                 }
                 .accessibilityIdentifier("RecoveryCancelButton")
             case .showingKey(let key):
@@ -1971,11 +2016,11 @@ private struct SecuritySettingsView: View {
                 .accessibilityIdentifier("CopyRecoveryKeyButton")
                 Button("Done") {
                     copiedRecoveryKey = false
-                    recoverySetup.acknowledgeKey()
+                    flow.acknowledgeKey()
                 }
                 .accessibilityIdentifier("RecoveryKeyDoneButton")
             }
-            if let message = recoverySetup.errorMessage {
+            if let message = flow.errorMessage {
                 Text(message)
                     .font(SynaraTypography.supporting)
                     .foregroundStyle(SynaraColor.criticalText)
@@ -1990,7 +2035,7 @@ private struct SecuritySettingsView: View {
 
     @ViewBuilder
     private func recoverySetupLabel(_ title: String) -> some View {
-        if recoverySetup.isWorking {
+        if flow.isWorking {
             ProgressView()
         } else {
             Text(title)
@@ -2001,31 +2046,422 @@ private struct SecuritySettingsView: View {
     /// after anything was set up.
     @MainActor
     private func finishRecoverySetupStep() async {
-        switch recoverySetup.phase {
+        switch flow.phase {
         case .showingKey, .finished:
             recoveryPassphrase = ""
             recoveryPassphraseConfirmation = ""
-            sessionCrypto.apply(await environment.sessionCrypto.refresh())
+            await onSetUp()
         case .idle, .working, .passwordRequired:
             break
         }
     }
+}
+extension SynaraCryptoCrossSigningStatus {
+    /// Reset Identity is offered once the account has an identity.
+    var offersIdentityReset: Bool {
+        switch self {
+        case .ready, .needsVerification, .needsRecovery:
+            return true
+        case .unknown, .notSetUp:
+            return false
+        }
+    }
+}
 
-    private func runCryptoAction(
-        _ action: @escaping () async -> CryptoActionResult,
-        onComplete: @escaping @MainActor () -> Void = {}
-    ) {
-        isRunningCryptoAction = true
-        cryptoActionMessage = nil
-        Task {
-            let result = await action()
-            let status = await environment.sessionCrypto.refresh()
-            await MainActor.run {
-                sessionCrypto.apply(status)
-                cryptoActionMessage = result.message
-                isRunningCryptoAction = false
-                onComplete()
+/// Reset Identity, in desktop's order: the warning, then the password or the
+/// browser approval the homeserver asks for, then recovery setup.
+///
+/// Leaving the password or approval step cancels the reset in Core; the SDK
+/// has already deleted key backup and disabled recovery by then, so the
+/// cancelled state and terminal failures point back to recovery setup.
+@MainActor
+final class IdentityResetFlow: ObservableObject {
+    enum Phase: Equatable {
+        case warning
+        case passwordRequired
+        case approvalRequired(URL)
+        case complete
+        /// A pending reset was cancelled after Start.
+        case cancelled
+    }
+
+    @Published private(set) var phase: Phase = .warning
+    @Published private(set) var isWorking = false
+    @Published private(set) var errorMessage: String?
+    /// A step failed after Start in a way that may have left the account
+    /// without key backup and recovery.
+    @Published private(set) var recoveryMayBeOff = false
+
+    /// A reset is waiting on the password or the approval.
+    var isPending: Bool {
+        switch phase {
+        case .passwordRequired, .approvalRequired:
+            return true
+        case .warning, .complete, .cancelled:
+            return false
+        }
+    }
+
+    /// The sheet is done: closing it needs no cancel in Core.
+    var isFinished: Bool {
+        phase == .complete || phase == .cancelled
+    }
+
+    func start(crypto: CryptoStatusServicing) async {
+        guard phase == .warning, isWorking == false else { return }
+        await run { await crypto.startIdentityReset() }
+    }
+
+    func authenticate(password: String, crypto: CryptoStatusServicing) async {
+        guard phase == .passwordRequired, isWorking == false else { return }
+        guard password.isEmpty == false else {
+            errorMessage = "Enter your account password."
+            return
+        }
+        await run { await crypto.authenticateIdentityReset(password: password) }
+    }
+
+    func continueAfterApproval(crypto: CryptoStatusServicing) async {
+        guard case .approvalRequired = phase, isWorking == false else { return }
+        await run { await crypto.continueIdentityReset() }
+    }
+
+    /// Cancel a pending reset in Core and say what that left behind. With
+    /// nothing pending this only clears the step.
+    func cancel(crypto: CryptoStatusServicing) async {
+        errorMessage = nil
+        guard isPending else {
+            if phase != .cancelled { phase = .warning }
+            return
+        }
+        await crypto.cancelIdentityReset()
+        phase = .cancelled
+    }
+
+    private func run(_ step: () async -> IdentityResetResult) async {
+        isWorking = true
+        errorMessage = nil
+        let result = await step()
+        isWorking = false
+        switch result {
+        case .complete:
+            phase = .complete
+        case .passwordRequired:
+            phase = .passwordRequired
+        case .approvalRequired(let url):
+            phase = .approvalRequired(url)
+        case .passwordRejected:
+            phase = .passwordRequired
+            errorMessage = IdentityResetCopy.passwordRejected
+        case .approvalPending:
+            errorMessage = IdentityResetCopy.approvalPending
+        case .failed(let message):
+            errorMessage = message
+            recoveryMayBeOff = true
+        }
+    }
+}
+
+/// The Reset Identity steps as Form sections, shared by the Security sheet
+/// and the "Verify This Device" prompt.
+struct IdentityResetSections: View {
+    @Environment(\.appEnvironment) private var environment
+    @Environment(\.openURL) private var openURL
+    @ObservedObject var flow: IdentityResetFlow
+    @ObservedObject var recoverySetup: RecoverySetupFlow
+    let onDone: () -> Void
+    @State private var accountPassword = ""
+    @State private var openedApprovalURL: URL?
+
+    var body: some View {
+        switch flow.phase {
+        case .warning:
+            Section {
+                Text(IdentityResetCopy.warningIntro)
+                ForEach(IdentityResetCopy.warnings, id: \.self) { warning in
+                    Label(warning, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(SynaraColor.primaryText)
+                }
             }
+            .accessibilityIdentifier("IdentityResetWarning")
+            Section {
+                Button(role: .destructive) {
+                    Task { await flow.start(crypto: environment.crypto) }
+                } label: {
+                    workingLabel(IdentityResetCopy.title)
+                }
+                .disabled(flow.isWorking)
+                .accessibilityIdentifier("ConfirmResetIdentityButton")
+            }
+        case .passwordRequired:
+            Section {
+                Text(IdentityResetCopy.password)
+                    .font(SynaraTypography.supporting)
+                SecureField("Account Password", text: $accountPassword)
+                    .textContentType(.password)
+                    .accessibilityIdentifier("IdentityResetPasswordField")
+                Button(role: .destructive) {
+                    let password = accountPassword
+                    Task {
+                        await flow.authenticate(password: password, crypto: environment.crypto)
+                        accountPassword = ""
+                    }
+                } label: {
+                    workingLabel("Authenticate")
+                }
+                .disabled(flow.isWorking || accountPassword.isEmpty)
+                .accessibilityIdentifier("IdentityResetAuthenticateButton")
+            }
+        case .approvalRequired(let url):
+            Section {
+                Text(IdentityResetCopy.approval)
+                    .font(SynaraTypography.supporting)
+                Button(IdentityResetCopy.openAccountPage) {
+                    openURL(url)
+                }
+                .disabled(flow.isWorking)
+                .accessibilityIdentifier("IdentityResetOpenAccountPageButton")
+                Button {
+                    Task { await flow.continueAfterApproval(crypto: environment.crypto) }
+                } label: {
+                    workingLabel("Continue")
+                }
+                .disabled(flow.isWorking)
+                .accessibilityIdentifier("IdentityResetContinueButton")
+            }
+            .onAppear {
+                // Open the account page once; the button reopens it.
+                guard openedApprovalURL != url else { return }
+                openedApprovalURL = url
+                openURL(url)
+            }
+        case .cancelled:
+            Section {
+                Text(IdentityResetCopy.cancelled)
+                Button("Close", action: onDone)
+                    .accessibilityIdentifier("IdentityResetCloseButton")
+            }
+        case .complete:
+            if recoverySetup.phase == .finished {
+                Section {
+                    Text(IdentityResetCopy.configured)
+                    Button("Done", action: onDone)
+                        .accessibilityIdentifier("IdentityResetDoneButton")
+                }
+            } else {
+                Section {
+                    Text(IdentityResetCopy.recovery)
+                        .font(SynaraTypography.supporting)
+                }
+                RecoverySetupSection(flow: recoverySetup) {
+                    _ = await environment.sessionCrypto.refresh()
+                }
+            }
+        }
+        if let message = flow.errorMessage {
+            Section {
+                Text(message)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.criticalText)
+                    .accessibilityIdentifier("IdentityResetErrorText")
+                if flow.recoveryMayBeOff {
+                    Text(IdentityResetCopy.recoveryMayBeOff)
+                        .font(SynaraTypography.supporting)
+                        .accessibilityIdentifier("IdentityResetRecoveryOffText")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func workingLabel(_ title: String) -> some View {
+        if flow.isWorking {
+            ProgressView()
+        } else {
+            Text(title)
+        }
+    }
+}
+
+/// Security → Reset Identity.
+struct IdentityResetSheet: View {
+    @Environment(\.appEnvironment) private var environment
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var flow = IdentityResetFlow()
+    @StateObject private var recoverySetup = RecoverySetupFlow()
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                IdentityResetSections(flow: flow, recoverySetup: recoverySetup) {
+                    dismiss()
+                }
+            }
+            .navigationTitle(IdentityResetCopy.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(flow.isFinished ? "Close" : "Cancel") {
+                        Task {
+                            // A pending reset stays open on its cancelled state.
+                            let wasPending = flow.isPending
+                            await flow.cancel(crypto: environment.crypto)
+                            if wasPending == false { dismiss() }
+                        }
+                    }
+                    .disabled(flow.isWorking)
+                    .accessibilityIdentifier("IdentityResetCancelButton")
+                }
+            }
+        }
+        .interactiveDismissDisabled(flow.isPending || flow.isWorking)
+        .accessibilityIdentifier("IdentityResetSheet")
+    }
+}
+
+/// When the "Verify This Device" prompt shows, and what follows it. "Verify
+/// from Another Device" only records the choice and closes the sheet; the
+/// request starts from the sheet's `onDismiss`, once it is gone, so the
+/// verification sheet can present.
+@MainActor
+final class VerifyDevicePromptPresentation: ObservableObject {
+    @Published var isPresented = false
+    private var verifyAfterDismiss = false
+
+    func showIfNeeded(crypto: CryptoStatusServicing) async {
+        if await crypto.deviceVerificationPromptVisible() {
+            isPresented = true
+        }
+    }
+
+    func verifyWithAnotherDevice() {
+        verifyAfterDismiss = true
+        isPresented = false
+    }
+
+    /// The sheet is gone: hide it in Core for the session, then start the
+    /// recorded verification request. Nil when none was asked for.
+    func didDismiss(crypto: CryptoStatusServicing) async -> CryptoActionResult? {
+        await crypto.dismissDeviceVerificationPrompt()
+        guard verifyAfterDismiss else { return nil }
+        verifyAfterDismiss = false
+        return await crypto.requestDeviceVerification()
+    }
+}
+
+/// "Verify This Device", once after signing in on a new device of an account
+/// that already has an identity. Core decides when; closing it in any way
+/// dismisses it for the session, and Security keeps every entry.
+struct VerifyThisDevicePromptSheet: View {
+    @Environment(\.appEnvironment) private var environment
+    @Environment(\.dismiss) private var dismiss
+    /// Record the choice and close; verification starts once the sheet is gone.
+    let onVerifyWithAnotherDevice: () -> Void
+    @StateObject private var reset = IdentityResetFlow()
+    @StateObject private var recoverySetup = RecoverySetupFlow()
+    @State private var showsReset = false
+    @State private var showsRecoveryKey = false
+    @State private var recoveryKey = ""
+    @State private var recoveryMessage: String?
+    @State private var isRecovering = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if showsReset {
+                    IdentityResetSections(flow: reset, recoverySetup: recoverySetup) {
+                        dismiss()
+                    }
+                } else {
+                    choices
+                }
+            }
+            .navigationTitle(showsReset ? IdentityResetCopy.title : VerifyDevicePromptCopy.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(closeTitle) {
+                        Task {
+                            let wasPending = reset.isPending
+                            await reset.cancel(crypto: environment.crypto)
+                            if wasPending == false { dismiss() }
+                        }
+                    }
+                    .disabled(reset.isWorking || isRecovering)
+                    .accessibilityIdentifier("VerifyDevicePromptLaterButton")
+                }
+            }
+        }
+        .interactiveDismissDisabled(reset.isPending || reset.isWorking)
+        .accessibilityIdentifier("VerifyDevicePromptSheet")
+    }
+
+    private var closeTitle: String {
+        if showsReset {
+            return reset.isFinished ? "Close" : "Cancel"
+        }
+        return VerifyDevicePromptCopy.later
+    }
+
+    @ViewBuilder
+    private var choices: some View {
+        Section {
+            Text(VerifyDevicePromptCopy.description)
+        }
+        Section {
+            Button(VerifyDevicePromptCopy.verifyWithDevice) {
+                onVerifyWithAnotherDevice()
+            }
+            .accessibilityIdentifier("VerifyDevicePromptVerifyButton")
+            Button(VerifyDevicePromptCopy.recoveryKey) {
+                showsRecoveryKey = true
+            }
+            .disabled(showsRecoveryKey)
+            .accessibilityIdentifier("VerifyDevicePromptRecoveryKeyButton")
+            if showsRecoveryKey {
+                SecureField("Recovery key", text: $recoveryKey)
+                    .textContentType(.oneTimeCode)
+                    .accessibilityIdentifier("VerifyDevicePromptRecoveryKeyField")
+                Button {
+                    recover()
+                } label: {
+                    if isRecovering {
+                        ProgressView()
+                    } else {
+                        Text("Recover Keys")
+                    }
+                }
+                .disabled(isRecovering || recoveryKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityIdentifier("VerifyDevicePromptRecoverButton")
+            }
+        } footer: {
+            if let recoveryMessage {
+                Text(recoveryMessage)
+            } else if showsRecoveryKey {
+                Text("Recovery keys are used only for this request and are not stored by Synara.")
+            }
+        }
+        Section {
+            Button(IdentityResetCopy.title, role: .destructive) {
+                showsReset = true
+            }
+            .accessibilityIdentifier("VerifyDevicePromptResetButton")
+        } header: {
+            Text(VerifyDevicePromptCopy.cantVerify)
+                .textCase(nil)
+        }
+    }
+
+    private func recover() {
+        let key = recoveryKey
+        isRecovering = true
+        recoveryMessage = nil
+        Task {
+            let result = await environment.crypto.recover(recoveryKey: key)
+            _ = await environment.sessionCrypto.refresh()
+            isRecovering = false
+            recoveryKey = ""
+            recoveryMessage = result.message
         }
     }
 }

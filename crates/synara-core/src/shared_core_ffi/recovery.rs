@@ -165,6 +165,17 @@ wire_enum_from!(crate::app::cross_signing::NativeCrossSigningSetupOutcome => Cro
 });
 
 wire_enum! {
+    pub enum IdentityResetStepDto {
+        Complete => "complete",
+        PasswordRequired => "password_required",
+        ApprovalRequired => "approval_required",
+    }
+}
+wire_enum_from!(crate::app::cross_signing::NativeIdentityResetStep => IdentityResetStepDto {
+    Complete, PasswordRequired, ApprovalRequired
+});
+
+wire_enum! {
     pub enum RoomKeyTransferPhaseDto {
         Idle => "idle",
         Preparing => "preparing",
@@ -240,6 +251,43 @@ impl From<crate::app::cross_signing::NativeCrossSigningSetupResult> for CrossSig
             session_generation: result.status.session_generation,
             outcome: result.outcome.into(),
             readiness: result.status.readiness.into(),
+        }
+    }
+}
+
+/// Identity reset step. The account-page URL (for `ApprovalRequired`) is
+/// the only homeserver value; no password, UIA session or key.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct IdentityResetStateDto {
+    pub session_generation: u64,
+    pub step: IdentityResetStepDto,
+    pub approval_url: Option<String>,
+}
+
+impl From<crate::app::cross_signing::NativeIdentityResetState> for IdentityResetStateDto {
+    fn from(state: crate::app::cross_signing::NativeIdentityResetState) -> Self {
+        Self {
+            session_generation: state.session_generation,
+            step: state.step.into(),
+            approval_url: state.approval_url,
+        }
+    }
+}
+
+/// Whether to show "Verify This Device" after this session's sign-in.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct DeviceVerificationPromptDto {
+    pub session_generation: u64,
+    pub show: bool,
+}
+
+impl From<crate::app::cross_signing::NativeDeviceVerificationPrompt>
+    for DeviceVerificationPromptDto
+{
+    fn from(prompt: crate::app::cross_signing::NativeDeviceVerificationPrompt) -> Self {
+        Self {
+            session_generation: prompt.session_generation,
+            show: prompt.show,
         }
     }
 }
@@ -432,6 +480,70 @@ impl SharedCore {
             .cross_signing_setup_password(secret.as_str())
             .await
             .map(CrossSigningSetupDto::from)
+            .map_err(map_session_status_core_error)
+    }
+
+    /// Reset identity (Security, or the "Verify This Device" prompt) for an
+    /// account that lost its recovery key and every other device. Returns
+    /// the next step; recovery setup follows `Complete`.
+    pub async fn identity_reset_start(&self) -> Result<IdentityResetStateDto, SessionStatusError> {
+        self.core
+            .identity_reset_start()
+            .await
+            .map(IdentityResetStateDto::from)
+            .map_err(map_session_status_core_error)
+    }
+
+    /// Answer the password step of the pending reset. The password is a
+    /// dedicated zeroizing argument and never leaves this call.
+    pub async fn identity_reset_password(
+        &self,
+        password: String,
+    ) -> Result<IdentityResetStateDto, SessionStatusError> {
+        let secret = Zeroizing::new(password);
+        self.core
+            .identity_reset_password(secret.as_str())
+            .await
+            .map(IdentityResetStateDto::from)
+            .map_err(map_session_status_core_error)
+    }
+
+    /// Continue after the user approved the reset on the account page.
+    pub async fn identity_reset_continue(
+        &self,
+    ) -> Result<IdentityResetStateDto, SessionStatusError> {
+        self.core
+            .identity_reset_continue()
+            .await
+            .map(IdentityResetStateDto::from)
+            .map_err(map_session_status_core_error)
+    }
+
+    pub async fn identity_reset_cancel(&self) -> Result<(), SessionStatusError> {
+        self.core
+            .identity_reset_cancel()
+            .await
+            .map_err(map_session_status_core_error)
+    }
+
+    /// Whether to show "Verify This Device" now (once after sign-in).
+    pub async fn device_verification_prompt(
+        &self,
+    ) -> Result<DeviceVerificationPromptDto, SessionStatusError> {
+        self.core
+            .device_verification_prompt()
+            .await
+            .map(DeviceVerificationPromptDto::from)
+            .map_err(map_session_status_core_error)
+    }
+
+    /// "Later": hide the prompt for this session.
+    pub fn dismiss_device_verification_prompt(
+        &self,
+    ) -> Result<DeviceVerificationPromptDto, SessionStatusError> {
+        self.core
+            .dismiss_device_verification_prompt()
+            .map(DeviceVerificationPromptDto::from)
             .map_err(map_session_status_core_error)
     }
 

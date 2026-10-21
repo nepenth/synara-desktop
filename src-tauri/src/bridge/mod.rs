@@ -13,6 +13,7 @@ pub(crate) mod directory_protocols;
 pub(crate) mod directory_search;
 pub(crate) mod directory_visibility;
 pub(crate) mod global_image_packs;
+pub(crate) mod identity_reset;
 pub(crate) mod ignored_users;
 pub(crate) mod image_pack_writes;
 pub(crate) mod inbox_notifications;

@@ -658,6 +658,65 @@ enum RecoverySetupCopy {
     static let unavailable = "Recovery setup is unavailable."
 }
 
+/// One Reset Identity step (Security, or the "Verify This Device" prompt).
+enum IdentityResetResult: Equatable {
+    /// The new identity is published; recovery setup comes next.
+    case complete
+    /// The homeserver wants the account password.
+    case passwordRequired
+    /// Approve the reset on the account page, then continue.
+    case approvalRequired(URL)
+    /// The password was not accepted; it can be entered again.
+    case passwordRejected
+    /// Continue came before the approval; approve, then continue again.
+    case approvalPending
+    case failed(String)
+}
+
+/// Desktop's wording, word for word
+/// (`synara/src/app/features/cross-signing/nativeIdentityReset.ts`).
+enum IdentityResetCopy {
+    static let title = "Reset Identity"
+    static let settingsDescription =
+        "If you have lost your recovery key and all your other devices, start over with a new identity."
+    static let warningIntro =
+        "Only reset your identity if you have lost your recovery key and are not signed in on any other device you can verify with."
+    static let warnings = [
+        "People you talk to will see that your identity changed.",
+        "You will need to verify your other devices and contacts again.",
+        "Messages that only your old keys can read may be lost, unless another device still has them.",
+        "Starting the reset removes your key backup and recovery key right away, even if you cancel before it finishes.",
+    ]
+    static let password = "Enter your account password to confirm the reset."
+    static let approval =
+        "Your homeserver asks you to approve the reset on your account page. Approve it in your browser, then select Continue."
+    static let openAccountPage = "Open Account Page"
+    static let recovery = "Your identity was reset. Set up recovery now to get a new recovery key."
+    static let configured = "Device verification and account recovery are configured for this session."
+    static let cancelled =
+        "Reset cancelled. Your key backup and recovery key were removed when it started. Set up recovery in Settings once this device is verified, or reset your identity to finish."
+    static let recoveryMayBeOff =
+        "Your key backup and recovery key may already be removed. Set up recovery in Settings once this device is verified, or reset your identity to finish."
+    static let failed = "Synara could not reset your identity. Try again."
+    static let passwordRejected = "Identity reset authentication failed. Check your password and try again."
+    static let approvalPending =
+        "Synara has not seen your approval yet. Approve the reset in your browser, then select Continue."
+    static let network = "Synara could not reach your homeserver. Check your connection and try again."
+    static let authUnsupported =
+        "This homeserver asks for a sign-in step Synara cannot complete for an identity reset."
+}
+
+/// Desktop's "Verify This Device" prompt wording.
+enum VerifyDevicePromptCopy {
+    static let title = "Verify This Device"
+    static let description =
+        "Your account already has a cross-signing identity. Verify this device to read your encrypted messages and so others can trust it."
+    static let verifyWithDevice = "Verify from Another Device"
+    static let recoveryKey = "Use Recovery Key"
+    static let cantVerify = "Lost your recovery key and all your other devices?"
+    static let later = "Later"
+}
+
 protocol CryptoStatusServicing {
     func roomStatus(roomID: String) async -> RoomCryptoStatus
     /// Room status over a session status the caller already has (from
@@ -679,6 +738,16 @@ protocol CryptoStatusServicing {
     func authenticateCrossSigningSetup(password: String) async -> CrossSigningSetupResult
     /// Enrol secret storage and key backup with a recovery passphrase.
     func enableRecovery(passphrase: String) async -> RecoveryEnrollmentResult
+    /// Whether to show "Verify This Device" now; Core arms it once per sign-in.
+    func deviceVerificationPromptVisible() async -> Bool
+    /// "Later" (or any choice): hide the prompt for this session.
+    func dismissDeviceVerificationPrompt() async
+    /// Reset Identity. The SDK deletes key backup and disables recovery first.
+    func startIdentityReset() async -> IdentityResetResult
+    func authenticateIdentityReset(password: String) async -> IdentityResetResult
+    /// Continue after the user approved the reset in the browser.
+    func continueIdentityReset() async -> IdentityResetResult
+    func cancelIdentityReset() async
     func sessionDevices() async -> [SharedCoreSessionDevice]
     func sessionDeviceUpdates() -> AsyncStream<Void>
     func signOutSession(deviceId: String, password: String) async -> CryptoActionResult
@@ -785,6 +854,27 @@ extension CryptoStatusServicing {
         _ = passphrase
         return .failed(RecoverySetupCopy.unavailable)
     }
+
+    func deviceVerificationPromptVisible() async -> Bool {
+        false
+    }
+
+    func dismissDeviceVerificationPrompt() async {}
+
+    func startIdentityReset() async -> IdentityResetResult {
+        .failed(IdentityResetCopy.failed)
+    }
+
+    func authenticateIdentityReset(password: String) async -> IdentityResetResult {
+        _ = password
+        return .failed(IdentityResetCopy.failed)
+    }
+
+    func continueIdentityReset() async -> IdentityResetResult {
+        .failed(IdentityResetCopy.failed)
+    }
+
+    func cancelIdentityReset() async {}
 
     func sessionDevices() async -> [SharedCoreSessionDevice] {
         []
@@ -1221,13 +1311,29 @@ final class PlaceholderPushService: PushServicing {
 struct MockCryptoStatusService: CryptoStatusServicing {
     var roomCryptoStatus: RoomCryptoStatus
     var sessionCryptoStatus: SessionCryptoStatus
+    /// UI tests: show "Verify This Device" as after a new sign-in.
+    var verifyDevicePrompt: Bool
 
     init(
         roomCryptoStatus: RoomCryptoStatus = .unknown,
-        sessionCryptoStatus: SessionCryptoStatus = .unknown
+        sessionCryptoStatus: SessionCryptoStatus = .unknown,
+        verifyDevicePrompt: Bool = false
     ) {
         self.roomCryptoStatus = roomCryptoStatus
         self.sessionCryptoStatus = sessionCryptoStatus
+        self.verifyDevicePrompt = verifyDevicePrompt
+    }
+
+    func deviceVerificationPromptVisible() async -> Bool {
+        verifyDevicePrompt
+    }
+
+    func startIdentityReset() async -> IdentityResetResult {
+        .passwordRequired
+    }
+
+    func authenticateIdentityReset(password: String) async -> IdentityResetResult {
+        password.isEmpty ? .passwordRejected : .complete
     }
 
     func roomStatus(roomID: String) async -> RoomCryptoStatus {
