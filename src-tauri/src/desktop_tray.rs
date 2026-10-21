@@ -178,7 +178,7 @@ fn tray_route_labels(state: &DesktopTrayState) -> [String; 5] {
     let later_label = format!("Later ({later})");
     let notifications_label = format!("Notifications ({notifications})");
     let dnd_label = if do_not_disturb {
-        "Do Not Disturb: On"
+        "Do Not Disturb: On (Approvals Still Alert)"
     } else {
         "Do Not Disturb: Off"
     };
@@ -769,7 +769,7 @@ mod tests {
             do_not_disturb: false,
         });
 
-        assert_eq!(on[3], "Do Not Disturb: On");
+        assert_eq!(on[3], "Do Not Disturb: On (Approvals Still Alert)");
         assert_eq!(off[3], "Do Not Disturb: Off");
     }
 

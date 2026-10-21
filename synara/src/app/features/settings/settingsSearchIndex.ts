@@ -250,7 +250,7 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
   {
     page: SettingsPages.NotificationPage,
     title: 'Desktop Notifications',
-    description: 'Show system notifications for new messages.',
+    description: 'Show system notifications for new messages. Approval requests always alert.',
     synonyms: ['alerts', 'popups', 'banners', 'notify'],
   },
   {

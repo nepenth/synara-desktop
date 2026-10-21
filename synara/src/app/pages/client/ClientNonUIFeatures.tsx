@@ -70,9 +70,11 @@ import {
   inviteNotificationText,
   isDocumentActive,
   nativeNotificationSound,
+  shouldDeliverNotificationKind,
   shouldPlayAppNotificationSound,
   shouldRequestNotificationPermission,
   shouldPresentOrdinaryMessage,
+  shouldSubmitApprovalObservation,
   type ApprovalBannerActionResult,
 } from '../../notifications/notificationDelivery';
 import { useLatestRef } from '../../hooks/useLatestRef';
@@ -519,8 +521,9 @@ function MessageNotifications() {
         },
         deliver: async (candidate) => {
           let outcome: NativeNotificationDeliveryOutcome | undefined;
+          // A late-promoted approval alerts under Do Not Disturb too.
           if (
-            showNotifications &&
+            shouldDeliverNotificationKind({ kind: candidate.kind, showNotifications }) &&
             (supportsPlatformSystemNotifications() || notificationPermission('granted'))
           ) {
             const avatarMxc =
@@ -616,12 +619,11 @@ function AgentApprovalNotifications() {
   const { navigateRoom, roomPath } = useRoomNavigate();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
   const [showApprovalDetails] = useSetting(settingsAtom, 'showApprovalNotificationDetails');
-  const showNotificationsRef = useLatestRef(showNotifications);
 
   /**
    * A banner action leaves a visible result even with Synara in the tray:
    * failures bring the window forward at the prompt, and failures or a
-   * prompt decided elsewhere post a local notice.
+   * prompt decided elsewhere post a local notice, under Do Not Disturb too.
    */
   const reportBannerAction = useCallback(
     (result: ApprovalBannerActionResult, roomId: string, eventId: string) => {
@@ -630,16 +632,14 @@ function AgentApprovalNotifications() {
         navigateRoom(roomId, eventId);
       }
       const notice = approvalBannerActionNotice(result);
-      if (!notice || !showNotificationsRef.current || !supportsPlatformSystemNotifications()) {
-        return;
-      }
+      if (!notice || !supportsPlatformSystemNotifications()) return;
       showPlatformNotification({
         ...notice,
         route: roomPath(roomId, { eventId }),
         sound: 'default',
       }).catch(() => undefined);
     },
-    [navigateRoom, roomPath, showNotificationsRef]
+    [navigateRoom, roomPath]
   );
 
   const notify = useCallback(
@@ -872,10 +872,15 @@ function AgentApprovalNotifications() {
   const notifyApprovalEvent = useCallback(
     async (observation: NativeNotificationObservation) => {
       const { eventId, agentApproval } = observation;
-      if (!agentApproval || agentApproval.expired) return;
+      if (
+        !agentApproval ||
+        !shouldSubmitApprovalObservation({
+          expired: agentApproval.expired,
+          alreadyNotified: notifiedEventIdsCache.has(eventId),
+        })
+      )
+        return;
       const room = getNativeRoom(observation.roomId);
-
-      if (notifiedEventIdsCache.has(eventId)) return;
 
       let readback;
       try {
@@ -907,8 +912,10 @@ function AgentApprovalNotifications() {
         },
         deliver: async (candidate) => {
           let outcome: NativeNotificationDeliveryOutcome | undefined;
+          // Approvals alert under Do Not Disturb; a room's approvals past
+          // Core's budget arrive as messages and stay behind the switch.
           if (
-            showNotifications &&
+            shouldDeliverNotificationKind({ kind: candidate.kind, showNotifications }) &&
             (supportsPlatformSystemNotifications() || notificationPermission('granted'))
           ) {
             outcome = await notify({

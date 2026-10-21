@@ -29,13 +29,36 @@ export const isDocumentActive = (doc: Pick<Document, 'hasFocus' | 'visibilitySta
   doc.visibilityState === 'visible' && doc.hasFocus();
 
 /**
- * A notification sound follows its banner. Nothing plays when notifications
- * are off (the tray's Do Not Disturb item turns them off), when permission is
- * missing, or when the OS did not accept the banner.
- *
- * The Desktop Notifications switch, and so tray Do Not Disturb, governs every
- * kind, approvals included: there is no separate desktop switch for approval
- * alerts, and an unanswered approval expires without running the command.
+ * Whether a candidate Core decided to show reaches the OS. The Desktop
+ * Notifications switch, and so tray Do Not Disturb, holds back messages,
+ * invites and reminders. An approval request still alerts: an unanswered one
+ * expires without running the command. Core sends a room's approvals past
+ * its rolling budget as ordinary messages, so a flood stays behind the switch.
+ */
+export const shouldDeliverNotificationKind = ({
+  kind,
+  showNotifications,
+}: {
+  kind: string;
+  showNotifications: boolean;
+}): boolean => showNotifications || kind === 'agent_approval';
+
+/**
+ * An approval observation goes to Core once per event, and only while its
+ * prompt is pending. Expiry and this dedupe apply with notifications on or off.
+ */
+export const shouldSubmitApprovalObservation = ({
+  expired,
+  alreadyNotified,
+}: {
+  expired: boolean;
+  alreadyNotified: boolean;
+}): boolean => !expired && !alreadyNotified;
+
+/**
+ * A notification sound follows its banner. Nothing plays when the banner was
+ * held back (notifications off or tray Do Not Disturb, except for approvals),
+ * when permission is missing, or when the OS did not accept the banner.
  */
 export const shouldPlayNotificationSound = ({
   soundsEnabled,
