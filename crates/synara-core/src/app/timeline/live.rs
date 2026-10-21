@@ -73,6 +73,8 @@ use crate::dto::{LocalEchoState, RoomEncryptionStatus, TimelineEncryptedUnavaila
 #[cfg(test)]
 use super::{view::TimelineViewDeltaBatch, TIMELINE_VIEW_SCHEMA_VERSION};
 
+use super::{own_agent_approval_decision, TimelineAgentApprovalDecision};
+
 use super::{
     format_forwarded_media_body, format_forwarded_plain_body, project_timeline_diffs_with_media,
     project_timeline_item_with_media,
@@ -749,6 +751,54 @@ fn approval_history_item_key(item: &SynaraAgentApprovalHistoryItem) -> (String, 
     (item.room_id.clone(), item.event_id.clone())
 }
 
+/// An `already_decided` result carrying the decision on record, if known.
+fn already_decided_result(
+    room_id: String,
+    event_id: String,
+    recorded: Option<TimelineAgentApprovalDecision>,
+) -> NativeAgentApprovalDecisionResult {
+    NativeAgentApprovalDecisionResult {
+        room_id,
+        event_id,
+        status: AgentApprovalDecisionStatus::AlreadyDecided,
+        reaction: None,
+        decision: recorded.map(|recorded| recorded.decision),
+        decided_at: recorded.and_then(|recorded| recorded.decided_at),
+    }
+}
+
+/// This account's own terminal reaction on an approval prompt, with the
+/// reaction's server timestamp. Agent-seeded reactions are never decisions.
+fn own_recorded_approval_decision(
+    item: &SdkTimelineItem,
+    local_user: Option<&matrix_sdk::ruma::UserId>,
+) -> Option<TimelineAgentApprovalDecision> {
+    let local_user = local_user?;
+    let reactions = item.as_event()?.content().reactions()?;
+    own_agent_approval_decision(reactions.iter().filter_map(|(key, senders)| {
+        senders
+            .get(local_user)
+            .map(|info| (key.as_str(), true, Some(u64::from(info.timestamp.get()))))
+    }))
+}
+
+/// The newest history row for one prompt, as a recorded decision.
+fn recorded_history_decision(
+    items: &[SynaraAgentApprovalHistoryItem],
+    room_id: &str,
+    event_id: &str,
+) -> Option<TimelineAgentApprovalDecision> {
+    items
+        .iter()
+        .filter(|item| item.room_id == room_id && item.event_id == event_id)
+        .max_by(|a, b| a.decided_at.total_cmp(&b.decided_at))
+        .map(|item| TimelineAgentApprovalDecision {
+            decision: item.decision,
+            decided_at: (item.decided_at.is_finite() && item.decided_at > 0.0)
+                .then_some(item.decided_at as u64),
+        })
+}
+
 fn native_agent_approval_history_item(
     room_id: String,
     event_id: String,
@@ -996,6 +1046,17 @@ impl NativeTimelineOwner {
         }
     }
 
+    /// The decision this account's approval history records for one prompt.
+    /// Best effort: an unreadable history reports no decision.
+    async fn recorded_agent_approval_decision(
+        &self,
+        room_id: &str,
+        event_id: &str,
+    ) -> Option<TimelineAgentApprovalDecision> {
+        let snapshot = self.agent_approval_history_snapshot().await.ok()?;
+        recorded_history_decision(&snapshot.items, room_id, event_id)
+    }
+
     pub async fn lock(&self) -> tokio::sync::MutexGuard<'_, NativeTimelineRegistry> {
         self.registry.lock().await
     }
@@ -1218,12 +1279,14 @@ impl NativeTimelineOwner {
             // await so a history backfill cannot deadlock other decisions.
             self.retry_unconfirmed_approval_history(&room_id, event_id.as_str())
                 .await;
-            return Ok(NativeAgentApprovalDecisionResult {
+            let recorded = self
+                .recorded_agent_approval_decision(&room_id, event_id.as_str())
+                .await;
+            return Ok(already_decided_result(
                 room_id,
-                event_id: event_id.to_string(),
-                status: AgentApprovalDecisionStatus::AlreadyDecided,
-                reaction: None,
-            });
+                event_id.to_string(),
+                recorded,
+            ));
         };
         // Cancellation before a Matrix side effect releases this guard. Once
         // send begins, the guard moves into a detached task below.
@@ -1242,12 +1305,14 @@ impl NativeTimelineOwner {
             drop(decision_guard);
             self.retry_unconfirmed_approval_history(&room_id, event_id.as_str())
                 .await;
-            return Ok(NativeAgentApprovalDecisionResult {
+            let recorded = self
+                .recorded_agent_approval_decision(&room_id, event_id.as_str())
+                .await;
+            return Ok(already_decided_result(
                 room_id,
-                event_id: event_id.to_string(),
-                status: AgentApprovalDecisionStatus::AlreadyDecided,
-                reaction: None,
-            });
+                event_id.to_string(),
+                recorded,
+            ));
         }
 
         let room = self
@@ -1264,7 +1329,7 @@ impl NativeTimelineOwner {
         // event for a short bounded window; never fall back to a room scan or
         // another event with similar text. The timeout owns builder, initial
         // subscribe, and update wait—not just the final stream read.
-        let (item, plan) = timeout(Duration::from_secs(3), async {
+        let (item, plan, own_decision) = timeout(Duration::from_secs(3), async {
             let timeline = TimelineBuilder::new(&room)
                 .with_focus(TimelineFocus::Event {
                     target: event_id.clone(),
@@ -1276,11 +1341,16 @@ impl NativeTimelineOwner {
                 .map_err(|_| "v-crypto.6-event-open-failed")?;
             let (mut items, mut updates) = timeline.subscribe().await;
             loop {
-                let item = items
-                    .iter()
-                    .filter_map(|item| project_item(item, self.client.user_id()))
-                    .find(|item| item.event_id == event_id.as_str());
-                if let Some(item) = item {
+                let found = items.iter().find_map(|raw| {
+                    let item = project_item(raw, self.client.user_id())?;
+                    (item.event_id == event_id.as_str()).then(|| {
+                        (
+                            item,
+                            own_recorded_approval_decision(raw, self.client.user_id()),
+                        )
+                    })
+                });
+                if let Some((item, own_decision)) = found {
                     match plan_agent_approval(
                         &request.action_id,
                         &item.body,
@@ -1292,7 +1362,7 @@ impl NativeTimelineOwner {
                             .iter()
                             .map(|reaction| (reaction.key.as_str(), reaction.me)),
                     ) {
-                        Ok(plan) => break Ok((item, plan)),
+                        Ok(plan) => break Ok((item, plan, own_decision)),
                         Err(error) if item.decryption_state.is_none() => break Err(error),
                         Err(_) => {}
                     }
@@ -1337,12 +1407,21 @@ impl NativeTimelineOwner {
             }
             self.retry_unconfirmed_approval_history(&room_id, event_id.as_str())
                 .await;
-            return Ok(NativeAgentApprovalDecisionResult {
+            // The account's own terminal reaction is the decision on record;
+            // history fills in the time while that reaction is a local echo.
+            let recorded = match own_decision {
+                Some(own) if own.decided_at.is_some() => Some(own),
+                own => self
+                    .recorded_agent_approval_decision(&room_id, event_id.as_str())
+                    .await
+                    .filter(|history| own.is_none_or(|own| own.decision == history.decision))
+                    .or(own),
+            };
+            return Ok(already_decided_result(
                 room_id,
-                event_id: event_id.to_string(),
-                status: plan.status,
-                reaction: None,
-            });
+                event_id.to_string(),
+                recorded,
+            ));
         }
 
         let reaction_key = plan
@@ -1409,6 +1488,8 @@ impl NativeTimelineOwner {
                 mutation: NativeReactionMutation::Added,
                 readback: Some(readback),
             }),
+            decision: None,
+            decided_at: None,
         })
     }
 

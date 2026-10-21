@@ -11,7 +11,16 @@ import type { NativeNotificationCandidate } from './nativeNotificationDecision';
  */
 export function buildNativeObservedNotificationPresentation(
   candidate: NativeNotificationCandidate,
-  source: { roomId: string; eventId: string; sessionGeneration: number }
+  source: {
+    roomId: string;
+    eventId: string;
+    sessionGeneration: number;
+    /**
+     * Sound for a message banner, played by the OS so macOS Focus governs
+     * it. Approvals always ask for the default (time-sensitive) sound.
+     */
+    messageSound?: 'default' | 'silent';
+  }
 ): PlatformNotificationPayload {
   if (
     candidate.roomId !== source.roomId ||
@@ -25,7 +34,7 @@ export function buildNativeObservedNotificationPresentation(
     title: candidate.title,
     body: candidate.body,
     sessionGeneration: source.sessionGeneration,
-    sound: approval ? 'default' : 'silent',
+    sound: approval ? 'default' : (source.messageSound ?? 'silent'),
     route: candidate.route ?? buildDesktopNotificationRoomRoute(source.roomId, source.eventId),
     // Focusing a room clears its `room:` notifications. An approval is a
     // pending decision rather than an unread hint, so only its own event or

@@ -143,13 +143,15 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
     let unlistenHistory: (() => void) | undefined;
     void subscribeAgentApprovalHistory(() => {
       void loadHistory();
-    }).then((unlisten) => {
-      if (cancelled) {
-        unlisten();
-        return;
-      }
-      unlistenHistory = unlisten;
-    });
+    })
+      .then((unlisten) => {
+        if (cancelled) {
+          unlisten();
+          return;
+        }
+        unlistenHistory = unlisten;
+      })
+      .catch(() => undefined);
     void load();
     void loadHistory();
     // Hidden (closed to the tray) the inbox refreshes slowly; decisions and

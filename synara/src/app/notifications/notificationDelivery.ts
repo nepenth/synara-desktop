@@ -48,6 +48,104 @@ export const shouldPlayNotificationSound = ({
   requested?: boolean;
 }): boolean => soundsEnabled && requested && outcome === 'delivered';
 
+/**
+ * The sound a native banner asks the OS for. The OS plays it, so macOS Focus
+ * and the desktop's Do Not Disturb govern it, and the app plays nothing of
+ * its own for a native banner.
+ */
+export const nativeNotificationSound = ({
+  soundsEnabled,
+  requested = true,
+}: {
+  soundsEnabled: boolean;
+  /** Core's per-event sound decision (push rule tweak) where one exists. */
+  requested?: boolean;
+}): 'default' | 'silent' => (soundsEnabled && requested ? 'default' : 'silent');
+
+/**
+ * The app's own sound is only for the browser fallback; a native banner
+ * carries its sound in the notification itself.
+ */
+export const shouldPlayAppNotificationSound = ({
+  nativeDelivery,
+  ...rest
+}: Parameters<typeof shouldPlayNotificationSound>[0] & { nativeDelivery: boolean }): boolean =>
+  !nativeDelivery && shouldPlayNotificationSound(rest);
+
+/**
+ * Ask the OS for permission once, only while notifications are on and the
+ * OS has never been asked (`prompt`, which macOS reports as `default`). A
+ * denied permission is the user's answer and is never asked again here.
+ */
+export const shouldRequestNotificationPermission = ({
+  showNotifications,
+  permission,
+  alreadyAsked,
+}: {
+  showNotifications: boolean;
+  permission: string | undefined;
+  alreadyAsked: boolean;
+}): boolean =>
+  showNotifications &&
+  !alreadyAsked &&
+  (permission === 'prompt' || permission === 'prompt-with-rationale');
+
+type ApprovalDecisionName = 'approve_once' | 'approve_always' | 'deny';
+
+const APPROVAL_DECISION_LABELS: Record<ApprovalDecisionName, string> = {
+  approve_once: 'approved',
+  approve_always: 'always approved',
+  deny: 'denied',
+};
+
+/** What an approval action from a banner ended as. */
+export type ApprovalBannerActionResult =
+  | { status: 'applied' }
+  | {
+      status: 'already_decided';
+      clicked?: ApprovalDecisionName;
+      recorded?: ApprovalDecisionName;
+    }
+  | { status: 'failed'; error: unknown };
+
+const nativeErrorCode = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object') return undefined;
+  const { code } = error as { code?: unknown };
+  return typeof code === 'string' ? code : undefined;
+};
+
+/**
+ * The local notice an approval action from a banner leaves behind, so a
+ * click from the tray is never silent: a failure says the decision was not
+ * sent (or may still be sent, after a timeout), and a prompt decided on
+ * another device says so when that differs from the click. `undefined`
+ * when the click simply worked.
+ */
+export const approvalBannerActionNotice = (
+  result: ApprovalBannerActionResult
+): { title: string; body: string } | undefined => {
+  if (result.status === 'applied') return undefined;
+  if (result.status === 'already_decided') {
+    if (result.recorded && result.recorded === result.clicked) return undefined;
+    return {
+      title: 'Already decided',
+      body: result.recorded
+        ? `This request was already ${APPROVAL_DECISION_LABELS[result.recorded]} on another device.`
+        : 'This request was already decided on another device.',
+    };
+  }
+  if (nativeErrorCode(result.error) === 'ApprovalDecisionPending') {
+    return {
+      title: 'Approval may still be sent',
+      body: 'Synara could not confirm your decision in time. Check the request before deciding again.',
+    };
+  }
+  return {
+    title: 'Approval not sent',
+    body: 'Open Synara to review the command. It may have expired.',
+  };
+};
+
 export const inviteNotificationText = (count: number): { title: string; body: string } =>
   count === 1
     ? { title: 'New invitation', body: 'You have a new invitation.' }
@@ -73,6 +171,28 @@ export const createInviteArrivalTracker = () => {
     generation = snapshot.sessionGeneration;
     known = new Set(snapshot.roomIds);
     return baseline || !live ? 0 : arrived;
+  };
+};
+
+const MAX_INVITE_BANNER_KEYS = 8;
+
+/**
+ * Tracks which invites joined or left the list between snapshots. A banner
+ * for new invites is tagged `invite:<roomId>` per new invite (at most 8, the
+ * shell's limit), and withdrawn once one of them is accepted, declined or
+ * gone.
+ */
+export const createInviteBannerTracker = () => {
+  let known = new Set<string>();
+  return (roomIds: readonly string[]) => {
+    const next = new Set(roomIds);
+    const added = roomIds.filter((roomId) => !known.has(roomId));
+    const removed = [...known].filter((roomId) => !next.has(roomId));
+    known = next;
+    return {
+      bannerKeys: added.slice(0, MAX_INVITE_BANNER_KEYS).map((roomId) => `invite:${roomId}`),
+      withdrawKeys: removed.map((roomId) => `invite:${roomId}`),
+    };
   };
 };
 

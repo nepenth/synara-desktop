@@ -38,16 +38,20 @@ export const subscribeOwnProfileNativePush = (
   void listen<unknown>(MATRIX_OWN_PROFILE_CHANGED_EVENT, (event) => {
     const profile = parseOwnProfilePush(event.payload);
     if (profile) onProfile(profile);
-  }).then((handle) => {
-    if (!handle) return;
-    if (cancelled) {
-      void handle();
-      return;
-    }
-    unlisten = () => {
-      void handle();
-    };
-  });
+  })
+    .then((handle) => {
+      if (!handle) return;
+      if (cancelled) {
+        void handle();
+        return;
+      }
+      unlisten = () => {
+        void handle();
+      };
+    })
+    .catch(() => {
+      // No listener: the profile still refreshes on the next fetch.
+    });
   return () => {
     cancelled = true;
     unlisten?.();

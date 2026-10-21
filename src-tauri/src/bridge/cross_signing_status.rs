@@ -247,7 +247,6 @@ fn cross_signing_status_response_error() -> MatrixAuthCommandError {
 mod tests {
     use std::sync::Arc;
 
-    use synara_core::dto::NotificationCandidate;
     use synara_core::platform::{
         CrossSigningStatusFuture, Platform, PlatformCrossSigningStatusError,
         PlatformCryptoCrossSigningState, PlatformCryptoStatus, PlatformMediaConfig, PlatformStatus,
@@ -304,10 +303,6 @@ mod tests {
             Box::pin(async {
                 Ok(PlatformMediaConfig::new(0).expect("zero is a valid closed media projection"))
             })
-        }
-
-        fn notify(&self, _candidate: NotificationCandidate) -> Result<(), MatrixIpcError> {
-            Ok(())
         }
 
         fn set_badge(&self, _count: u64) -> Result<(), MatrixIpcError> {

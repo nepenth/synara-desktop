@@ -32,8 +32,11 @@ import {
   sanitizeDesktopDismissKey,
   dismissDesktopNotifications,
   clearDesktopNotificationSurfaces,
-  desktopNotificationCheckFromPermission,
+  dismissAllDesktopNotifications,
   getPostedDesktopDismissKeys,
+  normalizeDesktopAgentActionOutcome,
+  normalizeDesktopPermission,
+  takeDesktopNotificationResponses,
   type DesktopTrayState,
 } from '../desktop';
 import {
@@ -242,7 +245,7 @@ test('desktop actions use explicit IPC command names', async () => {
         kind: 'export',
         markdown: '# Thread',
       }),
-      true
+      'handed_to_renderer'
     );
     assert.deepEqual(
       await setDesktopShortcuts({
@@ -669,6 +672,18 @@ test('desktop integration status falls back when the bridge does not support dia
   }
 });
 
+test('the shell reports what it did with an agent action', async () => {
+  for (const [answer, outcome] of [
+    ['ran_locally', 'ran_locally'],
+    ['handed_to_renderer', 'handed_to_renderer'],
+    ['unsupported', 'unsupported'],
+    [false, 'unsupported'],
+    [true, 'handed_to_renderer'],
+  ] as const) {
+    assert.equal(normalizeDesktopAgentActionOutcome(answer), outcome);
+  }
+});
+
 test('desktop agent actions sanitize unsafe URLs and omit invalid payloads', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   const originalWindow = globalThis.window;
@@ -689,7 +704,7 @@ test('desktop agent actions sanitize unsafe URLs and omit invalid payloads', asy
         title: 'Open private',
         url: 'https://127.0.0.1',
       }),
-      false
+      'unsupported'
     );
 
     assert.equal(
@@ -699,7 +714,7 @@ test('desktop agent actions sanitize unsafe URLs and omit invalid payloads', asy
         kind: 'shell',
         prompt: 'rm -rf /',
       }),
-      false
+      'unsupported'
     );
 
     const command = await sendDesktopAgentAction({
@@ -707,7 +722,7 @@ test('desktop agent actions sanitize unsafe URLs and omit invalid payloads', asy
       title: 'Bad action',
       url: 'https://example.org',
     });
-    assert.equal(command, false);
+    assert.equal(command, 'unsupported');
 
     assert.equal(
       await sendDesktopAgentAction({
@@ -715,7 +730,7 @@ test('desktop agent actions sanitize unsafe URLs and omit invalid payloads', asy
         title: 'Open safe',
         url: 'https://example.org',
       }),
-      true
+      'handed_to_renderer'
     );
   } finally {
     (globalThis as any).window = originalWindow;
@@ -964,7 +979,9 @@ test('desktop dismiss keys match the native charset and prefixes', async () => {
     sanitizeDesktopDismissKey('event:$abc+/=_-:example.org'),
     'event:$abc+/=_-:example.org'
   );
-  assert.equal(sanitizeDesktopDismissKey('invite:abc'), undefined);
+  assert.equal(sanitizeDesktopDismissKey('invite:!abc:example.org'), 'invite:!abc:example.org');
+  assert.equal(sanitizeDesktopDismissKey('invite:'), undefined);
+  assert.equal(sanitizeDesktopDismissKey('other:abc'), undefined);
   assert.equal(sanitizeDesktopDismissKey('room:!ünicode:example.org'), undefined);
   assert.equal(sanitizeDesktopDismissKey('room:!room:example.org\u202E'), undefined);
   assert.equal(
@@ -991,7 +1008,7 @@ test('desktop dismiss keys match the native charset and prefixes', async () => {
     await dismissDesktopNotifications([
       'event:$event:example.org',
       'room:!ünicode:example.org',
-      'invite:x',
+      'other:x',
     ]);
   } finally {
     (globalThis as any).window = originalWindow;
@@ -1512,55 +1529,84 @@ test('desktop performance capabilities fall back when desktop ACL denies the com
   }
 });
 
-test('the integration report reads the OS notification permission, not the plugin', async () => {
+test("the integration report is the shell's own, read from the OS permission source", async () => {
   const originalWindow = globalThis.window;
+  const calls: string[] = [];
   const integrationReport = {
     platform: 'macos',
     notifications: {
       name: 'Notifications',
-      ready: true,
+      ready: false,
       supported: true,
-      message: 'Notification permission is active.',
+      message: 'Notification permission has not been requested yet.',
     },
   };
-  const statusFor = async (permission: unknown) => {
-    (globalThis as any).window = {
-      __SYNARA_DESKTOP__: {
-        platform: 'tauri',
-        supportsIntegrationStatus: true,
-        invoke: async (command: string) => {
-          if (command === 'desktop_get_integration_status') return integrationReport;
-          if (command === 'desktop_get_notification_permission') {
-            if (permission instanceof Error) throw permission;
-            return permission;
-          }
-          throw new Error(`unexpected ${command}`);
-        },
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      supportsIntegrationStatus: true,
+      invoke: async (command: string) => {
+        calls.push(command);
+        if (command === 'desktop_get_integration_status') return integrationReport;
+        throw new Error(`unexpected ${command}`);
       },
-    };
-    try {
-      return (await getDesktopIntegrationStatus()).notifications;
-    } finally {
-      (globalThis as any).window = originalWindow;
-    }
+    },
   };
+  try {
+    // The shell already reads UserNotifications; no second permission read
+    // overlays its answer.
+    assert.deepEqual(
+      (await getDesktopIntegrationStatus()).notifications,
+      integrationReport.notifications
+    );
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+  assert.deepEqual(calls, ['desktop_get_integration_status']);
+});
 
-  assert.deepEqual(await statusFor('denied'), {
-    name: 'Notifications',
-    supported: true,
-    ready: false,
-    message: 'Notifications are blocked by platform permission.',
-  });
-  // macOS reports `default` before the user was ever asked.
-  assert.equal(
-    (await statusFor('default'))?.message,
-    'Notification permission has not been requested yet.'
-  );
-  assert.equal((await statusFor('granted'))?.ready, true);
-  // An unreadable permission keeps the shell's own report.
-  assert.deepEqual(await statusFor(new Error('unavailable')), integrationReport.notifications);
-  assert.deepEqual(await statusFor('weird'), integrationReport.notifications);
-  assert.equal(desktopNotificationCheckFromPermission(undefined), undefined);
+test('a permission macOS has not asked for yet reads as a prompt, not a block', () => {
+  assert.equal(normalizeDesktopPermission('default'), 'prompt');
+  assert.equal(normalizeDesktopPermission('prompt'), 'prompt');
+  assert.equal(normalizeDesktopPermission('granted'), 'granted');
+  assert.equal(normalizeDesktopPermission('denied'), 'denied');
+  assert.equal(normalizeDesktopPermission(undefined), 'denied');
+});
+
+test('queued notification clicks are taken for the current session generation', async () => {
+  const originalWindow = globalThis.window;
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return [
+          {
+            sessionGeneration: 4,
+            actionId: 'agent-approval.approve-once',
+            context: { kind: 'agent-approval', roomId: '!r:x', eventId: '$e' },
+          },
+          { junk: true },
+        ];
+      },
+    },
+  };
+  try {
+    assert.deepEqual(await takeDesktopNotificationResponses(4), [
+      {
+        sessionGeneration: 4,
+        actionId: 'agent-approval.approve-once',
+        context: { kind: 'agent-approval', roomId: '!r:x', eventId: '$e' },
+      },
+    ]);
+    assert.deepEqual(await takeDesktopNotificationResponses(-1), []);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+  assert.deepEqual(calls, [
+    { command: 'desktop_take_notification_responses', args: { sessionGeneration: 4 } },
+  ]);
 });
 
 test('sign-out withdraws posted banners and zeroes the badge and tray', async () => {
@@ -1602,11 +1648,9 @@ test('sign-out withdraws posted banners and zeroes the badge and tray', async ()
     (globalThis as any).window = originalWindow;
   }
 
+  // Every banner this app posted goes, an earlier launch's included.
   assert.deepEqual(calls, [
-    {
-      command: 'desktop_dismiss_notifications',
-      args: { keys: ['room:!room:example.org', 'event:$event:example.org'] },
-    },
+    { command: 'desktop_dismiss_all_notifications', args: undefined },
     { command: 'desktop_set_badge_count', args: { count: 0 } },
     {
       command: 'desktop_update_tray_state',
@@ -1620,6 +1664,36 @@ test('sign-out withdraws posted banners and zeroes the badge and tray', async ()
         },
       },
     },
+  ]);
+  assert.deepEqual(getPostedDesktopDismissKeys(), []);
+});
+
+test('dismiss-all falls back to the posted keys on a shell without the command', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        if (command === 'desktop_dismiss_all_notifications') {
+          throw new Error('command desktop_dismiss_all_notifications not found');
+        }
+        return true;
+      },
+    },
+  };
+  try {
+    await dismissDesktopNotifications(getPostedDesktopDismissKeys());
+    await showDesktopNotification({ title: 'Room', dismissKeys: ['room:!left:example.org'] });
+    calls.length = 0;
+    await dismissAllDesktopNotifications();
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+  assert.deepEqual(calls, [
+    { command: 'desktop_dismiss_all_notifications', args: undefined },
+    { command: 'desktop_dismiss_notifications', args: { keys: ['room:!left:example.org'] } },
   ]);
   assert.deepEqual(getPostedDesktopDismissKeys(), []);
 });

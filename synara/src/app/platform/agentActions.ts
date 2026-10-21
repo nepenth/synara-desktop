@@ -11,6 +11,7 @@ import {
   listen,
   sendDesktopAgentAction,
   type DesktopAgentActionEventPayload,
+  type DesktopAgentActionOutcome,
   type DesktopAgentActionPayload,
   type DesktopUnlisten,
 } from '../utils/desktop';
@@ -58,16 +59,19 @@ const nextAgentActionNonce = (): string => {
 };
 
 /**
- * The shell answers `true` once it has either run the action or handed it to
- * the listener below, which runs it with the same plan. An action that plan
- * cannot run (an `open` without a URL) is reported as unhandled up front, so
- * the caller's fallback runs instead of a silent no-op.
+ * The shell reports what it did: ran the action itself, handed it to the
+ * listener below (which runs it with the same plan), or could not run it.
+ * An action that plan cannot run (an `open` without a URL) is reported as
+ * unsupported up front, so the caller's fallback runs instead of a silent
+ * no-op.
  */
 export const sendPlatformAgentAction = async (
   action: PlatformAgentActionPayload
-): Promise<boolean> => {
+): Promise<DesktopAgentActionOutcome> => {
   const normalized = normalizeAgentActionPayload(action);
-  if (normalized && planAgentActionExecution(normalized).type === 'unsupported') return false;
+  if (normalized && planAgentActionExecution(normalized).type === 'unsupported') {
+    return 'unsupported';
+  }
   return sendDesktopAgentAction(withAgentActionInvocationId(action, nextAgentActionNonce()));
 };
 

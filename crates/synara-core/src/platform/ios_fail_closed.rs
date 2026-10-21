@@ -11,13 +11,12 @@ use super::{
     PlatformCrossSigningStatusError, PlatformCryptoStatusError, PlatformMediaConfigError,
     PlatformStatus, PlatformSyncStatusError, SecretVault, SyncStatusFuture, UnavailableSecretVault,
 };
-use crate::dto::NotificationCandidate;
 use crate::transport::{MatrixIpcEnvelope, MatrixIpcError};
 
 /// iOS shell placeholder that permits safe Core construction.
 ///
 /// Calls that need a live client return the existing static unavailable or
-/// no-session errors. The typed IPC envelope sink and OS notification/status
+/// no-session errors. The typed IPC envelope sink and OS badge/status
 /// sinks are intentional no-ops until the corresponding iOS shell work lands.
 pub struct IosFailClosedPlatform {
     vault: Arc<dyn SecretVault + Send + Sync>,
@@ -68,10 +67,6 @@ impl Platform for IosFailClosedPlatform {
 
     fn media_config(&self) -> MediaConfigFuture<'_> {
         Box::pin(async { Err(PlatformMediaConfigError::NoSession) })
-    }
-
-    fn notify(&self, _: NotificationCandidate) -> Result<(), MatrixIpcError> {
-        Ok(())
     }
 
     fn set_badge(&self, _: u64) -> Result<(), MatrixIpcError> {

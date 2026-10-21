@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-desktop-take-notification-responses"
+description = "Enables the desktop_take_notification_responses command without any pre-configured scope."
+commands.allow = ["desktop_take_notification_responses"]
+
+[[permission]]
+identifier = "deny-desktop-take-notification-responses"
+description = "Denies the desktop_take_notification_responses command without any pre-configured scope."
+commands.deny = ["desktop_take_notification_responses"]

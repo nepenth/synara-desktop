@@ -14,7 +14,6 @@ use crate::app::sync::{
     SyncReadiness, SyncReadinessSnapshot, SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID,
     SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
 };
-use crate::dto::NotificationCandidate;
 use crate::transport::{
     MatrixIpcEnvelope, MatrixIpcError, MatrixIpcErrorCategory, MAX_WIRE_COUNTER,
 };
@@ -668,8 +667,6 @@ pub trait Platform: Send + Sync + 'static {
     /// and store. It maps its local observation to [`PlatformMediaConfig`] or
     /// [`PlatformMediaConfigError`] before Core sees it.
     fn media_config(&self) -> MediaConfigFuture<'_>;
-    /// Deliver a native notification (tray/toast on desktop, APNs/badge on iOS).
-    fn notify(&self, candidate: NotificationCandidate) -> Result<(), MatrixIpcError>;
     /// App icon badge count (dock/taskbar/today on iOS).
     fn set_badge(&self, count: u64) -> Result<(), MatrixIpcError>;
     /// Broadcast engine status (health/readiness) to the OS layer.

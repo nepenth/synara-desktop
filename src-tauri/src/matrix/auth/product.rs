@@ -334,6 +334,17 @@ impl MatrixAuthState {
         Self::default()
     }
 
+    /// The installed session's generation and account. The session lock is
+    /// held only to copy them, never across a caller's await.
+    pub async fn active_session_binding(&self) -> Option<(u64, String)> {
+        self.session.lock().await.as_ref().map(|active| {
+            (
+                active.sync.session_generation(),
+                active.identity.user_id.clone(),
+            )
+        })
+    }
+
     /// Retry a failed save of the current in-memory tokens.
     ///
     /// Returns `None` when nothing needs saving, otherwise whether the write

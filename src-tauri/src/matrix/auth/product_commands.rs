@@ -844,6 +844,10 @@ pub async fn matrix_logout(
             },
         )
         .await?;
+    // Voluntary, forced and expired sign-outs all end here: withdraw the old
+    // account's banners and zero the badge and tray even when no renderer
+    // is left to do it.
+    crate::desktop_notifications::clear_signed_out_surfaces(&app).await;
     Ok(MatrixSessionSnapshot::LoggedOut)
 }
 

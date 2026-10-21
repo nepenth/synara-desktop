@@ -138,3 +138,35 @@ test('an optimistic decision labels the Recent row before account data syncs', a
   unsubscribe();
   release();
 });
+
+test('a prompt decided on another device shows that decision and its time', async () => {
+  const client = {};
+  const projection = createApprovalInboxProjection();
+  projection.receive(
+    await loadApprovalInbox(async () => ({ available: true, value: snapshot(1) })),
+    client
+  );
+  const release = activateApprovalDecisionScope(projection.scope);
+  const unsubscribe = subscribeApprovalDecisions((notice) =>
+    projection.complete(notice.scope, notice)
+  );
+  await decideAgentApprovalWithNativeOwner(
+    { roomId: '!room:example.org', eventId: '$event', actionId: 'agent-approval.approve-once' },
+    async () => ({
+      available: true,
+      value: {
+        roomId: '!room:example.org',
+        eventId: '$event',
+        status: 'already_decided',
+        decision: 'deny',
+        decidedAt: 1500,
+      },
+    })
+  );
+  const item = projection.read(2000)?.items[0];
+  assert.equal(item?.status, 'decided');
+  assert.equal(item?.decision, 'deny');
+  assert.equal(item?.decidedAt, 1500);
+  unsubscribe();
+  release();
+});

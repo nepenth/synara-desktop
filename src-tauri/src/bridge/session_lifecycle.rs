@@ -125,7 +125,6 @@ mod tests {
         SyncReadiness, SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID,
         SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
     };
-    use synara_core::dto::NotificationCandidate;
     use synara_core::platform::{
         Platform, PlatformCryptoCrossSigningState, PlatformCryptoStatus, PlatformCryptoStatusError,
         PlatformStatus, PlatformSyncFailure, PlatformSyncStatus, PlatformSyncStatusError,
@@ -194,10 +193,6 @@ mod tests {
                 Ok(synara_core::platform::PlatformMediaConfig::new(0)
                     .expect("zero is a valid closed media projection"))
             })
-        }
-
-        fn notify(&self, _candidate: NotificationCandidate) -> Result<(), MatrixIpcError> {
-            Ok(())
         }
 
         fn set_badge(&self, _count: u64) -> Result<(), MatrixIpcError> {

@@ -10,7 +10,7 @@ export function createApprovalInboxProjection() {
   let client: object | undefined;
   let scope: object = {};
   let snapshot: ApprovalInboxSnapshot | undefined;
-  const completed = new Map<string, ApprovalDecision | undefined>();
+  const completed = new Map<string, { decision?: ApprovalDecision; decidedAt?: number }>();
   return {
     get scope() {
       return scope;
@@ -31,10 +31,13 @@ export function createApprovalInboxProjection() {
     },
     complete(
       expectedScope: object | undefined,
-      item: { roomId: string; eventId: string; decision?: ApprovalDecision }
+      item: { roomId: string; eventId: string; decision?: ApprovalDecision; decidedAt?: number }
     ): boolean {
       if (!snapshot || expectedScope !== scope) return false;
-      completed.set(approvalIdentity(item), item.decision);
+      completed.set(approvalIdentity(item), {
+        decision: item.decision,
+        decidedAt: item.decidedAt,
+      });
       return true;
     },
     read(now: number): ApprovalInboxSnapshot | undefined {
@@ -44,11 +47,14 @@ export function createApprovalInboxProjection() {
           items: snapshot.items.map((item) => {
             const identity = approvalIdentity(item);
             if (!completed.has(identity)) return { ...item, status: approvalStatus(item, now) };
-            const decision = completed.get(identity) ?? item.decision;
+            const recorded = completed.get(identity);
+            const decision = recorded?.decision ?? item.decision;
             return {
               ...item,
               status: 'decided' as const,
-              ...(decision ? { decision, decidedAt: item.decidedAt ?? now } : {}),
+              ...(decision
+                ? { decision, decidedAt: item.decidedAt ?? recorded?.decidedAt ?? now }
+                : {}),
             };
           }),
         }

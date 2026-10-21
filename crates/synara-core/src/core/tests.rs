@@ -63,9 +63,6 @@ impl Platform for TestPlatform {
     fn media_config(&self) -> crate::platform::MediaConfigFuture<'_> {
         Box::pin(async { Ok(available_platform_media_config()) })
     }
-    fn notify(&self, _candidate: crate::dto::NotificationCandidate) -> Result<(), MatrixIpcError> {
-        Ok(())
-    }
     fn set_badge(&self, _count: u64) -> Result<(), MatrixIpcError> {
         Ok(())
     }
@@ -102,9 +99,6 @@ impl Platform for StatusPlatform {
 
     fn media_config(&self) -> crate::platform::MediaConfigFuture<'_> {
         Box::pin(async { Ok(available_platform_media_config()) })
-    }
-    fn notify(&self, _candidate: crate::dto::NotificationCandidate) -> Result<(), MatrixIpcError> {
-        Ok(())
     }
     fn set_badge(&self, _count: u64) -> Result<(), MatrixIpcError> {
         Ok(())
@@ -143,9 +137,6 @@ impl Platform for CryptoStatusPlatform {
     fn media_config(&self) -> crate::platform::MediaConfigFuture<'_> {
         Box::pin(async { Ok(available_platform_media_config()) })
     }
-    fn notify(&self, _candidate: crate::dto::NotificationCandidate) -> Result<(), MatrixIpcError> {
-        Ok(())
-    }
     fn set_badge(&self, _count: u64) -> Result<(), MatrixIpcError> {
         Ok(())
     }
@@ -182,9 +173,6 @@ impl Platform for CrossSigningStatusPlatform {
     }
     fn media_config(&self) -> crate::platform::MediaConfigFuture<'_> {
         Box::pin(async { Ok(available_platform_media_config()) })
-    }
-    fn notify(&self, _candidate: crate::dto::NotificationCandidate) -> Result<(), MatrixIpcError> {
-        Ok(())
     }
     fn set_badge(&self, _count: u64) -> Result<(), MatrixIpcError> {
         Ok(())
@@ -226,9 +214,6 @@ impl Platform for SecretStorageStatusPlatform {
     fn media_config(&self) -> crate::platform::MediaConfigFuture<'_> {
         Box::pin(async { Ok(available_platform_media_config()) })
     }
-    fn notify(&self, _candidate: crate::dto::NotificationCandidate) -> Result<(), MatrixIpcError> {
-        Ok(())
-    }
     fn set_badge(&self, _count: u64) -> Result<(), MatrixIpcError> {
         Ok(())
     }
@@ -266,9 +251,6 @@ impl Platform for MediaConfigPlatform {
 
     fn media_config(&self) -> crate::platform::MediaConfigFuture<'_> {
         Box::pin(async move { self.config })
-    }
-    fn notify(&self, _candidate: crate::dto::NotificationCandidate) -> Result<(), MatrixIpcError> {
-        Ok(())
     }
     fn set_badge(&self, _count: u64) -> Result<(), MatrixIpcError> {
         Ok(())

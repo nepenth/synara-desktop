@@ -369,6 +369,12 @@
           "markdownDescription": "Enables the desktop_diagnostics_status command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_dismiss_all_notifications command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-dismiss-all-notifications",
+          "markdownDescription": "Enables the desktop_dismiss_all_notifications command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_dismiss_notifications command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-dismiss-notifications",
@@ -535,6 +541,12 @@
           "type": "string",
           "const": "allow-desktop-show",
           "markdownDescription": "Enables the desktop_show command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_take_notification_responses command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-take-notification-responses",
+          "markdownDescription": "Enables the desktop_take_notification_responses command without any pre-configured scope."
         },
         {
           "description": "Enables the desktop_update_tray_state command without any pre-configured scope.",
@@ -1851,6 +1863,12 @@
           "markdownDescription": "Denies the desktop_diagnostics_status command without any pre-configured scope."
         },
         {
+          "description": "Denies the desktop_dismiss_all_notifications command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-dismiss-all-notifications",
+          "markdownDescription": "Denies the desktop_dismiss_all_notifications command without any pre-configured scope."
+        },
+        {
           "description": "Denies the desktop_dismiss_notifications command without any pre-configured scope.",
           "type": "string",
           "const": "deny-desktop-dismiss-notifications",
@@ -2017,6 +2035,12 @@
           "type": "string",
           "const": "deny-desktop-show",
           "markdownDescription": "Denies the desktop_show command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_take_notification_responses command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-take-notification-responses",
+          "markdownDescription": "Denies the desktop_take_notification_responses command without any pre-configured scope."
         },
         {
           "description": "Denies the desktop_update_tray_state command without any pre-configured scope.",

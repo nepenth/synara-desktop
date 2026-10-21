@@ -290,6 +290,17 @@ pub struct NativeAgentApprovalDecisionResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "ts-export", ts(optional))]
     pub reaction: Option<NativeReactionMutationResult>,
+    /// For `already_decided`: the decision this account already recorded
+    /// (its own terminal reaction, else its approval history), which may
+    /// differ from the requested action. Absent when Core cannot tell.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
+    pub decision: Option<crate::app::account_data::SynaraAgentApprovalHistoryDecision>,
+    /// When `decision` was made, in milliseconds since the epoch; absent
+    /// while the reaction is a local echo or the time is unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
+    pub decided_at: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
