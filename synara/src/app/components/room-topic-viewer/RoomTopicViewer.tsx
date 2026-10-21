@@ -2,9 +2,8 @@ import React from 'react';
 import { as, Box, Header, Icon, IconButton, Icons, Scroll, Text } from 'folds';
 import { Modal } from '../modal-dialog';
 import classNames from 'classnames';
-import Linkify from 'linkify-react';
 import * as css from './style.css';
-import { LINKIFY_OPTS, scaleSystemEmoji } from '../../plugins/react-custom-html-parser';
+import { NativeLinkifiedText } from '../../features/room/nativeTimelineFormattedBody';
 
 export const RoomTopicViewer = as<
   'div',
@@ -34,7 +33,7 @@ export const RoomTopicViewer = as<
     <Scroll className={css.ModalScroll} size="300" hideTrack>
       <Box className={css.ModalContent} direction="Column" gap="100">
         <Text size="T300" className={css.ModalTopic} priority="400">
-          <Linkify options={LINKIFY_OPTS}>{scaleSystemEmoji(topic)}</Linkify>
+          <NativeLinkifiedText text={topic} />
         </Text>
       </Box>
     </Scroll>

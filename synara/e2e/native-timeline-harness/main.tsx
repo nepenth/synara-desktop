@@ -68,9 +68,22 @@ let sequence = polish
     ? 1
     : scenario === 'short'
       ? 2
-      : jank
-        ? 180
-        : 60;
+      : scenario === 'media'
+        ? 3
+        : jank
+          ? 180
+          : 60;
+// `scenario=media`: an image, a video and an image the webview cannot load.
+const MEDIA_IMAGE_HANDLE = `timeline-media-${'1a'.repeat(32)}`;
+const MEDIA_VIDEO_HANDLE = `timeline-media-${'2b'.repeat(32)}`;
+const MEDIA_BROKEN_HANDLE = `timeline-media-${'3c'.repeat(32)}`;
+// Thread fixtures: `failThreadOpen` rejects the first thread open,
+// `failThreadPaginate` the first thread pagination, `threadMore` leaves older
+// replies on the server and `holdThreadReopen` holds every later thread open.
+let failThreadOpen = params.has('failThreadOpen');
+let failThreadPaginate = params.has('failThreadPaginate');
+let threadOpenCount = 0;
+let releaseThreadOpen: (() => void) | undefined;
 let historyIndex = 0;
 let stream = 0;
 let releaseJump: (() => void) | undefined;
@@ -153,6 +166,29 @@ if (scenario === 'threads') {
       : row
   );
 }
+if (scenario === 'media') {
+  const media = [
+    {
+      messageType: 'image' as const,
+      mediaFilename: 'sunrise.png',
+      media: { handleId: MEDIA_IMAGE_HANDLE, mimeType: 'image/png', width: 64, height: 48 },
+    },
+    {
+      messageType: 'video' as const,
+      mediaFilename: 'clip.mp4',
+      media: { handleId: MEDIA_VIDEO_HANDLE, mimeType: 'video/mp4', width: 64, height: 48 },
+    },
+    {
+      messageType: 'image' as const,
+      mediaFilename: 'broken.png',
+      media: { handleId: MEDIA_BROKEN_HANDLE, mimeType: 'image/png', width: 64, height: 48 },
+    },
+  ];
+  rows = rows.map(
+    (row, index) =>
+      ({ ...row, body: media[index].mediaFilename, ...media[index] }) as (typeof rows)[number]
+  );
+}
 const threadRows = () => [
   rows.find((row) => row.eventId === THREAD_ROOT) ?? makeRow(1),
   ...Array.from({ length: THREAD_REPLY_COUNT }, (_, index) => ({
@@ -160,6 +196,13 @@ const threadRows = () => [
     itemId: `$t${index + 1}`,
     eventId: `$t${index + 1}`,
     body: `Thread reply ${index + 1}`,
+    // One reply carries Matrix HTML, as Hermes and Element send it.
+    ...(index === 5
+      ? {
+          formattedBody:
+            '<p>Thread reply 6 is <strong>formatted</strong> with <code>code</code></p><script>bad()</script>',
+        }
+      : {}),
     threadRoot: THREAD_ROOT,
   })),
 ];
@@ -325,6 +368,16 @@ window.__SYNARA_DESKTOP__ = {
       } as T;
     }
     if (command === 'matrix_timeline_open' && request?.position?.kind === 'thread') {
+      threadOpenCount += 1;
+      if (failThreadOpen) {
+        failThreadOpen = false;
+        throw coreOpenFailure('v-timeline-thread-open-failed');
+      }
+      if (params.has('holdThreadReopen') && threadOpenCount > 1) {
+        await new Promise<void>((resolve) => {
+          releaseThreadOpen = resolve;
+        });
+      }
       const threadPosition = {
         kind: 'thread',
         root_event_id: (request.position as { root_event_id?: string }).root_event_id ?? '',
@@ -333,7 +386,10 @@ window.__SYNARA_DESKTOP__ = {
       const threadSnapshot = {
         ...opened.snapshot,
         rows: threadRows(),
-        pagination: { backward: 'exhausted', forward: 'exhausted' } as const,
+        pagination: {
+          backward: params.has('threadMore') ? 'available' : 'exhausted',
+          forward: 'exhausted',
+        } as const,
       };
       snapshots.set(opened.streamId, threadSnapshot);
       openThreadStreams.add(opened.streamId);
@@ -452,7 +508,13 @@ window.__SYNARA_DESKTOP__ = {
       openThreadStreams.delete(request?.streamId ?? '');
       return undefined as T;
     }
-    if (command === 'matrix_timeline_paginate') return snapshots.get(request?.streamId ?? '') as T;
+    if (command === 'matrix_timeline_paginate') {
+      if (failThreadPaginate && openThreadStreams.has(request?.streamId ?? '')) {
+        failThreadPaginate = false;
+        throw new Error('Thread history is temporarily unavailable');
+      }
+      return snapshots.get(request?.streamId ?? '') as T;
+    }
     if (command === 'matrix_media_text_preview') {
       return { text: FILE_MD_BYTES } as T;
     }
@@ -496,6 +558,17 @@ if (params.has('nativeEvents')) {
         if (listener) eventCallbacks.delete(listener.handler);
         eventListeners.delete(id);
       },
+    },
+  });
+}
+
+if (scenario === 'media' || params.has('surface')) {
+  // Core serves media on its own protocol; tests route this origin path instead.
+  Object.assign(window, {
+    __TAURI_INTERNALS__: {
+      ...(window as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__,
+      convertFileSrc: (handle: string) =>
+        `${location.origin}/__synara-media/${encodeURIComponent(handle)}`,
     },
   });
 }
@@ -874,6 +947,12 @@ const api = {
   openThreadStreams() {
     return openThreadStreams.size;
   },
+  threadOpenCount() {
+    return threadOpenCount;
+  },
+  releaseThreadOpen() {
+    releaseThreadOpen?.();
+  },
 };
 Object.assign(window, { nativeTimelineFixture: api });
 setNativeIdentity({ userId: '@reader0:example.test' });
@@ -955,6 +1034,12 @@ async function bootHarness() {
       document.body.style.backgroundColor = '#161719';
       document.body.style.color = '#ededed';
     }
+  }
+  if (params.has('surface')) {
+    // Message text outside the timeline (inbox, pins, search, topics).
+    const { mountRichTextSurfaces } = await import('./surfaces');
+    mountRichTextSurfaces(document.getElementById('root')!);
+    return;
   }
   createRoot(document.getElementById('root')!).render(<App />);
 }

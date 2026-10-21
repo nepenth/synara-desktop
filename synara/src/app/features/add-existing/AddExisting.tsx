@@ -47,7 +47,7 @@ import {
   useAsyncSearch,
   UseAsyncSearchOptions,
 } from '../../hooks/useAsyncSearch';
-import { highlightText, makeHighlightRegex } from '../../plugins/react-custom-html-parser';
+import { highlightText, makeHighlightRegex } from '../../utils/highlightText';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { getViaServers } from '../../plugins/via-servers';
 import { setSpaceChild } from '../lobby/nativeSpaceChild';

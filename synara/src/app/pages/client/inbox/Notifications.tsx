@@ -31,8 +31,6 @@ type NotificationsRoomReading = EventedRoomReading & {
 import type { EventedRoomReading } from '../../../utils/roomEvents';
 import type { MatrixEventReading } from '../../../utils/room';
 import { useSharedScrollVirtualizer } from '../../../hooks/useSharedScrollVirtualizer';
-import { HTMLReactParserOptions } from 'html-react-parser';
-import { Opts as LinkifyOpts } from 'linkifyjs';
 import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { Page, PageContent, PageContentCenter, PageHeader } from '../../../components/page';
@@ -63,13 +61,6 @@ import {
   Username,
   UsernameBold,
 } from '../../../components/message';
-import {
-  factoryRenderLinkifyWithMention,
-  getReactCustomHtmlParser,
-  LINKIFY_OPTS,
-  makeMentionCustomProps,
-  renderMatrixMention,
-} from '../../../plugins/react-custom-html-parser';
 import { RenderMessageContent } from '../../../components/RenderMessageContent';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
@@ -90,7 +81,7 @@ import {
   NativeEventContent,
   type NativeEventSource,
 } from '../../../features/room/message/NativeEventContent';
-import { useMentionClickHandler } from '../../../hooks/useMentionClickHandler';
+import { NativeRoomPermalinks } from '../../../features/room/NativeRoomPermalinks';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../../components/BackRouteHandler';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
@@ -236,7 +227,16 @@ type RoomNotificationsGroupProps = {
   hour24Clock: boolean;
   dateFormatString: string;
 };
-function RoomNotificationsGroupComp({
+/** The inbox sits outside any room view, so each group opens permalinks itself. */
+function RoomNotificationsGroupComp(props: RoomNotificationsGroupProps) {
+  return (
+    <NativeRoomPermalinks roomId={props.room.roomId}>
+      <RoomNotificationsGroupBody {...props} />
+    </NativeRoomPermalinks>
+  );
+}
+
+function RoomNotificationsGroupBody({
   room,
   notifications,
   mediaAutoLoad,
@@ -261,27 +261,6 @@ function RoomNotificationsGroupComp({
   const theme = useTheme();
   const accessibleTagColors = useAccessiblePowerTagColors(theme.kind, creatorsTag, powerLevelTags);
 
-  const mentionClickHandler = useMentionClickHandler(room.roomId);
-
-  const linkifyOpts = useMemo<LinkifyOpts>(
-    () => ({
-      ...LINKIFY_OPTS,
-      render: factoryRenderLinkifyWithMention((href) =>
-        renderMatrixMention(room.roomId, href, makeMentionCustomProps(mentionClickHandler))
-      ),
-    }),
-    [room, mentionClickHandler]
-  );
-  const htmlReactParserOptions = useMemo<HTMLReactParserOptions>(
-    () =>
-      getReactCustomHtmlParser(room.roomId, {
-        linkifyOpts,
-        useAuthentication,
-        handleMentionClick: mentionClickHandler,
-      }),
-    [room, linkifyOpts, mentionClickHandler, useAuthentication]
-  );
-
   const renderMatrixEvent = useMatrixEventRenderer<
     [NotificationEventReading, string, GetContentCallback]
   >(
@@ -298,8 +277,6 @@ function RoomNotificationsGroupComp({
             ts={event.origin_server_ts}
             getContent={getContent}
             mediaAutoLoad={mediaAutoLoad}
-            htmlReactParserOptions={htmlReactParserOptions}
-            linkifyOpts={linkifyOpts}
             outlineAttachment
             agentApprovalTarget={{
               roomId: room.roomId,
@@ -365,8 +342,6 @@ function RoomNotificationsGroupComp({
                     edited={!!editedEvent}
                     getContent={getContent}
                     mediaAutoLoad={mediaAutoLoad}
-                    htmlReactParserOptions={htmlReactParserOptions}
-                    linkifyOpts={linkifyOpts}
                     agentApprovalTarget={{
                       roomId: room.roomId,
                       eventId: evt.event_id,

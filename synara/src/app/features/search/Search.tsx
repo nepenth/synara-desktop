@@ -48,7 +48,7 @@ import {
   getRoomAvatarUrl,
   guessPerfectParent,
 } from '../../utils/room';
-import { highlightText, makeHighlightRegex } from '../../plugins/react-custom-html-parser';
+import { highlightText, makeHighlightRegex } from '../../utils/highlightText';
 import { factoryRoomIdByActivity } from '../../utils/sort';
 import { nameInitials } from '../../utils/common';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';

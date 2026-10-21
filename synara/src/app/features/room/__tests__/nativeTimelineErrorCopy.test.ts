@@ -67,9 +67,11 @@ test('the presenter shows no "native" copy and styles action errors as alerts (D
   assert.doesNotMatch(presenter, /'[^'\n]*\bnative (timeline|matrix)\b[^'\n]*'/i);
   assert.doesNotMatch(presenter, /error instanceof Error \? error\.message/);
   assert.doesNotMatch(presenter, /\{actionError && <Text/);
-  assert.match(presenter, /role=\{tone === 'error' \? 'alert' : 'status'\}/);
-  assert.match(presenter, /className=\{htmlCss\.TimelineNotice\(\{ tone \}\)\}/);
-  assert.match(presenter, /aria-label="Dismiss"/);
+  const notice = read('NativeTimelineNotice.tsx');
+  assert.match(presenter, /<NativeTimelineNotice/);
+  assert.match(notice, /role=\{tone === 'error' \? 'alert' : 'status'\}/);
+  assert.match(notice, /className=\{htmlCss\.TimelineNotice\(\{ tone \}\)\}/);
+  assert.match(notice, /aria-label="Dismiss"/);
   assert.match(read('nativeTimelineHtml.css.ts'), /TimelineNotice = recipe\(/);
   assert.doesNotMatch(read('nativeLinkUnfurl.ts'), /Native Matrix URL preview/);
   assert.doesNotMatch(read('NativeTimelineMarkdownPreview.tsx'), /error instanceof Error/);

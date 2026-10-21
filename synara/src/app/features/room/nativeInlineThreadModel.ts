@@ -4,6 +4,8 @@ export type InlineThreadReply = {
   key: string;
   senderName: string;
   body: string;
+  /** Matrix HTML of a text reply; media replies show their `body` only. */
+  formattedBody?: string;
   originServerTs?: number;
 };
 
@@ -28,7 +30,19 @@ export const inlineThreadReplies = (
         key: event.itemId,
         senderName: event.senderName,
         body: replyText(row),
+        formattedBody: row.kind === 'message' && !row.media ? row.formattedBody : undefined,
         originServerTs: event.originServerTs,
       },
     ];
   });
+
+/**
+ * The last replies an expanded inline thread showed. Virtualization unmounts
+ * the row (and closes its stream) when it scrolls away; the remounted row
+ * shows these at once, at the same height, while its stream reopens.
+ */
+export type InlineThreadReplyCache = {
+  rows: readonly NativeTimelineViewRow[];
+  moreOnServer: boolean;
+  visible: number;
+};

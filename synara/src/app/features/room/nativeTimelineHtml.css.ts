@@ -163,6 +163,66 @@ export const MediaLoadPlaceholder = style({
   },
 });
 
+/** An inline image or video that opens the media viewer; it keeps the media's own box. */
+export const MediaOpenButton = style({
+  display: 'block',
+  alignSelf: 'flex-start',
+  maxWidth: '100%',
+  lineHeight: 0,
+  padding: 0,
+  margin: 0,
+  border: 'none',
+  borderRadius: config.radii.R400,
+  background: 'none',
+  overflow: 'hidden',
+  cursor: 'zoom-in',
+  selectors: {
+    '&:focus-visible': {
+      outline: `${config.borderWidth.B500} solid ${color.Primary.Main}`,
+      outlineOffset: config.borderWidth.B300,
+    },
+  },
+});
+
+/** Inline video keeps its own controls; the viewer opens from this corner button. */
+export const MediaVideoFrame = style({
+  position: 'relative',
+  alignSelf: 'flex-start',
+  maxWidth: '100%',
+  lineHeight: 0,
+});
+
+export const MediaExpandButton = style({
+  position: 'absolute',
+  top: config.space.S200,
+  right: config.space.S200,
+});
+
+export const MediaViewerModal = style({
+  width: 'min(72rem, 94vw)',
+  maxHeight: '92vh',
+  display: 'flex',
+  flexDirection: 'column',
+  backgroundColor: color.Surface.Container,
+  color: color.Surface.OnContainer,
+});
+
+export const MediaViewerBody = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minHeight: toRem(160),
+  padding: config.space.S300,
+  overflow: 'auto',
+});
+
+export const MediaViewerMedia = style({
+  display: 'block',
+  maxWidth: '100%',
+  maxHeight: 'calc(92vh - 5rem)',
+  objectFit: 'contain',
+});
+
 /** Read by screen readers, not drawn. */
 export const VisuallyHidden = style({
   position: 'absolute',

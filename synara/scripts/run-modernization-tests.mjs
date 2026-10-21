@@ -167,6 +167,7 @@ const tests = [
   'src/app/features/room/__tests__/nativeTimelineRowFilter.test.ts',
   'src/app/features/room/__tests__/nativeTimelineErrorCopy.test.ts',
   'src/app/features/room/__tests__/nativeTimelineLinks.test.ts',
+  'src/app/features/room/__tests__/nativeRichTextSurfaces.test.ts',
   'src/app/features/room/__tests__/nativeTimelineEdit.test.ts',
   'src/app/features/room/__tests__/nativeTimelineAnnouncements.test.ts',
   'src/app/features/room/__tests__/nativeTimelineAccessibility.test.ts',

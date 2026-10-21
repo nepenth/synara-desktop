@@ -10,9 +10,9 @@ import type { _RoomSearchParams } from '../../pages/paths';
 import type { NativePermalinkHandler } from './nativeTimelineFormattedBody';
 
 /**
- * In-app navigation for matrix.to links in timeline messages: a user opens
+ * In-app navigation for matrix.to links in message text: a user opens
  * their profile, a joined room or event opens here, anything else opens the
- * room preview. Mirrors `useMentionClickHandler` for the legacy renderers.
+ * room preview.
  */
 export const useNativePermalinkHandler = (roomId: string): NativePermalinkHandler => {
   const { navigateRoom, navigateSpace } = useRoomNavigate();

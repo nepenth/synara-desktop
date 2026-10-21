@@ -134,6 +134,11 @@ import {
 } from './nativeTimelineViewportPolicy';
 import { shouldGroupNativeTimelineRows } from './nativeTimelineGrouping';
 import { NativeTimelineHistoryStatus } from './NativeTimelineHistoryStatus';
+import { NativeTimelineNotice, type NativeTimelineNoticeState } from './NativeTimelineNotice';
+import {
+  NativeTimelineMediaViewer,
+  type NativeTimelineMediaViewerTarget,
+} from './NativeTimelineMediaViewer';
 import { formatTimelineDayLabel, rowTimestampMs } from '../../utils/timelineDateMarks';
 import {
   canPaginateTimelineForward,
@@ -422,6 +427,7 @@ type NativeTimelineRowProps = {
   onOpenThread: (rootEventId: string, latestEventId?: string) => void;
   activeThreadRoot?: string;
   onOpenMarkdownPreview: (file: NativeTimelineFilePreviewTarget) => void;
+  onOpenMediaViewer: (target: NativeTimelineMediaViewerTarget) => void;
   /** This row's message is open in the in-place editor. */
   editing: boolean;
   /** Open the editor for an event, or close it with `undefined`. */
@@ -1270,55 +1276,6 @@ const NativeTimelineRowActionSurface = ({
   );
 };
 
-type NativeTimelineNoticeState = { tone: 'error' | 'info'; message: string };
-
-/** A failed row action or a routing notice, shown above the timeline. */
-const NativeTimelineNotice = ({
-  tone,
-  message,
-  action,
-  onDismiss,
-}: NativeTimelineNoticeState & {
-  action?: { label: string; onClick: () => void };
-  onDismiss?: () => void;
-}) => (
-  <Box
-    className={htmlCss.TimelineNotice({ tone })}
-    gap="200"
-    alignItems="Center"
-    role={tone === 'error' ? 'alert' : 'status'}
-    data-native-timeline-notice={tone}
-  >
-    <Icon src={tone === 'error' ? Icons.Warning : Icons.Info} size="100" />
-    <Box grow="Yes">
-      <Text size="T200">{message}</Text>
-    </Box>
-    {action ? (
-      <Button
-        size="300"
-        variant={tone === 'error' ? 'Critical' : 'Secondary'}
-        fill="Soft"
-        radii="300"
-        onClick={action.onClick}
-      >
-        <Text size="B300">{action.label}</Text>
-      </Button>
-    ) : null}
-    {onDismiss ? (
-      <IconButton
-        onClick={onDismiss}
-        variant={tone === 'error' ? 'Critical' : 'SurfaceVariant'}
-        fill="Soft"
-        size="300"
-        radii="300"
-        aria-label="Dismiss"
-      >
-        <Icon src={Icons.Cross} size="50" />
-      </IconButton>
-    ) : null}
-  </Box>
-);
-
 const FOCUSED_OPEN_FAILED =
   'That message could not be opened. Showing the latest messages instead.';
 const STREAM_GAP_FAILED = 'Some new messages could not be loaded.';
@@ -1386,6 +1343,9 @@ const NativeTimelineFileChip = ({
 // Media the user chose to load while auto-loading is off. Rows remount as
 // they scroll, so the choice lives outside them for the session.
 const nativeTimelineRequestedMediaLoads = new Set<string>();
+// Images and videos the webview could not show. A remounted row goes straight
+// to the file chip instead of loading, failing and changing height again.
+const nativeTimelineFailedMediaLoads = new Set<string>();
 
 /** The placeholder keeps the media's own box so loading it does not shift rows. */
 const nativeTimelineDeferredMediaStyle = (
@@ -1415,6 +1375,7 @@ const NativeTimelineMedia = ({
   sticker,
   onActionError,
   onOpenMarkdownPreview,
+  onOpenMediaViewer,
 }: {
   media?: NativeTimelineMediaHandle;
   messageType?: string;
@@ -1424,11 +1385,19 @@ const NativeTimelineMedia = ({
   sticker?: boolean;
   onActionError?: (message: string) => void;
   onOpenMarkdownPreview?: (file: NativeTimelineFilePreviewTarget) => void;
+  onOpenMediaViewer?: (target: NativeTimelineMediaViewerTarget) => void;
 }) => {
   const [mediaAutoLoad] = useSetting(settingsAtom, 'mediaAutoLoad');
   const [loadRequested, setLoadRequested] = useState(() =>
     media?.handleId ? nativeTimelineRequestedMediaLoads.has(media.handleId) : false
   );
+  const [loadFailed, setLoadFailed] = useState(() =>
+    media?.handleId ? nativeTimelineFailedMediaLoads.has(media.handleId) : false
+  );
+  const markLoadFailed = () => {
+    if (media?.handleId) nativeTimelineFailedMediaLoads.add(media.handleId);
+    setLoadFailed(true);
+  };
   const mediaSrc = media ? nativeTimelineMediaSrc(media) : undefined;
   const reservedBox = sticker ? NATIVE_TIMELINE_STICKER_MAX_PX : NATIVE_TIMELINE_MEDIA_MAX_PX;
   // "Load Media Automatically" off: images and videos wait for a click, and
@@ -1505,15 +1474,66 @@ const NativeTimelineMedia = ({
       </Box>
     );
   }
+  const visualKind =
+    messageType === 'image' ? 'image' : messageType === 'video' ? 'video' : undefined;
+  const visualLabel =
+    caption?.trim() || filename?.trim() || (visualKind === 'video' ? 'Video' : 'Image');
+  if (visualKind && media && loadFailed) {
+    // The webview could not show it; the file is still there to save.
+    return (
+      <Box direction="Column" gap="100" data-native-timeline-media-failed={visualKind}>
+        <NativeTimelineFileChip
+          handleId={media.handleId}
+          filename={filename}
+          mimeType={media.mimeType}
+          onActionError={onActionError}
+        />
+        {captionView}
+        <Text size="T200" className={htmlCss.Metadata}>
+          {visualKind === 'video'
+            ? 'This video could not be played here.'
+            : 'This image could not be shown here.'}
+        </Text>
+      </Box>
+    );
+  }
+  const openViewer =
+    visualKind && media && onOpenMediaViewer
+      ? (event: React.MouseEvent<HTMLButtonElement>) =>
+          onOpenMediaViewer({
+            kind: visualKind,
+            handleId: media.handleId,
+            label: visualLabel,
+            filename,
+            mimeType: media.mimeType,
+            opener: event.currentTarget,
+          })
+      : undefined;
   if (messageType === 'image') {
     const inlineSrc = media ? nativeTimelineInlineImageSrc(media, reservedBox) : undefined;
+    const image = (
+      <img
+        src={inlineSrc ?? mediaSrc}
+        alt={caption || filename || 'Image'}
+        style={mediaStyle(media)}
+        onError={markLoadFailed}
+      />
+    );
     return (
       <Box direction="Column" gap="100">
-        <img
-          src={inlineSrc ?? mediaSrc}
-          alt={caption || filename || 'Image'}
-          style={mediaStyle(media)}
-        />
+        {openViewer && media ? (
+          <button
+            type="button"
+            className={htmlCss.MediaOpenButton}
+            aria-label={`Open image: ${visualLabel}`}
+            data-native-timeline-media-open={media.handleId}
+            onClick={openViewer}
+          >
+            {image}
+          </button>
+        ) : (
+          image
+        )}
         {captionView}
       </Box>
     );
@@ -1534,16 +1554,35 @@ const NativeTimelineMedia = ({
     );
   }
   if (messageType === 'video') {
+    // A click on the video belongs to its own controls; the viewer opens from
+    // a corner button instead.
     return (
       <Box direction="Column" gap="100">
-        {/* Matrix media metadata does not provide a captions track. */}
-        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-        <video
-          src={mediaSrc}
-          controls
-          style={mediaStyle(media)}
-          {...(media?.durationMs ? { 'data-duration-ms': String(media.durationMs) } : {})}
-        />
+        <div className={htmlCss.MediaVideoFrame}>
+          {/* Matrix media metadata does not provide a captions track. */}
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <video
+            src={mediaSrc}
+            controls
+            style={mediaStyle(media)}
+            onError={markLoadFailed}
+            {...(media?.durationMs ? { 'data-duration-ms': String(media.durationMs) } : {})}
+          />
+          {openViewer && media ? (
+            <IconButton
+              className={htmlCss.MediaExpandButton}
+              variant="SurfaceVariant"
+              fill="Soft"
+              size="300"
+              radii="300"
+              aria-label={`Open video: ${visualLabel}`}
+              data-native-timeline-media-open={media.handleId}
+              onClick={openViewer}
+            >
+              <Icon src={Icons.Eye} size="100" />
+            </IconButton>
+          ) : null}
+        </div>
         {captionView}
       </Box>
     );
@@ -1814,6 +1853,7 @@ const NativeTimelineRowImpl = ({
   onOpenThread,
   activeThreadRoot,
   onOpenMarkdownPreview,
+  onOpenMediaViewer,
   editing,
   onEditingChange,
 }: NativeTimelineRowProps) => {
@@ -2187,6 +2227,7 @@ const NativeTimelineRowImpl = ({
                     formattedCaption={row.formattedBody}
                     onActionError={onActionError}
                     onOpenMarkdownPreview={onOpenMarkdownPreview}
+                    onOpenMediaViewer={onOpenMediaViewer}
                   />
                   <NativeTimelineReactionPills
                     reactions={row.reactions}
@@ -2609,6 +2650,7 @@ export function NativeTimelinePresenter({
     []
   );
   const [filePreview, setFilePreview] = useState<NativeTimelineFilePreviewTarget>();
+  const [mediaViewer, setMediaViewer] = useState<NativeTimelineMediaViewerTarget>();
   const [atLiveBottom, setAtLiveBottom] = useState(false);
   const [pendingLastRead, setPendingLastRead] = useState<string>();
   const [latestPlacementRequest, setLatestPlacementRequest] = useState(0);
@@ -2659,6 +2701,7 @@ export function NativeTimelinePresenter({
     setPaginationErrors({});
     setAtHistoryEdge({ backward: false, forward: false });
     setFilePreview(undefined);
+    setMediaViewer(undefined);
   }, [eventId, roomId]);
   const pendingBackwardGrowRef = useRef(false);
   const lastParkedStartRef = useRef(-1);
@@ -3633,6 +3676,7 @@ export function NativeTimelinePresenter({
       isExpanded: inlineExpansion.isExpanded,
       toggleExpanded: toggleInlineThread,
       openInPane: onOpenThreadPane,
+      replyCache: inlineExpansion.replyCache,
     }),
     [inlineExpansion, onOpenThreadPane, roomId, threadDisplay, toggleInlineThread]
   );
@@ -3939,6 +3983,7 @@ export function NativeTimelinePresenter({
                       onOpenThread={openThread}
                       activeThreadRoot={threadRootId}
                       onOpenMarkdownPreview={setFilePreview}
+                      onOpenMediaViewer={setMediaViewer}
                       editing={editingEventId !== undefined && rowEventId(row) === editingEventId}
                       onEditingChange={setEditingEventId}
                     />
@@ -4058,6 +4103,12 @@ export function NativeTimelinePresenter({
             target={filePreview}
             onClose={() => setFilePreview(undefined)}
             onActionError={showActionError}
+          />
+        ) : null}
+        {mediaViewer ? (
+          <NativeTimelineMediaViewer
+            target={mediaViewer}
+            onClose={() => setMediaViewer(undefined)}
           />
         ) : null}
       </Box>
