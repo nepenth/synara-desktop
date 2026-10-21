@@ -32,6 +32,7 @@ mod last_message;
 mod live;
 mod presentation;
 mod projection;
+mod server_highlights;
 mod sort;
 mod summary;
 
@@ -54,9 +55,10 @@ pub use invites::{
 };
 pub use last_message::{
     is_own_membership_event, last_message_event_is_agent_approval,
-    last_message_event_is_agent_approval_str, last_message_preview_for_user,
-    last_message_preview_from_event_json, last_message_preview_from_event_json_str,
-    sanitize_last_message_preview, ENCRYPTED_MESSAGE_PREVIEW,
+    last_message_event_is_agent_approval_str, last_message_event_is_agent_workflow,
+    last_message_preview_for_user, last_message_preview_from_event_json,
+    last_message_preview_from_event_json_str, sanitize_last_message_preview,
+    ENCRYPTED_MESSAGE_PREVIEW,
 };
 pub use live::{
     snapshot_from_sync_owner, NativeRoomListLoading, NativeRoomListOwner, NativeRoomListSnapshot,
@@ -68,5 +70,9 @@ pub use presentation::{
     RoomBadgeSource, RoomListOrder, RoomListPresentation, RoomOrderInput, RoomUnreadAttention,
 };
 pub use projection::{reconstruct, RoomListProjection};
+pub use server_highlights::{
+    fetch_server_highlights, unread_highlight_count, HighlightRecord, ServerHighlights,
+    HIGHLIGHT_MAX_PAGES, HIGHLIGHT_PAGE_LIMIT, HIGHLIGHT_REFRESH_MIN_INTERVAL,
+};
 pub use sort::{sort_rooms, sort_rooms_in_place, RoomListSort};
 pub use summary::RoomSummaryBuilder;

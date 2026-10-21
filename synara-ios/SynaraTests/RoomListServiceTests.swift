@@ -863,8 +863,13 @@ final class RoomListServiceTests: XCTestCase {
     }
 
     func testRowMappingCarriesSpacesAndLowPriorityFromCore() {
-        func row(_ id: String, isDirect: Bool = false, isSpace: Bool = false, isLowPriority: Bool = false)
-            -> SharedCoreRoomListRows.RoomRow {
+        func row(
+            _ id: String,
+            isDirect: Bool = false,
+            isSpace: Bool = false,
+            isLowPriority: Bool = false,
+            isAgentRoom: Bool = false
+        ) -> SharedCoreRoomListRows.RoomRow {
             SharedCoreRoomListRows.RoomRow(
                 roomId: id,
                 name: id,
@@ -884,7 +889,8 @@ final class RoomListServiceTests: XCTestCase {
                 directUserId: nil,
                 encryptionStatus: .unknown,
                 isSpace: isSpace,
-                isLowPriority: isLowPriority
+                isLowPriority: isLowPriority,
+                isAgentRoom: isAgentRoom
             )
         }
         let rooms = SharedCoreRoomListRows.rooms(
@@ -893,6 +899,7 @@ final class RoomListServiceTests: XCTestCase {
                 row("!quiet:example.org", isLowPriority: true),
                 row("!dm:example.org", isDirect: true),
                 row("!room:example.org"),
+                row("!agent-ops:example.org", isAgentRoom: true),
             ],
             invites: [],
             spaceParents: []
@@ -903,6 +910,18 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(byID["!room:example.org"]?.kind, .room)
         XCTAssertEqual(byID["!quiet:example.org"]?.isLowPriority, true)
         XCTAssertEqual(byID["!room:example.org"]?.isLowPriority, false)
+        XCTAssertEqual(byID["!agent-ops:example.org"]?.isAgentRoom, true)
+        XCTAssertEqual(byID["!room:example.org"]?.isAgentRoom, false)
+        XCTAssertEqual(
+            RoomListScopeFilter.filteredRooms(
+                from: rooms,
+                filter: .agents,
+                selectedSpaceID: nil,
+                searchQuery: ""
+            ).map(\.id),
+            ["!agent-ops:example.org"],
+            "the Agents filter lists Core's agent rooms"
+        )
     }
 
     func testSectionsKeepSpacesOutOfChannelsAndLowPriorityLast() {

@@ -68,6 +68,16 @@ pub fn last_message_preview_from_event_json(value: &JsonValue) -> Option<String>
     last_message_preview_for_user(value, None)
 }
 
+/// A message that carries a Hermes/Synara agent workflow payload (the same
+/// keys the preview renders as "Agent workflow").
+pub fn last_message_event_is_agent_workflow(value: &JsonValue) -> bool {
+    value.get("type").and_then(JsonValue::as_str) == Some("m.room.message")
+        && value
+            .get("content")
+            .and_then(agent_workflow_preview)
+            .is_some()
+}
+
 /// True for a membership event about `own_user_id` (its state key).
 pub fn is_own_membership_event(value: &JsonValue, own_user_id: &str) -> bool {
     value.get("type").and_then(JsonValue::as_str) == Some("m.room.member")
@@ -358,6 +368,25 @@ mod tests {
         assert!(!raw.contains("mxc://"));
         assert!(!raw.contains("syt_"));
         assert!(!raw.contains("password"));
+    }
+
+    #[test]
+    fn agent_workflow_payloads_are_recognised() {
+        assert!(last_message_event_is_agent_workflow(&json!({
+            "type": "m.room.message",
+            "content": { "msgtype": "m.text", "body": "x", "org.hermes.agent": { "title": "Deploy" } }
+        })));
+        assert!(last_message_event_is_agent_workflow(&json!({
+            "type": "m.room.message",
+            "content": {
+                "msgtype": "m.text",
+                "body": r#"{"hermes":true,"payload":{"title":"Deploy approval"}}"#
+            }
+        })));
+        assert!(!last_message_event_is_agent_workflow(&json!({
+            "type": "m.room.message",
+            "content": { "msgtype": "m.text", "body": "hello" }
+        })));
     }
 
     #[test]

@@ -14,11 +14,12 @@ use matrix_sdk::event_handler::EventHandlerHandle;
 use matrix_sdk::notification_settings::{
     IsEncrypted, IsOneToOne, NotificationSettings, RoomNotificationMode,
 };
+use matrix_sdk::ruma::events::room::member::MembershipState;
 use matrix_sdk::ruma::events::{
     AnyGlobalAccountDataEvent, AnyRoomAccountDataEvent, MessageLikeEventContent,
 };
 use matrix_sdk::ruma::serde::Raw;
-use matrix_sdk::ruma::{OwnedRoomId, RoomId};
+use matrix_sdk::ruma::{OwnedRoomId, OwnedUserId, RoomId, UserId};
 use matrix_sdk::sync::RoomUpdates;
 use matrix_sdk::{Client, EncryptionState, Room, RoomState};
 use matrix_sdk_ui::room_list_service::{
@@ -31,10 +32,14 @@ use crate::app::room_list::counts::{room_unread_presentation, RoomUnreadMembersh
 use crate::app::room_list::dm_avatar::dm_avatar_source;
 use crate::app::room_list::last_message::{
     is_own_membership_event, last_message_event_is_agent_approval,
-    last_message_event_is_agent_approval_str, last_message_preview_for_user,
-    ENCRYPTED_MESSAGE_PREVIEW,
+    last_message_event_is_agent_approval_str, last_message_event_is_agent_workflow,
+    last_message_preview_for_user, ENCRYPTED_MESSAGE_PREVIEW,
 };
 use crate::app::room_list::presentation::{room_list_presentation, RoomListPresentation};
+use crate::app::room_list::server_highlights::{
+    fetch_server_highlights, own_read_up_to_ts, run_highlight_refresh, unread_highlight_count,
+    ServerHighlights,
+};
 use crate::app::spaces::NativeSpaceParentEntry;
 use crate::app::sync::{
     spawn_supervised, RestartPolicy, SupervisedTask, SyncServiceOwner, TaskHealth,
@@ -85,6 +90,8 @@ pub const ROOM_LIST_RECENT_SUBSCRIPTIONS: usize = 20;
 /// of leaving the list without updates for the rest of the session.
 pub struct NativeRoomListOwner {
     task: SupervisedTask,
+    /// Keeps the server highlight notifications behind mention badges fresh.
+    _highlights_task: SupervisedTask,
     client: Client,
     handlers: Vec<EventHandlerHandle>,
     revision: Arc<AtomicU64>,
@@ -114,6 +121,7 @@ impl NativeRoomListOwner {
                 }
             }),
         ];
+        let highlights_task = spawn_highlight_refresh(owner, &client, wake.clone());
         // Shared across restarts: the handlers above keep the senders.
         let wakes = Arc::new(tokio::sync::Mutex::new(wakes));
         let mut first_room_updates = Some(client.subscribe_to_all_room_updates());
@@ -169,6 +177,7 @@ impl NativeRoomListOwner {
         });
         Self {
             task,
+            _highlights_task: highlights_task,
             client,
             handlers,
             revision,
@@ -193,6 +202,67 @@ impl Drop for NativeRoomListOwner {
             self.client.remove_event_handler(handle);
         }
     }
+}
+
+/// Supervised [`run_highlight_refresh`] for this session. A successful read
+/// wakes the room-list owner, which re-emits like any other change.
+fn spawn_highlight_refresh(
+    owner: &Arc<SyncServiceOwner>,
+    client: &Client,
+    wake: mpsc::UnboundedSender<()>,
+) -> SupervisedTask {
+    let sync_owner = Arc::clone(owner);
+    let client = client.clone();
+    // Subscribed before spawning so the first response is not missed.
+    let mut first = Some((
+        client.subscribe_to_all_room_updates(),
+        owner.room_list_service().state(),
+        owner.service().state(),
+    ));
+    spawn_supervised(RestartPolicy::default(), move || {
+        let (room_updates, list_states, sync_states) = first.take().unwrap_or_else(|| {
+            (
+                client.subscribe_to_all_room_updates(),
+                sync_owner.room_list_service().state(),
+                sync_owner.service().state(),
+            )
+        });
+        let known = client
+            .joined_rooms()
+            .iter()
+            .map(|room| room.room_id().to_owned())
+            .collect();
+        let responses = list_states.filter_map(|state| {
+            std::future::ready(
+                matches!(
+                    state,
+                    RoomListServiceState::SettingUp
+                        | RoomListServiceState::Recovering
+                        | RoomListServiceState::Running
+                )
+                .then_some(()),
+            )
+        });
+        let running =
+            sync_states.map(|state| matches!(state, matrix_sdk_ui::sync_service::State::Running));
+        let store = Arc::clone(sync_owner.server_highlights());
+        let fetch_client = client.clone();
+        let wake = wake.clone();
+        run_highlight_refresh(
+            room_updates,
+            responses,
+            running,
+            known,
+            move || {
+                let client = fetch_client.clone();
+                async move { fetch_server_highlights(&client).await }
+            },
+            store,
+            move || {
+                let _ = wake.send(());
+            },
+        )
+    })
 }
 
 struct RoomListWakeSources<'a, L> {
@@ -413,6 +483,11 @@ pub struct NativeRoomListSnapshot {
     /// means "not synced yet", not "no rooms".
     #[serde(default)]
     pub loading: NativeRoomListLoading,
+    /// Rooms Core counts as agent rooms ([`room_is_agent_room`]). iOS reads
+    /// them for its Agents filter and agent styling; desktop has no agent
+    /// room UI and keeps its wire shape.
+    #[serde(skip)]
+    pub agent_room_ids: Vec<String>,
     /// The child to parent-space graph `presentation` was built from. iOS
     /// reads it from here instead of building it again with a second
     /// snapshot; desktop keeps its own wire shape.
@@ -492,11 +567,16 @@ pub async fn snapshot_from_sync_owner(
     // One push-rule read per snapshot. `Room::notification_mode` builds a new
     // `NotificationSettings` (a store read plus an event handler) per room.
     let settings = service.client().notification_settings().await;
+    let agents = configured_agents(service.client()).await;
     let mut ordered_room_ids = Vec::with_capacity(values.len());
     let mut rooms = Vec::with_capacity(values.len());
+    let mut agent_room_ids = Vec::new();
     for item in values {
+        if room_is_agent_room(&item, &agents).await {
+            agent_room_ids.push(item.room_id().to_string());
+        }
         ordered_room_ids.push(item.room_id().to_string());
-        rooms.push(project_room(&item, &settings).await);
+        rooms.push(project_room(&item, &settings, owner.server_highlights()).await);
     }
 
     // Space rollup needs the parent graph. A failed read leaves rollup empty
@@ -517,8 +597,55 @@ pub async fn snapshot_from_sync_owner(
         rooms,
         presentation,
         loading,
+        agent_room_ids,
         space_parents,
     })
+}
+
+/// The agent accounts listed in Agent Notifications settings (the list
+/// desktop and iOS already use to trust approval alerts). Unreadable or
+/// absent settings mean no list.
+async fn configured_agents(client: &Client) -> Vec<OwnedUserId> {
+    crate::app::notifications::cached_agent_notification_preferences(client)
+        .await
+        .map(|preferences| {
+            preferences
+                .agent_user_ids
+                .iter()
+                .filter_map(|id| UserId::parse(id).ok())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// One agent-room rule for both shells: a listed agent account is a joined
+/// member, or the newest event is agent content (an approval prompt or a
+/// Hermes workflow payload), which also covers accounts with no agent list.
+async fn room_is_agent_room(room: &Room, agents: &[OwnedUserId]) -> bool {
+    if latest_event_is_agent_content(room) {
+        return true;
+    }
+    for agent in agents {
+        if let Ok(Some(member)) = room.get_member_no_sync(agent).await {
+            if *member.membership() == MembershipState::Join {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn latest_event_is_agent_content(room: &Room) -> bool {
+    use matrix_sdk::latest_events::LatestEventValue;
+    match room.latest_event() {
+        LatestEventValue::Remote(event) => {
+            serde_json::from_str::<serde_json::Value>(event.raw().json().get()).is_ok_and(|value| {
+                last_message_event_is_agent_approval(&value)
+                    || last_message_event_is_agent_workflow(&value)
+            })
+        }
+        _ => false,
+    }
 }
 
 /// Unread counts the SDK computes on the client from the events it holds.
@@ -577,7 +704,11 @@ fn row_unread_counts(
     }
 }
 
-async fn project_room(room: &Room, settings: &NotificationSettings) -> RoomSummary {
+async fn project_room(
+    room: &Room,
+    settings: &NotificationSettings,
+    highlights: &ServerHighlights,
+) -> RoomSummary {
     let server_counts = room.unread_notification_counts();
     // `recency_stamp` is an opaque ordering value, not wall-clock time. Only
     // expose a timestamp when the SDK has an actual latest-event timestamp.
@@ -612,6 +743,19 @@ async fn project_room(room: &Room, settings: &NotificationSettings) -> RoomSumma
             highlights: server_counts.highlight_count,
         },
     );
+    // Mentions the room-list window never delivered, from the bounded
+    // server notification read; the receipt check runs only for rooms
+    // that have such highlights.
+    let records = highlights.records(room.room_id());
+    let server_mentions = if records.is_empty() {
+        0
+    } else {
+        unread_highlight_count(&records, own_read_up_to_ts(room).await)
+    };
+    let counts = RowUnreadCounts {
+        mentions: counts.mentions.max(server_mentions),
+        ..counts
+    };
     let has_unread = room_has_unread(
         counts.messages,
         counts.notifications,
@@ -1417,6 +1561,11 @@ mod room_list_cost_tests {
             .mount(server.server())
             .await;
         Mock::given(method("GET"))
+            .and(path("/_matrix/client/v3/notifications"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "notifications": [] })))
+            .mount(server.server())
+            .await;
+        Mock::given(method("GET"))
             .and(path_regex(r"/rooms/[^/]+/messages$"))
             .respond_with(
                 ResponseTemplate::new(200).set_body_json(json!({ "chunk": [], "start": "t0" })),
@@ -1548,6 +1697,29 @@ mod room_list_cost_tests {
         );
         assert!(!subscribed.contains(INVITE));
 
+        // One bounded highlight read once the first response settled (this
+        // mock answers every 100 ms, so it waits out HIGHLIGHT_MAX_DEFER);
+        // the rooms that arrived later are first appearances, not gaps.
+        let highlight_reads = || async {
+            server
+                .server()
+                .received_requests()
+                .await
+                .unwrap_or_default()
+                .iter()
+                .filter(|request| request.url.path() == "/_matrix/client/v3/notifications")
+                .count()
+        };
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while highlight_reads().await == 0 {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await
+        .expect("a highlight read after the first response");
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        assert_eq!(highlight_reads().await, 1);
+
         let after = snapshot_from_sync_owner(&owner).await.expect("snapshot");
         assert!(matches!(
             after.loading,
@@ -1629,8 +1801,18 @@ mod room_list_cost_tests {
             server.sync_room(&client, builder).await;
         }
         let settings = client.notification_settings().await;
-        let encrypted_row = project_room(&client.get_room(encrypted).unwrap(), &settings).await;
-        let plain_row = project_room(&client.get_room(plain).unwrap(), &settings).await;
+        let encrypted_row = project_room(
+            &client.get_room(encrypted).unwrap(),
+            &settings,
+            &ServerHighlights::default(),
+        )
+        .await;
+        let plain_row = project_room(
+            &client.get_room(plain).unwrap(),
+            &settings,
+            &ServerHighlights::default(),
+        )
+        .await;
         assert_eq!(
             encrypted_row.encryption_status,
             RoomEncryptionStatus::Encrypted
@@ -1678,7 +1860,12 @@ mod room_list_cost_tests {
             async move {
                 tokio::time::timeout(Duration::from_secs(5), async {
                     loop {
-                        let row = project_room(&client.get_room(room_id).unwrap(), settings).await;
+                        let row = project_room(
+                            &client.get_room(room_id).unwrap(),
+                            settings,
+                            &ServerHighlights::default(),
+                        )
+                        .await;
                         if let Some(preview) = row.last_message_preview {
                             return preview;
                         }
@@ -1691,5 +1878,222 @@ mod room_list_cost_tests {
         };
         assert_eq!(preview_of(joined_only).await, "You joined");
         assert_eq!(preview_of(locked).await, ENCRYPTED_MESSAGE_PREVIEW);
+    }
+
+    fn highlight_notification(
+        room_id: &str,
+        event_id: &str,
+        ts: u64,
+        read: bool,
+    ) -> serde_json::Value {
+        json!({
+            "actions": ["notify", { "set_tweak": "highlight" }],
+            "read": read,
+            "room_id": room_id,
+            "ts": ts,
+            "event": {
+                "type": "m.room.message",
+                "event_id": event_id,
+                "sender": "@bob:example.org",
+                "origin_server_ts": ts,
+                "content": { "msgtype": "m.text", "body": "Ada, look" }
+            }
+        })
+    }
+
+    #[tokio::test]
+    async fn server_highlight_read_is_bounded_to_two_pages() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        // A server that always has another full page.
+        let page: Vec<serde_json::Value> = (0..crate::app::room_list::HIGHLIGHT_PAGE_LIMIT)
+            .map(|index| {
+                highlight_notification("!b5-page:example.org", &format!("$page-{index}"), 10, false)
+            })
+            .collect();
+        Mock::given(method("GET"))
+            .and(path("/_matrix/client/v3/notifications"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "next_token": "more",
+                "notifications": page
+            })))
+            .mount(server.server())
+            .await;
+        let by_room = crate::app::room_list::fetch_server_highlights(&client)
+            .await
+            .expect("highlights");
+        let requests: Vec<String> = server
+            .server()
+            .received_requests()
+            .await
+            .unwrap_or_default()
+            .iter()
+            .filter(|request| request.url.path() == "/_matrix/client/v3/notifications")
+            .map(|request| request.url.query().unwrap_or_default().to_owned())
+            .collect();
+        assert_eq!(requests.len(), crate::app::room_list::HIGHLIGHT_MAX_PAGES);
+        assert!(requests
+            .iter()
+            .all(|query| query.contains("only=highlight")));
+        assert!(requests[1].contains("from=more"));
+        assert_eq!(
+            by_room.values().map(Vec::len).sum::<usize>(),
+            2 * crate::app::room_list::HIGHLIGHT_PAGE_LIMIT as usize
+        );
+    }
+
+    #[tokio::test]
+    async fn a_short_highlight_page_is_the_last_one() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        // Synapse sends a next_token with every non-empty page.
+        Mock::given(method("GET"))
+            .and(path("/_matrix/client/v3/notifications"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "next_token": "38",
+                "notifications": [highlight_notification("!b5-short:example.org", "$short", 10, false)]
+            })))
+            .mount(server.server())
+            .await;
+        let by_room = crate::app::room_list::fetch_server_highlights(&client)
+            .await
+            .expect("highlights");
+        let requests = server
+            .server()
+            .received_requests()
+            .await
+            .unwrap_or_default()
+            .iter()
+            .filter(|request| request.url.path() == "/_matrix/client/v3/notifications")
+            .count();
+        assert_eq!(requests, 1);
+        assert_eq!(by_room.values().map(Vec::len).sum::<usize>(), 1);
+    }
+
+    #[tokio::test]
+    async fn server_highlights_raise_mentions_until_the_room_is_read() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        client.event_cache().subscribe().unwrap();
+        mount_homeserver(&server).await;
+        let room_id = room_id!("!b5-old-mention:example.org");
+        let f = EventFactory::new().room(room_id).sender(*BOB);
+        server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(room_id).add_timeline_event(
+                    f.text_msg("newest, no mention").event_id(event_id!("$new")),
+                ),
+            )
+            .await;
+        let room = client.get_room(room_id).unwrap();
+        let settings = client.notification_settings().await;
+        let highlights = ServerHighlights::default();
+        highlights.replace(std::collections::HashMap::from([(
+            room_id.to_owned(),
+            vec![
+                // Older than the synced window, unread on the server.
+                crate::app::room_list::HighlightRecord {
+                    event_ts: 10,
+                    read: false,
+                },
+                // The server already saw a receipt past this one.
+                crate::app::room_list::HighlightRecord {
+                    event_ts: 20,
+                    read: true,
+                },
+            ],
+        )]));
+        let row = project_room(&room, &settings, &highlights).await;
+        assert_eq!(row.highlight_count, 1, "the client window held no mention");
+        assert!(row.unread_count >= 1);
+
+        // Reading the room here sends a receipt; its timestamp is newer than
+        // the old highlight, so the badge clears without another server read.
+        server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(room_id).add_receipt(
+                    f.read_receipts()
+                        .add_with_timestamp(
+                            event_id!("$new"),
+                            user_id!("@example:localhost"),
+                            matrix_sdk::ruma::events::receipt::ReceiptType::ReadPrivate,
+                            matrix_sdk::ruma::events::receipt::ReceiptThread::Unthreaded,
+                            Some(matrix_sdk::ruma::MilliSecondsSinceUnixEpoch(
+                                matrix_sdk::ruma::UInt::from(1_000u32),
+                            )),
+                        )
+                        .into_event(),
+                ),
+            )
+            .await;
+        let read = project_room(&room, &settings, &highlights).await;
+        assert_eq!(read.highlight_count, 0);
+    }
+
+    #[tokio::test]
+    async fn agent_rooms_are_listed_agents_or_agent_content() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        client.event_cache().subscribe().unwrap();
+        mount_homeserver(&server).await;
+        let hermes = user_id!("@hermes:example.org");
+        let with_agent = room_id!("!b5-with-agent:example.org");
+        let approval = room_id!("!b5-approval:example.org");
+        let plain = room_id!("!b5-plain-chat:example.org");
+        let f = EventFactory::new().room(with_agent);
+        server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(with_agent)
+                    .add_state_event(f.member(hermes))
+                    .add_timeline_event(f.text_msg("hello").sender(hermes)),
+            )
+            .await;
+        let f = EventFactory::new().room(approval).sender(*BOB);
+        server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(approval).add_timeline_event(f.text_msg(
+                    "⚠️ **Dangerous command requires approval**\n\n```\nrm -rf dist/\n```",
+                )),
+            )
+            .await;
+        let f = EventFactory::new().room(plain).sender(*BOB);
+        server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(plain).add_timeline_event(f.text_msg("lunch?")),
+            )
+            .await;
+        for room_id in [with_agent, approval, plain] {
+            client
+                .latest_events()
+                .await
+                .listen_to_room(room_id)
+                .await
+                .expect("listen to the latest event");
+        }
+        let agents = vec![hermes.to_owned()];
+        let room = |room_id| client.get_room(room_id).unwrap();
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !latest_event_is_agent_content(&room(approval)) {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("the approval prompt becomes the latest event");
+
+        assert!(room_is_agent_room(&room(with_agent), &agents).await);
+        assert!(
+            !room_is_agent_room(&room(with_agent), &[]).await,
+            "without a list, membership alone does not make an agent room"
+        );
+        assert!(
+            room_is_agent_room(&room(approval), &[]).await,
+            "an approval prompt marks the room even without a list"
+        );
+        assert!(!room_is_agent_room(&room(plain), &agents).await);
     }
 }

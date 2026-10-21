@@ -132,6 +132,9 @@ pub struct RoomListRoomDto {
     pub is_favorite: bool,
     /// Tagged `m.lowpriority`. Core's section orders put these rooms last.
     pub is_low_priority: bool,
+    /// A listed agent (Agent Notifications settings) is a member, or the
+    /// newest event is an approval prompt or agent workflow.
+    pub is_agent_room: bool,
     pub is_call: bool,
     pub has_active_call: bool,
     pub active_call_participant_count: u32,
@@ -1430,6 +1433,8 @@ impl SharedCore {
             .await
             .map_err(map_room_list_core_error)?;
         let snapshot: NativeRoomListSnapshot = response;
+        let agent_rooms: std::collections::HashSet<String> =
+            snapshot.agent_room_ids.into_iter().collect();
         Ok(RoomListSnapshotDto {
             session_generation: snapshot.session_generation,
             ordered_room_ids: snapshot.ordered_room_ids,
@@ -1437,6 +1442,7 @@ impl SharedCore {
                 .rooms
                 .into_iter()
                 .map(|room| RoomListRoomDto {
+                    is_agent_room: agent_rooms.contains(&room.room_id),
                     room_id: room.room_id,
                     name: room.name,
                     canonical_alias: room.canonical_alias,
