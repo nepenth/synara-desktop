@@ -1223,6 +1223,9 @@ impl SharedCore {
             Output = Result<crate::app::send::MatrixSendTextResult, MatrixIpcError>,
         >,
     ) -> Result<SendTextDto, SendTextError> {
+        self.await_open_stores().await.map_err(|()| {
+            send_text_failed(SESSION_SUSPENDED_CODE, SESSION_SUSPENDED_DESCRIPTION)
+        })?;
         let response = request
             .await
             .map_err(|error| map_send_text_core_error(SEND_TEXT_NO_SESSION_CODE, error))?;

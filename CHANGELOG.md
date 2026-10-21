@@ -30,6 +30,10 @@
 - Approvals: urgent approval alerts are harder to abuse. Once you list your agents in Agent Notifications, only those accounts can raise them; a prompt from anyone else arrives as an ordinary message. Without a list, approval alerts follow the room's notification settings, so a muted room stays silent. A room can raise at most three urgent approval alerts per minute; more arrive as ordinary messages. Desktop approval alerts name the room.
 - Approvals: after you approve or deny in the timeline, the approval card shows your decision and when you made it instead of the buttons, on iOS and desktop and on every device. On iOS your own ✅ stays visible in the reactions below the card; a reaction whose count changed no longer disappears.
 - iOS: the Approvals inbox refreshes every few seconds while open, so a new request appears without pulling to refresh. In Notifications, approval requests are labeled Approval instead of Mention.
+- iOS: opening a room, tapping a notification or sending while Synara is coming back from the background waits for the connection to reopen instead of failing with "Messages are temporarily unavailable" or "Sign in again". A failed room-list refresh keeps your rooms and unread badges instead of showing "No Rooms".
+- iOS: pulling down Control Center or Notification Center, a system alert, a permission prompt or a glance at the app switcher no longer disconnects Synara; it disconnects only when it goes to the background.
+- iOS: after switching between Wi-Fi and cellular, or turning on Low Data Mode, Synara reconnects at once instead of receiving messages up to a minute late while showing "Connected". Network changes are handled one at a time and restart only the sync connection.
+- iOS: restoring a session never reports another account's live session as already restored.
 
 ## [2.2.6] - 2026-10-12
 

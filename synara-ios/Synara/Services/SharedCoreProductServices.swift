@@ -243,6 +243,152 @@ enum ExplicitRoomReadReceipt {
     }
 }
 
+/// The parts of an `NWPath` that decide whether sync must reconnect.
+struct ConnectionPathSnapshot: Equatable, Sendable {
+    var isSatisfied: Bool
+    /// The interface the system routes through first, e.g. "wifi".
+    var primaryInterface: String?
+    var isExpensive: Bool
+    var isConstrained: Bool
+
+    init(isSatisfied: Bool, primaryInterface: String?, isExpensive: Bool = false, isConstrained: Bool = false) {
+        self.isSatisfied = isSatisfied
+        self.primaryInterface = primaryInterface
+        self.isExpensive = isExpensive
+        self.isConstrained = isConstrained
+    }
+
+    init(_ path: NWPath) {
+        let primary: String?
+        switch path.availableInterfaces.first?.type {
+        case .wifi: primary = "wifi"
+        case .cellular: primary = "cellular"
+        case .wiredEthernet: primary = "wiredEthernet"
+        case .loopback: primary = "loopback"
+        case .other: primary = "other"
+        case nil: primary = nil
+        @unknown default: primary = "unknown"
+        }
+        self.init(
+            isSatisfied: path.status == .satisfied,
+            primaryInterface: primary,
+            isExpensive: path.isExpensive,
+            isConstrained: path.isConstrained
+        )
+    }
+
+    /// Same reachability, different route: a long-poll opened on the old
+    /// route is dead even though nothing reported an error.
+    func changedRoute(from previous: ConnectionPathSnapshot) -> Bool {
+        primaryInterface != previous.primaryInterface
+            || isExpensive != previous.isExpensive
+            || isConstrained != previous.isConstrained
+    }
+}
+
+enum ConnectionPathPolicy {
+    enum Action: Equatable {
+        case none
+        case markReconnecting
+        case restartSync
+    }
+
+    /// What one path update means for a session in `status`. The first
+    /// update after the monitor starts only describes the current route.
+    static func action(
+        previous: ConnectionPathSnapshot?,
+        current: ConnectionPathSnapshot,
+        status: MatrixSyncStatus
+    ) -> Action {
+        guard mayRestart(status) else {
+            return .none
+        }
+        guard current.isSatisfied else {
+            switch status {
+            case .connected, .syncing, .starting:
+                return .markReconnecting
+            default:
+                return .none
+            }
+        }
+        if status == .reconnecting {
+            return .restartSync
+        }
+        guard let previous else {
+            return .none
+        }
+        if previous.isSatisfied == false || current.changedRoute(from: previous) {
+            return .restartSync
+        }
+        return .none
+    }
+
+    /// Stopped (background, sign-out) and failed-restore sessions have
+    /// nothing a path change could restart.
+    static func mayRestart(_ status: MatrixSyncStatus) -> Bool {
+        switch status {
+        case .stopped, .restoreFailed:
+            return false
+        case .starting, .syncing, .connected, .reconnecting, .disconnected, .failed:
+            return true
+        }
+    }
+}
+
+/// Hands path updates to one consumer, in delivery order, together with the
+/// update it applied before. A `Task` per update ran in any order and let a
+/// restart overlap the next update.
+final class ConnectionPathSequencer: @unchecked Sendable {
+    private let continuation: AsyncStream<ConnectionPathSnapshot>.Continuation
+    private let consumer: Task<Void, Never>
+
+    init(handle: @escaping (_ previous: ConnectionPathSnapshot?, _ current: ConnectionPathSnapshot) async -> Void) {
+        var captured: AsyncStream<ConnectionPathSnapshot>.Continuation?
+        let stream = AsyncStream<ConnectionPathSnapshot>(bufferingPolicy: .unbounded) {
+            captured = $0
+        }
+        // The build closure runs synchronously inside `AsyncStream.init`.
+        continuation = captured!
+        consumer = Task {
+            var previous: ConnectionPathSnapshot?
+            for await path in stream {
+                await handle(previous, path)
+                previous = path
+            }
+        }
+    }
+
+    func receive(_ path: ConnectionPathSnapshot) {
+        continuation.yield(path)
+    }
+
+    func finish() {
+        continuation.finish()
+        consumer.cancel()
+    }
+}
+
+/// Reconnect after a path change: restart sync in place, and run the full
+/// restore → attach → start only when Core has nothing to restart.
+enum SharedCoreSyncReconnect {
+    enum Outcome: Equatable {
+        case restarted(SyncReadinessDto)
+        case fullStart
+    }
+
+    static func run(
+        restartSync: () async throws -> SyncReadinessDto,
+        fullStart: () async -> Void
+    ) async -> Outcome {
+        do {
+            return .restarted(try await restartSync())
+        } catch {
+            await fullStart()
+            return .fullStart
+        }
+    }
+}
+
 final class SharedCoreMatrixClientService: MatrixClientServicing {
     private let host: SharedCoreProductHost
     private let connectionStatus: ConnectionStatusStore
@@ -262,14 +408,24 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     private var retiringAuthenticationGeneration: UInt64?
     private(set) var syncStatus: MatrixSyncStatus = .stopped
     private static let syncNotAttachedCode = "p4-s12-sync-not-attached"
+    /// Suspended while the stores are closed for background, so rooms and
+    /// timelines opened meanwhile wait for the resume instead of failing.
+    private let sessionReadiness: SignedInSessionReadinessServicing
+    /// Applies path updates one at a time, in delivery order.
+    private var pathSequencer: ConnectionPathSequencer?
 
     var syncStatusDescription: String {
         syncStatus.description
     }
 
-    init(host: SharedCoreProductHost, connectionStatus: ConnectionStatusStore = ConnectionStatusStore()) {
+    init(
+        host: SharedCoreProductHost,
+        connectionStatus: ConnectionStatusStore = ConnectionStatusStore(),
+        sessionReadiness: SignedInSessionReadinessServicing = ImmediateSignedInSessionReadiness()
+    ) {
         self.host = host
         self.connectionStatus = connectionStatus
+        self.sessionReadiness = sessionReadiness
     }
 
     func start(session: AuthenticatedSession) async {
@@ -362,6 +518,10 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     private func applyBackgroundPause(clearLastSession: Bool) async {
         PerformanceTrace.event("MatrixStoreCloseBegin")
         defer { PerformanceTrace.event("MatrixStoreCloseComplete") }
+        if clearLastSession == false {
+            // Before the stores close, so nothing new is opened against them.
+            await sessionReadiness.suspend()
+        }
         do {
             let stopped = try await SharedCoreSyncStop.stopSync(core: host.core)
             if clearLastSession {
@@ -395,6 +555,11 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         )
         if outcome.hasLiveClient {
             _ = try? SharedCoreProductHost.publishNseStoreReady(at: host.storeRoot)
+        }
+        // Release opens parked since the pause. A background mutation pauses
+        // again right after its one operation, so it releases nothing.
+        if applyLock.withLock({ foregroundActive }) {
+            await sessionReadiness.resume(for: session)
         }
         if let failure = outcome.failure {
             await publish(failure.syncStatus)
@@ -519,41 +684,71 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         if pathMonitor != nil {
             return
         }
+        // One consumer, so updates apply in delivery order and a restart
+        // finishes before the next update is judged against it.
+        let sequencer = ConnectionPathSequencer { [weak self] previous, path in
+            await self?.handlePath(path, previous: previous)
+        }
         let monitor = NWPathMonitor()
-        monitor.pathUpdateHandler = { [weak self] path in
-            Task { await self?.handlePath(path) }
+        monitor.pathUpdateHandler = { path in
+            sequencer.receive(ConnectionPathSnapshot(path))
         }
         monitor.start(queue: pathQueue)
         pathMonitor = monitor
+        pathSequencer = sequencer
     }
 
     private func stopPathMonitor() {
         pathMonitor?.cancel()
         pathMonitor = nil
+        pathSequencer?.finish()
+        pathSequencer = nil
     }
 
-    private func handlePath(_ path: NWPath) async {
-        switch syncStatus {
-        case .restoreFailed, .stopped:
-            return
-        default:
+    private func handlePath(_ path: ConnectionPathSnapshot, previous: ConnectionPathSnapshot?) async {
+        switch ConnectionPathPolicy.action(previous: previous, current: path, status: syncStatus) {
+        case .none:
             break
+        case .markReconnecting:
+            await publish(.reconnecting)
+        case .restartSync:
+            await enqueueSyncRestart()
         }
-        switch path.status {
-        case .unsatisfied, .requiresConnection:
-            switch syncStatus {
-            case .connected, .syncing, .starting:
-                await publish(.reconnecting)
-            default:
-                break
+    }
+
+    /// Replaces the sync connection after a path change, on the same chain as
+    /// pause and resume so it never races them. Only a session Core cannot
+    /// restart in place (owners not attached) runs the full bootstrap again.
+    private func enqueueSyncRestart() async {
+        let queued: Task<Void, Never> = applyLock.withLock {
+            let previous = applyChain
+            let next = Task { [weak self] in
+                await previous.value
+                guard let self else {
+                    return
+                }
+                let session = self.applyLock.withLock {
+                    self.foregroundActive ? self.lastSession : nil
+                }
+                guard let session, ConnectionPathPolicy.mayRestart(self.syncStatus) else {
+                    return
+                }
+                PerformanceTrace.event("MatrixSyncRestartForPath")
+                let core = self.host.core
+                let outcome = await SharedCoreSyncReconnect.run(
+                    restartSync: { try await SharedCoreSyncRestart.restartSync(core: core).readiness },
+                    fullStart: { await self.applyLiveSession(session) }
+                )
+                if case let .restarted(readiness) = outcome {
+                    await self.publish(
+                        ConnectionStatusCopy.fromReadiness(readiness, previous: self.syncStatus)
+                    )
+                }
             }
-        case .satisfied:
-            if syncStatus == .reconnecting, let lastSession {
-                await enqueueLiveSession(lastSession)
-            }
-        @unknown default:
-            break
+            applyChain = next
+            return next
         }
+        await queued.value
     }
 
     func syncForBackgroundNotification(session: AuthenticatedSession) async -> Bool {
@@ -995,8 +1190,27 @@ final class SharedCoreRoomListService: RoomListServicing {
             }
             return state
         } catch {
+            return Self.state(afterLoadError: error, lastGood: stateLock.withLock { latestState })
+        }
+    }
+
+    static let loadFailedMessage = "Rooms could not be loaded. Try again."
+
+    /// A failed read must not look like an account without rooms, which also
+    /// zeroed every unread badge: keep the last good list. Without one, a
+    /// read that waited out a suspension stays loading (the next room-list
+    /// signal reloads it), and other failures show Retry.
+    static func state(afterLoadError error: Error, lastGood: RoomListState?) -> RoomListState {
+        guard case let RoomListSnapshotError.Failed(code, _) = error else {
+            return lastGood ?? .failed(loadFailedMessage)
+        }
+        if code == "p2-room-list-snapshot-no-session" {
             return .empty
         }
+        if let lastGood {
+            return lastGood
+        }
+        return code == SharedCoreSessionSuspension.code ? .loading : .failed(loadFailedMessage)
     }
 
     func roomDisplayName(roomID: String) -> String? {

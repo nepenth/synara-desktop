@@ -215,6 +215,96 @@ final class SessionCoordinatorTests: XCTestCase {
         XCTAssertEqual(permission.requestCallCount, 0)
     }
 
+    func testPauseSuspendsAPreparedSessionUntilTheForegroundResume() async throws {
+        let readiness = SignedInSessionReadiness()
+        let session = try makeSession()
+        _ = await readiness.claimPreparation(for: session)
+        _ = await readiness.markPrepared(for: session)
+
+        await readiness.suspend()
+        // Opening a room while the stores are closed waits instead of failing.
+        let waiter = Task { await readiness.waitUntilPrepared(for: session) }
+        try await waitForParkedWaiters(readiness, count: 1)
+        // The lifecycle path resumes the session; the shell does not restart it.
+        let claimedWhileSuspended = await readiness.claimPreparation(for: session)
+        XCTAssertFalse(claimedWhileSuspended)
+
+        await readiness.resume(for: session)
+
+        let waitResult = await waiter.value
+        let preparedAgain = await readiness.waitUntilPrepared(for: session)
+        XCTAssertTrue(waitResult)
+        XCTAssertTrue(preparedAgain)
+    }
+
+    func testStartSuppressedWhileSuspendedStaysUnpreparedUntilResume() async throws {
+        let readiness = SignedInSessionReadiness()
+        let session = try makeSession()
+        await readiness.suspend()
+
+        // `matrix.start` returned without opening stores (background launch).
+        let claimed = await readiness.claimPreparation(for: session)
+        let marked = await readiness.markPrepared(for: session)
+        XCTAssertTrue(claimed)
+        XCTAssertTrue(marked)
+        let waiter = Task { await readiness.waitUntilPrepared(for: session) }
+        try await waitForParkedWaiters(readiness, count: 1)
+
+        await readiness.resume(for: session)
+
+        let waitResult = await waiter.value
+        XCTAssertTrue(waitResult)
+    }
+
+    func testResumeWithoutAPriorPauseLeavesStartupToItsOwner() async throws {
+        let readiness = SignedInSessionReadiness()
+        let session = try makeSession()
+        _ = await readiness.claimPreparation(for: session)
+        let waiter = Task { await readiness.waitUntilPrepared(for: session) }
+        try await waitForParkedWaiters(readiness, count: 1)
+
+        // The first start finishes its Matrix start before SessionCoordinator marks it.
+        await readiness.resume(for: session)
+        let stillParked = await readiness.pendingWaiterCount()
+        XCTAssertEqual(stillParked, 1)
+
+        _ = await readiness.markPrepared(for: session)
+        let waitResult = await waiter.value
+        XCTAssertTrue(waitResult)
+    }
+
+    func testSignOutWhileSuspendedFailsWaitersAndClearsTheSuspension() async throws {
+        let readiness = SignedInSessionReadiness()
+        let session = try makeSession()
+        _ = await readiness.claimPreparation(for: session)
+        _ = await readiness.markPrepared(for: session)
+        await readiness.suspend()
+        let waiter = Task { await readiness.waitUntilPrepared(for: session) }
+        try await waitForParkedWaiters(readiness, count: 1)
+
+        await readiness.resetForSignOut()
+
+        let waitResult = await waiter.value
+        XCTAssertFalse(waitResult)
+        let reclaimed = await readiness.claimPreparation(for: session)
+        let marked = await readiness.markPrepared(for: session)
+        let prepared = await readiness.waitUntilPrepared(for: session)
+        XCTAssertTrue(reclaimed)
+        XCTAssertTrue(marked)
+        XCTAssertTrue(prepared, "a new sign-in is not held by the old suspension")
+    }
+
+    private func waitForParkedWaiters(_ readiness: SignedInSessionReadiness, count: Int) async throws {
+        var parked = await readiness.pendingWaiterCount()
+        var attempts = 0
+        while parked < count, attempts < 200 {
+            try await Task.sleep(nanoseconds: 5_000_000)
+            parked = await readiness.pendingWaiterCount()
+            attempts += 1
+        }
+        XCTAssertEqual(parked, count)
+    }
+
     private func makeSession() throws -> AuthenticatedSession {
         AuthenticatedSession(
             userID: "@alice:matrix.org",

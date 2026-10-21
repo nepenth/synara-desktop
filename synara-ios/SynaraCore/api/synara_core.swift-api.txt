@@ -365,6 +365,7 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func recover(recoveryKey: String) async throws -> LeftoverAckDto
   open func registerHttpPusher(pushKey: String, appId: String, gatewayUrl: String, appDisplayName: String, lang: String) async throws -> PusherWriteDto
   open func resolveRoomIdentityWarning(roomId: String, userId: String, action: IdentityWarningActionDto) async throws -> RoomIdentityWarningsDto
+  open func restartSync() async throws -> SyncStartDto
   open func restoreBackup(recoverySecret: String) async throws -> RestoreBackupDto
   open func restorePersistedSession(userId: String, homeserverUrl: String, storeRoot: String) async throws -> SessionRestoreDto
   open func restrictedJoinReparent(roomId: String, removeParentId: String?, addParentId: String) async throws -> RestrictedJoinReparentDto
@@ -1031,6 +1032,7 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func recover(recoveryKey: String) async throws -> LeftoverAckDto
   func registerHttpPusher(pushKey: String, appId: String, gatewayUrl: String, appDisplayName: String, lang: String) async throws -> PusherWriteDto
   func resolveRoomIdentityWarning(roomId: String, userId: String, action: IdentityWarningActionDto) async throws -> RoomIdentityWarningsDto
+  func restartSync() async throws -> SyncStartDto
   func restoreBackup(recoverySecret: String) async throws -> RestoreBackupDto
   func restorePersistedSession(userId: String, homeserverUrl: String, storeRoot: String) async throws -> SessionRestoreDto
   func restrictedJoinReparent(roomId: String, removeParentId: String?, addParentId: String) async throws -> RestrictedJoinReparentDto
@@ -1846,7 +1848,8 @@ public struct SyncStatusDto: Equatable, Hashable
   public var failureDiagnosticId: String?
   public var slidingSyncCapable: Bool?
   public var commandGate: CommandGateDto
-  public init(readiness: SyncReadinessDto, sessionGeneration: UInt64, offlineModeEnabled: Bool, failureDiagnosticId: String?, slidingSyncCapable: Bool?, commandGate: CommandGateDto)
+  public var suspended: Bool
+  public init(readiness: SyncReadinessDto, sessionGeneration: UInt64, offlineModeEnabled: Bool, failureDiagnosticId: String?, slidingSyncCapable: Bool?, commandGate: CommandGateDto, suspended: Bool)
 public struct SyncStopDto: Equatable, Hashable
   public var readiness: SyncReadinessDto
   public var sessionGeneration: UInt64

@@ -97,7 +97,12 @@ struct AppEnvironment {
             sessionStore: session
         )
         let connectionStatus = ConnectionStatusStore()
-        let matrix = SharedCoreMatrixClientService(host: host, connectionStatus: connectionStatus)
+        let sessionReadiness = SignedInSessionReadiness()
+        let matrix = SharedCoreMatrixClientService(
+            host: host,
+            connectionStatus: connectionStatus,
+            sessionReadiness: sessionReadiness
+        )
         let pusherService = SharedCorePusherService(
             host: host,
             gatewayURL: resolvedPushGatewayURL(),
@@ -117,7 +122,6 @@ struct AppEnvironment {
         let roomMembership = SharedCoreRoomMembershipService(host: host)
         let crypto = SharedCoreCryptoStatusService(host: host, timeline: timeline)
         let roomManagement = SharedCoreRoomManagementService(host: host)
-        let sessionReadiness = SignedInSessionReadiness()
         let messageSender = SharedCoreMessageSendService(host: host)
         let outgoingSends = OutgoingSendCoordinator(
             messageSender: messageSender,

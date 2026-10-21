@@ -258,6 +258,35 @@ impl SyncServiceOwner {
         Ok(self.observe())
     }
 
+    /// Replace the live connection now, for an OS network change.
+    ///
+    /// `start()` keeps a `Running` service until its heartbeat goes stale,
+    /// which takes the SDK's poll plus network timeouts. A long-poll opened on
+    /// the previous interface is dead long before that, so stop it first.
+    /// Unlike `apply_intent(SyncIntent::Resume)` this never starts sync the
+    /// shell stopped (suspension, or not started yet), and leaves a rejected
+    /// session and a server without sliding sync alone.
+    pub async fn restart_live(&self) -> Result<SyncReadinessSnapshot, SyncError> {
+        let _gate = self.lifecycle_gate.lock().await;
+        if !self.sync_requested.load(Ordering::Acquire)
+            || self.authentication_rejected.load(Ordering::Acquire)
+        {
+            return Ok(self.observe());
+        }
+        let state = self.service.state().get();
+        if matches!(&state, SdkSyncState::Error(error) if is_sliding_sync_unsupported_error(error.as_ref()))
+        {
+            return Ok(self.observe());
+        }
+        if matches!(state, SdkSyncState::Running) {
+            self.service.stop().await;
+        }
+        self.heartbeat.record_start(Instant::now());
+        self.service.start().await;
+        reapply_room_subscriptions(&self.service, &self.room_subscriptions).await;
+        Ok(self.observe())
+    }
+
     /// Apply a reconnect decision for the given intent.
     pub async fn apply_intent(
         &self,
@@ -1588,6 +1617,68 @@ mod liveness_tests {
         .expect("the recovery task must replace a dead long-poll");
         owner.stop().await.unwrap();
         assert_eq!(owner.observe().readiness, SyncReadiness::Idle);
+    }
+
+    async fn wait_for_sliding_syncs(server: &MatrixMockServer, what: &str, more_than: usize) {
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while sliding_sync_requests(&server.server().received_requests().await.unwrap())
+                <= more_than
+            {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| panic!("timed out waiting for {what}"));
+    }
+
+    #[tokio::test]
+    async fn network_change_restart_replaces_a_fresh_long_poll_but_never_starts_sync() {
+        let server = MatrixMockServer::new().await;
+        let client = refreshing_client(&server).await;
+        mount_versions(&server).await;
+        server.mock_upload_keys().ok().mount().await;
+        // A long-poll that never answers, inside the startup grace: neither
+        // `start()` nor the recovery task would replace it yet.
+        Mock::given(method("POST"))
+            .and(path(SLIDING_SYNC))
+            .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(60)))
+            .mount(server.server())
+            .await;
+        let owner = build_sync_service(&client, 8, SyncServiceConfig::default())
+            .await
+            .unwrap();
+        let sliding_syncs =
+            || async { sliding_sync_requests(&server.server().received_requests().await.unwrap()) };
+
+        // Never started: a network change must not start sync on its own.
+        owner.restart_live().await.unwrap();
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert_eq!(sliding_syncs().await, 0);
+        assert_eq!(owner.observe().readiness, SyncReadiness::Idle);
+
+        owner.start().await.unwrap();
+        wait_for_sliding_syncs(&server, "the first long-poll", 0).await;
+        let before = sliding_syncs().await;
+        owner.start().await.unwrap();
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert_eq!(
+            sliding_syncs().await,
+            before,
+            "start() keeps a Running service with a fresh heartbeat"
+        );
+
+        let restarted = owner.restart_live().await.unwrap();
+        assert_eq!(restarted.readiness, SyncReadiness::Running);
+        wait_for_sliding_syncs(&server, "a replacement long-poll", before).await;
+
+        // Stopped by the shell (iOS suspension): it stays stopped.
+        owner.stop().await.unwrap();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let stopped = sliding_syncs().await;
+        owner.restart_live().await.unwrap();
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert_eq!(owner.observe().readiness, SyncReadiness::Idle);
+        assert_eq!(sliding_syncs().await, stopped);
     }
 
     #[tokio::test]

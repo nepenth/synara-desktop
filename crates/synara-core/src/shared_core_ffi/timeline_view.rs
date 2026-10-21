@@ -1310,6 +1310,9 @@ impl SharedCore {
         no_session: &'static str,
         request: impl std::future::Future<Output = Result<T, MatrixIpcError>>,
     ) -> Result<T, TimelineReadStateError> {
+        self.await_open_stores().await.map_err(|()| {
+            timeline_read_state_failed(SESSION_SUSPENDED_CODE, SESSION_SUSPENDED_DESCRIPTION)
+        })?;
         let response = request
             .await
             .map_err(|error| map_timeline_read_state_core_error(no_session, error))?;
@@ -1341,6 +1344,9 @@ impl SharedCore {
         position: TimelineOpenPositionDto,
     ) -> Result<TimelineOpenDto, TimelineError> {
         let position = open_position_from_dto(position)?;
+        self.await_open_stores()
+            .await
+            .map_err(|()| timeline_failed(SESSION_SUSPENDED_CODE, SESSION_SUSPENDED_DESCRIPTION))?;
         let response = self
             .core
             .timeline_open(crate::core_api::MatrixTimelineOpenRequest { room_id, position })
@@ -1371,6 +1377,9 @@ impl SharedCore {
                 TIMELINE_NO_SESSION_DESCRIPTION,
             ));
         };
+        self.await_open_stores()
+            .await
+            .map_err(|()| timeline_failed(SESSION_SUSPENDED_CODE, SESSION_SUSPENDED_DESCRIPTION))?;
         match owner.event_route(&room_id, &event_id).await {
             Ok(route) => Ok(event_route_dto(route)),
             Err("d0.3-timeline-invalid-room-id") => Err(timeline_failed(
@@ -1441,6 +1450,9 @@ impl SharedCore {
         direction: TimelineDirectionDto,
     ) -> Result<TimelineSnapshotDto, TimelineError> {
         let direction = paginate_direction(direction);
+        self.await_open_stores()
+            .await
+            .map_err(|()| timeline_failed(SESSION_SUSPENDED_CODE, SESSION_SUSPENDED_DESCRIPTION))?;
         let response = self
             .core
             .timeline_paginate(crate::core_api::MatrixTimelinePaginateRequest {

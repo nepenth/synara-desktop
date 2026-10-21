@@ -310,6 +310,40 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(service.syncStatus, .restoreFailed)
     }
 
+    func testSharedCorePauseSuspendsReadinessUntilTheForegroundResume() async throws {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let readiness = SignedInSessionReadiness()
+        let service = SharedCoreMatrixClientService(host: host, sessionReadiness: readiness)
+        let session = AuthenticatedSession(
+            userID: "@alice:example.org",
+            deviceID: "DEVICE",
+            homeserverURL: try XCTUnwrap(URL(string: "https://matrix.example.org")),
+            accessToken: "syt_secret_token"
+        )
+        _ = await readiness.claimPreparation(for: session)
+        _ = await readiness.markPrepared(for: session)
+
+        await service.pauseForBackground()
+        let waiter = Task { await readiness.waitUntilPrepared(for: session) }
+        var parked = await readiness.pendingWaiterCount()
+        var attempts = 0
+        while parked == 0, attempts < 200 {
+            try await Task.sleep(nanoseconds: 5_000_000)
+            parked = await readiness.pendingWaiterCount()
+            attempts += 1
+        }
+        XCTAssertEqual(parked, 1, "an open during background waits for the resume")
+
+        await service.resumeFromForeground(session: session)
+
+        let released = await waiter.value
+        XCTAssertTrue(released)
+    }
+
     func testSharedCoreColdBackgroundPauseWithoutOwnersStaysStopped() async {
         let host = SharedCoreProductHost(
             core: SharedCore(),
