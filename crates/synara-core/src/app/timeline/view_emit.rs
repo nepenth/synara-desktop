@@ -1,8 +1,8 @@
 //! Timeline view-delta emit sink (P1 4B first slice).
 //!
 //! Builds [`TimelineViewDeltaBatch`] and hands it to a shell callback.
-//! Desktop maps that onto the existing `matrix-timeline-view-updated` Tauri
-//! event. This is not [`crate::platform::Platform::emit`] (IPC envelopes).
+//! Desktop sends each batch down the IPC channels its timeline views opened.
+//! This is not [`crate::platform::Platform::emit`] (IPC envelopes).
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;

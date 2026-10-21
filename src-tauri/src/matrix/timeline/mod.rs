@@ -3,7 +3,8 @@
 //! SNC-P1-5c: the pure timeline logic now lives in the shared native core at
 //! `crates/synara-core/src/app/timeline`. This module keeps every
 //! `crate::matrix::timeline::*` path resolving with **identical behavior** by
-//! re-exporting the core items plus the desktop `live.rs` AppHandle adapter.
+//! re-exporting the core items plus the desktop `live.rs` AppHandle adapter
+//! and the `view_channels.rs` delta channels it feeds.
 //!
 //! `product_commands.rs`, `tests.rs`, and `live_synapse_proof/` also stay here
 //! (Platform commands = serial product lane; tests.rs = desktop suite via
@@ -17,6 +18,9 @@
 //! - `docs/matrix-rust-sdk/p5.10-utd.md`
 
 mod live;
+mod view_channels;
+
+pub use view_channels::TimelineViewChannels;
 
 #[cfg(test)]
 pub use synara_core::app::timeline::{

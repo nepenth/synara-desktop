@@ -106,6 +106,61 @@ test('inline threads expand under the root, reveal earlier replies, and close th
   await expect.poll(() => openThreadStreams(page)).toBe(0);
 });
 
+test('each view streams over its own delta channel, which closes with the view', async ({
+  page,
+}) => {
+  type Channels = { subscriptions: number[]; threadOwners: unknown[]; roomOwners: unknown[] };
+  const deltaChannels = () =>
+    page.evaluate(() =>
+      (
+        window as unknown as { nativeTimelineFixture: { deltaChannels(): Channels } }
+      ).nativeTimelineFixture.deltaChannels()
+    );
+  const commandArgs = (command: string) =>
+    page.evaluate(
+      (name) =>
+        (
+          window as unknown as {
+            nativeTimelineFixture: {
+              commands: { command: string; args?: Record<string, unknown> }[];
+            };
+          }
+        ).nativeTimelineFixture.commands
+          .filter((entry) => entry.command === name)
+          .map((entry) => ({
+            roomId: entry.args?.roomId,
+            subscriptionId: entry.args?.subscriptionId,
+          })),
+      command
+    );
+  await page.goto(
+    '/e2e/native-timeline-harness/index.html?scenario=threads&threadDisplay=inline&nativeEvents=1'
+  );
+  await expect(page.locator('[data-native-timeline-event-id]').first()).toBeVisible();
+  // The room view subscribed before it opened, and its stream is its own.
+  await expect
+    .poll(deltaChannels)
+    .toEqual({ subscriptions: [1], threadOwners: [], roomOwners: [1] });
+  expect(await commandArgs('desktop_timeline_subscribe')).toEqual([
+    { roomId: '!navigation:example.test', subscriptionId: undefined },
+  ]);
+  expect((await commandArgs('matrix_timeline_open'))[0]?.subscriptionId).toBe(1);
+
+  await threadButton(page).click();
+  await expect(page.locator('[data-inline-thread]').getByText('Thread reply 7')).toBeVisible();
+  await expect
+    .poll(deltaChannels)
+    .toEqual({ subscriptions: [1, 2], threadOwners: [2], roomOwners: [1] });
+
+  await page.getByRole('button', { name: /Hide 7 replies/ }).click();
+  await expect
+    .poll(deltaChannels)
+    .toEqual({ subscriptions: [1], threadOwners: [], roomOwners: [1] });
+  expect(await commandArgs('desktop_timeline_unsubscribe')).toEqual([
+    { roomId: undefined, subscriptionId: 2 },
+  ]);
+});
+
 test('inline Reply in thread opens the side panel', async ({ page }) => {
   await openThreads(page, 'inline');
   await threadButton(page).click();

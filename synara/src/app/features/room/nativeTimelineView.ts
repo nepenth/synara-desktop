@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { listen as listenTauriEvent } from '@tauri-apps/api/event';
+import { Channel } from '@tauri-apps/api/core';
 import {
   convertDesktopFileSrc,
   invokeDesktopWithAvailability,
@@ -18,7 +18,6 @@ import type {
 } from '../matrix-dto/generated';
 export type { NativeTimelineReactionSender } from '../matrix-dto/generated';
 
-const NATIVE_TIMELINE_VIEW_UPDATED_EVENT = 'matrix-timeline-view-updated';
 const TIMELINE_VIEW_SCHEMA_VERSION = 1;
 
 export type NativeTimelinePageState = 'available' | 'exhausted' | 'loading' | 'unavailable';
@@ -603,7 +602,7 @@ const isValidIndex = (index: number, length: number, allowEnd = false): boolean 
  * confirm stream ownership; equal-or-older snapshots then keep the newer view.
  */
 /**
- * With the delta listener live, the snapshot poll is only a safety net for a
+ * With the delta channel live, the snapshot poll is only a safety net for a
  * dropped batch. Without deltas it is the update path.
  */
 export const NATIVE_TIMELINE_SAFETY_NET_POLL_MS = 10_000;
@@ -956,6 +955,67 @@ export async function requestNativeTimelineFollowLive(
   return result.value;
 }
 
+/** One timeline view's delta channel (L20). */
+export type NativeTimelineDeltaSubscription = {
+  /** Passed to the opens and jumps whose stream this view shows. */
+  id: number;
+  /** Stops delivery and closes the channel on the Rust side. */
+  close: () => void;
+};
+
+export type NativeTimelineDeltaChannelDeps = {
+  createChannel: (onBatch: (batch: NativeTimelineViewDeltaBatch) => void) => unknown;
+  invoke: (
+    command: string,
+    args?: Record<string, unknown>
+  ) => Promise<DesktopInvokeResult<unknown>>;
+};
+
+const defaultDeltaChannelDeps: NativeTimelineDeltaChannelDeps = {
+  createChannel: (onBatch) => new Channel<NativeTimelineViewDeltaBatch>(onBatch),
+  invoke: (command, args) => invokeDesktopWithAvailability(command, args),
+};
+
+/**
+ * Open a view's delta channel before its first stream. Rust sends the
+ * room's batches down it in emit order, and only this view's once its open
+ * claims a stream. Resolves undefined when no channel opens; the view then
+ * polls its snapshot instead.
+ */
+export async function subscribeNativeTimelineDeltas(
+  roomId: string,
+  onBatch: (batch: NativeTimelineViewDeltaBatch) => void,
+  deps: NativeTimelineDeltaChannelDeps = defaultDeltaChannelDeps
+): Promise<NativeTimelineDeltaSubscription | undefined> {
+  let open = true;
+  let channel: unknown;
+  try {
+    channel = deps.createChannel((batch) => {
+      if (open) onBatch(batch);
+    });
+  } catch {
+    return undefined;
+  }
+  const result = await deps
+    .invoke('desktop_timeline_subscribe', { roomId, channel })
+    .catch(() => undefined);
+  const id = result?.available ? result.value : undefined;
+  if (typeof id !== 'number') {
+    open = false;
+    return undefined;
+  }
+  return {
+    id,
+    close: () => {
+      if (!open) return;
+      open = false;
+      void deps
+        .invoke('desktop_timeline_unsubscribe', { subscriptionId: id })
+        .catch(() => undefined);
+    },
+  };
+}
+
 // Core subscribes before returning the open snapshot. Keep the candidate's
 // intervening deltas until its stream ID is known, with a bounded lifetime and
 // size. An incomplete candidate is rejected without replacing the current view.
@@ -1051,6 +1111,8 @@ export const useNativeTimelineView = (
   const [reloadToken, setReloadToken] = useState(0);
   const reload = useCallback(() => setReloadToken((token) => token + 1), []);
   const streamIdRef = useRef<string | undefined>(undefined);
+  /** This view's delta channel; opens and jumps claim their stream for it. */
+  const deltaSubscriptionIdRef = useRef<number | undefined>(undefined);
   const snapshotRef = useRef<NativeTimelineViewSnapshot | undefined>(undefined);
   const selectedPositionRef = useRef<NativeTimelinePosition | undefined>(undefined);
   const pendingOpenRef = useRef<ReturnType<typeof createNativeTimelineOpenBuffer> | undefined>(
@@ -1241,7 +1303,7 @@ export const useNativeTimelineView = (
     try {
       result = await invokeDesktopWithAvailability<NativeTimelineOpenReadback>(
         'matrix_timeline_jump_latest',
-        { request: { streamId } }
+        { request: { streamId }, subscriptionId: deltaSubscriptionIdRef.current }
       );
     } catch (error) {
       finishOpen(buffer);
@@ -1319,6 +1381,7 @@ export const useNativeTimelineView = (
               roomId: current.roomId,
               position: { kind: 'focused', eventId },
             }),
+            subscriptionId: deltaSubscriptionIdRef.current,
           }
         );
       } catch (error) {
@@ -1381,6 +1444,7 @@ export const useNativeTimelineView = (
   useEffect(() => {
     navigationRevisionRef.current += 1;
     streamIdRef.current = undefined;
+    deltaSubscriptionIdRef.current = undefined;
     snapshotRef.current = undefined;
     selectedPositionRef.current = undefined;
     setFocusRoute(undefined);
@@ -1393,7 +1457,7 @@ export const useNativeTimelineView = (
     }
 
     let disposed = false;
-    let unlisten: (() => void) | undefined;
+    let deltas: NativeTimelineDeltaSubscription | undefined;
     let stopPoll: (() => void) | undefined;
     let resyncInFlight = false;
     // Assigned below; a gap found while applying deltas asks for a snapshot.
@@ -1525,21 +1589,15 @@ export const useNativeTimelineView = (
       const buffer = beginOpen(nativeRequest.roomId);
       setState({ status: 'loading' });
       try {
-        try {
-          unlisten = await listenTauriEvent<NativeTimelineViewDeltaBatch>(
-            NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
-            ({ payload }) => applyBatch(payload)
-          );
-        } catch {
-          unlisten = undefined;
-        }
+        deltas = await subscribeNativeTimelineDeltas(nativeRequest.roomId, applyBatch);
         if (disposed) {
-          unlisten?.();
+          deltas?.close();
           return;
         }
+        deltaSubscriptionIdRef.current = deltas?.id;
         const result = await invokeDesktopWithAvailability<NativeTimelineOpenReadback>(
           'matrix_timeline_open',
-          { request: nativeRequest }
+          { request: nativeRequest, subscriptionId: deltas?.id }
         );
         if (disposed) {
           if (result.available && result.value?.streamId) {
@@ -1586,7 +1644,7 @@ export const useNativeTimelineView = (
         );
         if (!disposed) {
           // Paused while the window is hidden; showing it again polls at once (D11).
-          const deltasLive = Boolean(unlisten);
+          const deltasLive = Boolean(deltas);
           stopPoll = startVisibleOnlyPoll(
             () => {
               if (!disposed) void pollSnapshot(true);
@@ -1621,7 +1679,7 @@ export const useNativeTimelineView = (
         });
       }
       stopPoll?.();
-      unlisten?.();
+      deltas?.close();
     };
     // `reloadToken` reopens the same request on demand (Retry, Reload).
   }, [acceptSnapshot, beginOpen, finishOpen, nativeRequest, reloadToken]);

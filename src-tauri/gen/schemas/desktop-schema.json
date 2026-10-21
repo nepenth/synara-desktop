@@ -549,6 +549,18 @@
           "markdownDescription": "Enables the desktop_take_notification_responses command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_timeline_subscribe command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-timeline-subscribe",
+          "markdownDescription": "Enables the desktop_timeline_subscribe command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_timeline_unsubscribe command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-timeline-unsubscribe",
+          "markdownDescription": "Enables the desktop_timeline_unsubscribe command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_update_tray_state command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-update-tray-state",
@@ -2077,6 +2089,18 @@
           "type": "string",
           "const": "deny-desktop-take-notification-responses",
           "markdownDescription": "Denies the desktop_take_notification_responses command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_timeline_subscribe command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-timeline-subscribe",
+          "markdownDescription": "Denies the desktop_timeline_subscribe command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_timeline_unsubscribe command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-timeline-unsubscribe",
+          "markdownDescription": "Denies the desktop_timeline_unsubscribe command without any pre-configured scope."
         },
         {
           "description": "Denies the desktop_update_tray_state command without any pre-configured scope.",

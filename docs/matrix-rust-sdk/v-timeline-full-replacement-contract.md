@@ -93,11 +93,12 @@ viewport proof still remain. Body drafts remain local. The flat `NativeTimelineS
 temporary V-CRYPTO.6 bridge until those owners replace it.
 
 The managed SDK timeline now also owns an ordered subscription from the same
-pre-snapshot boundary and emits `matrix-timeline-view-updated` batches. Each
+pre-snapshot boundary and emits view-delta batches (desktop: over each view's
+`tauri::ipc::Channel`, opened with `desktop_timeline_subscribe`; L20). Each
 batch contains only the versioned product row operations and a monotonic native
 revision plus the exact opaque stream ID returned by the open readback; it is
 aborted with the session timeline registry. The unselected renderer-side
-bridge registers its event listener before `matrix_timeline_open`, keeps only
+bridge opens its delta channel before `matrix_timeline_open`, keeps only
 the exact returned stream, and rejects revision gaps or malformed operations
 instead of fetching through the JS timeline. The unselected virtualized
 presenter consumes only that product DTO and invokes only capability-gated
@@ -115,7 +116,7 @@ and resolve placement with legacy-compatible precedence: unread beats
 historical restore, while an exact live-tail at-bottom match may keep live
 bottom. Jump-to-latest is a stream-addressed native command that closes the
 prior stream and returns a fresh live-bottom open readback. Live read-frontier and pagination-state
-signals now travel on the same `matrix-timeline-view-updated` stream as row
+signals now travel on the same view-delta stream as row
 ops: optional `readState` / `pagination` metadata (including metadata-only
 batches) are projected from room-info, own-receipt, and live back-pagination
 status subscriptions. Restored scroll-offset application remains presenter-

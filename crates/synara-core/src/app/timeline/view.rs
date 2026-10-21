@@ -34,7 +34,6 @@ use super::shield::{project_encryption_shield, TimelineEncryptionShield, STRICT_
 use super::TimelineMediaRegistry;
 
 pub const TIMELINE_VIEW_SCHEMA_VERSION: u32 = 1;
-pub const NATIVE_TIMELINE_VIEW_UPDATED_EVENT: &str = "matrix-timeline-view-updated";
 const MAX_AGENT_CARD_JSON_BYTES: usize = 200_000;
 const AGENT_CARD_CONTENT_KEYS: [&str; 4] = [
     "org.hermes.agent",

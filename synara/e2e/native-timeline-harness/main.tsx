@@ -94,10 +94,20 @@ let failLastRead = params.has('failLastRead');
 let lastCandidateStreamId: string | undefined;
 let releaseOperation: (() => void) | undefined;
 let operationDeferred = false;
-const eventCallbacks = new Map<number, (event: unknown) => void>();
-const eventListeners = new Map<number, { event: string; handler: number }>();
+// `nativeEvents`: the views' delta channels, as `desktop_timeline_subscribe`
+// and the Rust registry deliver them (room-wide until an open claims a stream).
+const channelCallbacks = new Map<number, (message: unknown) => void>();
+const deltaSubscriptions = new Map<
+  number,
+  { roomId: string; channelId: number; nextIndex: number }
+>();
+const streamOwners = new Map<string, number>();
 let callbackSequence = 0;
-let eventSequence = 0;
+let subscriptionSequence = 0;
+const claimStream = (subscriptionId: unknown, streamId: string | undefined) => {
+  if (typeof subscriptionId !== 'number' || !streamId) return;
+  if (deltaSubscriptions.has(subscriptionId)) streamOwners.set(streamId, subscriptionId);
+};
 const commands: { command: string; args?: Record<string, unknown> }[] = [];
 const makeRow = (index: number) => ({
   kind: 'message' as const,
@@ -239,10 +249,13 @@ const emitCandidateUpdate = (body: string, skipRevision = false, remove = false)
   emitBatch(batch);
 };
 const emitBatch = (batch: NativeTimelineViewDeltaBatch) => {
-  for (const [id, listener] of eventListeners) {
-    if (listener.event === 'matrix-timeline-view-updated') {
-      eventCallbacks.get(listener.handler)?.({ event: listener.event, id, payload: batch });
-    }
+  const owner = streamOwners.get(batch.streamId);
+  for (const [id, subscription] of deltaSubscriptions) {
+    if (subscription.roomId !== batch.roomId || (owner !== undefined && owner !== id)) continue;
+    channelCallbacks.get(subscription.channelId)?.({
+      message: batch,
+      index: subscription.nextIndex++,
+    });
   }
 };
 const update = () => {
@@ -496,7 +509,8 @@ window.__SYNARA_DESKTOP__ = {
       // Core publishes the new read state as a delta before it replies; the
       // reply carries metadata only. Without a delta channel the fixture
       // leaves the stream as it was, as a dropped batch would.
-      if (eventListeners.size === 0) return { view: withoutRows(current), receiptSent: true } as T;
+      if (deltaSubscriptions.size === 0)
+        return { view: withoutRows(current), receiptSent: true } as T;
       const next = {
         ...current,
         revision: current.revision + 1,
@@ -578,33 +592,67 @@ window.__SYNARA_DESKTOP__ = {
 };
 
 if (params.has('nativeEvents')) {
+  // The real `@tauri-apps/api` Channel runs on these internals: it orders
+  // messages by index and unregisters itself on the end message.
+  const desktop = window.__SYNARA_DESKTOP__;
+  const desktopInvoke = desktop?.invoke;
+  if (!desktop || !desktopInvoke) throw new Error('The harness bridge is missing');
+  desktop.invoke = async <T,>(command: string, args?: Record<string, unknown>): Promise<T> => {
+    if (command === 'desktop_timeline_subscribe') {
+      commands.push({ command, args });
+      const id = ++subscriptionSequence;
+      deltaSubscriptions.set(id, {
+        roomId: args?.roomId as string,
+        channelId: (args?.channel as { id: number }).id,
+        nextIndex: 0,
+      });
+      return id as T;
+    }
+    if (command === 'desktop_timeline_unsubscribe') {
+      commands.push({ command, args });
+      const id = args?.subscriptionId as number;
+      const subscription = deltaSubscriptions.get(id);
+      deltaSubscriptions.delete(id);
+      for (const [streamId, owner] of streamOwners) {
+        if (owner === id) streamOwners.delete(streamId);
+      }
+      // Rust drops the channel, which tells the webview no more will come.
+      if (subscription) {
+        channelCallbacks.get(subscription.channelId)?.({
+          end: true,
+          index: subscription.nextIndex,
+        });
+      }
+      return (subscription !== undefined) as T;
+    }
+    const result = await desktopInvoke<T>(command, args);
+    const request = args?.request as { streamId?: string } | undefined;
+    if (command === 'matrix_timeline_open' || command === 'matrix_timeline_jump_latest') {
+      claimStream(args?.subscriptionId, (result as { streamId?: string } | undefined)?.streamId);
+    }
+    if (command === 'matrix_timeline_close' && request?.streamId) {
+      streamOwners.delete(request.streamId);
+    }
+    return result;
+  };
   Object.assign(window, {
     __TAURI_INTERNALS__: {
-      transformCallback: (handler: (event: unknown) => void) => {
+      transformCallback: (handler: (message: unknown) => void) => {
         const id = ++callbackSequence;
-        eventCallbacks.set(id, handler);
+        channelCallbacks.set(id, handler);
         return id;
       },
+      unregisterCallback: (id: number) => {
+        channelCallbacks.delete(id);
+      },
       invoke: async (command: string, args: Record<string, unknown>) => {
-        if (command === 'plugin:event|listen') {
-          const id = ++eventSequence;
-          eventListeners.set(id, { event: args.event as string, handler: args.handler as number });
-          return id;
-        }
-        if (command === 'plugin:event|unlisten') {
-          eventListeners.delete(args.eventId as number);
-          return undefined;
-        }
+        // Other views still listen to small Tauri events; none fire here.
+        if (command === 'plugin:event|listen') return ++callbackSequence;
+        if (command === 'plugin:event|unlisten') return undefined;
         return window.__SYNARA_DESKTOP__?.invoke?.(command, args);
       },
     },
-    __TAURI_EVENT_PLUGIN_INTERNALS__: {
-      unregisterListener: (_event: string, id: number) => {
-        const listener = eventListeners.get(id);
-        if (listener) eventCallbacks.delete(listener.handler);
-        eventListeners.delete(id);
-      },
-    },
+    __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => undefined },
   });
 }
 
@@ -619,13 +667,7 @@ if (scenario === 'media' || params.has('surface')) {
   });
 }
 
-const dispatchBatch = (batch: NativeTimelineViewDeltaBatch) => {
-  for (const [id, listener] of eventListeners) {
-    if (listener.event === 'matrix-timeline-view-updated') {
-      eventCallbacks.get(listener.handler)?.({ event: listener.event, id, payload: batch });
-    }
-  }
-};
+const dispatchBatch = emitBatch;
 
 const emitActiveBatch = (
   build: (current: NativeTimelineViewSnapshot, streamId: string) => NativeTimelineViewDeltaBatch
@@ -747,7 +789,7 @@ const api = {
     }
   },
   emitRevisionGap() {
-    if (eventListeners.size === 0 || snapshots.size === 0) {
+    if (deltaSubscriptions.size === 0 || snapshots.size === 0) {
       throw new Error('emitRevisionGap requires an open native timeline stream');
     }
     const row = makeRow(++sequence);
@@ -992,6 +1034,16 @@ const api = {
   threadRoot: THREAD_ROOT,
   openThreadStreams() {
     return openThreadStreams.size;
+  },
+  /** Open delta channels, and which channel each open stream is claimed by. */
+  deltaChannels() {
+    return {
+      subscriptions: [...deltaSubscriptions.keys()],
+      threadOwners: [...openThreadStreams].map((streamId) => streamOwners.get(streamId)),
+      roomOwners: [...snapshots.keys()]
+        .filter((streamId) => !openThreadStreams.has(streamId))
+        .map((streamId) => streamOwners.get(streamId)),
+    };
   },
   threadOpenCount() {
     return threadOpenCount;

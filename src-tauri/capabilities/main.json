@@ -230,6 +230,8 @@
     "allow-matrix-notification-dismiss",
     "allow-matrix-notification-focus-set",
     "allow-matrix-notification-pending-snapshot",
+    "allow-desktop-timeline-subscribe",
+    "allow-desktop-timeline-unsubscribe",
     "allow-matrix-timeline-open",
     "allow-matrix-timeline-snapshot",
     "allow-matrix-timeline-retry-decryption",

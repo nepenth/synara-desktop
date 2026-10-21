@@ -38,7 +38,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use synara_core::platform::Platform;
 use tauri::{
-    webview::{NewWindowResponse, WebviewWindowBuilder},
+    webview::{NewWindowResponse, PageLoadEvent, WebviewWindowBuilder},
     DragDropEvent, Emitter, LogicalSize, Manager, Size, WebviewUrl, WindowEvent,
 };
 use tauri_plugin_opener::OpenerExt;
@@ -598,6 +598,7 @@ pub fn run() {
     }
     builder = builder
         .manage(matrix::auth::MatrixAuthState::new())
+        .manage(Arc::new(matrix::timeline::TimelineViewChannels::default()))
         .plugin({
             // macOS and Windows keep every default flag, including decorations.
             // Linux must not restore DECORATIONS: the saved file still says
@@ -786,6 +787,8 @@ pub fn run() {
             matrix::auth::product::matrix_widget_post,
             matrix::auth::product::matrix_widget_subscribe,
             matrix::auth::product::widget_bridge_post,
+            matrix::auth::product::desktop_timeline_subscribe,
+            matrix::auth::product::desktop_timeline_unsubscribe,
             matrix::auth::product::matrix_timeline_open,
             matrix::auth::product::matrix_timeline_close,
             matrix::auth::product::matrix_timeline_jump_latest,
@@ -999,6 +1002,17 @@ pub fn run() {
             let window = window_builder
                 .initialization_script(bridge_script)
                 .on_navigation(move |url| desktop_navigation::is_app_navigation(&navigation_url, url))
+                // A reload drops the page's timeline views without unmounting
+                // them: close their delta channels with the old page.
+                .on_page_load(|window, payload| {
+                    if payload.event() == PageLoadEvent::Started {
+                        if let Some(channels) =
+                            window.try_state::<Arc<matrix::timeline::TimelineViewChannels>>()
+                        {
+                            channels.close_webview(window.label());
+                        }
+                    }
+                })
                 .on_new_window(move |url, _features| {
                     if desktop::is_safe_external_url(url.as_str()) {
                         if let Err(error) = app_handle.opener().open_url(url.as_str(), None::<&str>)

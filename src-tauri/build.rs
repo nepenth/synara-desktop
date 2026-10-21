@@ -236,6 +236,8 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_edit_message",
     "matrix_poll_respond",
     "matrix_timeline_set_read_state",
+    "desktop_timeline_subscribe",
+    "desktop_timeline_unsubscribe",
     "matrix_timeline_open",
     "matrix_timeline_paginate",
     "matrix_timeline_snapshot",
