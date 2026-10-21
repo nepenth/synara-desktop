@@ -1644,6 +1644,9 @@ impl SharedCore {
             mention_user_ids,
             mention_room,
             txn_id,
+            // iOS edits only sent messages; a local echo edit names its
+            // transaction id (desktop `matrix_edit_message`).
+            target_transaction_id: None,
         };
         if !within_envelope_cap(&request) {
             return Err(edit_message_failed(

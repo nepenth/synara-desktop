@@ -568,6 +568,28 @@ final class PushServiceTests: XCTestCase {
         XCTAssertEqual(pusher.lastPushKey, "7ab13c")
     }
 
+    func testPushServiceRegistersWhenTheEditPolicyIsDegradedAndSaysSo() async {
+        let pusher = StubPusherService()
+        pusher.editSuppressionDiagnostic = "v-pusher.edit-policy-failed"
+
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: pusher,
+            isRegistrationAvailable: true
+        )
+        service.configure(with: makeSession())
+        service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
+
+        await waitUntil {
+            service.isRegistered && pusher.registerCount >= 1
+        }
+        XCTAssertTrue(service.isRegistered)
+        XCTAssertEqual(
+            service.registrationStateDescription,
+            SynaraPushService.registeredWithoutEditSuppressionDescription
+        )
+    }
+
     func testPushServiceCoalescesRepeatedRegistrationTriggers() async {
         let pusher = StubPusherService()
         let session = makeSession()
@@ -1349,6 +1371,7 @@ private final class StubPusherService: MatrixPusherServicing {
         var bindFailuresRemaining = 0
         var onRegister: () -> Void = {}
         var onUnregister: () -> Void = {}
+        var editSuppressionDiagnostic: String?
 
         init(
             isGatewayConfigured: Bool = true,
@@ -1369,7 +1392,7 @@ private final class StubPusherService: MatrixPusherServicing {
         return StubPusherAccountService(service: self, session: session)
     }
 
-    fileprivate func registerPusher(session: AuthenticatedSession, pushKey: String) async throws {
+    fileprivate func registerPusher(session: AuthenticatedSession, pushKey: String) async throws -> String? {
         registerCount += 1
         lastPushKey = pushKey
         registeredSessions.append(session)
@@ -1377,6 +1400,7 @@ private final class StubPusherService: MatrixPusherServicing {
         if registerDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: registerDelayNanoseconds)
         }
+        return editSuppressionDiagnostic
     }
 
     fileprivate func unregisterPusher(session: AuthenticatedSession, pushKey: String) async throws {
@@ -1419,7 +1443,7 @@ private final class StubPusherAccountService: MatrixPusherAccountServicing {
         self.session = session
     }
 
-    func registerPusher(pushKey: String) async throws {
+    func registerPusher(pushKey: String) async throws -> String? {
         try await service.registerPusher(session: session, pushKey: pushKey)
     }
 
@@ -1479,13 +1503,13 @@ private final class RecordingSharedCoreHttpPusherOwner: SharedCoreHttpPusherOwni
         _ = appDisplayName
         _ = lang
         registeredPushKeys.append(pushKey)
-        return PusherWriteDto(status: .ok)
+        return PusherWriteDto(status: .ok, editSuppressionDiagnosticId: nil)
     }
 
     func deleteHttpPusher(pushKey: String, appId: String) async throws -> PusherWriteDto {
         _ = appId
         deletedPushKeys.append(pushKey)
-        return PusherWriteDto(status: .ok)
+        return PusherWriteDto(status: .ok, editSuppressionDiagnosticId: nil)
     }
 
     func deleteHttpPushersForDevice(
@@ -1495,6 +1519,6 @@ private final class RecordingSharedCoreHttpPusherOwner: SharedCoreHttpPusherOwni
         _ = appId
         _ = lastPushKey
         deleteForDeviceCount += 1
-        return PusherWriteDto(status: .ok)
+        return PusherWriteDto(status: .ok, editSuppressionDiagnosticId: nil)
     }
 }

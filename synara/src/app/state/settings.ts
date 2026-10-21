@@ -371,6 +371,12 @@ export const getSettings = () => {
   return settingsStore.getSettings();
 };
 
+/**
+ * The user's receipt privacy mode: read receipts are public `m.read` unless
+ * "Hide Typing & Read Receipts" is on, when Core sends `m.read.private`.
+ */
+export const readReceiptsArePublic = (): boolean => !getSettings().hideActivity;
+
 export const setSettings = (settings: Settings) => {
   settingsStore.setSettings(settings);
 };

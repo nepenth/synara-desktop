@@ -828,7 +828,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
             encryptionShield: nil,
             transactionId: nil,
             localEchoState: nil,
-            sendFailure: nil
+            sendFailure: nil,
+            sendFailureRetryable: nil
         )
     }
 
@@ -955,7 +956,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 encryptionShield: nil,
                 transactionId: nil,
                 localEchoState: nil,
-                sendFailure: nil
+                sendFailure: nil,
+                sendFailureRetryable: nil
             )
         )
         XCTAssertEqual(mappedRow?.senderProfileDisplayName, "Alice Example")
@@ -981,7 +983,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 mediaCaption: nil, reactions: [], mediaHandleId: nil, mediaMimeType: nil,
                 mediaWidth: nil, mediaHeight: nil, mediaDurationMs: nil,
                 encryptionShield: nil, transactionId: "synara-attachment-a",
-                localEchoState: "sending", sendFailure: nil
+                localEchoState: "sending", sendFailure: nil, sendFailureRetryable: nil
             )
         )
         XCTAssertEqual(localEcho?.eventID, "sdk-local-item")
@@ -1153,7 +1155,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 encryptionShield: nil,
                 transactionId: nil,
                 localEchoState: nil,
-                sendFailure: nil
+                sendFailure: nil,
+                sendFailureRetryable: nil
             )
         }
 
@@ -3996,7 +3999,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         let hostileURL = "https://user:secret@example.invalid"
 
         do {
-            _ = try await SynaraCore.registerFlows(homeserverUrl: hostileURL)
+            _ = try await SynaraCore.registerFlows(homeserverUrl: hostileURL, appVersion: "1.0")
             XCTFail("Hostile registration-flow URL must fail before a request")
         } catch {
             let publicError = String(reflecting: error)

@@ -573,6 +573,26 @@ test('unsent rows are visibly not sent and discard does not require an event id'
   assert.equal(sent, undefined);
   assert.equal(remote, undefined);
   assert.equal(nativeTimelineUnsentDelivery({}), undefined);
+  assert.equal(failed?.retryable, true, 'an unknown cause keeps Retry');
+  assert.equal(wedged?.retryable, true);
+  assert.equal(sending?.retryable, false);
+
+  // D70: a 413 or a forbidden send is refused again; only Discard remains.
+  const tooLarge = nativeTimelineUnsentDelivery({
+    localEchoState: 'wedged',
+    transactionId: 'txn-too-large',
+    sendFailureRetryable: false,
+    candidate: true,
+  });
+  assert.equal(tooLarge?.status, 'failed');
+  assert.equal(tooLarge?.retryable, false);
+  const identity = nativeTimelineUnsentDelivery({
+    localEchoState: 'wedged',
+    transactionId: 'txn-identity',
+    sendFailureRetryable: true,
+    candidate: true,
+  });
+  assert.equal(identity?.retryable, true);
 
   const chromeStart = presenter.indexOf('const NativeTimelineUnsentChrome');
   const chromeEnd = presenter.indexOf('type NativeTimelineRowActionSurfaceProps');
@@ -582,7 +602,7 @@ test('unsent rows are visibly not sent and discard does not require an event id'
   assert.match(chrome, /\{unsent\.accessibleName\}/);
   assert.match(chrome, /aria-label="Discard unsent message"/);
   assert.match(chrome, /aria-label="Retry unsent message"/);
-  assert.match(chrome, /unsent\.status === 'failed'/);
+  assert.match(chrome, /unsent\.status === 'failed' && unsent\.retryable/);
   assert.match(chrome, /data-native-timeline-unsent="true"/);
   assert.doesNotMatch(chrome, /eventId/);
   assert.doesNotMatch(chrome, /matrix_send_text/);

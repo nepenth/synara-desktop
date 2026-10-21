@@ -1,24 +1,27 @@
-//! Bounded, redirect-free HTTP transport for unauthenticated Matrix auth probes.
+//! Unauthenticated Matrix auth probes through the SDK (review S18).
 //!
-//! The login-flow route sends only `GET /_matrix/client/v3/login`; the
-//! registration-flow route sends only an empty `POST /_matrix/client/v3/register`.
-//! Credentials and raw response bodies never cross the public error surface.
+//! The login-flow route sends only `GET /_matrix/client/v3/login`
+//! (`get_login_types`); the registration-flow route sends only an empty
+//! `POST /_matrix/client/v3/register`, whose UIA challenge lists the flows.
+//! Each probe runs on its own memory-only, redirect-free, time-bounded client
+//! ([`build_auth_probe_client`]). Credentials and raw response bodies never
+//! cross the public error surface.
 
 use std::time::Duration;
 
+use matrix_sdk::ruma::api::client::account::register;
+use matrix_sdk::ruma::api::client::session::get_login_types::v3::LoginType;
+use matrix_sdk::{Client, HttpError};
 use serde_json::Value;
 
-use super::discovery::{parse_well_known_client_json, DiscoveryTransport, WellKnownClientConfig};
 use super::error::AuthError;
 use super::input::normalize_homeserver_url;
 use super::login_flow::{LoginFlow, LoginFlowTransport};
 use super::register_flow::{parse_register_uiaa_json, RegisterFlowsProbe, RegisterFlowsTransport};
-use crate::app::client_builder::MATRIX_SDK_PIN_VERSION;
+use crate::app::client_builder::{build_auth_probe_client, MATRIX_SDK_PIN_VERSION};
 
-/// Default end-to-end timeout for the unauthenticated login-types request.
+/// Default end-to-end timeout for one unauthenticated probe request.
 pub const AUTH_HTTP_TIMEOUT_SECS: u64 = 15;
-/// Ceiling for a single login-types JSON response.
-pub const AUTH_HTTP_MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 
 pub(super) fn core_user_agent() -> String {
     format!(
@@ -27,121 +30,74 @@ pub(super) fn core_user_agent() -> String {
     )
 }
 
-/// Live read-only transport for `GET /_matrix/client/v3/login`.
+/// Live read-only probe for `GET /_matrix/client/v3/login`.
 #[derive(Debug, Clone)]
 pub struct HttpLoginFlowTransport {
-    http: reqwest::Client,
+    user_agent: String,
 }
 
 impl HttpLoginFlowTransport {
-    /// Build the shared core default bounded client.
+    /// Probe with Core's fallback user agent.
     pub fn new() -> Result<Self, AuthError> {
         Self::new_with_user_agent(core_user_agent())
     }
 
-    /// Build a bounded client with a shell-owned product identifier. This
-    /// preserves desktop's established user agent without importing a shell
-    /// type or product configuration into the core.
+    /// Probe with a shell-owned product identifier (`Synara-Desktop/<v>`,
+    /// `Synara-iOS/<v>`), as the shell's own client sends.
     pub fn new_with_user_agent(user_agent: impl Into<String>) -> Result<Self, AuthError> {
         Ok(Self {
-            http: bounded_http_client(user_agent)?,
+            user_agent: user_agent.into(),
         })
     }
 }
 
 impl Default for HttpLoginFlowTransport {
     fn default() -> Self {
-        // Never fall back to an unconstrained client: that would silently
-        // re-enable redirects or lose the request timeout. Construction must
-        // fail closed if the HTTP backend cannot initialize.
-        Self::new().expect("bounded login-flow HTTP client must initialize")
+        Self {
+            user_agent: core_user_agent(),
+        }
     }
 }
 
-/// Live read-only transport for the empty registration UIAA probe.
+/// Live read-only probe for the empty registration UIAA request.
 #[derive(Debug, Clone)]
 pub struct HttpRegisterFlowTransport {
-    http: reqwest::Client,
+    user_agent: String,
 }
 
 impl HttpRegisterFlowTransport {
-    /// Build the shared core default bounded client.
+    /// Probe with Core's fallback user agent.
     pub fn new() -> Result<Self, AuthError> {
         Self::new_with_user_agent(core_user_agent())
     }
 
-    /// Build a bounded probe client with a shell-owned product identifier.
+    /// Probe with a shell-owned product identifier.
     pub fn new_with_user_agent(user_agent: impl Into<String>) -> Result<Self, AuthError> {
         Ok(Self {
-            http: bounded_http_client(user_agent)?,
+            user_agent: user_agent.into(),
         })
-    }
-}
-
-/// Live read-only transport for `GET /.well-known/matrix/client`.
-#[derive(Debug, Clone)]
-pub struct HttpDiscoveryTransport {
-    http: reqwest::Client,
-}
-
-impl HttpDiscoveryTransport {
-    /// Build the shared core default bounded client.
-    pub fn new() -> Result<Self, AuthError> {
-        Self::new_with_user_agent(core_user_agent())
-    }
-
-    /// Build a bounded well-known client with a shell-owned product identifier.
-    pub fn new_with_user_agent(user_agent: impl Into<String>) -> Result<Self, AuthError> {
-        Ok(Self {
-            http: bounded_http_client(user_agent)?,
-        })
-    }
-}
-
-impl Default for HttpDiscoveryTransport {
-    fn default() -> Self {
-        Self::new().expect("bounded well-known HTTP client must initialize")
-    }
-}
-
-impl DiscoveryTransport for HttpDiscoveryTransport {
-    async fn fetch_well_known(
-        &self,
-        server_name: &str,
-    ) -> Result<WellKnownClientConfig, AuthError> {
-        let url = format!("https://{server_name}/.well-known/matrix/client");
-        let mut response = self
-            .http
-            .get(&url)
-            .send()
-            .await
-            .map_err(map_reqwest_error)?;
-        let status = response.status();
-        if status.as_u16() == 404 {
-            return Err(AuthError::WellKnownNotFound {
-                diagnostic_id: "r0.7-well-known-404",
-            });
-        }
-        if !status.is_success() {
-            return Err(map_http_status(status.as_u16()));
-        }
-        let body = read_bounded_response(
-            &mut response,
-            ResponseReadDiagnostics {
-                too_large: "r0.7-well-known-response-too-large",
-                body: "r0.7-well-known-body",
-                invalid_utf8: "r0.7-well-known-json",
-            },
-        )
-        .await?;
-        parse_well_known_client_json(&body)
     }
 }
 
 impl Default for HttpRegisterFlowTransport {
     fn default() -> Self {
-        Self::new().expect("bounded registration-flow HTTP client must initialize")
+        Self {
+            user_agent: core_user_agent(),
+        }
     }
+}
+
+async fn probe_client(homeserver_base_url: &str, user_agent: &str) -> Result<Client, AuthError> {
+    let base = normalize_homeserver_url(homeserver_base_url)?.into_string();
+    build_auth_probe_client(
+        &base,
+        user_agent,
+        Duration::from_secs(AUTH_HTTP_TIMEOUT_SECS),
+    )
+    .await
+    .map_err(|_| AuthError::Connectivity {
+        diagnostic_id: "r0.7-http-client-init",
+    })
 }
 
 impl RegisterFlowsTransport for HttpRegisterFlowTransport {
@@ -149,44 +105,32 @@ impl RegisterFlowsTransport for HttpRegisterFlowTransport {
         &self,
         homeserver_base_url: &str,
     ) -> Result<RegisterFlowsProbe, AuthError> {
-        let base = normalize_homeserver_url(homeserver_base_url)?.into_string();
-        let url = format!("{base}/_matrix/client/v3/register");
-        let mut response = self
-            .http
-            .post(url)
-            .header(reqwest::header::CONTENT_TYPE, "application/json")
-            .body("{}")
-            .send()
-            .await
-            .map_err(map_reqwest_error)?;
-        match response.status().as_u16() {
-            401 => {
-                let body = read_bounded_response(
-                    &mut response,
-                    ResponseReadDiagnostics {
-                        too_large: "p2-register-flows-response-too-large",
-                        body: "p2-register-flows-response-body",
-                        invalid_utf8: "p2-register-flows-uiaa-response-invalid",
-                    },
-                )
-                .await?;
-                parse_register_uiaa_json(&body)
-            }
-            200..=299 => Ok(RegisterFlowsProbe::InvalidRequest),
-            status => map_register_flows_status(status),
+        let client = probe_client(homeserver_base_url, &self.user_agent).await?;
+        // `Client::send` rather than `MatrixAuth::register`: a server that
+        // registers without UIA must not leave a session on this client.
+        let error = match client.send(register::v3::Request::new()).await {
+            Ok(_) => return Ok(RegisterFlowsProbe::InvalidRequest),
+            Err(error) => error,
+        };
+        if let Some(info) = error.as_uiaa_response() {
+            let body =
+                serde_json::to_string(info).map_err(|_| AuthError::UnsupportedCapability {
+                    diagnostic_id: "p2-register-flows-uiaa-response-invalid",
+                })?;
+            return parse_register_uiaa_json(&body);
+        }
+        match probe_failure(&error) {
+            ProbeFailure::Status(401) => Err(AuthError::UnsupportedCapability {
+                diagnostic_id: "p2-register-flows-uiaa-response-invalid",
+            }),
+            ProbeFailure::Status(status) => map_register_flows_status(status),
+            ProbeFailure::Redirected => map_register_flows_status(302),
+            // A success answer the SDK could not read: the server did not
+            // challenge the empty request, as for any 2xx before.
+            ProbeFailure::UnreadableSuccess => Ok(RegisterFlowsProbe::InvalidRequest),
+            ProbeFailure::Transport(error) => Err(error),
         }
     }
-}
-
-fn bounded_http_client(user_agent: impl Into<String>) -> Result<reqwest::Client, AuthError> {
-    reqwest::ClientBuilder::new()
-        .timeout(Duration::from_secs(AUTH_HTTP_TIMEOUT_SECS))
-        .redirect(reqwest::redirect::Policy::none())
-        .user_agent(user_agent.into())
-        .build()
-        .map_err(|_| AuthError::Connectivity {
-            diagnostic_id: "r0.7-http-client-init",
-        })
 }
 
 impl LoginFlowTransport for HttpLoginFlowTransport {
@@ -194,64 +138,75 @@ impl LoginFlowTransport for HttpLoginFlowTransport {
         &self,
         homeserver_base_url: &str,
     ) -> Result<Vec<LoginFlow>, AuthError> {
-        let base = normalize_homeserver_url(homeserver_base_url)?.into_string();
-        let url = format!("{base}/_matrix/client/v3/login");
-        let mut response = self.http.get(url).send().await.map_err(map_reqwest_error)?;
-        let status = response.status();
-        if !status.is_success() {
-            return Err(map_http_status(status.as_u16()));
-        }
-        let body = read_bounded_response(
-            &mut response,
-            ResponseReadDiagnostics {
-                too_large: "r0.7-login-types-response-too-large",
-                body: "r0.7-login-types-body",
-                invalid_utf8: "r0.7-login-types-json",
-            },
-        )
-        .await?;
-        parse_login_types_json(&body)
+        let client = probe_client(homeserver_base_url, &self.user_agent).await?;
+        let response = client
+            .matrix_auth()
+            .get_login_types()
+            .await
+            .map_err(|error| match probe_failure(&error) {
+                ProbeFailure::Status(status) => map_http_status(status),
+                ProbeFailure::Redirected => map_http_status(302),
+                ProbeFailure::UnreadableSuccess => AuthError::UnsupportedCapability {
+                    diagnostic_id: "r0.7-login-types-json",
+                },
+                ProbeFailure::Transport(error) => error,
+            })?;
+        Ok(login_flows_from_sdk(&response.flows))
     }
 }
 
-#[derive(Clone, Copy)]
-struct ResponseReadDiagnostics {
-    too_large: &'static str,
-    body: &'static str,
-    invalid_utf8: &'static str,
+/// SDK login types as Synara login flows, in server order.
+pub(super) fn login_flows_from_sdk(flows: &[LoginType]) -> Vec<LoginFlow> {
+    flows
+        .iter()
+        .map(|flow| match flow {
+            LoginType::Token(token) => LoginFlow::token(token.get_login_token),
+            other => LoginFlow::from_matrix_parts(other.login_type(), None),
+        })
+        .collect()
 }
 
-async fn read_bounded_response(
-    response: &mut reqwest::Response,
-    diagnostics: ResponseReadDiagnostics,
-) -> Result<String, AuthError> {
-    if response
-        .content_length()
-        .is_some_and(|length| length > AUTH_HTTP_MAX_RESPONSE_BYTES as u64)
-    {
-        return Err(AuthError::UnsupportedCapability {
-            diagnostic_id: diagnostics.too_large,
-        });
-    }
+/// What a failed probe request got back. No URL, header or body survives.
+enum ProbeFailure {
+    /// The server answered with an error status (4xx/5xx).
+    Status(u16),
+    /// The server answered with a redirect, which the probe client refuses.
+    Redirected,
+    /// The server answered with success but a body the SDK could not read:
+    /// ruma parses every answer below 400 as a success response.
+    UnreadableSuccess,
+    /// No answer: the connection failed or timed out.
+    Transport(AuthError),
+}
 
-    let mut body = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|_| AuthError::Connectivity {
-            diagnostic_id: diagnostics.body,
-        })?
-    {
-        if body.len().saturating_add(chunk.len()) > AUTH_HTTP_MAX_RESPONSE_BYTES {
-            return Err(AuthError::UnsupportedCapability {
-                diagnostic_id: diagnostics.too_large,
-            });
-        }
-        body.extend_from_slice(&chunk);
+fn probe_failure(error: &HttpError) -> ProbeFailure {
+    if error.as_uiaa_response().is_some() {
+        return ProbeFailure::Status(401);
     }
-    String::from_utf8(body).map_err(|_| AuthError::UnsupportedCapability {
-        diagnostic_id: diagnostics.invalid_utf8,
-    })
+    if let Some(api) = error.as_client_api_error() {
+        return ProbeFailure::Status(api.status_code.as_u16());
+    }
+    match error {
+        HttpError::Cached(inner) => probe_failure(inner),
+        HttpError::Api(_) => ProbeFailure::UnreadableSuccess,
+        HttpError::Reqwest(error) if error.is_redirect() => ProbeFailure::Redirected,
+        HttpError::Reqwest(error) if error.is_timeout() || error.is_connect() => {
+            ProbeFailure::Transport(AuthError::Connectivity {
+                diagnostic_id: "r0.7-http-connect",
+            })
+        }
+        HttpError::Reqwest(error) if error.is_request() => {
+            ProbeFailure::Transport(AuthError::Connectivity {
+                diagnostic_id: "r0.7-http-request",
+            })
+        }
+        HttpError::Reqwest(_) => ProbeFailure::Transport(AuthError::HomeserverUnavailable {
+            diagnostic_id: "r0.7-http-unavailable",
+        }),
+        _ => ProbeFailure::Transport(AuthError::Unknown {
+            diagnostic_id: "r0.7-http-status",
+        }),
+    }
 }
 
 /// Parse `GET /login` flows JSON into Synara domain login flows.
@@ -278,23 +233,6 @@ pub fn parse_login_types_json(raw: &str) -> Result<Vec<LoginFlow>, AuthError> {
         out.push(LoginFlow::from_matrix_parts(matrix_type, get_login_token));
     }
     Ok(out)
-}
-
-/// Classify an HTTP-library failure without exposing an endpoint or raw error.
-fn map_reqwest_error(err: reqwest::Error) -> AuthError {
-    if err.is_timeout() || err.is_connect() {
-        return AuthError::Connectivity {
-            diagnostic_id: "r0.7-http-connect",
-        };
-    }
-    if err.is_request() {
-        return AuthError::Connectivity {
-            diagnostic_id: "r0.7-http-request",
-        };
-    }
-    AuthError::HomeserverUnavailable {
-        diagnostic_id: "r0.7-http-unavailable",
-    }
 }
 
 /// Classify an HTTP status without retaining the endpoint or response body.
@@ -550,45 +488,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn registration_probe_uiaa_body_is_bounded_before_reading() {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("bind oversized registration server");
-        let address = listener
-            .local_addr()
-            .expect("oversized registration address");
-        let base = format!("http://{address}");
-        let server = tokio::spawn(async move {
-            use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-            let (mut socket, _) = listener.accept().await.expect("accept probe request");
-            let mut request = [0_u8; 1024];
-            let _ = socket.read(&mut request).await.expect("read probe request");
-            let response = format!(
-                "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{{}}",
-                AUTH_HTTP_MAX_RESPONSE_BYTES + 1
-            );
-            socket
-                .write_all(response.as_bytes())
-                .await
-                .expect("write oversized response");
-        });
-
-        let transport = HttpRegisterFlowTransport::new().expect("HTTP transport");
-        let error = transport
-            .probe_register_flows(&base)
-            .await
-            .expect_err("oversized registration UIAA response must fail closed");
-        assert!(matches!(
-            error,
-            AuthError::UnsupportedCapability {
-                diagnostic_id: "p2-register-flows-response-too-large"
-            }
-        ));
-        server.await.expect("oversized server task");
-    }
-
-    #[tokio::test]
     async fn live_login_types_against_disposable_synapse_when_configured() {
         if std::env::var("SYNARA_RUN_MATRIX_RUST_AUTH_LIVE")
             .ok()
@@ -655,42 +554,103 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn login_types_response_body_is_bounded_before_reading() {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("bind oversized server");
-        let address = listener.local_addr().expect("oversized address");
-        let base = format!("http://{address}");
-        let server = tokio::spawn(async move {
-            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    async fn registration_probe_reads_the_sdk_uia_challenge_with_one_request() {
+        use matrix_sdk::test_utils::mocks::MatrixMockServer;
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
 
-            let (mut socket, _) = listener.accept().await.expect("accept oversized request");
-            let mut request = [0_u8; 1024];
-            let _ = socket
-                .read(&mut request)
-                .await
-                .expect("read oversized request");
-            let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{{}}",
-                AUTH_HTTP_MAX_RESPONSE_BYTES + 1
-            );
-            socket
-                .write_all(response.as_bytes())
-                .await
-                .expect("write oversized response");
-        });
+        let server = MatrixMockServer::new().await;
+        Mock::given(method("POST"))
+            .and(path("/_matrix/client/v3/register"))
+            .respond_with(ResponseTemplate::new(401).set_body_json(serde_json::json!({
+                "session": "uia-session",
+                "flows": [{"stages": ["m.login.registration_token", "m.login.dummy"]}],
+                "params": {}
+            })))
+            .expect(1)
+            .mount(server.server())
+            .await;
 
-        let transport = HttpLoginFlowTransport::new().expect("HTTP transport");
-        let error = transport
-            .fetch_login_flows(&base)
+        let transport =
+            HttpRegisterFlowTransport::new_with_user_agent("Synara-iOS/2.2.6 (matrix-sdk/x)")
+                .unwrap();
+        let probe = transport
+            .probe_register_flows(&server.uri())
             .await
-            .expect_err("oversized response must fail closed");
-        assert!(matches!(
-            error,
-            AuthError::UnsupportedCapability {
-                diagnostic_id: "r0.7-login-types-response-too-large"
-            }
-        ));
-        server.await.expect("oversized server task");
+            .expect("UIA challenge");
+
+        let RegisterFlowsProbe::FlowRequired { session, flows, .. } = probe else {
+            panic!("expected a UIA challenge, got {probe:?}");
+        };
+        assert_eq!(session.as_deref(), Some("uia-session"));
+        assert_eq!(
+            flows[0].stages,
+            ["m.login.registration_token", "m.login.dummy"]
+        );
+        let requests = server.server().received_requests().await.unwrap();
+        assert_eq!(requests.len(), 1, "no /versions or well-known request");
+        assert_eq!(
+            requests[0].headers.get("user-agent").unwrap(),
+            "Synara-iOS/2.2.6 (matrix-sdk/x)"
+        );
+        assert!(!requests[0].headers.contains_key("authorization"));
+    }
+
+    #[tokio::test]
+    async fn registration_probe_maps_disabled_registration() {
+        use matrix_sdk::test_utils::mocks::MatrixMockServer;
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+
+        let server = MatrixMockServer::new().await;
+        Mock::given(method("POST"))
+            .and(path("/_matrix/client/v3/register"))
+            .respond_with(ResponseTemplate::new(403).set_body_json(serde_json::json!({
+                "errcode": "M_FORBIDDEN",
+                "error": "Registration has been disabled"
+            })))
+            .mount(server.server())
+            .await;
+
+        let probe = HttpRegisterFlowTransport::new()
+            .unwrap()
+            .probe_register_flows(&server.uri())
+            .await
+            .unwrap();
+        assert_eq!(probe, RegisterFlowsProbe::RegistrationDisabled);
+    }
+
+    #[tokio::test]
+    async fn login_types_go_through_the_sdk_with_the_shell_user_agent() {
+        use matrix_sdk::test_utils::mocks::MatrixMockServer;
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+
+        let server = MatrixMockServer::new().await;
+        Mock::given(method("GET"))
+            .and(path("/_matrix/client/v3/login"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "flows": [
+                    {"type": "m.login.password"},
+                    {"type": "m.login.token", "get_login_token": true}
+                ]
+            })))
+            .expect(1)
+            .mount(server.server())
+            .await;
+
+        let flows = HttpLoginFlowTransport::new_with_user_agent("Synara-Desktop/1.4.0")
+            .unwrap()
+            .fetch_login_flows(&server.uri())
+            .await
+            .unwrap();
+
+        assert_eq!(flows, [LoginFlow::password(), LoginFlow::token(true)]);
+        let requests = server.server().received_requests().await.unwrap();
+        assert_eq!(requests.len(), 1, "no /versions or well-known request");
+        assert_eq!(
+            requests[0].headers.get("user-agent").unwrap(),
+            "Synara-Desktop/1.4.0"
+        );
     }
 }

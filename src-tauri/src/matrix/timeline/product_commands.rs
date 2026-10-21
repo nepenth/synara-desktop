@@ -124,6 +124,7 @@ pub async fn matrix_timeline_set_read_state(
         request.action,
         request.intent,
         request.observed_live_tail_event_id,
+        request.public_receipt,
     )
     .await
 }

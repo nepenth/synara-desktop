@@ -172,10 +172,16 @@ test('hiding typing and read receipts still marks the visible tail read privatel
     join(process.cwd(), '../crates/synara-core/src/app/timeline/live.rs'),
     'utf8'
   );
+  // Hidden receipts are private; otherwise Core sends public `m.read` (S11).
   assert.match(
     live,
-    /\.fully_read_marker\(Some\(event_id\.clone\(\)\)\)\s*\.private_read_receipt\(Some\(event_id\)\)/
+    /Receipts::new\(\)\.fully_read_marker\(Some\(event_id\.clone\(\)\)\);\s*if public_receipt \{\s*receipts\.public_read_receipt\(Some\(event_id\)\)\s*\} else \{\s*receipts\.private_read_receipt\(Some\(event_id\)\)/
   );
+  const view = readFileSync(
+    join(process.cwd(), 'src/app/features/room/nativeTimelineView.ts'),
+    'utf8'
+  );
+  assert.match(view, /publicReceipt: readReceiptsArePublic\(\)/);
   const general = readFileSync(
     join(process.cwd(), 'src/app/features/settings/general/General.tsx'),
     'utf8'

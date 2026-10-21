@@ -705,6 +705,7 @@ fn timeline_view_row_dto_maps_message_without_token_echo() {
             origin_server_ts: 1_700_000_000_000,
             local_echo_state: None,
             send_failure: None,
+            send_failure_retryable: None,
             transaction_id: None,
             encryption_shield: None,
             capabilities: TimelineRowCapabilities {
@@ -833,6 +834,7 @@ fn timeline_view_row_dto_carries_local_echo_transaction_id() {
             origin_server_ts: 1_700_000_000_001,
             local_echo_state: Some(LocalEchoState::Sending),
             send_failure: None,
+            send_failure_retryable: None,
             transaction_id: Some("synara-attachment-1".to_owned()),
             encryption_shield: None,
             capabilities: TimelineRowCapabilities {
@@ -888,6 +890,7 @@ fn timeline_view_row_dto_preserves_open_and_closed_poll_semantics() {
                 origin_server_ts: 1_700_000_000_002,
                 local_echo_state: None,
                 send_failure: None,
+                send_failure_retryable: None,
                 transaction_id: None,
                 encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
@@ -978,6 +981,7 @@ fn timeline_view_row_dto_preserves_incoming_sticker_media() {
             origin_server_ts: 1_700_000_000_001,
             local_echo_state: None,
             send_failure: None,
+            send_failure_retryable: None,
             transaction_id: None,
             encryption_shield: None,
             capabilities: TimelineRowCapabilities {
@@ -1052,6 +1056,7 @@ fn timeline_view_row_dto_preserves_base_metadata_for_non_message_events() {
         origin_server_ts: 1_700_000_000_003,
         local_echo_state: None,
         send_failure: None,
+        send_failure_retryable: None,
         transaction_id: None,
         encryption_shield: None,
         capabilities: TimelineRowCapabilities {

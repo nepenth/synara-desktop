@@ -422,9 +422,22 @@ final class OutgoingSendServiceTests: XCTestCase {
 
         XCTAssertEqual(TimelineLocalEchoState.sending.deliveryStatus, .sending)
         XCTAssertEqual(TimelineLocalEchoState.wedged(cause: nil).deliveryStatus, .failed)
-        XCTAssertTrue(TimelineLocalEchoState.wedged(cause: "forbidden").canRetry)
+        // D70: forbidden, too large and not-joined sends are refused again.
+        XCTAssertFalse(TimelineLocalEchoState.wedged(cause: "forbidden").canRetry)
         XCTAssertFalse(TimelineLocalEchoState.wedged(cause: "too_large").canRetry)
+        XCTAssertTrue(TimelineLocalEchoState.wedged(cause: "identity_violation").canRetry)
         XCTAssertFalse(TimelineLocalEchoState.sending.canRetry)
+        // Core's verdict wins over the local list.
+        XCTAssertEqual(
+            TimelineLocalEchoState(coreState: "wedged", cause: "insecure_devices", retryable: true),
+            .wedged(cause: "insecure_devices", retryable: true)
+        )
+        XCTAssertFalse(
+            TimelineLocalEchoState(coreState: "wedged", cause: "unknown", retryable: false)!.canRetry
+        )
+        XCTAssertTrue(
+            TimelineLocalEchoState(coreState: "failed", cause: "server_error", retryable: true)!.canRetry
+        )
 
         var sending = TimelineItem(
             id: "sdk-item", eventID: "sdk-item", senderID: "@alice:matrix.org",

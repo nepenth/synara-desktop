@@ -57,6 +57,9 @@ pub struct MatrixRoomSetFavoriteRequest {
 pub struct MatrixRoomSetReadStateRequest {
     pub room_id: String,
     pub action: NativeTimelineReadAction,
+    /// Send public `m.read` rather than `m.read.private` (receipt privacy).
+    #[serde(default)]
+    pub public_receipt: bool,
 }
 
 #[derive(Deserialize)]
@@ -602,7 +605,7 @@ pub(super) async fn room_set_read_state(
             .with_diagnostic("p2-room-set-read-state-no-session")
     })?;
     let readback = owner
-        .set_room_read_state(&payload.room_id, payload.action)
+        .set_room_read_state(&payload.room_id, payload.action, payload.public_receipt)
         .await
         .map_err(room_read_state_owner_error)?;
     Ok(readback)

@@ -39,8 +39,8 @@ pub use homeserver_resolution::{
     resolve_homeserver, resolve_homeserver_with_user_agent, ResolvedHomeserver,
 };
 pub use http_transport::{
-    parse_login_types_json, HttpDiscoveryTransport, HttpLoginFlowTransport,
-    HttpRegisterFlowTransport, AUTH_HTTP_MAX_RESPONSE_BYTES, AUTH_HTTP_TIMEOUT_SECS,
+    parse_login_types_json, HttpLoginFlowTransport, HttpRegisterFlowTransport,
+    AUTH_HTTP_TIMEOUT_SECS,
 };
 pub use input::{
     normalize_homeserver_url, normalize_server_name, parse_discovery_input, DiscoveryInput,

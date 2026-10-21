@@ -226,10 +226,15 @@ pub(super) fn room_notification_write_dto(
     })
 }
 
-/// Privacy-safe HTTP pusher write ack. Status only; never push key or URL.
+/// Privacy-safe HTTP pusher write ack. Status and a closed diagnostic only;
+/// never push key or URL.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PusherWriteDto {
     pub status: WriteAckDto,
+    /// Registration only: the pusher is registered, but Synara's
+    /// edit-suppression push rule could not be installed or confirmed, so
+    /// edits can alert. The policy's closed diagnostic id.
+    pub edit_suppression_diagnostic_id: Option<String>,
 }
 
 /// Account-bound HTTP pusher capability. It retains the exact Core owner—and
@@ -272,6 +277,7 @@ impl HttpPusherOwner {
         })?;
         Ok(PusherWriteDto {
             status: result.status.into(),
+            edit_suppression_diagnostic_id: result.edit_suppression_diagnostic_id,
         })
     }
 
@@ -296,6 +302,7 @@ impl HttpPusherOwner {
         })?;
         Ok(PusherWriteDto {
             status: result.status.into(),
+            edit_suppression_diagnostic_id: result.edit_suppression_diagnostic_id,
         })
     }
 
@@ -323,6 +330,7 @@ impl HttpPusherOwner {
         })?;
         Ok(PusherWriteDto {
             status: result.status.into(),
+            edit_suppression_diagnostic_id: result.edit_suppression_diagnostic_id,
         })
     }
 }
@@ -459,6 +467,7 @@ impl SharedCore {
             })?;
         Ok(PusherWriteDto {
             status: result.status.into(),
+            edit_suppression_diagnostic_id: result.edit_suppression_diagnostic_id,
         })
     }
 
@@ -503,6 +512,7 @@ impl SharedCore {
             })?;
         Ok(PusherWriteDto {
             status: result.status.into(),
+            edit_suppression_diagnostic_id: result.edit_suppression_diagnostic_id,
         })
     }
 

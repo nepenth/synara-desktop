@@ -282,6 +282,9 @@ pub struct TimelineViewRowDto {
     /// `rejected`, `encryption`, `insecure_devices`, `identity_violation`,
     /// `verification_required`, `media`, `not_joined` or `unknown`.
     pub send_failure: Option<String>,
+    /// Set with `send_failure`: whether Retry can help. `false` (too large,
+    /// forbidden, rejected, not joined, unusable media) leaves only Discard.
+    pub send_failure_retryable: Option<bool>,
 }
 
 fn view_local_echo_state(state: Option<crate::dto::LocalEchoState>) -> Option<String> {
@@ -784,6 +787,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 transaction_id: message.event.transaction_id,
                 local_echo_state: view_local_echo_state(message.event.local_echo_state),
                 send_failure: message.event.send_failure,
+                send_failure_retryable: message.event.send_failure_retryable,
             }
         }
         TimelineViewRow::Sticker {
@@ -838,6 +842,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 transaction_id: event.transaction_id,
                 local_echo_state: view_local_echo_state(event.local_echo_state),
                 send_failure: event.send_failure,
+                send_failure_retryable: event.send_failure_retryable,
             }
         }
         TimelineViewRow::Poll(poll) => {
@@ -883,6 +888,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 transaction_id: poll.event.transaction_id,
                 local_echo_state: view_local_echo_state(poll.event.local_echo_state),
                 send_failure: poll.event.send_failure,
+                send_failure_retryable: poll.event.send_failure_retryable,
             }
         }
         TimelineViewRow::Membership(membership) => TimelineViewRowDto {
@@ -921,6 +927,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             transaction_id: membership.event.transaction_id,
             local_echo_state: view_local_echo_state(membership.event.local_echo_state),
             send_failure: membership.event.send_failure,
+            send_failure_retryable: membership.event.send_failure_retryable,
         },
         TimelineViewRow::State(state) => TimelineViewRowDto {
             kind: TimelineRowKindDto::State,
@@ -958,6 +965,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             transaction_id: state.event.transaction_id,
             local_echo_state: view_local_echo_state(state.event.local_echo_state),
             send_failure: state.event.send_failure,
+            send_failure_retryable: state.event.send_failure_retryable,
         },
         TimelineViewRow::Call(call) => TimelineViewRowDto {
             kind: TimelineRowKindDto::Call,
@@ -995,6 +1003,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             transaction_id: call.event.transaction_id,
             local_echo_state: view_local_echo_state(call.event.local_echo_state),
             send_failure: call.event.send_failure,
+            send_failure_retryable: call.event.send_failure_retryable,
         },
         TimelineViewRow::Redacted(redacted) => TimelineViewRowDto {
             kind: TimelineRowKindDto::Redacted,
@@ -1032,6 +1041,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             transaction_id: redacted.event.transaction_id,
             local_echo_state: view_local_echo_state(redacted.event.local_echo_state),
             send_failure: redacted.event.send_failure,
+            send_failure_retryable: redacted.event.send_failure_retryable,
         },
         TimelineViewRow::EncryptedUnavailable(encrypted) => TimelineViewRowDto {
             kind: TimelineRowKindDto::Encrypted,
@@ -1069,6 +1079,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             transaction_id: encrypted.event.transaction_id,
             local_echo_state: view_local_echo_state(encrypted.event.local_echo_state),
             send_failure: encrypted.event.send_failure,
+            send_failure_retryable: encrypted.event.send_failure_retryable,
         },
         TimelineViewRow::Other(other) => {
             let (
@@ -1080,6 +1091,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 transaction_id,
                 local_echo_state,
                 send_failure,
+                send_failure_retryable,
             ) = other
                 .event
                 .map(|event| {
@@ -1092,6 +1104,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                         event.transaction_id,
                         view_local_echo_state(event.local_echo_state),
                         event.send_failure,
+                        event.send_failure_retryable,
                     )
                 })
                 .unwrap_or_else(|| {
@@ -1100,6 +1113,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                         String::new(),
                         None,
                         0,
+                        None,
                         None,
                         None,
                         None,
@@ -1144,6 +1158,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 transaction_id,
                 local_echo_state,
                 send_failure,
+                send_failure_retryable,
             }
         }
         TimelineViewRow::DateSeparator {
@@ -1185,6 +1200,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             transaction_id: None,
             local_echo_state: None,
             send_failure: None,
+            send_failure_retryable: None,
         },
         TimelineViewRow::ReadMarker { item_id } => {
             virtual_row_dto(TimelineRowKindDto::ReadMarker, item_id)
@@ -1238,6 +1254,7 @@ pub(super) fn virtual_row_dto(kind: TimelineRowKindDto, item_id: String) -> Time
         transaction_id: None,
         local_echo_state: None,
         send_failure: None,
+        send_failure_retryable: None,
     }
 }
 
@@ -1594,6 +1611,7 @@ impl SharedCore {
         action: TimelineReadActionDto,
         intent: TimelineReadIntentDto,
         observed_live_tail_event_id: Option<String>,
+        public_receipt: bool,
     ) -> Result<TimelineReadStateDto, TimelineReadStateError> {
         let action = NativeTimelineReadAction::from(action);
         let intent = NativeTimelineReadIntent::from(intent);
@@ -1602,6 +1620,7 @@ impl SharedCore {
             "action": read_action_as_str(action),
             "intent": read_intent_as_str(intent),
             "observedLiveTailEventId": observed_live_tail_event_id,
+            "publicReceipt": public_receipt,
         }))?;
         let response = self
             .timeline_read_state_command(
@@ -1612,6 +1631,7 @@ impl SharedCore {
                         action,
                         intent,
                         observed_live_tail_event_id,
+                        public_receipt,
                     },
                 ),
             )

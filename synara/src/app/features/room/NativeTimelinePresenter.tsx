@@ -1075,7 +1075,7 @@ const NativeTimelineUnsentChrome = ({
           Discard
         </button>
       ) : null}
-      {unsent.status === 'failed' && transactionId ? (
+      {unsent.status === 'failed' && unsent.retryable && transactionId ? (
         <button
           type="button"
           className={htmlCss.UnsentAction}

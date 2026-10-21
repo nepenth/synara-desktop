@@ -18,12 +18,21 @@ const MAX_GATEWAY_URL_BYTES: usize = 2048;
 const MAX_DISPLAY_NAME_BYTES: usize = 256;
 const MAX_LANG_BYTES: usize = 32;
 const APPEND_NEW_PUSHER: bool = false;
+/// Share of the shell's 5 s registration bound the edit policy may use, so
+/// the pusher write still fits when the push-rule requests are slow.
+const EDIT_POLICY_BUDGET: std::time::Duration = std::time::Duration::from_secs(3);
+const EDIT_POLICY_TIMEOUT: &str = "v-pusher.edit-policy-timeout";
 
 /// Result of HTTP pusher set/delete. `status` is always `"ok"` on success.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatrixHttpPusherWriteResult {
     pub status: WriteAck,
+    /// Set by a registration that succeeded while Synara's edit-suppression
+    /// push rule could not be installed or confirmed: the device receives
+    /// pushes, but edits can alert. The policy's closed diagnostic id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub edit_suppression_diagnostic_id: Option<String>,
 }
 
 /// Account-bound owner for HTTP-pusher writes.
@@ -135,6 +144,7 @@ impl NativeHttpPusherOwner {
         }
         Ok(MatrixHttpPusherWriteResult {
             status: crate::dto::WriteAck::Ok,
+            edit_suppression_diagnostic_id: None,
         })
     }
 }
@@ -231,9 +241,17 @@ pub async fn register_http_pusher(
         lang,
     )?;
     // Install and independently confirm the account-owned replacement policy
-    // before making this device eligible for APNs delivery. Existing generic
-    // notification content must never be used as an edit-suppression fallback.
-    super::edit_policy::ensure_edit_notification_policy(client).await?;
+    // first, but best-effort (review S17): a server that rejects or rewrites
+    // the custom override rule must not cost the device every notification.
+    // Without it edits can alert, which the result reports for the shell's
+    // notification status. Existing generic notification content is never
+    // used as an edit-suppression fallback.
+    let edit_policy = tokio::time::timeout(
+        EDIT_POLICY_BUDGET,
+        super::edit_policy::ensure_edit_notification_policy(client),
+    )
+    .await
+    .unwrap_or(Err(EDIT_POLICY_TIMEOUT));
     client
         .pusher()
         .set(pusher, APPEND_NEW_PUSHER)
@@ -241,6 +259,7 @@ pub async fn register_http_pusher(
         .map_err(|_| "v-pusher.sdk-failed")?;
     Ok(MatrixHttpPusherWriteResult {
         status: crate::dto::WriteAck::Ok,
+        edit_suppression_diagnostic_id: edit_policy.err().map(str::to_owned),
     })
 }
 
@@ -295,6 +314,7 @@ pub async fn delete_http_pusher(
         .map_err(|_| "v-pusher.sdk-failed")?;
     Ok(MatrixHttpPusherWriteResult {
         status: crate::dto::WriteAck::Ok,
+        edit_suppression_diagnostic_id: None,
     })
 }
 

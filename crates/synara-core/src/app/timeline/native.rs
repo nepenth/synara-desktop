@@ -186,6 +186,11 @@ pub struct NativeTimelineReadStateRequest {
     /// the SDK-authoritative live tail and no-ops when they differ.
     #[serde(default)]
     pub observed_live_tail_event_id: Option<String>,
+    /// The user's receipt privacy mode for MarkRead: `true` sends public
+    /// `m.read`, `false` (the default, and what an older shell sends)
+    /// `m.read.private`. Shells pass "read receipts not hidden".
+    #[serde(default)]
+    pub public_receipt: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -193,7 +198,7 @@ pub struct NativeTimelineReadStateRequest {
 pub struct NativeTimelineReadStateReadback {
     pub action: NativeTimelineReadAction,
     /// `None` for MarkUnread. For MarkRead, `Some(true)` means a receipt-capable
-    /// remote target was resolved and the exact private + fully-read SDK
+    /// remote target was resolved and the exact receipt + fully-read SDK
     /// operation completed (the SDK may deduplicate network I/O); `Some(false)`
     /// means no receipt advanced. For an explicit action that can mean only the
     /// SDK unread flag was cleared; for an automatic action it can also mean the
@@ -202,6 +207,8 @@ pub struct NativeTimelineReadStateReadback {
     pub receipt_sent: Option<bool>,
     /// Exact remote event acknowledged by this operation. `None` means no
     /// receipt was advanced (including a superseded automatic observation).
+    /// For an automatic read this is the observed tail, even when the receipt
+    /// also covers newer thread replies that the tail's thread summaries show.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub acknowledged_event_id: Option<String>,
     pub snapshot: TimelineViewSnapshot,

@@ -58,6 +58,8 @@ pub async fn matrix_local_echo_retry(
 /// Sends a replacement (`m.replace`) room message via the live matrix-sdk session.
 /// The new content is built with standard Matrix `m.new_content` semantics
 /// (fallback body `* {plain}`; real body/html/mentions live in `m.new_content`).
+/// With `target_transaction_id`, a message still in the send queue is edited in
+/// place instead (`Timeline::edit`); `event_id` may then be empty.
 /// The JS `mx.sendMessage` edit path is only used when no native session is live;
 /// when a native session is live this command is the sole owner and failures are
 /// fail-closed (no silent fallthrough to `mx.sendMessage`).
@@ -73,6 +75,7 @@ pub async fn matrix_edit_message(
     mention_user_ids: Option<Vec<String>>,
     mention_room: Option<bool>,
     txn_id: Option<String>,
+    target_transaction_id: Option<String>,
 ) -> Result<MatrixSendTextResult, MatrixAuthCommandError> {
     crate::bridge::send_text::edit_message(
         core.inner().as_ref(),
@@ -84,6 +87,7 @@ pub async fn matrix_edit_message(
         mention_user_ids,
         mention_room,
         txn_id,
+        target_transaction_id,
     )
     .await
 }

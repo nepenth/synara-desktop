@@ -10,7 +10,8 @@ export async function markAsUnread(roomId: string): Promise<void> {
 
 /**
  * Mark a room read through the native Core owner. Core writes the fully-read
- * marker and the private read receipt for the newest receipt-capable event; the
+ * marker and the read receipt (private when receipts are hidden) for the newest
+ * receipt-capable event; the
  * renderer no longer resolves read targets itself. Only the desktop shell ships
  * this renderer, so a missing native owner fails closed instead of guessing.
  */

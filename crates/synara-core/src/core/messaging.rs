@@ -69,6 +69,9 @@ pub struct MatrixTimelineSetReadStateRequest {
     pub intent: NativeTimelineReadIntent,
     #[serde(default)]
     pub observed_live_tail_event_id: Option<String>,
+    /// Send public `m.read` rather than `m.read.private` (receipt privacy).
+    #[serde(default)]
+    pub public_receipt: bool,
 }
 
 /// Exact React/Tauri envelope payload for `matrix_timeline_follow_live`.
@@ -170,6 +173,9 @@ pub struct MatrixPollRespondRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixEditMessageRequest {
     pub room_id: String,
+    /// The replaced event. May be empty when `target_transaction_id` names a
+    /// message still in the send queue.
+    #[serde(default)]
     pub event_id: String,
     pub body: String,
     #[serde(default)]
@@ -182,6 +188,10 @@ pub struct MatrixEditMessageRequest {
     pub mention_room: Option<bool>,
     #[serde(default)]
     pub txn_id: Option<String>,
+    /// Transaction id of the edited message while it is a local echo; Core
+    /// edits it in place through `Timeline::edit` (review S16).
+    #[serde(default)]
+    pub target_transaction_id: Option<String>,
 }
 
 /// Exact React/Tauri envelope payload for `matrix_timeline_edit_text`.
@@ -671,6 +681,7 @@ pub(super) async fn timeline_set_read_state(
             action: payload.action,
             intent: payload.intent,
             observed_live_tail_event_id: payload.observed_live_tail_event_id,
+            public_receipt: payload.public_receipt,
         })
         .await
         .map_err(timeline_view_owner_error)?;
@@ -1064,6 +1075,9 @@ pub(super) fn send_text_owner_error(diagnostic_id: &'static str) -> MatrixIpcErr
         | "v-send.5-invalid-thread-root-event-id"
         | "v-send.r-edit-invalid-event-id"
         | "v-send.r-edit-room-not-found"
+        | "v-send.r-edit-not-own-event"
+        | "v-send.r-edit-incompatible-target"
+        | "v-send.r-edit-target-not-found"
         | "v-send-sticker-invalid-body"
         | "v-send-sticker-invalid-mxc"
         | "v-send-sticker-invalid-mimetype"
@@ -1164,6 +1178,7 @@ pub(super) async fn edit_message(
             payload.mention_user_ids,
             payload.mention_room,
             payload.txn_id,
+            payload.target_transaction_id,
         )
         .await
         .map_err(send_text_owner_error)?;

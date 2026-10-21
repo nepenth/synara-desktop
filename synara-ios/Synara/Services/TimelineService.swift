@@ -59,20 +59,21 @@ enum TimelineDeliveryStatus: Equatable {
 enum TimelineLocalEchoState: Equatable {
     case sending
     /// Recoverable: the SDK keeps the request and retries it on its own.
-    case failed(cause: String?)
+    /// `retryable` is Core's verdict on the cause (`send_failure_retryable`).
+    case failed(cause: String?, retryable: Bool? = nil)
     /// Unrecoverable: later sends in the room wait until Retry or Discard.
-    case wedged(cause: String?)
+    case wedged(cause: String?, retryable: Bool? = nil)
 
-    /// Core's `local_echo_state` / `send_failure` pair. `sent` and unknown
-    /// states are not unsent, so they map to nil.
-    init?(coreState: String?, cause: String?) {
+    /// Core's `local_echo_state` / `send_failure` / `send_failure_retryable`
+    /// triple. `sent` and unknown states are not unsent, so they map to nil.
+    init?(coreState: String?, cause: String?, retryable: Bool? = nil) {
         switch coreState {
         case "sending":
             self = .sending
         case "failed":
-            self = .failed(cause: cause)
+            self = .failed(cause: cause, retryable: retryable)
         case "wedged":
-            self = .wedged(cause: cause)
+            self = .wedged(cause: cause, retryable: retryable)
         default:
             return nil
         }
@@ -87,15 +88,20 @@ enum TimelineLocalEchoState: Equatable {
         }
     }
 
-    /// Retry cannot succeed for these causes (the same request would be
-    /// refused again); the row offers Discard only.
+    /// Retry cannot succeed when the homeserver would refuse the same request
+    /// again; the row offers Discard only. Core decides per cause; the local
+    /// list mirrors `send_failure_is_retryable` for a row without the verdict.
     var canRetry: Bool {
         switch self {
         case .sending:
             return false
-        case let .failed(cause), let .wedged(cause):
-            return ["too_large", "media", "not_joined"].contains(cause ?? "") == false
+        case let .failed(cause, retryable), let .wedged(cause, retryable):
+            return retryable ?? Self.isRetryableCause(cause)
         }
+    }
+
+    static func isRetryableCause(_ cause: String?) -> Bool {
+        ["too_large", "forbidden", "rejected", "media", "not_joined"].contains(cause ?? "") == false
     }
 }
 

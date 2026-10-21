@@ -422,3 +422,23 @@ fn wedge_causes_are_closed_codes_and_survive_a_relaunch() {
     assert!(is_wedged_send_diagnostic(WEDGED_SEND_DIAGNOSTIC));
     assert!(!is_wedged_send_diagnostic("d0.4-send-queue-cancelled"));
 }
+
+#[test]
+fn retry_is_offered_only_where_the_same_request_can_succeed() {
+    for cause in ["too_large", "forbidden", "rejected", "not_joined", "media"] {
+        assert!(!send_failure_is_retryable(cause), "{cause}");
+    }
+    for cause in [
+        "insecure_devices",
+        "identity_violation",
+        "verification_required",
+        "network",
+        "rate_limited",
+        "server_error",
+        "auth",
+        "encryption",
+        "unknown",
+    ] {
+        assert!(send_failure_is_retryable(cause), "{cause}");
+    }
+}

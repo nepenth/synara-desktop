@@ -14,6 +14,8 @@ export type NativeEditMessageInput = {
   mentionUserIds?: string[];
   mentionRoom?: boolean;
   txnId?: string;
+  /** A message still in the send queue: its transaction id. Core edits it in place. */
+  targetTransactionId?: string;
 };
 
 export type NativeEditMessageResult = {
@@ -61,6 +63,7 @@ export async function editMessageWithNativeOwner(
     mentionUserIds: input.mentionUserIds,
     mentionRoom: input.mentionRoom,
     txnId: input.txnId,
+    targetTransactionId: input.targetTransactionId,
   });
   if (!edit.available) {
     throw new Error('Native Matrix message edit is unavailable.');

@@ -219,7 +219,11 @@ protocol MatrixPusherServicing {
 /// Matrix client. Rotation and logout must invoke this bound owner rather than
 /// resolving through whichever Core session is current at cleanup time.
 protocol MatrixPusherAccountServicing: AnyObject {
-    func registerPusher(pushKey: String) async throws
+    /// Registers the pusher. Returns Core's closed diagnostic when the pusher
+    /// is registered but the edit-suppression push rule could not be
+    /// installed, so edits can alert; `nil` when fully registered.
+    @discardableResult
+    func registerPusher(pushKey: String) async throws -> String?
     func unregisterPusher(pushKey: String) async throws
     func unregisterAllPushersForDevice(lastPushKey: String?) async throws
 }
@@ -242,6 +246,9 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
                 && lhs.pushKey == rhs.pushKey
         }
     }
+
+    static let registeredWithoutEditSuppressionDescription =
+        "Pusher registration complete; edited messages may notify"
 
     private(set) var isRegistered = false
     private(set) var fullDeviceToken: String?
@@ -669,16 +676,27 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
             runID: diagnosticRunID
         )
         do {
-            try await desiredBinding.owner.registerPusher(pushKey: token)
+            let editPolicyDiagnostic = try await desiredBinding.owner.registerPusher(pushKey: token)
             if Task.isCancelled == false,
                isDesired(desiredBinding) {
                 registeredBinding = desiredBinding
                 isRegistered = true
-                registrationStateDescription = "Pusher registration complete"
                 SynaraNotificationDiagnostics.record(
                     .pusherRegistrationSucceeded,
                     runID: diagnosticRunID
                 )
+                if editPolicyDiagnostic != nil {
+                    // Pushes arrive, but the server did not keep the rule
+                    // that silences edits, so an edited message can alert.
+                    logger.info("Push registered without edit suppression", category: .push)
+                    registrationStateDescription = Self.registeredWithoutEditSuppressionDescription
+                    SynaraNotificationDiagnostics.record(
+                        .pusherEditPolicyDegraded,
+                        runID: diagnosticRunID
+                    )
+                } else {
+                    registrationStateDescription = "Pusher registration complete"
+                }
             } else {
                 // The target changed while registration was in flight. Remove
                 // the stale binding with the exact session that created it;
@@ -863,8 +881,9 @@ private struct DisabledMatrixPusherService: MatrixPusherServicing {
 }
 
 private final class DisabledMatrixPusherAccountService: MatrixPusherAccountServicing {
-    func registerPusher(pushKey: String) async throws {
+    func registerPusher(pushKey: String) async throws -> String? {
         _ = pushKey
+        return nil
     }
 
     func unregisterPusher(pushKey: String) async throws {

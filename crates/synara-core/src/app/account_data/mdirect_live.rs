@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use matrix_sdk::{
     ruma::{
         events::direct::{DirectEventContent, OwnedDirectUserIdentifier},
-        OwnedRoomId, UserId,
+        OwnedRoomId, OwnedUserId, UserId,
     },
     Client, RoomState,
 };
@@ -31,36 +31,59 @@ pub async fn snapshot_mdirect(
     ))
 }
 
+/// Mark `room_id` as a DM with `user_id` through the SDK.
+///
+/// `Account::mark_as_dm` re-fetches `m.direct` and writes it under the SDK's
+/// own lock, the one it also takes when it marks a created or joined DM, so
+/// concurrent writes from this client cannot drop each other's entries. A
+/// room is a DM for at most one user key (product parity): when another user
+/// lists it, `Room::set_is_direct(false)` clears it first.
 pub async fn add_room_to_mdirect(
     client: &Client,
     room_id: &str,
     user_id: &str,
 ) -> Result<NativeMDirectMutationResult, &'static str> {
     let room_id = parse_mdirect_room_id(room_id)?;
-    let user_key = parse_direct_user(user_id)?;
-    let mut content = fetch_mdirect_content(client).await?;
-    apply_add_room(&mut content, &room_id, user_key);
-    client
-        .account()
-        .set_account_data(content)
-        .await
-        .map_err(|_| "v-rooms.5-mdirect-set-failed")?;
+    let user_id = parse_direct_user(user_id)?;
+    let user_key = OwnedDirectUserIdentifier::from(user_id.clone());
+    let content = fetch_mdirect_content(client).await?;
+    let listed_for_user = content
+        .get(&user_key)
+        .is_some_and(|rooms| rooms.contains(&room_id));
+    let listed_for_others = content
+        .iter()
+        .any(|(key, rooms)| key != &user_key && rooms.contains(&room_id));
+    if listed_for_others {
+        client
+            .get_room(&room_id)
+            .ok_or("v-rooms.5-mdirect-room-not-found")?
+            .set_is_direct(false)
+            .await
+            .map_err(|_| "v-rooms.5-mdirect-set-failed")?;
+    }
+    if !listed_for_user || listed_for_others {
+        client
+            .account()
+            .mark_as_dm(&room_id, &[user_id])
+            .await
+            .map_err(|_| "v-rooms.5-mdirect-set-failed")?;
+    }
     Ok(NativeMDirectMutationResult {
         room_id: room_id.to_string(),
         status: crate::dto::MutationStatus::Updated,
     })
 }
 
+/// Unmark `room_id` as a DM for every user, through `Room::set_is_direct`.
 pub async fn remove_room_from_mdirect(
     client: &Client,
     room_id: &str,
 ) -> Result<NativeMDirectMutationResult, &'static str> {
     let room_id = parse_mdirect_room_id(room_id)?;
-    let mut content = fetch_mdirect_content(client).await?;
-    apply_remove_room(&mut content, &room_id);
     client
-        .account()
-        .set_account_data(content)
+        .get_room(&room_id)
+        .ok_or("v-rooms.5-mdirect-room-not-found")?
+        .set_is_direct(false)
         .await
         .map_err(|_| "v-rooms.5-mdirect-set-failed")?;
     Ok(NativeMDirectMutationResult {
@@ -122,65 +145,173 @@ fn parse_mdirect_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
     OwnedRoomId::try_from(room_id.trim()).map_err(|_| "v-rooms.5-mdirect-invalid-room")
 }
 
-fn parse_direct_user(user_id: &str) -> Result<OwnedDirectUserIdentifier, &'static str> {
-    let user = UserId::parse(user_id.trim()).map_err(|_| "v-rooms.5-mdirect-invalid-user")?;
-    Ok(user.into())
-}
-
-fn apply_add_room(
-    content: &mut DirectEventContent,
-    room_id: &OwnedRoomId,
-    user_key: OwnedDirectUserIdentifier,
-) {
-    for (key, rooms) in content.iter_mut() {
-        if key == &user_key {
-            continue;
-        }
-        rooms.retain(|id| id != room_id);
-    }
-    let rooms = content.entry(user_key).or_default();
-    if !rooms.iter().any(|id| id == room_id) {
-        rooms.push(room_id.clone());
-    }
-}
-
-fn apply_remove_room(content: &mut DirectEventContent, room_id: &OwnedRoomId) {
-    for rooms in content.values_mut() {
-        rooms.retain(|id| id != room_id);
-    }
-    content.retain(|_, rooms| !rooms.is_empty());
+fn parse_direct_user(user_id: &str) -> Result<OwnedUserId, &'static str> {
+    UserId::parse(user_id.trim()).map_err(|_| "v-rooms.5-mdirect-invalid-user")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use matrix_sdk::ruma::{owned_room_id, user_id};
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use matrix_sdk_test::{event_factory::EventFactory, JoinedRoomBuilder};
+    use ruma::{room_id, user_id};
+    use wiremock::{
+        matchers::{method, path},
+        Mock, ResponseTemplate,
+    };
 
-    #[test]
-    fn add_moves_room_to_single_user() {
-        let alice: OwnedDirectUserIdentifier = user_id!("@alice:example.org").into();
-        let bob: OwnedDirectUserIdentifier = user_id!("@bob:example.org").into();
-        let room = owned_room_id!("!dm:example.org");
-        let mut content = DirectEventContent::default();
-        content.insert(bob.clone(), vec![room.clone()]);
-        apply_add_room(&mut content, &room, alice.clone());
-        assert_eq!(content.get(&alice), Some(&vec![room.clone()]));
-        assert!(content.get(&bob).map(|r| r.is_empty()).unwrap_or(true));
+    const DIRECT_PATH: &str = "/_matrix/client/v3/user/@example:localhost/account_data/m.direct";
+
+    async fn mount_fetched_direct(server: &MatrixMockServer, content: serde_json::Value) {
+        Mock::given(method("GET"))
+            .and(path(DIRECT_PATH))
+            .respond_with(ResponseTemplate::new(200).set_body_json(content))
+            .mount(server.server())
+            .await;
     }
 
-    #[test]
-    fn remove_clears_room_from_all_users() {
-        let alice: OwnedDirectUserIdentifier = user_id!("@alice:example.org").into();
-        let room = owned_room_id!("!dm:example.org");
-        let mut content = DirectEventContent::default();
-        content.insert(
-            alice.clone(),
-            vec![room.clone(), owned_room_id!("!other:example.org")],
-        );
-        apply_remove_room(&mut content, &room);
+    async fn mount_direct_put(server: &MatrixMockServer) {
+        Mock::given(method("PUT"))
+            .and(path(DIRECT_PATH))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .mount(server.server())
+            .await;
+    }
+
+    async fn direct_puts(server: &MatrixMockServer) -> Vec<serde_json::Value> {
+        server
+            .server()
+            .received_requests()
+            .await
+            .unwrap()
+            .into_iter()
+            .filter(|request| request.method.as_str() == "PUT" && request.url.path() == DIRECT_PATH)
+            .map(|request| serde_json::from_slice(&request.body).unwrap())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn add_keeps_other_dms_through_mark_as_dm() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        mount_fetched_direct(
+            &server,
+            serde_json::json!({"@carol:localhost": ["!other:localhost"]}),
+        )
+        .await;
+        mount_direct_put(&server).await;
+
+        add_room_to_mdirect(&client, "!dm:localhost", "@bob:localhost")
+            .await
+            .unwrap();
+
         assert_eq!(
-            content.get(&alice),
-            Some(&vec![owned_room_id!("!other:example.org")])
+            direct_puts(&server).await,
+            [serde_json::json!({
+                "@carol:localhost": ["!other:localhost"],
+                "@bob:localhost": ["!dm:localhost"],
+            })]
         );
+    }
+
+    #[tokio::test]
+    async fn add_for_a_listed_user_writes_nothing() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        mount_fetched_direct(
+            &server,
+            serde_json::json!({"@bob:localhost": ["!dm:localhost"]}),
+        )
+        .await;
+        mount_direct_put(&server).await;
+
+        add_room_to_mdirect(&client, "!dm:localhost", "@bob:localhost")
+            .await
+            .unwrap();
+
+        assert!(direct_puts(&server).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn add_moves_a_room_listed_for_another_user() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        let room_id = room_id!("!dm:localhost");
+        let f = EventFactory::new();
+        server
+            .mock_sync()
+            .ok_and_run(&client, |builder| {
+                builder.add_joined_room(JoinedRoomBuilder::new(room_id));
+                builder.add_global_account_data(
+                    f.direct()
+                        .add_user(user_id!("@carol:localhost").to_owned().into(), room_id),
+                );
+            })
+            .await;
+        mount_fetched_direct(
+            &server,
+            serde_json::json!({"@carol:localhost": ["!dm:localhost"]}),
+        )
+        .await;
+        mount_direct_put(&server).await;
+
+        add_room_to_mdirect(&client, room_id.as_str(), "@bob:localhost")
+            .await
+            .unwrap();
+
+        let puts = direct_puts(&server).await;
+        assert_eq!(puts.len(), 2);
+        assert_eq!(puts[0], serde_json::json!({}), "cleared for carol first");
+        assert_eq!(
+            puts[1]["@bob:localhost"],
+            serde_json::json!(["!dm:localhost"])
+        );
+    }
+
+    #[tokio::test]
+    async fn remove_clears_the_room_for_every_user_and_keeps_the_rest() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        let room_id = room_id!("!dm:localhost");
+        let f = EventFactory::new();
+        server
+            .mock_sync()
+            .ok_and_run(&client, |builder| {
+                builder.add_joined_room(JoinedRoomBuilder::new(room_id));
+                builder.add_global_account_data(
+                    f.direct()
+                        .add_user(user_id!("@bob:localhost").to_owned().into(), room_id)
+                        .add_user(
+                            user_id!("@bob:localhost").to_owned().into(),
+                            room_id!("!keep:localhost"),
+                        ),
+                );
+            })
+            .await;
+        mount_direct_put(&server).await;
+
+        remove_room_from_mdirect(&client, room_id.as_str())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            direct_puts(&server).await,
+            [serde_json::json!({"@bob:localhost": ["!keep:localhost"]})]
+        );
+    }
+
+    #[tokio::test]
+    async fn remove_for_an_unknown_room_fails_without_writing() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        mount_direct_put(&server).await;
+
+        assert_eq!(
+            remove_room_from_mdirect(&client, "!unknown:localhost")
+                .await
+                .unwrap_err(),
+            "v-rooms.5-mdirect-room-not-found"
+        );
+        assert!(direct_puts(&server).await.is_empty());
     }
 }

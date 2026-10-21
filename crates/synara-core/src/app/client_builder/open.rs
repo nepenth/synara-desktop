@@ -76,6 +76,47 @@ pub async fn build_discovery_client(
         .map_err(map_build_error)
 }
 
+/// Build a memory-only, unauthenticated client for one pre-session auth
+/// probe (`get_login_types`, the empty `register` UIA probe) against a
+/// homeserver URL used as given: no well-known lookup and no `/versions`
+/// request. Both endpoints are v3 since Matrix 1.1, so that version is
+/// declared up front and each probe sends exactly one request.
+///
+/// The reqwest client handed to the SDK keeps the probes redirect-free and
+/// time-bounded; it sends nothing itself.
+#[cfg(feature = "full-app")]
+pub async fn build_auth_probe_client(
+    homeserver_url: &str,
+    user_agent: &str,
+    request_timeout: std::time::Duration,
+) -> Result<Client, ClientBuilderError> {
+    #[cfg(feature = "x509-identity")]
+    crate::app::x509::ensure_aws_lc_rustls_provider();
+    // A redirect is an error, not a 3xx answer: the SDK would try to parse a
+    // 3xx body as a successful response and lose its status.
+    let http = reqwest::ClientBuilder::new()
+        .timeout(request_timeout)
+        .redirect(reqwest::redirect::Policy::custom(|attempt| {
+            attempt.error("auth probes do not follow redirects")
+        }))
+        .user_agent(user_agent)
+        .build()
+        .map_err(|_| ClientBuilderError::InvalidConfig("auth probe http client"))?;
+    Client::builder()
+        .homeserver_url(homeserver_url)
+        .http_client(http)
+        .server_versions([matrix_sdk::ruma::api::MatrixVersion::V1_1])
+        .request_config(
+            RequestConfig::new()
+                .timeout(request_timeout)
+                .disable_retry(),
+        )
+        .store_config(StoreConfig::new(CrossProcessLockConfig::SingleProcess))
+        .build()
+        .await
+        .map_err(map_build_error)
+}
+
 /// Event-cache policy shared by every product client (and by tests that
 /// build their client through `MatrixMockServer`).
 ///
