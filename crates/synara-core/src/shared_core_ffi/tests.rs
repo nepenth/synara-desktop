@@ -2044,7 +2044,9 @@ async fn ios_password_login_reports_rejection_rate_limit_and_outage_distinctly()
             .await
             .expect_err("login fails");
         match error {
-            SessionLoginError::Failed { code, description } => {
+            SessionLoginError::Failed {
+                code, description, ..
+            } => {
                 assert_eq!(code, expected, "case {index}");
                 assert!(!description.contains("fixture-password"));
             }
