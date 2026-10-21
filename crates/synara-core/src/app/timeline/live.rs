@@ -109,9 +109,9 @@ mod eviction_tests;
 #[cfg(test)]
 mod focused_route_tests;
 #[cfg(test)]
-mod room_read_state_tests;
-#[cfg(test)]
 mod registry_lock_tests;
+#[cfg(test)]
+mod room_read_state_tests;
 #[cfg(test)]
 mod thread_list_tests;
 #[cfg(test)]
@@ -1093,7 +1093,14 @@ impl NativeTimelineOwner {
         event_id: &str,
         key: &str,
     ) -> Result<NativeReactionMutationResult, &'static str> {
-        toggle_reaction_in(&mut Slots::Shared(self), &self.client, room_id, event_id, key).await
+        toggle_reaction_in(
+            &mut Slots::Shared(self),
+            &self.client,
+            room_id,
+            event_id,
+            key,
+        )
+        .await
     }
 
     /// Waits up to the queued-send bound for the server's acknowledgement,
@@ -1104,7 +1111,14 @@ impl NativeTimelineOwner {
         event_id: &str,
         key: &str,
     ) -> Result<NativeReactionMutationResult, &'static str> {
-        ensure_reaction_in(&mut Slots::Shared(self), &self.client, room_id, event_id, key).await
+        ensure_reaction_in(
+            &mut Slots::Shared(self),
+            &self.client,
+            room_id,
+            event_id,
+            key,
+        )
+        .await
     }
 
     pub async fn decide_agent_approval(
@@ -3231,8 +3245,9 @@ async fn build_live_entry(
     })
 }
 
-type TimelineUpdates =
-    std::pin::Pin<Box<dyn futures_util::Stream<Item = Vec<VectorDiff<Arc<SdkTimelineItem>>>> + Send>>;
+type TimelineUpdates = std::pin::Pin<
+    Box<dyn futures_util::Stream<Item = Vec<VectorDiff<Arc<SdkTimelineItem>>>> + Send>,
+>;
 
 /// An opened view whose initial rows are ready, waiting to be published.
 struct PreparedView {
@@ -3409,9 +3424,7 @@ async fn open_view(
     };
     let own_user_id = client.user_id().map(ToOwned::to_owned);
     let action_authority = room_action_authority(timeline.room(), own_user_id.as_deref()).await;
-    let stream_number = slots
-        .with(NativeTimelineRegistry::next_stream_number)
-        .await;
+    let stream_number = slots.with(NativeTimelineRegistry::next_stream_number).await;
     let subscription_key = format!(
         "{}:{}",
         view_subscription_key(&room_id_string, &view_position),

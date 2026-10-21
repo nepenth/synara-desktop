@@ -59,6 +59,7 @@ impl<K: Eq + Hash + Clone, V> RecencyMap<K, V> {
         self.entries.len()
     }
 
+    #[cfg(test)]
     pub(super) fn contains_key<Q>(&self, key: &Q) -> bool
     where
         K: Borrow<Q>,
