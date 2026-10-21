@@ -549,6 +549,18 @@
           "markdownDescription": "Enables the desktop_window_minimize command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_timeline_subscribe command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-timeline-subscribe",
+          "markdownDescription": "Enables the desktop_timeline_subscribe command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_timeline_unsubscribe command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-timeline-unsubscribe",
+          "markdownDescription": "Enables the desktop_timeline_unsubscribe command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_window_toggle_maximize command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-window-toggle-maximize",
@@ -2077,6 +2089,18 @@
           "type": "string",
           "const": "deny-matrix-account-data-types",
           "markdownDescription": "Denies the matrix_account_data_types command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_timeline_subscribe command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-timeline-subscribe",
+          "markdownDescription": "Denies the desktop_timeline_subscribe command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_timeline_unsubscribe command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-timeline-unsubscribe",
+          "markdownDescription": "Denies the desktop_timeline_unsubscribe command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_agent_approval_decide command without any pre-configured scope.",

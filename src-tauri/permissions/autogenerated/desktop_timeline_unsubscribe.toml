@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-desktop-timeline-unsubscribe"
+description = "Enables the desktop_timeline_unsubscribe command without any pre-configured scope."
+commands.allow = ["desktop_timeline_unsubscribe"]
+
+[[permission]]
+identifier = "deny-desktop-timeline-unsubscribe"
+description = "Denies the desktop_timeline_unsubscribe command without any pre-configured scope."
+commands.deny = ["desktop_timeline_unsubscribe"]

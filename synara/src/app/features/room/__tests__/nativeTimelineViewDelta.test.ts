@@ -454,12 +454,13 @@ test('pin and forward pure helpers gate native presenter UX', () => {
   assert.equal(nativeForwardEncryptionDecision('encrypted', undefined), 'unavailable');
 });
 
-test('timeline open is not aborted when event listen is unavailable', () => {
+test('timeline open is not aborted when the delta channel is unavailable', () => {
   const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
-  assert.match(source, /listenTauriEvent/);
+  assert.match(source, /subscribeNativeTimelineDeltas\(nativeRequest\.roomId, applyBatch\)/);
   assert.match(source, /matrix_timeline_open/);
   assert.match(source, /matrix_timeline_snapshot/);
-  assert.doesNotMatch(source, /if \(disposed \|\| !unlisten\)/);
+  assert.doesNotMatch(source, /if \(disposed \|\| !deltas\)/);
+  assert.doesNotMatch(source, /@tauri-apps\/api\/event/);
 });
 
 test('live stream deltas coalesce to one React state update per animation frame', () => {
@@ -570,7 +571,7 @@ test('the snapshot poll checks once early, then is a slow safety net while delta
   assert.equal(nativeTimelinePollDelay(false, true), NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS);
   assert.equal(nativeTimelinePollDelay(false, false), NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS);
   const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
-  assert.match(source, /const deltasLive = Boolean\(unlisten\);/);
+  assert.match(source, /const deltasLive = Boolean\(deltas\);/);
   assert.match(source, /nativeTimelinePollDelay\(deltasLive, firstPoll\)/);
   // D11: the safety-net poll pauses while the window is hidden.
   assert.match(source, /stopPoll = startVisibleOnlyPoll\(/);

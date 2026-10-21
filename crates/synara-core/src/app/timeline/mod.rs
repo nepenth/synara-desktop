@@ -115,6 +115,6 @@ pub use view::{
     TimelineReplyPreview, TimelineRoomActionAuthority, TimelineRowCapabilities, TimelineStateRow,
     TimelineThreadSummary, TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewDeltaOp,
     TimelineViewMetadata, TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot,
-    NATIVE_TIMELINE_VIEW_UPDATED_EVENT, TIMELINE_VIEW_SCHEMA_VERSION,
+    TIMELINE_VIEW_SCHEMA_VERSION,
 };
 pub use view_emit::{TimelineViewUpdateEmit, ViewDeltaEmitter};
