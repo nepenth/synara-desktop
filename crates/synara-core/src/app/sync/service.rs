@@ -1116,6 +1116,25 @@ mod auth_recovery_tests {
         );
     }
 
+    /// The key upload and its refresh attempt can still be in flight when the
+    /// owner reports the auth failure, so wait for the request count to settle.
+    async fn settled_request_count(server: &MatrixMockServer) -> usize {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        let mut count = server.server().received_requests().await.unwrap().len();
+        let mut stable_since = tokio::time::Instant::now();
+        while tokio::time::Instant::now() < deadline
+            && stable_since.elapsed() < Duration::from_millis(500)
+        {
+            tokio::time::sleep(Duration::from_millis(25)).await;
+            let next = server.server().received_requests().await.unwrap().len();
+            if next != count {
+                count = next;
+                stable_since = tokio::time::Instant::now();
+            }
+        }
+        count
+    }
+
     #[tokio::test]
     async fn rejected_sync_stays_terminal_after_delay_stop_and_wake() {
         let server = MatrixMockServer::new().await;
@@ -1149,16 +1168,22 @@ mod auth_recovery_tests {
         })
         .await
         .expect("typed rejected refresh must reach the owner");
-        let count = server.server().received_requests().await.unwrap().len();
+        let count = settled_request_count(&server).await;
         tokio::time::sleep(Duration::from_millis(5200)).await;
         owner.apply_intent(SyncIntent::Resume).await.unwrap();
         owner.stop().await.unwrap();
         owner.start().await.unwrap();
         tokio::time::sleep(Duration::from_millis(100)).await;
+        let after = server.server().received_requests().await.unwrap();
         assert_eq!(
-            server.server().received_requests().await.unwrap().len(),
+            after.len(),
             count,
-            "no offline probes or automatic/manual restart of rejected credentials"
+            "no offline probes or automatic/manual restart of rejected credentials; late: {:?}",
+            after
+                .iter()
+                .skip(count)
+                .map(|r| format!("{} {}", r.method, r.url.path()))
+                .collect::<Vec<_>>()
         );
         assert_eq!(
             owner.observe().failure_diagnostic_id,
