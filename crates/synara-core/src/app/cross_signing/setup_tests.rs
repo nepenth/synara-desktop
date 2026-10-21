@@ -26,11 +26,11 @@ use crate::platform::{
     PlatformCryptoCrossSigningState,
 };
 
-const PASSWORD: &str = "test-account-password";
-const UIA_SESSION: &str = "test-uia-session";
-const SIGNING_UPLOAD: &str = r"^/_matrix/client/.*/keys/device_signing/upload$";
+pub(super) const PASSWORD: &str = "test-account-password";
+pub(super) const UIA_SESSION: &str = "test-uia-session";
+pub(super) const SIGNING_UPLOAD: &str = r"^/_matrix/client/.*/keys/device_signing/upload$";
 
-async fn alice(server: &MatrixMockServer, device: &DeviceId) -> Client {
+pub(super) async fn alice(server: &MatrixMockServer, device: &DeviceId) -> Client {
     server
         .client_builder_for_crypto_end_to_end(user_id!("@alice:example.org"), device)
         .on_builder(|builder| builder.request_config(RequestConfig::new().disable_retry()))
@@ -39,7 +39,7 @@ async fn alice(server: &MatrixMockServer, device: &DeviceId) -> Client {
 }
 
 /// A homeserver that keeps keys (the SDK's stateful crypto preset).
-async fn keys_server() -> MatrixMockServer {
+pub(super) async fn keys_server() -> MatrixMockServer {
     let server = MatrixMockServer::new().await;
     server.mock_crypto_endpoints_preset().await;
     server
@@ -47,7 +47,7 @@ async fn keys_server() -> MatrixMockServer {
 
 /// Requests the password stage has not authorised: no `auth`, the wrong
 /// password, or another UIA session.
-struct WithoutPasswordStage;
+pub(super) struct WithoutPasswordStage;
 
 impl Match for WithoutPasswordStage {
     fn matches(&self, request: &Request) -> bool {
@@ -75,7 +75,7 @@ async fn require_password_stage(server: &MatrixMockServer) {
         .await;
 }
 
-async fn signing_uploads(server: &MatrixMockServer) -> Vec<Value> {
+pub(super) async fn signing_uploads(server: &MatrixMockServer) -> Vec<Value> {
     server
         .server()
         .received_requests()
@@ -305,7 +305,7 @@ async fn partial_private_identity_without_a_published_one_is_refused_without_upl
 
 /// Account data and key backup kept by the mock homeserver, so recovery
 /// enrolment and its homeserver readback see one consistent account.
-async fn mount_recovery_homeserver(server: &MatrixMockServer) {
+pub(super) async fn mount_recovery_homeserver(server: &MatrixMockServer) {
     let account_data: Arc<Mutex<HashMap<String, Value>>> = Arc::default();
     let backup: Arc<Mutex<Option<Value>>> = Arc::default();
     let account_data_path = r"^/_matrix/client/.*/user/.*/account_data/[^/]+$";
@@ -345,6 +345,16 @@ async fn mount_recovery_homeserver(server: &MatrixMockServer) {
         })
         .mount(server.server())
         .await;
+    // Identity reset deletes the backup before it publishes a new identity.
+    let deleted = Arc::clone(&backup);
+    Mock::given(method("DELETE"))
+        .and(path_regex(r"^/_matrix/client/.*/room_keys/version/[^/]+$"))
+        .respond_with(move |_: &Request| {
+            *deleted.lock().unwrap() = None;
+            ResponseTemplate::new(200).set_body_json(json!({}))
+        })
+        .mount(server.server())
+        .await;
     let created = Arc::clone(&backup);
     Mock::given(method("GET"))
         .and(path_regex(r"^/_matrix/client/.*/room_keys/version$"))
@@ -368,7 +378,7 @@ async fn mount_recovery_homeserver(server: &MatrixMockServer) {
         .await;
 }
 
-async fn backup_creations(server: &MatrixMockServer) -> usize {
+pub(super) async fn backup_creations(server: &MatrixMockServer) -> usize {
     server
         .server()
         .received_requests()

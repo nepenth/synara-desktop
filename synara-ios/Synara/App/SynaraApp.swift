@@ -959,6 +959,19 @@ private extension AppEnvironment {
                     unableToDecryptCount: 1
                 )
             )
+            : processEnvironment["SYNARA_UI_TEST_VERIFY_DEVICE_PROMPT"] == "1"
+            ? MockCryptoStatusService(
+                sessionCryptoStatus: SessionCryptoStatus(
+                    verification: .unverified,
+                    recovery: .incomplete,
+                    backup: .unavailable,
+                    hasDevicesToVerifyAgainst: true,
+                    isLastDevice: false,
+                    unableToDecryptCount: 0,
+                    crossSigning: .needsVerification
+                ),
+                verifyDevicePrompt: true
+            )
             : MockCryptoStatusService()
 
         if let inviteTransitionService {

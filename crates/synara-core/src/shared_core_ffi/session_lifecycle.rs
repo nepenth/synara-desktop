@@ -1211,16 +1211,20 @@ impl SharedCore {
         // An account's first device gets a cross-signing identity now (same
         // guarded Core step as desktop). Sign-in never fails because of it;
         // Security settings still offers setup when it was skipped.
-        let _ = crate::app::cross_signing::bootstrap_after_login(&client, password).await;
-        self.persist_open_and_retain(
-            client,
-            persistence,
-            &live_identity,
-            &vault,
-            claim,
-            outcome.device_id,
-        )
-        .await
+        let sign_in = crate::app::cross_signing::bootstrap_after_login(&client, password).await;
+        let login = self
+            .persist_open_and_retain(
+                client,
+                persistence,
+                &live_identity,
+                &vault,
+                claim,
+                outcome.device_id,
+            )
+            .await?;
+        // "Verify this device" is offered once, after a password sign-in.
+        let _ = self.core.arm_device_verification_prompt(sign_in);
+        Ok(login)
     }
 
     /// Test-only persist+open+retain through the production login path.

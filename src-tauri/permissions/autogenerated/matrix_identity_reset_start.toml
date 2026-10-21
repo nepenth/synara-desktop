@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-identity-reset-start"
+description = "Enables the matrix_identity_reset_start command without any pre-configured scope."
+commands.allow = ["matrix_identity_reset_start"]
+
+[[permission]]
+identifier = "deny-matrix-identity-reset-start"
+description = "Denies the matrix_identity_reset_start command without any pre-configured scope."
+commands.deny = ["matrix_identity_reset_start"]

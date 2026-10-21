@@ -136,12 +136,15 @@ pub async fn matrix_login_password(
         identity.clone(),
         SessionInstallOrigin::NewAuthentication,
     );
+    let mut sign_in = None;
     let preparation = async {
         ensure_crypto_ready(&client).await?;
         // An account's first device gets a cross-signing identity now (same
         // guarded Core step as iOS). Sign-in never fails because of it.
-        let _ = synara_core::app::cross_signing::bootstrap_after_login(&client, password.as_str())
-            .await;
+        sign_in = Some(
+            synara_core::app::cross_signing::bootstrap_after_login(&client, password.as_str())
+                .await,
+        );
         let session_generation = state.next_generation();
         let owners = start_desktop_owners(
             &client,
@@ -198,6 +201,10 @@ pub async fn matrix_login_password(
     })
     .await?;
     drop(install);
+    // "Verify this device" is offered once, after a password sign-in.
+    if let Some(sign_in) = sign_in {
+        let _ = core.arm_device_verification_prompt(sign_in);
+    }
     Ok(identity)
 }
 

@@ -39,12 +39,15 @@ extension DeviceDeleteOutcomeDto: Sendable
 extension DeviceSnapshotDto: Sendable
 extension DeviceSummaryDto: Sendable
 extension DeviceTrustDto: Sendable
+extension DeviceVerificationPromptDto: Sendable
 extension DirectorySearchCommandError: Sendable
 extension DirectorySearchStatusDto: Sendable
 extension DirectoryVisibilityCommandError: Sendable
 extension EditMessageDto: Sendable
 extension EditMessageError: Sendable
 extension GlobalImagePacksSnapshotDto: Sendable
+extension IdentityResetStateDto: Sendable
+extension IdentityResetStepDto: Sendable
 extension IdentityWarningActionDto: Sendable
 extension IdentityWarningKindDto: Sendable
 extension IgnoredUsersCommandError: Sendable
@@ -316,6 +319,8 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func deviceDeleteStart(deviceIds: [String]) async throws -> DeviceDeleteDto
   open func deviceRename(deviceId: String, displayName: String) async throws -> DeviceSnapshotDto
   open func deviceSnapshot() async throws -> DeviceSnapshotDto
+  open func deviceVerificationPrompt() async throws -> DeviceVerificationPromptDto
+  open func dismissDeviceVerificationPrompt() throws -> DeviceVerificationPromptDto
   open func downloadPlainMedia(contentUri: String) async throws -> MediaBytesDto
   open func editMessage(roomId: String, eventId: String, body: String, msgType: String?, formattedBody: String?, mentionUserIds: [String]?, mentionRoom: Bool?, txnId: String?) async throws -> EditMessageDto
   open func forgetSession(userId: String, homeserverUrl: String) async throws -> LeftoverAckDto
@@ -324,6 +329,10 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func getRoomDirectoryVisibility(roomId: String, sessionGeneration: UInt64) async throws -> RoomDirectoryVisibilityDto
   open func getRoomImagePacks(roomId: String) async throws -> RoomImagePacksSnapshotDto
   open func getUserImagePack() async throws -> UserImagePackSnapshotDto
+  open func identityResetCancel() async throws
+  open func identityResetContinue() async throws -> IdentityResetStateDto
+  open func identityResetPassword(password: String) async throws -> IdentityResetStateDto
+  open func identityResetStart() async throws -> IdentityResetStateDto
   open func ignoredUsersIgnore(userId: String) async throws -> IgnoredUsersWriteDto
   open func ignoredUsersSnapshot() async throws -> IgnoredUsersSnapshotDto
   open func ignoredUsersUnignore(userId: String) async throws -> IgnoredUsersWriteDto
@@ -588,6 +597,10 @@ public enum DirectoryVisibilityCommandError: Swift.Error, Equatable, Hashable, F
 public enum EditMessageError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum IdentityResetStepDto: Equatable, Hashable
+  case complete
+  case passwordRequired
+  case approvalRequired
 public enum IdentityWarningActionDto: Equatable, Hashable
   case dismiss
   case withdrawVerification
@@ -997,6 +1010,8 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func deviceDeleteStart(deviceIds: [String]) async throws -> DeviceDeleteDto
   func deviceRename(deviceId: String, displayName: String) async throws -> DeviceSnapshotDto
   func deviceSnapshot() async throws -> DeviceSnapshotDto
+  func deviceVerificationPrompt() async throws -> DeviceVerificationPromptDto
+  func dismissDeviceVerificationPrompt() throws -> DeviceVerificationPromptDto
   func downloadPlainMedia(contentUri: String) async throws -> MediaBytesDto
   func editMessage(roomId: String, eventId: String, body: String, msgType: String?, formattedBody: String?, mentionUserIds: [String]?, mentionRoom: Bool?, txnId: String?) async throws -> EditMessageDto
   func forgetSession(userId: String, homeserverUrl: String) async throws -> LeftoverAckDto
@@ -1005,6 +1020,10 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func getRoomDirectoryVisibility(roomId: String, sessionGeneration: UInt64) async throws -> RoomDirectoryVisibilityDto
   func getRoomImagePacks(roomId: String) async throws -> RoomImagePacksSnapshotDto
   func getUserImagePack() async throws -> UserImagePackSnapshotDto
+  func identityResetCancel() async throws
+  func identityResetContinue() async throws -> IdentityResetStateDto
+  func identityResetPassword(password: String) async throws -> IdentityResetStateDto
+  func identityResetStart() async throws -> IdentityResetStateDto
   func ignoredUsersIgnore(userId: String) async throws -> IgnoredUsersWriteDto
   func ignoredUsersSnapshot() async throws -> IgnoredUsersSnapshotDto
   func ignoredUsersUnignore(userId: String) async throws -> IgnoredUsersWriteDto
@@ -1292,6 +1311,10 @@ public struct DeviceSummaryDto: Equatable, Hashable
   public var firstSeenTs: UInt64?
   public var ed25519Fingerprint: String?
   public init(deviceId: String, displayName: String?, lastSeenIp: String?, lastSeenTs: UInt64?, trust: DeviceTrustDto, isCurrent: Bool, isCrossSignedByOwner: Bool?, firstSeenTs: UInt64?, ed25519Fingerprint: String?)
+public struct DeviceVerificationPromptDto: Equatable, Hashable
+  public var sessionGeneration: UInt64
+  public var show: Bool
+  public init(sessionGeneration: UInt64, show: Bool)
 public struct EditMessageDto: Equatable, Hashable
   public var roomId: String
   public var eventId: String
@@ -1302,6 +1325,11 @@ public struct GlobalImagePacksSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var packs: [ImagePackDto]
   public init(sessionGeneration: UInt64, packs: [ImagePackDto])
+public struct IdentityResetStateDto: Equatable, Hashable
+  public var sessionGeneration: UInt64
+  public var step: IdentityResetStepDto
+  public var approvalUrl: String?
+  public init(sessionGeneration: UInt64, step: IdentityResetStepDto, approvalUrl: String?)
 public struct IgnoredUsersSnapshotDto: Equatable, Hashable
   public var userIds: [String]
   public init(userIds: [String])

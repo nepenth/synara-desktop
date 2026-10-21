@@ -6,7 +6,11 @@ export default defineConfig({
   globalSetup: fileURLToPath(new URL('../warm-harness.ts', import.meta.url)),
   metadata: { warmPages: ['/e2e/settings-harness/index.html'] },
   testDir: '..',
-  testMatch: ['settings-layout.spec.ts', 'settings-screens.spec.ts'],
+  testMatch: [
+    'settings-layout.spec.ts',
+    'settings-screens.spec.ts',
+    'device-verification-prompt.spec.ts',
+  ],
   workers: 2,
   retries: 0,
   timeout: 60000,

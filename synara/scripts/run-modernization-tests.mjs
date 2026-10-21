@@ -184,6 +184,7 @@ const tests = [
   'src/app/features/room/__tests__/nativeThreadListPanel.test.ts',
   'src/app/features/verification/__tests__/nativeVerification.test.ts',
   'src/app/features/cross-signing/__tests__/nativeCrossSigning.test.ts',
+  'src/app/features/cross-signing/__tests__/nativeIdentityReset.test.ts',
   'src/app/features/settings/devices/__tests__/deviceVerificationPresentation.test.ts',
   'src/app/features/settings/devices/__tests__/nativeDeviceSnapshot.test.ts',
   'src/app/features/settings/devices/__tests__/nativeX509Identity.test.ts',

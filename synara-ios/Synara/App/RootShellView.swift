@@ -15,6 +15,7 @@ struct RootShellView: View {
     @State private var cryptoVerificationSessionKey: String?
     @State private var cryptoVerificationActionError: String?
     @State private var signOutError: String?
+    @StateObject private var verifyDevicePrompt = VerifyDevicePromptPresentation()
     @StateObject private var bannerSignOutConfirmation = SignOutConfirmationModel()
     @State private var tabBarScrollTailHeight: CGFloat = 0
     @ObservedObject private var themePaint = SynaraThemePaint.shared
@@ -132,6 +133,9 @@ struct RootShellView: View {
             environment.router.replayPendingDeepLinkIfNeeded(sessionIsSignedIn: true)
             startTabBadgeUpdates()
             startCryptoVerificationUpdates(sessionKey: "\(authenticatedSession.userID)-\(authenticatedSession.deviceID)-\(session.sessionEpoch)")
+            // "Verify This Device", once after signing in on a new device of
+            // an account that already has an identity. Core decides.
+            await verifyDevicePrompt.showIfNeeded(crypto: environment.crypto)
         }
         .sheet(isPresented: cryptoVerificationSheetBinding) {
             CryptoVerificationSheetHost(
@@ -146,6 +150,23 @@ struct RootShellView: View {
                     dismissCryptoVerification()
                 }
             )
+        }
+        .sheet(isPresented: $verifyDevicePrompt.isPresented, onDismiss: {
+            // Runs once the prompt sheet is gone, so the verification sheet
+            // it may start can present.
+            Task {
+                guard let result = await verifyDevicePrompt.didDismiss(crypto: environment.crypto) else {
+                    return
+                }
+                if case .completed = result { return }
+                cryptoVerificationActionError = result.message
+            }
+        }) {
+            VerifyThisDevicePromptSheet(onVerifyWithAnotherDevice: {
+                verifyDevicePrompt.verifyWithAnotherDevice()
+            })
+            .environment(\.appEnvironment, environment)
+            .environment(\.synaraThemeBaseHex, themePaint.baseHex)
         }
         .alert("Verification action failed", isPresented: cryptoVerificationActionErrorBinding) {
             Button("OK", role: .cancel) {

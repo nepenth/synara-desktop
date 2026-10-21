@@ -699,6 +699,18 @@
           "markdownDescription": "Enables the matrix_device_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_device_verification_prompt command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-device-verification-prompt",
+          "markdownDescription": "Enables the matrix_device_verification_prompt command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_device_verification_prompt_dismiss command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-device-verification-prompt-dismiss",
+          "markdownDescription": "Enables the matrix_device_verification_prompt_dismiss command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_edit_message command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-edit-message",
@@ -739,6 +751,30 @@
           "type": "string",
           "const": "allow-matrix-get-user-image-pack",
           "markdownDescription": "Enables the matrix_get_user_image_pack command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_identity_reset_cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-identity-reset-cancel",
+          "markdownDescription": "Enables the matrix_identity_reset_cancel command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_identity_reset_continue command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-identity-reset-continue",
+          "markdownDescription": "Enables the matrix_identity_reset_continue command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_identity_reset_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-identity-reset-password",
+          "markdownDescription": "Enables the matrix_identity_reset_password command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_identity_reset_start command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-identity-reset-start",
+          "markdownDescription": "Enables the matrix_identity_reset_start command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_ignored_users_ignore command without any pre-configured scope.",
@@ -2169,6 +2205,18 @@
           "markdownDescription": "Denies the matrix_device_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_device_verification_prompt command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-device-verification-prompt",
+          "markdownDescription": "Denies the matrix_device_verification_prompt command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_device_verification_prompt_dismiss command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-device-verification-prompt-dismiss",
+          "markdownDescription": "Denies the matrix_device_verification_prompt_dismiss command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_edit_message command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-edit-message",
@@ -2209,6 +2257,30 @@
           "type": "string",
           "const": "deny-matrix-get-user-image-pack",
           "markdownDescription": "Denies the matrix_get_user_image_pack command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_identity_reset_cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-identity-reset-cancel",
+          "markdownDescription": "Denies the matrix_identity_reset_cancel command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_identity_reset_continue command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-identity-reset-continue",
+          "markdownDescription": "Denies the matrix_identity_reset_continue command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_identity_reset_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-identity-reset-password",
+          "markdownDescription": "Denies the matrix_identity_reset_password command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_identity_reset_start command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-identity-reset-start",
+          "markdownDescription": "Denies the matrix_identity_reset_start command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_ignored_users_ignore command without any pre-configured scope.",

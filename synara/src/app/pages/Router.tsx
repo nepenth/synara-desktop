@@ -62,6 +62,7 @@ import { ClientInitStorageAtom } from './client/ClientInitStorageAtom';
 import { ClientNonUIFeatures } from './client/ClientNonUIFeatures';
 import { AuthRouteThemeManager, UnAuthRouteThemeManager } from './ThemeManager';
 import { NativeVerificationInboxRenderer } from '../features/verification/NativeDeviceVerification';
+import { DeviceVerificationPromptRenderer } from '../features/cross-signing/DeviceVerificationPrompt';
 import { RoomSettingsRenderer } from '../features/room-settings';
 import { ClientRoomsNotificationPreferences } from './client/ClientRoomsNotificationPreferences';
 import { SpaceSettingsRenderer } from '../features/space-settings';
@@ -161,6 +162,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
                         <RoomSettingsRenderer />
                         <SpaceSettingsRenderer />
                         <NativeVerificationInboxRenderer />
+                        <DeviceVerificationPromptRenderer />
                       </ClientNonUIFeatures>
                     </ApprovalInboxProvider>
                   </ClientBindAtoms>

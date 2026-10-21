@@ -30,4 +30,31 @@ enum SharedCoreBackupRestore {
     ) async throws -> SecretStorageSetupDto {
         try await core.secretStorageBootstrap(passphrase: passphrase)
     }
+
+    static func identityResetStart(core: SharedCore) async throws -> IdentityResetStateDto {
+        try await core.identityResetStart()
+    }
+
+    static func identityResetPassword(
+        core: SharedCore,
+        password: String
+    ) async throws -> IdentityResetStateDto {
+        try await core.identityResetPassword(password: password)
+    }
+
+    static func identityResetContinue(core: SharedCore) async throws -> IdentityResetStateDto {
+        try await core.identityResetContinue()
+    }
+
+    static func identityResetCancel(core: SharedCore) async throws {
+        try await core.identityResetCancel()
+    }
+
+    static func deviceVerificationPrompt(core: SharedCore) async throws -> DeviceVerificationPromptDto {
+        try await core.deviceVerificationPrompt()
+    }
+
+    static func dismissDeviceVerificationPrompt(core: SharedCore) throws {
+        _ = try core.dismissDeviceVerificationPrompt()
+    }
 }

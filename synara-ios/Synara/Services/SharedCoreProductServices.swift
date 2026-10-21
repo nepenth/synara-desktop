@@ -2856,6 +2856,83 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         }
     }
 
+    func deviceVerificationPromptVisible() async -> Bool {
+        (try? await SharedCoreBackupRestore.deviceVerificationPrompt(core: host.core).show) ?? false
+    }
+
+    func dismissDeviceVerificationPrompt() async {
+        try? SharedCoreBackupRestore.dismissDeviceVerificationPrompt(core: host.core)
+    }
+
+    func startIdentityReset() async -> IdentityResetResult {
+        do {
+            return Self.identityResetResult(try await SharedCoreBackupRestore.identityResetStart(core: host.core))
+        } catch {
+            return Self.identityResetFailure(error)
+        }
+    }
+
+    func authenticateIdentityReset(password: String) async -> IdentityResetResult {
+        guard password.isEmpty == false else {
+            return .failed("Enter your account password.")
+        }
+        do {
+            return Self.identityResetResult(
+                try await SharedCoreBackupRestore.identityResetPassword(core: host.core, password: password)
+            )
+        } catch {
+            return Self.identityResetFailure(error)
+        }
+    }
+
+    func continueIdentityReset() async -> IdentityResetResult {
+        do {
+            return Self.identityResetResult(try await SharedCoreBackupRestore.identityResetContinue(core: host.core))
+        } catch {
+            return Self.identityResetFailure(error)
+        }
+    }
+
+    func cancelIdentityReset() async {
+        try? await SharedCoreBackupRestore.identityResetCancel(core: host.core)
+    }
+
+    /// Only an http(s) account page is opened for approval.
+    static func identityResetResult(_ dto: IdentityResetStateDto) -> IdentityResetResult {
+        switch dto.step {
+        case .complete:
+            return .complete
+        case .passwordRequired:
+            return .passwordRequired
+        case .approvalRequired:
+            guard let raw = dto.approvalUrl,
+                  let url = URL(string: raw),
+                  let scheme = url.scheme?.lowercased(),
+                  scheme == "https" || scheme == "http" else {
+                return .failed(IdentityResetCopy.failed)
+            }
+            return .approvalRequired(url)
+        }
+    }
+
+    static func identityResetFailure(_ error: Error) -> IdentityResetResult {
+        guard let code = (error as? SessionStatusError)?.coreErrorCode else {
+            return .failed(IdentityResetCopy.failed)
+        }
+        switch code {
+        case "v-crypto.2-identity-reset-password-rejected":
+            return .passwordRejected
+        case "v-crypto.2-identity-reset-approval-pending":
+            return .approvalPending
+        case "v-crypto.2-identity-reset-network":
+            return .failed(IdentityResetCopy.network)
+        case "v-crypto.2-identity-reset-auth-unsupported":
+            return .failed(IdentityResetCopy.authUnsupported)
+        default:
+            return .failed(IdentityResetCopy.failed)
+        }
+    }
+
     static func crossSigningSetupResult(_ outcome: CrossSigningSetupOutcomeDto) -> CrossSigningSetupResult {
         switch outcome {
         case .complete, .alreadyConfigured:

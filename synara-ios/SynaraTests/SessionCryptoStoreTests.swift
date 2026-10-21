@@ -421,6 +421,241 @@ final class RecoverySetupFlowTests: XCTestCase {
     }
 }
 
+@MainActor
+final class IdentityResetFlowTests: XCTestCase {
+    func testPasswordResetAfterARejectedPasswordCompletes() async {
+        let crypto = ScriptedIdentityResetService(
+            start: [.passwordRequired],
+            authentication: [.passwordRejected, .complete]
+        )
+        let flow = IdentityResetFlow()
+        XCTAssertEqual(flow.phase, .warning, "nothing is reset before the warning is confirmed")
+
+        await flow.start(crypto: crypto)
+        XCTAssertEqual(flow.phase, .passwordRequired)
+        XCTAssertTrue(flow.isPending)
+
+        await flow.authenticate(password: "", crypto: crypto)
+        XCTAssertEqual(flow.errorMessage, "Enter your account password.")
+        XCTAssertTrue(crypto.passwords.isEmpty)
+
+        await flow.authenticate(password: "wrong", crypto: crypto)
+        XCTAssertEqual(flow.phase, .passwordRequired)
+        XCTAssertEqual(flow.errorMessage, IdentityResetCopy.passwordRejected)
+
+        await flow.authenticate(password: "right", crypto: crypto)
+        XCTAssertEqual(flow.phase, .complete)
+        XCTAssertNil(flow.errorMessage)
+        XCTAssertFalse(flow.isPending)
+        XCTAssertEqual(crypto.passwords, ["wrong", "right"])
+        XCTAssertEqual(crypto.cancels, 0)
+    }
+
+    func testApprovalResetWaitsForTheBrowserApproval() async {
+        let url = URL(string: "https://account.example.org/reset")!
+        let crypto = ScriptedIdentityResetService(
+            start: [.approvalRequired(url)],
+            continuation: [.approvalPending, .complete]
+        )
+        let flow = IdentityResetFlow()
+
+        await flow.start(crypto: crypto)
+        XCTAssertEqual(flow.phase, .approvalRequired(url))
+        await flow.continueAfterApproval(crypto: crypto)
+        XCTAssertEqual(flow.phase, .approvalRequired(url), "still waiting for approval")
+        XCTAssertEqual(flow.errorMessage, IdentityResetCopy.approvalPending)
+        await flow.continueAfterApproval(crypto: crypto)
+        XCTAssertEqual(flow.phase, .complete)
+    }
+
+    func testCancelOnlyCancelsAPendingResetInCore() async {
+        let crypto = ScriptedIdentityResetService(start: [.passwordRequired, .failed("offline")])
+        let flow = IdentityResetFlow()
+        await flow.cancel(crypto: crypto)
+        XCTAssertEqual(crypto.cancels, 0, "nothing was pending")
+
+        await flow.start(crypto: crypto)
+        await flow.cancel(crypto: crypto)
+        XCTAssertEqual(crypto.cancels, 1)
+        XCTAssertEqual(flow.phase, .cancelled, "the cancelled state points back to recovery setup")
+        XCTAssertTrue(flow.isFinished)
+        XCTAssertTrue(IdentityResetCopy.cancelled.contains("Set up recovery in Settings once this device is verified"))
+
+        let failing = IdentityResetFlow()
+        await failing.start(crypto: crypto)
+        XCTAssertEqual(failing.phase, .warning)
+        XCTAssertEqual(failing.errorMessage, "offline")
+        XCTAssertTrue(failing.recoveryMayBeOff, "a failure after Start may have removed recovery")
+    }
+
+    func testRejectedPasswordOrPendingApprovalDoNotClaimRecoveryIsOff() async {
+        let url = URL(string: "https://account.example.org/reset")!
+        let crypto = ScriptedIdentityResetService(
+            start: [.passwordRequired, .approvalRequired(url)],
+            authentication: [.passwordRejected],
+            continuation: [.approvalPending]
+        )
+        let password = IdentityResetFlow()
+        await password.start(crypto: crypto)
+        await password.authenticate(password: "wrong", crypto: crypto)
+        XCTAssertFalse(password.recoveryMayBeOff)
+        let approval = IdentityResetFlow()
+        await approval.start(crypto: crypto)
+        await approval.continueAfterApproval(crypto: crypto)
+        XCTAssertFalse(approval.recoveryMayBeOff)
+    }
+
+    func testVerifyWithAnotherDeviceStartsOnlyAfterThePromptIsGone() async {
+        let crypto = ScriptedIdentityResetService(start: [], promptVisible: true)
+        let prompt = VerifyDevicePromptPresentation()
+        await prompt.showIfNeeded(crypto: crypto)
+        XCTAssertTrue(prompt.isPresented)
+
+        prompt.verifyWithAnotherDevice()
+        XCTAssertFalse(prompt.isPresented)
+        XCTAssertEqual(crypto.calls, [], "nothing starts while the sheet is still on screen")
+
+        let result = await prompt.didDismiss(crypto: crypto)
+        XCTAssertEqual(result, .completed("requested"))
+        XCTAssertEqual(crypto.calls, ["dismissPrompt", "requestVerification"])
+
+        // Later (or any other close) only dismisses the prompt in Core.
+        let later = await prompt.didDismiss(crypto: crypto)
+        XCTAssertNil(later)
+        XCTAssertEqual(crypto.calls, ["dismissPrompt", "requestVerification", "dismissPrompt"])
+    }
+
+    func testCoreResetStepsAndErrorsMapToFlowResults() {
+        func state(_ step: IdentityResetStepDto, _ url: String? = nil) -> IdentityResetStateDto {
+            IdentityResetStateDto(sessionGeneration: 1, step: step, approvalUrl: url)
+        }
+        XCTAssertEqual(SharedCoreCryptoStatusService.identityResetResult(state(.complete)), .complete)
+        XCTAssertEqual(
+            SharedCoreCryptoStatusService.identityResetResult(state(.passwordRequired)),
+            .passwordRequired
+        )
+        XCTAssertEqual(
+            SharedCoreCryptoStatusService.identityResetResult(
+                state(.approvalRequired, "https://account.example.org/reset")
+            ),
+            .approvalRequired(URL(string: "https://account.example.org/reset")!)
+        )
+        XCTAssertEqual(
+            SharedCoreCryptoStatusService.identityResetResult(state(.approvalRequired, "javascript:alert(1)")),
+            .failed(IdentityResetCopy.failed),
+            "only an http(s) account page is opened"
+        )
+
+        func failure(_ code: String) -> SessionStatusError {
+            .Failed(kind: .terminal, code: code, description: "static")
+        }
+        XCTAssertEqual(
+            SharedCoreCryptoStatusService.identityResetFailure(failure("v-crypto.2-identity-reset-password-rejected")),
+            .passwordRejected
+        )
+        XCTAssertEqual(
+            SharedCoreCryptoStatusService.identityResetFailure(failure("v-crypto.2-identity-reset-approval-pending")),
+            .approvalPending
+        )
+        XCTAssertEqual(
+            SharedCoreCryptoStatusService.identityResetFailure(failure("v-crypto.2-identity-reset-network")),
+            .failed(IdentityResetCopy.network)
+        )
+        XCTAssertEqual(
+            SharedCoreCryptoStatusService.identityResetFailure(failure("anything-else")),
+            .failed(IdentityResetCopy.failed)
+        )
+    }
+
+    func testResetIsOfferedOnlyOnceTheAccountHasAnIdentity() {
+        XCTAssertTrue(SynaraCryptoCrossSigningStatus.ready.offersIdentityReset)
+        XCTAssertTrue(SynaraCryptoCrossSigningStatus.needsVerification.offersIdentityReset)
+        XCTAssertTrue(SynaraCryptoCrossSigningStatus.needsRecovery.offersIdentityReset)
+        XCTAssertFalse(SynaraCryptoCrossSigningStatus.notSetUp.offersIdentityReset)
+        XCTAssertFalse(SynaraCryptoCrossSigningStatus.unknown.offersIdentityReset)
+    }
+
+    func testDesktopWordingIsSharedWordForWord() {
+        XCTAssertEqual(VerifyDevicePromptCopy.title, "Verify This Device")
+        XCTAssertEqual(VerifyDevicePromptCopy.verifyWithDevice, "Verify from Another Device")
+        XCTAssertEqual(IdentityResetCopy.warnings, [
+            "People you talk to will see that your identity changed.",
+            "You will need to verify your other devices and contacts again.",
+            "Messages that only your old keys can read may be lost, unless another device still has them.",
+            "Starting the reset removes your key backup and recovery key right away, even if you cancel before it finishes.",
+        ])
+    }
+
+    func testThePromptIsHiddenUnlessTheServiceAsksForIt() async {
+        let hidden = MockCryptoStatusService()
+        let hiddenVisible = await hidden.deviceVerificationPromptVisible()
+        XCTAssertFalse(hiddenVisible)
+        let shown = MockCryptoStatusService(verifyDevicePrompt: true)
+        let shownVisible = await shown.deviceVerificationPromptVisible()
+        XCTAssertTrue(shownVisible)
+    }
+}
+
+private final class ScriptedIdentityResetService: CryptoStatusServicing {
+    private var startResults: [IdentityResetResult]
+    private var authenticationResults: [IdentityResetResult]
+    private var continuationResults: [IdentityResetResult]
+    private let promptVisible: Bool
+    private(set) var passwords: [String] = []
+    private(set) var cancels = 0
+    private(set) var calls: [String] = []
+
+    init(
+        start: [IdentityResetResult],
+        authentication: [IdentityResetResult] = [],
+        continuation: [IdentityResetResult] = [],
+        promptVisible: Bool = false
+    ) {
+        startResults = start
+        authenticationResults = authentication
+        continuationResults = continuation
+        self.promptVisible = promptVisible
+    }
+
+    func deviceVerificationPromptVisible() async -> Bool { promptVisible }
+
+    func dismissDeviceVerificationPrompt() async {
+        calls.append("dismissPrompt")
+    }
+
+    func startIdentityReset() async -> IdentityResetResult {
+        startResults.isEmpty ? .failed("unscripted") : startResults.removeFirst()
+    }
+
+    func authenticateIdentityReset(password: String) async -> IdentityResetResult {
+        passwords.append(password)
+        return authenticationResults.isEmpty ? .failed("unscripted") : authenticationResults.removeFirst()
+    }
+
+    func continueIdentityReset() async -> IdentityResetResult {
+        continuationResults.isEmpty ? .failed("unscripted") : continuationResults.removeFirst()
+    }
+
+    func cancelIdentityReset() async {
+        cancels += 1
+    }
+
+    func sessionStatus() async -> SessionCryptoStatus { .unknown }
+    func roomStatus(roomID: String) async -> RoomCryptoStatus { .unknown }
+    func verificationUpdates() -> AsyncStream<CryptoVerificationSnapshot?> { AsyncStream { $0.finish() } }
+    func retryDecryption(roomID: String) async -> CryptoActionResult { .unavailable("unused") }
+    func requestDeviceVerification(deviceId: String?) async -> CryptoActionResult {
+        calls.append("requestVerification")
+        return .completed("requested")
+    }
+    func acceptVerificationRequest() async -> CryptoActionResult { .unavailable("unused") }
+    func startSasVerification() async -> CryptoActionResult { .unavailable("unused") }
+    func approveVerification() async -> CryptoActionResult { .unavailable("unused") }
+    func declineVerification() async -> CryptoActionResult { .unavailable("unused") }
+    func cancelVerification() async -> CryptoActionResult { .unavailable("unused") }
+    func recover(recoveryKey: String) async -> CryptoActionResult { .unavailable("unused") }
+}
+
 private final class ScriptedRecoveryService: CryptoStatusServicing {
     private var setupResults: [CrossSigningSetupResult]
     private var authenticationResults: [CrossSigningSetupResult]

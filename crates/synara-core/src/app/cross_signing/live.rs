@@ -373,7 +373,7 @@ pub async fn authenticate_password(
         .map_err(CrossSigningPasswordError::Failed)
 }
 
-fn password_auth(user_id: &UserId, password: &str) -> Password {
+pub(super) fn password_auth(user_id: &UserId, password: &str) -> Password {
     Password::new(
         UserIdentifier::Matrix(MatrixUserIdentifier::new(user_id.to_string())),
         password.to_owned(),
