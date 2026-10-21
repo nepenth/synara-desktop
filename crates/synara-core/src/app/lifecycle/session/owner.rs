@@ -108,6 +108,30 @@ impl<'a, S> SessionInstallGuard<'a, S> {
     }
 }
 
+/// Transition gate alone, held for one install attempt that must not hold
+/// the slot across its awaits (iOS restore and sign-in): ordinary commands
+/// keep reading an empty slot, and fail closed, while the install runs.
+pub struct DetachedInstallGuard<'a, S> {
+    owner: &'a SessionLifecycleOwner<S>,
+    _transition: MutexGuard<'a, ()>,
+}
+
+impl<S> DetachedInstallGuard<'_, S> {
+    /// Read the installed session, if any, under a brief slot lock.
+    pub async fn current<T>(&self, read: impl FnOnce(Option<&S>) -> T) -> T {
+        read(self.owner.session.lock().await.as_ref())
+    }
+
+    /// Publish the new session and release the gate. Nothing else installs
+    /// or logs out while the gate is held, so the slot is still as `current`
+    /// saw it. Like [`SessionInstallGuard::publish`], it supersedes any
+    /// store-recovery capability.
+    pub async fn publish(self, session: S) {
+        self.owner.clear_store_recovery().await;
+        *self.owner.session.lock().await = Some(session);
+    }
+}
+
 impl<S> SessionLifecycleOwner<S> {
     pub fn new() -> Self {
         Self::default()
@@ -128,6 +152,17 @@ impl<S> SessionLifecycleOwner<S> {
             _transition: transition,
             session,
         }
+    }
+
+    /// Take the transition gate, but not the slot, for one install attempt.
+    /// `None` at once while another install or a logout holds the gate, so a
+    /// concurrent attempt is answered instead of queued.
+    pub fn try_begin_detached_install(&self) -> Option<DetachedInstallGuard<'_, S>> {
+        let transition = self.transition.try_lock().ok()?;
+        Some(DetachedInstallGuard {
+            owner: self,
+            _transition: transition,
+        })
     }
 
     pub fn next_generation(&self) -> u64 {
@@ -237,6 +272,38 @@ impl<S> SessionLifecycleOwner<S> {
         }
     }
 
+    /// The logout shape for [`super::TeardownOrder::RetireAfterClose`] (iOS).
+    ///
+    /// Under the transition gate, `teardown` runs with `handle` of the
+    /// installed session (`None` when the slot is empty) while the session
+    /// stays installed. Only after it succeeds is the session moved out of
+    /// the slot, any store-recovery capability revoked, and the taken
+    /// session passed to `retire`. A teardown failure leaves the session
+    /// installed for a retry.
+    pub async fn logout_in_place<H, E, Teardown, TeardownFuture>(
+        &self,
+        handle: impl FnOnce(&S) -> H,
+        teardown: Teardown,
+        retire: impl FnOnce(Option<S>),
+    ) -> Result<LogoutOutcome, E>
+    where
+        Teardown: FnOnce(Option<H>) -> TeardownFuture,
+        TeardownFuture: Future<Output = Result<(), E>>,
+    {
+        let _transition = self.transition.lock().await;
+        let handle = self.session.lock().await.as_ref().map(handle);
+        let outcome = if handle.is_some() {
+            LogoutOutcome::TornDown
+        } else {
+            LogoutOutcome::NoSession
+        };
+        teardown(handle).await?;
+        let taken = self.session.lock().await.take();
+        self.clear_store_recovery().await;
+        retire(taken);
+        Ok(outcome)
+    }
+
     /// Whether a failed-save retry is due (iOS calls this from its status poll).
     pub fn save_retry_due(&self, now: Instant) -> bool {
         self.maintenance
@@ -249,6 +316,20 @@ impl<S> SessionLifecycleOwner<S> {
         if let Ok(mut maintenance) = self.maintenance.lock() {
             maintenance.record_save_retry(now, saved);
         }
+    }
+
+    /// The failed-save step of [`Self::maintenance_tick`] for a caller that
+    /// is already on a blocking thread (the iOS status poll): the due check,
+    /// the synchronous `save` and the backoff record share one lock, so two
+    /// overlapping polls save once. `None` when no retry was due.
+    pub fn retry_save_if_due(&self, now: Instant, save: impl FnOnce() -> bool) -> Option<bool> {
+        let mut maintenance = self.maintenance.lock().ok()?;
+        if !maintenance.save_retry_due(now) {
+            return None;
+        }
+        let saved = save();
+        maintenance.record_save_retry(now, saved);
+        Some(saved)
     }
 
     /// One periodic maintenance pass, in a fixed order:
@@ -437,6 +518,80 @@ mod tests {
             Some(2)
         );
         assert_eq!(owner.with_session_generation(1, || async { 1 }).await, None);
+    }
+
+    #[tokio::test]
+    async fn a_detached_install_leaves_the_slot_free_and_refuses_a_second_attempt() {
+        let owner = SessionLifecycleOwner::<Session>::new();
+        let install = owner.try_begin_detached_install().expect("gate free");
+        // Commands keep reading the empty slot while the install runs.
+        assert!(owner.session.try_lock().unwrap().is_none());
+        assert!(owner.try_begin_detached_install().is_none());
+        assert!(install.current(|active| active.is_none()).await);
+        install.publish(Session(3)).await;
+        assert_eq!(owner.session.lock().await.as_ref().map(|s| s.0), Some(3));
+        // A logout holds the same gate.
+        let transition = owner.lock_transition().await;
+        assert!(owner.try_begin_detached_install().is_none());
+        drop(transition);
+        assert!(owner.try_begin_detached_install().is_some());
+    }
+
+    #[tokio::test]
+    async fn logout_in_place_keeps_the_session_until_teardown_succeeds() {
+        let owner = SessionLifecycleOwner::<Session>::new();
+        owner.begin_install().await.publish(Session(5)).await;
+        let failed = owner
+            .logout_in_place(
+                |active| active.0,
+                |handle| {
+                    let owner = &owner;
+                    async move {
+                        assert_eq!(handle, Some(5));
+                        // Still installed, and the slot is not held.
+                        assert!(owner.session.try_lock().unwrap().is_some());
+                        Err("stop failed")
+                    }
+                },
+                |_| panic!("a failed teardown never retires"),
+            )
+            .await;
+        assert_eq!(failed, Err("stop failed"));
+        assert_eq!(owner.session.lock().await.as_ref().map(|s| s.0), Some(5));
+        let mut retired = None;
+        let outcome = owner
+            .logout_in_place(
+                |active| active.0,
+                |_| async { Ok::<_, &str>(()) },
+                |taken| retired = taken.map(|s| s.0),
+            )
+            .await;
+        assert_eq!(outcome, Ok(LogoutOutcome::TornDown));
+        assert_eq!(retired, Some(5));
+        assert!(owner.session.lock().await.is_none());
+        let orphan = owner
+            .logout_in_place(
+                |active| active.0,
+                |handle| async move {
+                    assert_eq!(handle, None);
+                    Ok::<_, &str>(())
+                },
+                |taken| assert!(taken.is_none()),
+            )
+            .await;
+        assert_eq!(orphan, Ok(LogoutOutcome::NoSession));
+    }
+
+    #[test]
+    fn a_due_save_retry_runs_once_and_backs_off() {
+        let owner = SessionLifecycleOwner::<Session>::new();
+        let now = Instant::now();
+        assert_eq!(owner.retry_save_if_due(now, || false), Some(false));
+        assert_eq!(
+            owner.retry_save_if_due(now, || panic!("backoff holds the retry")),
+            None
+        );
+        assert!(!owner.save_retry_due(now));
     }
 
     #[tokio::test]

@@ -1300,10 +1300,7 @@ impl SharedCore {
         }
     }
 
-    pub(super) fn spawn_room_surface_owners(&self) {
-        let Ok(client) = self.retained_client() else {
-            return;
-        };
+    pub(super) fn spawn_room_surface_owners(&self, client: &Client) {
         let Ok(Some(snapshot)) = self.core.session_snapshot() else {
             return;
         };
@@ -1312,12 +1309,12 @@ impl SharedCore {
             return;
         }
         let emit: OwnProfileUpdateEmit = Arc::new(|_| {});
-        if let Ok(owner) = NativeOwnProfileOwner::start(&client, emit, generation) {
+        if let Ok(owner) = NativeOwnProfileOwner::start(client, emit, generation) {
             if let Ok(mut guard) = self.own_profile_live.lock() {
                 *guard = Some(owner);
             }
         }
-        if let Ok(owner) = NativeMediaRetentionOwner::start(&client, generation) {
+        if let Ok(owner) = NativeMediaRetentionOwner::start(client, generation) {
             if let Ok(mut guard) = self.media_retention_live.lock() {
                 *guard = Some(owner);
             }

@@ -649,11 +649,14 @@ pub struct SharedCore {
     secret_store: Arc<dyn SecretVault + Send + Sync>,
     /// User-Agent of every SDK client this Core builds.
     user_agent: String,
-    restored_client: Mutex<RestoredClientSlot>,
-    owner_attach: Mutex<OwnerAttachSlot>,
-    /// Serializes the complete SyncService/Client lifecycle transaction.
+    /// The session slot, transition gate, recover gate, generation counter
+    /// and save-retry backoff, shared with desktop's `MatrixAuthState`.
+    lifecycle: Arc<crate::app::lifecycle::session::SessionLifecycleOwner<IosSession>>,
+    /// Serializes the complete SyncService/Client suspend and resume
+    /// transaction (`start_sync`, `stop_sync`, `restart_sync`, `logout`).
     /// Shell-side ordering remains useful, but the persistence boundary must
-    /// remain correct for every current and future FFI caller.
+    /// remain correct for every current and future FFI caller. Taken before
+    /// the lifecycle owner's transition gate.
     sync_lifecycle: tokio::sync::Mutex<()>,
     /// Closed between `stop_sync` and the next `start_sync` (iOS suspension).
     suspension: SessionSuspension,
@@ -663,11 +666,6 @@ pub struct SharedCore {
     room_list_live: Arc<Mutex<Option<NativeRoomListOwner>>>,
     own_profile_live: Arc<Mutex<Option<NativeOwnProfileOwner>>>,
     media_retention_live: Arc<Mutex<Option<NativeMediaRetentionOwner>>>,
-    /// Monotonic per-instance session generation. A re-login in the same
-    /// process must not reuse the generation a retired session carried.
-    generations: crate::app::lifecycle::session::SessionGenerations,
-    /// Backoff for re-saving tokens after a failed rotation save.
-    maintenance: Arc<Mutex<crate::app::lifecycle::session::SessionMaintenance>>,
     /// The generation (and account) whose sync reported a rejected refresh.
     /// Latched when observed so retirement does not depend on the live sync
     /// owner still existing, or still reporting, after the shell stops it.

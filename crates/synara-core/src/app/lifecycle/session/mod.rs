@@ -52,7 +52,10 @@ pub use logout::{
     LOGOUT_BACKUP_STEADY_STATE_TIMEOUT, VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
 };
 pub use maintenance::{MaintenanceReport, RejectedGeneration, SessionMaintenance};
-pub use owner::{InstalledSession, LogoutOutcome, SessionInstallGuard, SessionLifecycleOwner};
+pub use owner::{
+    DetachedInstallGuard, InstalledSession, LogoutOutcome, SessionInstallGuard,
+    SessionLifecycleOwner,
+};
 pub use owners::{attach_owner_set, OwnerKind, SessionOwnerSet, OWNER_ATTACH_ORDER};
 pub use persistence::{
     persist_with_client_lease, SessionPersistenceLease, SessionPersistenceOwner,
