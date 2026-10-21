@@ -275,6 +275,114 @@ fn sync_stop_closes_retained_client_stores_and_start_reopens_them() {
 }
 
 #[test]
+fn store_calls_while_suspended_wait_for_resume_or_fail_retryably() {
+    let identity = alice();
+    let values = std::sync::Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(
+        std::sync::Arc::clone(&values),
+    )));
+    let root = temp_root("suspended-store-calls");
+    let rt = test_runtime();
+    let _enter = rt.enter();
+
+    rt.block_on(shared.persist_planted_session_for_test(
+        identity.user_id().to_owned(),
+        identity.homeserver_url().to_owned(),
+        root.to_string_lossy().into_owned(),
+        "DEVICEABC".to_owned(),
+        "syt_suspended_store_calls_access".to_owned(),
+        None,
+    ))
+    .expect("planted persist retains a SQLite-backed Client");
+    rt.block_on(shared.attach_session_owners())
+        .expect("attach retained session owners");
+    let status = rt.block_on(shared.sync_status()).expect("status");
+    assert!(
+        !status.suspended,
+        "an attached, unstarted session is not suspended"
+    );
+
+    rt.block_on(shared.stop_sync())
+        .expect("stop closes the stores");
+    let status = rt.block_on(shared.sync_status()).expect("status");
+    assert!(status.suspended);
+    assert_eq!(status.readiness, SyncReadinessDto::Idle);
+
+    // Past the bound, every gated family fails with the one retryable code
+    // instead of a generic open or store failure.
+    shared
+        .suspension
+        .set_wait_bound_for_test(std::time::Duration::from_millis(50));
+    let suspended = |text: String| text.contains(SESSION_SUSPENDED_CODE);
+    let room_list = rt.block_on(shared.room_list_snapshot());
+    assert!(suspended(format!(
+        "{:?}",
+        room_list.expect_err("room list")
+    )));
+    let invites = rt.block_on(shared.invites_snapshot());
+    assert!(suspended(format!("{:?}", invites.expect_err("invites"))));
+    let open = rt.block_on(shared.timeline_open(
+        "!room:example.org".to_owned(),
+        TimelineOpenPositionDto {
+            kind: TimelineOpenKindDto::LiveBottom,
+            at_bottom: true,
+            restored_anchor_event_id: None,
+            live_tail_event_id: None,
+            updated_at_ms: None,
+            event_id: None,
+        },
+    ));
+    assert!(suspended(format!("{:?}", open.expect_err("timeline open"))));
+    let readback = rt.block_on(
+        shared.timeline_event_readback("!room:example.org".to_owned(), "$event".to_owned()),
+    );
+    assert!(suspended(format!("{:?}", readback.expect_err("readback"))));
+    let send = rt.block_on(shared.send_text(
+        "!room:example.org".to_owned(),
+        "hello".to_owned(),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        Some("txn-suspended".to_owned()),
+    ));
+    assert!(suspended(format!("{:?}", send.expect_err("send"))));
+    // A network change while suspended must not start sync on closed stores.
+    let restarted = rt
+        .block_on(shared.restart_sync())
+        .expect("restart is a no-op while suspended");
+    assert_eq!(restarted.readiness, SyncReadinessDto::Idle);
+    assert!(rt.block_on(shared.sync_status()).expect("status").suspended);
+
+    // Within the bound, a call made while suspended waits for the resume and
+    // then runs against the reopened stores.
+    shared
+        .suspension
+        .set_wait_bound_for_test(std::time::Duration::from_secs(20));
+    let (room_list, started) = rt.block_on(async {
+        tokio::join!(shared.room_list_snapshot(), async {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            tokio::time::timeout(std::time::Duration::from_secs(15), shared.start_sync())
+                .await
+                .expect("start_sync timed out")
+        })
+    });
+    started.expect("start reopens the stores");
+    let room_list = room_list.expect("a room-list read parked on the suspension succeeds");
+    assert!(room_list.rooms.is_empty());
+    assert!(!rt.block_on(shared.sync_status()).expect("status").suspended);
+
+    rt.block_on(shared.stop_sync())
+        .expect("final stop releases store resources before teardown");
+    drop(shared);
+    drop(_enter);
+    drop(rt);
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
 fn callback_vault_maps_foreign_failure_to_static_store_unavailable() {
     struct FailingVault;
     impl IosSecretVault for FailingVault {
@@ -398,6 +506,35 @@ fn restore_from_vault_installs_session_without_password_or_token_leak() {
         .expect_err("second restore");
     assert!(format!("{second:?}").contains(ALREADY_RESTORED_CODE));
     assert!(!format!("{second:?}").contains(RESTORE_FAILED_CODE));
+    assert!(matches!(
+        *shared.restored_client.lock().expect("client"),
+        RestoredClientSlot::Ready(..)
+    ));
+    // "Already restored" means success to the shells, so another account,
+    // or the same user id on another homeserver, must not get it.
+    for (user_id, homeserver_url) in [
+        ("@bob:example.org", "https://matrix.example.org"),
+        ("@alice:example.org", "https://other.example.org"),
+    ] {
+        let other = rt
+            .block_on(shared.restore_persisted_session(
+                user_id.to_owned(),
+                homeserver_url.to_owned(),
+                root.to_string_lossy().into_owned(),
+            ))
+            .expect_err("another account's restore");
+        assert!(format!("{other:?}").contains(RESTORED_IDENTITY_MISMATCH_CODE));
+        assert!(!format!("{other:?}").contains(ALREADY_RESTORED_CODE));
+    }
+    // Normalization differences of the same account still match.
+    let same = rt
+        .block_on(shared.restore_persisted_session(
+            identity.user_id().to_owned(),
+            format!("{}/", identity.homeserver_url()),
+            root.to_string_lossy().into_owned(),
+        ))
+        .expect_err("same account, trailing slash");
+    assert!(format!("{same:?}").contains(ALREADY_RESTORED_CODE));
     assert!(matches!(
         *shared.restored_client.lock().expect("client"),
         RestoredClientSlot::Ready(..)

@@ -274,6 +274,9 @@ pub struct SyncStatusDto {
     pub failure_diagnostic_id: Option<String>,
     pub sliding_sync_capable: Option<bool>,
     pub command_gate: CommandGateDto,
+    /// `stop_sync` closed the stores and no `start_sync` reopened them yet.
+    /// Readiness alone reads `idle` both here and before the first start.
+    pub suspended: bool,
 }
 
 /// Static fail-closed session/status error. Fields are source constants only.
@@ -346,6 +349,67 @@ pub(super) enum OwnerAttachSlot {
     Empty,
     InFlight,
     Ready,
+}
+
+/// How long a store-touching export waits for `start_sync` to reopen the
+/// stores before it fails with the retryable `SESSION_SUSPENDED_CODE`. A
+/// foreground resume reopens them in well under a second.
+const SUSPENDED_WAIT_BOUND: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Whether `stop_sync` has closed the retained Client's stores for iOS
+/// suspension.
+///
+/// `Client::pause()` keeps the Client and every owner but fails each store
+/// read or write with `StoreClosed`, which used to surface as a generic open
+/// or send failure. Exports that touch the stores wait here, bounded, for the
+/// next `start_sync`, and fail with the specific retryable code if it does
+/// not come. It is the same "stores open" boundary the send-queue recovery
+/// checks before re-enabling queues.
+pub(super) struct SessionSuspension {
+    stores_open: tokio::sync::watch::Sender<bool>,
+    wait_bound: std::sync::Mutex<std::time::Duration>,
+}
+
+impl SessionSuspension {
+    pub(super) fn new() -> Self {
+        Self {
+            stores_open: tokio::sync::watch::Sender::new(true),
+            wait_bound: std::sync::Mutex::new(SUSPENDED_WAIT_BOUND),
+        }
+    }
+
+    pub(super) fn suspend(&self) {
+        self.stores_open.send_replace(false);
+    }
+
+    pub(super) fn resume(&self) {
+        self.stores_open.send_replace(true);
+    }
+
+    pub(super) fn is_suspended(&self) -> bool {
+        !*self.stores_open.borrow()
+    }
+
+    /// `true` once the stores are open, at once when they never closed.
+    async fn wait_until_open(&self) -> bool {
+        let bound = self
+            .wait_bound
+            .lock()
+            .map(|bound| *bound)
+            .unwrap_or(SUSPENDED_WAIT_BOUND);
+        let mut open = self.stores_open.subscribe();
+        let reopened = tokio::time::timeout(bound, open.wait_for(|open| *open))
+            .await
+            .is_ok_and(|changed| changed.is_ok());
+        reopened
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_wait_bound_for_test(&self, bound: std::time::Duration) {
+        if let Ok(mut guard) = self.wait_bound.lock() {
+            *guard = bound;
+        }
+    }
 }
 
 pub(super) fn closed_creators_event_type(value: &str) -> Option<&'static str> {
@@ -494,6 +558,7 @@ pub(super) fn sync_status_from_owner_snapshot(
         failure_diagnostic_id: snapshot.failure_diagnostic_id.map(str::to_owned),
         sliding_sync_capable: snapshot.sliding_sync_capable,
         command_gate: command_gate.into(),
+        suspended: false,
     })
 }
 
@@ -512,7 +577,20 @@ pub(super) fn sync_status_dto_from_public(
         failure_diagnostic_id: snapshot.failure_diagnostic_id.map(str::to_owned),
         sliding_sync_capable: snapshot.sliding_sync_capable,
         command_gate: snapshot.command_gate.into(),
+        suspended: false,
     })
+}
+
+/// Whether the retained Client is signed in as `identity` on its homeserver.
+/// Product clients are built with `identity`'s homeserver URL and never
+/// follow a login well-known, so both compare exactly after URL parsing.
+fn client_matches_identity(client: &Client, identity: &AccountIdentity) -> bool {
+    let same_user = client
+        .user_id()
+        .is_some_and(|user_id| user_id.as_str() == identity.user_id());
+    let same_homeserver = url::Url::parse(identity.homeserver_url())
+        .is_ok_and(|homeserver| homeserver == client.homeserver());
+    same_user && same_homeserver
 }
 
 /// Claims the restore slot for one in-flight attempt. Drop releases it unless
@@ -523,13 +601,17 @@ pub(super) struct RestoreClaim<'a> {
 }
 
 impl<'a> RestoreClaim<'a> {
+    /// The shells treat "already restored" as success, so it is only returned
+    /// when the retained Client belongs to `identity`. Any other account gets
+    /// a mismatch error instead of silently driving the wrong session.
     pub(super) fn acquire(
         slot: &'a Mutex<RestoredClientSlot>,
+        identity: &AccountIdentity,
     ) -> Result<Self, SessionRestoreError> {
         let mut guard = slot
             .lock()
             .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
-        match *guard {
+        match &*guard {
             RestoredClientSlot::Empty => {
                 *guard = RestoredClientSlot::InFlight;
                 Ok(Self {
@@ -537,9 +619,15 @@ impl<'a> RestoreClaim<'a> {
                     committed: false,
                 })
             }
+            RestoredClientSlot::Ready(client, _) if client_matches_identity(client, identity) => {
+                Err(restore_failed(
+                    ALREADY_RESTORED_CODE,
+                    ALREADY_RESTORED_DESCRIPTION,
+                ))
+            }
             RestoredClientSlot::Ready(..) => Err(restore_failed(
-                ALREADY_RESTORED_CODE,
-                ALREADY_RESTORED_DESCRIPTION,
+                RESTORED_IDENTITY_MISMATCH_CODE,
+                RESTORED_IDENTITY_MISMATCH_DESCRIPTION,
             )),
             RestoredClientSlot::InFlight => Err(restore_failed(
                 RESTORE_FAILED_CODE,
@@ -798,7 +886,7 @@ impl SharedCore {
         let identity = AccountIdentity::new(&user_id, &homeserver_url)
             .map_err(|_| restore_failed(IDENTITY_INVALID_CODE, IDENTITY_INVALID_DESCRIPTION))?;
         let root = validate_store_root(&store_root)?;
-        let claim = RestoreClaim::acquire(&self.restored_client)?;
+        let claim = RestoreClaim::acquire(&self.restored_client, &identity)?;
         let vault = SecretStoreSessionVault {
             store: Arc::clone(&self.secret_store),
         };
@@ -903,7 +991,7 @@ impl SharedCore {
         if password.is_empty() {
             return Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION));
         }
-        let claim = RestoreClaim::acquire(&self.restored_client)
+        let claim = RestoreClaim::acquire(&self.restored_client, &identity)
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let vault = SecretStoreSessionVault {
             store: Arc::clone(&self.secret_store),
@@ -1011,7 +1099,7 @@ impl SharedCore {
                 LOGIN_STORE_ROOT_INVALID_DESCRIPTION,
             )
         })?;
-        let claim = RestoreClaim::acquire(&self.restored_client)
+        let claim = RestoreClaim::acquire(&self.restored_client, &identity)
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let vault = SecretStoreSessionVault {
             store: Arc::clone(&self.secret_store),
@@ -1137,6 +1225,19 @@ impl SharedCore {
         if let Ok(mut attach) = self.owner_attach.lock() {
             *attach = OwnerAttachSlot::Empty;
         }
+        // No retained Client means no closed stores; the next session starts open.
+        self.suspension.resume();
+    }
+
+    /// Waits, bounded, while `stop_sync` holds the retained stores closed.
+    /// `Err(())` means the session is still suspended; each export maps it
+    /// to its own error with `SESSION_SUSPENDED_CODE`.
+    pub(super) async fn await_open_stores(&self) -> Result<(), ()> {
+        if self.suspension.wait_until_open().await {
+            Ok(())
+        } else {
+            Err(())
+        }
     }
 
     pub(super) fn retry_failed_session_save(&self, now: std::time::Instant) -> Option<bool> {
@@ -1248,6 +1349,7 @@ impl SharedCore {
             restored_client: Mutex::new(RestoredClientSlot::Empty),
             owner_attach: Mutex::new(OwnerAttachSlot::Empty),
             sync_lifecycle: tokio::sync::Mutex::new(()),
+            suspension: SessionSuspension::new(),
             timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
             owner_updates: Arc::new(Mutex::new(Vec::new())),
             room_list_updates: Arc::new(Mutex::new(Vec::new())),
@@ -1273,6 +1375,7 @@ impl SharedCore {
             restored_client: Mutex::new(RestoredClientSlot::Empty),
             owner_attach: Mutex::new(OwnerAttachSlot::Empty),
             sync_lifecycle: tokio::sync::Mutex::new(()),
+            suspension: SessionSuspension::new(),
             timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
             owner_updates: Arc::new(Mutex::new(Vec::new())),
             room_list_updates: Arc::new(Mutex::new(Vec::new())),
@@ -1526,6 +1629,9 @@ impl SharedCore {
         client.resume().await.map_err(|_| {
             sync_start_failed(CLIENT_RESUME_FAILED_CODE, CLIENT_RESUME_FAILED_DESCRIPTION)
         })?;
+        // Stores are open again: release exports waiting out the suspension,
+        // even if SyncService itself fails to start below.
+        self.suspension.resume();
         let snapshot = self.core.start_attached_sync().await.map_err(|code| {
             if code == SYNC_NOT_ATTACHED_CODE {
                 sync_start_failed(SYNC_NOT_ATTACHED_CODE, SYNC_NOT_ATTACHED_DESCRIPTION)
@@ -1550,6 +1656,8 @@ impl SharedCore {
     /// store operation, and release all SQLite connections and file locks.
     /// Returning `stopped = true` therefore means the complete persistence
     /// boundary is safe for OS suspension, not merely that network sync ended.
+    /// From here until the next `start_sync`, store-touching exports wait for
+    /// the stores to reopen instead of failing on them.
     pub async fn stop_sync(&self) -> Result<SyncStopDto, SyncStopError> {
         let _lifecycle = self.sync_lifecycle.lock().await;
         if !self.owners_attached() {
@@ -1558,6 +1666,8 @@ impl SharedCore {
                 SYNC_NOT_ATTACHED_DESCRIPTION,
             ));
         }
+        // Before any teardown, so no new store work starts while the stores close.
+        self.suspension.suspend();
         if let Ok(mut live) = self.room_list_live.lock() {
             *live = None;
         }
@@ -1568,6 +1678,8 @@ impl SharedCore {
             *live = None;
         }
         let snapshot = self.core.stop_attached_sync().await.map_err(|code| {
+            // The stores were never closed; do not hold callers on them.
+            self.suspension.resume();
             if code == SYNC_NOT_ATTACHED_CODE {
                 sync_stop_failed(SYNC_NOT_ATTACHED_CODE, SYNC_NOT_ATTACHED_DESCRIPTION)
             } else {
@@ -1581,6 +1693,31 @@ impl SharedCore {
             sync_stop_failed(CLIENT_PAUSE_FAILED_CODE, CLIENT_PAUSE_FAILED_DESCRIPTION)
         })?;
         Ok(sync_stop_dto_from_snapshot(snapshot))
+    }
+
+    /// Replace the live sync connection after an OS network change.
+    ///
+    /// iOS calls this when the network path comes back on another interface
+    /// or its cost changes. A long-poll opened on the old path can look live
+    /// until the SDK's poll and network timeouts expire; this replaces it at
+    /// once. It never starts sync while suspended or before `start_sync`,
+    /// and leaves a rejected session alone. Not `Core.command`.
+    pub async fn restart_sync(&self) -> Result<SyncStartDto, SyncStartError> {
+        let _lifecycle = self.sync_lifecycle.lock().await;
+        let owner = self
+            .owners_attached()
+            .then(|| self.core.attached_sync_owner())
+            .flatten()
+            .ok_or_else(|| {
+                sync_start_failed(SYNC_NOT_ATTACHED_CODE, SYNC_NOT_ATTACHED_DESCRIPTION)
+            })?;
+        if self.suspension.is_suspended() {
+            return Ok(sync_start_dto_from_snapshot(owner.observe()));
+        }
+        let snapshot = owner.restart_live().await.map_err(|_| {
+            sync_start_failed(SYNC_START_FAILED_CODE, SYNC_START_FAILED_DESCRIPTION)
+        })?;
+        Ok(sync_start_dto_from_snapshot(snapshot))
     }
 
     pub async fn wipe_persisted_stores(
@@ -1811,7 +1948,11 @@ impl SharedCore {
             return sync_status_from_owner_snapshot(
                 observed,
                 self.core.attached_timeline_owner().is_some(),
-            );
+            )
+            .map(|status| SyncStatusDto {
+                suspended: self.suspension.is_suspended(),
+                ..status
+            });
         }
         let snapshot = self
             .core

@@ -1380,6 +1380,9 @@ impl SharedCore {
     /// owner yields the handler's empty snapshot. Does not expose a generic
     /// command FFI.
     pub async fn room_list_snapshot(&self) -> Result<RoomListSnapshotDto, RoomListSnapshotError> {
+        self.await_open_stores().await.map_err(|()| {
+            room_list_failed(SESSION_SUSPENDED_CODE, SESSION_SUSPENDED_DESCRIPTION)
+        })?;
         let response = self
             .core
             .room_list_snapshot()
@@ -1420,6 +1423,9 @@ impl SharedCore {
     }
 
     pub async fn invites_snapshot(&self) -> Result<InviteSnapshotDto, InviteSnapshotError> {
+        self.await_open_stores()
+            .await
+            .map_err(|()| invites_failed(SESSION_SUSPENDED_CODE, SESSION_SUSPENDED_DESCRIPTION))?;
         let response = self
             .core
             .invites_snapshot()

@@ -125,6 +125,9 @@ const RESTORE_FAILED_CODE: &str = "p4-s3b-restore-failed";
 const RESTORE_FAILED_DESCRIPTION: &str = "The persisted session could not be restored.";
 const ALREADY_RESTORED_CODE: &str = "p4-s3b-session-already-restored";
 const ALREADY_RESTORED_DESCRIPTION: &str = "A live session is already restored.";
+const RESTORED_IDENTITY_MISMATCH_CODE: &str = "p4-s3b-session-identity-mismatch";
+const RESTORED_IDENTITY_MISMATCH_DESCRIPTION: &str =
+    "A different account's session is already restored.";
 const LOGIN_VAULT_UNAVAILABLE_CODE: &str = "p4-s3c-secret-vault-unavailable";
 const LOGIN_VAULT_UNAVAILABLE_DESCRIPTION: &str = "The secret store is unavailable.";
 const LOGIN_IDENTITY_INVALID_CODE: &str = "p4-s3c-identity-invalid";
@@ -160,6 +163,11 @@ const SYNC_STOP_FAILED_CODE: &str = "p4-s12-sync-stop-failed";
 const SYNC_STOP_FAILED_DESCRIPTION: &str = "SyncService could not be stopped.";
 const CLIENT_PAUSE_FAILED_CODE: &str = "p4-s12-client-pause-failed";
 const CLIENT_PAUSE_FAILED_DESCRIPTION: &str = "The Matrix client stores could not be paused.";
+/// Shared by every store-touching export that gave up waiting for
+/// `start_sync` to reopen the stores `stop_sync` closed. Retryable.
+const SESSION_SUSPENDED_CODE: &str = "p4-session-suspended";
+const SESSION_SUSPENDED_DESCRIPTION: &str =
+    "The session is paused while the app is in the background.";
 const TIMELINE_VIEW_POLL_FAILED_CODE: &str = "p4-s14-timeline-view-poll-failed";
 const TIMELINE_VIEW_POLL_FAILED_DESCRIPTION: &str = "Timeline view updates could not be polled.";
 const TIMELINE_VIEW_UPDATE_QUEUE_CAP: usize = 32;
@@ -616,6 +624,8 @@ pub struct SharedCore {
     /// Shell-side ordering remains useful, but the persistence boundary must
     /// remain correct for every current and future FFI caller.
     sync_lifecycle: tokio::sync::Mutex<()>,
+    /// Closed between `stop_sync` and the next `start_sync` (iOS suspension).
+    suspension: SessionSuspension,
     timeline_view_updates: Arc<Mutex<Vec<TimelineViewDeltaBatch>>>,
     owner_updates: Arc<Mutex<Vec<OwnerUpdateDto>>>,
     room_list_updates: Arc<Mutex<Vec<RoomListUpdateDto>>>,

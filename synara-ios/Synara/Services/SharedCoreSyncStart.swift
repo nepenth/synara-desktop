@@ -21,3 +21,18 @@ enum SharedCoreSyncStop {
         try await core.stopSync()
     }
 }
+
+/// Core's error code for a store read or write that waited, bounded, for the
+/// stores `stopSync` closed and gave up. Retryable once the session resumes;
+/// every gated export uses it, whatever its error type.
+enum SharedCoreSessionSuspension {
+    static let code = "p4-session-suspended"
+}
+
+/// Replaces the live sync connection after a network path change. Core makes
+/// this a no-op while the stores are suspended or before sync first started.
+enum SharedCoreSyncRestart {
+    static func restartSync(core: SharedCore) async throws -> SyncStartDto {
+        try await core.restartSync()
+    }
+}

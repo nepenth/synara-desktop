@@ -50,12 +50,14 @@ enum SharedCoreSendText {
         try await core.localEchoDiscard(roomId: roomId, transactionId: transactionId)
     }
 
-    /// Core could not take the message yet (no session, or the room is not
-    /// known while the session restores). Anything else is a rejection.
+    /// Core could not take the message yet (no session, the room is not
+    /// known while the session restores, or the stores are still closed for
+    /// background). Anything else is a rejection.
     static func isNotReady(_ error: Error) -> Bool {
         guard case let SendTextError.Failed(code, _) = error else {
             return false
         }
         return code == "p2-send-text-no-session" || code == "d0.4-send-room-not-found"
+            || code == SharedCoreSessionSuspension.code
     }
 }
