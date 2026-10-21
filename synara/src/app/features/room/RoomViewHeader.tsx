@@ -69,6 +69,7 @@ import { RoomThreadListPanel } from './RoomThreadListPanel';
 import type { RoomSidePanelType } from './RoomSidePanel';
 import * as depthCss from '../../styles/Depth.css';
 import { useNativeRoomSummary } from '../../state/room-list/roomList';
+import { PersonGlyph, roomGlyphFor } from '../../components/room-glyph';
 import {
   snapshotRtcTransportsNative,
   type NativeRtcTransportsSnapshot,
@@ -412,6 +413,7 @@ export function RoomViewHeader({
   const notesSummary = getRoomNotesSummary(notesContent, room.roomId);
   const name = useRoomName(room);
   const topic = useRoomTopic(room);
+  const glyph = roomGlyphFor(useNativeRoomSummary(room.roomId), name);
 
   const [peopleDrawer, setPeopleDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
   const pinsOpen = activeSidePanel === 'pins' || !!pinMenuAnchor;
@@ -497,11 +499,14 @@ export function RoomViewHeader({
           </BackRouteHandler>
         )}
         <Box grow="Yes" alignItems="Center" gap="300">
-          {screenSize !== ScreenSize.Mobile && (
-            <Text as="span" className={css.RoomChannelGlyph} aria-hidden="true">
-              #
-            </Text>
-          )}
+          {screenSize !== ScreenSize.Mobile &&
+            (glyph.kind === 'person' ? (
+              <PersonGlyph className={css.RoomPersonGlyph} glyph={glyph} />
+            ) : (
+              <Text as="span" className={css.RoomChannelGlyph} aria-hidden="true">
+                #
+              </Text>
+            ))}
           <Box direction="Column">
             <Text as="h1" size={topic ? 'H5' : 'H3'} className={css.RoomTitle} truncate>
               {name}

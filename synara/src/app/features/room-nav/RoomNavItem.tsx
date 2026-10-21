@@ -56,6 +56,7 @@ import { useNativeUserStatus } from '../matrix-presence/nativeUserStatus';
 import * as css from './styles.css';
 import * as depthCss from '../../styles/Depth.css';
 import { getMyUserId } from '../../state/nativeIdentity';
+import { PersonGlyph, roomGlyphFor } from '../../components/room-glyph';
 
 type RoomNavItemMenuProps = {
   room: EventedRoomReading;
@@ -340,6 +341,7 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
   );
 
   const roomName = useRoomName(room);
+  const glyph = roomGlyphFor(nativeRoom, roomName);
 
   const handleContextMenu: MouseEventHandler<HTMLElement> = (evt) => {
     evt.preventDefault();
@@ -389,9 +391,13 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
       >
         <NavItemContent>
           <Box as="span" grow="Yes" alignItems="Center" gap="200">
-            <Text as="span" className={css.RoomGlyph} aria-hidden="true">
-              #
-            </Text>
+            {glyph.kind === 'person' ? (
+              <PersonGlyph className={css.RoomPersonGlyph} glyph={glyph} />
+            ) : (
+              <Text as="span" className={css.RoomGlyph} aria-hidden="true">
+                #
+              </Text>
+            )}
             <Box as="span" grow="Yes" direction="Column">
               <Text
                 as="span"

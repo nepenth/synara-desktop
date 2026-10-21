@@ -7,6 +7,7 @@ export default defineConfig({
     'avatar-lifetime.spec.ts',
     'room-list-live-call.spec.ts',
     'navigation-unread.spec.ts',
+    'room-list-glyph.spec.ts',
   ],
   fullyParallel: false,
   retries: 0,

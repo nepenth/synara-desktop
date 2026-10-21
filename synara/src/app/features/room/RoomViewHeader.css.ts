@@ -8,6 +8,13 @@ export const RoomChannelGlyph = style({
   lineHeight: 1,
 });
 
+/** A DM's peer in the `#` slot, at the glyph's size. */
+export const RoomPersonGlyph = style({
+  width: toRem(22),
+  height: toRem(22),
+  fontSize: toRem(13),
+});
+
 export const RoomTitle = style({
   color: 'var(--synara-content-heading)',
   letterSpacing: '-0.01em',
