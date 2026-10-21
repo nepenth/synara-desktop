@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- iOS: opening a room from a notification loads its earlier messages and keeps receiving new ones, the same as opening it from the room list. You no longer need to leave the room or relaunch Synara to see its history.
+
 ## [2.2.6] - 2026-10-12
 
 - Approvals: Approve once and Deny on agent approval notifications work from the iPhone lock screen and from Apple Watch. They run in the background without unlocking or opening Synara; Synara opens its stores for one bounded decision and closes them before suspension, and shows "Approval not sent" if the decision could not be sent. Approve always remains in-app only.
