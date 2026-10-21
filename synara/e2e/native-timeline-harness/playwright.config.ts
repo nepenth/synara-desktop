@@ -25,7 +25,11 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
     {
       name: 'webkit',
-      testMatch: 'native-timeline-hermes-layout.spec.ts',
+      // The desktop app runs in WKWebView on macOS: layout, and dialog focus.
+      testMatch: [
+        'native-timeline-hermes-layout.spec.ts',
+        'native-timeline-redact-confirm.spec.ts',
+      ],
       use: { ...devices['Desktop Safari'] },
     },
   ],

@@ -587,6 +587,17 @@ window.__SYNARA_DESKTOP__ = {
       const filename = typeof args?.filename === 'string' ? args.filename : 'download';
       return { filename } as T;
     }
+    if (command === 'matrix_timeline_redact') {
+      // Core's readback for a completed redaction of the requested event.
+      const redact = args?.request as { roomId: string; eventId: string };
+      return {
+        schemaVersion: 1,
+        action: 'redact',
+        roomId: redact.roomId,
+        eventId: redact.eventId,
+        status: 'redacted',
+      } as T;
+    }
     return undefined as T;
   },
 };
