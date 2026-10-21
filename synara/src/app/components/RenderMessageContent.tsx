@@ -1,7 +1,5 @@
 import React, { lazy, Suspense } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
-import { HTMLReactParserOptions } from 'html-react-parser';
-import { Opts } from 'linkifyjs';
 import { config } from 'folds';
 import {
   AudioContent,
@@ -19,7 +17,6 @@ import {
   MVideo,
   ReadPdfFile,
   ReadTextFile,
-  RenderBody,
   ThumbnailContent,
   UnsupportedContent,
   VideoContent,
@@ -33,6 +30,7 @@ import { parseHermesAgentPayload } from '../utils/hermes';
 import { useClientConfig } from '../hooks/useClientConfig';
 import { formatCoreAgentApprovalPrompt } from '../utils/agentApprovals';
 import { AgentApprovalCard, type AgentApprovalTarget } from './agent-approval/AgentApprovalCard';
+import { NativeMessageText } from '../features/room/nativeTimelineFormattedBody';
 
 const HermesAgentCard = lazy(() =>
   import('./hermes/HermesAgentCard').then((module) => ({ default: module.HermesAgentCard }))
@@ -46,8 +44,6 @@ type RenderMessageContentProps = {
   getContent: <T>() => T;
   mediaAutoLoad?: boolean;
   highlightRegex?: RegExp;
-  htmlReactParserOptions: HTMLReactParserOptions;
-  linkifyOpts: Opts;
   outlineAttachment?: boolean;
   agentApprovalTarget?: AgentApprovalTarget;
 };
@@ -58,8 +54,6 @@ export function RenderMessageContent({
   getContent,
   mediaAutoLoad,
   highlightRegex,
-  htmlReactParserOptions,
-  linkifyOpts,
   outlineAttachment,
   agentApprovalTarget,
 }: RenderMessageContentProps) {
@@ -84,6 +78,11 @@ export function RenderMessageContent({
     );
   }
 
+  // The timeline's sanitizer and renderer, so text here matches the room.
+  const renderBody = ({ body, customBody }: { body: string; customBody?: string }) => (
+    <NativeMessageText body={body} formattedBody={customBody} highlightRegex={highlightRegex} />
+  );
+
   const renderCaption = () => {
     const imageContent: IImageContent = getContent();
     if (imageContent.filename && imageContent.filename !== imageContent.body) {
@@ -92,14 +91,7 @@ export function RenderMessageContent({
           style={{ marginTop: config.space.S200 }}
           edited={edited}
           content={imageContent}
-          renderBody={(props) => (
-            <RenderBody
-              {...props}
-              highlightRegex={highlightRegex}
-              htmlReactParserOptions={htmlReactParserOptions}
-              linkifyOpts={linkifyOpts}
-            />
-          )}
+          renderBody={renderBody}
         />
       );
     }
@@ -143,20 +135,7 @@ export function RenderMessageContent({
   );
 
   if (msgType === 'm.text') {
-    return (
-      <MText
-        edited={edited}
-        content={getContent()}
-        renderBody={(props) => (
-          <RenderBody
-            {...props}
-            highlightRegex={highlightRegex}
-            htmlReactParserOptions={htmlReactParserOptions}
-            linkifyOpts={linkifyOpts}
-          />
-        )}
-      />
-    );
+    return <MText edited={edited} content={getContent()} renderBody={renderBody} />;
   }
 
   if (msgType === 'm.emote') {
@@ -165,33 +144,13 @@ export function RenderMessageContent({
         displayName={displayName}
         edited={edited}
         content={getContent()}
-        renderBody={(props) => (
-          <RenderBody
-            {...props}
-            highlightRegex={highlightRegex}
-            htmlReactParserOptions={htmlReactParserOptions}
-            linkifyOpts={linkifyOpts}
-          />
-        )}
+        renderBody={renderBody}
       />
     );
   }
 
   if (msgType === 'm.notice') {
-    return (
-      <MNotice
-        edited={edited}
-        content={getContent()}
-        renderBody={(props) => (
-          <RenderBody
-            {...props}
-            highlightRegex={highlightRegex}
-            htmlReactParserOptions={htmlReactParserOptions}
-            linkifyOpts={linkifyOpts}
-          />
-        )}
-      />
-    );
+    return <MNotice edited={edited} content={getContent()} renderBody={renderBody} />;
   }
 
   if (msgType === 'm.image') {

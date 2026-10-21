@@ -13,7 +13,6 @@ import {
 } from 'folds';
 import React, { FormEventHandler, useCallback, useMemo, useState } from 'react';
 import { useAtomValue } from 'jotai';
-import Linkify from 'linkify-react';
 import classNames from 'classnames';
 import type { MatrixError } from '../../../utils/matrix';
 import { SequenceCard } from '../../../components/sequence-card';
@@ -27,7 +26,7 @@ import {
 } from '../../../hooks/useRoomMeta';
 import { mDirectAtom } from '../../../state/mDirectList';
 import { BreakWord, LineClamp3 } from '../../../styles/Text.css';
-import { LINKIFY_OPTS } from '../../../plugins/react-custom-html-parser';
+import { NativeLinkifiedText } from '../../room/nativeTimelineFormattedBody';
 import { RoomAvatar, RoomIcon } from '../../../components/room-avatar';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { StateEvent } from '../../../../types/matrix/room';
@@ -329,7 +328,7 @@ export function RoomProfile({ permissions }: RoomProfileProps) {
                 </Text>
                 {topic && (
                   <Text className={classNames(BreakWord, LineClamp3)} size="T200">
-                    <Linkify options={LINKIFY_OPTS}>{topic}</Linkify>
+                    <NativeLinkifiedText text={topic} />
                   </Text>
                 )}
               </Box>

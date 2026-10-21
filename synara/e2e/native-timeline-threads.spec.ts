@@ -178,3 +178,107 @@ test('a reply sent from the full thread view stays in the thread', async ({ page
   await expect(timeline.getByText('Thread reply 7')).toBeVisible();
   expect(await openThreadStreams(page)).toBe(1);
 });
+
+type ThreadFixture = {
+  nativeTimelineFixture: {
+    scrollEventIntoView(eventId: string): void;
+    releaseThreadOpen(): void;
+    threadOpenCount(): number;
+    threadRoot: string;
+  };
+};
+
+const openInline = async (page: Page, query: string) => {
+  await page.goto(
+    `/e2e/native-timeline-harness/index.html?scenario=threads&threadDisplay=inline&${query}`
+  );
+  await expect(page.locator('[data-native-timeline-event-id]').first()).toBeVisible();
+};
+
+test('inline replies render their Matrix HTML through the timeline renderer', async ({ page }) => {
+  await openThreads(page, 'inline');
+  await threadButton(page).click();
+  const inline = page.locator('[data-inline-thread]');
+  const formatted = inline.locator('p', { hasText: 'Thread reply 6 is' });
+  await expect(formatted.locator('strong')).toHaveText('formatted');
+  await expect(formatted.locator('code')).toHaveText('code');
+  await expect(inline.locator('script')).toHaveCount(0);
+});
+
+test('an inline thread that fails to open says so and retries', async ({ page }) => {
+  await openInline(page, 'failThreadOpen');
+  await threadButton(page).click();
+  const inline = page.locator('[data-inline-thread]');
+  const alert = inline.getByRole('alert');
+  await expect(alert).toContainText('Synara could not open this thread. Try again.');
+  await expect(inline.getByText('Thread reply 7')).toHaveCount(0);
+
+  await alert.getByRole('button', { name: 'Retry' }).click();
+  await expect(inline.getByText('Thread reply 7')).toBeVisible();
+  await expect(inline.getByRole('alert')).toHaveCount(0);
+  expect(await openThreadStreams(page)).toBe(1);
+});
+
+test('a failed "Show earlier replies" shows an inline error with Retry', async ({ page }) => {
+  await openInline(page, 'threadMore&failThreadPaginate');
+  await threadButton(page).click();
+  const inline = page.locator('[data-inline-thread]');
+  const earlier = inline.getByRole('button', { name: 'Show earlier replies' });
+  // The first press reveals the two replies already loaded.
+  await earlier.click();
+  await expect(inline.getByText('Thread reply 1')).toBeVisible();
+  // Older replies remain on the server; this pagination is rejected.
+  await earlier.click();
+  const alert = inline.getByRole('alert');
+  await expect(alert).toContainText('Synara could not load earlier replies. Try again.');
+  await expect(inline.getByText('Thread reply 7')).toBeVisible();
+
+  await alert.getByRole('button', { name: 'Retry' }).click();
+  await expect(inline.getByRole('alert')).toHaveCount(0);
+  await expect(earlier).toBeEnabled();
+});
+
+test('an expanded inline thread shows its replies at once after scrolling back', async ({
+  page,
+}) => {
+  await openInline(page, 'holdThreadReopen');
+  await threadButton(page).click();
+  const inline = page.locator('[data-inline-thread]');
+  await expect(inline.getByText('Thread reply 7')).toBeVisible();
+
+  // Scroll the root out of the virtualized window: its stream closes.
+  await page.locator('#native-timeline').hover();
+  await expect
+    .poll(async () => {
+      await page.mouse.wheel(0, -2000);
+      return page.locator('[data-inline-thread]').count();
+    })
+    .toBe(0);
+  await expect.poll(() => openThreadStreams(page)).toBe(0);
+
+  // Back again: the reopen is held, yet the cached replies show immediately.
+  await expect
+    .poll(async () => {
+      await page.mouse.wheel(0, 2000);
+      return page.locator('[data-inline-thread]').count();
+    })
+    .toBe(1);
+  await page.evaluate(() => {
+    const fixture = (window as unknown as ThreadFixture).nativeTimelineFixture;
+    fixture.scrollEventIntoView(fixture.threadRoot);
+  });
+  await expect(inline.getByText('Thread reply 7')).toBeVisible();
+  await expect(inline.getByText('Loading replies…')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Hide 7 replies/ })).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      (window as unknown as ThreadFixture).nativeTimelineFixture.threadOpenCount()
+    )
+  ).toBe(2);
+
+  await page.evaluate(() =>
+    (window as unknown as ThreadFixture).nativeTimelineFixture.releaseThreadOpen()
+  );
+  await expect.poll(() => openThreadStreams(page)).toBe(1);
+  await expect(inline.getByText('Thread reply 7')).toBeVisible();
+});

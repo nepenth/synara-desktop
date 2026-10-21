@@ -1,8 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import Linkify from 'linkify-react';
-import type { Opts as LinkifyOpts } from 'linkifyjs';
 import { Box, Icon, IconButton, Icons, Text } from 'folds';
-import { LINKIFY_OPTS } from '../../plugins/react-custom-html-parser';
 import { isDesktopPlatform, openPlatformExternalUrl } from '../../platform';
 import {
   convertDesktopFileSrc,
@@ -17,6 +14,7 @@ import {
   shouldSkipMessageUnfurl,
   type NativeMediaPreview,
 } from './nativeLinkUnfurl';
+import { NativeLinkifiedText } from './nativeTimelineFormattedBody';
 
 const handleDesktopExternalLinkClick: React.MouseEventHandler<HTMLAnchorElement> = (evt) => {
   if (
@@ -36,14 +34,7 @@ const handleDesktopExternalLinkClick: React.MouseEventHandler<HTMLAnchorElement>
   void openPlatformExternalUrl(href);
 };
 
-export const nativeTimelineLinkifyOpts: LinkifyOpts = {
-  ...LINKIFY_OPTS,
-  attributes: {
-    ...LINKIFY_OPTS.attributes,
-    onClick: handleDesktopExternalLinkClick,
-  },
-};
-
+/** A message without HTML: its text and links, as the formatted renderer draws links. */
 export function NativePlainMessageBody({
   body,
   style,
@@ -53,7 +44,7 @@ export function NativePlainMessageBody({
 }) {
   return (
     <Text size="T300" style={style}>
-      <Linkify options={nativeTimelineLinkifyOpts}>{body}</Linkify>
+      <NativeLinkifiedText text={body} />
     </Text>
   );
 }

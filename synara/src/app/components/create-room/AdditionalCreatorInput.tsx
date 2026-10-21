@@ -29,7 +29,7 @@ import { useDirectUsers } from '../../hooks/useDirectUsers';
 import { SettingTile } from '../setting-tile';
 import { stopPropagation } from '../../utils/keyboard';
 import { useAsyncSearch, UseAsyncSearchOptions } from '../../hooks/useAsyncSearch';
-import { highlightText, makeHighlightRegex } from '../../plugins/react-custom-html-parser';
+import { highlightText, makeHighlightRegex } from '../../utils/highlightText';
 import { getSafeMyUserId } from '../../state/nativeIdentity';
 
 export const useAdditionalCreators = (defaultCreators?: string[]) => {

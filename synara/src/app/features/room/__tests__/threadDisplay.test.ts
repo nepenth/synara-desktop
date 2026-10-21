@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
   DEFAULT_THREAD_DISPLAY,
@@ -110,4 +111,62 @@ test('inline replies drop the root and non-message rows', () => {
     inlineThreadReplies(rows, '$root').map((reply) => reply.body),
     ['First answer', 'Second answer']
   );
+});
+
+test('inline replies carry Matrix HTML for text, never for media captions (D27)', () => {
+  const formatted = {
+    ...message('$r1', 'Plain'),
+    formattedBody: '<strong>Plain</strong>',
+  } as unknown as NativeTimelineViewRow;
+  const media = {
+    ...message('$r2', 'photo.png'),
+    formattedBody: '<em>caption</em>',
+    messageType: 'image',
+    media: { handleId: 'timeline-media-x' },
+  } as unknown as NativeTimelineViewRow;
+  assert.deepEqual(
+    inlineThreadReplies([message('$root', 'Q'), formatted, media], '$root').map(
+      (reply) => reply.formattedBody
+    ),
+    ['<strong>Plain</strong>', undefined]
+  );
+});
+
+test('inline threads retry, surface pagination errors and cache replies across remounts (D27)', () => {
+  const source = readFileSync('src/app/features/room/NativeInlineThread.tsx', 'utf8');
+  // Open failures offer Retry through the controller's reopen.
+  assert.match(source, /action=\{\{ label: 'Retry', onClick: reload \}\}/);
+  // Earlier-reply failures are caught and shown, never left unhandled.
+  assert.match(source, /paginate\('backwards'\)[\s\S]*\.catch\(\(\) => setEarlierError\(true\)\)/);
+  assert.doesNotMatch(source, /void paginate\(/);
+  assert.match(source, /<NativeTimelineNotice/);
+  // Replies render through the timeline's formatted renderer.
+  assert.match(source, /<NativeFormattedBody html=\{reply\.formattedBody\}/);
+  // A remounted row starts from the presenter-owned cache.
+  assert.match(source, /useState\(\(\) => replyCache\?\.get\(rootEventId\)\)/);
+  assert.match(source, /const rows = snapshot\?\.rows \?\? cached\?\.rows;/);
+  const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');
+  assert.match(presenter, /replyCache: inlineExpansion\.replyCache/);
+});
+
+test('timeline images and videos open the viewer, save, and fall back to the file chip (D14)', () => {
+  const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');
+  const viewer = readFileSync('src/app/features/room/NativeTimelineMediaViewer.tsx', 'utf8');
+  const media = presenter.slice(
+    presenter.indexOf('const NativeTimelineMedia = '),
+    presenter.indexOf('const NativeTimelineSenderAvatar')
+  );
+  assert.match(media, /<img[\s\S]*onError=\{markLoadFailed\}/);
+  assert.match(media, /<video[\s\S]*onError=\{markLoadFailed\}/);
+  assert.match(media, /visualKind && media && loadFailed[\s\S]*<NativeTimelineFileChip/);
+  // Auto-load off keeps the click-to-load placeholder ahead of the viewer.
+  assert.ok(media.indexOf('if (deferVisualMedia && media)') < media.indexOf('const openViewer'));
+  // The viewer shows the original handle, saves through the file-save path,
+  // and is a modal dialog that returns focus to its opener.
+  assert.match(viewer, /nativeTimelineMediaSrc\(\{ handleId: target\.handleId/);
+  assert.match(viewer, /saveNativeTimelineFileAttachment\(/);
+  assert.match(viewer, /import \{ Modal \} from '\.\.\/\.\.\/components\/modal-dialog'/);
+  assert.match(viewer, /escapeDeactivates: stopPropagation/);
+  assert.match(viewer, /setReturnFocus: \(previous\) => viewerReturnFocus\(target\) \?\? previous/);
+  assert.doesNotMatch(viewer, /nativeThumbnailContentUri|nativeTimelineInlineImageSrc/);
 });

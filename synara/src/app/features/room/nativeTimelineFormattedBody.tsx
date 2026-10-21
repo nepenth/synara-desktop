@@ -2,6 +2,8 @@ import { isTag, isText, type ChildNode } from 'domhandler';
 import { reactDomNodes } from '../../utils/reactDomNodes';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { attributesToProps, domToReact, HTMLReactParserOptions } from 'html-react-parser';
+import Linkify from 'linkify-react';
+import type { IntermediateRepresentation, Opts as LinkifyOpts } from 'linkifyjs';
 import '../../plugins/react-prism/ReactPrism.css';
 import {
   NATIVE_PRISM_CHAR_LIMIT,
@@ -24,6 +26,7 @@ import * as customHtmlCss from '../../styles/CustomHtml.css';
 import { convertDesktopFileSrc } from '../../utils/desktop';
 import { IN_APP_LINK_ATTRIBUTE } from '../../utils/appLinks';
 import { getMyUserId } from '../../state/nativeIdentity';
+import { highlightText } from '../../utils/highlightText';
 import {
   isNativeOpenableHref,
   nativeCustomEmojiContentUri,
@@ -193,6 +196,8 @@ function NativeSpoiler({
 type NativeFormattedRenderContext = {
   onPermalink?: NativePermalinkHandler;
   ownUserId?: string;
+  /** Search terms to mark in the text (message search results). */
+  highlightRegex?: RegExp;
 };
 
 const renderNativeAnchor = (
@@ -252,11 +257,19 @@ const renderNativeAnchor = (
   );
 };
 
-const createNativeFormattedHtmlParserOptions = (
+export const createNativeFormattedHtmlParserOptions = (
   context: NativeFormattedRenderContext
 ): HTMLReactParserOptions => {
   const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
     replace: (domNode) => {
+      if (isText(domNode)) {
+        const { highlightRegex } = context;
+        // Inline code keeps its exact text (code blocks never reach here).
+        const inCode =
+          domNode.parent !== null && isTag(domNode.parent) && domNode.parent.name === 'code';
+        if (!highlightRegex || inCode) return undefined;
+        return <>{highlightText(highlightRegex, [domNode.data])}</>;
+      }
       if (!isTag(domNode) || !('name' in domNode)) {
         return undefined;
       }
@@ -360,16 +373,18 @@ export function NativeFormattedBody({
   html,
   fallbackBody,
   style,
+  highlightRegex,
 }: {
   html: string;
   fallbackBody: string;
   style?: React.CSSProperties;
+  highlightRegex?: RegExp;
 }) {
   const onPermalink = useContext(NativePermalinkContext);
   const ownUserId = getMyUserId() ?? undefined;
   const parserOptions = useMemo(
-    () => createNativeFormattedHtmlParserOptions({ onPermalink, ownUserId }),
-    [onPermalink, ownUserId]
+    () => createNativeFormattedHtmlParserOptions({ onPermalink, ownUserId, highlightRegex }),
+    [onPermalink, ownUserId, highlightRegex]
   );
   const projection = useMemo(() => projectNativeFormattedBody(html), [html]);
   const parsed = useMemo(() => {
@@ -389,4 +404,72 @@ export function NativeFormattedBody({
       {parsed === undefined ? fallbackBody : parsed}
     </div>
   );
+}
+
+/**
+ * Plain-text links: only addresses the desktop opener handles (an ftp or
+ * magnet address is already readable as text), each through the formatted
+ * renderer's anchor, so matrix.to links become mentions and permalinks too.
+ */
+const createNativeLinkifyOptions = (context: NativeFormattedRenderContext): LinkifyOpts => ({
+  validate: {
+    url: (value) => isNativeOpenableHref(value),
+  },
+  ignoreTags: ['span'],
+  render: ({ tagName, attributes, content }: IntermediateRepresentation) => {
+    const href = typeof attributes.href === 'string' ? attributes.href : undefined;
+    if (tagName !== 'a' || !href) return <>{content}</>;
+    return renderNativeAnchor(href, content, content, context);
+  },
+});
+
+/**
+ * Plain text with its links: message bodies without HTML, room topics and
+ * pack attributions. Renders inline; the caller supplies the text box.
+ */
+export function NativeLinkifiedText({
+  text,
+  highlightRegex,
+}: {
+  text: string;
+  highlightRegex?: RegExp;
+}) {
+  const onPermalink = useContext(NativePermalinkContext);
+  const ownUserId = getMyUserId() ?? undefined;
+  const options = useMemo(
+    () => createNativeLinkifyOptions({ onPermalink, ownUserId }),
+    [onPermalink, ownUserId]
+  );
+  return (
+    <Linkify options={options}>
+      {highlightRegex ? highlightText(highlightRegex, [text]) : text}
+    </Linkify>
+  );
+}
+
+/**
+ * A message's text outside the timeline (inbox, pins, search): the timeline's
+ * sanitizer and renderer with no row state. Mentions, permalinks and custom
+ * emoji behave as in the timeline; inside `NativeRoomPermalinks` (or a room)
+ * permalinks open in Synara.
+ */
+export function NativeMessageText({
+  body,
+  formattedBody,
+  highlightRegex,
+}: {
+  body: string;
+  formattedBody?: string;
+  highlightRegex?: RegExp;
+}) {
+  if (formattedBody) {
+    return (
+      <NativeFormattedBody
+        html={formattedBody}
+        fallbackBody={body}
+        highlightRegex={highlightRegex}
+      />
+    );
+  }
+  return <NativeLinkifiedText text={body} highlightRegex={highlightRegex} />;
 }

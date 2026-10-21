@@ -3,18 +3,10 @@ import React, { MouseEventHandler, useMemo } from 'react';
 import type { useRoomEvent } from '../../hooks/useRoomEvent';
 import type { RoomReading } from '../../utils/room';
 import type { EventedRoomReading } from '../../utils/roomEvents';
-import { HTMLReactParserOptions } from 'html-react-parser';
 import { Avatar, Box, Chip, Header, Icon, Icons, Text, config } from 'folds';
 import * as depthCss from '../../styles/Depth.css';
-import { Opts as LinkifyOpts } from 'linkifyjs';
-import {
-  factoryRenderLinkifyWithMention,
-  getReactCustomHtmlParser,
-  LINKIFY_OPTS,
-  makeHighlightRegex,
-  makeMentionCustomProps,
-  renderMatrixMention,
-} from '../../plugins/react-custom-html-parser';
+import { makeHighlightRegex } from '../../utils/highlightText';
+import { NativeRoomPermalinks } from '../room/NativeRoomPermalinks';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { useMatrixEventRenderer } from '../../hooks/useMatrixEventRenderer';
 import { GetContentCallback, MessageEvent, StateEvent } from '../../../types/matrix/room';
@@ -38,7 +30,6 @@ import { getMemberAvatarMxc, getMemberDisplayName, getRoomAvatarUrl } from '../.
 import { ResultItem } from './useMessageSearch';
 import { SequenceCard } from '../../components/sequence-card';
 import { UserAvatar } from '../../components/user-avatar';
-import { useMentionClickHandler } from '../../hooks/useMentionClickHandler';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
@@ -92,7 +83,16 @@ type SearchResultGroupProps = {
   hour24Clock: boolean;
   dateFormatString: string;
 };
-export function SearchResultGroup({
+/** Search sits outside any room view, so each group opens permalinks itself. */
+export function SearchResultGroup(props: SearchResultGroupProps) {
+  return (
+    <NativeRoomPermalinks roomId={props.room.roomId}>
+      <SearchResultGroupBody {...props} />
+    </NativeRoomPermalinks>
+  );
+}
+
+function SearchResultGroupBody({
   room,
   highlights,
   items,
@@ -117,28 +117,6 @@ export function SearchResultGroup({
   const theme = useTheme();
   const accessibleTagColors = useAccessiblePowerTagColors(theme.kind, creatorsTag, powerLevelTags);
 
-  const mentionClickHandler = useMentionClickHandler(room.roomId);
-
-  const linkifyOpts = useMemo<LinkifyOpts>(
-    () => ({
-      ...LINKIFY_OPTS,
-      render: factoryRenderLinkifyWithMention((href) =>
-        renderMatrixMention(room.roomId, href, makeMentionCustomProps(mentionClickHandler))
-      ),
-    }),
-    [room, mentionClickHandler]
-  );
-  const htmlReactParserOptions = useMemo<HTMLReactParserOptions>(
-    () =>
-      getReactCustomHtmlParser(room.roomId, {
-        linkifyOpts,
-        highlightRegex,
-        useAuthentication,
-        handleMentionClick: mentionClickHandler,
-      }),
-    [room, linkifyOpts, highlightRegex, mentionClickHandler, useAuthentication]
-  );
-
   const renderMatrixEvent = useMatrixEventRenderer<[SearchResultEvent, string, GetContentCallback]>(
     {
       [MessageEvent.RoomMessage]: (event, displayName, getContent) => {
@@ -153,8 +131,6 @@ export function SearchResultGroup({
             ts={event.origin_server_ts ?? 0}
             getContent={getContent}
             mediaAutoLoad={mediaAutoLoad}
-            htmlReactParserOptions={htmlReactParserOptions}
-            linkifyOpts={linkifyOpts}
             highlightRegex={highlightRegex}
             outlineAttachment
             agentApprovalTarget={{

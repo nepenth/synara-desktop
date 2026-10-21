@@ -321,21 +321,22 @@ test('a focus trap whose only control is disabled opens without crashing', async
   expect(errors).toEqual([]);
 });
 
-test('the production custom parser renders empty pre and code blocks without crashing', async ({
+test('the production formatted renderer renders empty pre and code blocks without crashing', async ({
   page,
 }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/e2e/runtime-maturity-harness/index.html', { waitUntil: 'domcontentloaded' });
-  const blocks = page.getByRole('region', { name: 'Code block regression' }).locator('pre');
+  const blocks = page
+    .getByRole('region', { name: 'Code block regression' })
+    .locator('pre[data-native-code-block]');
   await expect(blocks).toHaveCount(3);
   for (let index = 0; index < 3; index += 1) {
-    await expect(blocks.nth(index).getByText('Code', { exact: true })).toBeVisible();
     await expect(
-      blocks.nth(index).getByRole('button', { name: 'Copy', exact: true })
+      blocks.nth(index).getByRole('button', { name: 'Copy code', exact: true })
     ).toBeVisible();
   }
-  await expect(blocks.nth(0).locator('code')).toHaveCount(0);
+  await expect(blocks.nth(0).locator('code')).toBeEmpty();
   await expect(blocks.nth(1).locator('code')).toBeEmpty();
   await expect(blocks.nth(2).locator('code')).toHaveText('hello');
   expect(errors).toEqual([]);
@@ -430,7 +431,9 @@ test('the compatibility PDF API and real worker render when newer builtins are a
   expect(warnings.some((warning) => warning.includes('fake worker'))).toBe(false);
 });
 
-test('nested CDATA retains literal text through the production custom parser', async ({ page }) => {
+test('nested CDATA retains literal text through the production formatted renderer', async ({
+  page,
+}) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/e2e/runtime-maturity-harness/index.html', { waitUntil: 'domcontentloaded' });
