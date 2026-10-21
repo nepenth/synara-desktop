@@ -237,6 +237,10 @@ test('desktop room navigation uses stable channel text instead of decorative roo
   assert.doesNotMatch(roomNav, /RoomAvatar/);
   assert.match(roomHeader, /className=\{css\.RoomChannelGlyph\}[\s\S]{0,80}#/);
   assert.doesNotMatch(roomHeader, /RoomAvatar/);
+  // Only a DM with a known peer swaps `#` for that person (iOS V3).
+  for (const source of [roomNav, roomHeader]) {
+    assert.match(source, /glyph\.kind === 'person' \?[\s\S]{0,40}<PersonGlyph/);
+  }
 });
 
 test('roomAvatarTone stays independent of the theme base hue', () => {

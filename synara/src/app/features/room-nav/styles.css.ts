@@ -19,6 +19,13 @@ export const RoomGlyph = style({
   textAlign: 'center',
 });
 
+/** A DM's peer in the `#` slot, at the glyph's size so rows keep their height. */
+export const RoomPersonGlyph = style({
+  width: toRem(18),
+  height: toRem(18),
+  fontSize: toRem(11),
+});
+
 export const RoomName = style({
   color: 'var(--synara-content-primary)',
   letterSpacing: '-0.005em',
