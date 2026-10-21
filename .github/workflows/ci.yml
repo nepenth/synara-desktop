@@ -265,7 +265,7 @@ jobs:
           toolchain: 1.96
 
       - name: Install cargo-audit
-        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2, pinned installer/checksums
+        uses: taiki-e/install-action@183e4297cca2404691e9380e1307288dced5c82a # v2, pinned installer/checksums
         with:
           tool: cargo-audit@0.22.2
           checksum: true
