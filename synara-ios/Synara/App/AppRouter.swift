@@ -100,6 +100,21 @@ final class AppRouter: ObservableObject {
         route(to: pendingDeepLink, sessionIsSignedIn: true)
     }
 
+    /// Whether `tab`'s navigation still holds this room route. A room covered
+    /// by a pushed thread, or in a tab that is not selected, is still open; a
+    /// popped or replaced one is not. Without a known tab, nothing holds it.
+    func holdsRoom(id: String, eventID: String?, in tab: AppTab?) -> Bool {
+        guard let tab else {
+            return false
+        }
+        return binding(for: tab).wrappedValue.contains { route in
+            guard case let .room(routeID, routeEventID, _) = route else {
+                return false
+            }
+            return routeID == id && routeEventID == eventID
+        }
+    }
+
     func present(_ destination: SheetDestination) {
         sheetDestination = destination
     }

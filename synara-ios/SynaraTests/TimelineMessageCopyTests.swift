@@ -281,9 +281,12 @@ final class TimelineMessageCopyTests: XCTestCase {
 
         XCTAssertGreaterThanOrEqual(
             source.components(separatedBy: "Button(\"Select Text\", systemImage: \"text.cursor\")").count - 1,
-            2,
-            "Both room and thread message menus must expose Select Text"
+            1,
+            "Message menus must expose Select Text"
         )
+        // Threads show the room's own row, so they share its menu.
+        XCTAssertTrue(source.contains("private func threadRow("))
+        XCTAssertFalse(source.contains("struct ThreadMessageRow"))
         XCTAssertTrue(source.contains("MessageTextSelectionSheet(payload: copyPayload)"))
         XCTAssertTrue(source.contains("Button(\"Done\", action: dismiss.callAsFunction)"))
         XCTAssertTrue(source.contains("SelectableMessageTextView("))

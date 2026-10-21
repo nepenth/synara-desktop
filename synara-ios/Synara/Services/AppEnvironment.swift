@@ -111,7 +111,7 @@ struct AppEnvironment {
         let push = SynaraPushService(
             logger: logger,
             pusherService: pusherService,
-            sparseRouteResolver: SharedCoreSparsePushRouteResolver()
+            sparseRouteResolver: SharedCoreSparsePushRouteResolver(host: host, sessionReadiness: sessionReadiness)
         )
         let router = AppRouter()
         // Drafts and messages Core has not accepted yet survive termination.

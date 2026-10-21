@@ -1155,6 +1155,69 @@ final class PushServiceTests: XCTestCase {
         XCTAssertEqual(resolver.resolveCallCount, 1)
     }
 
+    func testSparseRouteResolverOpensTheRoomCoreFindsForTheEvent() async {
+        // I29: an event-only push resolves through Core's cached-event
+        // lookup, waiting a little for sync to store the event.
+        let calls = LockedCounter()
+        let paused = LockedCounter()
+        let resolver = SharedCoreSparsePushRouteResolver(
+            lookup: { eventID in
+                XCTAssertEqual(eventID, "$sparse:matrix.org")
+                switch calls.increment() {
+                case 1:
+                    throw TimelineError.Failed(code: "p4-session-suspended", description: "suspended")
+                case 2:
+                    return nil
+                default:
+                    return TimelineEventLocationDto(
+                        roomId: "!resolved:matrix.org",
+                        route: TimelineEventRouteDto(kind: .thread, threadRootEventId: "$root:matrix.org")
+                    )
+                }
+            },
+            pause: { _ in paused.increment() },
+            attempts: 4
+        )
+
+        let route = await resolver.resolveRoute(eventID: "$sparse:matrix.org")
+
+        assertRoute(route, matchesRoom: "!resolved:matrix.org", eventID: "$sparse:matrix.org")
+        XCTAssertEqual(calls.value, 3)
+        XCTAssertEqual(paused.value, 2)
+    }
+
+    func testSparseRouteResolverGivesUpWithoutGuessing() async {
+        let calls = LockedCounter()
+        let resolver = SharedCoreSparsePushRouteResolver(
+            lookup: { _ in
+                calls.increment()
+                return nil
+            },
+            pause: { _ in },
+            attempts: 3
+        )
+        let missing = await resolver.resolveRoute(eventID: "$unknown:matrix.org")
+        XCTAssertNil(missing)
+        XCTAssertEqual(calls.value, 3)
+
+        let notReady = SharedCoreSparsePushRouteResolver(
+            lookup: { _ in
+                XCTFail("no lookup before the session is ready")
+                return nil
+            },
+            isReady: { false }
+        )
+        let unready = await notReady.resolveRoute(eventID: "$sparse:matrix.org")
+        XCTAssertNil(unready)
+        XCTAssertNil(SharedCoreSparsePushRouteResolver.route(
+            eventID: "$sparse:matrix.org",
+            location: TimelineEventLocationDto(
+                roomId: "",
+                route: TimelineEventRouteDto(kind: .room, threadRootEventId: nil)
+            )
+        ))
+    }
+
     func testPushServiceDoesNotRegisterWithoutGateway() async {
         let pusher = StubPusherService(isGatewayConfigured: false)
 
@@ -1229,6 +1292,25 @@ final class PushServiceTests: XCTestCase {
             }
             try? await Task.sleep(nanoseconds: 10_000_000)
         }
+    }
+}
+
+private final class LockedCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+
+    @discardableResult
+    func increment() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        count += 1
+        return count
     }
 }
 

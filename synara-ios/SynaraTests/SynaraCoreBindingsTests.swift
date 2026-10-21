@@ -548,6 +548,18 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(hostileCode.kind, .temporarilyUnavailable)
         XCTAssertEqual(hostileCode.diagnosticCode, "timeline-invalid-diagnostic-code")
+
+        // Suspended stores (app in the background) wait for the connection
+        // instead of reading as an outage.
+        let suspended = SharedCoreTimelineService.failure(
+            from: TimelineError.Failed(
+                code: SharedCoreSessionSuspension.code,
+                description: "ignored owner text"
+            )
+        )
+        XCTAssertEqual(suspended.kind, .waitingToReconnect)
+        XCTAssertEqual(suspended.diagnosticCode, "p4-session-suspended")
+        XCTAssertTrue(suspended.userMessage.hasPrefix("Waiting to reconnect"))
     }
 
     func testSharedCoreTimelineSenderAvatarAcceptsOnlyValidMXCMetadata() {
@@ -576,7 +588,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 body: "@alex joined",
                 formattedBody: nil
             ),
-            .text("@alex joined")
+            .systemNotice("@alex joined")
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
@@ -584,7 +596,16 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 body: "Topic changed",
                 formattedBody: nil
             ),
-            .text("Topic changed")
+            .systemNotice("Topic changed")
+        )
+        // A room change Core could not describe is dropped, not shown as an
+        // "unsupported" message from its sender.
+        XCTAssertNil(
+            SharedCoreTimelineRows.displayKind(
+                rowKind: .state,
+                body: "  ",
+                formattedBody: nil
+            )
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(

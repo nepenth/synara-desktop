@@ -3,7 +3,8 @@ import SynaraCore
 
 /// P4-S16/S29 map of privacy-safe SharedCore timeline rows to product items.
 ///
-/// Skips virtual separators/markers. Poll / membership / state / call /
+/// Skips virtual separators/markers (day headers are derived from the shown
+/// rows). Membership and state rows become system lines; poll / call /
 /// other rows use the existing body text. Does not load media bytes or
 /// invent mxc URLs. This is not iOS-on-engine and not P4 acceptance.
 enum SharedCoreTimelineRows {
@@ -194,7 +195,12 @@ enum SharedCoreTimelineRows {
                 return .text(trimmed)
             }
             return .unknown(type: rowKind.wireLabel)
-        case .poll, .membership, .state, .other, .sticker:
+        case .membership, .state:
+            // Room changes read as compact system lines, never as a message
+            // from their sender.
+            let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : .systemNotice(trimmed)
+        case .poll, .other, .sticker:
             let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty == false {
                 return .text(trimmed)
