@@ -4,6 +4,11 @@ import { invokeDesktopWithAvailability, isSynaraDesktop } from '../utils/desktop
 import type { SynaraRoomNotesContent } from '../../types/matrix/accountData';
 import { normalizeRoomNotesContent } from '../utils/roomNotes';
 import { startRoomListUpdateDrivenPoll } from '../utils/nativeRoomListUpdates';
+import {
+  createCoalescedRefresh,
+  keepIfSameJson,
+  readNativeSessionSnapshotShared,
+} from '../utils/nativeListRefresh';
 
 export type RoomNotesContentAction = {
   type: 'INITIALIZE' | 'PUT';
@@ -28,7 +33,8 @@ export const roomNotesContentAtom = atom<
 >(
   (get) => get(baseRoomNotesContentAtom),
   (_get, set, action) => {
-    set(baseRoomNotesContentAtom, normalizeRoomNotesContent(action.content));
+    const next = normalizeRoomNotesContent(action.content);
+    set(baseRoomNotesContentAtom, (current) => keepIfSameJson(current, next));
   }
 );
 
@@ -42,39 +48,37 @@ export const useBindRoomNotesContentAtom = (
 
   useEffect(() => {
     let disposed = false;
-    let inFlight = false;
 
     const clear = () => {
       setRoomNotesContent({ type: 'INITIALIZE', content: emptyRoomNotesContent() });
     };
 
-    const refresh = async () => {
-      if (inFlight) return;
-      inFlight = true;
-      try {
-        const session = await invokeDesktopWithAvailability<{
-          status: 'logged_out' | 'logged_in';
-        }>('matrix_session_snapshot');
-        if (disposed) return;
-        if (!session.available || session.value?.status !== 'logged_in') {
-          clear();
-          return;
+    const refresh = createCoalescedRefresh(
+      async () => {
+        try {
+          const session = await readNativeSessionSnapshotShared<{
+            status: 'logged_out' | 'logged_in';
+          }>();
+          if (disposed) return;
+          if (!session.available || session.value?.status !== 'logged_in') {
+            clear();
+            return;
+          }
+          const result = await invokeDesktopWithAvailability<NativeRoomNotesSnapshot>(
+            'matrix_room_notes_snapshot'
+          );
+          if (!disposed && result.available && result.value) {
+            setRoomNotesContent({
+              type: 'PUT',
+              content: result.value.content,
+            });
+          }
+        } catch {
+          // Preserve last known notes content during transient failures.
         }
-        const result = await invokeDesktopWithAvailability<NativeRoomNotesSnapshot>(
-          'matrix_room_notes_snapshot'
-        );
-        if (!disposed && result.available && result.value) {
-          setRoomNotesContent({
-            type: 'PUT',
-            content: result.value.content,
-          });
-        }
-      } catch {
-        // Preserve last known notes content during transient failures.
-      } finally {
-        inFlight = false;
-      }
-    };
+      },
+      () => disposed
+    );
 
     if (!isSynaraDesktop()) {
       clear();

@@ -20,6 +20,7 @@ import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desk
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { stopPropagation } from '../../utils/keyboard';
 import { leaveRoomWithNativeOwner } from '../nativeRoomLeaveOwner';
+import { composerErrorMessage } from '../../features/room/composerSendError';
 
 type LeaveSpacePromptProps = {
   roomId: string;
@@ -76,7 +77,10 @@ export function LeaveSpacePrompt({ roomId, onDone, onCancel }: LeaveSpacePromptP
                 <Text priority="400">Are you sure you want to leave this space?</Text>
                 {leaveState.status === AsyncStatus.Error && (
                   <Text style={{ color: color.Critical.Main }} size="T300">
-                    Failed to leave space! {leaveState.error.message}
+                    {composerErrorMessage(
+                      leaveState.error,
+                      'Synara could not leave the space. Try again.'
+                    )}
                   </Text>
                 )}
               </Box>

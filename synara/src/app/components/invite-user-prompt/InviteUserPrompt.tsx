@@ -47,6 +47,7 @@ import { inviteUserWithNativeOwner } from '../nativeRoomModerationOwner';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { isNativeMatrixSession } from '../../features/verification/nativeVerification';
 import { isObject, optString, reqString } from '../../features/matrix-dto/parseUtil';
+import { composerErrorMessage } from '../../features/room/composerSendError';
 
 const SEARCH_OPTIONS: UseAsyncSearchOptions = {
   limit: 1000,
@@ -360,7 +361,12 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
                 </Box>
                 {inviteState.status === AsyncStatus.Error && (
                   <Text size="T200" style={{ color: color.Critical.Main }} className={BreakWord}>
-                    <b>{inviteState.error.message}</b>
+                    <b>
+                      {composerErrorMessage(
+                        inviteState.error,
+                        'Synara could not send the invite. Try again.'
+                      )}
+                    </b>
                   </Text>
                 )}
                 <Button

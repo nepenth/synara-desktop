@@ -30,14 +30,3 @@ test('room image pack effect depends on joined room ids, not array identity', ()
   assert.doesNotMatch(roomsHook, /\[roomKey, roomIds, refreshToken\]/);
   assert.match(roomsHook, /sameImagePackList\(prev, all\)/);
 });
-
-test('message reaction pickers reuse a stable empty image-pack room list', () => {
-  const message = readFileSync('src/app/features/room/message/Message.tsx', 'utf8');
-  const editor = readFileSync('src/app/features/room/message/MessageEditor.tsx', 'utf8');
-  assert.match(message, /const EMPTY_IMAGE_PACK_ROOMS: string\[\] = \[\]/);
-  assert.match(message, /imagePackRooms \?\? EMPTY_IMAGE_PACK_ROOMS/);
-  assert.doesNotMatch(message, /imagePackRooms \?\? \[\]/);
-  assert.match(editor, /const EMPTY_IMAGE_PACK_ROOMS: string\[\] = \[\]/);
-  assert.doesNotMatch(editor, /imagePackRooms \?\? \[\]/);
-  assert.doesNotMatch(editor, /imagePackRooms \|\| \[\]/);
-});

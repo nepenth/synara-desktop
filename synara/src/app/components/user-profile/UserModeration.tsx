@@ -33,6 +33,7 @@ import {
   unbanUserWithNativeOwner,
 } from '../nativeRoomModerationOwner';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { composerErrorMessage } from '../../features/room/composerSendError';
 
 type UserKickAlertProps = {
   reason?: string;
@@ -138,7 +139,12 @@ export function UserBanAlert({ userId, reason, canUnban, bannedBy, ts }: UserBan
           </Box>
           {error && (
             <Text className={BreakWord} size="T200" style={{ color: color.Critical.Main }}>
-              <b>{unbanState.error.message}</b>
+              <b>
+                {composerErrorMessage(
+                  unbanState.error,
+                  'Synara could not unban this person. Try again.'
+                )}
+              </b>
             </Text>
           )}
           {canUnban && (
@@ -218,7 +224,12 @@ export function UserInviteAlert({ userId, reason, canKick, invitedBy, ts }: User
           </Box>
           {error && (
             <Text className={BreakWord} size="T200" style={{ color: color.Critical.Main }}>
-              <b>{kickState.error.message}</b>
+              <b>
+                {composerErrorMessage(
+                  kickState.error,
+                  'Synara could not remove this person. Try again.'
+                )}
+              </b>
             </Text>
           )}
           {canKick && (
@@ -410,17 +421,32 @@ export function UserModeration({
           />
           {kickState.status === AsyncStatus.Error && (
             <Text style={{ color: color.Critical.Main }} className={BreakWord} size="T200">
-              <b>{kickState.error.message}</b>
+              <b>
+                {composerErrorMessage(
+                  kickState.error,
+                  'Synara could not remove this person. Try again.'
+                )}
+              </b>
             </Text>
           )}
           {banState.status === AsyncStatus.Error && (
             <Text style={{ color: color.Critical.Main }} className={BreakWord} size="T200">
-              <b>{banState.error.message}</b>
+              <b>
+                {composerErrorMessage(
+                  banState.error,
+                  'Synara could not ban this person. Try again.'
+                )}
+              </b>
             </Text>
           )}
           {inviteState.status === AsyncStatus.Error && (
             <Text style={{ color: color.Critical.Main }} className={BreakWord} size="T200">
-              <b>{inviteState.error.message}</b>
+              <b>
+                {composerErrorMessage(
+                  inviteState.error,
+                  'Synara could not invite this person. Try again.'
+                )}
+              </b>
             </Text>
           )}
         </Box>

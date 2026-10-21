@@ -59,7 +59,7 @@ import { RenderMessageContent } from '../../../components/RenderMessageContent';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import * as customHtmlCss from '../../../styles/CustomHtml.css';
-import { NativeEventContent, type NativeEventSource } from '../message';
+import { NativeEventContent, type NativeEventSource } from '../message/NativeEventContent';
 import { Image } from '../../../components/media';
 import { ImageViewer } from '../../../components/image-viewer';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';

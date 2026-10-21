@@ -88,6 +88,7 @@ import {
   type NativeTimelineThreadSummary,
   type NativeTimelineUnsentDelivery,
   type NativeTimelineViewRow,
+  shouldPlaceLatestLocally,
   useNativeTimelineView,
 } from './nativeTimelineView';
 import {
@@ -96,7 +97,7 @@ import {
 } from './nativeTimelineShield';
 import type { RoomEncryptionStatus } from '../matrix-dto/room';
 import { incomingCallLabel } from '../matrix-rtc/liveCallChrome';
-import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
+import { useNativeRoomListSnapshot, useNativeRoomSummary } from '../../state/room-list/roomList';
 import { Time } from '../../components/message';
 import { UserAvatar } from '../../components/user-avatar';
 import { useSetting } from '../../state/hooks/settings';
@@ -1799,7 +1800,7 @@ const NativeTimelinePollAnswers = ({
   );
 };
 
-const NativeTimelineRow = ({
+const NativeTimelineRowImpl = ({
   row,
   grouped,
   groupsNext,
@@ -2513,6 +2514,13 @@ const NativeTimelineRow = ({
 };
 
 /**
+ * Deltas keep unchanged row objects, and the presenter passes stable
+ * callbacks, so a row re-renders only when its own data changes, not on every
+ * scroll-state or notice update of the timeline (D10).
+ */
+const NativeTimelineRow = React.memo(NativeTimelineRowImpl);
+
+/**
  * SDK-neutral, virtualized presentation of the native timeline DTO.
  * Active owner mounted by RoomView after V-TIMELINE.C1; JS RoomTimeline deleted
  * in V-TIMELINE.C2 (dual_backend false).
@@ -2623,10 +2631,23 @@ export function NativeTimelinePresenter({
     initialKey?: string;
     reactions: NativeReactionReadback[];
   } | null>(null);
-  const roomList = useNativeRoomListSnapshot();
-  const sourceEncryptionStatus = roomList.rooms.find(
-    (room) => room.roomId === roomId
-  )?.encryptionStatus;
+  const viewReactions = useCallback(
+    (request: { eventId: string; initialKey?: string; reactions: NativeReactionReadback[] }) => {
+      setReactionViewer(request);
+      void nativeReactionViewFromEventReadback({
+        roomId,
+        eventId: request.eventId,
+      }).then((refreshed) => {
+        if (!refreshed) return;
+        setReactionViewer((current) =>
+          current?.eventId === request.eventId ? { ...current, reactions: refreshed } : current
+        );
+      });
+    },
+    [roomId]
+  );
+  // This room only: the whole room list changes on any room's activity.
+  const sourceEncryptionStatus = useNativeRoomSummary(roomId)?.encryptionStatus;
   const scrollRef = useRef<HTMLDivElement>(null);
   const paginationInFlightRef = useRef<'backwards' | 'forwards' | undefined>(undefined);
   const [paginationInFlight, setPaginationInFlight] = useState<'backwards' | 'forwards'>();
@@ -3651,14 +3672,26 @@ export function NativeTimelinePresenter({
   // A send into this thread scrolls to the thread's tail; `jumpToLatest`
   // would leave the thread (and close a thread pane).
   const showThreadTail = useCallback(() => setLatestPlacementRequest((request) => request + 1), []);
+  // A live stream already carries the sent message as a delta, so a send only
+  // needs the tail placed. Asking Core to jump would close and reopen the
+  // stream with a full snapshot over IPC (D9).
+  const showLatestAfterSend = useCallback(() => {
+    if (shouldPlaceLatestLocally(readyStateRef.current?.selectedPosition)) {
+      setNotice(undefined);
+      setPendingLastRead(undefined);
+      setLatestPlacementRequest((request) => request + 1);
+      return;
+    }
+    jumpToLatest();
+  }, [jumpToLatest]);
   useEffect(
     () =>
       observeRoomLatestAfterSend(
         roomId,
         threadRootId,
-        threadRootId ? showThreadTail : jumpToLatest
+        threadRootId ? showThreadTail : showLatestAfterSend
       ),
-    [roomId, threadRootId, jumpToLatest, showThreadTail]
+    [roomId, threadRootId, showLatestAfterSend, showThreadTail]
   );
 
   const jumpToLastRead = useCallback(() => {
@@ -3902,20 +3935,7 @@ export function NativeTimelinePresenter({
                       sourceEncryptionStatus={sourceEncryptionStatus}
                       onActionError={showActionError}
                       onFocusEvent={onFocusEvent}
-                      onViewReactions={(request) => {
-                        setReactionViewer(request);
-                        void nativeReactionViewFromEventReadback({
-                          roomId,
-                          eventId: request.eventId,
-                        }).then((refreshed) => {
-                          if (!refreshed) return;
-                          setReactionViewer((current) =>
-                            current?.eventId === request.eventId
-                              ? { ...current, reactions: refreshed }
-                              : current
-                          );
-                        });
-                      }}
+                      onViewReactions={viewReactions}
                       onOpenThread={openThread}
                       activeThreadRoot={threadRootId}
                       onOpenMarkdownPreview={setFilePreview}

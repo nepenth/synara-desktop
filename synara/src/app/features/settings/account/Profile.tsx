@@ -515,7 +515,7 @@ function ProfilePresence({ userId }: { userId: string }) {
         </Box>
         {failed && (
           <Text size="T300" style={{ color: 'var(--folds-color-Critical-Main)' }}>
-            Native Matrix presence is unavailable.
+            Synara could not load your presence. Try again.
           </Text>
         )}
       </Box>
@@ -575,7 +575,7 @@ function ProfileStatus({ userId }: { userId: string }) {
     if (thrown instanceof UserStatusWriteError) {
       setFailure(thrown.message);
     } else {
-      setFailure('Native user status is unavailable.');
+      setFailure('Synara could not update your status. Try again.');
     }
   }, [changeState, clearState]);
 
@@ -644,7 +644,7 @@ function ProfileStatus({ userId }: { userId: string }) {
         </Box>
         {(unavailable || failure) && (
           <Text size="T300" style={{ color: 'var(--folds-color-Critical-Main)' }}>
-            {failure ?? 'Native user status is unavailable.'}
+            {failure ?? 'Synara could not load your status. Try again.'}
           </Text>
         )}
       </Box>
@@ -691,7 +691,7 @@ function ProfileRtcTransports() {
       <Box direction="Column" gap="100">
         <Text size="T300" data-testid="matrix-rtc-transport-diagnostic">
           {unavailable || !snapshot
-            ? 'Native MatrixRTC transports are unavailable.'
+            ? 'Synara could not read the call transports for your homeserver.'
             : rtcTransportsDiagnosticCopy(snapshot)}
         </Text>
         <Button

@@ -68,7 +68,7 @@ import { RoomNotesPanel } from './room-notes/RoomNotesPanel';
 import { RoomThreadListPanel } from './RoomThreadListPanel';
 import type { RoomSidePanelType } from './RoomSidePanel';
 import * as depthCss from '../../styles/Depth.css';
-import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
+import { useNativeRoomSummary } from '../../state/room-list/roomList';
 import {
   snapshotRtcTransportsNative,
   type NativeRtcTransportsSnapshot,
@@ -318,8 +318,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
 
 const RoomCallMenu = forwardRef<HTMLDivElement>((_, ref) => {
   const room = useRoom();
-  const nativeRooms = useNativeRoomListSnapshot();
-  const nativeRoom = nativeRooms.rooms.find((summary) => summary.roomId === room.roomId);
+  const nativeRoom = useNativeRoomSummary(room.roomId);
   const [snapshot, setSnapshot] = useState<NativeRtcTransportsSnapshot | null>(null);
 
   useEffect(() => {

@@ -52,7 +52,7 @@ test('after a send only the view showing that timeline moves', () => {
   assert.doesNotMatch(roomInput, /if \(!threadRootOverride\) requestRoomLatestAfterSend/);
   assert.match(
     presenter,
-    /observeRoomLatestAfterSend\(\s*roomId,\s*threadRootId,\s*threadRootId \? showThreadTail : jumpToLatest\s*\)/
+    /observeRoomLatestAfterSend\(\s*roomId,\s*threadRootId,\s*threadRootId \? showThreadTail : showLatestAfterSend\s*\)/
   );
 });
 
@@ -94,5 +94,7 @@ test('upload cards and the board report real state and never reject silently', (
     assert.doesNotMatch(card, /mediaConfig\['m\.upload\.size'\]/);
   }
   assert.match(uploadCard, /upload\.status === UploadStatus\.Success && !nativeStaged/);
-  assert.match(uploadCard, /upload\.status === UploadStatus\.Error && !nativeComposerSend/);
+  // D85: no renderer upload path, so no Retry that could only fail again.
+  assert.doesNotMatch(uploadCard, /startUpload|Retry Upload/);
+  assert.doesNotMatch(compactCard, /startUpload|isSynaraDesktop/);
 });

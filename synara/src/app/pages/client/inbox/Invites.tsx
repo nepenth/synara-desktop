@@ -53,6 +53,7 @@ import {
   runBulkAction,
   type BulkFailureCopy,
 } from '../../../utils/bulkActions';
+import { composerErrorMessage } from '../../../features/room/composerSendError';
 
 const COMPACT_CARD_WIDTH = 548;
 
@@ -219,12 +220,18 @@ function InviteCard({
             </Box>
             {joinState.status === AsyncStatus.Error && (
               <Text size="T200" style={{ color: color.Critical.Main }}>
-                {joinState.error.message}
+                {composerErrorMessage(
+                  joinState.error,
+                  'Synara could not accept the invite. Try again.'
+                )}
               </Text>
             )}
             {leaveState.status === AsyncStatus.Error && (
               <Text size="T200" style={{ color: color.Critical.Main }}>
-                {leaveState.error.message}
+                {composerErrorMessage(
+                  leaveState.error,
+                  'Synara could not decline the invite. Try again.'
+                )}
               </Text>
             )}
           </Box>

@@ -94,6 +94,7 @@ import { InviteUserPrompt } from '../../../components/invite-user-prompt';
 import * as depthCss from '../../../styles/Depth.css';
 
 import { getNativeRoom } from '../../../native/nativeSession';
+import { composerErrorMessage } from '../../../features/room/composerSendError';
 type SpaceMenuProps = {
   room: EventedRoomReading;
   requestClose: () => void;
@@ -371,7 +372,10 @@ export function SpaceTombstone({ roomId, replacementRoomId }: SpaceTombstoneProp
         <Text size="T200">This space has been replaced and is no longer active.</Text>
         {joinState.status === AsyncStatus.Error && (
           <Text className={BreakWord} style={{ color: color.Critical.Main }} size="T200">
-            {(joinState.error as any)?.message ?? 'Failed to join replacement space!'}
+            {composerErrorMessage(
+              joinState.error,
+              'Synara could not join the new space. Try again.'
+            )}
           </Text>
         )}
       </Box>

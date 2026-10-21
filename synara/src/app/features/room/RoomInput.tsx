@@ -153,7 +153,7 @@ import {
 } from './nativeLinkUnfurl';
 import { NativeLinkUnfurlCard } from './nativeLinkUnfurlCard';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
-import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
+import { useNativeRoomSummary } from '../../state/room-list/roomList';
 import { useNativeThreadRoot } from './nativeThreadViewContext';
 import type { AttachmentSendPlan } from './attachmentSendPlan';
 import {
@@ -175,6 +175,7 @@ import {
   COMPOSER_NOT_SIGNED_IN,
   ComposerUserError,
   composerCommandErrorMessage,
+  composerErrorMessage,
   composerSendErrorMessage,
 } from './composerSendError';
 import type { NativeUploadSendState } from '../../components/upload-card/UploadCardRenderer';
@@ -370,10 +371,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const [composerPreviewUrl, setComposerPreviewUrl] = useState<string>();
     const [composerPreview, setComposerPreview] = useState<NativeMediaPreview | null>(null);
     const [composerPreviewDismissed, setComposerPreviewDismissed] = useState<string>();
-    const nativeRoomList = useNativeRoomListSnapshot();
-    const composerEncryptionStatus = nativeRoomList.rooms.find(
-      (nativeRoom) => nativeRoom.roomId === roomId
-    )?.encryptionStatus;
+    // This room only, so other rooms' activity does not re-render the editor.
+    const composerEncryptionStatus = useNativeRoomSummary(roomId)?.encryptionStatus;
     const [pollAnchor, setPollAnchor] = useState<RectCords>();
     const [pollQuestion, setPollQuestion] = useState('');
     const [pollAnswers, setPollAnswers] = useState(['', '']);
@@ -1010,7 +1009,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           setPollError(
             t(
               'modernization.poll.native_required',
-              'Native Matrix session is required to send polls on desktop.'
+              'Sign in to your Matrix account in Synara to send polls.'
             )
           );
           return;
@@ -1117,7 +1116,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         });
         setGifPickerAnchor(undefined);
       } catch (err) {
-        setGifSendError(err instanceof Error ? err.message : 'Failed to send GIF.');
+        setGifSendError(composerErrorMessage(err, 'Synara could not send the GIF. Try again.'));
       } finally {
         setGifSending(false);
       }

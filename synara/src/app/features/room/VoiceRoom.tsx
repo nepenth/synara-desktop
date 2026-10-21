@@ -6,7 +6,7 @@ import { isNativeMatrixSession } from '../verification/nativeVerification';
 import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 import { getRoomIconSrc } from '../../utils/room';
 import { RoomType } from '../../../types/matrix/room';
-import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
+import { useNativeRoomSummary } from '../../state/room-list/roomList';
 import { snapshotRtcTransportsNative } from '../matrix-rtc/nativeRtcTransports';
 import { voiceRoomLandingCopy } from '../matrix-rtc/liveCallChrome';
 
@@ -20,8 +20,7 @@ import { voiceRoomLandingCopy } from '../matrix-rtc/liveCallChrome';
 export function VoiceRoom() {
   const room = useRoom();
   const members = useRoomMembers(room.roomId, isNativeMatrixSession());
-  const nativeRooms = useNativeRoomListSnapshot();
-  const nativeRoom = nativeRooms.rooms.find((summary) => summary.roomId === room.roomId);
+  const nativeRoom = useNativeRoomSummary(room.roomId);
   const [rtcStatus, setRtcStatus] = useState<'ready' | 'unsupported' | 'unavailable' | null>(null);
   const iconSrc = getRoomIconSrc(
     Icons,

@@ -29,7 +29,7 @@ import { stopPropagation } from '../../../utils/keyboard';
 import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom, getSharedSettings } from '../../../state/settings';
-import { useNativeRoomListSnapshot } from '../../../state/room-list/roomList';
+import { useNativeRoomSummary } from '../../../state/room-list/roomList';
 import {
   desktopUsesNativeStateEventOwner,
   enableRoomEncryptedStateWithNativeOwner,
@@ -53,8 +53,7 @@ type RoomEncryptionProps = {
 export function RoomEncryption({ permissions }: RoomEncryptionProps) {
   const room = useRoom();
   const [encryptedStateEventsSetting] = useSetting(settingsAtom, 'encryptedStateEvents');
-  const nativeRooms = useNativeRoomListSnapshot();
-  const nativeSummary = nativeRooms.rooms.find((item) => item.roomId === room.roomId);
+  const nativeSummary = useNativeRoomSummary(room.roomId);
 
   const canEnable = permissions.stateEvent(StateEvent.RoomEncryption);
   const content = useStateEvent(room, StateEvent.RoomEncryption)?.getContent<{

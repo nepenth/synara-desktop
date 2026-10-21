@@ -45,6 +45,7 @@ import { useMemberPowerCompare } from '../../hooks/useMemberPowerCompare';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { setPowerLevelWithNativeOwner } from '../nativeRoomModerationOwner';
 import { getSafeMyUserId } from '../../state/nativeIdentity';
+import { composerErrorMessage } from '../../features/room/composerSendError';
 
 type SelfDemoteAlertProps = {
   power: number;
@@ -252,7 +253,10 @@ export function PowerChip({ userId }: { userId: string }) {
                   <CutoutCard style={{ padding: config.space.S200 }} variant="Critical">
                     <Text size="L400">Error: {powerState.error.name}</Text>
                     <Text className={BreakWord} size="T200">
-                      {powerState.error.message}
+                      {composerErrorMessage(
+                        powerState.error,
+                        'Synara could not change the power level. Try again.'
+                      )}
                     </Text>
                   </CutoutCard>
                 )}

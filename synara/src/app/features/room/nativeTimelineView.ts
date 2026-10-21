@@ -7,6 +7,7 @@ import {
   type DesktopInvokeResult,
 } from '../../utils/desktop';
 import { parseHermesAgentPayload, type HermesAgentPayload } from '../../utils/hermes';
+import { startVisibleOnlyPoll } from '../../utils/visibilityPoll';
 import type { RoomEncryptionStatus } from '../matrix-dto/room';
 import { devicePixelScale, nativeThumbnailContentUri } from '../../matrix/nativeThumbnail';
 import type { NativeTimelineEncryptionShield } from './nativeTimelineShield';
@@ -561,6 +562,14 @@ export const nativeTimelinePollDelay = (deltasLive: boolean, firstPoll: boolean)
 };
 
 /**
+ * After a send, a view Core opened at the live bottom already receives the
+ * message as a delta, so only the tail needs placing. Any other placement
+ * (history, a focused event, last read) still asks Core to jump to latest.
+ */
+export const shouldPlaceLatestLocally = (position: NativeTimelinePosition | undefined): boolean =>
+  position?.kind === 'live_bottom';
+
+/**
  * True when `next` carries nothing new. The revision counts SDK timeline
  * diffs only; position, pagination, and read state can change without one, so
  * an equal revision alone is not proof. Compare the payload too, but only
@@ -733,21 +742,6 @@ export const shouldAttachFormattedBody = (body: string, formattedBody?: string |
   const html = formattedBody?.trim();
   if (!html) return false;
   return html !== body.trim();
-};
-
-/**
- * Preserve Matrix HTML only when the user deliberately edited it, or when the
- * plain-text fallback is unchanged. Reusing the original HTML after changing
- * only the fallback would send two different messages in one event.
- */
-export const editedFormattedBodyForSubmit = (
-  initialBody: string,
-  nextBody: string,
-  formattedBody: string,
-  formattedBodyWasEdited: boolean
-): string | undefined => {
-  if (!formattedBodyWasEdited && nextBody.trim() !== initialBody.trim()) return undefined;
-  return shouldAttachFormattedBody(nextBody, formattedBody) ? formattedBody.trim() : undefined;
 };
 
 /** Prefer the latest remote thread event when focusing from a thread summary. */
@@ -1341,7 +1335,7 @@ export const useNativeTimelineView = (
 
     let disposed = false;
     let unlisten: (() => void) | undefined;
-    let pollTimer: number | undefined;
+    let stopPoll: (() => void) | undefined;
     let resyncInFlight = false;
     // Assigned below; a gap found while applying deltas asks for a snapshot.
     let resyncAfterGap: () => void = () => undefined;
@@ -1520,17 +1514,14 @@ export const useNativeTimelineView = (
             : undefined
         );
         if (!disposed) {
-          const schedulePoll = (firstPoll: boolean) => {
-            pollTimer = window.setTimeout(
-              () => {
-                if (disposed) return;
-                void pollSnapshot();
-                schedulePoll(false);
-              },
-              nativeTimelinePollDelay(Boolean(unlisten), firstPoll)
-            );
-          };
-          schedulePoll(true);
+          // Paused while the window is hidden; showing it again polls at once (D11).
+          const deltasLive = Boolean(unlisten);
+          stopPoll = startVisibleOnlyPoll(
+            () => {
+              if (!disposed) void pollSnapshot();
+            },
+            (firstPoll) => nativeTimelinePollDelay(deltasLive, firstPoll)
+          );
         }
       } catch (error) {
         if (!disposed) {
@@ -1558,7 +1549,7 @@ export const useNativeTimelineView = (
           request: { streamId },
         });
       }
-      if (pollTimer !== undefined) window.clearTimeout(pollTimer);
+      stopPoll?.();
       unlisten?.();
     };
     // `reloadToken` reopens the same request on demand (Retry, Reload).

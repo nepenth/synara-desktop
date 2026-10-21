@@ -23,7 +23,7 @@ export type NativeSecretStorageSetup = NativeSecretStorageOperationResult & {
 export const NATIVE_SECRET_STORAGE_CHANGED = 'synara-native-secret-storage-changed';
 
 export const nativeSecretStorageErrorMessage = (): string =>
-  'Native secret storage is unavailable. Restart Synara and try again.';
+  'Synara could not reach secret storage. Restart Synara and try again.';
 
 const invokeNativeSecretStorage = async <T>(
   command: string,

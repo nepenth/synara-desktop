@@ -28,6 +28,7 @@ import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import { NativeDevice, nativeDeviceTrustLabel, renameNativeDevice } from './nativeDevices';
 import { RefreshDeviceList } from '../../../hooks/useDeviceList';
+import { composerErrorMessage } from '../../room/composerSendError';
 
 export function DeviceTilePlaceholder() {
   return (
@@ -205,7 +206,10 @@ function DeviceRename({ device, onCancel, onRename, refreshDeviceList }: DeviceR
       </Box>
       {renameState.status === AsyncStatus.Error ? (
         <Text size="T200" style={{ color: color.Critical.Main }}>
-          {renameState.error.message}
+          {composerErrorMessage(
+            renameState.error,
+            'Synara could not rename this session. Try again.'
+          )}
         </Text>
       ) : (
         <Text size="T200">Device names are visible to public.</Text>

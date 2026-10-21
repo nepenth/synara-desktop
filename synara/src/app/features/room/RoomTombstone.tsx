@@ -9,6 +9,7 @@ import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { getViaServers } from '../../plugins/via-servers';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { joinRoomWithNativeOwner } from '../../components/nativeRoomJoinOwner';
+import { composerErrorMessage } from './composerSendError';
 
 import { getNativeRoom } from '../../native/nativeSession';
 type RoomTombstoneProps = { roomId: string; body?: string; replacementRoomId: string };
@@ -41,7 +42,10 @@ export function RoomTombstone({ roomId, body, replacementRoomId }: RoomTombstone
         <Text size="T400">{body || 'This room has been replaced and is no longer active.'}</Text>
         {joinState.status === AsyncStatus.Error && (
           <Text style={{ color: color.Critical.Main }} size="T200">
-            {(joinState.error as any)?.message ?? 'Failed to join replacement room!'}
+            {composerErrorMessage(
+              joinState.error,
+              'Synara could not join the new room. Try again.'
+            )}
           </Text>
         )}
       </Box>

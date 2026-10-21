@@ -32,6 +32,7 @@ import { useRoomPermissions } from '../../../hooks/useRoomPermissions';
 import { sendLeftoverStateEvent } from '../../../components/nativeStateEventOwner';
 
 import { sendNativeStateEvent } from '../../../native/nativeCommands';
+import { composerErrorMessage } from '../../room/composerSendError';
 const EDITOR_INTENT_SPACE_COUNT = 2;
 
 type StateEventEditProps = {
@@ -159,7 +160,12 @@ function StateEventEdit({ type, stateKey, content, requestClose }: StateEventEdi
 
         {submitState.status === AsyncStatus.Error && (
           <Text size="T200" style={{ color: color.Critical.Main }}>
-            <b>{submitState.error.message}</b>
+            <b>
+              {composerErrorMessage(
+                submitState.error,
+                'Synara could not save the state event. Try again.'
+              )}
+            </b>
           </Text>
         )}
       </Box>

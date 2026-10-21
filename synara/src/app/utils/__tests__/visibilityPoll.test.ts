@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   HIDDEN_POLL_INTERVAL_MS,
   startVisibilityAwarePoll,
+  startVisibleOnlyPoll,
   VISIBLE_POLL_INTERVAL_MS,
   type VisibilityPollEnvironment,
 } from '../visibilityPoll';
@@ -81,4 +82,65 @@ test('polls at the visible cadence and slows down while hidden', () => {
   stop();
   assert.equal(fake.timers.size, 0);
   assert.equal(fake.listeners.size, 0);
+});
+
+test('D11: a visible-only poll stops while hidden and catches up when shown', () => {
+  const fake = fakeEnvironment();
+  let ticks = 0;
+  const delays: boolean[] = [];
+  const stop = startVisibleOnlyPoll(
+    () => {
+      ticks += 1;
+    },
+    (firstPoll) => {
+      delays.push(firstPoll);
+      return firstPoll ? 1_500 : 10_000;
+    },
+    fake.environment
+  );
+  assert.deepEqual(
+    [...fake.timers.values()].map((timer) => timer.ms),
+    [1_500],
+    'the first poll uses the early delay'
+  );
+  fake.fire();
+  assert.equal(ticks, 1);
+  assert.deepEqual(
+    [...fake.timers.values()].map((timer) => timer.ms),
+    [10_000]
+  );
+
+  fake.setHidden(true);
+  assert.equal(fake.timers.size, 0, 'no timer, so no IPC, while hidden');
+  assert.equal(ticks, 1);
+
+  fake.setHidden(false);
+  assert.equal(ticks, 2, 'showing the window polls at once');
+  assert.deepEqual(
+    [...fake.timers.values()].map((timer) => timer.ms),
+    [10_000]
+  );
+  assert.deepEqual(delays, [true, false, false]);
+
+  stop();
+  assert.equal(fake.timers.size, 0);
+  assert.equal(fake.listeners.size, 0);
+});
+
+test('D11: a visible-only poll started while hidden waits for the window', () => {
+  const fake = fakeEnvironment();
+  fake.setHidden(true);
+  let ticks = 0;
+  const stop = startVisibleOnlyPoll(
+    () => {
+      ticks += 1;
+    },
+    () => 1_000,
+    fake.environment
+  );
+  assert.equal(fake.timers.size, 0);
+  fake.setHidden(false);
+  assert.equal(ticks, 1);
+  assert.equal(fake.timers.size, 1);
+  stop();
 });

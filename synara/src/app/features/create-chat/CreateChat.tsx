@@ -7,8 +7,6 @@ import { SequenceCard } from '../../components/sequence-card';
 import { isUserId } from '../../utils/matrix';
 import { addRoomIdToMDirect } from '../room/nativeMDirect';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
-import { ErrorCode } from '../../cs-errorcode';
-import { millisecondsToMinutes } from '../../utils/common';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { createRoomWithNativeOwner } from '../../components/nativeRoomCreateOwner';
 import { useAlive } from '../../hooks/useAlive';
@@ -16,6 +14,7 @@ import { getDirectRoomPath } from '../../pages/pathUtils';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom, getSharedSettings } from '../../state/settings';
 import { pushEncryptedStateEventsSetting } from '../settings/encryptedStateEvents';
+import { composerErrorMessage } from '../room/composerSendError';
 
 type CreateChatProps = {
   defaultUserId?: string;
@@ -145,14 +144,7 @@ export function CreateChat({ defaultUserId }: CreateChatProps) {
         <Box style={{ color: color.Critical.Main }} alignItems="Center" gap="200">
           <Icon src={Icons.Warning} filled size="100" />
           <Text size="T300" style={{ color: color.Critical.Main }}>
-            <b>
-              {(error as { name?: string } | null)?.name === ErrorCode.M_LIMIT_EXCEEDED
-                ? `Server rate-limited your request for ${millisecondsToMinutes(
-                    ((error as { data?: { retry_after_ms?: unknown } }).data?.retry_after_ms as
-                      number | undefined) ?? 0
-                  )} minutes!`
-                : error.message}
-            </b>
+            <b>{composerErrorMessage(error, 'Synara could not create the chat. Try again.')}</b>
           </Text>
         </Box>
       )}

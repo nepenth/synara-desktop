@@ -8,6 +8,10 @@ import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { StateEvent } from '../../../../types/matrix/room';
 import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
 import { useNativeRoomJoinRule } from '../../../hooks/useNativeRoomJoinRule';
+import { composerErrorMessage } from '../../room/composerSendError';
+
+const DIRECTORY_VISIBILITY_FAILED =
+  'Synara could not update whether this room is listed in the directory. Try again.';
 
 type RoomPublishProps = {
   permissions: RoomPermissionsAPI;
@@ -33,15 +37,11 @@ export function RoomPublish({ permissions, roomId, isSpace }: RoomPublishProps) 
       joinRuleState.snapshot.joinRule === 'knock_restricted');
   const errorMessage =
     joinRuleState.status === 'error'
-      ? joinRuleState.error.message
+      ? composerErrorMessage(joinRuleState.error, 'Synara could not load who can join. Try again.')
       : visibilityState.status === AsyncStatus.Error
-        ? visibilityState.error instanceof Error
-          ? visibilityState.error.message
-          : 'Native Matrix directory visibility is unavailable.'
+        ? composerErrorMessage(visibilityState.error, DIRECTORY_VISIBILITY_FAILED)
         : toggleState.status === AsyncStatus.Error
-          ? toggleState.error instanceof Error
-            ? toggleState.error.message
-            : 'Native Matrix directory visibility is unavailable.'
+          ? composerErrorMessage(toggleState.error, DIRECTORY_VISIBILITY_FAILED)
           : undefined;
 
   return (

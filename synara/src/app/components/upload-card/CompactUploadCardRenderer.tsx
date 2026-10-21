@@ -12,34 +12,30 @@ import {
 import { TUploadContent } from '../../utils/matrix';
 import { bytesToSize, getFileTypeIcon } from '../../utils/common';
 import { useMediaConfig } from '../../hooks/useMediaConfig';
-import { isSynaraDesktop } from '../../utils/desktop';
 import { uploadMediaNative } from '../../state/nativeMediaUpload';
 import {
   effectiveNativeAttachmentLimit,
   mediaConfigUploadLimit,
 } from '../../utils/nativeMediaLimits';
+import { composerErrorMessage } from '../../features/room/composerSendError';
 
 type CompactUploadCardRendererProps = {
+  /** Unused: Core encrypts uploads for encrypted rooms. */
   isEncrypted?: boolean;
   uploadAtom: TUploadAtom;
   onRemove: (file: TUploadContent) => void;
   onComplete?: (upload: UploadSuccess) => void;
 };
 export function CompactUploadCardRenderer({
-  isEncrypted,
   uploadAtom,
   onRemove,
   onComplete,
 }: CompactUploadCardRendererProps) {
   const mediaConfig = useMediaConfig();
-  const desktop = isSynaraDesktop();
-  const serverAllowSize = mediaConfigUploadLimit(mediaConfig);
-  const allowSize = desktop
-    ? effectiveNativeAttachmentLimit(serverAllowSize)
-    : serverAllowSize || Infinity;
+  const allowSize = effectiveNativeAttachmentLimit(mediaConfigUploadLimit(mediaConfig));
   const [, setUpload] = useAtom(uploadAtom);
 
-  const { upload, startUpload, cancelUpload } = useBindUploadAtom(uploadAtom, isEncrypted);
+  const { upload } = useBindUploadAtom(uploadAtom);
   const { file } = upload;
   const fileSizeExceeded = file.size > allowSize;
   const nativeStarted = useRef(false);
@@ -54,33 +50,24 @@ export function CompactUploadCardRenderer({
       const mimeType = file.type || 'image/png';
       const uploaded = await uploadMediaNative(mimeType, bytes);
       if (uploaded === 'legacy') {
-        throw new Error('Native Matrix media upload is unavailable.');
+        throw new Error(
+          'Synara is not signed in to your Matrix account. Sign in again, then retry.'
+        );
       }
       setUpload({ mxc: uploaded.mxc });
     } catch (e: unknown) {
-      const message =
-        e instanceof Error && typeof e.message === 'string'
-          ? e.message
-          : 'Native Matrix media upload is unavailable.';
+      const message = composerErrorMessage(e, 'Synara could not upload this file. Try again.');
       setUpload({ error: makeUploadError(message) });
     }
   }, [file, setUpload]);
 
-  if (upload.status === UploadStatus.Idle && !fileSizeExceeded) {
-    if (desktop) {
-      if (!nativeStarted.current) {
-        nativeStarted.current = true;
-        void startNativeUpload();
-      }
-    } else {
-      startUpload();
-    }
+  // Core uploads the file; there is no renderer upload path (D85).
+  if (upload.status === UploadStatus.Idle && !fileSizeExceeded && !nativeStarted.current) {
+    nativeStarted.current = true;
+    void startNativeUpload();
   }
 
   const removeUpload = () => {
-    if (!desktop) {
-      cancelUpload();
-    }
     nativeStarted.current = false;
     onRemove(file);
   };
@@ -103,12 +90,8 @@ export function CompactUploadCardRenderer({
             <Chip
               as="button"
               onClick={() => {
-                if (desktop) {
-                  nativeStarted.current = false;
-                  void startNativeUpload();
-                } else {
-                  startUpload();
-                }
+                nativeStarted.current = false;
+                void startNativeUpload();
               }}
               aria-label="Retry Upload"
               variant="Critical"
@@ -147,7 +130,12 @@ export function CompactUploadCardRenderer({
           )}
           {upload.status === UploadStatus.Error && (
             <UploadCardError>
-              <Text size="T200">{upload.error.message}</Text>
+              <Text size="T200">
+                {composerErrorMessage(
+                  upload.error,
+                  'Synara could not upload this file. Try again.'
+                )}
+              </Text>
             </UploadCardError>
           )}
           {upload.status === UploadStatus.Idle && fileSizeExceeded && (

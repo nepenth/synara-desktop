@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
-import type { MemberReading, RoomReading } from '../utils/room';
+import type { RoomReading } from '../utils/room';
+import type { RoomMember } from '../features/matrix-dto/member';
+import { readRoomMembersWithNativeOwner } from './nativeRoomMembersOwner';
 import { useTranslation } from 'react-i18next';
 import {
   getDMRoomFor,
@@ -38,8 +40,6 @@ import {
 import { bulkRedact } from '../native/nativeRoomExtras';
 import type { BulkActionFailure, BulkFailureCopy } from '../utils/bulkActions';
 import { ComposerUserError, commandFailureError } from '../features/room/composerSendError';
-
-type ServerMemberReading = MemberReading & { membership: string };
 
 type RoomServerAclEventContent = {
   allow?: string[];
@@ -112,9 +112,26 @@ export const parseServers = (payload: string): string[] => {
   return servers;
 };
 
-const getServerMembers = (room: RoomReading, server: string): ServerMemberReading[] => {
-  const members = room.getMembers() as ServerMemberReading[];
-  return members.filter((member) => member.userId.endsWith(`:${server}`));
+/**
+ * Members of `room` on any of `servers`, from Core's member list. The room
+ * facade has no members, so a server argument used to match nobody (D15).
+ */
+const getServerMembers = async (room: RoomReading, servers: string[]): Promise<RoomMember[]> => {
+  if (servers.length === 0) return [];
+  const members = (await readRoomMembersWithNativeOwner(room.roomId, isSynaraDesktop())) ?? [];
+  return members.filter((member) => servers.some((server) => member.userId.endsWith(`:${server}`)));
+};
+
+/** The one other joined member of `room`, or `undefined` when there is not exactly one. */
+const onlyOtherJoinedMember = async (
+  room: RoomReading,
+  myUserId: string
+): Promise<string | undefined> => {
+  const members = (await readRoomMembersWithNativeOwner(room.roomId, isSynaraDesktop())) ?? [];
+  const others = members.filter(
+    (member) => member.membership === Membership.Join && member.userId !== myUserId
+  );
+  return others.length === 1 ? others[0].userId : undefined;
 };
 
 export const parseTimestampFlag = (input: string): number | undefined => {
@@ -375,7 +392,7 @@ export const useCommands = (
           const flagToContent = parseFlags(flags);
           const reason = flagToContent.r;
 
-          const serverMembers = servers?.flatMap((server) => getServerMembers(room, server));
+          const serverMembers = await getServerMembers(room, servers);
           const serverUsers = serverMembers
             ?.filter((m) => m.membership !== Membership.Ban)
             .map((m) => m.userId);
@@ -417,7 +434,7 @@ export const useCommands = (
           const flagToContent = parseFlags(flags);
           const reason = flagToContent.r;
 
-          const serverMembers = servers?.flatMap((server) => getServerMembers(room, server));
+          const serverMembers = await getServerMembers(room, servers);
           const serverUsers = serverMembers?.map((m) => m.userId);
 
           if (Array.isArray(serverUsers)) {
@@ -559,7 +576,14 @@ export const useCommands = (
         name: Command.ConvertToDm,
         description: 'Convert room to direct message',
         exe: async () => {
-          const dmUserId = guessDmRoomUserId(room, getSafeMyUserId());
+          const myUserId = getSafeMyUserId();
+          const dmUserId =
+            guessDmRoomUserId(room, myUserId) ?? (await onlyOtherJoinedMember(room, myUserId));
+          if (!dmUserId) {
+            throw new ComposerUserError(
+              'Synara could not tell who this direct message is with. /converttodm works in a room with one other member.'
+            );
+          }
           await addRoomIdToMDirect(room.roomId, dmUserId);
         },
       },
@@ -592,7 +616,7 @@ export const useCommands = (
             );
           }
 
-          const serverMembers = servers?.flatMap((server) => getServerMembers(room, server));
+          const serverMembers = await getServerMembers(room, servers);
           const serverUsers = serverMembers?.map((m) => m.userId);
 
           if (Array.isArray(serverUsers)) {

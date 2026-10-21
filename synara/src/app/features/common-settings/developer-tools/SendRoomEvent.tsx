@@ -24,6 +24,7 @@ import { Cursor } from '../../../plugins/text-area';
 import { sendLeftoverStateEvent } from '../../../components/nativeStateEventOwner';
 
 import { sendNativeEvent, sendNativeStateEvent } from '../../../native/nativeCommands';
+import { composerErrorMessage } from '../../room/composerSendError';
 const EDITOR_INTENT_SPACE_COUNT = 2;
 
 export type SendRoomEventProps = {
@@ -174,7 +175,12 @@ export function SendRoomEvent({ type, stateKey, requestClose }: SendRoomEventPro
 
             {submitState.status === AsyncStatus.Error && (
               <Text size="T200" style={{ color: color.Critical.Main }}>
-                <b>{submitState.error.message}</b>
+                <b>
+                  {composerErrorMessage(
+                    submitState.error,
+                    'Synara could not send the event. Try again.'
+                  )}
+                </b>
               </Text>
             )}
           </Box>
