@@ -50,8 +50,11 @@ async fn sync_cached_room(server: &MatrixMockServer, client: &Client, id: &RoomI
                 .set_timeline_prev_batch("earlier")
                 .add_state_event(f.create(client.user_id().unwrap(), RoomVersionId::V11))
                 .add_timeline_event(
-                    f.image("cat.png".to_owned(), mxc_uri!("mxc://example.org/cat").to_owned())
-                        .sender(*BOB),
+                    f.image(
+                        "cat.png".to_owned(),
+                        mxc_uri!("mxc://example.org/cat").to_owned(),
+                    )
+                    .sender(*BOB),
                 )
                 .add_timeline_event(f.text_msg("one").sender(*BOB))
                 .add_timeline_event(f.text_msg("two").sender(*BOB)),

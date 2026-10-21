@@ -128,7 +128,10 @@ fn approval_history_stream_publication_has_no_cancellation_point_before_readback
         .next()
         .unwrap();
     assert!(publish.contains("self.view_streams.insert("));
-    assert!(!publish.contains(".await"), "publication must stay synchronous");
+    assert!(
+        !publish.contains(".await"),
+        "publication must stay synchronous"
+    );
     let open = source
         .split_once("\nasync fn open_view(")
         .expect("view open")
