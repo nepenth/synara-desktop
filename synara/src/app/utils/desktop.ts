@@ -351,7 +351,7 @@ export const sanitizeDesktopNotificationRoute = (value: unknown): string | undef
 };
 
 const MAX_DESKTOP_DISMISS_KEY_CHARS = 255;
-const DESKTOP_DISMISS_KEY_PREFIXES = ['room:', 'event:'] as const;
+const DESKTOP_DISMISS_KEY_PREFIXES = ['room:', 'event:', 'invite:'] as const;
 
 export const sanitizeDesktopDismissKey = (value: unknown): string | undefined => {
   if (typeof value !== 'string') return undefined;
@@ -666,13 +666,27 @@ export const playDesktopNotificationSound = async (
   }
 };
 
+/**
+ * What the shell did with an agent action: ran it itself (clipboard or
+ * browser), handed it to the renderer's agent-action listener, or could not
+ * run it, so the caller's fallback should.
+ */
+export type DesktopAgentActionOutcome = 'ran_locally' | 'handed_to_renderer' | 'unsupported';
+
+export const normalizeDesktopAgentActionOutcome = (value: unknown): DesktopAgentActionOutcome => {
+  if (value === 'ran_locally' || value === 'handed_to_renderer') return value;
+  // An older shell answered `true` once it had run or forwarded the action.
+  if (value === true) return 'handed_to_renderer';
+  return 'unsupported';
+};
+
 export const sendDesktopAgentAction = async (
   action: DesktopAgentActionPayload
-): Promise<boolean> => {
+): Promise<DesktopAgentActionOutcome> => {
   const safeAction: NormalizedAgentActionPayload | undefined = normalizeAgentActionPayload(action);
-  if (!safeAction) return false;
-  const result = await invokeDesktop<boolean>('desktop_agent_action', { action: safeAction });
-  return result === true;
+  if (!safeAction) return 'unsupported';
+  const result = await invokeDesktop<unknown>('desktop_agent_action', { action: safeAction });
+  return normalizeDesktopAgentActionOutcome(result);
 };
 
 const isSafeDesktopExternalUrl = (url: string): boolean => {
@@ -1040,61 +1054,20 @@ export const flushPendingDesktopTrayStateUpdate = (): Promise<boolean | undefine
   debouncedSetDesktopTrayState.flush();
 
 /**
- * The integration report's notification check reads the Tauri plugin, which
- * reports Granted on every desktop. The notification permission command reads
- * what the OS actually allows (UserNotifications on a bundled macOS build).
+ * The shell's report reads notification permission from the same source as
+ * `desktop_get_notification_permission` (UserNotifications on a bundled
+ * macOS build), so it is used as is.
  */
-export const desktopNotificationCheckFromPermission = (
-  permission: unknown
-): DesktopIntegrationCheck | undefined => {
-  const name = 'Notifications';
-  switch (typeof permission === 'string' ? permission.trim().toLowerCase() : undefined) {
-    case 'granted':
-      return {
-        name,
-        supported: true,
-        ready: true,
-        message: 'Notification permission is active.',
-      };
-    case 'denied':
-      return {
-        name,
-        supported: true,
-        ready: false,
-        message: 'Notifications are blocked by platform permission.',
-      };
-    case 'default':
-    case 'prompt':
-    case 'prompt-with-rationale':
-      return {
-        name,
-        supported: true,
-        ready: false,
-        message: 'Notification permission has not been requested yet.',
-      };
-    default:
-      return undefined;
-  }
-};
-
 export const getDesktopIntegrationStatus = async (): Promise<DesktopIntegrationStatus> => {
   if (!getBridge()?.supportsIntegrationStatus) {
     return normalizeDesktopIntegrationStatus(undefined);
   }
 
-  let status: DesktopIntegrationStatus;
   try {
     const result = await invokeDesktop<unknown>('desktop_get_integration_status');
-    status = normalizeDesktopIntegrationStatus(result);
+    return normalizeDesktopIntegrationStatus(result);
   } catch {
     return normalizeDesktopIntegrationStatus(undefined);
-  }
-  try {
-    const permission = await invokeDesktop<unknown>('desktop_get_notification_permission');
-    const notifications = desktopNotificationCheckFromPermission(permission);
-    return notifications ? { ...status, notifications } : status;
-  } catch {
-    return status;
   }
 };
 
@@ -1110,7 +1083,11 @@ export const getDesktopPerformanceCapabilities =
     }
   };
 
-const normalizeDesktopPermission = (permission: unknown): DesktopNotificationPermission => {
+/**
+ * macOS reports `default` until the user has been asked; that is a prompt,
+ * not a block, so Settings offers Enable instead of "blocked".
+ */
+export const normalizeDesktopPermission = (permission: unknown): DesktopNotificationPermission => {
   if (
     permission === 'granted' ||
     permission === 'denied' ||
@@ -1119,6 +1096,7 @@ const normalizeDesktopPermission = (permission: unknown): DesktopNotificationPer
   ) {
     return permission;
   }
+  if (permission === 'default') return 'prompt';
   return 'denied';
 };
 
@@ -1208,9 +1186,63 @@ export async function dismissDesktopNotifications(keys: string[]): Promise<void>
 }
 
 /**
- * Sign-out cleanup: withdraw the banners this session posted, zero the app
+ * Withdraw every banner this app posted, including an earlier launch's on
+ * macOS. Falls back to the keys this renderer posted when the shell lacks
+ * the command.
+ */
+export async function dismissAllDesktopNotifications(): Promise<void> {
+  if (!isSynaraDesktop()) return;
+  try {
+    const result = await invokeDesktopWithAvailability(
+      'desktop_dismiss_all_notifications',
+      undefined,
+      // A missing command is expected from an older shell; it is handled below.
+      { suppressErrorDiagnostic: true }
+    );
+    if (result.available) {
+      postedDismissKeys.clear();
+      return;
+    }
+  } catch {
+    // An older shell has no such command; withdraw what this renderer posted.
+  }
+  await dismissDesktopNotifications(getPostedDesktopDismissKeys());
+}
+
+/**
+ * Clicks and approval actions that reached the shell before this renderer
+ * was listening for `sessionGeneration` (cold launch, before restore, after
+ * re-login). The shell opens queued routes itself and returns the actions.
+ */
+export const takeDesktopNotificationResponses = async (
+  sessionGeneration: number
+): Promise<DesktopNotificationActionEventPayload[]> => {
+  if (!isSynaraDesktop() || !Number.isSafeInteger(sessionGeneration) || sessionGeneration < 0) {
+    return [];
+  }
+  const result = await invokeDesktopWithAvailability<unknown>(
+    'desktop_take_notification_responses',
+    { sessionGeneration }
+  );
+  if (!result.available || !Array.isArray(result.value)) return [];
+  return result.value.filter(
+    (entry): entry is DesktopNotificationActionEventPayload =>
+      !!entry &&
+      typeof entry === 'object' &&
+      typeof (entry as DesktopNotificationActionEventPayload).actionId === 'string'
+  );
+};
+
+/** Bring the main window forward (it may be hidden in the tray). */
+export const showDesktopWindow = async (): Promise<void> => {
+  await invokeDesktopWithAvailability('desktop_show');
+};
+
+/**
+ * Sign-out cleanup: withdraw the banners this app posted, zero the app
  * badge and clear the tray counts. The signed-out shell mounts no badge or
- * tray updater, so without this the old account's counts would stay.
+ * tray updater, so without this the old account's counts would stay. The
+ * shell repeats this inside `matrix_logout` for forced and expired sign-outs.
  */
 export const clearDesktopNotificationSurfaces = async ({
   doNotDisturb,
@@ -1219,7 +1251,7 @@ export const clearDesktopNotificationSurfaces = async ({
 }): Promise<void> => {
   if (!isSynaraDesktop()) return;
   const steps: Array<() => Promise<unknown>> = [
-    () => dismissDesktopNotifications(getPostedDesktopDismissKeys()),
+    () => dismissAllDesktopNotifications(),
     () => setDesktopBadgeCount(0),
     async () => {
       const trayUpdate = setDesktopTrayState({

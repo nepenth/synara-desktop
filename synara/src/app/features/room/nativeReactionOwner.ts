@@ -29,10 +29,12 @@ export type NativeAgentApprovalDecisionResult = {
   status: 'applied' | 'already_decided';
   reaction?: NativeReactionMutationResult;
   /**
-   * The decision already on record when `status` is `already_decided`. Core
-   * does not report it yet; until it does, the caller shows no decision.
+   * The decision already on record when `status` is `already_decided`, and
+   * when it was made. Absent when Core cannot tell; the caller then shows no
+   * decision.
    */
   decision?: ApprovalDecision;
+  decidedAt?: number;
 };
 
 const APPROVAL_DECISIONS: ReadonlySet<string> = new Set(['approve_once', 'approve_always', 'deny']);
@@ -183,11 +185,19 @@ export async function decideAgentApprovalWithNativeOwner(
     throw new Error('Native agent approval readback did not match the requested decision.');
   }
   const decision = recordedApprovalDecision(result.value, input.actionId);
+  const decidedAt =
+    result.value.status === 'already_decided' &&
+    typeof result.value.decidedAt === 'number' &&
+    Number.isFinite(result.value.decidedAt) &&
+    result.value.decidedAt > 0
+      ? result.value.decidedAt
+      : undefined;
   publishApprovalDecision({
     scope,
     roomId: input.roomId,
     eventId: input.eventId,
     ...(decision ? { decision } : {}),
+    ...(decision && decidedAt !== undefined ? { decidedAt } : {}),
   });
   return result.value;
 }

@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use crate::app::auth::{normalize_homeserver_url, normalize_server_name};
 use crate::core::Core;
-use crate::dto::{NotificationCandidate, SessionLifecycle, SessionSnapshot};
+use crate::dto::{SessionLifecycle, SessionSnapshot};
 use crate::platform::{
     CryptoStatusFuture, MediaConfigFuture, Platform, PlatformCryptoStatusError,
     PlatformMediaConfigError, PlatformStatus, PlatformSyncStatusError, SecretVault,
@@ -261,10 +261,6 @@ impl Platform for ProjectionOnlyPlatform {
 
     fn media_config(&self) -> MediaConfigFuture<'_> {
         Box::pin(async { Err(PlatformMediaConfigError::NoSession) })
-    }
-
-    fn notify(&self, _: NotificationCandidate) -> Result<(), MatrixIpcError> {
-        Err(inert_platform_error())
     }
 
     fn set_badge(&self, _: u64) -> Result<(), MatrixIpcError> {

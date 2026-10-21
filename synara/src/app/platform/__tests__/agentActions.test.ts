@@ -217,9 +217,12 @@ test('a repeated click or a second card with the same action id runs again', asy
   try {
     // Hermes cards default to `action-0`, so ids repeat across cards.
     const action = { id: 'action-0', title: 'Run', kind: 'run', prompt: 'npm test' };
-    assert.equal(await sendPlatformAgentAction(action), true);
-    assert.equal(await sendPlatformAgentAction(action), true);
-    assert.equal(await sendPlatformAgentAction({ ...action, prompt: 'npm run lint' }), true);
+    assert.equal(await sendPlatformAgentAction(action), 'handed_to_renderer');
+    assert.equal(await sendPlatformAgentAction(action), 'handed_to_renderer');
+    assert.equal(
+      await sendPlatformAgentAction({ ...action, prompt: 'npm run lint' }),
+      'handed_to_renderer'
+    );
     assert.deepEqual(copied, ['npm test', 'npm test', 'npm run lint']);
   } finally {
     (globalThis as any).window = originalWindow;
@@ -286,7 +289,7 @@ test('an action no plan can run reports unhandled so the card falls back', async
   try {
     assert.equal(
       await sendPlatformAgentAction({ id: 'open', title: 'Open', kind: 'open', prompt: 'p' }),
-      false
+      'unsupported'
     );
     assert.equal(invoked, 0);
   } finally {
@@ -299,4 +302,34 @@ test('a Hermes card confirms a copied action instead of looking ignored', () => 
   assert.match(card, /setActionDoneId\(action\.id\)/);
   assert.match(card, /role="status"/);
   assert.match(card, /'modernization\.hermes\.action_copied', 'Copied'/);
+});
+
+test('a Hermes card reacts to what the shell actually did', () => {
+  const card = readFileSync('src/app/components/hermes/HermesAgentCard.tsx', 'utf8');
+  // Only an action nothing could run falls back to copying here.
+  assert.match(card, /if \(outcome === 'unsupported'\) copyToClipboard\(/);
+  // Handed on to Synara reads "Done"; copied by the shell or fallback, "Copied".
+  assert.match(
+    card,
+    /setActionDoneOutcome\(outcome === 'handed_to_renderer' \? 'done' : 'copied'\)/
+  );
+  assert.match(card, /'modernization\.hermes\.action_done', 'Done'/);
+});
+
+test('the shell reporting an action it ran itself is passed through', async () => {
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async () => 'ran_locally',
+    },
+  };
+  try {
+    assert.equal(
+      await sendPlatformAgentAction({ id: 'copy', title: 'Copy', kind: 'copy', prompt: 'p' }),
+      'ran_locally'
+    );
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
 });

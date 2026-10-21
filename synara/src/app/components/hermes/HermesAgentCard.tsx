@@ -108,6 +108,7 @@ export const HermesAgentCard = memo(({ payload }: HermesAgentCardProps) => {
   const [busyActionId, setBusyActionId] = useState<string>();
   const [actionErrorId, setActionErrorId] = useState<string>();
   const [actionDoneId, setActionDoneId] = useState<string>();
+  const [actionDoneOutcome, setActionDoneOutcome] = useState<'copied' | 'done'>('copied');
   const [pendingUrlAction, setPendingUrlAction] = useState<ActionEntry>();
 
   const pendingActionTitle = pendingUrlAction?.title ?? '';
@@ -146,16 +147,15 @@ export const HermesAgentCard = memo(({ payload }: HermesAgentCardProps) => {
       setActionErrorId(undefined);
       setActionDoneId(undefined);
       try {
-        const handled = await sendPlatformAgentAction({
+        const outcome = await sendPlatformAgentAction({
           ...action,
           markdown,
         });
-        if (!handled) {
-          copyToClipboard(action.prompt ?? action.title);
-          setActionErrorId(undefined);
-        }
-        // Actions without a URL copy their text, whether the shell or the
-        // fallback above did it; say so, so a click never looks ignored.
+        // Nothing could run it: copy its text here instead.
+        if (outcome === 'unsupported') copyToClipboard(action.prompt ?? action.title);
+        // Say what happened, so a click never looks ignored: copied by the
+        // shell or the fallback above, or handed on to Synara to run.
+        setActionDoneOutcome(outcome === 'handed_to_renderer' ? 'done' : 'copied');
         setActionDoneId(action.id);
       } catch {
         setActionErrorId(action.id);
@@ -382,7 +382,9 @@ export const HermesAgentCard = memo(({ payload }: HermesAgentCardProps) => {
           )}
           {!actionErrorId && actionDoneId && (
             <Text size="T200" priority="300" role="status">
-              {t('modernization.hermes.action_copied', 'Copied')}
+              {actionDoneOutcome === 'done'
+                ? t('modernization.hermes.action_done', 'Done')
+                : t('modernization.hermes.action_copied', 'Copied')}
             </Text>
           )}
           <Box gap="100" wrap="Wrap">

@@ -4,9 +4,11 @@ use tauri_plugin_notification::NotificationExt;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 #[cfg(target_os = "linux")]
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::Arc;
+use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
 
-use crate::desktop::navigate_main_window;
+use crate::desktop::{navigate_main_window, show_main_window};
 #[cfg(test)]
 use crate::desktop_sanitize::sanitize_route;
 use crate::desktop_sanitize::{sanitize_action_text, sanitize_notification_route};
@@ -15,10 +17,21 @@ use crate::desktop_sanitize::{sanitize_action_text, sanitize_notification_route}
 #[path = "desktop_notifications_macos.rs"]
 mod macos_modern;
 
+#[path = "desktop_notification_responses.rs"]
+mod responses;
+
+use responses::{
+    admit, process_nonce, response_for_action, ActiveSession, Admission, NotificationBinding,
+    NotificationResponse, PendingResponses,
+};
+
 #[cfg(target_os = "macos")]
 pub fn initialize_macos_notifications<R: Runtime>(app: &AppHandle<R>) {
     if macos_delivery::is_bundled() {
         macos_modern::initialize(app);
+        // A relaunched process can still withdraw the banners an earlier
+        // one posted (sign-out, read elsewhere, decided approvals).
+        macos_modern::rebuild_dismiss_index();
     }
 }
 
@@ -50,9 +63,9 @@ pub struct DesktopNotificationActionContext {
     pub event_id: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-struct DesktopNotificationActionEvent {
+pub struct DesktopNotificationActionEvent {
     session_generation: Option<u64>,
     action_id: String,
     context: Option<DesktopNotificationActionContext>,
@@ -203,7 +216,7 @@ pub(crate) fn sanitize_dismiss_key(value: &str) -> Option<String> {
             && sequence.bytes().all(|b| b.is_ascii_digit()))
         .then(|| trimmed.to_owned());
     }
-    if rest.is_empty() || (prefix != "room" && prefix != "event") {
+    if rest.is_empty() || !matches!(prefix, "room" | "event" | "invite") {
         return None;
     }
     if !trimmed.chars().all(|ch| {
@@ -307,63 +320,127 @@ fn lock_mutex<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-fn emit_notification_action<R: Runtime>(
-    app: &AppHandle<R>,
-    action_id: &str,
-    context: Option<DesktopNotificationActionContext>,
-    session_generation: Option<u64>,
-) -> Result<(), String> {
-    if action_id.starts_with("agent-approval.") && session_generation.is_none() {
-        return Err("Native approval action has no bound session".to_owned());
-    }
-    let event = DesktopNotificationActionEvent {
-        session_generation,
-        action_id: action_id.to_owned(),
-        context,
-    };
-    if let Some(generation) = session_generation {
-        let app = app.clone();
-        tauri::async_runtime::spawn(async move {
-            let auth = app.state::<crate::matrix::auth::MatrixAuthState>();
-            let _ = auth
-                .with_session_generation(generation, || async {
-                    app.emit(DESKTOP_NOTIFICATION_ACTION_EVENT, event)
-                })
-                .await;
-        });
-        return Ok(());
-    }
-    app.emit(DESKTOP_NOTIFICATION_ACTION_EVENT, event)
-        .map_err(|error| error.to_string())
+/// Record a notification failure in the app log as well as stderr, so a
+/// report from a user's machine shows why a banner or click did nothing.
+fn log_notification_error<R: Runtime>(app: &AppHandle<R>, message: &str) {
+    eprintln!("[synara] {message}");
+    crate::desktop_logging::append_app_log(app, "notifications", message);
 }
 
-fn navigate_notification_route<R: Runtime>(
+fn pending_responses() -> std::sync::MutexGuard<'static, PendingResponses> {
+    static PENDING: OnceLock<Mutex<PendingResponses>> = OnceLock::new();
+    PENDING
+        .get_or_init(|| Mutex::new(PendingResponses::default()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+async fn active_session<R: Runtime>(app: &AppHandle<R>) -> Option<ActiveSession> {
+    let auth = app.try_state::<crate::matrix::auth::MatrixAuthState>()?;
+    let (generation, account) = auth.active_session_binding().await?;
+    Some(ActiveSession {
+        generation,
+        account,
+    })
+}
+
+/// Who a banner is posted for: the requested generation plus the account
+/// and process that posted it, so a later click can be matched safely.
+async fn notification_binding<R: Runtime>(
     app: &AppHandle<R>,
-    route: &str,
     session_generation: Option<u64>,
-    critical: bool,
+) -> NotificationBinding {
+    NotificationBinding {
+        session_generation,
+        account: active_session(app).await.map(|active| active.account),
+        process: Some(process_nonce()),
+    }
+}
+
+/// Deliver one response under its session's generation gate. A route shows
+/// the window; an action reaches the renderer's listener.
+async fn deliver_notification_response<R: Runtime>(
+    app: &AppHandle<R>,
+    generation: Option<u64>,
+    response: NotificationResponse,
 ) -> Result<(), String> {
-    if critical && session_generation.is_none() {
-        return Err("Native approval review has no bound session".to_owned());
-    }
-    if let Some(generation) = session_generation {
-        let app = app.clone();
-        let route = route.to_owned();
-        tauri::async_runtime::spawn(async move {
-            let auth = app.state::<crate::matrix::auth::MatrixAuthState>();
-            let _ = auth
-                .with_session_generation(generation, || async {
-                    navigate_main_window(&app, &route)
-                })
-                .await;
-        });
-        return Ok(());
-    }
-    navigate_main_window(app, route).map_err(|_| "Native notification navigation failed".to_owned())
+    let deliver = || async {
+        match &response {
+            NotificationResponse::Open { route } => {
+                navigate_main_window(app, route).map_err(|error| error.to_string())
+            }
+            NotificationResponse::Action { action_id, context } => app
+                .emit(
+                    DESKTOP_NOTIFICATION_ACTION_EVENT,
+                    DesktopNotificationActionEvent {
+                        session_generation: generation,
+                        action_id: action_id.clone(),
+                        context: context.clone(),
+                    },
+                )
+                .map_err(|error| error.to_string()),
+        }
+    };
+    let Some(generation) = generation else {
+        return deliver().await;
+    };
+    let auth = app.state::<crate::matrix::auth::MatrixAuthState>();
+    auth.with_session_generation(generation, deliver)
+        .await
+        .unwrap_or_else(|| Err("the session changed before the response arrived".to_owned()))
+}
+
+/// Act on a banner click or action button: deliver it now, keep it until
+/// the renderer is ready (cold launch, before restore, after re-login), or
+/// refuse it. Whatever happens, a click that cannot be delivered still shows
+/// the window, so it never appears to do nothing.
+fn handle_notification_response<R: Runtime>(
+    app: &AppHandle<R>,
+    binding: NotificationBinding,
+    critical: bool,
+    response: NotificationResponse,
+) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let active = active_session(&app).await;
+        let ready = pending_responses().renderer_ready();
+        let result = match admit(&binding, critical, active.as_ref(), ready, process_nonce()) {
+            Admission::Deliver { generation } => {
+                deliver_notification_response(&app, generation, response).await
+            }
+            Admission::Queue => {
+                pending_responses().push(binding, critical, response, Instant::now());
+                show_main_window(&app).map_err(|error| error.to_string())
+            }
+            Admission::Reject => {
+                Err("the notification belongs to another session or account".to_owned())
+            }
+        };
+        if let Err(error) = result {
+            log_notification_error(
+                &app,
+                &format!("notification response not delivered: {error}"),
+            );
+            if let Err(error) = show_main_window(&app) {
+                log_notification_error(&app, &format!("failed to show Synara: {error}"));
+            }
+        }
+    });
 }
 
 fn is_time_sensitive_agent_approval(context: Option<&DesktopNotificationActionContext>) -> bool {
     context.is_some_and(|context| context.kind == "agent-approval")
+}
+
+/// Approval banners: never delivered without a matching session or account.
+fn is_critical_notification(
+    context: Option<&DesktopNotificationActionContext>,
+    actions: &[DesktopNotificationAction],
+) -> bool {
+    is_time_sensitive_agent_approval(context)
+        || actions
+            .iter()
+            .any(|action| action.id.starts_with("agent-approval."))
 }
 
 fn show_notification_without_route_click_handler<R: Runtime>(
@@ -483,6 +560,18 @@ async fn dismiss_linux_notifications(keys: &[String]) {
     }
 }
 
+/// Close every banner this process still tracks (sign-out).
+#[cfg(target_os = "linux")]
+async fn dismiss_all_linux_notifications() {
+    let live: Vec<(u32, Arc<notify_rust::NotificationHandle>)> =
+        lock_mutex(linux_notification_handles()).drain().collect();
+    *lock_mutex(linux_dismiss_index()) = DismissKeyIndex::default();
+    for (id, handle) in live {
+        handle.close_async().await;
+        abort_linux_waiter(id);
+    }
+}
+
 /// The server's advertised `actions` capability, read once per process.
 /// An unreachable server is treated as supporting actions so the existing
 /// delivery error path, not this hint, reports the failure.
@@ -500,24 +589,34 @@ fn linux_server_supports_actions() -> bool {
     })
 }
 
+/// The freedesktop sound for a notification that may sound. Daemons that
+/// honour `sound-name` (GNOME Shell, Plasma) play it under the desktop's
+/// own Do Not Disturb rules.
+#[cfg(any(target_os = "linux", test))]
+fn linux_notification_sound_name(
+    sound: Option<DesktopNotificationSoundPolicy>,
+) -> Option<&'static str> {
+    match sound {
+        Some(DesktopNotificationSoundPolicy::Silent) => None,
+        Some(DesktopNotificationSoundPolicy::Default) | None => Some("message-new-instant"),
+    }
+}
+
 #[cfg(target_os = "linux")]
 fn show_notification_with_route_click_handler<R: Runtime>(
     app: &AppHandle<R>,
     notification: &DesktopNotificationPayload,
+    binding: &NotificationBinding,
 ) -> Result<(), String> {
     let title = notification.title.as_str();
     let body = notification.body.as_deref();
     let route = notification.route.as_deref();
     let actions = notification.actions.as_deref().unwrap_or(&[]);
     let action_context = notification.action_context.as_ref();
-    let session_generation = notification.session_generation;
-    let critical = is_time_sensitive_agent_approval(action_context)
-        || actions
-            .iter()
-            .any(|action| action.id.starts_with("agent-approval."));
+    let critical = is_critical_notification(action_context, actions);
     let dismiss_keys = notification.dismiss_keys.as_deref().unwrap_or(&[]);
 
-    use notify_rust::{Notification, NotificationResponse, Urgency};
+    use notify_rust::{Notification, Urgency};
     let notification_payload_sound = notification.sound;
 
     // Some notification servers (for example mako, or dunst without a
@@ -538,11 +637,13 @@ fn show_notification_with_route_click_handler<R: Runtime>(
         notification.body(body);
     }
     notification.auto_icon();
-    if matches!(
-        notification_payload_sound,
-        Some(DesktopNotificationSoundPolicy::Silent)
-    ) {
-        notification.hint(notify_rust::Hint::SuppressSound(true));
+    match linux_notification_sound_name(notification_payload_sound) {
+        Some(sound) => {
+            notification.sound_name(sound);
+        }
+        None => {
+            notification.hint(notify_rust::Hint::SuppressSound(true));
+        }
     }
     if is_time_sensitive_agent_approval(action_context) {
         notification.urgency(Urgency::Critical);
@@ -561,45 +662,50 @@ fn show_notification_with_route_click_handler<R: Runtime>(
     let app = app.clone();
     let route = route.map(str::to_owned);
     let action_context = action_context.cloned();
+    let binding = binding.clone();
     let allowed_action_ids = actions
         .iter()
         .map(|action| action.id.clone())
         .collect::<Vec<_>>();
 
+    let waiter_app = app.clone();
     let waiter = tauri::async_runtime::spawn(async move {
         let wait = handle.wait_for_action_async(move |response| match response {
-            NotificationResponse::Default => {
-                let Some(route) = route.as_deref() else {
+            notify_rust::NotificationResponse::Default => {
+                let Some(route) = route.clone() else {
                     return;
                 };
-                if let Err(error) =
-                    navigate_notification_route(&app, route, session_generation, critical)
-                {
-                    eprintln!("failed to navigate from notification click: {error}");
-                }
+                handle_notification_response(
+                    &app,
+                    binding.clone(),
+                    critical,
+                    NotificationResponse::Open { route },
+                );
             }
-            NotificationResponse::Action(action) => {
+            notify_rust::NotificationResponse::Action(action) => {
                 if allowed_action_ids
                     .iter()
                     .any(|candidate| candidate == action)
                 {
-                    if let Err(error) = emit_notification_action(
+                    handle_notification_response(
                         &app,
-                        action,
-                        action_context.clone(),
-                        session_generation,
-                    ) {
-                        eprintln!("failed to emit notification action: {error}");
-                    }
+                        binding.clone(),
+                        critical,
+                        response_for_action(action, route.as_deref(), action_context.clone()),
+                    );
                 }
             }
-            NotificationResponse::Closed(_) | NotificationResponse::Reply(_) => {}
+            notify_rust::NotificationResponse::Closed(_)
+            | notify_rust::NotificationResponse::Reply(_) => {}
         });
         if tokio::time::timeout(LINUX_NOTIFICATION_WAIT_MAX, wait)
             .await
             .is_err()
         {
-            eprintln!("notification {id} waiter timed out without a close signal");
+            log_notification_error(
+                &waiter_app,
+                &format!("notification {id} waiter timed out without a close signal"),
+            );
         }
         unregister_linux_notification(id);
     });
@@ -619,6 +725,7 @@ fn configure_macos_notification_application() {
             "com.whylandcreative.synara.desktop"
         };
         if let Err(error) = set_application(bundle_identifier) {
+            // Development only (unbundled); there is no AppHandle here.
             eprintln!("failed to configure macOS notification application: {error}");
         }
     });
@@ -938,23 +1045,19 @@ mod macos_delivery {
 async fn show_notification_with_route_click_handler<R: Runtime>(
     app: &AppHandle<R>,
     notification: &DesktopNotificationPayload,
+    binding: &NotificationBinding,
 ) -> Result<bool, String> {
     let title = notification.title.as_str();
     let body = notification.body.as_deref();
     let route = notification.route.as_deref();
     let actions = notification.actions.as_deref().unwrap_or(&[]);
     let action_context = notification.action_context.as_ref();
-    let session_generation = notification.session_generation;
-    let critical = is_time_sensitive_agent_approval(action_context)
-        || actions
-            .iter()
-            .any(|action| action.id.starts_with("agent-approval."));
-    let _dismiss_keys = notification.dismiss_keys.as_deref().unwrap_or(&[]);
+    let critical = is_critical_notification(action_context, actions);
 
-    use mac_notification_sys::{MainButton, Notification, NotificationResponse, Sound};
+    use mac_notification_sys::{MainButton, Notification, Sound};
 
     if macos_delivery::is_bundled() {
-        return macos_modern::show(app, notification).await;
+        return macos_modern::show(app, notification, binding).await;
     }
     if notification.session_generation.is_some() {
         // A legacy development sender has no callback that can keep the auth
@@ -972,6 +1075,7 @@ async fn show_notification_with_route_click_handler<R: Runtime>(
     let action_context = action_context.cloned();
     let time_sensitive = is_time_sensitive_agent_approval(action_context.as_ref());
     let silent = notification.sound == Some(DesktopNotificationSoundPolicy::Silent);
+    let binding = binding.clone();
     let action_labels = actions
         .iter()
         .map(|action| action.label.clone())
@@ -999,9 +1103,9 @@ async fn show_notification_with_route_click_handler<R: Runtime>(
             }
             if time_sensitive {
                 notification.subtitle("Time-sensitive · expires in 5 minutes");
-                if !silent {
-                    notification.sound(Sound::Default);
-                }
+            }
+            if !silent {
+                notification.sound(Sound::Default);
             }
             if action_labels.len() == 1 {
                 notification.main_button(MainButton::SingleAction(action_labels[0].as_str()));
@@ -1021,45 +1125,47 @@ async fn show_notification_with_route_click_handler<R: Runtime>(
                 // send error after a credited receipt is logged here instead.
                 let message = error.to_string();
                 if send_failed_tx.send(message.clone()).is_err() {
-                    eprintln!("macOS notification send failed after receipt: {message}");
+                    log_notification_error(
+                        &app,
+                        &format!("macOS notification send failed after receipt: {message}"),
+                    );
                 }
                 return;
             }
             Err(error) => {
                 let message = format!("notification task failed: {error}");
                 if send_failed_tx.send(message.clone()).is_err() {
-                    eprintln!("{message}");
+                    log_notification_error(&app, &message);
                 }
                 return;
             }
         };
 
         match response {
-            NotificationResponse::Click => {
-                let Some(route) = route.as_deref() else {
+            mac_notification_sys::NotificationResponse::Click => {
+                let Some(route) = route.clone() else {
                     return;
                 };
-                if let Err(error) =
-                    navigate_notification_route(&app, route, session_generation, critical)
-                {
-                    eprintln!("failed to navigate from notification click: {error}");
-                }
+                handle_notification_response(
+                    &app,
+                    binding,
+                    critical,
+                    NotificationResponse::Open { route },
+                );
             }
-            NotificationResponse::ActionButton(label) => {
+            mac_notification_sys::NotificationResponse::ActionButton(label) => {
                 let Some((_, action_id)) = action_ids_by_label
                     .iter()
                     .find(|(candidate_label, _)| candidate_label == &label)
                 else {
                     return;
                 };
-                if let Err(error) = emit_notification_action(
+                handle_notification_response(
                     &app,
-                    action_id,
-                    action_context.clone(),
-                    session_generation,
-                ) {
-                    eprintln!("failed to emit notification action: {error}");
-                }
+                    binding,
+                    critical,
+                    response_for_action(action_id, route.as_deref(), action_context.clone()),
+                );
             }
             _ => {}
         }
@@ -1074,22 +1180,25 @@ async fn show_notification_with_route_click_handler<R: Runtime>(
 async fn show_notification_with_route_click_handler_receipt<R: Runtime>(
     app: &AppHandle<R>,
     notification: &DesktopNotificationPayload,
+    binding: &NotificationBinding,
 ) -> Result<bool, String> {
-    show_notification_with_route_click_handler(app, notification).map(|()| true)
+    show_notification_with_route_click_handler(app, notification, binding).map(|()| true)
 }
 
 #[cfg(target_os = "macos")]
 async fn show_notification_with_route_click_handler_receipt<R: Runtime>(
     app: &AppHandle<R>,
     notification: &DesktopNotificationPayload,
+    binding: &NotificationBinding,
 ) -> Result<bool, String> {
-    show_notification_with_route_click_handler(app, notification).await
+    show_notification_with_route_click_handler(app, notification, binding).await
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 async fn show_notification_with_route_click_handler_receipt<R: Runtime>(
     app: &AppHandle<R>,
     notification: &DesktopNotificationPayload,
+    _binding: &NotificationBinding,
 ) -> Result<bool, String> {
     show_notification_without_route_click_handler(
         app,
@@ -1099,9 +1208,10 @@ async fn show_notification_with_route_click_handler_receipt<R: Runtime>(
     .map(|()| true)
 }
 
-#[tauri::command]
-pub async fn desktop_get_notification_permission<R: Runtime>(
-    app: AppHandle<R>,
+/// What the OS allows: UserNotifications on a bundled macOS build (where
+/// `default` means not asked yet), otherwise the notification plugin.
+pub(crate) async fn notification_permission<R: Runtime>(
+    app: &AppHandle<R>,
 ) -> Result<String, String> {
     #[cfg(target_os = "macos")]
     if macos_delivery::is_bundled() {
@@ -1113,6 +1223,15 @@ pub async fn desktop_get_notification_permission<R: Runtime>(
         .map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+pub async fn desktop_get_notification_permission<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<String, String> {
+    notification_permission(&app).await
+}
+
+/// Ask the OS for permission. Only the user's own request (Settings, or the
+/// renderer's one-time prompt) reaches this; posting never asks.
 #[tauri::command]
 pub async fn desktop_request_notification_permission<R: Runtime>(
     app: AppHandle<R>,
@@ -1127,11 +1246,44 @@ pub async fn desktop_request_notification_permission<R: Runtime>(
         .map_err(|error| error.to_string())
 }
 
+/// Post without holding the session lock. A bound post checks that its
+/// generation is installed, posts, and checks again: if a logout or account
+/// switch landed meanwhile, the banner is withdrawn and reported undelivered.
+/// The OS post (and any wait for its receipt) therefore never stalls media,
+/// sync status or sign-out behind the session lock.
+async fn post_for_generation<Current, CurrentFut, Post, PostFut, Withdraw, WithdrawFut>(
+    expected: Option<u64>,
+    current: Current,
+    post: Post,
+    withdraw: Withdraw,
+) -> Result<bool, String>
+where
+    Current: Fn() -> CurrentFut,
+    CurrentFut: std::future::Future<Output = Option<u64>>,
+    Post: FnOnce() -> PostFut,
+    PostFut: std::future::Future<Output = Result<bool, String>>,
+    Withdraw: FnOnce() -> WithdrawFut,
+    WithdrawFut: std::future::Future<Output = ()>,
+{
+    let Some(expected) = expected else {
+        return post().await;
+    };
+    if current().await != Some(expected) {
+        return Ok(false);
+    }
+    let accepted = post().await?;
+    if accepted && current().await != Some(expected) {
+        withdraw().await;
+        return Ok(false);
+    }
+    Ok(accepted)
+}
+
 /// Post one desktop notification and return the OS receipt.
 ///
 /// `Ok(true)` means the OS notification server accepted the notification;
-/// `Ok(false)` means permission or submission was refused, or no legacy
-/// record appeared within the platform's bound;
+/// `Ok(false)` means permission or submission was refused, the bound session
+/// ended, or no legacy record appeared within the platform's bound;
 /// `Err` is a post failure. The renderer forwards this verdict unchanged as
 /// the `delivered` / `failed` acknowledgement Core's delivery ledger counts,
 /// so the command resolves only once the answer is real: on macOS the
@@ -1143,28 +1295,31 @@ pub async fn desktop_notify<R: Runtime>(
     notification: DesktopNotificationPayload,
 ) -> Result<bool, String> {
     let notification = sanitize_notification_payload(notification)?;
-    if let Some(generation) = notification.session_generation {
-        // The acceptance task owns the AppHandle and auth guard. Canceling a
-        // renderer waiter must not release that gate while the OS post runs.
-        return tauri::async_runtime::spawn(async move {
-            let auth = app.state::<crate::matrix::auth::MatrixAuthState>();
-            auth.with_session_generation(generation, || {
-                post_sanitized_notification(&app, &notification)
-            })
-            .await
-            .unwrap_or(Ok(false))
-        })
+    // The acceptance task owns the AppHandle. A renderer that stops waiting
+    // must not skip the re-check that withdraws a banner of an ended session.
+    tauri::async_runtime::spawn(async move {
+        let binding = notification_binding(&app, notification.session_generation).await;
+        let keys = notification.dismiss_keys.clone().unwrap_or_default();
+        post_for_generation(
+            notification.session_generation,
+            || async { active_session(&app).await.map(|active| active.generation) },
+            || post_sanitized_notification(&app, &notification, &binding),
+            || dismiss_notifications_now(&keys),
+        )
         .await
-        .map_err(|_| "Native notification acceptance task failed".to_owned())?;
-    }
-    post_sanitized_notification(&app, &notification).await
+    })
+    .await
+    .map_err(|_| "Native notification acceptance task failed".to_owned())?
 }
 
 async fn post_sanitized_notification<R: Runtime>(
     app: &AppHandle<R>,
     notification: &DesktopNotificationPayload,
+    binding: &NotificationBinding,
 ) -> Result<bool, String> {
-    if cfg!(target_os = "macos")
+    // macOS and Linux always post through their own clients, which carry the
+    // click binding, dismiss keys and sound policy.
+    if cfg!(any(target_os = "macos", target_os = "linux"))
         || notification.route.is_some()
         || notification
             .actions
@@ -1176,7 +1331,8 @@ async fn post_sanitized_notification<R: Runtime>(
             .is_some_and(|keys| !keys.is_empty())
         || notification.sound == Some(DesktopNotificationSoundPolicy::Silent)
     {
-        return show_notification_with_route_click_handler_receipt(app, notification).await;
+        return show_notification_with_route_click_handler_receipt(app, notification, binding)
+            .await;
     }
     show_notification_without_route_click_handler(
         app,
@@ -1184,6 +1340,27 @@ async fn post_sanitized_notification<R: Runtime>(
         notification.body.as_deref(),
     )?;
     Ok(true)
+}
+
+async fn dismiss_notifications_now(keys: &[String]) {
+    if keys.is_empty() {
+        return;
+    }
+    #[cfg(target_os = "linux")]
+    dismiss_linux_notifications(keys).await;
+    #[cfg(target_os = "macos")]
+    if macos_delivery::is_bundled() {
+        macos_modern::dismiss(keys);
+    }
+}
+
+async fn dismiss_all_notifications() {
+    #[cfg(target_os = "linux")]
+    dismiss_all_linux_notifications().await;
+    #[cfg(target_os = "macos")]
+    if macos_delivery::is_bundled() {
+        macos_modern::dismiss_all();
+    }
 }
 
 /// Close delivered Linux notifications that were tagged with `dismissKeys`.
@@ -1197,16 +1374,70 @@ pub async fn desktop_dismiss_notifications(keys: Vec<String>) -> Result<(), Stri
         .take(DESKTOP_DISMISS_COMMAND_MAX_KEYS)
         .filter_map(|key| sanitize_dismiss_key(&key))
         .collect();
-    if keys.is_empty() {
-        return Ok(());
-    }
-    #[cfg(target_os = "linux")]
-    dismiss_linux_notifications(&keys).await;
-    #[cfg(target_os = "macos")]
-    if macos_delivery::is_bundled() {
-        macos_modern::dismiss(&keys);
-    }
+    dismiss_notifications_now(&keys).await;
     Ok(())
+}
+
+/// Withdraw every banner this app has posted: all of this app's delivered
+/// and pending requests on macOS (including an earlier launch's), every
+/// tracked handle on Linux.
+#[tauri::command]
+pub async fn desktop_dismiss_all_notifications() -> Result<(), String> {
+    dismiss_all_notifications().await;
+    Ok(())
+}
+
+/// The renderer is listening for `session_generation`: hand it the clicks
+/// and actions that arrived before it was (cold launch, before restore,
+/// after re-login). Routes are opened here; actions are returned for the
+/// renderer's action handler. Nothing is returned for another generation.
+#[tauri::command]
+pub async fn desktop_take_notification_responses<R: Runtime>(
+    app: AppHandle<R>,
+    session_generation: u64,
+) -> Result<Vec<DesktopNotificationActionEvent>, String> {
+    let Some(active) = active_session(&app).await else {
+        return Ok(Vec::new());
+    };
+    if active.generation != session_generation {
+        return Ok(Vec::new());
+    }
+    let drained = pending_responses().drain_for(&active, process_nonce(), Instant::now());
+    let mut actions = Vec::new();
+    for (response, generation) in drained {
+        match response {
+            NotificationResponse::Action { action_id, context } => {
+                actions.push(DesktopNotificationActionEvent {
+                    session_generation: generation,
+                    action_id,
+                    context,
+                });
+            }
+            open @ NotificationResponse::Open { .. } => {
+                if let Err(error) = deliver_notification_response(&app, generation, open).await {
+                    log_notification_error(
+                        &app,
+                        &format!("queued notification click not opened: {error}"),
+                    );
+                }
+            }
+        }
+    }
+    Ok(actions)
+}
+
+/// Sign-out (voluntary, forced or expired): no banner, count or queued click
+/// of the old session may outlive it, even when the renderer that would
+/// clean up has already gone.
+pub(crate) async fn clear_signed_out_surfaces<R: Runtime>(app: &AppHandle<R>) {
+    pending_responses().reset();
+    dismiss_all_notifications().await;
+    if let Err(error) = crate::desktop_tray::set_badge_count(app, None) {
+        log_notification_error(app, &format!("failed to clear the badge: {error}"));
+    }
+    if let Err(error) = crate::desktop_tray::reset_tray_counts(app) {
+        log_notification_error(app, &format!("failed to reset the tray: {error}"));
+    }
 }
 
 #[cfg(test)]
@@ -1425,7 +1656,12 @@ mod tests {
         ] {
             assert_eq!(sanitize_dismiss_key(key), None, "{key:?}");
         }
-        assert_eq!(sanitize_dismiss_key("invite:abc"), None);
+        assert_eq!(
+            sanitize_dismiss_key("invite:!room:example.org"),
+            Some("invite:!room:example.org".to_owned())
+        );
+        assert_eq!(sanitize_dismiss_key("invite:"), None);
+        assert_eq!(sanitize_dismiss_key("other:abc"), None);
         assert_eq!(sanitize_dismiss_key("room:"), None);
         assert_eq!(sanitize_dismiss_key("room:!room example"), None);
         assert_eq!(sanitize_dismiss_key(&"x".repeat(300)), None);
@@ -1476,5 +1712,157 @@ mod tests {
             )]),
             vec![MAX_LINUX_NOTIFICATION_HANDLES as u32]
         );
+    }
+
+    #[tokio::test]
+    async fn a_bound_post_never_holds_the_session_lock_and_withdraws_after_logout() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let session = tokio::sync::Mutex::new(Some(7_u64));
+        let current = || async { *session.lock().await };
+        let withdrawn = AtomicUsize::new(0);
+        let withdraw = || async {
+            withdrawn.fetch_add(1, Ordering::SeqCst);
+        };
+
+        // The OS post (which can wait for the user or Notification Center)
+        // runs with the session lock free, so media and sign-out never stall.
+        let posted = post_for_generation(
+            Some(7),
+            current,
+            || async {
+                assert!(
+                    session.try_lock().is_ok(),
+                    "post ran under the session lock"
+                );
+                Ok(true)
+            },
+            withdraw,
+        )
+        .await;
+        assert_eq!(posted, Ok(true));
+        assert_eq!(withdrawn.load(Ordering::SeqCst), 0);
+
+        // Another generation: nothing is posted.
+        let posted = post_for_generation(
+            Some(6),
+            current,
+            || async { panic!("a stale generation must not post") },
+            withdraw,
+        )
+        .await;
+        assert_eq!(posted, Ok(false));
+
+        // A sign-out while the OS accepted the banner withdraws it.
+        let posted = post_for_generation(
+            Some(7),
+            current,
+            || async {
+                *session.lock().await = None;
+                Ok(true)
+            },
+            withdraw,
+        )
+        .await;
+        assert_eq!(posted, Ok(false));
+        assert_eq!(withdrawn.load(Ordering::SeqCst), 1);
+
+        // Unbound system notices post whatever the session.
+        let posted = post_for_generation(None, current, || async { Ok(true) }, withdraw).await;
+        assert_eq!(posted, Ok(true));
+
+        let source = include_str!("desktop_notifications.rs");
+        let notify = source
+            .split("pub async fn desktop_notify<")
+            .nth(1)
+            .and_then(|rest| rest.split("\nasync fn post_sanitized_notification").next())
+            .expect("desktop_notify body");
+        assert!(notify.contains("post_for_generation("));
+        assert!(!notify.contains("with_session_generation"));
+    }
+
+    #[test]
+    fn notification_failures_reach_the_app_log_and_clicks_always_show_the_window() {
+        let source = include_str!("desktop_notifications.rs")
+            .split("#[cfg(test)]\nmod tests")
+            .next()
+            .expect("production source");
+        assert!(!source.contains("let _ = auth"));
+        assert!(!source.contains("eprintln!(\"failed to navigate"));
+        assert!(!source.contains("eprintln!(\"failed to emit"));
+        let handler = source
+            .split("fn handle_notification_response<")
+            .nth(1)
+            .and_then(|rest| rest.split("\nfn is_time_sensitive_agent_approval").next())
+            .expect("response handler");
+        // Waiting for the session, refused, or failed: the window comes up.
+        assert!(handler.contains(
+            "pending_responses().push(binding, critical, response, Instant::now());\n                show_main_window(&app)"
+        ));
+        assert!(handler.contains("log_notification_error(&app"));
+        assert!(handler.matches("show_main_window(&app)").count() >= 2);
+        let macos = include_str!("desktop_notifications_macos.rs");
+        assert!(!macos.contains("let _ = navigate_notification_route"));
+        assert!(!macos.contains("let _ = emit_notification_action"));
+    }
+
+    #[test]
+    fn linux_messages_ask_the_daemon_for_a_sound_unless_silent() {
+        assert_eq!(
+            linux_notification_sound_name(Some(DesktopNotificationSoundPolicy::Default)),
+            Some("message-new-instant")
+        );
+        assert_eq!(
+            linux_notification_sound_name(None),
+            Some("message-new-instant")
+        );
+        assert_eq!(
+            linux_notification_sound_name(Some(DesktopNotificationSoundPolicy::Silent)),
+            None
+        );
+    }
+
+    #[test]
+    fn queued_actions_reach_the_renderer_in_the_listener_shape() {
+        let event = DesktopNotificationActionEvent {
+            session_generation: Some(3),
+            action_id: "agent-approval.deny".to_owned(),
+            context: Some(DesktopNotificationActionContext {
+                kind: "agent-approval".to_owned(),
+                room_id: Some("!r:x".to_owned()),
+                event_id: Some("$e".to_owned()),
+            }),
+        };
+        assert_eq!(
+            serde_json::to_value(&event).unwrap(),
+            serde_json::json!({
+                "sessionGeneration": 3,
+                "actionId": "agent-approval.deny",
+                "context": {"kind": "agent-approval", "roomId": "!r:x", "eventId": "$e"}
+            })
+        );
+    }
+
+    #[test]
+    fn sign_out_withdraws_every_banner_and_forgets_queued_clicks() {
+        let source = include_str!("desktop_notifications.rs");
+        let clear = source
+            .split("pub(crate) async fn clear_signed_out_surfaces<")
+            .nth(1)
+            .and_then(|rest| rest.split("\n}\n").next())
+            .expect("clear_signed_out_surfaces body");
+        assert!(clear.contains("pending_responses().reset();"));
+        assert!(clear.contains("dismiss_all_notifications().await;"));
+        assert!(clear.contains("set_badge_count(app, None)"));
+        assert!(clear.contains("reset_tray_counts(app)"));
+        let all = source
+            .split("async fn dismiss_all_notifications()")
+            .nth(1)
+            .and_then(|rest| rest.split("\n}\n").next())
+            .expect("dismiss_all_notifications body");
+        assert!(all.contains("dismiss_all_linux_notifications().await"));
+        assert!(all.contains("macos_modern::dismiss_all()"));
+        let macos = include_str!("desktop_notifications_macos.rs");
+        assert!(macos.contains("center.removeAllPendingNotificationRequests();"));
+        assert!(macos.contains("center.removeAllDeliveredNotifications();"));
     }
 }

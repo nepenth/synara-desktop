@@ -158,13 +158,8 @@ test('platform diagnostics reads desktop integration status when supported', asy
       distroVersion: 'rolling',
       buildIdentity: 'debug',
       tray: { name: 'Tray', ready: true, supported: true, message: 'Ready' },
-      // Read from the OS permission, not the plugin's always-Granted answer.
-      notifications: {
-        name: 'Notifications',
-        ready: true,
-        supported: true,
-        message: 'Notification permission is active.',
-      },
+      // The shell reads the OS permission itself; no renderer overlay.
+      notifications: { name: 'Notifications', ready: true, supported: true, message: 'Ready' },
       globalShortcuts: {
         name: 'Global Shortcuts',
         ready: false,
@@ -174,10 +169,7 @@ test('platform diagnostics reads desktop integration status when supported', asy
       filePortal: { name: 'File Portal', ready: true, supported: true, message: 'Ready' },
       mediaPortal: { name: 'Media Portal', ready: false, supported: false, message: 'Missing' },
     });
-    assert.deepEqual(calls, [
-      { command: 'desktop_get_integration_status', args: undefined },
-      { command: 'desktop_get_notification_permission', args: undefined },
-    ]);
+    assert.deepEqual(calls, [{ command: 'desktop_get_integration_status', args: undefined }]);
   } finally {
     (globalThis as any).window = originalWindow;
   }

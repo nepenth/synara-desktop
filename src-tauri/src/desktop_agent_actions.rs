@@ -134,23 +134,52 @@ fn is_supported_agent_action(action: &DesktopAgentActionPayload) -> bool {
     }
 }
 
+/// What the shell did with an agent action, so the card can say so.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DesktopAgentActionOutcome {
+    /// Copied to the clipboard or opened in the browser here.
+    RanLocally,
+    /// Handed to the renderer's agent-action listener to run.
+    HandedToRenderer,
+    /// Nothing can run it; the caller's fallback should.
+    Unsupported,
+}
+
+fn agent_action_outcome(
+    supported: bool,
+    ran_locally: impl FnOnce() -> bool,
+    hand_to_renderer: impl FnOnce() -> Result<(), String>,
+) -> Result<DesktopAgentActionOutcome, String> {
+    if !supported {
+        return Ok(DesktopAgentActionOutcome::Unsupported);
+    }
+    if ran_locally() {
+        return Ok(DesktopAgentActionOutcome::RanLocally);
+    }
+    hand_to_renderer()?;
+    Ok(DesktopAgentActionOutcome::HandedToRenderer)
+}
+
 #[tauri::command]
 pub fn desktop_agent_action<R: Runtime>(
     app: AppHandle<R>,
     action: DesktopAgentActionPayload,
-) -> Result<bool, String> {
+) -> Result<DesktopAgentActionOutcome, String> {
     let action = sanitize_agent_action_payload(action).map_err(|error| error.to_string())?;
-    if !is_supported_agent_action(&action) {
-        return Ok(false);
-    }
-
-    if handle_agent_action_locally(&app, &action) {
-        return Ok(true);
-    }
-
-    app.emit("synara://agent-action", DesktopAgentActionEvent { action })
-        .map_err(|error| error.to_string())?;
-    Ok(true)
+    agent_action_outcome(
+        is_supported_agent_action(&action),
+        || handle_agent_action_locally(&app, &action),
+        || {
+            app.emit(
+                "synara://agent-action",
+                DesktopAgentActionEvent {
+                    action: action.clone(),
+                },
+            )
+            .map_err(|error| error.to_string())
+        },
+    )
 }
 
 #[cfg(test)]
@@ -306,6 +335,30 @@ mod tests {
         assert_eq!(
             extract_agent_action_copy_text(&payload),
             Some("```\nBlock\n```".to_owned())
+        );
+    }
+
+    #[test]
+    fn agent_action_reports_what_actually_happened() {
+        assert_eq!(
+            agent_action_outcome(true, || true, || panic!("ran locally")),
+            Ok(DesktopAgentActionOutcome::RanLocally)
+        );
+        assert_eq!(
+            agent_action_outcome(true, || false, || Ok(())),
+            Ok(DesktopAgentActionOutcome::HandedToRenderer)
+        );
+        assert_eq!(
+            agent_action_outcome(false, || panic!("unsupported"), || panic!("unsupported")),
+            Ok(DesktopAgentActionOutcome::Unsupported)
+        );
+        assert_eq!(
+            agent_action_outcome(true, || false, || Err("no window".to_owned())),
+            Err("no window".to_owned())
+        );
+        assert_eq!(
+            serde_json::to_value(DesktopAgentActionOutcome::HandedToRenderer).unwrap(),
+            "handed_to_renderer"
         );
     }
 

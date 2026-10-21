@@ -50,7 +50,6 @@ struct TrayMenuItems<R: Runtime> {
     notifications: MenuItem<R>,
     #[cfg(target_os = "linux")]
     unread_summary: MenuItem<R>,
-    #[cfg(target_os = "linux")]
     dnd: MenuItem<R>,
 }
 
@@ -200,11 +199,9 @@ fn apply_tray_menu_labels<R: Runtime>(
     let route_labels = tray_route_labels(state);
     items.later.set_text(route_labels[1].as_str())?;
     items.notifications.set_text(route_labels[2].as_str())?;
+    items.dnd.set_text(route_labels[3].as_str())?;
     #[cfg(target_os = "linux")]
-    {
-        items.unread_summary.set_text(route_labels[0].as_str())?;
-        items.dnd.set_text(route_labels[3].as_str())?;
-    }
+    items.unread_summary.set_text(route_labels[0].as_str())?;
     Ok(())
 }
 
@@ -300,7 +297,10 @@ fn schedule_tray_state_flush<R: Runtime>(app: AppHandle<R>) {
         let coalescer = app.state::<TrayStateCoalescer>();
         coalescer.flush_scheduled.store(false, Ordering::Release);
         if let Err(error) = apply_pending_tray_state(&app) {
-            eprintln!("failed to apply coalesced tray state: {error}");
+            log_tray_error(
+                &app,
+                &format!("failed to apply coalesced tray state: {error}"),
+            );
         }
     });
 }
@@ -358,6 +358,15 @@ fn build_tray_menu<R: Runtime>(
         true,
         None::<&str>,
     )?;
+    // Every platform's tray can turn Synara's notifications off and on; the
+    // menu bar icon is the quickest place to reach it on macOS too.
+    let dnd = MenuItem::with_id(
+        app,
+        MENU_DND_TOGGLE,
+        route_labels[3].as_str(),
+        true,
+        None::<&str>,
+    )?;
     let separator = PredefinedMenuItem::separator(app)?;
     let build_item = MenuItem::with_id(
         app,
@@ -375,6 +384,7 @@ fn build_tray_menu<R: Runtime>(
             &show,
             &later,
             &notifications,
+            &dnd,
             &separator,
             &build_item,
             &quit,
@@ -384,6 +394,7 @@ fn build_tray_menu<R: Runtime>(
     let items = TrayMenuItems {
         later,
         notifications,
+        dnd,
     };
 
     #[cfg(target_os = "linux")]
@@ -399,14 +410,6 @@ fn build_tray_menu<R: Runtime>(
         app,
         MENU_DESKTOP_INTEGRATION,
         route_labels[4].as_str(),
-        true,
-        None::<&str>,
-    )?;
-    #[cfg(target_os = "linux")]
-    let dnd = MenuItem::with_id(
-        app,
-        MENU_DND_TOGGLE,
-        route_labels[3].as_str(),
         true,
         None::<&str>,
     )?;
@@ -511,7 +514,10 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                 }
             ) {
                 if let Err(error) = show_main_window(tray.app_handle()) {
-                    eprintln!("failed to show Synara from the tray: {error}");
+                    log_tray_error(
+                        tray.app_handle(),
+                        &format!("failed to show Synara from the tray: {error}"),
+                    );
                 }
             }
         });
@@ -549,8 +555,17 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
     };
 
     if let Err(error) = result {
-        eprintln!("failed to handle desktop menu event: {error}");
+        log_tray_error(
+            app,
+            &format!("failed to handle desktop menu event: {error}"),
+        );
     }
+}
+
+/// Tray failures go to the app log as well as stderr.
+fn log_tray_error<R: Runtime>(app: &AppHandle<R>, message: &str) {
+    eprintln!("[synara] {message}");
+    crate::desktop_logging::append_app_log(app, "tray", message);
 }
 
 pub(crate) fn tray_is_available<R: Runtime>(app: &AppHandle<R>) -> bool {
@@ -643,16 +658,37 @@ fn status_notifier_host_registered() -> bool {
         .unwrap_or(false)
 }
 
+/// The renderer's last Do Not Disturb state, kept so a reset after sign-out
+/// clears the counts without flipping the toggle's label.
+static TRAY_DO_NOT_DISTURB: AtomicBool = AtomicBool::new(false);
+
 pub(crate) fn update_tray_state<R: Runtime>(
     app: AppHandle<R>,
     state: DesktopTrayState,
 ) -> Result<bool, String> {
+    TRAY_DO_NOT_DISTURB.store(state.do_not_disturb, Ordering::Relaxed);
     if tray_is_available(&app) {
         queue_tray_state_update(app, state)?;
         return Ok(true);
     }
 
     Ok(false)
+}
+
+/// Signed out: zero every tray count. The signed-out shell sends no tray
+/// state, so without this the old account's counts would stay.
+pub(crate) fn reset_tray_counts<R: Runtime>(app: &AppHandle<R>) -> Result<bool, String> {
+    update_tray_state(app.clone(), signed_out_tray_state())
+}
+
+fn signed_out_tray_state() -> DesktopTrayState {
+    DesktopTrayState {
+        unread_count: 0,
+        highlight_count: 0,
+        later_count: 0,
+        notification_inbox_count: 0,
+        do_not_disturb: TRAY_DO_NOT_DISTURB.load(Ordering::Relaxed),
+    }
 }
 
 #[cfg(test)]
@@ -829,6 +865,44 @@ mod tests {
     }
 
     #[test]
+    fn sign_out_zeroes_tray_counts_but_keeps_do_not_disturb() {
+        TRAY_DO_NOT_DISTURB.store(true, Ordering::Relaxed);
+        let state = signed_out_tray_state();
+        assert_eq!(state.unread_count, 0);
+        assert_eq!(state.highlight_count, 0);
+        assert_eq!(state.later_count, 0);
+        assert_eq!(state.notification_inbox_count, 0);
+        assert!(state.do_not_disturb);
+        TRAY_DO_NOT_DISTURB.store(false, Ordering::Relaxed);
+        assert!(!signed_out_tray_state().do_not_disturb);
+        // matrix_logout resets the tray, badge and banners itself, so forced
+        // and expired sign-outs are covered without the renderer.
+        let logout = include_str!("matrix/auth/product_commands.rs")
+            .split("pub async fn matrix_logout")
+            .nth(1)
+            .and_then(|rest| rest.split("pub(super) struct LogoutPlan").next())
+            .expect("logout body");
+        assert!(logout.contains("desktop_notifications::clear_signed_out_surfaces(&app)"));
+    }
+
+    #[test]
+    fn every_tray_menu_offers_do_not_disturb() {
+        let build = include_str!("desktop_tray.rs")
+            .split("fn build_tray_menu")
+            .nth(1)
+            .and_then(|rest| rest.split("fn tray_tooltip").next())
+            .expect("build_tray_menu");
+        let (mac, linux) = build
+            .split_once("#[cfg(target_os = \"linux\")]\n    let unread_summary")
+            .expect("platform menus");
+        // The non-Linux (macOS) menu and items include the toggle.
+        assert!(mac.contains("&notifications,\n            &dnd,"));
+        assert!(mac.contains("notifications,\n        dnd,\n    };"));
+        assert!(linux.contains("&dnd,"));
+        assert!(!build.contains("#[cfg(target_os = \"linux\")]\n    let dnd"));
+    }
+
+    #[test]
     fn tray_menu_items_carry_no_fixed_global_shortcut_hints() {
         let source = include_str!("desktop_tray.rs");
         let build = source
@@ -841,10 +915,14 @@ mod tests {
 
     #[test]
     fn linux_tray_left_click_restores_instead_of_opening_the_menu() {
-        let source = include_str!("desktop_tray.rs");
+        // Only the production half: a needle in this test would match itself.
+        let source = include_str!("desktop_tray.rs")
+            .split("#[cfg(test)]\nmod tests")
+            .next()
+            .expect("production source");
         assert!(source.contains("show_menu_on_left_click(cfg!(not(target_os = \"linux\")))"));
         assert!(source.contains("MouseButton::Left"));
-        assert!(source.contains("overlay_unread_badge"));
-        assert!(source.contains("emit_unity_launcher_badge"));
+        assert!(source.contains("desktop_unread_badge::overlay_unread_dot("));
+        assert!(source.contains("desktop_unread_badge::emit_unity_launcher_badge("));
     }
 }

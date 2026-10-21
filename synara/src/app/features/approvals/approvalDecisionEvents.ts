@@ -6,6 +6,8 @@ export type ApprovalDecisionNotice = {
   eventId: string;
   /** Optional so the optimistic Recent row can label Denied/Approved before account data syncs. */
   decision?: ApprovalDecision;
+  /** When an earlier decision was made (a prompt already decided elsewhere). */
+  decidedAt?: number;
 };
 
 const APPROVAL_DECISION_BY_ACTION_ID: Record<string, ApprovalDecision> = {

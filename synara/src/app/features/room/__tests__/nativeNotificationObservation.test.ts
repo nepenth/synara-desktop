@@ -246,6 +246,20 @@ test('late approval promotion uses the shared actionable presentation and exact 
     `candidate:${candidate.candidateId}`,
   ]);
   assert.equal(ordinary.sound, 'silent');
+  // A message that may sound asks the OS for the default sound.
+  assert.equal(
+    buildNativeObservedNotificationPresentation(
+      { ...candidate, kind: 'message' },
+      { ...source, messageSound: 'default' }
+    ).sound,
+    'default'
+  );
+  // Approvals keep their own sound whatever the message setting says.
+  assert.equal(
+    buildNativeObservedNotificationPresentation(candidate, { ...source, messageSound: 'silent' })
+      .sound,
+    'default'
+  );
 
   // Both mounted delivery paths use this tested adapter. A late promotion
   // must also get approval sound ownership instead of generic push tweaks.

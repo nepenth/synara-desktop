@@ -86,9 +86,20 @@ test('an approval already decided elsewhere is never recorded as the clicked cho
     // Once Core reports the recorded decision, that is what the inbox shows.
     await decide({ status: 'already_decided', decision: 'deny' });
     assert.equal(notices[1].decision, 'deny');
+    assert.equal('decidedAt' in notices[1], false);
 
     await decide({ status: 'applied' });
     assert.equal(notices[2].decision, 'approve_once');
+
+    // Core's recorded time travels with the recorded decision.
+    await decide({ status: 'already_decided', decision: 'deny', decidedAt: 1_700_000_000_000 });
+    assert.equal(notices[3].decision, 'deny');
+    assert.equal(notices[3].decidedAt, 1_700_000_000_000);
+    // A time without a decision, or an invalid time, is not passed on.
+    await decide({ status: 'already_decided', decidedAt: 1_700_000_000_000 });
+    assert.equal('decidedAt' in notices[4], false);
+    await decide({ status: 'already_decided', decision: 'deny', decidedAt: -1 });
+    assert.equal('decidedAt' in notices[5], false);
   } finally {
     unsubscribe();
   }

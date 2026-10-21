@@ -2,13 +2,18 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  approvalBannerActionNotice,
   createApprovalAlertWithdrawal,
   createInviteArrivalTracker,
+  createInviteBannerTracker,
   createRoomReadTracker,
   inviteNotificationText,
   isDocumentActive,
+  nativeNotificationSound,
+  shouldPlayAppNotificationSound,
   shouldPlayNotificationSound,
   shouldPresentOrdinaryMessage,
+  shouldRequestNotificationPermission,
 } from '../notificationDelivery';
 
 const features = () => readFileSync('src/app/pages/client/ClientNonUIFeatures.tsx', 'utf8');
@@ -88,7 +93,7 @@ test('the invite sound follows the invite banner instead of ignoring the notific
   assert.match(route, /if \(\s*!delivery\.showNotifications \|\|/);
   assert.match(
     route,
-    /shouldPlayNotificationSound\(\{ soundsEnabled: delivery\.notificationSound, outcome \}\)/
+    /shouldPlayAppNotificationSound\(\{\s*nativeDelivery: supportsPlatformSystemNotifications\(\),\s*soundsEnabled: delivery\.notificationSound,\s*outcome,\s*\}\)/
   );
   assert.doesNotMatch(route, /if \(notificationSound\) \{\s*playSound\(\);/);
 });
@@ -217,5 +222,133 @@ test('notification listeners register once and read handlers from refs', () => {
 test('notification routes use the same direct and space resolution as in-app navigation', () => {
   const source = features();
   assert.doesNotMatch(source, /buildDesktopNotificationRoomRoute/);
-  assert.equal((source.match(/route: roomPath\(/g) ?? []).length, 3);
+  // Messages, approvals, reminders, and an approval action's local notice.
+  assert.equal((source.match(/route: roomPath\(/g) ?? []).length, 4);
+});
+
+test('native banners carry their sound so the OS (and macOS Focus) decides', () => {
+  assert.equal(nativeNotificationSound({ soundsEnabled: true }), 'default');
+  assert.equal(nativeNotificationSound({ soundsEnabled: true, requested: false }), 'silent');
+  assert.equal(nativeNotificationSound({ soundsEnabled: false }), 'silent');
+  // The app's own sound is only for the browser fallback.
+  assert.equal(
+    shouldPlayAppNotificationSound({
+      nativeDelivery: true,
+      soundsEnabled: true,
+      outcome: 'delivered',
+    }),
+    false
+  );
+  assert.equal(
+    shouldPlayAppNotificationSound({
+      nativeDelivery: false,
+      soundsEnabled: true,
+      outcome: 'delivered',
+    }),
+    true
+  );
+
+  const source = features();
+  const messages = section(source, 'function MessageNotifications()');
+  assert.match(
+    messages,
+    /sound: nativeNotificationSound\(\{\s*soundsEnabled: notificationSound,\s*requested: readback\.sound === true,\s*\}\)/
+  );
+  assert.match(messages, /messageSound: sound/);
+  assert.match(
+    section(source, 'function InviteNotifications()'),
+    /sound: nativeNotificationSound\(\{ soundsEnabled \}\)/
+  );
+  assert.match(
+    section(source, 'function LaterReminderNotifications()'),
+    /sound: nativeNotificationSound\(\{ soundsEnabled: notificationSound \}\)/
+  );
+});
+
+test('an approval action from a banner always leaves a visible result', () => {
+  assert.equal(approvalBannerActionNotice({ status: 'applied' }), undefined);
+  assert.deepEqual(approvalBannerActionNotice({ status: 'failed', error: new Error('expired') }), {
+    title: 'Approval not sent',
+    body: 'Open Synara to review the command. It may have expired.',
+  });
+  // A timed-out send may still land: say so instead of "not sent".
+  assert.equal(
+    approvalBannerActionNotice({
+      status: 'failed',
+      error: { code: 'ApprovalDecisionPending', diagnosticId: 'v-send.2-reaction-ensure-timeout' },
+    })?.title,
+    'Approval may still be sent'
+  );
+  // Decided on another device: the recorded decision, not the click.
+  assert.deepEqual(
+    approvalBannerActionNotice({
+      status: 'already_decided',
+      clicked: 'approve_once',
+      recorded: 'deny',
+    }),
+    { title: 'Already decided', body: 'This request was already denied on another device.' }
+  );
+  assert.equal(
+    approvalBannerActionNotice({
+      status: 'already_decided',
+      clicked: 'deny',
+      recorded: 'deny',
+    }),
+    undefined
+  );
+  assert.equal(
+    approvalBannerActionNotice({ status: 'already_decided', clicked: 'deny' })?.body,
+    'This request was already decided on another device.'
+  );
+
+  // Failures bring the hidden window forward at the prompt and post the notice.
+  const approvals = section(features(), 'function AgentApprovalNotifications()');
+  assert.match(
+    approvals,
+    /showDesktopWindow\(\)\.catch\(\(\) => undefined\);\s*navigateRoom\(roomId, eventId\);/
+  );
+  assert.match(approvals, /reportBannerAction\(\{ status: 'failed', error \}, roomId, eventId\)/);
+  assert.match(approvals, /recorded: recordedApprovalDecision\(decided, actionId\)/);
+});
+
+test('clicks held back by the shell are drained once the action listener listens', () => {
+  const approvals = section(features(), 'function AgentApprovalNotifications()');
+  assert.match(approvals, /takeDesktopNotificationResponses\(generation\)/);
+  assert.match(approvals, /listening = nextUnlisten !== undefined;\s*drain\(\);/);
+  assert.match(approvals, /nativeSession\(\)\.subscribe\('sync', drain\)/);
+  assert.match(approvals, /nativeSession\(\)\.subscribe\('session', drain\)/);
+});
+
+test('invite banners are tagged per invite and withdrawn when one is handled', () => {
+  const banners = createInviteBannerTracker();
+  assert.deepEqual(banners(['!a', '!b']), {
+    bannerKeys: ['invite:!a', 'invite:!b'],
+    withdrawKeys: [],
+  });
+  assert.deepEqual(banners(['!b', '!c']), {
+    bannerKeys: ['invite:!c'],
+    withdrawKeys: ['invite:!a'],
+  });
+  const many = Array.from({ length: 12 }, (_, index) => `!n${index}`);
+  assert.equal(banners(many).bannerKeys.length, 8);
+  assert.match(
+    section(features(), 'function InviteNotifications()'),
+    /dismissDesktopNotifications\(withdrawKeys\)\.catch\(\(\) => undefined\)/
+  );
+});
+
+test('notification permission is requested once, never from a post', () => {
+  const ask = (permission: string | undefined, showNotifications = true, alreadyAsked = false) =>
+    shouldRequestNotificationPermission({ showNotifications, permission, alreadyAsked });
+  assert.equal(ask('prompt'), true);
+  assert.equal(ask('prompt', true, true), false);
+  assert.equal(ask('prompt', false), false);
+  assert.equal(ask('denied'), false);
+  assert.equal(ask('granted'), false);
+  const source = features();
+  assert.match(source, /<NotificationPermissionRequest \/>/);
+  assert.match(
+    section(source, 'function NotificationPermissionRequest()'),
+    /askedRef\.current = true;/
+  );
 });

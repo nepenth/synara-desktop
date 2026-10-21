@@ -97,7 +97,6 @@ fn media_config_response_error() -> MatrixAuthCommandError {
 mod tests {
     use std::sync::Arc;
 
-    use synara_core::dto::NotificationCandidate;
     use synara_core::platform::{
         Platform, PlatformCryptoCrossSigningState, PlatformCryptoStatus, PlatformMediaConfig,
         PlatformStatus, PlatformSyncStatus, SecretVault, UnavailableSecretVault,
@@ -156,10 +155,6 @@ mod tests {
                 Ok(PlatformMediaConfig::new(16 * 1024 * 1024)
                     .expect("normal media limit is a valid closed projection"))
             })
-        }
-
-        fn notify(&self, _candidate: NotificationCandidate) -> Result<(), MatrixIpcError> {
-            Ok(())
         }
 
         fn set_badge(&self, _count: u64) -> Result<(), MatrixIpcError> {

@@ -144,8 +144,16 @@ fn reaction_success_does_not_fail_the_decision_when_history_write_fails() {
         .split("agent-approval-history-write-failed: {diagnostic}")
         .nth(1)
         .expect("decision continues after the history-write log");
-    assert!(after_write.contains("Ok(NativeAgentApprovalDecisionResult"));
+    // AlreadyDecided returns its recorded decision through
+    // `already_decided_result`; Applied builds the result after its own log.
+    assert!(after_write.contains("Ok(already_decided_result("));
     assert!(!after_write.contains("return Err("));
+    let applied = decide
+        .rsplit("agent-approval-history-write-failed: {diagnostic}")
+        .next()
+        .expect("applied decision after its history-write log");
+    assert!(applied.contains("Ok(NativeAgentApprovalDecisionResult"));
+    assert!(!applied.contains("return Err("));
 }
 
 #[test]

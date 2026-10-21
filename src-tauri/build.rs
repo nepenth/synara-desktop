@@ -21,6 +21,8 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "desktop_request_notification_permission",
     "desktop_notify",
     "desktop_dismiss_notifications",
+    "desktop_dismiss_all_notifications",
+    "desktop_take_notification_responses",
     "desktop_open_external_url",
     "desktop_save_file",
     "desktop_save_file_begin",
