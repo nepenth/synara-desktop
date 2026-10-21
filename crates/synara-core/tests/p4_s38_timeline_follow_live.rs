@@ -97,7 +97,53 @@ async fn focused_owner() -> (
 
 #[tokio::test]
 async fn follow_live_rejects_a_focused_provider_even_on_the_exact_room_tail() {
-    let (_server, _client, owner, room_id, _older_id, newer_id) = focused_owner().await;
+    let (server, _client, owner, room_id, older_id, newer_id) = focused_owner().await;
+    // A target inside the live window opens on the live provider, so the
+    // anchor here is older than anything sync delivered. Core must build a
+    // genuine event-focused timeline, whose `/context` window still reaches
+    // the exact room tail.
+    let room = room_id!("!follow-live:example.org");
+    let ancient = event_id!("$follow-live-ancient");
+    let f = EventFactory::new().room(room);
+    server
+        .mock_room_event()
+        .room(room)
+        .match_event_id()
+        .ok(f
+            .text_msg("ancient message")
+            .sender(*BOB)
+            .event_id(ancient)
+            .into_event())
+        .with_priority(1)
+        .mount()
+        .await;
+    server
+        .mock_room_event_context()
+        .room(room)
+        .match_event_id()
+        .ok(RoomContextResponseTemplate::new(
+            f.text_msg("ancient message")
+                .sender(*BOB)
+                .event_id(ancient)
+                .into_event(),
+        )
+        .events_before(vec![])
+        .events_after(vec![
+            f.text_msg("older message")
+                .sender(*BOB)
+                .event_id(event_id!("$follow-live-older"))
+                .into_event(),
+            f.text_msg("newer message")
+                .sender(*BOB)
+                .event_id(event_id!("$follow-live-newer"))
+                .into_event(),
+        ])
+        .start("follow-live-ancient-prev")
+        .end("follow-live-ancient-next"))
+        .with_priority(1)
+        .mount()
+        .await;
+
     owner
         .open_at(NativeTimelineOpenRequest {
             room_id: room_id.clone(),
@@ -105,13 +151,12 @@ async fn follow_live_rejects_a_focused_provider_even_on_the_exact_room_tail() {
         })
         .await
         .expect("live provider must be registered");
-    let older = event_id!("$follow-live-older");
     let opened = timeout(
         WAIT,
         owner.open_at(NativeTimelineOpenRequest {
             room_id: room_id.clone(),
             position: NativeTimelineOpenPosition::Focused {
-                event_id: older.to_string(),
+                event_id: ancient.to_string(),
             },
         }),
     )
@@ -122,6 +167,21 @@ async fn follow_live_rejects_a_focused_provider_even_on_the_exact_room_tail() {
         opened.position,
         TimelineViewPosition::LiveBottom,
         "a focused open must not already be live or the flip proof is vacuous"
+    );
+    let rows: Vec<_> = opened
+        .snapshot
+        .rows
+        .iter()
+        .filter_map(|row| match row {
+            synara_core::app::timeline::TimelineViewRow::Message(message) => {
+                message.event.event_id.clone()
+            }
+            _ => None,
+        })
+        .collect();
+    assert!(
+        rows.contains(&ancient.to_string()) && rows.contains(&older_id) && rows.contains(&newer_id),
+        "the event-focused window must reach the exact room tail: {rows:?}"
     );
 
     let error = timeout(
@@ -135,6 +195,43 @@ async fn follow_live_rejects_a_focused_provider_even_on_the_exact_room_tail() {
     .expect("follow must complete")
     .expect_err("a focused SDK provider must remain focused");
     assert_eq!(error, "v-timeline-follow-live-tail-not-loaded");
+}
+
+#[tokio::test]
+async fn follow_live_promotes_a_focused_open_inside_the_live_window() {
+    let (_server, _client, owner, room_id, older_id, newer_id) = focused_owner().await;
+    // The target is in the live window, so Core presents it on the live
+    // provider rather than building an event-focused timeline.
+    let opened = timeout(
+        WAIT,
+        owner.open_at(NativeTimelineOpenRequest {
+            room_id: room_id.clone(),
+            position: NativeTimelineOpenPosition::Focused {
+                event_id: older_id.clone(),
+            },
+        }),
+    )
+    .await
+    .expect("open must complete")
+    .expect("focused open must succeed");
+    assert_eq!(
+        opened.position,
+        TimelineViewPosition::Focused {
+            target_event_id: older_id.clone()
+        }
+    );
+
+    let followed = timeout(
+        WAIT,
+        owner.follow_live_tail(NativeTimelineFollowLiveRequest {
+            stream_id: opened.stream_id.clone(),
+            observed_live_tail_event_id: newer_id.clone(),
+        }),
+    )
+    .await
+    .expect("follow must complete")
+    .expect("a focus on the live provider can follow the exact live tail");
+    assert_eq!(followed.position, TimelineViewPosition::LiveBottom);
 }
 
 #[tokio::test]
