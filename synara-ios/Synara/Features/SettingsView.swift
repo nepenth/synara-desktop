@@ -8,9 +8,9 @@ import UserNotifications
 /// Log Out confirmation copy, including the last-device warning.
 enum SignOutCopy {
     static let standardMessage =
-        "This clears local sign-in data and cached rooms. Synara also attempts to revoke this session and remove its push registration; remote cleanup requires a connection."
+        String(localized: "This clears local sign-in data and cached rooms. Synara also attempts to revoke this session and remove its push registration; remote cleanup requires a connection.")
     static let lastDeviceWarning =
-        "This is your last signed-in device. Save your recovery key before logging out, or you will lose access to your encrypted messages."
+        String(localized: "This is your last signed-in device. Save your recovery key before logging out, or you will lose access to your encrypted messages.")
 
     /// `isLastDevice` is `nil` while the device list is unknown; only a
     /// confirmed last device shows the warning.
@@ -130,21 +130,21 @@ struct SettingsView: View {
                 NavigationLink {
                     NotificationSettingsView()
                 } label: {
-                    SettingsNavigationRow(title: "Notifications", systemImage: "bell")
+                    SettingsNavigationRow(title: String(localized: "Notifications"), systemImage: "bell")
                 }
                 .accessibilityIdentifier("NotificationSettingsLink")
 
                 NavigationLink {
                     AppearanceSettingsView()
                 } label: {
-                    SettingsNavigationRow(title: "Appearance", systemImage: "textformat.size")
+                    SettingsNavigationRow(title: String(localized: "Appearance"), systemImage: "textformat.size")
                 }
                 .accessibilityIdentifier("AppearanceSettingsLink")
 
                 NavigationLink {
                     SecuritySettingsView()
                 } label: {
-                    SettingsNavigationRow(title: "Security & Recovery", systemImage: "lock.shield")
+                    SettingsNavigationRow(title: String(localized: "Security & Recovery"), systemImage: "lock.shield")
                 }
                 .accessibilityIdentifier("SecuritySettingsLink")
             }
@@ -153,28 +153,28 @@ struct SettingsView: View {
                 NavigationLink {
                     AboutSettingsView()
                 } label: {
-                    SettingsNavigationRow(title: "About Synara", systemImage: "info.circle")
+                    SettingsNavigationRow(title: String(localized: "About Synara"), systemImage: "info.circle")
                 }
                 .accessibilityIdentifier("AboutSettingsLink")
 
                 NavigationLink {
                     LicensesSettingsView()
                 } label: {
-                    SettingsNavigationRow(title: "Licenses", systemImage: "doc.text")
+                    SettingsNavigationRow(title: String(localized: "Licenses"), systemImage: "doc.text")
                 }
                 .accessibilityIdentifier("LicensesSettingsLink")
 
                 NavigationLink {
                     PrivacyPolicySettingsView()
                 } label: {
-                    SettingsNavigationRow(title: "Privacy Policy", systemImage: "hand.raised")
+                    SettingsNavigationRow(title: String(localized: "Privacy Policy"), systemImage: "hand.raised")
                 }
                 .accessibilityIdentifier("PrivacyPolicySettingsLink")
 
                 NavigationLink {
                     SupportSettingsView()
                 } label: {
-                    SettingsNavigationRow(title: "Support", systemImage: "questionmark.circle")
+                    SettingsNavigationRow(title: String(localized: "Support"), systemImage: "questionmark.circle")
                 }
                 .accessibilityIdentifier("SupportSettingsLink")
             }
@@ -311,12 +311,15 @@ private struct AccountSettingsView: View {
                     coreSessionIdentity,
                     for: session
                 )
-                SettingsInfoRow(title: "User", value: displayIdentity?.userID ?? session.userID)
+                SettingsInfoRow(title: String(localized: "User"), value: displayIdentity?.userID ?? session.userID)
                     .accessibilityIdentifier("SettingsAccountUser")
-                SettingsInfoRow(title: "Device", value: displayIdentity?.deviceID ?? session.deviceID)
+                SettingsInfoRow(
+                    title: String(localized: "Device"),
+                    value: displayIdentity?.deviceID ?? session.deviceID
+                )
                     .accessibilityIdentifier("SettingsAccountDevice")
                 SettingsInfoRow(
-                    title: "Homeserver",
+                    title: String(localized: "Homeserver"),
                     value: SettingsAccountIdentitySelection.homeserverDisplayValue(
                         for: displayIdentity,
                         fallback: session.homeserverURL
@@ -450,7 +453,7 @@ private struct AccountSettingsView: View {
                     applyPresence(newValue)
                 }
                 if let status = ownPresence?.statusMessage, status.isEmpty == false {
-                    SettingsInfoRow(title: "Message", value: status)
+                    SettingsInfoRow(title: String(localized: "Message"), value: status)
                         .accessibilityIdentifier("SettingsPresenceMessage")
                 }
             }
@@ -483,7 +486,7 @@ private struct AccountSettingsView: View {
             Section {
                 Text(
                     rtcTransports.map(SharedCoreRtcTransports.diagnosticCopy)
-                        ?? "Native MatrixRTC transports are unavailable."
+                        ?? String(localized: "Native MatrixRTC transports are unavailable.")
                 )
                 .font(SynaraTypography.supporting)
                 .foregroundStyle(SynaraColor.secondaryText)
@@ -532,7 +535,7 @@ private struct AccountSettingsView: View {
             } header: {
                 Text("Sessions")
             } footer: {
-                Text("Sign out a session to revoke it on the homeserver. This device uses Log Out instead.")
+                Text("Log out a session to revoke it on the homeserver. This device uses Log Out instead.")
             }
 
             if sessionCrypto.showsVerifyThisDevice {
@@ -609,7 +612,7 @@ private struct AccountSettingsView: View {
         }
         .accessibilityIdentifier("AccountSettingsScreen")
         .alert(
-            "Sign out session?",
+            "Log out session?",
             isPresented: Binding(
                 get: { signOutDevice != nil },
                 set: { presented in
@@ -622,7 +625,7 @@ private struct AccountSettingsView: View {
         ) {
             SecureField("Account password", text: $signOutPassword)
                 .textContentType(.password)
-            Button("Sign Out", role: .destructive) {
+            Button("Log Out", role: .destructive) {
                 confirmSignOut()
             }
             .disabled(isSigningOut || signOutPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -632,7 +635,7 @@ private struct AccountSettingsView: View {
                 signOutPassword = ""
             }
         } message: {
-            Text("Enter your account password to revoke \(signOutDevice?.displayName ?? "this session").")
+            Text("Enter your account password to revoke \(signOutDevice?.displayName ?? String(localized: "this session")).")
         }
         .task {
             await sessionCrypto.start(store: environment.sessionCrypto)
@@ -703,8 +706,8 @@ private struct AccountSettingsView: View {
             await MainActor.run {
                 isSettingStatus = false
                 statusMessage = ok
-                    ? "Status updated."
-                    : "This homeserver does not support user status."
+                    ? String(localized: "Status updated.")
+                    : String(localized: "This homeserver does not support user status.")
             }
         }
     }
@@ -719,9 +722,9 @@ private struct AccountSettingsView: View {
                 if ok {
                     statusEmojiDraft = ""
                     statusTextDraft = ""
-                    statusMessage = "Status cleared."
+                    statusMessage = String(localized: "Status cleared.")
                 } else {
-                    statusMessage = "This homeserver does not support user status."
+                    statusMessage = String(localized: "This homeserver does not support user status.")
                 }
             }
         }
@@ -762,13 +765,13 @@ private struct AccountSettingsView: View {
                 await MainActor.run {
                     selectedAvatarPhoto = nil
                     isUploadingAvatar = false
-                    displayNameMessage = status.message(for: "Avatar")
+                    displayNameMessage = status.message(for: .avatar)
                 }
             } catch {
                 await MainActor.run {
                     selectedAvatarPhoto = nil
                     isUploadingAvatar = false
-                    displayNameMessage = "Could not update avatar."
+                    displayNameMessage = String(localized: "Could not update avatar.")
                 }
             }
         }
@@ -781,20 +784,20 @@ private struct AccountSettingsView: View {
         Task {
             let requested = await environment.matrix.requestThreepidEmailToken(email)
             guard requested else {
-                await MainActor.run { emailMessage = "Could not send verification email." }
+                await MainActor.run { emailMessage = String(localized: "Could not send verification email.") }
                 return
             }
             let status = await environment.matrix.addThreepidEmail()
             await MainActor.run {
                 if status == .authenticationRequired {
                     needsEmailPassword = true
-                    emailMessage = "Enter your account password to confirm this email."
+                    emailMessage = String(localized: "Enter your account password to confirm this email.")
                 } else if status == .ok {
                     emailDraft = ""
                     needsEmailPassword = false
-                    emailMessage = "Email attached."
+                    emailMessage = String(localized: "Email attached.")
                 } else {
-                    emailMessage = "Could not attach this email."
+                    emailMessage = String(localized: "Could not attach this email.")
                 }
             }
             emails = await environment.matrix.threepidEmails()
@@ -810,9 +813,9 @@ private struct AccountSettingsView: View {
                 if status == .ok {
                     emailDraft = ""
                     needsEmailPassword = false
-                    emailMessage = "Email attached."
+                    emailMessage = String(localized: "Email attached.")
                 } else {
-                    emailMessage = "Could not confirm this email."
+                    emailMessage = String(localized: "Could not confirm this email.")
                 }
             }
             emails = await environment.matrix.threepidEmails()
@@ -822,7 +825,7 @@ private struct AccountSettingsView: View {
     private func blockUser() {
         let userID = ignoreDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard userID.hasPrefix("@") else {
-            ignoreMessage = "Enter a full Matrix user ID."
+            ignoreMessage = String(localized: "Enter a full Matrix user ID.")
             return
         }
         ignoreMessage = nil
@@ -834,7 +837,7 @@ private struct AccountSettingsView: View {
                 if ok {
                     ignoreDraft = ""
                 } else {
-                    ignoreMessage = "Could not block this user."
+                    ignoreMessage = String(localized: "Could not block this user.")
                 }
             }
         }
@@ -849,7 +852,7 @@ private struct AccountSettingsView: View {
             let status = await environment.matrix.setOwnDisplayNameStatus(name)
             await MainActor.run {
                 isSavingDisplayName = false
-                displayNameMessage = status.message(for: "Display name")
+                displayNameMessage = status.message(for: .displayName)
             }
         }
     }
@@ -918,7 +921,7 @@ private struct SessionDeviceRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
             HStack(alignment: .firstTextBaseline) {
-                Text(device.isCurrent ? "This device" : device.displayName)
+                Text(device.isCurrent ? String(localized: "This device") : device.displayName)
                     .font(SynaraTypography.body)
                     .foregroundStyle(SynaraColor.primaryText)
                 Spacer()
@@ -927,7 +930,7 @@ private struct SessionDeviceRow: View {
                         Button("Verify", systemImage: "checkmark.shield", action: onVerify)
                             .disabled(isRequestingVerification)
                             .accessibilityIdentifier("VerifySessionButton-\(device.id)")
-                        Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive, action: onSignOut)
+                        Button("Log Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive, action: onSignOut)
                             .disabled(isSigningOut)
                             .accessibilityIdentifier("SignOutSessionButton-\(device.id)")
                     } label: {
@@ -989,7 +992,7 @@ final class PushRuleSettingsModel: ObservableObject {
     /// newer edit.
     private var revision = 0
 
-    static let failureMessage = "Could not update push rules. Check your connection and try again."
+    static let failureMessage = String(localized: "Could not update push rules. Check your connection and try again.")
 
     func load(using matrix: PushRuleSettingsServicing) async {
         let started = revision
@@ -1109,7 +1112,7 @@ private struct NotificationSettingsView: View {
 
             Section {
                 SettingsInfoRow(
-                    title: "Status",
+                    title: String(localized: "Status"),
                     value: pushRegistrationStatus.isEmpty
                         ? environment.push.registrationStateDescription
                         : pushRegistrationStatus
@@ -1250,27 +1253,52 @@ private struct NotificationSettingsView: View {
                     }
                 }
                 Section("1-to-1 Chats") {
-                    pushModePicker("Unencrypted", current: pushRules.dm) { mode in
+                    pushModePicker(String(localized: "Unencrypted"), current: pushRules.dm) { mode in
                         await updateDefault(\.dm, encrypted: false, oneToOne: true, mode: mode)
                     }
-                    pushModePicker("Encrypted", current: pushRules.dmEncrypted) { mode in
+                    pushModePicker(String(localized: "Encrypted"), current: pushRules.dmEncrypted) { mode in
                         await updateDefault(\.dmEncrypted, encrypted: true, oneToOne: true, mode: mode)
                     }
                 }
                 Section("Rooms") {
-                    pushModePicker("Unencrypted", current: pushRules.group) { mode in
+                    pushModePicker(String(localized: "Unencrypted"), current: pushRules.group) { mode in
                         await updateDefault(\.group, encrypted: false, oneToOne: false, mode: mode)
                     }
-                    pushModePicker("Encrypted", current: pushRules.groupEncrypted) { mode in
+                    pushModePicker(String(localized: "Encrypted"), current: pushRules.groupEncrypted) { mode in
                         await updateDefault(\.groupEncrypted, encrypted: true, oneToOne: false, mode: mode)
                     }
                 }
                 Section("Mentions") {
-                    mentionToggle("User ID", enabled: pushRules.mentions.userMention, keyPath: \.userMention, ruleID: "userMention")
-                    mentionToggle("Display name", enabled: pushRules.mentions.displayName, keyPath: \.displayName, ruleID: "displayName")
-                    mentionToggle("Username", enabled: pushRules.mentions.userName, keyPath: \.userName, ruleID: "userName")
-                    mentionToggle("@room mention", enabled: pushRules.mentions.roomMention, keyPath: \.roomMention, ruleID: "roomMention")
-                    mentionToggle("Contains @room", enabled: pushRules.mentions.atRoom, keyPath: \.atRoom, ruleID: "atRoom")
+                    mentionToggle(
+                        String(localized: "User ID"),
+                        enabled: pushRules.mentions.userMention,
+                        keyPath: \.userMention,
+                        ruleID: "userMention"
+                    )
+                    mentionToggle(
+                        String(localized: "Display name"),
+                        enabled: pushRules.mentions.displayName,
+                        keyPath: \.displayName,
+                        ruleID: "displayName"
+                    )
+                    mentionToggle(
+                        String(localized: "Username"),
+                        enabled: pushRules.mentions.userName,
+                        keyPath: \.userName,
+                        ruleID: "userName"
+                    )
+                    mentionToggle(
+                        String(localized: "@room mention"),
+                        enabled: pushRules.mentions.roomMention,
+                        keyPath: \.roomMention,
+                        ruleID: "roomMention"
+                    )
+                    mentionToggle(
+                        String(localized: "Contains @room"),
+                        enabled: pushRules.mentions.atRoom,
+                        keyPath: \.atRoom,
+                        ruleID: "atRoom"
+                    )
                 }
                 Section("Keywords") {
                     ForEach(pushRules.keywords, id: \.self) { keyword in
@@ -1441,7 +1469,7 @@ private struct AppearanceSettingsView: View {
     var body: some View {
         Form {
             Section {
-                SettingsInfoRow(title: "Appearance", value: "System")
+                SettingsInfoRow(title: String(localized: "Appearance"), value: String(localized: "System"))
                     .accessibilityIdentifier("AppearanceThemeRow")
                 themeRampPreview
                 HStack(spacing: 0) {
@@ -1468,7 +1496,7 @@ private struct AppearanceSettingsView: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel(preset.label)
                         .accessibilityAddTraits(isSelected ? .isSelected : [])
-                        .accessibilityIdentifier("AppearancePreset-\(preset.label)")
+                        .accessibilityIdentifier("AppearancePreset-\(preset.key)")
                     }
                 }
                 .padding(.leading, -11)
@@ -1519,7 +1547,7 @@ private struct AppearanceSettingsView: View {
             } header: {
                 Text("Thread Display")
             } footer: {
-                Text(threadDisplay.detail + " Matches desktop Settings → Appearance → Thread Display.")
+                Text(String(localized: "\(threadDisplay.detail) Matches desktop Settings → Appearance → Thread Display."))
             }
 
             Section {
@@ -1535,7 +1563,10 @@ private struct AppearanceSettingsView: View {
             }
 
             Section {
-                SettingsInfoRow(title: "Text Size", value: "Uses iOS Dynamic Type")
+                SettingsInfoRow(
+                    title: String(localized: "Text Size"),
+                    value: String(localized: "Uses iOS Dynamic Type")
+                )
                     .accessibilityIdentifier("AppearanceTextSizeRow")
             } header: {
                 Text("Text")
@@ -1575,9 +1606,9 @@ private struct AppearanceSettingsView: View {
             dark: colorScheme == .dark
         )
         return HStack(spacing: SynaraSpacing.medium) {
-            rampSwatch(title: "Rail", hex: tokens.groupedSurface)
-            rampSwatch(title: "List", hex: tokens.secondarySurface)
-            rampSwatch(title: "Chat", hex: tokens.surface)
+            rampSwatch(title: String(localized: "Rail"), hex: tokens.groupedSurface)
+            rampSwatch(title: String(localized: "List"), hex: tokens.secondarySurface)
+            rampSwatch(title: String(localized: "Chat"), hex: tokens.surface)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Theme ramp preview")
@@ -1713,11 +1744,11 @@ final class RecoverySetupFlow: ObservableObject {
     func start(passphrase: String, confirmation: String, crypto: CryptoStatusServicing) async {
         guard phase == .idle else { return }
         guard passphrase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
-            errorMessage = "Choose a recovery passphrase."
+            errorMessage = String(localized: "Choose a recovery passphrase.")
             return
         }
         guard passphrase == confirmation else {
-            errorMessage = "Recovery passphrases do not match."
+            errorMessage = String(localized: "Recovery passphrases do not match.")
             return
         }
         errorMessage = nil
@@ -1736,7 +1767,7 @@ final class RecoverySetupFlow: ObservableObject {
     func authenticate(password: String, crypto: CryptoStatusServicing) async {
         guard phase == .passwordRequired, let passphrase = pendingPassphrase else { return }
         guard password.isEmpty == false else {
-            errorMessage = "Enter your account password."
+            errorMessage = String(localized: "Enter your account password.")
             return
         }
         errorMessage = nil
@@ -1804,20 +1835,35 @@ private struct SecuritySettingsView: View {
     var body: some View {
         Form {
             Section("Protection") {
-                SettingsInfoRow(title: "Session Storage", value: "Keychain")
+                SettingsInfoRow(title: String(localized: "Session Storage"), value: String(localized: "Keychain"))
                     .accessibilityIdentifier("SecuritySessionStorageRow")
-                SettingsInfoRow(title: "Message Security", value: "Matrix Rust SDK")
+                SettingsInfoRow(title: String(localized: "Message Security"), value: "Matrix Rust SDK")
                     .accessibilityIdentifier("SecurityMatrixSDKRow")
-                SettingsInfoRow(title: "Device Verification", value: sessionCrypto.status.verification.settingsDisplayName)
-                    .accessibilityIdentifier("SecurityDeviceVerificationRow")
-                SettingsInfoRow(title: "Cross-Signing", value: sessionCrypto.status.crossSigning.settingsDisplayName)
-                    .accessibilityIdentifier("SecurityCrossSigningRow")
-                SettingsInfoRow(title: "Key Recovery", value: sessionCrypto.status.recovery.settingsDisplayName)
-                    .accessibilityIdentifier("SecurityKeyRecoveryRow")
-                SettingsInfoRow(title: "Key Backup", value: sessionCrypto.status.backup.settingsDisplayName)
-                    .accessibilityIdentifier("SecurityKeyBackupRow")
-                SettingsInfoRow(title: "Decryption Issues", value: sessionCrypto.status.decryptionIssuesLabel)
-                    .accessibilityIdentifier("SecurityDecryptionIssuesRow")
+                SettingsInfoRow(
+                    title: String(localized: "Device Verification"),
+                    value: sessionCrypto.status.verification.settingsDisplayName
+                )
+                .accessibilityIdentifier("SecurityDeviceVerificationRow")
+                SettingsInfoRow(
+                    title: String(localized: "Cross-Signing"),
+                    value: sessionCrypto.status.crossSigning.settingsDisplayName
+                )
+                .accessibilityIdentifier("SecurityCrossSigningRow")
+                SettingsInfoRow(
+                    title: String(localized: "Key Recovery"),
+                    value: sessionCrypto.status.recovery.settingsDisplayName
+                )
+                .accessibilityIdentifier("SecurityKeyRecoveryRow")
+                SettingsInfoRow(
+                    title: String(localized: "Key Backup"),
+                    value: sessionCrypto.status.backup.settingsDisplayName
+                )
+                .accessibilityIdentifier("SecurityKeyBackupRow")
+                SettingsInfoRow(
+                    title: String(localized: "Decryption Issues"),
+                    value: sessionCrypto.status.decryptionIssuesLabel
+                )
+                .accessibilityIdentifier("SecurityDecryptionIssuesRow")
             }
 
             if sessionCrypto.showsVerifyThisDevice {
@@ -1827,7 +1873,7 @@ private struct SecuritySettingsView: View {
                             await environment.crypto.requestDeviceVerification()
                         }
                     } label: {
-                        cryptoActionLabel("Verify This Device")
+                        cryptoActionLabel(String(localized: "Verify This Device"))
                     }
                     .disabled(isRunningCryptoAction || sessionCrypto.enablesVerifyThisDevice == false)
                     .accessibilityIdentifier("RequestDeviceVerificationButton")
@@ -1863,7 +1909,7 @@ private struct SecuritySettingsView: View {
                             recoveryKey = ""
                         }
                     } label: {
-                        cryptoActionLabel("Recover Keys")
+                        cryptoActionLabel(String(localized: "Recover Keys"))
                     }
                     .disabled(isRunningCryptoAction || recoveryKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .accessibilityIdentifier("RecoverKeysButton")
@@ -1971,7 +2017,7 @@ struct RecoverySetupSection: View {
                         await finishRecoverySetupStep()
                     }
                 } label: {
-                    recoverySetupLabel("Set Up Recovery")
+                    recoverySetupLabel(String(localized: "Set Up Recovery"))
                 }
                 .disabled(flow.isWorking || recoveryPassphrase.isEmpty)
                 .accessibilityIdentifier("SetUpRecoveryButton")
@@ -1989,7 +2035,7 @@ struct RecoverySetupSection: View {
                         await finishRecoverySetupStep()
                     }
                 } label: {
-                    recoverySetupLabel("Authenticate")
+                    recoverySetupLabel(String(localized: "Authenticate"))
                 }
                 .disabled(accountPassword.isEmpty)
                 .accessibilityIdentifier("RecoveryAuthenticateButton")
@@ -2115,7 +2161,7 @@ final class IdentityResetFlow: ObservableObject {
     func authenticate(password: String, crypto: CryptoStatusServicing) async {
         guard phase == .passwordRequired, isWorking == false else { return }
         guard password.isEmpty == false else {
-            errorMessage = "Enter your account password."
+            errorMessage = String(localized: "Enter your account password.")
             return
         }
         await run { await crypto.authenticateIdentityReset(password: password) }
@@ -2207,7 +2253,7 @@ struct IdentityResetSections: View {
                         accountPassword = ""
                     }
                 } label: {
-                    workingLabel("Authenticate")
+                    workingLabel(String(localized: "Authenticate"))
                 }
                 .disabled(flow.isWorking || accountPassword.isEmpty)
                 .accessibilityIdentifier("IdentityResetAuthenticateButton")
@@ -2224,7 +2270,7 @@ struct IdentityResetSections: View {
                 Button {
                     Task { await flow.continueAfterApproval(crypto: environment.crypto) }
                 } label: {
-                    workingLabel("Continue")
+                    workingLabel(String(localized: "Continue"))
                 }
                 .disabled(flow.isWorking)
                 .accessibilityIdentifier("IdentityResetContinueButton")
@@ -2398,7 +2444,7 @@ struct VerifyThisDevicePromptSheet: View {
 
     private var closeTitle: String {
         if showsReset {
-            return reset.isFinished ? "Close" : "Cancel"
+            return reset.isFinished ? String(localized: "Close") : String(localized: "Cancel")
         }
         return VerifyDevicePromptCopy.later
     }
@@ -2529,11 +2575,11 @@ extension SynaraCryptoVerificationStatus {
     var settingsDisplayName: String {
         switch self {
         case .verified:
-            return "Verified"
+            return String(localized: "Verified")
         case .unverified:
-            return "Unverified"
+            return String(localized: "Unverified")
         case .unknown:
-            return "Unknown"
+            return String(localized: "Unknown")
         }
     }
 }
@@ -2542,13 +2588,13 @@ private extension SynaraCryptoRecoveryStatus {
     var settingsDisplayName: String {
         switch self {
         case .enabled:
-            return "Enabled"
+            return String(localized: "Enabled")
         case .disabled:
-            return "Disabled"
+            return String(localized: "Disabled")
         case .incomplete:
-            return "Needs Recovery"
+            return String(localized: "Needs Recovery")
         case .unknown:
-            return "Unknown"
+            return String(localized: "Unknown")
         }
     }
 }
@@ -2557,15 +2603,15 @@ extension SynaraCryptoCrossSigningStatus {
     var settingsDisplayName: String {
         switch self {
         case .ready:
-            return "Ready"
+            return String(localized: "Ready")
         case .notSetUp:
-            return "Not Set Up"
+            return String(localized: "Not Set Up")
         case .needsVerification:
-            return "Needs Verification"
+            return String(localized: "Needs Verification")
         case .needsRecovery:
-            return "Needs Recovery"
+            return String(localized: "Needs Recovery")
         case .unknown:
-            return "Unknown"
+            return String(localized: "Unknown")
         }
     }
 }
@@ -2574,13 +2620,13 @@ private extension SynaraCryptoBackupStatus {
     var settingsDisplayName: String {
         switch self {
         case .enabled:
-            return "Enabled"
+            return String(localized: "Enabled")
         case .unavailable:
-            return "Unavailable"
+            return String(localized: "Unavailable")
         case .syncing:
-            return "Syncing"
+            return String(localized: "Syncing")
         case .unknown:
-            return "Unknown"
+            return String(localized: "Unknown")
         }
     }
 }
@@ -2601,22 +2647,22 @@ private struct AboutSettingsView: View {
             }
 
             Section("Build") {
-                SettingsInfoRow(title: "Version", value: AppBuildInfo.version)
+                SettingsInfoRow(title: String(localized: "Version"), value: AppBuildInfo.version)
                     .accessibilityIdentifier("AboutVersionRow")
-                SettingsInfoRow(title: "Build", value: AppBuildInfo.build)
+                SettingsInfoRow(title: String(localized: "Build"), value: AppBuildInfo.build)
                     .accessibilityIdentifier("AboutBuildRow")
-                SettingsInfoRow(title: "Bundle", value: AppBuildInfo.bundleIdentifier)
+                SettingsInfoRow(title: String(localized: "Bundle"), value: AppBuildInfo.bundleIdentifier)
                     .accessibilityIdentifier("AboutBundleRow")
             }
 
             Section("Links") {
                 Link(destination: SettingsLink.privacy.url) {
-                    SettingsNavigationRow(title: "Privacy Policy", systemImage: "hand.raised")
+                    SettingsNavigationRow(title: String(localized: "Privacy Policy"), systemImage: "hand.raised")
                 }
                 .accessibilityIdentifier("AboutPrivacyLink")
 
                 Link(destination: SettingsLink.support.url) {
-                    SettingsNavigationRow(title: "Support", systemImage: "questionmark.circle")
+                    SettingsNavigationRow(title: String(localized: "Support"), systemImage: "questionmark.circle")
                 }
                 .accessibilityIdentifier("AboutSupportLink")
             }
@@ -2631,12 +2677,24 @@ private struct LicensesSettingsView: View {
     var body: some View {
         List {
             Section("App") {
-                LicenseRow(name: "Synara", license: "AGPL-3.0-only", note: "Final App Store distribution requires legal review of repository licensing.")
+                LicenseRow(
+                    name: "Synara",
+                    license: "AGPL-3.0-only",
+                    note: String(localized: "Final App Store distribution requires legal review of repository licensing.")
+                )
             }
 
             Section("Dependencies") {
-                LicenseRow(name: "Matrix Rust SDK Swift", license: "Apache-2.0", note: "Pinned through Swift Package Manager.")
-                LicenseRow(name: "Apple SwiftUI and iOS SDK", license: "Apple platform SDK", note: "Provided by Xcode and iOS.")
+                LicenseRow(
+                    name: "Matrix Rust SDK Swift",
+                    license: "Apache-2.0",
+                    note: String(localized: "Pinned through Swift Package Manager.")
+                )
+                LicenseRow(
+                    name: "Apple SwiftUI and iOS SDK",
+                    license: String(localized: "Apple platform SDK"),
+                    note: String(localized: "Provided by Xcode and iOS.")
+                )
             }
         }
         .navigationTitle("Licenses")
@@ -2677,10 +2735,22 @@ private struct PrivacyPolicySettingsView: View {
             }
 
             Section("Current Data Inventory") {
-                DataInventoryRow(title: "Account", detail: "Matrix user ID, device ID, homeserver, and access tokens are stored locally for session restore.")
-                DataInventoryRow(title: "Messages and Rooms", detail: "Room metadata, timeline content, media, and account data come from the selected Matrix homeserver.")
-                DataInventoryRow(title: "Notifications", detail: "APNs device tokens and Matrix pusher registration are used only when notifications are enabled.")
-                DataInventoryRow(title: "Diagnostics", detail: "No analytics or crash SDK is enabled. Logs are local and redacted.")
+                DataInventoryRow(
+                    title: String(localized: "Account"),
+                    detail: String(localized: "Matrix user ID, device ID, homeserver, and access tokens are stored locally for session restore.")
+                )
+                DataInventoryRow(
+                    title: String(localized: "Messages and Rooms"),
+                    detail: String(localized: "Room metadata, timeline content, media, and account data come from the selected Matrix homeserver.")
+                )
+                DataInventoryRow(
+                    title: String(localized: "Notifications"),
+                    detail: String(localized: "APNs device tokens and Matrix pusher registration are used only when notifications are enabled.")
+                )
+                DataInventoryRow(
+                    title: String(localized: "Diagnostics"),
+                    detail: String(localized: "No analytics or crash SDK is enabled. Logs are local and redacted.")
+                )
             }
         }
         .navigationTitle("Privacy")
@@ -2701,9 +2771,9 @@ private struct SupportSettingsView: View {
             }
 
             Section("Diagnostics") {
-                SettingsInfoRow(title: "Version", value: AppBuildInfo.version)
-                SettingsInfoRow(title: "Build", value: AppBuildInfo.build)
-                SettingsInfoRow(title: "Bundle", value: AppBuildInfo.bundleIdentifier)
+                SettingsInfoRow(title: String(localized: "Version"), value: AppBuildInfo.version)
+                SettingsInfoRow(title: String(localized: "Build"), value: AppBuildInfo.build)
+                SettingsInfoRow(title: String(localized: "Bundle"), value: AppBuildInfo.bundleIdentifier)
             }
         }
         .navigationTitle("Support")
@@ -2753,15 +2823,15 @@ private enum SettingsLink {
 
 private enum AppBuildInfo {
     static var version: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? String(localized: "Unknown")
     }
 
     static var build: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? String(localized: "Unknown")
     }
 
     static var bundleIdentifier: String {
-        Bundle.main.bundleIdentifier ?? "Unknown"
+        Bundle.main.bundleIdentifier ?? String(localized: "Unknown")
     }
 }
 

@@ -2941,7 +2941,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
             description: "Profile request was rate limited"
         )
         XCTAssertEqual(SharedCoreOwnProfile.writeStatus(for: limited), .rateLimited)
-        XCTAssertTrue(OwnProfileWriteStatus.rateLimited.message(for: "Avatar").contains("try again"))
+        XCTAssertTrue(OwnProfileWriteStatus.rateLimited.message(for: .avatar).contains("try again"))
         XCTAssertEqual(
             SharedCoreOwnProfile.writeStatus(
                 for: OwnProfileCommandError.Failed(code: "other-error", description: "Unknown")

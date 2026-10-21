@@ -115,7 +115,7 @@ struct RoomMemberActionsView: View {
                                     _ = try await environment.roomManagement.createDirectMessage(
                                         DirectMessageCreateRequest(userID: member.userID, isEncrypted: true)
                                     )
-                                    message = "Direct message created."
+                                    message = String(localized: "Direct message created.")
                                 } catch let error as RoomManagementError {
                                     message = error.localizedDescription
                                 } catch {
@@ -127,7 +127,7 @@ struct RoomMemberActionsView: View {
                     }
                     Button("Copy user ID") {
                         UIPasteboard.general.string = member.userID
-                        message = "Copied user ID."
+                        message = String(localized: "Copied user ID.")
                     }
                     .accessibilityIdentifier("RoomMemberCopyUserIDButton")
                     if plan.canIgnore {
@@ -245,50 +245,50 @@ struct RoomMemberActionsView: View {
     private var confirmTitle: String {
         switch confirmAction {
         case .ban:
-            return "Ban from room?"
+            return String(localized: "Ban from room?")
         case .cancelInvite:
-            return "Cancel invite?"
+            return String(localized: "Cancel invite?")
         case .denyKnock:
-            return "Deny knock?"
+            return String(localized: "Deny knock?")
         default:
-            return "Remove from room?"
+            return String(localized: "Remove from room?")
         }
     }
 
     private var confirmButtonTitle: String {
         switch confirmAction {
         case .ban:
-            return "Ban from room"
+            return String(localized: "Ban from room")
         case .cancelInvite:
-            return "Cancel invite"
+            return String(localized: "Cancel invite")
         case .denyKnock:
-            return "Deny knock"
+            return String(localized: "Deny knock")
         default:
-            return "Remove from room"
+            return String(localized: "Remove from room")
         }
     }
 
     private var confirmMessage: String {
         switch confirmAction {
         case .ban:
-            return "They will be removed and cannot rejoin until they are unbanned."
+            return String(localized: "They will be removed and cannot rejoin until they are unbanned.")
         case .cancelInvite:
-            return "This withdraws their pending invitation."
+            return String(localized: "This withdraws their pending invitation.")
         case .denyKnock:
-            return "This rejects their request to join this room."
+            return String(localized: "This rejects their request to join this room.")
         default:
-            return "They will be removed from this room and can rejoin if the room allows it."
+            return String(localized: "They will be removed from this room and can rejoin if the room allows it.")
         }
     }
 
     private func powerLevelTitle(_ level: Int) -> String {
         switch level {
         case 100:
-            return "Admin (100)"
+            return String(localized: "Admin (100)")
         case 50:
-            return "Moderator (50)"
+            return String(localized: "Moderator (50)")
         default:
-            return "Default (\(level))"
+            return String(localized: "Default (\(level))")
         }
     }
 
@@ -298,19 +298,19 @@ struct RoomMemberActionsView: View {
     }
 
     private func invite() {
-        run(plan.canAcceptKnock ? "Knock accepted." : "Invitation sent.") {
+        run(plan.canAcceptKnock ? String(localized: "Knock accepted.") : String(localized: "Invitation sent.")) {
             try await environment.roomManagement.inviteUser(roomID: roomID, userID: member.userID)
         }
     }
 
     private func unban() {
-        run("User unbanned.") {
+        run(String(localized: "User unbanned.")) {
             try await environment.roomManagement.unbanUser(roomID: roomID, userID: member.userID)
         }
     }
 
     private func savePowerLevel() {
-        run("Power level updated.") {
+        run(String(localized: "Power level updated.")) {
             try await environment.roomManagement.setMemberPowerLevel(
                 roomID: roomID,
                 userID: member.userID,
@@ -331,7 +331,9 @@ struct RoomMemberActionsView: View {
             let ignored = await environment.matrix.ignoredUserIDs()
             await MainActor.run {
                 isIgnored = ignored.contains(member.userID)
-                message = ok ? (isIgnored ? "User ignored." : "User unignored.") : RoomManagementError.failed.localizedDescription
+                message = ok
+                    ? (isIgnored ? String(localized: "User ignored.") : String(localized: "User unignored."))
+                    : RoomManagementError.failed.localizedDescription
                 isLoading = false
             }
         }
@@ -340,7 +342,7 @@ struct RoomMemberActionsView: View {
     private func performConfirmedAction() {
         switch confirmAction {
         case .ban:
-            run("User banned.") {
+            run(String(localized: "User banned.")) {
                 try await environment.roomManagement.banUser(
                     roomID: roomID,
                     userID: member.userID,
@@ -348,7 +350,7 @@ struct RoomMemberActionsView: View {
                 )
             }
         case .cancelInvite:
-            run("Invite cancelled.") {
+            run(String(localized: "Invite cancelled.")) {
                 try await environment.roomManagement.kickUser(
                     roomID: roomID,
                     userID: member.userID,
@@ -356,7 +358,7 @@ struct RoomMemberActionsView: View {
                 )
             }
         case .denyKnock:
-            run("Knock denied.") {
+            run(String(localized: "Knock denied.")) {
                 try await environment.roomManagement.kickUser(
                     roomID: roomID,
                     userID: member.userID,
@@ -364,7 +366,7 @@ struct RoomMemberActionsView: View {
                 )
             }
         case .remove:
-            run("User removed.") {
+            run(String(localized: "User removed.")) {
                 try await environment.roomManagement.kickUser(
                     roomID: roomID,
                     userID: member.userID,

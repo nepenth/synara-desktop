@@ -32,8 +32,8 @@ enum TimelineSearchFilter {
             return true
         }
 
-        return searchableText(for: item).localizedCaseInsensitiveContains(trimmed)
-            || item.senderID.localizedCaseInsensitiveContains(trimmed)
+        return searchableText(for: item).localizedStandardContains(trimmed)
+            || item.senderID.localizedStandardContains(trimmed)
     }
 
     static func applySearchQuery(_ query: String, to items: [TimelineItem]) -> [TimelineItem] {
@@ -277,27 +277,29 @@ enum TimelineDayHeaderPolicy {
         calendar: Calendar = .current,
         locale: Locale = .current
     ) -> String {
+        let formatters = SynaraTimeFormatting.formatters(
+            for: SynaraTimeFormatting.Configuration(
+                uses24HourClock: SynaraSharedConstants.boolSetting(SynaraSharedConstants.hour24ClockKey),
+                locale: locale,
+                timeZone: calendar.timeZone
+            )
+        )
         if calendar.isDate(day, inSameDayAs: now) {
-            return "Today"
+            return formatters.relativeDayName(offset: 0)
         }
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
            calendar.isDate(day, inSameDayAs: yesterday) {
-            return "Yesterday"
+            return formatters.relativeDayName(offset: -1)
         }
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.timeZone = calendar.timeZone
-        formatter.locale = locale
         let startOfToday = calendar.startOfDay(for: now)
         if let lastWeek = calendar.date(byAdding: .day, value: -6, to: startOfToday),
            day >= lastWeek, day < startOfToday {
-            formatter.setLocalizedDateFormatFromTemplate("EEEE")
+            return formatters.weekdayWide.format(day)
         } else if calendar.component(.year, from: day) == calendar.component(.year, from: now) {
-            formatter.setLocalizedDateFormatFromTemplate("EEEEMMMMd")
+            return formatters.weekdayMonthDay.format(day)
         } else {
-            formatter.setLocalizedDateFormatFromTemplate("EEEEMMMMdyyyy")
+            return formatters.weekdayMonthDayYear.format(day)
         }
-        return formatter.string(from: day)
     }
 }
 
@@ -750,11 +752,11 @@ enum LaterInboxError: Error, LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .noSession:
-            return "Sign in to load your Later items."
+            return String(localized: "Sign in to load your Later items.")
         case .malformedPayload:
-            return "Later account data was not readable."
+            return String(localized: "Later account data was not readable.")
         case .networkFailure:
-            return "Could not load Later account data."
+            return String(localized: "Could not load Later account data.")
         }
     }
 }
@@ -772,26 +774,26 @@ struct SynaraLaterListItem: Identifiable, Equatable {
     var label: String {
         switch kind {
         case .saved:
-            return "Saved"
+            return String(localized: "Saved")
         case .reminder:
-            return "Reminder"
+            return String(localized: "Reminder")
         }
     }
 
     var detail: String {
         if completedAt != nil {
-            return "Completed"
+            return String(localized: "Completed")
         }
 
         if let dueTs {
             if dueTs < Int(Date().timeIntervalSince1970 * 1000) {
-                return "Due"
+                return String(localized: "Due")
             }
 
-            return "Due soon"
+            return String(localized: "Due soon")
         }
 
-        return "No due date"
+        return String(localized: "No due date")
     }
 }
 
@@ -954,13 +956,13 @@ struct TimelineLoadFailure: Equatable {
     var userMessage: String {
         switch kind {
         case .sessionUnavailable:
-            return "Sign in again to load this timeline."
+            return String(localized: "Sign in again to load this timeline.")
         case .roomUnavailable:
-            return "This room is not available."
+            return String(localized: "This room is not available.")
         case .viewUnavailable, .temporarilyUnavailable:
-            return "Messages are temporarily unavailable. Try again."
+            return String(localized: "Messages are temporarily unavailable. Try again.")
         case .waitingToReconnect:
-            return "Waiting to reconnect. Messages load when the connection is back."
+            return String(localized: "Waiting to reconnect. Messages load when the connection is back.")
         }
     }
 }
@@ -1002,9 +1004,9 @@ enum TimelineEventRoute: Equatable {
 /// "temporarily unavailable" failure. The room stays open at its latest
 /// messages.
 enum TimelineEventRouteNotice {
-    static let missing = "That message isn't available. It may have been deleted, or you may not have access to it."
-    static let notShown = "That message couldn't be shown. Showing the latest messages instead."
-    static let lastReadUnavailable = "Your last read message couldn't be loaded. Showing the latest messages instead."
+    static let missing = String(localized: "That message isn't available. It may have been deleted, or you may not have access to it.")
+    static let notShown = String(localized: "That message couldn't be shown. Showing the latest messages instead.")
+    static let lastReadUnavailable = String(localized: "Your last read message couldn't be loaded. Showing the latest messages instead.")
 }
 
 /// Core's backward pagination state for a room provider. Only `exhausted`
@@ -4466,13 +4468,13 @@ struct TimelineEncryptionShield: Equatable {
     var label: String {
         switch code {
         case .authenticityNotGuaranteed:
-            "The authenticity of this encrypted message can't be guaranteed on this device."
-        case .unknownDevice: "Encrypted by an unknown or deleted device."
-        case .unsignedDevice: "Encrypted by a device not verified by its owner."
-        case .unverifiedIdentity: "Encrypted by an unverified user."
-        case .verificationViolation: "The sender's verified identity has changed."
-        case .mismatchedSender: "The sender of this message does not match the device that encrypted it."
-        case .sentInClear: "Not encrypted."
+            String(localized: "The authenticity of this encrypted message can't be guaranteed on this device.")
+        case .unknownDevice: String(localized: "Encrypted by an unknown or deleted device.")
+        case .unsignedDevice: String(localized: "Encrypted by a device not verified by its owner.")
+        case .unverifiedIdentity: String(localized: "Encrypted by an unverified user.")
+        case .verificationViolation: String(localized: "The sender's verified identity has changed.")
+        case .mismatchedSender: String(localized: "The sender of this message does not match the device that encrypted it.")
+        case .sentInClear: String(localized: "Not encrypted.")
         }
     }
 }

@@ -1,0 +1,3431 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "" : {
+
+    },
+    "#" : {
+
+    },
+    "# %@" : {
+
+    },
+    "#alias:server, #other:server" : {
+
+    },
+    "#room:server" : {
+
+    },
+    "#room:server or !room:server" : {
+
+    },
+    "%@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
+          }
+        }
+      }
+    },
+    "%@ %@ Always approval remains in-app only." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@ Always approval remains in-app only."
+          }
+        }
+      }
+    },
+    "%@ %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$lld"
+          }
+        }
+      }
+    },
+    "%@ %lld, you reacted" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$lld, you reacted"
+          }
+        }
+      }
+    },
+    "%@ Matches desktop Settings → Appearance → Thread Display." : {
+
+    },
+    "%@ and %@ are typing..." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ and %2$@ are typing..."
+          }
+        }
+      }
+    },
+    "%@ at %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ at %2$@"
+          }
+        }
+      }
+    },
+    "%@ from %@ in %@. %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ from %2$@ in %3$@. %4$@"
+          }
+        }
+      }
+    },
+    "%@ in %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ in %2$@"
+          }
+        }
+      }
+    },
+    "%@ is typing..." : {
+
+    },
+    "%@ sent %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ sent %2$@"
+          }
+        }
+      }
+    },
+    "%@ sent %@: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ sent %2$@: %3$@"
+          }
+        }
+      }
+    },
+    "%@ sent encrypted media that cannot be opened until keys are available" : {
+
+    },
+    "%@ will be removed from your joined room list." : {
+
+    },
+    "%@ · %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld"
+          }
+        }
+      }
+    },
+    "%@'s identity changed." : {
+
+    },
+    "%@'s verified identity changed." : {
+
+    },
+    "%@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "%@, %@, and %lld more are typing..." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@, and %#@more@"
+          },
+          "substitutions" : {
+            "more" : {
+              "argNum" : 3,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg more are typing..."
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg more are typing..."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%@, %lld unread" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %#@unread@"
+          },
+          "substitutions" : {
+            "unread" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg unread"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg unread"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%@, %lld votes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %#@votes@"
+          },
+          "substitutions" : {
+            "votes" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg vote"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg votes"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%@, In a call" : {
+
+    },
+    "%@: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@"
+          }
+        }
+      }
+    },
+    "%@: agent card: %@%@%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: agent card: %2$@%3$@%4$@"
+          }
+        }
+      }
+    },
+    "%@: encrypted message unavailable" : {
+
+    },
+    "%@: message deleted" : {
+
+    },
+    "%lld" : {
+
+    },
+    "%lld channels" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld channel"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld channels"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld chars" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld char"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld chars"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld items changed" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld item changed"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld items changed"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld lines" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld line"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld lines"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld live" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld live"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld live"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld members" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld member"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld members"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld observed" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld observed"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld observed"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld passed" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld passed"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld passed"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld replies" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld reply"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld replies"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld rooms" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld room"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld rooms"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld unread" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld unread"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld unread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    ", primary action %@" : {
+
+    },
+    ", status %@" : {
+
+    },
+    "1-to-1 Chats" : {
+
+    },
+    "24-Hour Time" : {
+
+    },
+    "99+" : {
+
+    },
+    "@hermes:example.org" : {
+
+    },
+    "@room mention" : {
+
+    },
+    "@user:server" : {
+
+    },
+    "APNs device tokens and Matrix pusher registration are used only when notifications are enabled." : {
+
+    },
+    "APNs registration failed" : {
+
+    },
+    "APNs registration failed; existing pusher retained" : {
+
+    },
+    "About" : {
+
+    },
+    "About Synara" : {
+
+    },
+    "Accept" : {
+
+    },
+    "Accept knock" : {
+
+    },
+    "Account" : {
+
+    },
+    "Account Password" : {
+
+    },
+    "Account menu" : {
+
+    },
+    "Account password" : {
+
+    },
+    "Accounts" : {
+
+    },
+    "Action" : {
+
+    },
+    "Action link is not allowed" : {
+
+    },
+    "Action payload is missing" : {
+
+    },
+    "Actions" : {
+
+    },
+    "Actions for %@" : {
+
+    },
+    "Active" : {
+
+    },
+    "Add Agent" : {
+
+    },
+    "Add Email" : {
+
+    },
+    "Add Keyword" : {
+
+    },
+    "Add Note" : {
+
+    },
+    "Add ToDo" : {
+
+    },
+    "Add a note or ToDo here, or pin a useful message from its menu." : {
+
+    },
+    "Add each agent’s full Matrix user ID. These rules apply only to the listed agents and sync with your account across Synara clients. Once you add an agent, only listed agents can raise urgent approval alerts, even in muted rooms; with no agents listed, approval alerts follow each room’s notification settings." : {
+
+    },
+    "Add to Favorites" : {
+
+    },
+    "Adds your reaction" : {
+
+    },
+    "Adjust text size in iOS Settings. Synara follows your system accessibility preferences." : {
+
+    },
+    "Admin (100)" : {
+
+    },
+    "Agent" : {
+
+    },
+    "Agent Accounts" : {
+
+    },
+    "Agent Action" : {
+
+    },
+    "Agent Approvals" : {
+
+    },
+    "Agent Matrix user ID" : {
+
+    },
+    "Agent Notifications" : {
+
+    },
+    "Agent action approved" : {
+
+    },
+    "Agent action could not be submitted" : {
+
+    },
+    "Agent action could not be submitted. Try again." : {
+
+    },
+    "Agent action rejected" : {
+
+    },
+    "Agent actions" : {
+
+    },
+    "Agent notification settings are unavailable. Check your connection and try again." : {
+
+    },
+    "Agent notification settings could not be loaded. Check your connection and try again." : {
+
+    },
+    "Agent room" : {
+
+    },
+    "Agent workflow" : {
+
+    },
+    "Agentic native Matrix client for iOS, macOS, and Linux." : {
+
+    },
+    "Agents" : {
+
+    },
+    "Aliases And Avatar" : {
+
+    },
+    "All" : {
+
+    },
+    "All spaces" : {
+
+    },
+    "Allowed" : {
+
+    },
+    "Always" : {
+
+    },
+    "Amber" : {
+
+    },
+    "Another session wants to verify this device." : {
+
+    },
+    "App" : {
+
+    },
+    "Appearance" : {
+
+    },
+    "Apple platform SDK" : {
+
+    },
+    "Approval" : {
+
+    },
+    "Approval Required: Dangerous Command" : {
+
+    },
+    "Approval decision could not be submitted." : {
+
+    },
+    "Approval decision sent." : {
+
+    },
+    "Approval history could not be loaded." : {
+
+    },
+    "Approval not sent" : {
+
+    },
+    "Approval request filter" : {
+
+    },
+    "Approval required" : {
+
+    },
+    "Approvals" : {
+
+    },
+    "Approve always permanently trusts this command pattern. Confirm only if you intend to allow it without future prompts." : {
+
+    },
+    "Approve once" : {
+
+    },
+    "Approve once and Deny work from the Lock Screen and Apple Watch without unlocking your iPhone." : {
+
+    },
+    "Approve once requires unlocking your iPhone first. Deny works without unlocking." : {
+
+    },
+    "Approve once without unlocking" : {
+
+    },
+    "Approve the request from one of your already trusted sessions." : {
+
+    },
+    "Approved always" : {
+
+    },
+    "Approved once" : {
+
+    },
+    "Asks for confirmation before logging out of this device" : {
+
+    },
+    "Attach" : {
+
+    },
+    "Attachment" : {
+
+    },
+    "Attachment could not be loaded. Try again." : {
+
+    },
+    "Attachment is empty." : {
+
+    },
+    "Attachment is too large." : {
+
+    },
+    "Authenticate" : {
+
+    },
+    "Authorized" : {
+
+    },
+    "Avatar" : {
+
+    },
+    "Avatar removed." : {
+
+    },
+    "Avatar updated." : {
+
+    },
+    "Away" : {
+
+    },
+    "Back" : {
+
+    },
+    "Backup device" : {
+
+    },
+    "Ban from room" : {
+
+    },
+    "Ban from room?" : {
+
+    },
+    "Banned" : {
+
+    },
+    "Block User" : {
+
+    },
+    "Blocked Users" : {
+
+    },
+    "Blocked users cannot message or invite you." : {
+
+    },
+    "Blurple" : {
+
+    },
+    "Bold" : {
+
+    },
+    "Both devices accepted the comparison. Secure codes will appear when the key exchange completes." : {
+
+    },
+    "Build" : {
+
+    },
+    "Bulleted list" : {
+
+    },
+    "Bundle" : {
+
+    },
+    "Call declined." : {
+
+    },
+    "Camera" : {
+
+    },
+    "Camera is not available on this device." : {
+
+    },
+    "Cancel" : {
+
+    },
+    "Cancel Verification" : {
+
+    },
+    "Cancel editing" : {
+
+    },
+    "Cancel invite" : {
+
+    },
+    "Cancel invite?" : {
+
+    },
+    "Cancel reply" : {
+
+    },
+    "Cannot Forward" : {
+
+    },
+    "Change avatar" : {
+
+    },
+    "Change name" : {
+
+    },
+    "Change the room name or topic before saving." : {
+
+    },
+    "Change topic" : {
+
+    },
+    "Changes" : {
+
+    },
+    "Changes save to your account as you make them. Encrypted background alerts may still appear as generic activity unless the installed build supports Apple’s Notification Filtering capability. Hiding message previews does not suppress those alerts." : {
+
+    },
+    "Channels" : {
+
+    },
+    "Chat" : {
+
+    },
+    "Check room history" : {
+
+    },
+    "Check your password and try again." : {
+
+    },
+    "Checks" : {
+
+    },
+    "Choose Server" : {
+
+    },
+    "Choose a recovery passphrase." : {
+
+    },
+    "Choose a recovery passphrase. Synara sets up device verification for this account, then protects it and your message keys with secret storage and key backup. The recovery key is shown once." : {
+
+    },
+    "Choose a room" : {
+
+    },
+    "Choose a settings page to open beside the list." : {
+
+    },
+    "Choose one answer" : {
+
+    },
+    "Choose up to %lld answers" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Choose up to %lld answer"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Choose up to %lld answers"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Clear Diagnostics" : {
+
+    },
+    "Clear message search" : {
+
+    },
+    "Clear room search" : {
+
+    },
+    "Clear status" : {
+
+    },
+    "Clear vote" : {
+
+    },
+    "Close" : {
+
+    },
+    "Closing…" : {
+
+    },
+    "Code" : {
+
+    },
+    "Code block" : {
+
+    },
+    "Codes confirmed. Waiting for the other device." : {
+
+    },
+    "Codes did not match" : {
+
+    },
+    "Collapsed" : {
+
+    },
+    "Collapses the replies." : {
+
+    },
+    "Collapses unread rooms" : {
+
+    },
+    "Column %lld, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Column %1$lld, %2$@"
+          }
+        }
+      }
+    },
+    "Command not recorded" : {
+
+    },
+    "Command: %@" : {
+
+    },
+    "Compare emoji or number codes with another verified session. Synara does not mark this device verified until both sides confirm." : {
+
+    },
+    "Compare on both devices" : {
+
+    },
+    "Complete" : {
+
+    },
+    "Complete ToDo" : {
+
+    },
+    "Completed" : {
+
+    },
+    "Conceals spoiler text again" : {
+
+    },
+    "Confirm Email" : {
+
+    },
+    "Confirm Recovery Passphrase" : {
+
+    },
+    "Confirm approve always" : {
+
+    },
+    "Confirm before forwarding from an encrypted room to an unencrypted room." : {
+
+    },
+    "Connected" : {
+
+    },
+    "Connecting…" : {
+
+    },
+    "Connection Lost!" : {
+
+    },
+    "Connection Lost! Reconnecting..." : {
+
+    },
+    "Contact" : {
+
+    },
+    "Contains @room" : {
+
+    },
+    "Continue" : {
+
+    },
+    "Controls" : {
+
+    },
+    "Copied" : {
+
+    },
+    "Copied user ID." : {
+
+    },
+    "Copies the complete message with its formatting" : {
+
+    },
+    "Copy" : {
+
+    },
+    "Copy All" : {
+
+    },
+    "Copy Diagnostic Report" : {
+
+    },
+    "Copy Recovery Key" : {
+
+    },
+    "Copy code" : {
+
+    },
+    "Copy or share a report after reproducing a missing preview. It includes app version, notification settings, push registration and shared-store readiness, up to 256 fixed stage codes and timestamps, and how many previews failed because the server rejected your session. Reports stay on this device until you share them and exclude message content, Matrix IDs, senders, push payloads, tokens, URLs and account secrets." : {
+
+    },
+    "Copy user ID" : {
+
+    },
+    "Could Not Load Approvals" : {
+
+    },
+    "Could Not Load Later" : {
+
+    },
+    "Could Not Load Notifications" : {
+
+    },
+    "Could Not Load Rooms" : {
+
+    },
+    "Could Not Load Thread" : {
+
+    },
+    "Could Not Load Timeline" : {
+
+    },
+    "Could Not Save Note" : {
+
+    },
+    "Could not access secure session storage." : {
+
+    },
+    "Could not attach this email." : {
+
+    },
+    "Could not block this user." : {
+
+    },
+    "Could not clear local session state." : {
+
+    },
+    "Could not close verification. Try Done again." : {
+
+    },
+    "Could not confirm this email." : {
+
+    },
+    "Could not copy action payload" : {
+
+    },
+    "Could not discover this homeserver. Check the address and try again." : {
+
+    },
+    "Could not load Later account data." : {
+
+    },
+    "Could not log out" : {
+
+    },
+    "Could not log out that session." : {
+
+    },
+    "Could not pin this message." : {
+
+    },
+    "Could not reach the homeserver. Try again." : {
+
+    },
+    "Could not remove this device's push registration. Try logging out again." : {
+
+    },
+    "Could not restore encryption backup." : {
+
+    },
+    "Could not save the session securely." : {
+
+    },
+    "Could not send verification email." : {
+
+    },
+    "Could not update avatar." : {
+
+    },
+    "Could not update display name." : {
+
+    },
+    "Could not update push rules. Check your connection and try again." : {
+
+    },
+    "Could not update the room invite. Try again." : {
+
+    },
+    "Couldn't mark this channel as read." : {
+
+    },
+    "Couldn't restore this session. Log out and sign in again." : {
+
+    },
+    "Couldn't update this identity change." : {
+
+    },
+    "Create" : {
+
+    },
+    "Create Room" : {
+
+    },
+    "Cross-Signing" : {
+
+    },
+    "Cross-signing setup authentication failed. Check your password and try again." : {
+
+    },
+    "Current Data Inventory" : {
+
+    },
+    "Custom" : {
+
+    },
+    "DM" : {
+
+    },
+    "Danger Zone" : {
+
+    },
+    "Date & Time" : {
+
+    },
+    "Decided" : {
+
+    },
+    "Decided %@" : {
+
+    },
+    "Decided approvals will appear here after you approve or deny a request." : {
+
+    },
+    "Decisions your account made, synced across devices. Inbox-only expired requests stay here until they age out of recent room activity." : {
+
+    },
+    "Decline" : {
+
+    },
+    "Decline Call" : {
+
+    },
+    "Declines the invitation to %@" : {
+
+    },
+    "Decryption Issues" : {
+
+    },
+    "Decryption could not be retried." : {
+
+    },
+    "Decryption could not be retried. Reopen the room and try again." : {
+
+    },
+    "Decryption requested. Messages update when keys are available." : {
+
+    },
+    "Default" : {
+
+    },
+    "Default (%lld)" : {
+
+    },
+    "Delete" : {
+
+    },
+    "Deleted message" : {
+
+    },
+    "Delivery" : {
+
+    },
+    "Denied" : {
+
+    },
+    "Deny" : {
+
+    },
+    "Deny knock" : {
+
+    },
+    "Deny knock?" : {
+
+    },
+    "Dependencies" : {
+
+    },
+    "Design Tokens" : {
+
+    },
+    "Destination unavailable" : {
+
+    },
+    "Device" : {
+
+    },
+    "Device Verification" : {
+
+    },
+    "Device verification and account recovery are configured for this session." : {
+
+    },
+    "Device verification is unavailable." : {
+
+    },
+    "Device verification request sent." : {
+
+    },
+    "Device verified" : {
+
+    },
+    "Diagnostics" : {
+
+    },
+    "Direct message created." : {
+
+    },
+    "Direct messages" : {
+
+    },
+    "Disabled" : {
+
+    },
+    "Discard" : {
+
+    },
+    "Discard Unsent Message" : {
+
+    },
+    "Discard unsent message" : {
+
+    },
+    "Dismiss" : {
+
+    },
+    "Dismiss encryption banner" : {
+
+    },
+    "Display name" : {
+
+    },
+    "Display name updated." : {
+
+    },
+    "Done" : {
+
+    },
+    "Due" : {
+
+    },
+    "Due %@" : {
+
+    },
+    "Due later" : {
+
+    },
+    "Due soon" : {
+
+    },
+    "Edit" : {
+
+    },
+    "Edit %@" : {
+
+    },
+    "Edit message..." : {
+
+    },
+    "Edit unsent message" : {
+
+    },
+    "Edit unsent message..." : {
+
+    },
+    "Edited" : {
+
+    },
+    "Editing unsent message" : {
+
+    },
+    "Editing your message" : {
+
+    },
+    "Email attached." : {
+
+    },
+    "Emoji" : {
+
+    },
+    "Enable Notifications" : {
+
+    },
+    "Enable notifications in iOS Settings to receive alerts." : {
+
+    },
+    "Enabled" : {
+
+    },
+    "Encrypt DM" : {
+
+    },
+    "Encrypt room" : {
+
+    },
+    "Encrypted" : {
+
+    },
+    "Encrypted attachment" : {
+
+    },
+    "Encrypted by a device not verified by its owner." : {
+
+    },
+    "Encrypted by an unknown or deleted device." : {
+
+    },
+    "Encrypted by an unverified user." : {
+
+    },
+    "Encrypted content unavailable. Actions and media downloads are blocked until keys are available." : {
+
+    },
+    "Encrypted history needs attention" : {
+
+    },
+    "Encrypted media requires recovered keys" : {
+
+    },
+    "Encrypted media requires recovered keys before it can be opened." : {
+
+    },
+    "Encrypted message" : {
+
+    },
+    "Encrypted room" : {
+
+    },
+    "Encryption" : {
+
+    },
+    "Encryption Unavailable" : {
+
+    },
+    "Enter a full Matrix user ID." : {
+
+    },
+    "Enter a homeserver address." : {
+
+    },
+    "Enter a homeserver host, such as matrix.org." : {
+
+    },
+    "Enter a message before sending." : {
+
+    },
+    "Enter a message for this room" : {
+
+    },
+    "Enter a room ID or alias." : {
+
+    },
+    "Enter a room name." : {
+
+    },
+    "Enter a valid Matrix ID." : {
+
+    },
+    "Enter a valid homeserver address." : {
+
+    },
+    "Enter your account password to confirm the reset." : {
+
+    },
+    "Enter your account password to confirm this email." : {
+
+    },
+    "Enter your account password to log out that session." : {
+
+    },
+    "Enter your account password to revoke %@." : {
+
+    },
+    "Enter your account password." : {
+
+    },
+    "Enter your password." : {
+
+    },
+    "Enter your recovery key or passphrase." : {
+
+    },
+    "Enter your username." : {
+
+    },
+    "Ephemeral" : {
+
+    },
+    "Exchanging keys" : {
+
+    },
+    "Expanded" : {
+
+    },
+    "Expands unread rooms" : {
+
+    },
+    "Expired" : {
+
+    },
+    "External TestFlight and App Store submission remain blocked until the final privacy policy is approved." : {
+
+    },
+    "Failed to send. Tap to retry." : {
+
+    },
+    "Favorite" : {
+
+    },
+    "Favorites" : {
+
+    },
+    "File" : {
+
+    },
+    "Filter messages currently loaded in this room." : {
+
+    },
+    "Final App Store distribution requires legal review of repository licensing." : {
+
+    },
+    "First seen %@" : {
+
+    },
+    "Forward" : {
+
+    },
+    "Forward Anyway" : {
+
+    },
+    "Forward Message" : {
+
+    },
+    "Forward as quote" : {
+
+    },
+    "Forward to an Unencrypted Room?" : {
+
+    },
+    "Forwarding was not completed." : {
+
+    },
+    "Fresh, locally verified approval prompts use Critical Alerts when this build supports them and you allow them in iOS; otherwise they use Time Sensitive alerts. Use Request Notification Permission to allow Critical Alerts in a supported build. Show approval details puts the reason and requested command on the notification, including the Lock Screen and Apple Watch, independent of message previews." : {
+
+    },
+    "Full Screen" : {
+
+    },
+    "Full approval request" : {
+
+    },
+    "Graphite" : {
+
+    },
+    "Heading 1" : {
+
+    },
+    "Heading 2" : {
+
+    },
+    "Heading 3" : {
+
+    },
+    "Hide Spoilers" : {
+
+    },
+    "Hide Typing & Read Receipts" : {
+
+    },
+    "Hide formatting toolbar" : {
+
+    },
+    "Homeserver" : {
+
+    },
+    "Homeserver addresses must use HTTPS." : {
+
+    },
+    "Homeserver call transport discovery. Synara does not join calls from this screen." : {
+
+    },
+    "Hue tint for chrome. Lightness is mapped to stacked greys (rail / room list / chat); this is not the fill color." : {
+
+    },
+    "Identity key %@" : {
+
+    },
+    "Identity reset authentication failed. Check your password and try again." : {
+
+    },
+    "If you have lost your recovery key and all your other devices, start over with a new identity." : {
+
+    },
+    "Ignore" : {
+
+    },
+    "In a call" : {
+
+    },
+    "Include app version, build number, iOS version, homeserver domain, and a short description. Do not send passwords, access tokens, recovery keys, or private room content." : {
+
+    },
+    "Incoming call" : {
+
+    },
+    "Inline" : {
+
+    },
+    "Inline code" : {
+
+    },
+    "Invitation sent." : {
+
+    },
+    "Invite" : {
+
+    },
+    "Invite User" : {
+
+    },
+    "Invite cancelled." : {
+
+    },
+    "Invite users" : {
+
+    },
+    "Invited" : {
+
+    },
+    "Invited by %@" : {
+
+    },
+    "Invites" : {
+
+    },
+    "Italic" : {
+
+    },
+    "Item type" : {
+
+    },
+    "Items saved for later will appear here once synced." : {
+
+    },
+    "Join" : {
+
+    },
+    "Join Room" : {
+
+    },
+    "Join another room before forwarding this message." : {
+
+    },
+    "Joined" : {
+
+    },
+    "Joins %@" : {
+
+    },
+    "Jump to Last Read" : {
+
+    },
+    "Jump to last read message" : {
+
+    },
+    "Jump to latest" : {
+
+    },
+    "Key Backup" : {
+
+    },
+    "Key Recovery" : {
+
+    },
+    "Key recovery is incomplete. Review Security to protect access to encrypted history." : {
+
+    },
+    "Key recovery needs attention" : {
+
+    },
+    "Keychain" : {
+
+    },
+    "Keyword" : {
+
+    },
+    "Keywords" : {
+
+    },
+    "Knock accepted." : {
+
+    },
+    "Knock denied." : {
+
+    },
+    "Knocking" : {
+
+    },
+    "Last activity %@" : {
+
+    },
+    "Later" : {
+
+    },
+    "Later account data was not readable." : {
+
+    },
+    "Leave" : {
+
+    },
+    "Leave Room" : {
+
+    },
+    "Leave this room?" : {
+
+    },
+    "Left" : {
+
+    },
+    "Licenses" : {
+
+    },
+    "Links" : {
+
+    },
+    "List" : {
+
+    },
+    "Load earlier replies" : {
+
+    },
+    "Load older messages" : {
+
+    },
+    "Loading" : {
+
+    },
+    "Loading latest messages" : {
+
+    },
+    "Loading media..." : {
+
+    },
+    "Loading message" : {
+
+    },
+    "Loading replies" : {
+
+    },
+    "Loading rooms…" : {
+
+    },
+    "Loading settings…" : {
+
+    },
+    "Local Delivery Diagnostics" : {
+
+    },
+    "Log In" : {
+
+    },
+    "Log Out" : {
+
+    },
+    "Log out a session to revoke it on the homeserver. This device uses Log Out instead." : {
+
+    },
+    "Log out of Synara?" : {
+
+    },
+    "Log out session?" : {
+
+    },
+    "Logging out is taking too long. Try logging out again." : {
+
+    },
+    "Login" : {
+
+    },
+    "Login was cancelled." : {
+
+    },
+    "Logout cancelled, restoring push registration" : {
+
+    },
+    "Lost your recovery key and all your other devices?" : {
+
+    },
+    "Low priority" : {
+
+    },
+    "Makes spoiler text available for selection" : {
+
+    },
+    "Mark Active" : {
+
+    },
+    "Mark ToDo active" : {
+
+    },
+    "Matches desktop Settings → General. Room list and timeline clocks follow this toggle." : {
+
+    },
+    "Matrix Account" : {
+
+    },
+    "Matrix IDs must look like @name:server." : {
+
+    },
+    "Matrix room" : {
+
+    },
+    "Matrix user ID, device ID, homeserver, and access tokens are stored locally for session restore." : {
+
+    },
+    "MatrixRTC" : {
+
+    },
+    "MatrixRTC transport: LiveKit" : {
+
+    },
+    "MatrixRTC transport: LiveKit at %@" : {
+
+    },
+    "MatrixRTC transport: custom" : {
+
+    },
+    "MatrixRTC transport: ready" : {
+
+    },
+    "Media could not be loaded." : {
+
+    },
+    "Media could not be uploaded." : {
+
+    },
+    "Media is unavailable." : {
+
+    },
+    "Member" : {
+
+    },
+    "Members" : {
+
+    },
+    "Mention" : {
+
+    },
+    "Mentions" : {
+
+    },
+    "Message" : {
+
+    },
+    "Message Action" : {
+
+    },
+    "Message Categories" : {
+
+    },
+    "Message Security" : {
+
+    },
+    "Message actions" : {
+
+    },
+    "Message could not be sent. Try again." : {
+
+    },
+    "Message deleted" : {
+
+    },
+    "Message forwarded." : {
+
+    },
+    "Message pinned to your private notes." : {
+
+    },
+    "Message pinned to your private room notes." : {
+
+    },
+    "Message reported." : {
+
+    },
+    "Message table" : {
+
+    },
+    "Message unavailable" : {
+
+    },
+    "Message will be sent when Synara reconnects." : {
+
+    },
+    "Messages" : {
+
+    },
+    "Messages and Rooms" : {
+
+    },
+    "Messages are temporarily unavailable. Try again." : {
+
+    },
+    "Messages that only your old keys can read may be lost, unless another device still has them." : {
+
+    },
+    "Messages will appear here." : {
+
+    },
+    "Mode" : {
+
+    },
+    "Moderate" : {
+
+    },
+    "Moderation" : {
+
+    },
+    "Moderator (50)" : {
+
+    },
+    "Move Down" : {
+
+    },
+    "Move Up" : {
+
+    },
+    "Mute" : {
+
+    },
+    "Name" : {
+
+    },
+    "Native Matrix rooms, agent approvals, and private workflows across your devices." : {
+
+    },
+    "Native MatrixRTC transports are unavailable." : {
+
+    },
+    "Native encryption backup could not be activated." : {
+
+    },
+    "Needs Recovery" : {
+
+    },
+    "Needs Verification" : {
+
+    },
+    "New" : {
+
+    },
+    "New Hermes approval requests will appear here as they arrive." : {
+
+    },
+    "New ToDo" : {
+
+    },
+    "New private note" : {
+
+    },
+    "New room" : {
+
+    },
+    "No Key Backup" : {
+
+    },
+    "No Later Items" : {
+
+    },
+    "No Matching Messages" : {
+
+    },
+    "No Matching Rooms" : {
+
+    },
+    "No Messages" : {
+
+    },
+    "No Rooms" : {
+
+    },
+    "No Rooms Available" : {
+
+    },
+    "No Thread Replies" : {
+
+    },
+    "No agents selected. All message categories continue to notify." : {
+
+    },
+    "No analytics or crash SDK is enabled. Logs are local and redacted." : {
+
+    },
+    "No due date" : {
+
+    },
+    "No eligible verified session is available yet. Open Synara or Element on a device that already verified this account, then refresh." : {
+
+    },
+    "No notification-service activity recorded yet." : {
+
+    },
+    "No other sessions were returned for this account." : {
+
+    },
+    "No pending approvals" : {
+
+    },
+    "No personal notes yet" : {
+
+    },
+    "No recent requests" : {
+
+    },
+    "None" : {
+
+    },
+    "None observed" : {
+
+    },
+    "Not Requested" : {
+
+    },
+    "Not Set Up" : {
+
+    },
+    "Not connected" : {
+
+    },
+    "Not encrypted" : {
+
+    },
+    "Not encrypted." : {
+
+    },
+    "Not signed in" : {
+
+    },
+    "Note" : {
+
+    },
+    "Notes" : {
+
+    },
+    "Notification mode updated." : {
+
+    },
+    "Notifications" : {
+
+    },
+    "Notifications are enabled." : {
+
+    },
+    "Notifications are temporarily available for this session." : {
+
+    },
+    "Notifications are unavailable on this device." : {
+
+    },
+    "Notifications can be delivered quietly." : {
+
+    },
+    "Notifications can be enabled for room and agent alerts." : {
+
+    },
+    "Notify for commentary" : {
+
+    },
+    "Notify for final responses" : {
+
+    },
+    "Notify for tool activity" : {
+
+    },
+    "Numbered list" : {
+
+    },
+    "OK" : {
+
+    },
+    "Off" : {
+
+    },
+    "Off by default. Synara resolves content on this device; the push gateway receives only event IDs. Your iOS Show Previews setting still controls Lock Screen visibility." : {
+
+    },
+    "Offline" : {
+
+    },
+    "Online" : {
+
+    },
+    "Only accept if you recognize this request. You’ll compare codes on both devices next." : {
+
+    },
+    "Only approve if the values match exactly on both devices." : {
+
+    },
+    "Only reset your identity if you have lost your recovery key and are not signed in on any other device you can verify with." : {
+
+    },
+    "Open" : {
+
+    },
+    "Open Account Page" : {
+
+    },
+    "Open Synara to review the command. It may have expired." : {
+
+    },
+    "Open Thread" : {
+
+    },
+    "Open a mention, invite, or unread room. The inbox stays visible." : {
+
+    },
+    "Open a saved message. Your Later list stays visible." : {
+
+    },
+    "Open message" : {
+
+    },
+    "Open this room to retry decryption." : {
+
+    },
+    "Open thread" : {
+
+    },
+    "Opens HTTPS link" : {
+
+    },
+    "Opens the original message" : {
+
+    },
+    "Opens the room timeline" : {
+
+    },
+    "Opens the room to review this agent action" : {
+
+    },
+    "Opens the thread." : {
+
+    },
+    "Overdue" : {
+
+    },
+    "Password" : {
+
+    },
+    "Password login is not supported for this homeserver yet." : {
+
+    },
+    "Pending" : {
+
+    },
+    "Pending · %lld" : {
+
+    },
+    "People you talk to will see that your identity changed." : {
+
+    },
+    "Performs %@" : {
+
+    },
+    "Permission" : {
+
+    },
+    "Permissions" : {
+
+    },
+    "Personal" : {
+
+    },
+    "Personal Notes" : {
+
+    },
+    "Personal notes could not be synced." : {
+
+    },
+    "Personal notes could not be synced. Try again." : {
+
+    },
+    "Photo or Video" : {
+
+    },
+    "Photos are uploaded to your homeserver, then set as your profile avatar." : {
+
+    },
+    "Pick a conversation. The room list stays open beside it." : {
+
+    },
+    "Pin to Notes" : {
+
+    },
+    "Pinned Messages" : {
+
+    },
+    "Pinned through Swift Package Manager." : {
+
+    },
+    "Poll closed" : {
+
+    },
+    "Poll: %@" : {
+
+    },
+    "Power level" : {
+
+    },
+    "Power level updated." : {
+
+    },
+    "Preferences" : {
+
+    },
+    "Presence" : {
+
+    },
+    "Preview" : {
+
+    },
+    "Previous pusher cleanup failed" : {
+
+    },
+    "Privacy" : {
+
+    },
+    "Privacy Policy" : {
+
+    },
+    "Private" : {
+
+    },
+    "Private to your account and synced across Synara clients." : {
+
+    },
+    "Private to your account. Synced across Synara clients; never posted to the room." : {
+
+    },
+    "Profile" : {
+
+    },
+    "Profile updated." : {
+
+    },
+    "Protection" : {
+
+    },
+    "Provided by Xcode and iOS." : {
+
+    },
+    "Provisional" : {
+
+    },
+    "Public" : {
+
+    },
+    "Public Directory" : {
+
+    },
+    "Push cleanup failed; finishing local logout" : {
+
+    },
+    "Push cleanup unavailable; finishing local logout" : {
+
+    },
+    "Push delivery is configured for this build." : {
+
+    },
+    "Push delivery is unavailable in this build." : {
+
+    },
+    "Push gateway not configured" : {
+
+    },
+    "Push unavailable" : {
+
+    },
+    "Pusher cleanup complete, finishing logout" : {
+
+    },
+    "Pusher owner unavailable" : {
+
+    },
+    "Pusher registration complete" : {
+
+    },
+    "Pusher registration complete; edited messages may notify" : {
+
+    },
+    "Pusher registration failed" : {
+
+    },
+    "Queued" : {
+
+    },
+    "Quote" : {
+
+    },
+    "Quotes include the original sender in the forwarded message." : {
+
+    },
+    "Rail" : {
+
+    },
+    "Re-register Push" : {
+
+    },
+    "React" : {
+
+    },
+    "React with %@" : {
+
+    },
+    "Reactions: %@" : {
+
+    },
+    "Read" : {
+
+    },
+    "Ready" : {
+
+    },
+    "Ready to compare" : {
+
+    },
+    "Reason (optional)" : {
+
+    },
+    "Recent" : {
+
+    },
+    "Recent · %lld" : {
+
+    },
+    "Recover Keys" : {
+
+    },
+    "Recovery" : {
+
+    },
+    "Recovery Needed" : {
+
+    },
+    "Recovery Passphrase" : {
+
+    },
+    "Recovery completed." : {
+
+    },
+    "Recovery is ready. Copy this key now. Synara does not save it." : {
+
+    },
+    "Recovery key" : {
+
+    },
+    "Recovery keys are used only for this request and are not stored by Synara." : {
+
+    },
+    "Recovery passphrases do not match." : {
+
+    },
+    "Recovery setup is unavailable." : {
+
+    },
+    "Recovery was only partly set up. Synara will not enrol again automatically; use Recover Keys or set it up from another device." : {
+
+    },
+    "Redact" : {
+
+    },
+    "Refresh Diagnostics" : {
+
+    },
+    "Refresh Sessions" : {
+
+    },
+    "Refresh Settings" : {
+
+    },
+    "Refresh transport" : {
+
+    },
+    "Register Push" : {
+
+    },
+    "Reminder" : {
+
+    },
+    "Reminder\nRoom: %@" : {
+
+    },
+    "Reminder: %@\nRoom: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reminder: %1$@\nRoom: %2$@"
+          }
+        }
+      }
+    },
+    "Remove" : {
+
+    },
+    "Remove %@" : {
+
+    },
+    "Remove %@ reaction" : {
+
+    },
+    "Remove Avatar" : {
+
+    },
+    "Remove from Favorites" : {
+
+    },
+    "Remove from room" : {
+
+    },
+    "Remove from room?" : {
+
+    },
+    "Remove this message? This can't be undone." : {
+
+    },
+    "Removes this keyword" : {
+
+    },
+    "Removes your reaction" : {
+
+    },
+    "Reorder notes and ToDos" : {
+
+    },
+    "Replacing previous push registration" : {
+
+    },
+    "Replies could not be loaded." : {
+
+    },
+    "Replies expand beneath their first message in the room." : {
+
+    },
+    "Replies will appear here." : {
+
+    },
+    "Reply" : {
+
+    },
+    "Reply in Thread" : {
+
+    },
+    "Reply in thread" : {
+
+    },
+    "Reply in thread..." : {
+
+    },
+    "Reply to the agent workflow..." : {
+
+    },
+    "Replying to %@" : {
+
+    },
+    "Replying to a message" : {
+
+    },
+    "Report" : {
+
+    },
+    "Report Message" : {
+
+    },
+    "Request Notification Permission" : {
+
+    },
+    "Request sent" : {
+
+    },
+    "Requires %lld" : {
+
+    },
+    "Requires confirmation and clears local session data from this device" : {
+
+    },
+    "Reset Base Color" : {
+
+    },
+    "Reset Identity" : {
+
+    },
+    "Reset Local Data" : {
+
+    },
+    "Reset and Sign In" : {
+
+    },
+    "Reset cancelled. Your key backup and recovery key were removed when it started. Set up recovery in Settings once this device is verified, or reset your identity to finish." : {
+
+    },
+    "Reset local data for this account?" : {
+
+    },
+    "Restricted" : {
+
+    },
+    "Retry" : {
+
+    },
+    "Retry Availability Check" : {
+
+    },
+    "Retry Decryption" : {
+
+    },
+    "Reveal Spoilers" : {
+
+    },
+    "Reveal spoiler" : {
+
+    },
+    "Reveal spoiler: %@" : {
+
+    },
+    "Reveal spoilers before copying the complete message" : {
+
+    },
+    "Review" : {
+
+    },
+    "Review Security" : {
+
+    },
+    "Review available agent actions" : {
+
+    },
+    "Review available approval reactions" : {
+
+    },
+    "Review command" : {
+
+    },
+    "Review pending and recent agent approvals" : {
+
+    },
+    "Role" : {
+
+    },
+    "Room" : {
+
+    },
+    "Room Details" : {
+
+    },
+    "Room ID" : {
+
+    },
+    "Room action failed. Try again." : {
+
+    },
+    "Room aliases must look like #room:server." : {
+
+    },
+    "Room details" : {
+
+    },
+    "Room encryption status is still loading." : {
+
+    },
+    "Room encryption status is unavailable. Forwarding was not started." : {
+
+    },
+    "Room message" : {
+
+    },
+    "Room metadata, timeline content, media, and account data come from the selected Matrix homeserver." : {
+
+    },
+    "Room timeline" : {
+
+    },
+    "Rooms" : {
+
+    },
+    "Rooms could not be loaded. Try again." : {
+
+    },
+    "Rose" : {
+
+    },
+    "Row %lld, %@: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Row %1$lld, %2$@: %3$@"
+          }
+        }
+      }
+    },
+    "Row %lld, column %lld: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Row %1$lld, column %2$lld: %3$@"
+          }
+        }
+      }
+    },
+    "Save" : {
+
+    },
+    "Save Display Name" : {
+
+    },
+    "Save edit" : {
+
+    },
+    "Save power level" : {
+
+    },
+    "Save status" : {
+
+    },
+    "Saved" : {
+
+    },
+    "Saved\nRoom: %@" : {
+
+    },
+    "Saved to your account." : {
+
+    },
+    "Saves the edited message" : {
+
+    },
+    "Saving the edited message" : {
+
+    },
+    "Saving…" : {
+
+    },
+    "Search Directory" : {
+
+    },
+    "Search Messages" : {
+
+    },
+    "Search loaded messages" : {
+
+    },
+    "Search messages" : {
+
+    },
+    "Search public rooms" : {
+
+    },
+    "Search rooms" : {
+
+    },
+    "Security" : {
+
+    },
+    "Security & Recovery" : {
+
+    },
+    "Select Text" : {
+
+    },
+    "Select a Notification" : {
+
+    },
+    "Select a Room" : {
+
+    },
+    "Select a Setting" : {
+
+    },
+    "Select an Item" : {
+
+    },
+    "Select and copy any part of this message" : {
+
+    },
+    "Send" : {
+
+    },
+    "Send a message..." : {
+
+    },
+    "Send message" : {
+
+    },
+    "Send messages" : {
+
+    },
+    "Sending" : {
+
+    },
+    "Sending the current message and attachments" : {
+
+    },
+    "Sends the current message and attachments" : {
+
+    },
+    "Sent" : {
+
+    },
+    "Session Storage" : {
+
+    },
+    "Session changed, updating push registration" : {
+
+    },
+    "Session logged out." : {
+
+    },
+    "Session logout is unavailable." : {
+
+    },
+    "Sessions" : {
+
+    },
+    "Set Up Recovery" : {
+
+    },
+    "Set up device verification first so its identity can be protected by secret storage." : {
+
+    },
+    "Settings" : {
+
+    },
+    "Settings were not saved. Check your connection and agent IDs, then try again." : {
+
+    },
+    "Share Diagnostic Report" : {
+
+    },
+    "Sheet" : {
+
+    },
+    "Show approval details" : {
+
+    },
+    "Show earlier replies" : {
+
+    },
+    "Show formatting toolbar" : {
+
+    },
+    "Show message content in notifications" : {
+
+    },
+    "Shows account details, settings, and logout" : {
+
+    },
+    "Shows the replies." : {
+
+    },
+    "Sign In" : {
+
+    },
+    "Sign In Again" : {
+
+    },
+    "Sign in again to load this timeline." : {
+
+    },
+    "Sign in before changing messages." : {
+
+    },
+    "Sign in before changing room membership." : {
+
+    },
+    "Sign in before managing rooms." : {
+
+    },
+    "Sign in before uploading media." : {
+
+    },
+    "Sign in to load approval history." : {
+
+    },
+    "Sign in to load your Later items." : {
+
+    },
+    "Sign in to load your personal notes." : {
+
+    },
+    "Sign in to restore encryption backup." : {
+
+    },
+    "Sign in to submit this agent action." : {
+
+    },
+    "Sign in to your Matrix homeserver for your rooms, secure sessions, and agent workflows." : {
+
+    },
+    "Sign-in failed. Try again." : {
+
+    },
+    "Signed by your identity" : {
+
+    },
+    "Simulator: APNs unavailable" : {
+
+    },
+    "Slate" : {
+
+    },
+    "Some messages could not be decrypted. Retry after keys arrive, or review verification and key recovery in Settings." : {
+
+    },
+    "Sort %@ by name" : {
+
+    },
+    "Sort %@ by recent activity" : {
+
+    },
+    "Sort %@. Current: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sort %1$@. Current: %2$@"
+          }
+        }
+      }
+    },
+    "Sort by name" : {
+
+    },
+    "Sort by recent activity" : {
+
+    },
+    "Spoiler" : {
+
+    },
+    "Spoiler · Reveal" : {
+
+    },
+    "Spoiler: %@ · Reveal" : {
+
+    },
+    "Stale pusher cleanup failed" : {
+
+    },
+    "Start" : {
+
+    },
+    "Start Comparison" : {
+
+    },
+    "Start Direct Message" : {
+
+    },
+    "Start a secure emoji or number comparison. Only this device should start." : {
+
+    },
+    "Starting the reset removes your key backup and recovery key right away, even if you cancel before it finishes." : {
+
+    },
+    "States" : {
+
+    },
+    "Status" : {
+
+    },
+    "Status cleared." : {
+
+    },
+    "Status updated." : {
+
+    },
+    "Stored session data is corrupt." : {
+
+    },
+    "Strikethrough" : {
+
+    },
+    "Submit vote" : {
+
+    },
+    "Suggested" : {
+
+    },
+    "Summary" : {
+
+    },
+    "Support" : {
+
+    },
+    "Synara" : {
+
+    },
+    "Synara can't open this account's saved data on this device, for example after restoring from a backup. Reset local data to sign in again." : {
+
+    },
+    "Synara could not check eligible verified sessions. Check your connection and retry." : {
+
+    },
+    "Synara could not reach your homeserver. Check your connection and try again." : {
+
+    },
+    "Synara could not reset local data. Try again." : {
+
+    },
+    "Synara could not reset your identity. Try again." : {
+
+    },
+    "Synara could not set up cross-signing. Try again." : {
+
+    },
+    "Synara could not update secret storage. Try again." : {
+
+    },
+    "Synara deletes this account's saved data on this iPhone, then signs in again. Rooms come back from your homeserver; use your recovery key afterwards to read older encrypted messages." : {
+
+    },
+    "Synara has not seen your approval yet. Approve the reset in your browser, then select Continue." : {
+
+    },
+    "Synara recognizes messages starting with 🛠 Tool activity or 💬 Commentary, including Markdown headings. Other messages from the selected agents use the final response setting. Approval requests from listed agents remain eligible for urgent alerts. Messages remain in the conversation." : {
+
+    },
+    "Synara will create and securely store your cross-signing identity on this device. Enter your account password to continue." : {
+
+    },
+    "Synara workflow" : {
+
+    },
+    "Syncing" : {
+
+    },
+    "Syncing history…" : {
+
+    },
+    "System" : {
+
+    },
+    "Tap Retry to send this message again" : {
+
+    },
+    "Tap Retry to send this message again. Edit is also available." : {
+
+    },
+    "Target" : {
+
+    },
+    "Teal" : {
+
+    },
+    "Text" : {
+
+    },
+    "Text Size" : {
+
+    },
+    "That action could not be completed. Try again." : {
+
+    },
+    "That action is already in progress." : {
+
+    },
+    "That message couldn't be shown. Showing the latest messages instead." : {
+
+    },
+    "That message isn't available. It may have been deleted, or you may not have access to it." : {
+
+    },
+    "The authenticity of this encrypted message can't be guaranteed on this device." : {
+
+    },
+    "The codes matched on both devices. This device is verified for encrypted conversations." : {
+
+    },
+    "The codes matched on both devices. This device’s verified status is not confirmed yet. Check Security settings if it does not update." : {
+
+    },
+    "The homeserver is having problems. Try again later." : {
+
+    },
+    "The homeserver is limiting profile changes. Please try again shortly." : {
+
+    },
+    "The message could not be pinned." : {
+
+    },
+    "The recovery key or passphrase was rejected. Check it and try again." : {
+
+    },
+    "The report is sent to your homeserver administrators." : {
+
+    },
+    "The room will be removed from your joined room list." : {
+
+    },
+    "The security codes did not match. Verification was cancelled safely." : {
+
+    },
+    "The sender of this message does not match the device that encrypted it." : {
+
+    },
+    "The sender's verified identity has changed." : {
+
+    },
+    "The source room is encrypted, but this room is not. The forwarded copy will not be protected by room encryption." : {
+
+    },
+    "The unsent message could not be discarded." : {
+
+    },
+    "The username or password is incorrect." : {
+
+    },
+    "The verification flow could not be completed." : {
+
+    },
+    "The verification flow was cancelled." : {
+
+    },
+    "Theme" : {
+
+    },
+    "Theme ramp preview" : {
+
+    },
+    "They Do Not Match" : {
+
+    },
+    "They Match" : {
+
+    },
+    "They will be removed and cannot rejoin until they are unbanned." : {
+
+    },
+    "They will be removed from this room and can rejoin if the room allows it." : {
+
+    },
+    "This account already has a key backup. Use Recover Keys with its recovery key instead." : {
+
+    },
+    "This account has been deactivated." : {
+
+    },
+    "This account's saved data is in use. Close other copies of Synara, then try again." : {
+
+    },
+    "This agent action cannot be submitted." : {
+
+    },
+    "This approval was already decided on this account." : {
+
+    },
+    "This clears local sign-in data and cached rooms. Synara also attempts to revoke this session and remove its push registration; remote cleanup requires a connection." : {
+
+    },
+    "This device" : {
+
+    },
+    "This device accepted the codes. Wait for the other session to finish." : {
+
+    },
+    "This device has only part of your cross-signing identity. Verify it with another device or recover with your recovery key." : {
+
+    },
+    "This device is not verified. Compare emoji or number codes with another verified session in Settings. This does not mean messages failed to decrypt." : {
+
+    },
+    "This file type cannot be attached." : {
+
+    },
+    "This homeserver asks for a sign-in step Synara cannot complete for an identity reset." : {
+
+    },
+    "This homeserver asks for a sign-in step Synara cannot complete for device verification setup." : {
+
+    },
+    "This homeserver does not advertise a call transport" : {
+
+    },
+    "This homeserver does not support user status." : {
+
+    },
+    "This is the name other people see in rooms. It is stored on your homeserver." : {
+
+    },
+    "This is your last signed-in device. Save your recovery key before logging out, or you will lose access to your encrypted messages." : {
+
+    },
+    "This message can't be shown in Synara." : {
+
+    },
+    "This message was not sent. Use the Discard action to remove it" : {
+
+    },
+    "This note could not be saved." : {
+
+    },
+    "This rejects their request to join this room." : {
+
+    },
+    "This room is not available." : {
+
+    },
+    "This server doesn't offer password sign-in, which Synara for iPhone needs." : {
+
+    },
+    "This server doesn't support the sync protocol Synara needs (simplified sliding sync, MSC4186). Contact the server's administrator." : {
+
+    },
+    "This server signs in with single sign-on, which Synara for iPhone doesn't support yet." : {
+
+    },
+    "This withdraws their pending invitation." : {
+
+    },
+    "Thread" : {
+
+    },
+    "Thread Display" : {
+
+    },
+    "Threads open in a sheet over the room." : {
+
+    },
+    "Threads open on their own screen." : {
+
+    },
+    "To approve for the whole session, reply !approve session." : {
+
+    },
+    "ToDo" : {
+
+    },
+    "ToDos" : {
+
+    },
+    "Token captured for APNs" : {
+
+    },
+    "Token changed, re-registering" : {
+
+    },
+    "Too many sign-in attempts. Wait a moment, then try again." : {
+
+    },
+    "Topic" : {
+
+    },
+    "Try Again" : {
+
+    },
+    "Try again" : {
+
+    },
+    "Try again." : {
+
+    },
+    "Try another keyword from the loaded timeline." : {
+
+    },
+    "Try another room name or message preview." : {
+
+    },
+    "Try the verification step again." : {
+
+    },
+    "Unavailable" : {
+
+    },
+    "Unban" : {
+
+    },
+    "Underline" : {
+
+    },
+    "Unencrypted" : {
+
+    },
+    "Unfavorite" : {
+
+    },
+    "Unignore" : {
+
+    },
+    "Unknown" : {
+
+    },
+    "Unknown room" : {
+
+    },
+    "Unread" : {
+
+    },
+    "Unread messages" : {
+
+    },
+    "Unread rooms" : {
+
+    },
+    "Unread rooms and mentions will appear here. Push alerts still open the relevant room directly." : {
+
+    },
+    "Unsupported action: %@" : {
+
+    },
+    "Unverified" : {
+
+    },
+    "Upload Avatar" : {
+
+    },
+    "Urgent agent approvals" : {
+
+    },
+    "Use Recovery Key" : {
+
+    },
+    "Use the Message actions button or long press for message actions" : {
+
+    },
+    "Use the server that hosts your Matrix account." : {
+
+    },
+    "User" : {
+
+    },
+    "User ID" : {
+
+    },
+    "User banned." : {
+
+    },
+    "User ignored." : {
+
+    },
+    "User removed." : {
+
+    },
+    "User unbanned." : {
+
+    },
+    "User unignored." : {
+
+    },
+    "Username" : {
+
+    },
+    "Uses iOS Dynamic Type" : {
+
+    },
+    "Verification action failed" : {
+
+    },
+    "Verification cancelled" : {
+
+    },
+    "Verification cancelled." : {
+
+    },
+    "Verification closed." : {
+
+    },
+    "Verification comparison started." : {
+
+    },
+    "Verification complete" : {
+
+    },
+    "Verification declined." : {
+
+    },
+    "Verification failed" : {
+
+    },
+    "Verification request" : {
+
+    },
+    "Verification request accepted." : {
+
+    },
+    "Verified" : {
+
+    },
+    "Verified (certificate)" : {
+
+    },
+    "Verify" : {
+
+    },
+    "Verify This Device" : {
+
+    },
+    "Verify from Another Device" : {
+
+    },
+    "Verify this device" : {
+
+    },
+    "Version" : {
+
+    },
+    "Visibility" : {
+
+    },
+    "Vote submitted." : {
+
+    },
+    "Waiting" : {
+
+    },
+    "Waiting for APNs token" : {
+
+    },
+    "Waiting for the other device" : {
+
+    },
+    "Waiting for the other device to start comparison, or for codes to appear." : {
+
+    },
+    "Waiting to reconnect. Messages load when the connection is back." : {
+
+    },
+    "What are you doing?" : {
+
+    },
+    "When on, this device hides automatic typing status and read receipts. Choosing Mark as Read still sends a private receipt." : {
+
+    },
+    "Withdraw verification" : {
+
+    },
+    "You" : {
+
+    },
+    "You already decided this approval" : {
+
+    },
+    "You can attach up to %lld attachments." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You can attach up to %lld attachment."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You can attach up to %lld attachments."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "You decided at %@." : {
+
+    },
+    "You will need to verify your other devices and contacts again." : {
+
+    },
+    "You're Caught Up" : {
+
+    },
+    "Your account already has a cross-signing identity. Verify this device to read your encrypted messages and so others can trust it." : {
+
+    },
+    "Your decision was sent." : {
+
+    },
+    "Your homeserver asks you to approve the reset on your account page. Approve it in your browser, then select Continue." : {
+
+    },
+    "Your identity was reset. Set up recovery now to get a new recovery key." : {
+
+    },
+    "Your key backup and recovery key may already be removed. Set up recovery in Settings once this device is verified, or reset your identity to finish." : {
+
+    },
+    "Your last read message couldn't be loaded. Showing the latest messages instead." : {
+
+    },
+    "Your level" : {
+
+    },
+    "Your session expired. Sign in again to reconnect." : {
+
+    },
+    "[Spoiler · Reveal]" : {
+
+    },
+    "[Spoiler: %@ · Reveal]" : {
+
+    },
+    "agent room" : {
+
+    },
+    "approval required" : {
+
+    },
+    "edited" : {
+
+    },
+    "encrypted" : {
+
+    },
+    "favorite" : {
+
+    },
+    "matrix.org" : {
+
+    },
+    "mentioned" : {
+
+    },
+    "this session" : {
+
+    },
+    "you@example.org" : {
+
+    }
+  },
+  "version" : "1.0"
+}

@@ -39,7 +39,7 @@ struct MediaResource: Identifiable, Equatable {
 
     var safeDescription: String {
         let safeName = URL(fileURLWithPath: filename).lastPathComponent
-        return safeName.isEmpty ? "Attachment" : safeName
+        return safeName.isEmpty ? String(localized: "Attachment") : safeName
     }
 
     var resolvedMimeType: String? {

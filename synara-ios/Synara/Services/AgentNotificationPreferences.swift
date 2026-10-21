@@ -29,7 +29,7 @@ enum SynaraAgentNotificationPreferencesError: LocalizedError {
     case unavailable
 
     var errorDescription: String? {
-        "Agent notification settings are unavailable. Check your connection and try again."
+        String(localized: "Agent notification settings are unavailable. Check your connection and try again.")
     }
 }
 

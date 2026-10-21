@@ -166,7 +166,7 @@ enum SharedCoreRoomListRows {
             }
             let sender = invite.senderName.trimmingCharacters(in: .whitespacesAndNewlines)
             if sender.isEmpty == false {
-                return "Invited by \(sender)"
+                return String(localized: "Invited by \(sender)")
             }
             let topic = invite.roomTopic?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if topic.isEmpty == false {
@@ -203,11 +203,11 @@ extension RoomMembershipDto {
     /// User-facing membership text.
     var displayName: String {
         switch self {
-        case .join: return "Joined"
-        case .invite: return "Invited"
-        case .ban: return "Banned"
-        case .leave: return "Left"
-        case .knock: return "Knocking"
+        case .join: return String(localized: "Joined")
+        case .invite: return String(localized: "Invited")
+        case .ban: return String(localized: "Banned")
+        case .leave: return String(localized: "Left")
+        case .knock: return String(localized: "Knocking")
         }
     }
 

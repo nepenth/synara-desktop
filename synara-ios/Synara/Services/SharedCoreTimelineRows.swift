@@ -192,7 +192,7 @@ enum SharedCoreTimelineRows {
             return .text(body)
         case .call:
             if body == "notification" {
-                return .text("Incoming call")
+                return .text(String(localized: "Incoming call"))
             }
             let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty == false {

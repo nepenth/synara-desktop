@@ -63,13 +63,13 @@ struct RoomListView: View {
                 }
             case .empty:
                 HeldConnectionEmptyState(
-                    title: "No Rooms",
+                    title: String(localized: "No Rooms"),
                     systemImage: "bubble.left.and.bubble.right",
                     store: environment.connectionStatus
                 )
             case .failed(let message):
                 VStack(spacing: SynaraSpacing.medium) {
-                    SynaraErrorState(title: "Could Not Load Rooms", message: message) {
+                    SynaraErrorState(title: String(localized: "Could Not Load Rooms"), message: message) {
                         loadRooms(startUpdatesAfterLoad: true)
                     }
                     Button("Sign In Again") {
@@ -148,9 +148,9 @@ struct RoomListView: View {
                     List {
                         if searchQuery.isEmpty == false && filteredRooms.isEmpty {
                             SynaraEmptyState(
-                                title: "No Matching Rooms",
+                                title: String(localized: "No Matching Rooms"),
                                 systemImage: "magnifyingglass",
-                                message: "Try another room name or message preview."
+                                message: String(localized: "Try another room name or message preview.")
                             )
                             .listRowInsets(EdgeInsets())
                         }
@@ -162,7 +162,7 @@ struct RoomListView: View {
                                 }
                             } header: {
                                 RoomSectionHeader(
-                                    title: "Favorites",
+                                    title: String(localized: "Favorites"),
                                     count: favoriteRooms.count,
                                     selectedSort: $favoriteSort
                                 )
@@ -208,7 +208,7 @@ struct RoomListView: View {
                                     }
                                 } header: {
                                     RoomSectionHeader(
-                                        title: "Channels",
+                                        title: String(localized: "Channels"),
                                         count: ungroupedChannelRooms.count,
                                         selectedSort: $roomsSort
                                     )
@@ -223,7 +223,7 @@ struct RoomListView: View {
                                 }
                             } header: {
                                 RoomSectionHeader(
-                                    title: "Direct messages",
+                                    title: String(localized: "Direct messages"),
                                     count: directRooms.count,
                                     selectedSort: $directsSort
                                 )
@@ -237,7 +237,7 @@ struct RoomListView: View {
                                 }
                             } header: {
                                 RoomSectionHeader(
-                                    title: "Low priority",
+                                    title: String(localized: "Low priority"),
                                     count: lowPriorityRooms.count,
                                     selectedSort: $roomsSort
                                 )
@@ -289,7 +289,7 @@ struct RoomListView: View {
         .toolbar(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                SynaraToolbarIconButton(systemImage: "person.crop.circle", accessibilityLabel: "Accounts") {
+                SynaraToolbarIconButton(systemImage: "person.crop.circle", accessibilityLabel: String(localized: "Accounts")) {
                     environment.router.present(.accountSwitcher)
                 }
             }
@@ -791,6 +791,19 @@ private enum RoomListFilter: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var title: String {
+        switch self {
+        case .all:
+            return String(localized: "All")
+        case .unread:
+            return String(localized: "Unread")
+        case .mentions:
+            return String(localized: "Mentions")
+        case .agents:
+            return String(localized: "Agents")
+        }
+    }
+
     var scopeFilter: RoomListScopeFilter.Kind {
         switch self {
         case .all:
@@ -879,6 +892,17 @@ private struct RoomManagementSheet: View {
         case join = "Join"
 
         var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .room:
+                return String(localized: "Room")
+            case .dm:
+                return String(localized: "DM")
+            case .join:
+                return String(localized: "Join")
+            }
+        }
     }
 
     @Environment(\.appEnvironment) private var environment
@@ -901,7 +925,7 @@ private struct RoomManagementSheet: View {
                 Section {
                     Picker("Action", selection: $mode) {
                         ForEach(Mode.allCases) { mode in
-                            Text(mode.rawValue).tag(mode)
+                            Text(mode.title).tag(mode)
                         }
                     }
                     .pickerStyle(.segmented)
@@ -950,7 +974,7 @@ private struct RoomManagementSheet: View {
                 .accessibilityIdentifier("CreateRoomTopicField")
             Picker("Visibility", selection: $roomVisibility) {
                 ForEach(SynaraRoomVisibility.allCases) { visibility in
-                    Text(visibility.rawValue).tag(visibility)
+                    Text(visibilityTitle(visibility)).tag(visibility)
                 }
             }
             Toggle("Encrypt room", isOn: $encryptRoom)
@@ -1015,11 +1039,20 @@ private struct RoomManagementSheet: View {
     private var actionTitle: String {
         switch mode {
         case .room:
-            return "Create"
+            return String(localized: "Create")
         case .dm:
-            return "Start"
+            return String(localized: "Start")
         case .join:
-            return "Join"
+            return String(localized: "Join")
+        }
+    }
+
+    private func visibilityTitle(_ visibility: SynaraRoomVisibility) -> String {
+        switch visibility {
+        case .private:
+            return String(localized: "Private")
+        case .public:
+            return String(localized: "Public")
         }
     }
 
@@ -1107,7 +1140,7 @@ private struct RoomFilterStrip: View {
             HStack(spacing: SynaraSpacing.small) {
                 ForEach(RoomListFilter.allCases) { filter in
                     SynaraFilterChip(
-                        title: filter.rawValue,
+                        title: filter.title,
                         badgeCount: filterBadges[filter],
                         isSelected: filter == selectedFilter
                     ) {
@@ -1135,7 +1168,7 @@ private struct SpaceFilterStrip: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: SynaraSpacing.small) {
-                SynaraFilterChip(title: "All spaces", isSelected: selectedSpaceID == nil) {
+                SynaraFilterChip(title: String(localized: "All spaces"), isSelected: selectedSpaceID == nil) {
                     selectedSpaceID = nil
                 }
                 .accessibilityIdentifier("SpaceFilter-all")
@@ -1218,7 +1251,7 @@ private struct SpaceSelectedHeader: View {
             Text(title)
                 .font(SynaraTypography.screenTitle.weight(.bold))
                 .foregroundStyle(SynaraColor.headingText)
-            Text("\(roomCount) channel\(roomCount == 1 ? "" : "s")")
+            Text("\(roomCount) channels")
                 .font(SynaraTypography.messageMeta.weight(.medium))
                 .foregroundStyle(SynaraColor.secondaryText)
         }
@@ -1403,7 +1436,7 @@ private struct RoomListRow: View {
                         if room.hasHighlight {
                             RoomRowCompactStatusIcon(
                                 systemImage: "at",
-                                accessibilityLabel: "Mention",
+                                accessibilityLabel: String(localized: "Mention"),
                                 tint: SynaraColor.accent
                             )
                             .accessibilityIdentifier("RoomRowMentionIndicator-\(room.id)")
@@ -1412,14 +1445,14 @@ private struct RoomListRow: View {
                         if room.requiresAgentApproval {
                             RoomRowCompactStatusIcon(
                                 systemImage: "hand.raised.fill",
-                                accessibilityLabel: "Approval required",
+                                accessibilityLabel: String(localized: "Approval required"),
                                 tint: SynaraColor.agent
                             )
                             .accessibilityIdentifier("RoomRowApprovalChip-\(room.id)")
                         } else if room.isAgentRoom {
                             RoomRowCompactStatusIcon(
                                 systemImage: "sparkles",
-                                accessibilityLabel: "Agent room",
+                                accessibilityLabel: String(localized: "Agent room"),
                                 tint: SynaraColor.agent
                             )
                         }
@@ -1444,7 +1477,7 @@ private struct RoomListRow: View {
 
     private var rowAccessibilityLabel: String {
         if peerInCall && room.hasActiveCall == false {
-            return room.accessibilitySummary + ", In a call"
+            return String(localized: "\(room.accessibilitySummary), In a call")
         }
         return room.accessibilitySummary
     }
@@ -1513,24 +1546,24 @@ private extension RoomSummary {
     var accessibilitySummary: String {
         var parts = [name, lastMessagePreview]
         if unreadBadgeCount > 0 {
-            parts.append("\(unreadBadgeCount) unread")
+            parts.append(String(localized: "\(unreadBadgeCount) unread"))
         }
         if hasHighlight {
-            parts.append("mentioned")
+            parts.append(String(localized: "mentioned"))
         }
         if isFavorite {
-            parts.append("favorite")
+            parts.append(String(localized: "favorite"))
         }
         if hasActiveCall {
             parts.append(liveCallChipLabel)
         }
         if isSecureRoom {
-            parts.append("encrypted")
+            parts.append(String(localized: "encrypted"))
         }
         if requiresAgentApproval {
-            parts.append("approval required")
+            parts.append(String(localized: "approval required"))
         } else if isAgentRoom {
-            parts.append("agent room")
+            parts.append(String(localized: "agent room"))
         }
         if relativeActivity.isEmpty == false {
             parts.append(relativeActivity)
@@ -1553,24 +1586,24 @@ private extension RoomSummary {
         let calendar = Calendar.current
         let formatters = SynaraTimeFormatting.formatters()
         if calendar.isDate(lastActivityAt, inSameDayAs: referenceDate) {
-            return formatters.clockTime.string(from: lastActivityAt)
+            return formatters.clockTime.format(lastActivityAt)
         }
 
         if calendar.isDateInYesterday(lastActivityAt) {
-            return "Yesterday"
+            return formatters.relativeDayName(offset: -1)
         }
 
         if let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: lastActivityAt), to: calendar.startOfDay(for: referenceDate)).day,
            days > 0,
            days < 7 {
-            return formatters.weekday.string(from: lastActivityAt)
+            return formatters.weekday.format(lastActivityAt)
         }
 
         let isThisYear = calendar.component(.year, from: lastActivityAt) == calendar.component(.year, from: referenceDate)
         let formatter = isThisYear
             ? formatters.monthDay
             : formatters.monthDayYear
-        return formatter.string(from: lastActivityAt)
+        return formatter.format(lastActivityAt)
     }
 
     var roomTint: Color {

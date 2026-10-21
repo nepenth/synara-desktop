@@ -105,13 +105,21 @@ struct SynaraThemeTokens: Equatable {
 enum SynaraThemeRamp {
     static let defaultBaseHex = "#2b2d31"
     static let storageKey = SynaraSharedConstants.themeBaseColorKey
-    static let presets: [(label: String, hex: String)] = [
-        ("Graphite", "#2b2d31"),
-        ("Blurple", "#5865f2"),
-        ("Teal", "#0d9488"),
-        ("Slate", "#64748b"),
-        ("Amber", "#b45309"),
-        ("Rose", "#be123c"),
+    struct Preset {
+        /// The stable English name behind accessibility identifiers.
+        let key: String
+        /// The localized name people see and hear.
+        let label: String
+        let hex: String
+    }
+
+    static let presets: [Preset] = [
+        Preset(key: "Graphite", label: String(localized: "Graphite"), hex: "#2b2d31"),
+        Preset(key: "Blurple", label: String(localized: "Blurple"), hex: "#5865f2"),
+        Preset(key: "Teal", label: String(localized: "Teal"), hex: "#0d9488"),
+        Preset(key: "Slate", label: String(localized: "Slate"), hex: "#64748b"),
+        Preset(key: "Amber", label: String(localized: "Amber"), hex: "#b45309"),
+        Preset(key: "Rose", label: String(localized: "Rose"), hex: "#be123c"),
     ]
 
 
@@ -1405,7 +1413,7 @@ struct SynaraFilterChip: View {
 
     private var accessibilityLabel: String {
         if let badgeCount, badgeCount > 0 {
-            return "\(title), \(badgeCount) unread"
+            return String(localized: "\(title), \(badgeCount) unread")
         }
         return title
     }

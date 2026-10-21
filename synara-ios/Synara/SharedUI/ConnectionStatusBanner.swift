@@ -40,9 +40,9 @@ struct ConnectionStatusBanner: View {
                     .accessibilityIdentifier("ConnectionStatusRetryButton")
             }
             if store.showsSignOutAction, let onSignOut {
-                Button("Sign Out", action: onSignOut)
+                Button("Log Out", action: onSignOut)
                     .buttonStyle(SynaraCompactBorderedButtonStyle())
-                    .accessibilityHint("Asks for confirmation before signing out of this device")
+                    .accessibilityHint("Asks for confirmation before logging out of this device")
                     .accessibilityIdentifier("ConnectionStatusSignOutButton")
             }
         }

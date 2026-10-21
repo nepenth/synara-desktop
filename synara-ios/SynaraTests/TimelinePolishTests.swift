@@ -318,18 +318,18 @@ final class TimelinePolishTests: XCTestCase {
             first === SynaraTimeFormatting.formatters(for: twelveHour),
             "unchanged settings reuse the formatters"
         )
-        XCTAssertTrue(first.clockTime.string(from: date).contains("PM"))
+        XCTAssertTrue(first.clockTime.format(date).contains("PM"))
 
         let switched = SynaraTimeFormatting.formatters(for: twentyFourHour)
         XCTAssertFalse(first === switched, "the 24-hour setting rebuilds them")
-        XCTAssertEqual(switched.clockTime.string(from: date), "13:05")
-        XCTAssertEqual(switched.weekday.string(from: date), "Thu")
-        XCTAssertEqual(switched.monthDay.string(from: date), "Jan 1")
-        XCTAssertEqual(switched.monthDayYear.string(from: date), "Jan 1, 2026")
+        XCTAssertEqual(switched.clockTime.format(date), "13:05")
+        XCTAssertEqual(switched.weekday.format(date), "Thu")
+        XCTAssertEqual(switched.monthDay.format(date), "Jan 1")
+        XCTAssertEqual(switched.monthDayYear.format(date), "Jan 1, 2026")
 
         let back = SynaraTimeFormatting.formatters(for: twelveHour)
         XCTAssertFalse(back === switched)
-        XCTAssertFalse(back.clockTime.string(from: date).contains("13"))
+        XCTAssertFalse(back.clockTime.format(date).contains("13"))
     }
 
     func testClockTimeFollowsTheStoredSetting() throws {

@@ -44,7 +44,7 @@ enum SynaraNotificationPresentationPolicy {
         content.badge = original.badge
         content.title = "Synara"
         content.subtitle = ""
-        content.body = "New activity"
+        content.body = String(localized: "New activity", table: "SynaraShared")
         content.categoryIdentifier = ""
         content.interruptionLevel = .active
         content.sound = original.sound == nil ? nil : .default
@@ -78,8 +78,8 @@ enum SynaraNotificationPresentationPolicy {
             content.title = approvalSummary.title
             content.body = approvalSummary.body
         } else if !showPreview || preview == nil {
-            content.title = "Agent approval needed"
-            content.body = "Review a time-sensitive request in Synara."
+            content.title = String(localized: "Agent approval needed", table: "SynaraShared")
+            content.body = String(localized: "Review a time-sensitive request in Synara.", table: "SynaraShared")
         }
         content.categoryIdentifier = approvalCategory
         content.interruptionLevel = criticalAlertsAuthorized ? .critical : .timeSensitive
@@ -599,14 +599,17 @@ struct SynaraAgentApprovalSummary: Equatable {
     }
 
     var title: String {
-        let name = Self.nonEmpty(sender) ?? "Agent"
-        let reason = Self.nonEmpty(reason) ?? "Approval required"
-        return SynaraMatrixEventPreviewComposer.clamp("\(name): \(reason)", limit: 120)
+        let name = Self.nonEmpty(sender) ?? String(localized: "Agent", table: "SynaraShared")
+        let reason = Self.nonEmpty(reason) ?? String(localized: "Approval required", table: "SynaraShared")
+        return SynaraMatrixEventPreviewComposer.clamp(
+            String(localized: "\(name): \(reason)", table: "SynaraShared"),
+            limit: 120
+        )
     }
 
     var body: String {
         SynaraMatrixEventPreviewComposer.clamp(
-            Self.nonEmpty(command) ?? "Review the command in Synara.",
+            Self.nonEmpty(command) ?? String(localized: "Review the command in Synara.", table: "SynaraShared"),
             limit: 240
         )
     }
@@ -745,13 +748,13 @@ enum SynaraMatrixEventPreviewComposer {
     private static func messageBody(from input: SynaraMatrixEventPreviewInput) -> String? {
         switch input.messageType {
         case "m.image":
-            return input.body?.isEmpty == false ? input.body : "sent an image"
+            return input.body?.isEmpty == false ? input.body : String(localized: "sent an image", table: "SynaraShared")
         case "m.video":
-            return input.body?.isEmpty == false ? input.body : "sent a video"
+            return input.body?.isEmpty == false ? input.body : String(localized: "sent a video", table: "SynaraShared")
         case "m.file":
-            return input.body?.isEmpty == false ? input.body : "sent a file"
+            return input.body?.isEmpty == false ? input.body : String(localized: "sent a file", table: "SynaraShared")
         case "m.audio":
-            return input.body?.isEmpty == false ? input.body : "sent audio"
+            return input.body?.isEmpty == false ? input.body : String(localized: "sent audio", table: "SynaraShared")
         default:
             let trimmed = input.body?.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed?.isEmpty == false ? trimmed : nil

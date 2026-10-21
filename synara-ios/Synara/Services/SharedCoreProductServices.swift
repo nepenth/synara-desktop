@@ -273,7 +273,7 @@ struct RejectedAuthenticationRetirer {
 }
 
 enum ExplicitRoomReadReceipt {
-    static let failureCopy = "Couldn't mark this channel as read."
+    static let failureCopy = String(localized: "Couldn't mark this channel as read.")
 
     /// Fixed copy for the channel menu when explicit mark-read did not publish
     /// a fully-read marker. Nil means the mark-read landed.
@@ -1299,7 +1299,7 @@ final class SharedCoreRoomListService: RoomListServicing {
         }
     }
 
-    static let loadFailedMessage = "Rooms could not be loaded. Try again."
+    static let loadFailedMessage = String(localized: "Rooms could not be loaded. Try again.")
 
     /// An empty list before the first room-list response means "not synced
     /// yet" (fresh login, cold start with an empty store): keep loading
@@ -1722,14 +1722,14 @@ final class SharedCoreTimelineService: TimelineServicing {
             stream(for: SharedCoreTimelineStreamKey.room(roomID))
                 ?? stream(for: SharedCoreTimelineStreamKey.focused(roomID))
         )?.streamID else {
-            return .unavailable("Open this room to retry decryption.")
+            return .unavailable(String(localized: "Open this room to retry decryption."))
         }
         do {
             let requested = try await SharedCoreTimeline.timelineRetryDecryption(core: host.core, streamId: streamID)
-            return requested ? .completed("Decryption requested. Messages update when keys are available.")
-                : .failed("Decryption could not be retried.")
+            return requested ? .completed(String(localized: "Decryption requested. Messages update when keys are available."))
+                : .failed(String(localized: "Decryption could not be retried."))
         } catch {
-            return .failed("Decryption could not be retried. Reopen the room and try again.")
+            return .failed(String(localized: "Decryption could not be retried. Reopen the room and try again."))
         }
     }
 
@@ -2841,7 +2841,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
 
     func authenticateCrossSigningSetup(password: String) async -> CrossSigningSetupResult {
         guard password.isEmpty == false else {
-            return .failed("Enter your account password.")
+            return .failed(String(localized: "Enter your account password."))
         }
         do {
             let dto = try await SharedCoreBackupRestore.crossSigningSetupPassword(
@@ -2856,7 +2856,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
 
     func enableRecovery(passphrase: String) async -> RecoveryEnrollmentResult {
         guard passphrase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
-            return .failed("Choose a recovery passphrase.")
+            return .failed(String(localized: "Choose a recovery passphrase."))
         }
         do {
             let dto = try await SharedCoreBackupRestore.secretStorageBootstrap(
@@ -2888,7 +2888,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
 
     func authenticateIdentityReset(password: String) async -> IdentityResetResult {
         guard password.isEmpty == false else {
-            return .failed("Enter your account password.")
+            return .failed(String(localized: "Enter your account password."))
         }
         do {
             return Self.identityResetResult(
@@ -2964,9 +2964,9 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         case "v-crypto.2-cross-signing-password-rejected":
             return .passwordRejected
         case "v-crypto.2-cross-signing-auth-unsupported":
-            return .failed("This homeserver asks for a sign-in step Synara cannot complete for device verification setup.")
+            return .failed(String(localized: "This homeserver asks for a sign-in step Synara cannot complete for device verification setup."))
         case "v-crypto.2-cross-signing-partial-private-identity":
-            return .failed("This device has only part of your cross-signing identity. Verify it with another device or recover with your recovery key.")
+            return .failed(String(localized: "This device has only part of your cross-signing identity. Verify it with another device or recover with your recovery key."))
         default:
             return .failed(RecoverySetupCopy.setupFailed)
         }
@@ -2978,11 +2978,11 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         }
         switch code {
         case "v-crypto.4-bootstrap-existing-backup":
-            return .failed("This account already has a key backup. Use Recover Keys with its recovery key instead.")
+            return .failed(String(localized: "This account already has a key backup. Use Recover Keys with its recovery key instead."))
         case "v-crypto.4-bootstrap-cross-signing-required":
-            return .failed("Set up device verification first so its identity can be protected by secret storage.")
+            return .failed(String(localized: "Set up device verification first so its identity can be protected by secret storage."))
         case "v-crypto.4-operation-incomplete", "v-crypto.4-passphrase-not-configured":
-            return .failed("Recovery was only partly set up. Synara will not enrol again automatically; use Recover Keys or set it up from another device.")
+            return .failed(String(localized: "Recovery was only partly set up. Synara will not enrol again automatically; use Recover Keys or set it up from another device."))
         default:
             return .failed(RecoverySetupCopy.enrollmentFailed)
         }
@@ -3017,7 +3017,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     }
 
     func retryDecryption(roomID: String) async -> CryptoActionResult {
-        guard let timeline else { return .unavailable("Open this room to retry decryption.") }
+        guard let timeline else { return .unavailable(String(localized: "Open this room to retry decryption.")) }
         return await timeline.retryDecryption(roomID: roomID)
     }
 
@@ -3031,7 +3031,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 deviceId: deviceId
             )
             storeFlow(dto.flowId)
-            return "Device verification request sent."
+            return String(localized: "Device verification request sent.")
         }
     }
 
@@ -3042,17 +3042,17 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 flowId: flowID
             )
             clearFlow(matching: flowID)
-            return .completed("Verification closed.")
+            return .completed(String(localized: "Verification closed."))
         } catch let error as VerificationSasError {
             // An already-removed result is acknowledged. Other failures must
             // remain visible so the UI does not pretend it dismissed the flow.
             if case let .Failed(code, _) = error, code == "v-crypto.1-flow-not-found" {
                 clearFlow(matching: flowID)
-                return .completed("Verification closed.")
+                return .completed(String(localized: "Verification closed."))
             }
-            return .failed("Could not close verification. Try Done again.")
+            return .failed(String(localized: "Could not close verification. Try Done again."))
         } catch {
-            return .failed("Could not close verification. Try Done again.")
+            return .failed(String(localized: "Could not close verification. Try Done again."))
         }
     }
 
@@ -3062,7 +3062,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 core: host.core,
                 flowId: flowId
             )
-            return "Verification request accepted."
+            return String(localized: "Verification request accepted.")
         }
     }
 
@@ -3072,7 +3072,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 core: host.core,
                 flowId: flowId
             )
-            return "Verification comparison started."
+            return String(localized: "Verification comparison started.")
         }
     }
 
@@ -3082,7 +3082,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 core: host.core,
                 flowId: flowId
             )
-            return "Codes confirmed. Waiting for the other device."
+            return String(localized: "Codes confirmed. Waiting for the other device.")
         }
     }
 
@@ -3092,7 +3092,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 core: host.core,
                 flowId: flowId
             )
-            return "Verification declined."
+            return String(localized: "Verification declined.")
         }
     }
 
@@ -3102,21 +3102,21 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 core: host.core,
                 flowId: flowId
             )
-            return "Verification cancelled."
+            return String(localized: "Verification cancelled.")
         }
     }
 
     func recover(recoveryKey: String) async -> CryptoActionResult {
         let trimmed = recoveryKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else {
-            return .failed("Enter your recovery key or passphrase.")
+            return .failed(String(localized: "Enter your recovery key or passphrase."))
         }
         do {
             _ = try await SharedCoreBackupRestore.restoreBackup(
                 core: host.core,
                 recoverySecret: trimmed
             )
-            return .completed("Recovery completed.")
+            return .completed(String(localized: "Recovery completed."))
         } catch {
             return Self.restoreBackupResult(for: error)
         }
@@ -3124,19 +3124,19 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
 
     private static func restoreBackupResult(for error: Error) -> CryptoActionResult {
         guard case let RestoreBackupError.Failed(code, _) = error else {
-            return .failed("Could not restore encryption backup.")
+            return .failed(String(localized: "Could not restore encryption backup."))
         }
         switch code {
         case "v-crypto.3-restore-rejected":
-            return .failed("The recovery key or passphrase was rejected. Check it and try again.")
+            return .failed(String(localized: "The recovery key or passphrase was rejected. Check it and try again."))
         case "v-crypto.3-recovery-secret-empty":
-            return .failed("Enter your recovery key or passphrase.")
+            return .failed(String(localized: "Enter your recovery key or passphrase."))
         case "p2-restore-backup-no-session":
-            return .failed("Sign in to restore encryption backup.")
+            return .failed(String(localized: "Sign in to restore encryption backup."))
         case "v-crypto.3-restore-incomplete":
-            return .failed("Native encryption backup could not be activated.")
+            return .failed(String(localized: "Native encryption backup could not be activated."))
         default:
-            return .failed("Could not restore encryption backup.")
+            return .failed(String(localized: "Could not restore encryption backup."))
         }
     }
 
@@ -3176,7 +3176,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     func signOutSession(deviceId: String, password: String) async -> CryptoActionResult {
         let trimmedPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
         guard deviceId.isEmpty == false, trimmedPassword.isEmpty == false else {
-            return .failed("Enter your account password to sign out that session.")
+            return .failed(String(localized: "Enter your account password to log out that session."))
         }
         do {
             let started = try await SharedCoreDevices.deviceDeleteStart(
@@ -3184,12 +3184,12 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 deviceIds: [deviceId]
             )
             if started.outcome == .complete {
-                return .completed("Session signed out.")
+                return .completed(String(localized: "Session logged out."))
             }
             guard started.outcome == .authenticationRequired,
                   let challenge = started.challenge
             else {
-                return .failed("Could not sign out that session.")
+                return .failed(String(localized: "Could not log out that session."))
             }
             let finished = try await SharedCoreDevices.deviceDeletePassword(
                 core: host.core,
@@ -3198,14 +3198,14 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 password: trimmedPassword
             )
             if finished.outcome == .complete {
-                return .completed("Session signed out.")
+                return .completed(String(localized: "Session logged out."))
             }
             if finished.challenge?.authenticationFailed == true {
-                return .failed("Check your password and try again.")
+                return .failed(String(localized: "Check your password and try again."))
             }
-            return .failed("Could not sign out that session.")
+            return .failed(String(localized: "Could not log out that session."))
         } catch {
-            return .failed("Could not sign out that session.")
+            return .failed(String(localized: "Could not log out that session."))
         }
     }
 
@@ -3261,7 +3261,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         do {
             return .completed(try await message())
         } catch {
-            return .failed("Device verification is unavailable.")
+            return .failed(String(localized: "Device verification is unavailable."))
         }
     }
 
@@ -3271,12 +3271,12 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     ) async -> CryptoActionResult {
         _ = requiresFlow
         guard let flowId = resolvedFlowId() else {
-            return .unavailable("Device verification is unavailable.")
+            return .unavailable(String(localized: "Device verification is unavailable."))
         }
         do {
             return .completed(try await message(flowId))
         } catch {
-            return .failed("Device verification is unavailable.")
+            return .failed(String(localized: "Device verification is unavailable."))
         }
     }
 
@@ -3668,18 +3668,18 @@ final class SharedCoreMediaLoader: MediaLoading {
 
     func loadThumbnail(for resource: MediaResource) async -> MediaLoadState {
         guard resource.isEncrypted == false else {
-            return .failed("Encrypted media requires recovered keys before it can be opened.")
+            return .failed(String(localized: "Encrypted media requires recovered keys before it can be opened."))
         }
         if SharedCoreTimelineMedia.handleId(from: resource.authenticatedURL) != nil {
             return .thumbnail(resource)
         }
         if LocalUploadPreviewStore.isLocalPreview(resource.authenticatedURL) {
             return LocalUploadPreviewStore.shared.data(for: resource.authenticatedURL) == nil
-                ? .failed("Media is unavailable.")
+                ? .failed(String(localized: "Media is unavailable."))
                 : .thumbnail(resource)
         }
         guard let url = resource.authenticatedURL, url.scheme == "mxc" else {
-            return .failed("Media is unavailable.")
+            return .failed(String(localized: "Media is unavailable."))
         }
         do {
             let bytes = try await SharedCorePlainMedia.thumbnail(
@@ -3689,11 +3689,11 @@ final class SharedCoreMediaLoader: MediaLoading {
                 height: 480
             )
             guard bytes.isEmpty == false else {
-                return .failed("Media could not be loaded.")
+                return .failed(String(localized: "Media could not be loaded."))
             }
             return .thumbnail(resource)
         } catch {
-            return .failed("Media could not be loaded.")
+            return .failed(String(localized: "Media could not be loaded."))
         }
     }
 
@@ -3747,10 +3747,10 @@ final class SharedCoreMediaUploadService: MediaUploading {
 
     func upload(_ request: MediaUploadRequest) async -> MediaUploadState {
         guard case .signedIn = host.sessionStore.currentState else {
-            return .failed("Sign in before uploading media.")
+            return .failed(String(localized: "Sign in before uploading media."))
         }
         guard request.data.isEmpty == false else {
-            return .failed("Attachment is empty.")
+            return .failed(String(localized: "Attachment is empty."))
         }
         do {
             let result = try await SharedCoreMediaSend.sendRoomAttachment(
@@ -3779,7 +3779,7 @@ final class SharedCoreMediaUploadService: MediaUploading {
             )
             return .uploaded(item)
         } catch {
-            return .failed("Media could not be uploaded.")
+            return .failed(String(localized: "Media could not be uploaded."))
         }
     }
 

@@ -27,9 +27,11 @@ struct ComposerRelationTarget: Equatable {
     var bannerTitle: String {
         switch kind {
         case .reply:
-            return "Replying to \(senderName)"
+            return String(localized: "Replying to \(senderName)")
         case .edit:
-            return isLocalPending ? "Editing unsent message" : "Editing your message"
+            return isLocalPending
+                ? String(localized: "Editing unsent message")
+                : String(localized: "Editing your message")
         }
     }
 }
@@ -73,14 +75,14 @@ struct TimelineReplyPreview: Equatable {
             raw = markdown.isEmpty ? body : markdown
         case .mediaPlaceholder(let resource):
             if resource.isEncrypted {
-                raw = "Encrypted attachment"
+                raw = String(localized: "Encrypted attachment")
             } else {
                 raw = resource.safeDescription
             }
         case .redacted:
-            raw = "Message deleted"
+            raw = String(localized: "Message deleted")
         case .encryptedPlaceholder:
-            raw = "Encrypted message"
+            raw = String(localized: "Encrypted message")
         case .agentCard(let card):
             if let summary = card.summary?.trimmingCharacters(in: .whitespacesAndNewlines),
                summary.isEmpty == false {
@@ -91,7 +93,7 @@ struct TimelineReplyPreview: Equatable {
         case .systemNotice(let text):
             raw = text
         case .unknown:
-            raw = "Message unavailable"
+            raw = String(localized: "Message unavailable")
         }
         return truncatedSnippet(raw)
     }
@@ -132,7 +134,7 @@ extension TimelineItem {
 
     private func resolvedSenderDisplayName(currentUserID: String?) -> String {
         if let currentUserID, senderID == currentUserID {
-            return "You"
+            return String(localized: "You")
         }
 
         if let profileName = senderProfileDisplayName?

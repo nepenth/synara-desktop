@@ -23,7 +23,7 @@ private struct NotificationsTabView: View {
             case .empty:
                 caughtUpEmptyState
             case .failed(let message):
-                SynaraErrorState(title: "Could Not Load Notifications", message: message) {
+                SynaraErrorState(title: String(localized: "Could Not Load Notifications"), message: message) {
                     loadInbox()
                 }
             case .loaded(let rooms):
@@ -82,7 +82,7 @@ private struct NotificationsTabView: View {
                             notificationsRow(room)
                         }
                     } header: {
-                        notificationsSectionHeader("Mentions", count: sections.mentions.count)
+                        notificationsSectionHeader(String(localized: "Mentions"), count: sections.mentions.count)
                     }
                 }
 
@@ -92,7 +92,7 @@ private struct NotificationsTabView: View {
                             inviteRow(room)
                         }
                     } header: {
-                        notificationsSectionHeader("Invites", count: sections.invites.count)
+                        notificationsSectionHeader(String(localized: "Invites"), count: sections.invites.count)
                     }
                 }
 
@@ -102,7 +102,7 @@ private struct NotificationsTabView: View {
                             agentPendingRow(item)
                         }
                     } header: {
-                        notificationsSectionHeader("Agent actions", count: agentPendingApprovals.count)
+                        notificationsSectionHeader(String(localized: "Agent actions"), count: agentPendingApprovals.count)
                     }
                 }
 
@@ -137,7 +137,7 @@ private struct NotificationsTabView: View {
                             }
                         }
                     } header: {
-                        notificationsSectionHeader("Messages", count: sections.unreadRooms.count)
+                        notificationsSectionHeader(String(localized: "Messages"), count: sections.unreadRooms.count)
                     }
                 }
             }
@@ -148,9 +148,9 @@ private struct NotificationsTabView: View {
 
     private var caughtUpEmptyState: some View {
         SynaraEmptyState(
-            title: "You're Caught Up",
+            title: String(localized: "You're Caught Up"),
             systemImage: "bell.slash",
-            message: "Unread rooms and mentions will appear here. Push alerts still open the relevant room directly."
+            message: String(localized: "Unread rooms and mentions will appear here. Push alerts still open the relevant room directly.")
         )
     }
 
@@ -278,11 +278,11 @@ enum NotificationsInboxReason: Equatable {
     var title: String {
         switch self {
         case .approval:
-            return "Approval"
+            return String(localized: "Approval")
         case .mention:
-            return "Mention"
+            return String(localized: "Mention")
         case .invite:
-            return "Invite"
+            return String(localized: "Invite")
         }
     }
 
@@ -420,13 +420,13 @@ enum AppTab: String, CaseIterable, Identifiable {
     var emptyConversationTitle: String {
         switch self {
         case .rooms:
-            return "Select a Room"
+            return String(localized: "Select a Room")
         case .notifications:
-            return "Select a Notification"
+            return String(localized: "Select a Notification")
         case .later:
-            return "Select an Item"
+            return String(localized: "Select an Item")
         case .settings:
-            return "Select a Setting"
+            return String(localized: "Select a Setting")
         }
     }
 
@@ -446,13 +446,13 @@ enum AppTab: String, CaseIterable, Identifiable {
     var emptyConversationMessage: String {
         switch self {
         case .rooms:
-            return "Pick a conversation. The room list stays open beside it."
+            return String(localized: "Pick a conversation. The room list stays open beside it.")
         case .notifications:
-            return "Open a mention, invite, or unread room. The inbox stays visible."
+            return String(localized: "Open a mention, invite, or unread room. The inbox stays visible.")
         case .later:
-            return "Open a saved message. Your Later list stays visible."
+            return String(localized: "Open a saved message. Your Later list stays visible.")
         case .settings:
-            return "Choose a settings page to open beside the list."
+            return String(localized: "Choose a settings page to open beside the list.")
         }
     }
 

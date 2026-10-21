@@ -955,7 +955,7 @@ import SwiftUI
             tableView.delegate = self
             tableView.transform = CGAffineTransform(scaleX: 1, y: -1)
             tableView.accessibilityIdentifier = "TimelineList"
-            tableView.accessibilityLabel = "Room timeline"
+            tableView.accessibilityLabel = String(localized: "Room timeline")
             timestampRevealGesture.delegate = self
             timestampRevealGesture.cancelsTouchesInView = false
             timestampRevealGesture.delaysTouchesBegan = false

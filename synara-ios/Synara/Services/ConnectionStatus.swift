@@ -6,13 +6,13 @@ import SynaraCore
 /// meaning (connected / syncing / disconnected / restore failed) without
 /// tokens, homeserver admin URLs, or raw SDK text.
 enum ConnectionStatusCopy {
-    static let connected = "Connected"
-    static let syncing = "Syncing history…"
-    static let starting = "Connecting…"
-    static let reconnecting = "Connection Lost! Reconnecting..."
-    static let disconnected = "Connection Lost!"
-    static let restoreFailed = "Couldn't restore this session. Sign out and sign in again."
-    static let stopped = "Not connected"
+    static let connected = String(localized: "Connected")
+    static let syncing = String(localized: "Syncing history…")
+    static let starting = String(localized: "Connecting…")
+    static let reconnecting = String(localized: "Connection Lost! Reconnecting...")
+    static let disconnected = String(localized: "Connection Lost!")
+    static let restoreFailed = String(localized: "Couldn't restore this session. Log out and sign in again.")
+    static let stopped = String(localized: "Not connected")
 
     static func banner(_ status: MatrixSyncStatus) -> String {
         switch status {

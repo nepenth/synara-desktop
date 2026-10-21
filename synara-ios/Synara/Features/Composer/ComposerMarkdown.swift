@@ -42,31 +42,31 @@ enum ComposerMarkdownFormat: String, CaseIterable, Identifiable {
     var accessibilityLabel: String {
         switch self {
         case .bold:
-            return "Bold"
+            return String(localized: "Bold")
         case .italic:
-            return "Italic"
+            return String(localized: "Italic")
         case .underline:
-            return "Underline"
+            return String(localized: "Underline")
         case .strikethrough:
-            return "Strikethrough"
+            return String(localized: "Strikethrough")
         case .spoiler:
-            return "Spoiler"
+            return String(localized: "Spoiler")
         case .inlineCode:
-            return "Inline code"
+            return String(localized: "Inline code")
         case .codeBlock:
-            return "Code block"
+            return String(localized: "Code block")
         case .blockquote:
-            return "Quote"
+            return String(localized: "Quote")
         case .bulletList:
-            return "Bulleted list"
+            return String(localized: "Bulleted list")
         case .numberedList:
-            return "Numbered list"
+            return String(localized: "Numbered list")
         case .heading1:
-            return "Heading 1"
+            return String(localized: "Heading 1")
         case .heading2:
-            return "Heading 2"
+            return String(localized: "Heading 2")
         case .heading3:
-            return "Heading 3"
+            return String(localized: "Heading 3")
         }
     }
 

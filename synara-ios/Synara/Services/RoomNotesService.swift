@@ -8,9 +8,9 @@ enum RoomNoteKind: String, CaseIterable, Equatable {
 
     var title: String {
         switch self {
-        case .note: return "Note"
-        case .todo: return "ToDo"
-        case .message: return "Message"
+        case .note: return String(localized: "Note")
+        case .todo: return String(localized: "ToDo")
+        case .message: return String(localized: "Message")
         }
     }
 }
@@ -110,11 +110,11 @@ enum RoomNotesError: Error, LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .noSession:
-            return "Sign in to load your personal notes."
+            return String(localized: "Sign in to load your personal notes.")
         case .invalidItem:
-            return "This note could not be saved."
+            return String(localized: "This note could not be saved.")
         case .unavailable:
-            return "Personal notes could not be synced. Try again."
+            return String(localized: "Personal notes could not be synced. Try again.")
         }
     }
 }

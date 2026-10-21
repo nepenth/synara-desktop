@@ -3,6 +3,8 @@ import SwiftUI
 struct PlaceholderScreen: View {
     let title: String
     let systemImage: String
+    /// Stable, non-localized prefix for the screen's accessibility identifier.
+    let identifier: String
     @Environment(\.appEnvironment) private var environment
 
     var body: some View {
@@ -14,12 +16,12 @@ struct PlaceholderScreen: View {
         .navigationTitle(title)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                SynaraToolbarIconButton(systemImage: "person.crop.circle", accessibilityLabel: "Accounts") {
+                SynaraToolbarIconButton(systemImage: "person.crop.circle", accessibilityLabel: String(localized: "Accounts")) {
                     environment.router.present(.accountSwitcher)
                 }
             }
         }
-        .accessibilityIdentifier("\(title)Screen")
+        .accessibilityIdentifier("\(identifier)Screen")
     }
 }
 
@@ -53,7 +55,7 @@ struct RoutePlaceholderView: View {
         case .settings:
             EmptyView()
         case .notifications:
-            PlaceholderScreen(title: "Notifications", systemImage: "bell")
+            PlaceholderScreen(title: String(localized: "Notifications"), systemImage: "bell", identifier: "Notifications")
         case .later:
             LaterListView()
         }
@@ -84,11 +86,14 @@ private struct AccountMenuSheet: View {
                 Section("Account") {
                     switch environment.session.currentState {
                     case .signedIn(let session):
-                        AccountMenuInfoRow(title: "User", value: session.userID)
+                        AccountMenuInfoRow(title: String(localized: "User"), value: session.userID)
                             .accessibilityIdentifier("AccountMenuUserRow")
-                        AccountMenuInfoRow(title: "Homeserver", value: session.homeserverURL.host ?? session.homeserverURL.absoluteString)
+                        AccountMenuInfoRow(
+                            title: String(localized: "Homeserver"),
+                            value: session.homeserverURL.host ?? session.homeserverURL.absoluteString
+                        )
                             .accessibilityIdentifier("AccountMenuHomeserverRow")
-                        AccountMenuInfoRow(title: "Device", value: session.deviceID)
+                        AccountMenuInfoRow(title: String(localized: "Device"), value: session.deviceID)
                             .accessibilityIdentifier("AccountMenuDeviceRow")
                     case .signedOut:
                         Text("Not signed in")
@@ -188,7 +193,7 @@ private struct AccountMenuInfoRow: View {
 struct PlaceholderScreen_Previews: PreviewProvider {
     static var previews: some View {
         NavigationStack {
-            PlaceholderScreen(title: "Rooms", systemImage: "bubble.left.and.bubble.right")
+            PlaceholderScreen(title: "Rooms", systemImage: "bubble.left.and.bubble.right", identifier: "Rooms")
         }
         .environment(\.appEnvironment, AppEnvironment.mock())
     }

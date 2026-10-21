@@ -744,7 +744,7 @@ final class PushServiceTests: XCTestCase {
         XCTAssertFalse(cleanupSucceeded)
         XCTAssertEqual(
             service.registrationStateDescription,
-            "Push cleanup unavailable; finishing local sign out"
+            "Push cleanup unavailable; finishing local logout"
         )
     }
 

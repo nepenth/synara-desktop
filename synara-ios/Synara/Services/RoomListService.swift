@@ -102,7 +102,9 @@ struct RoomSummary: Identifiable, Equatable {
     }
 
     var liveCallChipLabel: String {
-        activeCallParticipantCount > 1 ? "\(activeCallParticipantCount) live" : "In a call"
+        activeCallParticipantCount > 1
+            ? String(localized: "\(activeCallParticipantCount) live")
+            : String(localized: "In a call")
     }
 
     var isAgentRoom: Bool {
@@ -190,23 +192,23 @@ enum RoomListSortOrder: String, CaseIterable, Identifiable {
         switch self {
         case .recent:
             if let section, section.isEmpty == false {
-                return "Sort \(section) by recent activity"
+                return String(localized: "Sort \(section) by recent activity")
             }
-            return "Sort by recent activity"
+            return String(localized: "Sort by recent activity")
         case .name:
             if let section, section.isEmpty == false {
-                return "Sort \(section) by name"
+                return String(localized: "Sort \(section) by name")
             }
-            return "Sort by name"
+            return String(localized: "Sort by name")
         }
     }
 
     var shortTitle: String {
         switch self {
         case .recent:
-            return "Recent"
+            return String(localized: "Recent")
         case .name:
-            return "Name"
+            return String(localized: "Name")
         }
     }
 
@@ -360,7 +362,7 @@ enum RoomDisplayNameLookup {
 
     static func resolve(roomID: String, names: [String: String]) -> String {
         guard roomID.isEmpty == false else {
-            return "Unknown room"
+            return String(localized: "Unknown room")
         }
 
         return names[roomID] ?? roomID
@@ -374,9 +376,9 @@ enum RoomMembershipError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .signedOut:
-            return "Sign in before changing room membership."
+            return String(localized: "Sign in before changing room membership.")
         case .failed:
-            return "Could not update the room invite. Try again."
+            return String(localized: "Could not update the room invite. Try again.")
         }
     }
 }
@@ -945,8 +947,8 @@ enum RoomListSearchFilter {
             return true
         }
 
-        return room.name.localizedCaseInsensitiveContains(trimmed)
-            || room.lastMessagePreview.localizedCaseInsensitiveContains(trimmed)
+        return room.name.localizedStandardContains(trimmed)
+            || room.lastMessagePreview.localizedStandardContains(trimmed)
     }
 
     static func mergeInvitedRooms(_ invitedRooms: [RoomSummary], into rooms: [RoomSummary]) -> [RoomSummary] {

@@ -15,7 +15,7 @@ struct SharedCorePresence: Equatable, Identifiable {
     var displayName: String {
         let trimmed = state.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty || trimmed == "unknown" {
-            return currentlyActive ? "Active" : "Unknown"
+            return currentlyActive ? String(localized: "Active") : String(localized: "Unknown")
         }
         return trimmed.replacingOccurrences(of: "_", with: " ").capitalized
     }

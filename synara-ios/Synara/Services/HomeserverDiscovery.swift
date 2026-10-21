@@ -26,9 +26,9 @@ struct HomeserverDiscoveryResult: Equatable {
 /// connection banner.
 enum ServerCompatibilityCopy {
     static let slidingSyncUnsupported =
-        "This server doesn't support the sync protocol Synara needs (simplified sliding sync, MSC4186). Contact the server's administrator."
+        String(localized: "This server doesn't support the sync protocol Synara needs (simplified sliding sync, MSC4186). Contact the server's administrator.")
     static let singleSignOnOnly =
-        "This server signs in with single sign-on, which Synara for iPhone doesn't support yet."
+        String(localized: "This server signs in with single sign-on, which Synara for iPhone doesn't support yet.")
 }
 
 enum HomeserverDiscoveryError: LocalizedError, Equatable {
@@ -44,21 +44,21 @@ enum HomeserverDiscoveryError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .empty:
-            return "Enter a homeserver address."
+            return String(localized: "Enter a homeserver address.")
         case .invalidURL:
-            return "Enter a valid homeserver address."
+            return String(localized: "Enter a valid homeserver address.")
         case .unsupportedScheme:
-            return "Homeserver addresses must use HTTPS."
+            return String(localized: "Homeserver addresses must use HTTPS.")
         case .missingHost:
-            return "Enter a homeserver host, such as matrix.org."
+            return String(localized: "Enter a homeserver host, such as matrix.org.")
         case .discoveryFailed:
-            return "Could not discover this homeserver. Check the address and try again."
+            return String(localized: "Could not discover this homeserver. Check the address and try again.")
         case .slidingSyncUnsupported:
             return ServerCompatibilityCopy.slidingSyncUnsupported
         case .singleSignOnOnly:
             return ServerCompatibilityCopy.singleSignOnOnly
         case .unsupportedServer:
-            return "This server doesn't offer password sign-in, which Synara for iPhone needs."
+            return String(localized: "This server doesn't offer password sign-in, which Synara for iPhone needs.")
         }
     }
 }

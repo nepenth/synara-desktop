@@ -1,0 +1,46 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%@: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@"
+          }
+        }
+      }
+    },
+    "Agent" : {
+
+    },
+    "Agent approval needed" : {
+
+    },
+    "Approval required" : {
+
+    },
+    "New activity" : {
+
+    },
+    "Review a time-sensitive request in Synara." : {
+
+    },
+    "Review the command in Synara." : {
+
+    },
+    "sent a file" : {
+
+    },
+    "sent a video" : {
+
+    },
+    "sent an image" : {
+
+    },
+    "sent audio" : {
+
+    }
+  },
+  "version" : "1.0"
+}
