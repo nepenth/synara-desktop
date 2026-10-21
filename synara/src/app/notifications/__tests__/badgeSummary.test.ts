@@ -1,7 +1,11 @@
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getBadgeCount, summarizeNotifications } from '../badgeSummary';
+import {
+  getBadgeCount,
+  getTrayNotificationListCount,
+  summarizeNotifications,
+} from '../badgeSummary';
 
 // The per-room rule (mentions count instead of totals, space rollups never
 // count) lives in Core: `room_list::presentation::summarize_notifications`.
@@ -47,6 +51,26 @@ test('summarizeNotifications clamps negative, fractional and missing counts', ()
     }
   );
   assert.equal(summarizeNotifications({}).appBadgeCount, 0);
+});
+
+test('the tray Notifications count matches the list it opens', () => {
+  const summary = summarizeNotifications({
+    highlightTotal: 1,
+    unreadTotal: 2,
+    laterActiveCount: 4,
+    inviteCount: 3,
+    agentApprovalCount: 2,
+  });
+  // Later has its own tray item; counting it here showed it twice, and
+  // invites and approvals are not in Inbox → Notifications.
+  assert.equal(getTrayNotificationListCount(summary), 3);
+  assert.equal(summary.inboxBadgeCount, 9, 'the cross-platform Inbox badge is unchanged');
+  assert.equal(
+    getTrayNotificationListCount(summarizeNotifications({ laterActiveCount: 4, inviteCount: 3 })),
+    0
+  );
+  const updater = readFileSync('src/app/pages/client/ClientNonUIFeatures.tsx', 'utf8');
+  assert.match(updater, /notificationInboxCount: getTrayNotificationListCount\(summary\)/);
 });
 
 test('getBadgeCount returns the app-icon number for platform adapters', () => {

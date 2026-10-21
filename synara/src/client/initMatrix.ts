@@ -14,7 +14,11 @@ import {
 } from '../app/state/sessions';
 import { clearNotificationCaches } from '../app/notifications/notificationCaches';
 import { recordClientDiagnostic } from '../app/utils/clientDiagnostics';
-import { invokeDesktopWithAvailability } from '../app/utils/desktop';
+import {
+  clearDesktopNotificationSurfaces,
+  invokeDesktopWithAvailability,
+} from '../app/utils/desktop';
+import { getSettings } from '../app/state/settings';
 
 import { getSafeMyUserId } from '../app/state/nativeIdentity';
 /**
@@ -139,6 +143,8 @@ export const reloadApplication = async () => {
 export type PerformLogoutDeps = {
   clearPersistedSessions: () => Promise<void>;
   clearSessionLocalStorage: typeof clearSessionLocalStorage;
+  /** Withdraws delivered banners and zeroes the app badge and tray counts. */
+  clearNotificationSurfaces: () => Promise<void>;
   logoutNativeSession: () => Promise<void>;
   reload: () => void;
 };
@@ -146,6 +152,10 @@ export type PerformLogoutDeps = {
 const defaultPerformLogoutDeps = (): PerformLogoutDeps => ({
   clearPersistedSessions,
   clearSessionLocalStorage,
+  // The signed-out shell mounts no badge or tray updater, so room names in
+  // Notification Center and the old account's counts would otherwise stay.
+  clearNotificationSurfaces: () =>
+    clearDesktopNotificationSurfaces({ doNotDisturb: !getSettings().showNotifications }),
   logoutNativeSession: async () => {
     const result = await invokeDesktopWithAvailability<NativeSessionSnapshot>('matrix_logout');
     if (!result.available || result.value?.status !== 'logged_out') {
@@ -175,6 +185,7 @@ export const performLogout = async (
     deps.clearPersistedSessions,
     () => deps.clearSessionLocalStorage(storage),
     clearNotificationCaches,
+    deps.clearNotificationSurfaces,
   ]);
   deps.reload();
 };

@@ -2,6 +2,7 @@ import {
   captureApprovalDecisionScope,
   publishApprovalDecision,
   approvalDecisionFromActionId,
+  type ApprovalDecision,
 } from '../approvals/approvalDecisionEvents';
 import { invokeDesktopWithAvailability, type DesktopInvokeResult } from '../../utils/desktop';
 import type { NativeReactionMutation } from '../matrix-dto/generated';
@@ -27,6 +28,29 @@ export type NativeAgentApprovalDecisionResult = {
   eventId: string;
   status: 'applied' | 'already_decided';
   reaction?: NativeReactionMutationResult;
+  /**
+   * The decision already on record when `status` is `already_decided`. Core
+   * does not report it yet; until it does, the caller shows no decision.
+   */
+  decision?: ApprovalDecision;
+};
+
+const APPROVAL_DECISIONS: ReadonlySet<string> = new Set(['approve_once', 'approve_always', 'deny']);
+
+/**
+ * The decision to record for a successful call. `applied` is the clicked
+ * choice. `already_decided` means another click (often on another device)
+ * won; the clicked choice was not sent, so only Core's recorded decision may
+ * be shown, and nothing when Core does not report one. Callers then read the
+ * authoritative state from Core (approval inbox, timeline row).
+ */
+export const recordedApprovalDecision = (
+  result: Pick<NativeAgentApprovalDecisionResult, 'status' | 'decision'>,
+  actionId: string
+): ApprovalDecision | undefined => {
+  if (result.status === 'applied') return approvalDecisionFromActionId(actionId);
+  const reported = result.decision;
+  return typeof reported === 'string' && APPROVAL_DECISIONS.has(reported) ? reported : undefined;
 };
 
 export type NativeReactionInvoke = (
@@ -158,11 +182,12 @@ export async function decideAgentApprovalWithNativeOwner(
   ) {
     throw new Error('Native agent approval readback did not match the requested decision.');
   }
+  const decision = recordedApprovalDecision(result.value, input.actionId);
   publishApprovalDecision({
     scope,
     roomId: input.roomId,
     eventId: input.eventId,
-    decision: approvalDecisionFromActionId(input.actionId),
+    ...(decision ? { decision } : {}),
   });
   return result.value;
 }

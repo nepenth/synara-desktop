@@ -43,6 +43,8 @@ const tests = [
   'src/app/utils/__tests__/bulkActions.test.ts',
   'src/app/notifications/__tests__/badgeSummary.test.ts',
   'src/app/notifications/__tests__/systemNotification.test.ts',
+  'src/app/notifications/__tests__/notificationDelivery.test.ts',
+  'src/app/hooks/__tests__/roomRoutePath.test.ts',
   'src/app/features/settings/notifications/__tests__/nativeAgentNotificationPreferences.test.ts',
   'src/app/routes/__tests__/synaraRoutes.test.ts',
   'src/app/utils/__tests__/agentApprovals.test.ts',

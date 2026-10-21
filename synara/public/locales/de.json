@@ -170,7 +170,8 @@
       "confirm_action_description": "Open \"{{title}}\" in an external browser?",
       "confirm_action_cancel": "Cancel",
       "confirm_action_open": "Open",
-      "action_failed": "Action failed"
+      "action_failed": "Action failed",
+      "action_copied": "Copied"
     }
   }
 }

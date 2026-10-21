@@ -30,6 +30,9 @@ import {
   subscribeDesktopTrayDndToggle,
   sanitizeDesktopDismissKey,
   dismissDesktopNotifications,
+  clearDesktopNotificationSurfaces,
+  desktopNotificationCheckFromPermission,
+  getPostedDesktopDismissKeys,
   type DesktopTrayState,
 } from '../desktop';
 import {
@@ -1456,6 +1459,128 @@ test('desktop performance capabilities fall back when desktop ACL denies the com
       getDesktopDiagnosticEntries().join('\n'),
       /desktop_get_performance_capabilities failed: native command rejected/
     );
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+});
+
+test('the integration report reads the OS notification permission, not the plugin', async () => {
+  const originalWindow = globalThis.window;
+  const integrationReport = {
+    platform: 'macos',
+    notifications: {
+      name: 'Notifications',
+      ready: true,
+      supported: true,
+      message: 'Notification permission is active.',
+    },
+  };
+  const statusFor = async (permission: unknown) => {
+    (globalThis as any).window = {
+      __SYNARA_DESKTOP__: {
+        platform: 'tauri',
+        supportsIntegrationStatus: true,
+        invoke: async (command: string) => {
+          if (command === 'desktop_get_integration_status') return integrationReport;
+          if (command === 'desktop_get_notification_permission') {
+            if (permission instanceof Error) throw permission;
+            return permission;
+          }
+          throw new Error(`unexpected ${command}`);
+        },
+      },
+    };
+    try {
+      return (await getDesktopIntegrationStatus()).notifications;
+    } finally {
+      (globalThis as any).window = originalWindow;
+    }
+  };
+
+  assert.deepEqual(await statusFor('denied'), {
+    name: 'Notifications',
+    supported: true,
+    ready: false,
+    message: 'Notifications are blocked by platform permission.',
+  });
+  // macOS reports `default` before the user was ever asked.
+  assert.equal(
+    (await statusFor('default'))?.message,
+    'Notification permission has not been requested yet.'
+  );
+  assert.equal((await statusFor('granted'))?.ready, true);
+  // An unreadable permission keeps the shell's own report.
+  assert.deepEqual(await statusFor(new Error('unavailable')), integrationReport.notifications);
+  assert.deepEqual(await statusFor('weird'), integrationReport.notifications);
+  assert.equal(desktopNotificationCheckFromPermission(undefined), undefined);
+});
+
+test('sign-out withdraws posted banners and zeroes the badge and tray', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      supportsTrayState: true,
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return true;
+      },
+    },
+  };
+
+  try {
+    // Earlier tests in this file posted banners of their own.
+    await dismissDesktopNotifications(getPostedDesktopDismissKeys());
+    await showDesktopNotification({
+      title: 'Room',
+      body: 'New inbox notification from Alice',
+      dismissKeys: ['room:!room:example.org', 'event:$event:example.org'],
+    });
+    await showDesktopNotification({
+      title: 'Room',
+      body: 'Read already',
+      dismissKeys: ['room:!read:example.org'],
+    });
+    await dismissDesktopNotifications(['room:!read:example.org']);
+    assert.deepEqual(getPostedDesktopDismissKeys(), [
+      'room:!room:example.org',
+      'event:$event:example.org',
+    ]);
+    calls.length = 0;
+
+    await clearDesktopNotificationSurfaces({ doNotDisturb: true });
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(calls, [
+    {
+      command: 'desktop_dismiss_notifications',
+      args: { keys: ['room:!room:example.org', 'event:$event:example.org'] },
+    },
+    { command: 'desktop_set_badge_count', args: { count: 0 } },
+    {
+      command: 'desktop_update_tray_state',
+      args: {
+        state: {
+          unreadCount: 0,
+          highlightCount: 0,
+          laterCount: 0,
+          notificationInboxCount: 0,
+          doNotDisturb: true,
+        },
+      },
+    },
+  ]);
+  assert.deepEqual(getPostedDesktopDismissKeys(), []);
+});
+
+test('sign-out surface cleanup is a no-op outside the desktop shell', async () => {
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {};
+  try {
+    await clearDesktopNotificationSurfaces({ doNotDisturb: false });
   } finally {
     (globalThis as any).window = originalWindow;
   }
