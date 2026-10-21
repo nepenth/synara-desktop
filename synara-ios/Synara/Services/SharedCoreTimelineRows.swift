@@ -12,7 +12,20 @@ enum SharedCoreTimelineRows {
         visibleTailEventID: String? = nil,
         receiptTailEventID: String? = nil
     ) -> [TimelineItem] {
-        var items = rows.compactMap(item(from:))
+        withReceiptTail(
+            rows.compactMap(item(from:)),
+            visibleTailEventID: visibleTailEventID,
+            receiptTailEventID: receiptTailEventID
+        )
+    }
+
+    /// Pairs the painted tail row with Core's receipt frontier.
+    static func withReceiptTail(
+        _ items: [TimelineItem],
+        visibleTailEventID: String?,
+        receiptTailEventID: String?
+    ) -> [TimelineItem] {
+        var items = items
         if let index = items.lastIndex(where: { $0.serverEventID != nil }),
            items[index].serverEventID == visibleTailEventID {
             items[index].readReceiptEventID = receiptTailEventID
@@ -30,8 +43,18 @@ enum SharedCoreTimelineRows {
         visibleTailEventID: String? = nil,
         receiptTailEventID: String? = nil
     ) -> TimelineLoadOutcome? {
-        let items = items(from: rows, visibleTailEventID: visibleTailEventID,
-                          receiptTailEventID: receiptTailEventID)
+        authoritativeOutcome(
+            items: items(from: rows, visibleTailEventID: visibleTailEventID,
+                         receiptTailEventID: receiptTailEventID),
+            paginationBackward: paginationBackward
+        )
+    }
+
+    /// `authoritativeOutcome(from:)` for rows already converted.
+    static func authoritativeOutcome(
+        items: [TimelineItem],
+        paginationBackward: TimelinePageStateDto
+    ) -> TimelineLoadOutcome? {
         if items.isEmpty == false {
             return .loaded(items)
         }
@@ -308,5 +331,46 @@ extension TimelineRowKindDto {
         case .timelineStart: return "timeline_start"
         case .pagination: return "pagination"
         }
+    }
+}
+
+/// Converted rows of one native stream, reused while Core's row is unchanged.
+///
+/// Each refresh receives the stream's whole window, but an update usually
+/// changes a few rows. Converting only new or changed rows keeps a refresh
+/// from re-parsing every agent card and formatted body in the window.
+struct SharedCoreTimelineRowCache {
+    private var entries: [String: (row: TimelineViewRowDto, item: TimelineItem?)] = [:]
+    /// Rows converted (not reused) so far.
+    private(set) var conversionCount = 0
+
+    mutating func items(
+        from rows: [TimelineViewRowDto],
+        visibleTailEventID: String? = nil,
+        receiptTailEventID: String? = nil
+    ) -> [TimelineItem] {
+        var next: [String: (row: TimelineViewRowDto, item: TimelineItem?)] = [:]
+        next.reserveCapacity(rows.count)
+        var items: [TimelineItem] = []
+        items.reserveCapacity(rows.count)
+        for row in rows {
+            let item: TimelineItem?
+            if let cached = entries[row.itemId], cached.row == row {
+                item = cached.item
+            } else {
+                item = SharedCoreTimelineRows.item(from: row)
+                conversionCount += 1
+            }
+            next[row.itemId] = (row, item)
+            if let item {
+                items.append(item)
+            }
+        }
+        entries = next
+        return SharedCoreTimelineRows.withReceiptTail(
+            items,
+            visibleTailEventID: visibleTailEventID,
+            receiptTailEventID: receiptTailEventID
+        )
     }
 }

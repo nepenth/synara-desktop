@@ -41,19 +41,26 @@ impl ViewDeltaEmitter {
         }
     }
 
+    /// The revision of the last emitted batch (0 before the first).
+    pub fn revision(&self) -> u64 {
+        self.revision.load(Ordering::Acquire)
+    }
+
+    /// Emit one batch at the next revision. Returns whether anything was
+    /// emitted: an empty payload is dropped without advancing the revision.
     pub fn emit(
         &self,
         ops: Vec<TimelineViewDeltaOp>,
         read_state: Option<TimelineReadState>,
         pagination: Option<TimelinePaginationState>,
         pinned_event_ids: Option<Vec<String>>,
-    ) {
+    ) -> bool {
         if ops.is_empty()
             && read_state.is_none()
             && pagination.is_none()
             && pinned_event_ids.is_none()
         {
-            return;
+            return false;
         }
         let next_revision = self
             .revision
@@ -70,6 +77,7 @@ impl ViewDeltaEmitter {
             pagination,
             pinned_event_ids,
         });
+        true
     }
 }
 

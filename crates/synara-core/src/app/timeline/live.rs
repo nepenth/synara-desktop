@@ -5,7 +5,7 @@
 //! event types, timestamps, and safe display text.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Instant;
 
@@ -71,14 +71,14 @@ use crate::app::utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind, MAX_EVEN
 use crate::dto::{LocalEchoState, RoomEncryptionStatus, TimelineEncryptedUnavailableItem};
 
 #[cfg(test)]
-use super::view::TimelineViewDeltaBatch;
+use super::{view::TimelineViewDeltaBatch, TIMELINE_VIEW_SCHEMA_VERSION};
 
 use super::{
     format_forwarded_media_body, format_forwarded_plain_body, project_timeline_diffs_with_media,
     project_timeline_item_with_media,
     reactions::{
         enrich_native_items, enrich_native_reactions, enrich_view_delta_ops, enrich_view_rows,
-        reaction_event_id_from_send_state,
+        reaction_event_id_from_send_state, KnownAnnotationIds,
     },
     reply_draft_readback, should_attach_formatted_body, snapshot_pinned_events,
     ComposerDraftRegistry, NativeAgentApprovalDecisionRequest, NativeAgentApprovalDecisionResult,
@@ -93,10 +93,10 @@ use super::{
     NativeTimelineTimestampToEventReadback, NativeTimelineViewPaginationRequest,
     NativeTimelineViewportHint, NativeUtdPhase, NativeUtdStatus, PinnedEventsSnapshot,
     TimelineMediaRegistry, TimelineMediaSource, TimelinePageState, TimelinePaginationState,
-    TimelineReadState, TimelineRoomActionAuthority, TimelineViewCapabilities, TimelineViewPosition,
-    TimelineViewSnapshot, TimelineViewUpdateEmit, UtdIndex, UtdPhase, UtdReasonCode,
-    ViewDeltaEmitter, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
-    NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS, TIMELINE_VIEW_SCHEMA_VERSION,
+    TimelineReadState, TimelineRoomActionAuthority, TimelineViewPosition, TimelineViewSnapshot,
+    TimelineViewUpdateEmit, UtdIndex, UtdPhase, UtdReasonCode, ViewDeltaEmitter,
+    NATIVE_TIMELINE_ACTION_SCHEMA_VERSION, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
+    NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
 };
 
 #[cfg(test)]
@@ -113,6 +113,8 @@ mod registry_lock_tests;
 #[cfg(test)]
 mod room_read_state_tests;
 #[cfg(test)]
+mod stream_view_tests;
+#[cfg(test)]
 mod thread_list_tests;
 #[cfg(test)]
 mod thread_open_tests;
@@ -120,12 +122,14 @@ mod thread_open_tests;
 mod thread_receipt_tests;
 use approval_history::{ApprovalHistory, HistoryProtection};
 mod approval_inbox;
+mod published;
 mod recency;
 use approval_inbox::ApprovalInboxOwner;
 pub use approval_inbox::{
     NativeAgentApprovalInboxCoverage, NativeAgentApprovalInboxItem,
     NativeAgentApprovalInboxSnapshot, NativeAgentApprovalInboxStatus,
 };
+use published::{PublishedView, PublishedViewInit, SettleRequest, ViewChange, ViewFocus};
 use recency::{RecencyMap, UseStamp};
 
 const PAGINATION_BATCH_SIZE: u16 = 30;
@@ -143,6 +147,10 @@ const MAX_LIVE_TIMELINES: usize = 16;
 /// Open view streams. A renderer reload can orphan streams it never closes;
 /// past this cap the least recently used stream is closed.
 const MAX_VIEW_STREAMS: usize = 32;
+/// How long a view stream's batches may stay unread before it expires (see
+/// [`NativeTimelineOwner::with_unclaimed_stream_ttl`]). A consumer showing
+/// the stream reads it within seconds of each batch.
+pub const UNCLAIMED_VIEW_STREAM_TTL: Duration = Duration::from_secs(10 * 60);
 const FOCUSED_CONTEXT_EVENT_COUNT: u16 = 25;
 /// Bound on building an event-focused timeline. matrix-sdk 0.19 holds its
 /// event-cache-wide state lock while it fetches `/context`, which stalls sync
@@ -637,10 +645,22 @@ struct ViewStreamEntry {
     _approval_history: HistoryProtection,
     room_id: String,
     timeline: Arc<Timeline>,
-    position: TimelineViewPosition,
-    hit_start: Arc<AtomicBool>,
-    media: Arc<AsyncMutex<TimelineMediaRegistry>>,
+    /// Rows, position, pagination and revision, shared with the update task.
+    view: Arc<PublishedView>,
     last_access: UseStamp,
+}
+
+impl ViewStreamEntry {
+    /// The stream a consumer command acts on, marked as used and read.
+    /// An expired stream no longer receives updates and reads as closed.
+    fn claim(&self) -> Result<&Self, &'static str> {
+        if self.view.is_expired() {
+            return Err("v-timeline-view-not-open");
+        }
+        self.last_access.touch();
+        self.view.claim();
+        Ok(self)
+    }
 }
 
 /// Media registries of the open view streams, by stream id.
@@ -700,8 +720,9 @@ pub struct NativeTimelineRegistry {
     thread_entries: RecencyMap<(String, String), Arc<Timeline>>,
     view_streams: HashMap<String, ViewStreamEntry>,
     view_update_tasks: HashMap<String, JoinHandle<()>>,
-    view_revisions: HashMap<String, Arc<AtomicU64>>,
     next_view_stream_id: u64,
+    /// See [`NativeTimelineOwner::with_unclaimed_stream_ttl`].
+    unclaimed_stream_ttl: Option<Duration>,
     utd_index: UtdIndex,
     utd_recovery: UtdRecoveryCoordinator,
 }
@@ -853,6 +874,20 @@ impl NativeTimelineOwner {
         }
     }
 
+    /// Expire view streams whose batches stay unread for `ttl`.
+    ///
+    /// For shells that may stop reading a stream without closing it. An
+    /// expired stream's update task stops, so a room nobody shows no longer
+    /// runs the per-update pipeline, and the registry closes it on its next
+    /// open; a command on it fails as not open, which the shell's
+    /// view-not-open recovery answers by reopening. Desktop does not use it:
+    /// it closes streams on unmount, and a hidden window's throttled poll
+    /// must not lose its stream.
+    pub fn with_unclaimed_stream_ttl(mut self, ttl: Duration) -> Self {
+        self.registry.get_mut().unclaimed_stream_ttl = Some(ttl);
+        self
+    }
+
     pub async fn agent_approvals_list(
         &self,
     ) -> Result<NativeAgentApprovalInboxSnapshot, &'static str> {
@@ -877,7 +912,7 @@ impl NativeTimelineOwner {
             let registry = self.registry.lock().await;
             let mut timelines = HashMap::new();
             for view in registry.view_streams.values() {
-                if matches!(view.position, TimelineViewPosition::LiveBottom) {
+                if matches!(view.view.position(), TimelineViewPosition::LiveBottom) {
                     timelines.insert(view.room_id.clone(), Arc::downgrade(&view.timeline));
                 }
             }
@@ -1037,7 +1072,7 @@ impl NativeTimelineOwner {
         &self,
         request: NativeTimelineViewPaginationRequest,
     ) -> Result<TimelineViewSnapshot, &'static str> {
-        paginate_view(&mut Slots::Shared(self), &self.client, request).await
+        paginate_view(&mut Slots::Shared(self), request).await
     }
 
     /// Mark a view stream read or unread.
@@ -1049,16 +1084,16 @@ impl NativeTimelineOwner {
         &self,
         request: NativeTimelineReadStateRequest,
     ) -> Result<NativeTimelineReadStateReadback, &'static str> {
-        let timeline = self.registry.lock().await.read_state_timeline(&request)?;
+        let (timeline, view) = self.registry.lock().await.read_state_target(&request)?;
         let (receipt_sent, acknowledged_event_id) =
             apply_stream_read_action(&timeline, &request).await?;
+        publish_current_read_state(&timeline, &view, self.client.user_id()).await;
         let snapshot = self
             .registry
             .lock()
             .await
-            .view_snapshot_source(&self.client, &request.stream_id)?
-            .snapshot()
-            .await;
+            .published_view(&request.stream_id)?
+            .snapshot();
         Ok(NativeTimelineReadStateReadback {
             action: request.action,
             receipt_sent,
@@ -1069,15 +1104,14 @@ impl NativeTimelineOwner {
 
     /// Promote unread placement on an existing live provider without reopening.
     /// Fails closed when the observed tail is no longer the SDK live tail.
+    ///
+    /// The registry lock covers only the stream lookup; reading the SDK tail
+    /// and the new read state run without it.
     pub async fn follow_live_tail(
         &self,
         request: NativeTimelineFollowLiveRequest,
     ) -> Result<TimelineViewSnapshot, &'static str> {
-        self.registry
-            .lock()
-            .await
-            .follow_live_tail(&self.client, request)
-            .await
+        follow_live_tail_in(&mut Slots::Shared(self), &self.client, request).await
     }
 
     /// Mark a room read or unread without requiring an already-open view stream.
@@ -1477,27 +1511,34 @@ impl NativeTimelineOwner {
             .map(|entry| entry.timeline.is_threaded())
     }
 
+    /// Open the room's live bottom, then close the stream it replaces. A
+    /// failed open keeps the old stream, so the caller is never left
+    /// without one.
     pub async fn jump_latest(
         &self,
         request: NativeTimelineJumpLatestRequest,
     ) -> Result<NativeTimelineOpenReadback, &'static str> {
-        let room_id = self.registry.lock().await.close_for_jump_latest(request)?;
-        self.open_at(NativeTimelineOpenRequest {
-            room_id,
-            position: NativeTimelineOpenPosition::LiveBottom,
-        })
-        .await
-    }
-
-    /// The registry lock covers reading the stream's handles; rows are
-    /// projected after it is released.
-    pub async fn snapshot(&self, stream_id: &str) -> Result<TimelineViewSnapshot, &'static str> {
-        let source = self
-            .registry
+        let room_id = self.registry.lock().await.jump_latest_room(&request)?;
+        let opened = self
+            .open_at(NativeTimelineOpenRequest {
+                room_id,
+                position: NativeTimelineOpenPosition::LiveBottom,
+            })
+            .await?;
+        self.registry
             .lock()
             .await
-            .view_snapshot_source(&self.client, stream_id)?;
-        Ok(source.snapshot().await)
+            .close_view(NativeTimelineCloseRequest {
+                stream_id: request.stream_id,
+            });
+        Ok(opened)
+    }
+
+    /// The published rows and metadata of one stream. The registry lock
+    /// covers only the lookup; the snapshot copies published rows.
+    pub async fn snapshot(&self, stream_id: &str) -> Result<TimelineViewSnapshot, &'static str> {
+        let view = self.registry.lock().await.published_view(stream_id)?;
+        Ok(view.snapshot())
     }
 
     /// Request SDK-owned decryption on this exact open view. Completion only
@@ -1508,8 +1549,8 @@ impl NativeTimelineOwner {
             registry
                 .view_streams
                 .get(stream_id)
-                .inspect(|stream| stream.last_access.touch())
                 .ok_or("v-timeline-view-not-open")?
+                .claim()?
                 .timeline
                 .clone()
         };
@@ -2446,8 +2487,8 @@ impl NativeTimelineRegistry {
             thread_entries: RecencyMap::new(MAX_FOCUSED_TIMELINES),
             view_streams: HashMap::new(),
             view_update_tasks: HashMap::new(),
-            view_revisions: HashMap::new(),
             next_view_stream_id: 0,
+            unclaimed_stream_ttl: None,
             utd_index: UtdIndex::new(session_generation),
             utd_recovery: UtdRecoveryCoordinator::new(session_generation),
         }
@@ -2481,6 +2522,15 @@ impl NativeTimelineRegistry {
     /// [`MAX_VIEW_STREAMS`]. Streams a reloaded renderer never closed are
     /// the ones that stop being touched.
     fn evict_least_recent_view_streams(&mut self) {
+        let expired = self
+            .view_streams
+            .iter()
+            .filter(|(_, stream)| stream.view.is_expired())
+            .map(|(stream_id, _)| stream_id.clone())
+            .collect::<Vec<_>>();
+        for stream_id in expired {
+            self.close_view(NativeTimelineCloseRequest { stream_id });
+        }
         while self.view_streams.len() >= MAX_VIEW_STREAMS {
             let Some(stream_id) = self
                 .view_streams
@@ -2580,11 +2630,7 @@ impl NativeTimelineRegistry {
 
     /// Publish an opened view. Deliberately synchronous: once the stream is
     /// inserted there is no cancellation point before the readback returns.
-    fn publish_view(
-        &mut self,
-        emit: TimelineViewUpdateEmit,
-        view: PreparedView,
-    ) -> NativeTimelineOpenReadback {
+    fn publish_view(&mut self, view: PreparedView) -> NativeTimelineOpenReadback {
         let PreparedView {
             approval_history,
             stream_id,
@@ -2593,27 +2639,24 @@ impl NativeTimelineRegistry {
             position,
             focus_route,
             own_user_id,
-            revision,
-            hit_start,
+            view,
+            settle_requests,
             media,
-            item_ids,
+            items,
+            annotations,
             hydrate_sender_profiles,
             updates,
             snapshot,
         } = view;
         self.evict_least_recent_view_streams();
-        self.view_revisions
-            .insert(stream_id.clone(), revision.clone());
         self.media_index.insert(stream_id.clone(), media.clone());
         self.view_streams.insert(
             stream_id.clone(),
             ViewStreamEntry {
                 _approval_history: approval_history,
-                room_id: room_id.clone(),
+                room_id,
                 timeline: timeline.clone(),
-                position: position.clone(),
-                hit_start: hit_start.clone(),
-                media: media.clone(),
+                view: view.clone(),
                 last_access: UseStamp::now(),
             },
         );
@@ -2621,17 +2664,13 @@ impl NativeTimelineRegistry {
             stream_id.clone(),
             spawn_view_update_owner(
                 ViewUpdateOwnerInput {
-                    emit,
-                    session_generation: self.session_generation,
-                    stream_id: stream_id.clone(),
-                    room_id,
                     own_user_id,
-                    revision,
+                    view,
+                    settle_requests,
                     media,
-                    item_ids,
+                    items,
+                    annotations,
                     timeline,
-                    position: position.clone(),
-                    hit_start,
                     hydrate_sender_profiles,
                 },
                 updates,
@@ -2668,29 +2707,30 @@ impl NativeTimelineRegistry {
             client.user_id(),
         )
         .await?;
-        self.reconcile_utd(&mut snapshot, UtdRecoveryKind::RetryDecrypt)?;
+        self.reconcile_utd(&mut snapshot, UtdRecoveryKind::RetryDecrypt);
         Ok(snapshot)
     }
 
     pub async fn paginate(
         &mut self,
-        client: &Client,
+        _client: &Client,
         request: NativeTimelineViewPaginationRequest,
     ) -> Result<TimelineViewSnapshot, &'static str> {
-        paginate_view(&mut Slots::Owned(self), client, request).await
+        paginate_view(&mut Slots::Owned(self), request).await
     }
 
-    /// The timeline and backward latch of the stream a page request targets.
-    fn pagination_target(
+    /// The timeline and published view of the stream a command targets,
+    /// marked as read by its consumer.
+    fn stream_target(
         &self,
         stream_id: &str,
-    ) -> Result<(Arc<Timeline>, Arc<AtomicBool>), &'static str> {
+    ) -> Result<(Arc<Timeline>, Arc<PublishedView>), &'static str> {
         let stream = self
             .view_streams
             .get(stream_id)
-            .inspect(|stream| stream.last_access.touch())
-            .ok_or("v-timeline-view-not-open")?;
-        Ok((stream.timeline.clone(), stream.hit_start.clone()))
+            .ok_or("v-timeline-view-not-open")?
+            .claim()?;
+        Ok((stream.timeline.clone(), stream.view.clone()))
     }
 
     /// Validate a stream read-state request and return the stream's timeline.
@@ -2698,17 +2738,20 @@ impl NativeTimelineRegistry {
         &self,
         request: &NativeTimelineReadStateRequest,
     ) -> Result<Arc<Timeline>, &'static str> {
-        let stream = self
-            .view_streams
-            .get(&request.stream_id)
-            .inspect(|stream| stream.last_access.touch())
-            .ok_or("v-timeline-view-not-open")?;
+        Ok(self.read_state_target(request)?.0)
+    }
+
+    fn read_state_target(
+        &self,
+        request: &NativeTimelineReadStateRequest,
+    ) -> Result<(Arc<Timeline>, Arc<PublishedView>), &'static str> {
+        let (timeline, view) = self.stream_target(&request.stream_id)?;
         if request.action == NativeTimelineReadAction::MarkRead
-            && !position_allows_mark_read(&stream.position)
+            && !position_allows_mark_read(&view.position())
         {
             return Err("v-timeline-read-requires-live-view");
         }
-        Ok(stream.timeline.clone())
+        Ok((timeline, view))
     }
 
     /// Promote unread placement on an existing live provider without reopening.
@@ -2728,47 +2771,7 @@ impl NativeTimelineRegistry {
         client: &Client,
         request: NativeTimelineFollowLiveRequest,
     ) -> Result<TimelineViewSnapshot, &'static str> {
-        let raw_observed = request.observed_live_tail_event_id.trim();
-        if raw_observed.is_empty() {
-            return Err("v-timeline-follow-live-tail-required");
-        }
-        let observed = parse_action_event_id(raw_observed, "v-timeline-follow-live-tail-invalid")?;
-        let stream = self
-            .view_streams
-            .get(&request.stream_id)
-            .inspect(|stream| stream.last_access.touch())
-            .ok_or("v-timeline-view-not-open")?;
-        let uses_live_provider = self
-            .entries
-            .get(&stream.room_id)
-            .inspect(|entry| entry.last_used.touch())
-            .is_some_and(|live| Arc::ptr_eq(&live.timeline, &stream.timeline));
-        if !uses_live_provider {
-            return Err("v-timeline-follow-live-tail-not-loaded");
-        }
-        let already_live = stream.position == TimelineViewPosition::LiveBottom;
-        if !already_live {
-            let sdk_tail = self
-                .view_streams
-                .get(&request.stream_id)
-                .inspect(|stream| stream.last_access.touch())
-                .ok_or("v-timeline-view-not-open")?
-                .timeline
-                .latest_event_id()
-                .await;
-            match sdk_tail {
-                Some(tail) if tail == observed => {
-                    self.view_streams
-                        .get_mut(&request.stream_id)
-                        .inspect(|stream| stream.last_access.touch())
-                        .ok_or("v-timeline-view-not-open")?
-                        .position = TimelineViewPosition::LiveBottom;
-                }
-                _ => return Err("v-timeline-follow-live-tail-not-loaded"),
-            }
-        }
-        self.view_snapshot_for_stream(client, &request.stream_id)
-            .await
+        follow_live_tail_in(&mut Slots::Owned(self), client, request).await
     }
 
     /// Open (or reuse) the live timeline a room-level Mark as Read acts on.
@@ -2780,53 +2783,20 @@ impl NativeTimelineRegistry {
         open_room_read_timeline_in(&mut Slots::Owned(self), client, room_id_string).await
     }
 
-    /// What a view snapshot reads from the registry. Rows are projected from
-    /// the returned source, after a shared caller has released the lock.
-    fn view_snapshot_source(
-        &self,
-        client: &Client,
-        stream_id: &str,
-    ) -> Result<ViewSnapshotSource, &'static str> {
-        let stream = self
-            .view_streams
-            .get(stream_id)
-            .inspect(|stream| stream.last_access.touch())
-            .ok_or("v-timeline-view-not-open")?;
-        let revision = self
-            .view_revisions
-            .get(stream_id)
-            .ok_or("v-timeline-view-revision-missing")?
-            .load(Ordering::Acquire);
-        Ok(ViewSnapshotSource {
-            input: TimelineViewSnapshotInput {
-                session_generation: self.session_generation,
-                room_id: stream.room_id.clone(),
-                position: stream.position.clone(),
-                pagination: pagination_state_from_hit_start(
-                    stream.hit_start.load(Ordering::Acquire),
-                ),
-                own_user_id: client.user_id().map(ToOwned::to_owned),
-                revision,
-            },
-            timeline: stream.timeline.clone(),
-            media: stream.media.clone(),
-        })
+    /// The published view a snapshot reads, marked as read by its consumer.
+    fn published_view(&self, stream_id: &str) -> Result<Arc<PublishedView>, &'static str> {
+        Ok(self.stream_target(stream_id)?.1)
     }
 
-    pub async fn view_snapshot_for_stream(
+    pub fn view_snapshot_for_stream(
         &self,
-        client: &Client,
         stream_id: &str,
     ) -> Result<TimelineViewSnapshot, &'static str> {
-        Ok(self
-            .view_snapshot_source(client, stream_id)?
-            .snapshot()
-            .await)
+        Ok(self.published_view(stream_id)?.snapshot())
     }
 
     pub fn close_view(&mut self, request: NativeTimelineCloseRequest) -> bool {
         let removed = self.view_streams.remove(&request.stream_id).is_some();
-        self.view_revisions.remove(&request.stream_id);
         self.media_index.remove(&request.stream_id);
         if let Some(task) = self.view_update_tasks.remove(&request.stream_id) {
             task.abort();
@@ -2834,44 +2804,46 @@ impl NativeTimelineRegistry {
         removed
     }
 
-    /// Close the stream Jump to latest replaces and return its room.
-    fn close_for_jump_latest(
-        &mut self,
-        request: NativeTimelineJumpLatestRequest,
+    /// The room of the stream Jump to latest replaces.
+    fn jump_latest_room(
+        &self,
+        request: &NativeTimelineJumpLatestRequest,
     ) -> Result<String, &'static str> {
-        let room_id = self
+        Ok(self
             .view_streams
             .get(&request.stream_id)
-            .inspect(|stream| stream.last_access.touch())
             .ok_or("v-timeline-view-not-open")?
+            .claim()?
             .room_id
-            .clone();
-        self.close_view(NativeTimelineCloseRequest {
-            stream_id: request.stream_id,
-        });
-        Ok(room_id)
+            .clone())
     }
 
     /// Rebind an opened stream to the live bottom and return a fresh stream
-    /// ownership packet. The previous stream is closed; the caller must adopt
-    /// the new stream id from readback.
+    /// ownership packet. The previous stream is closed only once the new one
+    /// is open, so a failed open leaves the caller its old stream; on success
+    /// the caller must adopt the new stream id from readback.
     pub async fn jump_latest(
         &mut self,
         emit: TimelineViewUpdateEmit,
         client: &Client,
         request: NativeTimelineJumpLatestRequest,
     ) -> Result<NativeTimelineOpenReadback, &'static str> {
-        let room_id = self.close_for_jump_latest(request)?;
-        self.open_at(
-            emit,
-            client,
-            NativeTimelineOpenRequest {
-                room_id,
-                position: NativeTimelineOpenPosition::LiveBottom,
-            },
-            None,
-        )
-        .await
+        let room_id = self.jump_latest_room(&request)?;
+        let opened = self
+            .open_at(
+                emit,
+                client,
+                NativeTimelineOpenRequest {
+                    room_id,
+                    position: NativeTimelineOpenPosition::LiveBottom,
+                },
+                None,
+            )
+            .await?;
+        self.close_view(NativeTimelineCloseRequest {
+            stream_id: request.stream_id,
+        });
+        Ok(opened)
     }
 
     pub async fn resolve_media(&self, handle_id: &str) -> Option<TimelineMediaSource> {
@@ -2915,7 +2887,7 @@ impl NativeTimelineRegistry {
             client.user_id(),
         )
         .await?;
-        self.reconcile_utd(&mut snapshot, UtdRecoveryKind::EncryptedHistoryRecovery)?;
+        self.reconcile_utd(&mut snapshot, UtdRecoveryKind::EncryptedHistoryRecovery);
         Ok(snapshot)
     }
 
@@ -3008,11 +2980,13 @@ impl NativeTimelineRegistry {
         .await
     }
 
-    fn reconcile_utd(
-        &mut self,
-        snapshot: &mut NativeTimelineSnapshot,
-        kind: UtdRecoveryKind,
-    ) -> Result<(), &'static str> {
+    /// Legacy UTD bookkeeping for the `NativeTimelineSnapshot` readbacks.
+    ///
+    /// Best effort: the index and the recovery coordinator are bounded and
+    /// session-wide, so a full index must never fail a room open, a page or
+    /// a reaction. Whatever cannot be recorded is skipped; the counts in
+    /// `snapshot.utd` always come from the snapshot itself.
+    fn reconcile_utd(&mut self, snapshot: &mut NativeTimelineSnapshot, kind: UtdRecoveryKind) {
         let room_id = snapshot.room_id.clone();
         let previous_active: Vec<String> = self
             .utd_index
@@ -3035,8 +3009,8 @@ impl NativeTimelineRegistry {
                 .get(&room_id, &item.event_id)
                 .map(|entry| entry.reason)
                 != Some(reason)
-            {
-                self.utd_index
+                && self
+                    .utd_index
                     .mark_unavailable(
                         TimelineEncryptedUnavailableItem {
                             item_id: item.item_id.clone(),
@@ -3046,21 +3020,18 @@ impl NativeTimelineRegistry {
                         },
                         reason,
                     )
-                    .map_err(|_| "v-crypto.6-utd-index-failed")?;
+                    .is_err()
+            {
+                continue;
             }
-            match item.decryption_state {
-                Some(NativeDecryptionState::Pending)
-                    if self
-                        .utd_index
-                        .get(&room_id, &item.event_id)
-                        .map(|e| e.phase)
-                        == Some(UtdPhase::UnableToDecrypt) =>
-                {
-                    self.utd_index
-                        .begin_retry(&room_id, &item.event_id)
-                        .map_err(|_| "v-crypto.6-utd-index-failed")?;
-                }
-                _ => {}
+            if item.decryption_state == Some(NativeDecryptionState::Pending)
+                && self
+                    .utd_index
+                    .get(&room_id, &item.event_id)
+                    .map(|e| e.phase)
+                    == Some(UtdPhase::UnableToDecrypt)
+            {
+                let _ = self.utd_index.begin_retry(&room_id, &item.event_id);
             }
         }
 
@@ -3078,9 +3049,7 @@ impl NativeTimelineRegistry {
             .iter()
             .filter(|event_id| !current_event_ids.contains(event_id.as_str()))
         {
-            self.utd_index
-                .mark_decrypted(&room_id, event_id)
-                .map_err(|_| "v-crypto.6-utd-index-failed")?;
+            let _ = self.utd_index.mark_decrypted(&room_id, event_id);
         }
         self.utd_index.gc_decrypted();
 
@@ -3108,26 +3077,24 @@ impl NativeTimelineRegistry {
                 .take(MAX_EVENT_IDS_PER_BATCH)
                 .map(|item| item.event_id.clone())
                 .collect();
-            let op_id = self
-                .utd_recovery
-                .begin(room_id.clone(), kind, pending_ids)
-                .map_err(|_| "v-crypto.6-recovery-state-failed")?;
-            self.utd_recovery
-                .mark_in_flight(&room_id, op_id)
-                .map_err(|_| "v-crypto.6-recovery-state-failed")?;
+            if let Ok(op_id) = self.utd_recovery.begin(room_id.clone(), kind, pending_ids) {
+                let _ = self.utd_recovery.mark_in_flight(&room_id, op_id);
+            }
         }
         if let Some(session) = self.utd_recovery.get(&room_id).cloned() {
             if session.phase.is_active() {
                 let recovered = session.recovered_count.saturating_add(newly_recovered);
-                if utd_count == 0 {
+                let _ = if utd_count == 0 {
                     self.utd_recovery
                         .succeed(&room_id, session.op_id, recovered, 0)
-                        .map_err(|_| "v-crypto.6-recovery-state-failed")?;
                 } else {
-                    self.utd_recovery
-                        .report_progress(&room_id, session.op_id, newly_recovered, utd_count)
-                        .map_err(|_| "v-crypto.6-recovery-state-failed")?;
-                }
+                    self.utd_recovery.report_progress(
+                        &room_id,
+                        session.op_id,
+                        newly_recovered,
+                        utd_count,
+                    )
+                };
             }
         }
         let recovery = self.utd_recovery.get(&room_id);
@@ -3146,7 +3113,6 @@ impl NativeTimelineRegistry {
             unavailable_count,
             recovered_count: recovery.map(|s| s.recovered_count).unwrap_or(0),
         };
-        Ok(())
     }
 }
 
@@ -3367,14 +3333,19 @@ struct PreparedView {
     position: TimelineViewPosition,
     focus_route: Option<NativeTimelineEventRoute>,
     own_user_id: Option<OwnedUserId>,
-    revision: Arc<AtomicU64>,
-    hit_start: Arc<AtomicBool>,
+    view: Arc<PublishedView>,
+    settle_requests: tokio::sync::mpsc::UnboundedReceiver<SettleRequest>,
     media: Arc<AsyncMutex<TimelineMediaRegistry>>,
-    item_ids: Vec<String>,
+    items: SdkItems,
+    annotations: KnownAnnotationIds,
     hydrate_sender_profiles: bool,
     updates: TimelineUpdates,
     snapshot: TimelineViewSnapshot,
 }
+
+/// The SDK items a view stream's rows are projected from, in the stream's
+/// own (skip-relative) indices.
+type SdkItems = eyeball_im::Vector<Arc<SdkTimelineItem>>;
 
 /// Open a view stream. Lookups and installs go through `slots`; SDK builds,
 /// `/context`, the sparse-history probe and row projection run between its
@@ -3533,17 +3504,24 @@ async fn open_view(
     };
     let own_user_id = client.user_id().map(ToOwned::to_owned);
     let action_authority = room_action_authority(timeline.room(), own_user_id.as_deref()).await;
+    let focus = if matches!(view_position, TimelineViewPosition::Thread { .. }) {
+        ViewFocus::Thread
+    } else if timeline.live_back_pagination_status().await.is_some() {
+        ViewFocus::Live
+    } else {
+        ViewFocus::Event
+    };
+    let pagination = TimelinePaginationState {
+        backward: pagination.backward,
+        forward: focus.initial_forward(),
+    };
     let stream_number = slots.with(NativeTimelineRegistry::next_stream_number).await;
+    let unclaimed_ttl = slots.with(|registry| registry.unclaimed_stream_ttl).await;
     let subscription_key = format!(
         "{}:{}",
         view_subscription_key(&room_id_string, &view_position),
         stream_number
     );
-    let revision = Arc::new(AtomicU64::new(0));
-    let hit_start = Arc::new(AtomicBool::new(matches!(
-        pagination.backward,
-        TimelinePageState::Exhausted
-    )));
     let media = Arc::new(AsyncMutex::new(TimelineMediaRegistry::new(
         session_generation,
         subscription_key.clone(),
@@ -3552,15 +3530,11 @@ async fn open_view(
     // fall into a snapshot-to-stream gap. Every open owns a distinct
     // stream, revision counter, update task, and media registry.
     let (items, updates) = timeline.subscribe().await;
-    let item_ids: Vec<String> = items
-        .iter()
-        .map(|item| item.unique_id().0.clone())
-        .collect();
     let hydrate_sender_profiles = items
         .iter()
         .filter_map(|item| item.as_event())
         .any(|event| !matches!(event.sender_profile(), TimelineDetails::Ready(_)));
-    let rows = {
+    let mut rows: Vec<super::TimelineViewRow> = {
         let mut registry = media.lock().await;
         items
             .iter()
@@ -3574,20 +3548,32 @@ async fn open_view(
             })
             .collect()
     };
-    let snapshot = view_snapshot_from_items(
-        TimelineViewSnapshotInput {
+    enrich_view_rows(timeline.room(), &mut rows).await;
+    let mut annotations = KnownAnnotationIds::default();
+    annotations.remember_rows(&rows);
+    let read_state =
+        project_live_read_state(&timeline, &view_position, own_user_id.as_deref()).await;
+    let (view, settle_requests) = PublishedView::new(PublishedViewInit {
+        session_generation,
+        room_id: room_id_string.clone(),
+        focus,
+        emitter: ViewDeltaEmitter::new(
+            emit,
             session_generation,
-            room_id: room_id_string.clone(),
-            position: view_position.clone(),
-            pagination,
-            own_user_id: own_user_id.clone(),
-            revision: revision.load(Ordering::Acquire),
-        },
-        &timeline,
+            subscription_key.clone(),
+            room_id_string.clone(),
+            Arc::new(AtomicU64::new(0)),
+        ),
+        unclaimed_ttl,
         rows,
+        position: view_position.clone(),
+        pagination,
+        read_state,
+        pinned_event_ids: project_pinned_event_ids(timeline.room()),
         action_authority,
-    )
-    .await;
+    });
+    let view = Arc::new(view);
+    let snapshot = view.snapshot();
     // Publish ownership only after all awaited initialization succeeds.
     // Cancellation before this point drops the local history protection.
     let view = PreparedView {
@@ -3598,16 +3584,17 @@ async fn open_view(
         position: view_position,
         focus_route,
         own_user_id,
-        revision,
-        hit_start,
+        view,
+        settle_requests,
         media,
-        item_ids,
+        items,
+        annotations,
         hydrate_sender_profiles,
         updates: Box::pin(updates),
         snapshot,
     };
     Ok(slots
-        .with(move |registry| registry.publish_view(emit, view))
+        .with(move |registry| registry.publish_view(view))
         .await)
 }
 
@@ -3815,47 +3802,115 @@ const USER_PAGINATION_TIMEOUT: Duration = Duration::from_secs(20);
 
 async fn paginate_view(
     slots: &mut Slots<'_>,
-    client: &Client,
     request: NativeTimelineViewPaginationRequest,
 ) -> Result<TimelineViewSnapshot, &'static str> {
-    let (timeline, hit_start) = slots
-        .with(|registry| registry.pagination_target(&request.stream_id))
+    let (timeline, view) = slots
+        .with(|registry| registry.stream_target(&request.stream_id))
         .await?;
-    let reached_end = match request.direction {
-        NativeTimelineDirection::Backwards => timeout(
-            USER_PAGINATION_TIMEOUT,
-            timeline.paginate_backwards(PAGINATION_BATCH_SIZE),
-        )
-        .await
-        .map_err(|_| "v-timeline-view-paginate-timeout")?
-        .map_err(|_| "v-timeline-view-paginate-backwards-failed")?,
-        NativeTimelineDirection::Forwards => timeout(
-            USER_PAGINATION_TIMEOUT,
-            timeline.paginate_forwards(PAGINATION_BATCH_SIZE),
-        )
-        .await
-        .map_err(|_| "v-timeline-view-paginate-timeout")?
-        .map_err(|_| "v-timeline-view-paginate-forwards-failed")?,
+    let page_state = |reached_end: bool| {
+        if reached_end {
+            TimelinePageState::Exhausted
+        } else {
+            TimelinePageState::Available
+        }
     };
-    if request.direction == NativeTimelineDirection::Backwards {
-        hit_start.store(reached_end, Ordering::Release);
+    let change = match (request.direction, view.focus()) {
+        (NativeTimelineDirection::Backwards, _) => {
+            let reached_start = timeout(
+                USER_PAGINATION_TIMEOUT,
+                timeline.paginate_backwards(PAGINATION_BATCH_SIZE),
+            )
+            .await
+            .map_err(|_| "v-timeline-view-paginate-timeout")?
+            .map_err(|_| "v-timeline-view-paginate-backwards-failed")?;
+            ViewChange {
+                backward: Some(page_state(reached_start)),
+                ..ViewChange::default()
+            }
+        }
+        // The live provider is always at the newest event, and the SDK
+        // cannot page a thread forward. Neither asks the SDK.
+        (NativeTimelineDirection::Forwards, ViewFocus::Live) => ViewChange {
+            forward: Some(TimelinePageState::Exhausted),
+            ..ViewChange::default()
+        },
+        (NativeTimelineDirection::Forwards, ViewFocus::Thread) => ViewChange::default(),
+        (NativeTimelineDirection::Forwards, ViewFocus::Event) => {
+            let reached_end = timeout(
+                USER_PAGINATION_TIMEOUT,
+                timeline.paginate_forwards(PAGINATION_BATCH_SIZE),
+            )
+            .await
+            .map_err(|_| "v-timeline-view-paginate-timeout")?
+            .map_err(|_| "v-timeline-view-paginate-forwards-failed")?;
+            ViewChange {
+                forward: Some(page_state(reached_end)),
+                ..ViewChange::default()
+            }
+        }
+    };
+    // Let the update task publish the rows this page queued, then publish
+    // the page state as its own batch so a stale readback cannot drop it.
+    view.settled().await;
+    view.publish(change);
+    Ok(view.snapshot())
+}
+
+/// Promote a stream's unread placement to the live bottom. See
+/// [`NativeTimelineRegistry::follow_live_tail`].
+async fn follow_live_tail_in(
+    slots: &mut Slots<'_>,
+    client: &Client,
+    request: NativeTimelineFollowLiveRequest,
+) -> Result<TimelineViewSnapshot, &'static str> {
+    let raw_observed = request.observed_live_tail_event_id.trim();
+    if raw_observed.is_empty() {
+        return Err("v-timeline-follow-live-tail-required");
     }
-    let source = slots
-        .with(|registry| registry.view_snapshot_source(client, &request.stream_id))
+    let observed = parse_action_event_id(raw_observed, "v-timeline-follow-live-tail-invalid")?;
+    let (timeline, view, uses_live_provider) = slots
+        .with(|registry| {
+            let (timeline, view) = registry.stream_target(&request.stream_id)?;
+            let room_id = &registry.view_streams[&request.stream_id].room_id;
+            let uses_live_provider = registry
+                .cached_live(room_id)
+                .is_some_and(|live| Arc::ptr_eq(&live, &timeline));
+            Ok::<_, &'static str>((timeline, view, uses_live_provider))
+        })
         .await?;
-    Ok(source.snapshot().await)
+    if !uses_live_provider {
+        return Err("v-timeline-follow-live-tail-not-loaded");
+    }
+    if view.position() != TimelineViewPosition::LiveBottom {
+        match timeline.latest_event_id().await {
+            Some(tail) if tail == observed => {
+                // The update task reads the position for every later read
+                // state, so deltas stop reporting the open-time anchor.
+                view.set_position(TimelineViewPosition::LiveBottom);
+                publish_current_read_state(&timeline, &view, client.user_id()).await;
+            }
+            _ => return Err("v-timeline-follow-live-tail-not-loaded"),
+        }
+    }
+    Ok(view.snapshot())
 }
 
-/// What a view snapshot needs, read from the registry under its lock.
-struct ViewSnapshotSource {
-    input: TimelineViewSnapshotInput,
-    timeline: Arc<Timeline>,
-    media: Arc<AsyncMutex<TimelineMediaRegistry>>,
-}
-
-impl ViewSnapshotSource {
-    async fn snapshot(self) -> TimelineViewSnapshot {
-        view_snapshot_from_timeline(self.input, &self.timeline, self.media).await
+/// Publish the stream's read state as a command just left it, so the
+/// command's readback (read from the published view) and the delta stream
+/// agree on it.
+async fn publish_current_read_state(
+    timeline: &Timeline,
+    view: &PublishedView,
+    own_user_id: Option<&UserId>,
+) {
+    let position = view.position();
+    let read_state = project_live_read_state(timeline, &position, own_user_id).await;
+    if read_state != view.read_state() {
+        view.publish(ViewChange {
+            read_state: Some(read_state),
+            read_state_position: Some(position),
+            ..ViewChange::default()
+        });
     }
 }
 
@@ -4567,35 +4622,55 @@ fn view_subscription_key(room_id: &str, position: &TimelineViewPosition) -> Stri
 }
 
 struct ViewUpdateOwnerInput {
-    emit: TimelineViewUpdateEmit,
-    session_generation: u64,
-    stream_id: String,
-    room_id: String,
     own_user_id: Option<OwnedUserId>,
-    revision: Arc<AtomicU64>,
+    view: Arc<PublishedView>,
+    settle_requests: tokio::sync::mpsc::UnboundedReceiver<SettleRequest>,
     media: Arc<AsyncMutex<TimelineMediaRegistry>>,
-    item_ids: Vec<String>,
+    items: SdkItems,
+    annotations: KnownAnnotationIds,
     timeline: Arc<Timeline>,
-    position: TimelineViewPosition,
-    hit_start: Arc<AtomicBool>,
     hydrate_sender_profiles: bool,
 }
+
+/// Re-project a stream's whole window, for a room-authority change. The
+/// window is the task's own SDK-item mirror, in the same skip-relative
+/// indices as the diff stream, so later ops still address the right rows.
+async fn reproject_view_window(
+    room: &Room,
+    items: &SdkItems,
+    own_user_id: Option<&UserId>,
+    action_authority: TimelineRoomActionAuthority,
+    media: &AsyncMutex<TimelineMediaRegistry>,
+    annotations: &mut KnownAnnotationIds,
+) -> Vec<super::TimelineViewRow> {
+    let mut rows: Vec<super::TimelineViewRow> = {
+        let mut registry = media.lock().await;
+        registry.retain_items(items.iter().map(|item| item.unique_id().0.as_str()));
+        items
+            .iter()
+            .map(|item| {
+                project_timeline_item_with_media(item, own_user_id, action_authority, &mut registry)
+            })
+            .collect()
+    };
+    annotations.fill_rows(&mut rows);
+    enrich_view_rows(room, &mut rows).await;
+    annotations.remember_rows(&rows);
+    rows
+}
+
 fn spawn_view_update_owner(
     input: ViewUpdateOwnerInput,
     updates: impl futures_util::Stream<Item = Vec<VectorDiff<Arc<SdkTimelineItem>>>> + Send + 'static,
 ) -> JoinHandle<()> {
     let ViewUpdateOwnerInput {
-        emit,
-        session_generation,
-        stream_id,
-        room_id,
         own_user_id,
-        revision,
+        view,
+        mut settle_requests,
         media,
-        mut item_ids,
+        mut items,
+        mut annotations,
         timeline,
-        position,
-        hit_start,
         hydrate_sender_profiles,
     } = input;
     let client = timeline.room().client();
@@ -4614,30 +4689,22 @@ fn spawn_view_update_owner(
     let power_handler = client.event_handler_drop_guard(power_handler);
     tokio::spawn(async move {
         let _power_handler = power_handler;
-        let emitter = ViewDeltaEmitter::new(emit, session_generation, stream_id, room_id, revision);
-        let mut last_read_state =
-            project_live_read_state(&timeline, &position, own_user_id.as_deref()).await;
-        let mut last_pagination =
-            pagination_state_from_hit_start(hit_start.load(Ordering::Acquire));
-        let mut last_pinned_event_ids = project_pinned_event_ids(timeline.room());
-        let mut last_action_authority =
-            room_action_authority(timeline.room(), own_user_id.as_deref()).await;
-
-        let mut room_info = timeline.room().subscribe_info();
+        let room = timeline.room();
+        let own_user_id = own_user_id.as_deref();
+        let mut room_info = room.subscribe_info();
         let mut read_receipts = timeline.subscribe_own_user_read_receipts_changed().await;
-        let live_focus;
+        let live_focus = view.focus() == ViewFocus::Live;
         let mut pagination_updates: std::pin::Pin<
             Box<dyn futures_util::Stream<Item = PaginationStatus> + Send>,
         > = match timeline.live_back_pagination_status().await {
             Some((current, stream)) => {
-                live_focus = true;
-                last_pagination = pagination_state_from_status(current, &hit_start);
+                view.publish(ViewChange {
+                    backward: Some(backward_page_state(current)),
+                    ..ViewChange::default()
+                });
                 Box::pin(stream)
             }
-            None => {
-                live_focus = false;
-                Box::pin(stream::pending())
-            }
+            None => Box::pin(stream::pending()),
         };
 
         // The SDK intentionally leaves sender profiles unresolved until the
@@ -4655,153 +4722,133 @@ fn spawn_view_update_owner(
 
         futures_util::pin_mut!(updates);
 
-        loop {
+        while !view.is_expired() {
+            // Biased: queued SDK diffs publish before metadata that describes
+            // them (a pagination status) and before a settle request is
+            // answered.
             tokio::select! {
-                () = &mut member_hydration, if !members_hydrated => {
-                    members_hydrated = true;
-                }
+                biased;
                 Some(diffs) = updates.next() => {
-                    let action_authority = room_action_authority(
-                        timeline.room(),
-                        own_user_id.as_deref(),
-                    ).await;
-                    apply_item_id_diffs(&mut item_ids, &diffs);
+                    for diff in diffs.iter().cloned() {
+                        diff.apply(&mut items);
+                    }
                     // The SDK clears a live room's linked chunk after a gappy
                     // sync, which reopens history this stream may have
                     // reached. Its status stream is deduplicated, so a stream
                     // latched by its own page may never see that `Idle`.
-                    let pagination = (live_focus
+                    let unlatch_backward = live_focus
                         && diffs
                             .iter()
-                            .any(|diff| matches!(diff, VectorDiff::Clear | VectorDiff::Reset { .. }))
-                        && hit_start.swap(false, Ordering::AcqRel))
-                    .then(|| pagination_state_from_hit_start(false))
-                    .filter(|pagination| *pagination != last_pagination);
-                    if let Some(pagination) = &pagination {
-                        last_pagination = pagination.clone();
-                    }
+                            .any(|diff| matches!(diff, VectorDiff::Clear | VectorDiff::Reset { .. }));
+                    // Authority is recomputed only when the room's power
+                    // levels or info change (the branches below).
+                    let action_authority = view.action_authority();
                     let mut ops = {
                         let mut registry = media.lock().await;
-                        registry.retain_items(item_ids.iter().map(String::as_str));
+                        registry.retain_items(items.iter().map(|item| item.unique_id().0.as_str()));
                         project_timeline_diffs_with_media(
                             &diffs,
-                            own_user_id.as_deref(),
+                            own_user_id,
                             action_authority,
                             &mut registry,
                         )
                     };
-                    enrich_view_delta_ops(timeline.room(), &mut ops).await;
-                    if ops.is_empty() && pagination.is_none() {
+                    annotations.fill_ops(&mut ops);
+                    let mut ops = view.without_unchanged_sets(ops);
+                    let reopens_history = unlatch_backward
+                        && view.pagination().backward == TimelinePageState::Exhausted;
+                    if ops.is_empty() && !reopens_history {
                         continue;
                     }
-                    let read_state =
-                        project_live_read_state(&timeline, &position, own_user_id.as_deref()).await;
-                    last_read_state = read_state.clone();
-                    emitter.emit(ops, Some(read_state), pagination, None);
+                    enrich_view_delta_ops(room, &mut ops).await;
+                    annotations.remember_ops(&ops);
+                    let position = view.position();
+                    let read_state = project_live_read_state(&timeline, &position, own_user_id).await;
+                    view.publish(ViewChange {
+                        ops,
+                        read_state: Some(read_state),
+                        read_state_position: Some(position),
+                        unlatch_backward,
+                        ..ViewChange::default()
+                    });
+                }
+                () = &mut member_hydration, if !members_hydrated => {
+                    members_hydrated = true;
                 }
                 Some(_) = room_info.next() => {
-                    let read_state =
-                        project_live_read_state(&timeline, &position, own_user_id.as_deref()).await;
-                    let pinned_event_ids = project_pinned_event_ids(timeline.room());
-                    let action_authority =
-                        room_action_authority(timeline.room(), own_user_id.as_deref()).await;
-                    let read_changed = read_state != last_read_state;
-                    let pins_changed = pinned_event_ids != last_pinned_event_ids;
-                    let authority_changed = action_authority != last_action_authority;
+                    let position = view.position();
+                    let read_state = project_live_read_state(&timeline, &position, own_user_id).await;
+                    let pinned_event_ids = project_pinned_event_ids(room);
+                    let action_authority = room_action_authority(room, own_user_id).await;
+                    let read_changed = read_state != view.read_state();
+                    let pins_changed = pinned_event_ids != view.pinned_event_ids();
+                    let authority_changed = action_authority != view.action_authority();
                     if !read_changed && !pins_changed && !authority_changed {
                         continue;
                     }
-                    if read_changed {
-                        last_read_state = read_state.clone();
-                    }
-                    if pins_changed {
-                        last_pinned_event_ids = pinned_event_ids.clone();
-                    }
                     let ops = if authority_changed {
-                        last_action_authority = action_authority;
-                        let items = timeline.items().await;
-                        item_ids = items
-                            .iter()
-                            .map(|item| item.unique_id().0.clone())
-                            .collect();
-                    let mut rows: Vec<super::TimelineViewRow> = {
-                        let mut registry = media.lock().await;
-                        registry.retain_items(item_ids.iter().map(String::as_str));
-                        items
-                            .iter()
-                            .map(|item| {
-                                project_timeline_item_with_media(
-                                    item,
-                                    own_user_id.as_deref(),
-                                    action_authority,
-                                    &mut registry,
-                                )
-                            })
-                            .collect()
-                    };
-                    enrich_view_rows(timeline.room(), &mut rows).await;
-                    vec![super::TimelineViewDeltaOp::Reset { rows }]
+                        let rows = reproject_view_window(
+                            room,
+                            &items,
+                            own_user_id,
+                            action_authority,
+                            &media,
+                            &mut annotations,
+                        )
+                        .await;
+                        vec![super::TimelineViewDeltaOp::Reset { rows }]
                     } else {
                         Vec::new()
                     };
-                    emitter.emit(
+                    view.publish(ViewChange {
                         ops,
-                        read_changed.then_some(read_state),
-                        None,
-                        pins_changed.then_some(pinned_event_ids),
-                    );
+                        read_state: read_changed.then_some(read_state),
+                        read_state_position: Some(position),
+                        pinned_event_ids: pins_changed.then_some(pinned_event_ids),
+                        action_authority: authority_changed.then_some(action_authority),
+                        ..ViewChange::default()
+                    });
                 }
                 Some(()) = power_authority_rx.recv() => {
-                    let action_authority =
-                        room_action_authority(timeline.room(), own_user_id.as_deref()).await;
-                    if action_authority == last_action_authority {
+                    let action_authority = room_action_authority(room, own_user_id).await;
+                    if action_authority == view.action_authority() {
                         continue;
                     }
-                    last_action_authority = action_authority;
-                    let items = timeline.items().await;
-                    item_ids = items
-                        .iter()
-                        .map(|item| item.unique_id().0.clone())
-                        .collect();
-                    let mut rows: Vec<super::TimelineViewRow> = {
-                        let mut registry = media.lock().await;
-                        registry.retain_items(item_ids.iter().map(String::as_str));
-                        items
-                            .iter()
-                            .map(|item| {
-                                project_timeline_item_with_media(
-                                    item,
-                                    own_user_id.as_deref(),
-                                    action_authority,
-                                    &mut registry,
-                                )
-                            })
-                            .collect()
-                    };
-                    enrich_view_rows(timeline.room(), &mut rows).await;
-                    emitter.emit(
-                        vec![super::TimelineViewDeltaOp::Reset { rows }],
-                        None,
-                        None,
-                        None,
-                    );
+                    let rows = reproject_view_window(
+                        room,
+                        &items,
+                        own_user_id,
+                        action_authority,
+                        &media,
+                        &mut annotations,
+                    )
+                    .await;
+                    view.publish(ViewChange {
+                        ops: vec![super::TimelineViewDeltaOp::Reset { rows }],
+                        action_authority: Some(action_authority),
+                        ..ViewChange::default()
+                    });
                 }
                 Some(()) = read_receipts.next() => {
-                    let read_state =
-                        project_live_read_state(&timeline, &position, own_user_id.as_deref()).await;
-                    if read_state == last_read_state {
+                    let position = view.position();
+                    let read_state = project_live_read_state(&timeline, &position, own_user_id).await;
+                    if read_state == view.read_state() {
                         continue;
                     }
-                    last_read_state = read_state.clone();
-                    emitter.emit(Vec::new(), Some(read_state), None, None);
+                    view.publish(ViewChange {
+                        read_state: Some(read_state),
+                        read_state_position: Some(position),
+                        ..ViewChange::default()
+                    });
                 }
                 Some(status) = pagination_updates.next() => {
-                    let pagination = pagination_state_from_status(status, &hit_start);
-                    if pagination == last_pagination {
-                        continue;
-                    }
-                    last_pagination = pagination.clone();
-                    emitter.emit(Vec::new(), None, Some(pagination), None);
+                    view.publish(ViewChange {
+                        backward: Some(backward_page_state(status)),
+                        ..ViewChange::default()
+                    });
+                }
+                Some(settled) = settle_requests.recv() => {
+                    let _ = settled.send(());
                 }
                 else => break,
             }
@@ -4820,27 +4867,18 @@ fn pagination_state_from_hit_start(hit_start: bool) -> TimelinePaginationState {
     }
 }
 
-/// Map a live provider's SDK pagination status. Every `Idle` is
+/// Map a live provider's SDK back-pagination status. Every `Idle` is
 /// authoritative, so `Idle { hit_timeline_start: false }` un-latches a stream
 /// whose history the SDK reopened.
-fn pagination_state_from_status(
-    status: PaginationStatus,
-    hit_start: &AtomicBool,
-) -> TimelinePaginationState {
-    let backward = match status {
+fn backward_page_state(status: PaginationStatus) -> TimelinePageState {
+    match status {
         PaginationStatus::Paginating => TimelinePageState::Loading,
-        PaginationStatus::Idle { hit_timeline_start } => {
-            hit_start.store(hit_timeline_start, Ordering::Release);
-            if hit_timeline_start {
-                TimelinePageState::Exhausted
-            } else {
-                TimelinePageState::Available
-            }
-        }
-    };
-    TimelinePaginationState {
-        backward,
-        forward: TimelinePageState::Available,
+        PaginationStatus::Idle {
+            hit_timeline_start: true,
+        } => TimelinePageState::Exhausted,
+        PaginationStatus::Idle {
+            hit_timeline_start: false,
+        } => TimelinePageState::Available,
     }
 }
 
@@ -4870,119 +4908,6 @@ async fn project_live_read_state(
         own_read_event_id,
         unread_anchor_event_id,
         is_marked_unread: timeline.room().is_marked_unread(),
-    }
-}
-
-/// Build the currently available native view snapshot from the SDK owner.
-///
-/// `revision` is zero until the native delta subscriber owns monotonically
-/// advancing revisions. Treating repeated snapshot reads as deltas would hide
-/// the missing owner boundary, so this contract makes that absence explicit.
-async fn view_snapshot_from_timeline(
-    input: TimelineViewSnapshotInput,
-    timeline: &Timeline,
-    media: Arc<AsyncMutex<TimelineMediaRegistry>>,
-) -> TimelineViewSnapshot {
-    let (items, _updates) = timeline.subscribe().await;
-    let action_authority =
-        room_action_authority(timeline.room(), input.own_user_id.as_deref()).await;
-    let rows = {
-        let mut registry = media.lock().await;
-        registry.retain_items(items.iter().map(|item| item.unique_id().0.as_str()));
-        items
-            .iter()
-            .map(|item| {
-                project_timeline_item_with_media(
-                    item,
-                    input.own_user_id.as_deref(),
-                    action_authority,
-                    &mut registry,
-                )
-            })
-            .collect()
-    };
-    view_snapshot_from_items(input, timeline, rows, action_authority).await
-}
-
-fn apply_item_id_diffs(item_ids: &mut Vec<String>, diffs: &[VectorDiff<Arc<SdkTimelineItem>>]) {
-    for diff in diffs {
-        match diff {
-            VectorDiff::Append { values } => {
-                item_ids.extend(values.iter().map(|item| item.unique_id().0.clone()))
-            }
-            VectorDiff::Clear => item_ids.clear(),
-            VectorDiff::PushFront { value } => item_ids.insert(0, value.unique_id().0.clone()),
-            VectorDiff::PushBack { value } => item_ids.push(value.unique_id().0.clone()),
-            VectorDiff::PopFront => {
-                if !item_ids.is_empty() {
-                    item_ids.remove(0);
-                }
-            }
-            VectorDiff::PopBack => {
-                item_ids.pop();
-            }
-            VectorDiff::Insert { index, value } => {
-                if *index <= item_ids.len() {
-                    item_ids.insert(*index, value.unique_id().0.clone());
-                }
-            }
-            VectorDiff::Set { index, value } => {
-                if let Some(item_id) = item_ids.get_mut(*index) {
-                    *item_id = value.unique_id().0.clone();
-                }
-            }
-            VectorDiff::Remove { index } => {
-                if *index < item_ids.len() {
-                    item_ids.remove(*index);
-                }
-            }
-            VectorDiff::Truncate { length } => item_ids.truncate(*length),
-            VectorDiff::Reset { values } => {
-                *item_ids = values
-                    .iter()
-                    .map(|item| item.unique_id().0.clone())
-                    .collect();
-            }
-        }
-    }
-}
-
-struct TimelineViewSnapshotInput {
-    session_generation: u64,
-    room_id: String,
-    position: TimelineViewPosition,
-    pagination: TimelinePaginationState,
-    own_user_id: Option<OwnedUserId>,
-    revision: u64,
-}
-
-async fn view_snapshot_from_items(
-    input: TimelineViewSnapshotInput,
-    timeline: &Timeline,
-    mut rows: Vec<super::TimelineViewRow>,
-    action_authority: TimelineRoomActionAuthority,
-) -> TimelineViewSnapshot {
-    enrich_view_rows(timeline.room(), &mut rows).await;
-    let read_state =
-        project_live_read_state(timeline, &input.position, input.own_user_id.as_deref()).await;
-    TimelineViewSnapshot {
-        schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
-        session_generation: input.session_generation,
-        room_id: input.room_id,
-        revision: input.revision,
-        position: input.position,
-        pagination: input.pagination,
-        read_state,
-        pinned_event_ids: project_pinned_event_ids(timeline.room()),
-        rows,
-        capabilities: TimelineViewCapabilities {
-            mark_read: true,
-            mark_unread: true,
-            paginate_backward: true,
-            paginate_forward: true,
-            can_redact_own: action_authority.can_redact_own,
-            can_redact_other: action_authority.can_redact_other,
-        },
     }
 }
 
@@ -6072,36 +5997,23 @@ mod tests {
         assert_eq!(json["readState"]["ownReadEventId"], "$read:example.org");
         assert_eq!(json["pagination"]["backward"], "exhausted");
 
-        let hit_start = AtomicBool::new(false);
         assert_eq!(
-            pagination_state_from_status(
-                PaginationStatus::Idle {
-                    hit_timeline_start: true
-                },
-                &hit_start
-            ),
-            TimelinePaginationState {
-                backward: TimelinePageState::Exhausted,
-                forward: TimelinePageState::Available,
-            }
+            backward_page_state(PaginationStatus::Idle {
+                hit_timeline_start: true
+            }),
+            TimelinePageState::Exhausted
         );
-        assert!(hit_start.load(Ordering::Acquire));
         assert_eq!(
-            pagination_state_from_status(PaginationStatus::Paginating, &hit_start).backward,
+            backward_page_state(PaginationStatus::Paginating),
             TimelinePageState::Loading
         );
         // The SDK un-latches after shrinking the room to its newest chunk.
         assert_eq!(
-            pagination_state_from_status(
-                PaginationStatus::Idle {
-                    hit_timeline_start: false
-                },
-                &hit_start
-            )
-            .backward,
+            backward_page_state(PaginationStatus::Idle {
+                hit_timeline_start: false
+            }),
             TimelinePageState::Available
         );
-        assert!(!hit_start.load(Ordering::Acquire));
     }
 
     #[test]
@@ -6449,9 +6361,7 @@ mod tests {
                 recovered_count: 0,
             },
         };
-        registry
-            .reconcile_utd(&mut pending, UtdRecoveryKind::RetryDecrypt)
-            .unwrap();
+        registry.reconcile_utd(&mut pending, UtdRecoveryKind::RetryDecrypt);
         assert_eq!(pending.utd.phase, NativeUtdPhase::Recovering);
         assert_eq!(pending.utd.pending_count, 1);
 
@@ -6464,9 +6374,7 @@ mod tests {
             }],
             ..pending
         };
-        registry
-            .reconcile_utd(&mut decrypted, UtdRecoveryKind::RetryDecrypt)
-            .unwrap();
+        registry.reconcile_utd(&mut decrypted, UtdRecoveryKind::RetryDecrypt);
         assert_eq!(decrypted.utd.phase, NativeUtdPhase::Idle);
         assert_eq!(decrypted.utd.pending_count, 0);
         assert_eq!(decrypted.utd.recovered_count, 1);
@@ -6488,17 +6396,13 @@ mod tests {
             }],
             ..decrypted
         };
-        registry
-            .reconcile_utd(&mut later_pending, UtdRecoveryKind::RetryDecrypt)
-            .unwrap();
+        registry.reconcile_utd(&mut later_pending, UtdRecoveryKind::RetryDecrypt);
         let second_session = registry.utd_recovery.get("!room:example.org").unwrap();
         assert!(second_session.op_id > first_op_id);
         assert!(second_session.phase.is_active());
 
         later_pending.items[0].decryption_state = Some(NativeDecryptionState::Unavailable);
-        registry
-            .reconcile_utd(&mut later_pending, UtdRecoveryKind::RetryDecrypt)
-            .unwrap();
+        registry.reconcile_utd(&mut later_pending, UtdRecoveryKind::RetryDecrypt);
         assert_eq!(later_pending.utd.phase, NativeUtdPhase::Unavailable);
 
         let mut later_decrypted = NativeTimelineSnapshot {
@@ -6510,9 +6414,7 @@ mod tests {
             }],
             ..later_pending
         };
-        registry
-            .reconcile_utd(&mut later_decrypted, UtdRecoveryKind::RetryDecrypt)
-            .unwrap();
+        registry.reconcile_utd(&mut later_decrypted, UtdRecoveryKind::RetryDecrypt);
         assert_eq!(later_decrypted.utd.phase, NativeUtdPhase::Idle);
         assert_eq!(later_decrypted.utd.recovered_count, 1);
     }

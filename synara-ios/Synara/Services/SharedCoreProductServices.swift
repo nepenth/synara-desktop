@@ -1405,8 +1405,38 @@ actor SharedCoreTimelineRecoveryGate {
 final class SharedCoreTimelineService: TimelineServicing {
     private struct OpenStreamState {
         let streamID: String
+        /// The event an event-focused window opened at; nil for live and
+        /// thread streams. Pages must name the window they extend.
+        let focusedEventID: String?
         var visibleItemIDs: Set<String>
         var backwardPagination: TimelineBackwardPagination = .unknown
+        /// Revision of the newest snapshot handed to this stream's consumer.
+        var revision: UInt64?
+    }
+
+    /// The native stream an update subscription last read.
+    private final class WatchedStream: @unchecked Sendable {
+        private let lock = NSLock()
+        private var streamID: String?
+
+        init(_ streamID: String?) {
+            self.streamID = streamID
+        }
+
+        var value: String? {
+            lock.lock()
+            defer { lock.unlock() }
+            return streamID
+        }
+
+        func set(_ streamID: String?) {
+            guard let streamID else {
+                return
+            }
+            lock.lock()
+            self.streamID = streamID
+            lock.unlock()
+        }
     }
 
     private let host: SharedCoreProductHost
@@ -1415,6 +1445,9 @@ final class SharedCoreTimelineService: TimelineServicing {
     /// Keyed by `SharedCoreTimelineStreamKey`: a room's own stream and each of
     /// its open thread streams live side by side and never evict each other.
     private var streams: [String: OpenStreamState] = [:]
+    /// Converted rows per native stream id.
+    private var rowCaches: [String: SharedCoreTimelineRowCache] = [:]
+    private var subscriptions = SharedCoreTimelineSubscriptions()
 
     init(host: SharedCoreProductHost) {
         self.host = host
@@ -1449,6 +1482,7 @@ final class SharedCoreTimelineService: TimelineServicing {
         _ = eventID
         return await paginate(
             key: SharedCoreTimelineStreamKey.room(roomID, focusedEventID: focusedEventID),
+            focusedEventID: focusedEventID,
             direction: .backwards
         )
     }
@@ -1456,6 +1490,7 @@ final class SharedCoreTimelineService: TimelineServicing {
     func loadNewerTimeline(roomID: String, focusedEventID: String) async -> TimelineLoadOutcome {
         await paginate(
             key: SharedCoreTimelineStreamKey.room(roomID, focusedEventID: focusedEventID),
+            focusedEventID: focusedEventID,
             direction: .forwards
         )
     }
@@ -1468,6 +1503,7 @@ final class SharedCoreTimelineService: TimelineServicing {
     func loadOlderThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome {
         await paginate(
             key: SharedCoreTimelineStreamKey.thread(roomID: roomID, rootEventID: rootEventID),
+            focusedEventID: nil,
             direction: .backwards
         )
     }
@@ -1499,6 +1535,12 @@ final class SharedCoreTimelineService: TimelineServicing {
         guard let streamID = takeStream(for: key) else {
             return
         }
+        release(streamID: streamID)
+    }
+
+    /// Closes a native stream this service no longer tracks.
+    private func release(streamID: String) {
+        host.livePoller.forgetTimelineStream(streamId: streamID)
         Task {
             _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: streamID)
         }
@@ -1549,7 +1591,11 @@ final class SharedCoreTimelineService: TimelineServicing {
     }
 
     func retryDecryption(roomID: String) async -> CryptoActionResult {
-        guard let streamID = stream(for: SharedCoreTimelineStreamKey.room(roomID))?.streamID else {
+        // The live stream closes while an event-focused window replaces it.
+        guard let streamID = (
+            stream(for: SharedCoreTimelineStreamKey.room(roomID))
+                ?? stream(for: SharedCoreTimelineStreamKey.focused(roomID))
+        )?.streamID else {
             return .unavailable("Open this room to retry decryption.")
         }
         do {
@@ -1563,6 +1609,9 @@ final class SharedCoreTimelineService: TimelineServicing {
 
     func clearSessionCaches() {
         let streamIds = takeAllStreams()
+        for streamId in streamIds {
+            host.livePoller.forgetTimelineStream(streamId: streamId)
+        }
         Task {
             for streamId in streamIds {
                 _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: streamId)
@@ -1577,6 +1626,7 @@ final class SharedCoreTimelineService: TimelineServicing {
     ) async -> TimelineLoadOutcome {
         do {
             if let previous = takeStream(for: key) {
+                host.livePoller.forgetTimelineStream(streamId: previous)
                 _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: previous)
             }
             let opened = try await SharedCoreTimeline.timelineOpen(
@@ -1584,7 +1634,11 @@ final class SharedCoreTimelineService: TimelineServicing {
                 roomId: roomID,
                 position: position
             )
-            storeStream(opened.streamId, visibleItemIDs: [], for: key)
+            storeStream(
+                opened.streamId,
+                focusedEventID: position.kind == .focused ? position.eventId : nil,
+                for: key
+            )
             return await resolveInitialSnapshot(
                 opened.snapshot,
                 key: key,
@@ -1598,26 +1652,27 @@ final class SharedCoreTimelineService: TimelineServicing {
     /// Pages a provider in `direction` until Core delivers rows this stream
     /// has not shown before. Backwards, `.empty` only when Core reports the
     /// start of the room. Forwards (event-focused windows), `.empty` when
-    /// pages stop changing the window: it reaches the present.
-    private func paginate(key: String, direction: TimelineDirectionDto) async -> TimelineLoadOutcome {
-        guard let initialState = stream(for: key) else {
+    /// Core reports the window reaches the present. `focusedEventID` names
+    /// the window the caller extends; a different window is not paged.
+    private func paginate(
+        key: String,
+        focusedEventID: String?,
+        direction: TimelineDirectionDto
+    ) async -> TimelineLoadOutcome {
+        guard let initialState = stream(for: key),
+              initialState.focusedEventID == focusedEventID
+        else {
             return .failed(Self.viewUnavailableFailure)
         }
         var knownItemIDs = initialState.visibleItemIDs
         var paginationProgress = SharedCoreTimelinePaginationProgress()
         var lastItems: [TimelineItem]?
         while Task.isCancelled == false {
-            let mayRequestPage = direction == .backwards
-                ? paginationProgress.hasPageBudget
-                : paginationProgress.canRequestPage
-            guard mayRequestPage else {
-                if direction == .forwards, paginationProgress.stoppedMakingProgress {
-                    return .empty
-                }
-                if direction == .backwards, let lastItems {
-                    // Still more history behind a long hidden run: no new
-                    // rows yet, not a failure and not the start. The caller
-                    // may ask again.
+            guard paginationProgress.hasPageBudget else {
+                if let lastItems {
+                    // Still more behind a long hidden run: no new rows yet,
+                    // not a failure and not the end. The caller may ask
+                    // again.
                     return .loaded(lastItems)
                 }
                 return .failed(Self.temporarilyUnavailableFailure)
@@ -1629,14 +1684,14 @@ final class SharedCoreTimelineService: TimelineServicing {
                     direction: direction
                 )
                 paginationProgress.recordPage(rowIDs: Self.nativeRowIDs(snapshot.rows))
-                let items = SharedCoreTimelineRows.items(from: snapshot.rows, visibleTailEventID: snapshot.visibleTailEventId, receiptTailEventID: snapshot.receiptTailEventId)
+                let items = convert(snapshot, streamID: initialState.streamID)
                 let itemIDs = Self.stableItemIDs(items)
                 let containsNewItems = itemIDs.isSubset(of: knownItemIDs) == false
                 knownItemIDs.formUnion(itemIDs)
                 lastItems = items
                 updateVisibleItemIDs(
                     knownItemIDs,
-                    backwardPagination: snapshot.paginationBackward,
+                    snapshot: snapshot,
                     key: key,
                     streamID: initialState.streamID
                 )
@@ -1644,7 +1699,12 @@ final class SharedCoreTimelineService: TimelineServicing {
                     return .loaded(items)
                 }
                 guard direction == .backwards else {
-                    continue
+                    switch SharedCoreTimelineForwardPagination.next(after: snapshot.paginationForward) {
+                    case .reachedPresent:
+                        return .empty
+                    case .pageAgain:
+                        continue
+                    }
                 }
                 if snapshot.paginationBackward == .exhausted {
                     return .empty
@@ -1668,27 +1728,90 @@ final class SharedCoreTimelineService: TimelineServicing {
         // Register before the task begins so an SDK update cannot be lost
         // between the initial snapshot and the first live readback.
         let signals = host.livePoller.timelineSignals(roomId: roomID)
+        let watched = WatchedStream(stream(for: key)?.streamID)
         return AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+            beginSubscription(key: key)
             let task = Task {
                 if refreshOnAttach {
                     continuation.yield(
                         await refreshOpenTimeline(roomID: roomID, key: key, position: position)
                     )
+                    watched.set(stream(for: key)?.streamID)
                 }
                 for await _ in signals {
                     guard Task.isCancelled == false else {
                         break
                     }
+                    // The signal may come from another stream of the room.
+                    guard needsRefresh(key: key) else {
+                        continue
+                    }
                     continuation.yield(
                         await refreshOpenTimeline(roomID: roomID, key: key, position: position)
                     )
+                    watched.set(stream(for: key)?.streamID)
                 }
                 continuation.finish()
             }
-            continuation.onTermination = { _ in
+            continuation.onTermination = { [weak self] _ in
                 task.cancel()
+                self?.endSubscription(key: key, watchedStreamID: watched.value)
             }
         }
+    }
+
+    private func needsRefresh(key: String) -> Bool {
+        guard let state = stream(for: key) else {
+            return true
+        }
+        return SharedCoreTimelineRefreshPolicy.shouldRefresh(
+            shownRevision: state.revision,
+            announcedRevision: host.livePoller.latestTimelineRevision(streamId: state.streamID)
+        )
+    }
+
+    private func beginSubscription(key: String) {
+        streamLock.lock()
+        subscriptions.begin(key: key)
+        streamLock.unlock()
+    }
+
+    /// The view stopped listening (it disappeared, or moved to another
+    /// provider). When no subscription is left for the key, release the
+    /// stream it watched; a stream a newer open stored meanwhile stays.
+    private func endSubscription(key: String, watchedStreamID: String?) {
+        streamLock.lock()
+        var released: String?
+        if subscriptions.end(key: key),
+           let watchedStreamID,
+           streams[key]?.streamID == watchedStreamID {
+            streams.removeValue(forKey: key)
+            rowCaches.removeValue(forKey: watchedStreamID)
+            released = watchedStreamID
+        }
+        streamLock.unlock()
+        if let released {
+            release(streamID: released)
+        }
+    }
+
+    /// Product items for a snapshot, reusing rows this stream already
+    /// converted.
+    private func convert(_ snapshot: TimelineSnapshotDto, streamID: String) -> [TimelineItem] {
+        streamLock.lock()
+        var cache = rowCaches[streamID] ?? SharedCoreTimelineRowCache()
+        streamLock.unlock()
+        let items = cache.items(
+            from: snapshot.rows,
+            visibleTailEventID: snapshot.visibleTailEventId,
+            receiptTailEventID: snapshot.receiptTailEventId
+        )
+        streamLock.lock()
+        if streams.values.contains(where: { $0.streamID == streamID }) {
+            rowCaches[streamID] = cache
+        }
+        streamLock.unlock()
+        return items
     }
 
     private func refreshOpenTimeline(
@@ -1722,6 +1845,7 @@ final class SharedCoreTimelineService: TimelineServicing {
                         ) else {
                             return await self.refreshCurrentTimelineAfterRecoveryRace(key: key)
                         }
+                        self.host.livePoller.forgetTimelineStream(streamId: staleStreamID)
                         _ = try? await SharedCoreTimeline.timelineClose(
                             core: self.host.core,
                             streamId: staleStreamID
@@ -1744,18 +1868,16 @@ final class SharedCoreTimelineService: TimelineServicing {
         var paginationProgress = SharedCoreTimelinePaginationProgress()
         paginationProgress.observeInitial(rowIDs: Self.nativeRowIDs(snapshot.rows))
         while Task.isCancelled == false {
-            let items = SharedCoreTimelineRows.items(from: snapshot.rows, visibleTailEventID: snapshot.visibleTailEventId, receiptTailEventID: snapshot.receiptTailEventId)
+            let items = convert(snapshot, streamID: streamID)
             updateVisibleItemIDs(
                 Self.stableItemIDs(items),
-                backwardPagination: snapshot.paginationBackward,
+                snapshot: snapshot,
                 key: key,
                 streamID: streamID
             )
             if let outcome = SharedCoreTimelineRows.authoritativeOutcome(
-                from: snapshot.rows,
-                paginationBackward: snapshot.paginationBackward,
-                visibleTailEventID: snapshot.visibleTailEventId,
-                receiptTailEventID: snapshot.receiptTailEventId
+                items: items,
+                paginationBackward: snapshot.paginationBackward
             ) {
                 return outcome
             }
@@ -1787,20 +1909,21 @@ final class SharedCoreTimelineService: TimelineServicing {
 
     private func storeStream(
         _ streamID: String,
-        visibleItemIDs: Set<String>,
+        focusedEventID: String?,
         for key: String
     ) {
         streamLock.lock()
         streams[key] = OpenStreamState(
             streamID: streamID,
-            visibleItemIDs: visibleItemIDs
+            focusedEventID: focusedEventID,
+            visibleItemIDs: []
         )
         streamLock.unlock()
     }
 
     private func updateVisibleItemIDs(
         _ itemIDs: Set<String>,
-        backwardPagination: TimelinePageStateDto,
+        snapshot: TimelineSnapshotDto,
         key: String,
         streamID: String
     ) {
@@ -1810,14 +1933,19 @@ final class SharedCoreTimelineService: TimelineServicing {
             return
         }
         state.visibleItemIDs.formUnion(itemIDs)
-        state.backwardPagination = SharedCoreTimelineRows.backwardPagination(from: backwardPagination)
+        state.backwardPagination = SharedCoreTimelineRows.backwardPagination(from: snapshot.paginationBackward)
+        state.revision = max(state.revision ?? 0, snapshot.revision)
         streams[key] = state
     }
 
     private func takeStream(for key: String) -> String? {
         streamLock.lock()
         defer { streamLock.unlock() }
-        return streams.removeValue(forKey: key)?.streamID
+        let streamID = streams.removeValue(forKey: key)?.streamID
+        if let streamID {
+            rowCaches.removeValue(forKey: streamID)
+        }
+        return streamID
     }
 
     private func takeStream(for key: String, ifMatching expectedStreamID: String) -> String? {
@@ -1826,6 +1954,7 @@ final class SharedCoreTimelineService: TimelineServicing {
         guard streams[key]?.streamID == expectedStreamID else {
             return nil
         }
+        rowCaches.removeValue(forKey: expectedStreamID)
         return streams.removeValue(forKey: key)?.streamID
     }
 
@@ -1853,6 +1982,7 @@ final class SharedCoreTimelineService: TimelineServicing {
         defer { streamLock.unlock() }
         let values = streams.values.map(\.streamID)
         streams.removeAll()
+        rowCaches.removeAll()
         return values
     }
 

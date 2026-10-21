@@ -756,6 +756,56 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
     }
 
+    func testLivePollerRecordsTheNewestRevisionPerStream() {
+        let poller = SharedCoreLivePoller(core: SharedCore())
+        let update = { (stream: String, revision: UInt64) in
+            TimelineViewUpdateDto(
+                schemaVersion: 1,
+                sessionGeneration: 1,
+                streamId: stream,
+                roomId: "!room:example.org",
+                revision: revision,
+                opCount: 1
+            )
+        }
+        poller.receiveTimelineUpdates([update("live", 4), update("thread", 9), update("live", 3)])
+        XCTAssertEqual(poller.latestTimelineRevision(streamId: "live"), 4)
+        XCTAssertEqual(poller.latestTimelineRevision(streamId: "thread"), 9)
+        poller.forgetTimelineStream(streamId: "live")
+        XCTAssertNil(poller.latestTimelineRevision(streamId: "live"))
+    }
+
+    func testRowCacheConvertsOnlyNewOrChangedRows() {
+        var cache = SharedCoreTimelineRowCache()
+        let first = approvalRow(decision: nil, decidedAt: nil)
+        let items = cache.items(from: [first])
+        XCTAssertEqual(items, SharedCoreTimelineRows.items(from: [first]))
+        XCTAssertEqual(cache.conversionCount, 1)
+
+        // An unchanged row is reused; the receipt tail is still applied.
+        let tail = cache.items(
+            from: [first],
+            visibleTailEventID: first.eventId,
+            receiptTailEventID: "$receipt:example.org"
+        )
+        XCTAssertEqual(cache.conversionCount, 1)
+        XCTAssertEqual(tail.last?.readReceiptEventID, "$receipt:example.org")
+        XCTAssertEqual(
+            tail,
+            SharedCoreTimelineRows.items(
+                from: [first],
+                visibleTailEventID: first.eventId,
+                receiptTailEventID: "$receipt:example.org"
+            )
+        )
+
+        // A changed row converts again.
+        let decided = approvalRow(decision: "approve_once", decidedAt: 1_700_000_060_000)
+        let changed = cache.items(from: [decided])
+        XCTAssertEqual(cache.conversionCount, 2)
+        XCTAssertEqual(changed, SharedCoreTimelineRows.items(from: [decided]))
+    }
+
     func testApprovalRowCarriesCoreDecisionAndKeepsOwnReactionChip() throws {
         let decided = try XCTUnwrap(
             SharedCoreTimelineRows.item(from: approvalRow(decision: "approve_once", decidedAt: 1_700_000_060_000))

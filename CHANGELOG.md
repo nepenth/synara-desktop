@@ -36,6 +36,9 @@
 - iOS: pulling down Control Center or Notification Center, a system alert, a permission prompt or a glance at the app switcher no longer disconnects Synara; it disconnects only when it goes to the background.
 - iOS: after switching between Wi-Fi and cellular, or turning on Low Data Mode, Synara reconnects at once instead of receiving messages up to a minute late while showing "Connected". Network changes are handled one at a time and restart only the sync connection.
 - iOS: restoring a session never reports another account's live session as already restored.
+- Timeline: busy rooms cost less to keep open, on desktop and iOS. Read receipts moving between other people no longer re-send unchanged messages, reaction details are looked up once instead of on every update, and iOS refreshes a room by copying the rows it already has instead of rebuilding every message (about 40 times less work for a 300-message window), and only when that room's own timeline changed. iOS closes a room's timeline when you leave it, and stops updating one nobody has read for 10 minutes.
+- Desktop: a timeline refresh that lands while new messages are arriving no longer shows a message twice or puts an edit or deletion on the wrong message, and the same holds right after a room's permissions change.
+- Timeline: scrolling to the bottom of a thread no longer shows a loading error, and a message opened from further back says when it has reached the newest messages, from the server's answer rather than by guessing (iOS stops asking sooner). Jump to latest that fails to load keeps the room you were reading instead of losing it. After following a room back to its latest messages, the unread marker no longer points at where you opened it. In encrypted rooms with many undecryptable messages, rooms, reactions and Mark as Read no longer start failing after a long session.
 
 ## [2.2.6] - 2026-10-12
 
