@@ -8,11 +8,10 @@
 
 use std::time::Duration;
 
-use matrix_sdk::ruma::api::client::session::get_login_types::v3::LoginType;
 use matrix_sdk::Client;
 
 use super::error::AuthError;
-use super::http_transport::{core_user_agent, AUTH_HTTP_TIMEOUT_SECS};
+use super::http_transport::{core_user_agent, login_flows_from_sdk, AUTH_HTTP_TIMEOUT_SECS};
 use super::input::normalize_homeserver_url;
 use super::login_flow::LoginFlow;
 use crate::app::client_builder::{build_discovery_client, ClientBuilderError, TimeoutPolicy};
@@ -88,14 +87,7 @@ async fn login_flows(client: &Client) -> Result<Vec<LoginFlow>, AuthError> {
             diagnostic_id: "p3.1-resolve-login-flows-unavailable",
         }
     })?;
-    Ok(response
-        .flows
-        .iter()
-        .map(|flow| match flow {
-            LoginType::Token(token) => LoginFlow::token(token.get_login_token),
-            other => LoginFlow::from_matrix_parts(other.login_type(), None),
-        })
-        .collect())
+    Ok(login_flows_from_sdk(&response.flows))
 }
 
 fn validate_input(raw: &str) -> Result<&str, AuthError> {

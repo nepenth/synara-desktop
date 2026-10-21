@@ -29,6 +29,7 @@ pub(crate) async fn timeline_set_read_state(
     action: NativeTimelineReadAction,
     intent: NativeTimelineReadIntent,
     observed_live_tail_event_id: Option<String>,
+    public_receipt: bool,
 ) -> Result<TimelineReadStateAck, MatrixAuthCommandError> {
     let response = core
         .timeline_set_read_state(synara_core::core_api::MatrixTimelineSetReadStateRequest {
@@ -36,6 +37,7 @@ pub(crate) async fn timeline_set_read_state(
             action,
             intent,
             observed_live_tail_event_id,
+            public_receipt,
         })
         .await
         .map_err(map_timeline_set_read_state_core_error)?;

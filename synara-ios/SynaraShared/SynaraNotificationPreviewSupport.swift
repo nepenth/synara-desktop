@@ -234,6 +234,7 @@ enum SynaraNotificationDiagnostics {
         case pusherGatewayUnavailable = "pusher-gateway-unavailable"
         case pusherRegistrationStarted = "pusher-registration-started"
         case pusherRegistrationSucceeded = "pusher-registration-succeeded"
+        case pusherEditPolicyDegraded = "pusher-edit-policy-degraded"
         case pusherRegistrationFailed = "pusher-registration-failed"
         case pusherRegistrationSuperseded = "pusher-registration-superseded"
         case pusherUnregistrationStarted = "pusher-unregistration-started"

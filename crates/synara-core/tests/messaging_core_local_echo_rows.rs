@@ -94,6 +94,7 @@ async fn local_echo_rows_carry_send_state_cause_and_transaction_id() {
         "a local echo has no server event id yet"
     );
     assert_eq!(row.send_failure, None);
+    assert_eq!(row.send_failure_retryable, None);
 
     let wedged = wait_for_event(&timeline, |event| {
         has_txn(event, &txn)
@@ -103,6 +104,11 @@ async fn local_echo_rows_carry_send_state_cause_and_transaction_id() {
     .await;
     let row = project_event_row_base("wedged-item", &wedged);
     assert_eq!(row.send_failure.as_deref(), Some("too_large"));
+    assert_eq!(
+        row.send_failure_retryable,
+        Some(false),
+        "a 413 is refused again: the row offers Discard, not Retry"
+    );
     assert_eq!(row.transaction_id.as_deref(), Some(txn.as_str()));
     assert_eq!(row.event_id, None);
 
@@ -167,6 +173,7 @@ async fn recoverable_local_echo_row_is_failed_with_its_cause() {
     .await;
     let row = project_event_row_base("failed-item", &failed);
     assert_eq!(row.send_failure.as_deref(), Some("server_error"));
+    assert_eq!(row.send_failure_retryable, Some(true));
     assert_eq!(row.event_id, None);
 }
 

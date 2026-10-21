@@ -407,6 +407,7 @@ async fn visible_frontier_reads_folded_edits_and_reactions_but_not_unseen_new_me
         action: NativeTimelineReadAction::MarkRead,
         intent: NativeTimelineReadIntent::AutomaticVisibility,
         observed_live_tail_event_id: Some(event),
+        public_receipt: false,
     };
     let initial = owner.set_read_state(mark(message.clone())).await.unwrap();
     assert_eq!(

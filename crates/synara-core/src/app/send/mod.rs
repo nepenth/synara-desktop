@@ -49,9 +49,10 @@ pub use room_queue::{
 pub use text::{
     edit_message_content, is_wedged_send_diagnostic, message_content, parse_edit_event_id,
     parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id, parse_transaction_id,
-    send_failure_cause, send_message_to_room, validate_outbound_text_payload, validated_mentions,
-    wedged_send_diagnostic, MAX_MATRIX_IDENTIFIER_BYTES, MAX_OUTBOUND_MENTION_COUNT,
-    MAX_OUTBOUND_TEXT_PAYLOAD_BYTES, WEDGED_SEND_DIAGNOSTIC,
+    send_failure_cause, send_failure_is_retryable, send_message_to_room,
+    validate_outbound_text_payload, validated_mentions, wedged_send_diagnostic,
+    MAX_MATRIX_IDENTIFIER_BYTES, MAX_OUTBOUND_MENTION_COUNT, MAX_OUTBOUND_TEXT_PAYLOAD_BYTES,
+    WEDGED_SEND_DIAGNOSTIC,
 };
 
 #[cfg(test)]

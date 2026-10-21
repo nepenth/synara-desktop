@@ -56,6 +56,8 @@ fn timeline_snapshot_surface_includes_rows_and_not_leftovers() {
     // The SDK send state and its cause reach the iOS bubble (Retry/Discard).
     assert!(row.contains("string? local_echo_state"));
     assert!(row.contains("string? send_failure"));
+    // Whether Retry can help that cause (D70).
+    assert!(row.contains("boolean? send_failure_retryable"));
 }
 
 #[test]

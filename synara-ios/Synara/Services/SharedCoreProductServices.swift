@@ -3836,19 +3836,19 @@ private final class SharedCoreBoundPusherService: MatrixPusherAccountServicing {
         self.logger = logger
     }
 
-    func registerPusher(pushKey: String) async throws {
+    func registerPusher(pushKey: String) async throws -> String? {
         guard let gatewayURL else {
             logger.info("Push gateway URL is not configured; skipping pusher registration", category: .push)
-            return
+            return nil
         }
-        _ = try await SharedCoreHttpPusher.register(
+        return try await SharedCoreHttpPusher.register(
             owner: owner,
             pushKey: pushKey,
             appId: appID,
             gatewayUrl: gatewayURL.absoluteString,
             appDisplayName: "Synara",
             lang: "en-US"
-        )
+        ).editSuppressionDiagnosticId
     }
 
     func unregisterPusher(pushKey: String) async throws {

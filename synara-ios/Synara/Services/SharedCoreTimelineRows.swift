@@ -112,7 +112,11 @@ enum SharedCoreTimelineRows {
         )
         item.encryptionShield = encryptionShield(from: row.encryptionShield)
         item.transactionID = row.transactionId
-        item.localEcho = TimelineLocalEchoState(coreState: row.localEchoState, cause: row.sendFailure)
+        item.localEcho = TimelineLocalEchoState(
+            coreState: row.localEchoState,
+            cause: row.sendFailure,
+            retryable: row.sendFailureRetryable
+        )
         if row.eventId.isEmpty {
             // An SDK local echo: its id is the timeline item id, which receipt,
             // read-marker and tail code must never send as an event id.

@@ -128,6 +128,7 @@ fn timeline_read_state_family_without_session_fails_closed_without_echo() {
             TimelineReadActionDto::MarkRead,
             TimelineReadIntentDto::ExplicitUser,
             None,
+            false,
         ))
         .expect_err("no attached set-read-state owner");
     let jump = rt
@@ -167,6 +168,7 @@ fn timeline_read_state_oversize_payload_fails_closed_without_truncate_or_echo() 
             TimelineReadActionDto::MarkRead,
             TimelineReadIntentDto::ExplicitUser,
             None,
+            false,
         ))
         .expect_err("oversize set-read-state payload must fail closed");
     let jump = rt
@@ -222,6 +224,7 @@ fn timeline_read_state_family_without_started_sync_returns_handler_result_withou
         TimelineReadActionDto::MarkRead,
         TimelineReadIntentDto::ExplicitUser,
         None,
+        false,
     ));
     let jump = rt.block_on(shared.timeline_jump_latest(stream_id.to_owned()));
     drop(shared);

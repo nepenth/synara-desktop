@@ -1,4 +1,5 @@
 import type { DesktopInvokeResult } from './desktop';
+import { readReceiptsArePublic } from '../state/settings';
 
 type NativeSessionSnapshot = {
   status: 'logged_out' | 'logged_in';
@@ -23,7 +24,7 @@ async function requireLoggedIn(invoke: NativeInvoke): Promise<void> {
 }
 
 /**
- * Sole desktop owner for explicit room-level private receipts and the unread
+ * Sole desktop owner for explicit room-level read receipts and the unread
  * flag. Context-menu Mark as Read uses this so a room does not have to be open.
  * Automatic visibility acknowledgements must use the opened timeline stream
  * with an exact observed-tail precondition instead.
@@ -42,7 +43,11 @@ export async function setRoomReadStateWithNativeOwner(
   }
 
   await requireLoggedIn(invoke);
-  const result = await invoke('matrix_room_set_read_state', { roomId, action });
+  const result = await invoke('matrix_room_set_read_state', {
+    roomId,
+    action,
+    publicReceipt: readReceiptsArePublic(),
+  });
   if (!result.available) {
     throw new Error('Native Matrix room read state is unavailable.');
   }

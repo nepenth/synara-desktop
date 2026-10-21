@@ -20,6 +20,7 @@ This directory holds product and program evidence from the replacement work.
 
 | Doc                                                                                        | Role                                                                   |
 | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| [0.19.1-capability-adoption.md](0.19.1-capability-adoption.md)                             | Current: matrix-sdk 0.19.1 capabilities and where Synara uses them     |
 | [program-status.md](program-status.md)                                                     | Generated machine ledger (do not hand-edit)                            |
 | [full-vertical-policy.md](full-vertical-policy.md)                                         | Complete replacement acceptance (no dual-backend, no plateau)          |
 | [d0-residual-completion.md](d0-residual-completion.md)                                     | Residual capability queue                                              |

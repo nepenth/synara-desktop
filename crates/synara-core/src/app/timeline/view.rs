@@ -250,6 +250,11 @@ pub struct TimelineEventRowBase {
     /// `too_large` or `forbidden`. Absent unless the row is Failed or Wedged.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub send_failure: Option<String>,
+    /// Whether Retry can help that failure (`send_failure_is_retryable`).
+    /// Set exactly when `send_failure` is; a shell offers only Discard when
+    /// `false` (too large, forbidden, rejected, not joined, unusable media).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub send_failure_retryable: Option<bool>,
     /// Transaction id of this account's own send: the SDK id while the row is
     /// a local echo (Discard and retry address it), then the remote event's
     /// `unsigned.transaction_id` once the server echo replaced it. A shell
@@ -365,6 +370,9 @@ fn project_event_row_base_for_user(
         origin_server_ts: event.timestamp().get().into(),
         local_echo_state: delivery.state,
         send_failure: delivery.failure.map(str::to_owned),
+        send_failure_retryable: delivery
+            .failure
+            .map(crate::app::send::send_failure_is_retryable),
         transaction_id: own_event_transaction_id(event),
         encryption_shield: project_encryption_shield(event.get_shield(STRICT_SHIELDS)),
         capabilities: project_row_action_capabilities(event, own_user_id, authority),
@@ -1932,6 +1940,7 @@ mod tests {
                 origin_server_ts: 1,
                 local_echo_state: None,
                 send_failure: None,
+                send_failure_retryable: None,
                 transaction_id: None,
                 encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
@@ -2065,6 +2074,7 @@ mod tests {
                 origin_server_ts: 1,
                 local_echo_state: None,
                 send_failure: None,
+                send_failure_retryable: None,
                 transaction_id: None,
                 encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
@@ -2223,6 +2233,7 @@ mod tests {
             origin_server_ts: 1,
             local_echo_state: failed.state,
             send_failure: None,
+            send_failure_retryable: None,
             transaction_id: Some("txn-failed".into()),
             encryption_shield: None,
             capabilities: TimelineRowCapabilities {

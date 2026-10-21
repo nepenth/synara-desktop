@@ -53,7 +53,7 @@ async fn explicit_mark_read_on_a_cold_timeline_pages_to_the_remote_tail() {
     let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 21);
     let readback = timeout(
         Duration::from_secs(15),
-        owner.set_room_read_state(room_id.as_str(), NativeTimelineReadAction::MarkRead),
+        owner.set_room_read_state(room_id.as_str(), NativeTimelineReadAction::MarkRead, false),
     )
     .await
     .expect("cold mark-read should finish")
@@ -87,7 +87,7 @@ async fn explicit_mark_read_fails_when_history_cannot_load() {
     let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 22);
     let result = timeout(
         Duration::from_secs(15),
-        owner.set_room_read_state(room_id.as_str(), NativeTimelineReadAction::MarkRead),
+        owner.set_room_read_state(room_id.as_str(), NativeTimelineReadAction::MarkRead, false),
     )
     .await
     .expect("failed mark-read should finish");
@@ -117,7 +117,7 @@ async fn explicit_mark_read_with_no_remote_events_clears_only_the_unread_flag() 
     let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 23);
     let readback = timeout(
         Duration::from_secs(15),
-        owner.set_room_read_state(room_id.as_str(), NativeTimelineReadAction::MarkRead),
+        owner.set_room_read_state(room_id.as_str(), NativeTimelineReadAction::MarkRead, false),
     )
     .await
     .expect("empty mark-read should finish")
@@ -159,7 +159,7 @@ async fn explicit_mark_read_surfaces_a_read_marker_failure() {
     let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 24);
     let result = timeout(
         Duration::from_secs(15),
-        owner.set_room_read_state(room_id.as_str(), NativeTimelineReadAction::MarkRead),
+        owner.set_room_read_state(room_id.as_str(), NativeTimelineReadAction::MarkRead, false),
     )
     .await
     .expect("failed marker write should finish");
@@ -205,7 +205,7 @@ async fn explicit_mark_read_targets_the_newest_thread_reply_and_writes_every_tim
     for attempt in 0..2 {
         let readback = timeout(
             Duration::from_secs(15),
-            owner.set_room_read_state(room_id.as_str(), NativeTimelineReadAction::MarkRead),
+            owner.set_room_read_state(room_id.as_str(), NativeTimelineReadAction::MarkRead, false),
         )
         .await
         .expect("thread-tail mark-read should finish")
@@ -256,7 +256,8 @@ async fn explicit_mark_read_does_not_hold_the_registry_lock_during_the_receipt_w
         .await;
 
     let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 26);
-    let mark = owner.set_room_read_state(room_id.as_str(), NativeTimelineReadAction::MarkRead);
+    let mark =
+        owner.set_room_read_state(room_id.as_str(), NativeTimelineReadAction::MarkRead, false);
     let probe = async {
         // Let mark-read open the timeline and reach the delayed receipt write.
         tokio::time::sleep(Duration::from_millis(500)).await;

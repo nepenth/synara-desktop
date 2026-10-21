@@ -47,6 +47,7 @@ test('native logged-in session is the sole message-edit owner', async () => {
         mentionUserIds: ['@alice:example.org'],
         mentionRoom: true,
         txnId: undefined,
+        targetTransactionId: undefined,
       },
     },
   ]);

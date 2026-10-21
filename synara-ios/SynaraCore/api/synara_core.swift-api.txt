@@ -464,7 +464,7 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func timelineRedact(roomId: String, eventId: String, reason: String?) async throws -> TimelineMutateDto
   open func timelineReport(roomId: String, eventId: String, reason: String?) async throws -> TimelineMutateDto
   open func timelineRetryDecryption(streamId: String) async throws -> Bool
-  open func timelineSetReadState(streamId: String, action: TimelineReadActionDto, intent: TimelineReadIntentDto, observedLiveTailEventId: String?) async throws -> TimelineReadStateDto
+  open func timelineSetReadState(streamId: String, action: TimelineReadActionDto, intent: TimelineReadIntentDto, observedLiveTailEventId: String?, publicReceipt: Bool) async throws -> TimelineReadStateDto
   open func timelineSnapshot(streamId: String) async throws -> TimelineSnapshotDto
   open func timelineUnpin(roomId: String, eventId: String) async throws -> TimelinePinDto
   open func typingSet(roomId: String, typing: Bool) async throws
@@ -952,12 +952,12 @@ public enum VerificationSasError: Swift.Error, Equatable, Hashable, Foundation.L
 public enum WriteAckDto: Equatable, Hashable
   case ok
 public func bindingScaffoldVersion() -> String
-public func loginFlows(homeserverUrl: String) async throws -> [LoginFlowDto]
+public func loginFlows(homeserverUrl: String, appVersion: String) async throws -> [LoginFlowDto]
 public func markdownToHtml(body: String) -> String?
 public func orderRoomIds(rooms: [RoomOrderInput], order: RoomListOrder) -> [String]
 public func planMemberActions(context: MemberActionContext) -> MemberActionPlan
-public func registerFlows(homeserverUrl: String) async throws -> RegisterFlowsDto
-public func resolveHomeserver(serverNameOrUrl: String) async throws -> ResolvedHomeserverDto
+public func registerFlows(homeserverUrl: String, appVersion: String) async throws -> RegisterFlowsDto
+public func resolveHomeserver(serverNameOrUrl: String, appVersion: String) async throws -> ResolvedHomeserverDto
 public func roomUnreadPresentation(membership: RoomUnreadMembership, numUnreadMessages: UInt64, numUnreadNotifications: UInt64, numUnreadMentions: UInt64, isMarkedUnread: Bool) -> RoomUnreadPresentationDto
 public func summarizeBadges(input: BadgeSummaryInput) -> BadgeSummary
 public protocol HttpPusherOwnerProtocol: AnyObject, Sendable
@@ -1145,7 +1145,7 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func timelineRedact(roomId: String, eventId: String, reason: String?) async throws -> TimelineMutateDto
   func timelineReport(roomId: String, eventId: String, reason: String?) async throws -> TimelineMutateDto
   func timelineRetryDecryption(streamId: String) async throws -> Bool
-  func timelineSetReadState(streamId: String, action: TimelineReadActionDto, intent: TimelineReadIntentDto, observedLiveTailEventId: String?) async throws -> TimelineReadStateDto
+  func timelineSetReadState(streamId: String, action: TimelineReadActionDto, intent: TimelineReadIntentDto, observedLiveTailEventId: String?, publicReceipt: Bool) async throws -> TimelineReadStateDto
   func timelineSnapshot(streamId: String) async throws -> TimelineSnapshotDto
   func timelineUnpin(roomId: String, eventId: String) async throws -> TimelinePinDto
   func typingSet(roomId: String, typing: Bool) async throws
@@ -1495,7 +1495,8 @@ public struct PushRulesWriteDto: Equatable, Hashable
   public init(status: WriteAckDto)
 public struct PusherWriteDto: Equatable, Hashable
   public var status: WriteAckDto
-  public init(status: WriteAckDto)
+  public var editSuppressionDiagnosticId: String?
+  public init(status: WriteAckDto, editSuppressionDiagnosticId: String?)
 public struct RegisterFlowsDto: Equatable, Hashable
   public var status: RegisterFlowsStatus
   public var session: String?
@@ -2087,7 +2088,8 @@ public struct TimelineViewRowDto: Equatable, Hashable
   public var transactionId: String?
   public var localEchoState: String?
   public var sendFailure: String?
-  public init(kind: TimelineRowKindDto, itemId: String, eventId: String, sender: String, senderName: String, senderAvatarUrl: String?, body: String, originServerTs: UInt64, edited: Bool, replyToEventId: String?, replyPreview: TimelineViewReplyPreviewDto?, threadRootEventId: String?, threadSummary: TimelineViewThreadSummaryDto?, poll: TimelineViewPollDto?, capabilities: TimelineViewRowCapabilitiesDto?, decryptionState: String?, messageType: String?, forwardTransport: String?, formattedBody: String?, agentCardJson: String?, isAgentApproval: Bool, agentApprovalDecision: String?, agentApprovalDecidedAt: UInt64?, mediaFilename: String?, mediaCaption: String?, reactions: [TimelineViewReactionDto], mediaHandleId: String?, mediaMimeType: String?, mediaWidth: UInt32?, mediaHeight: UInt32?, mediaDurationMs: UInt64?, encryptionShield: TimelineViewEncryptionShieldDto?, transactionId: String?, localEchoState: String?, sendFailure: String?)
+  public var sendFailureRetryable: Bool?
+  public init(kind: TimelineRowKindDto, itemId: String, eventId: String, sender: String, senderName: String, senderAvatarUrl: String?, body: String, originServerTs: UInt64, edited: Bool, replyToEventId: String?, replyPreview: TimelineViewReplyPreviewDto?, threadRootEventId: String?, threadSummary: TimelineViewThreadSummaryDto?, poll: TimelineViewPollDto?, capabilities: TimelineViewRowCapabilitiesDto?, decryptionState: String?, messageType: String?, forwardTransport: String?, formattedBody: String?, agentCardJson: String?, isAgentApproval: Bool, agentApprovalDecision: String?, agentApprovalDecidedAt: UInt64?, mediaFilename: String?, mediaCaption: String?, reactions: [TimelineViewReactionDto], mediaHandleId: String?, mediaMimeType: String?, mediaWidth: UInt32?, mediaHeight: UInt32?, mediaDurationMs: UInt64?, encryptionShield: TimelineViewEncryptionShieldDto?, transactionId: String?, localEchoState: String?, sendFailure: String?, sendFailureRetryable: Bool?)
 public struct TimelineViewThreadSummaryDto: Equatable, Hashable
   public var rootEventId: String
   public var replyCount: UInt32

@@ -169,6 +169,8 @@ fn http_pusher_surface_exposes_product_and_keeps_leftovers() {
     assert!(udl.contains("register_http_pusher"));
     assert!(udl.contains("delete_http_pusher"));
     assert!(udl.contains("dictionary PusherWriteDto"));
+    // A registration without the edit-suppression rule says so (S17).
+    assert!(udl.contains("string? edit_suppression_diagnostic_id"));
     assert!(udl.contains("interface PusherCommandError"));
     assert!(udl.contains("interface HttpPusherOwner"));
     assert!(udl.contains("delete_http_pushers_for_device"));

@@ -231,9 +231,9 @@ impl NativeRoomJoinRuleOwner {
             .map(|_| ())
             .map_err(|error| match error.client_api_error_kind() {
                 Some(ErrorKind::Forbidden) => "v-rooms-alias-forbidden",
-                _ if error.as_client_api_error().is_some_and(|api| {
-                    api.status_code == matrix_sdk::reqwest::StatusCode::CONFLICT
-                }) =>
+                _ if error
+                    .as_client_api_error()
+                    .is_some_and(|api| api.status_code.as_u16() == 409) =>
                 {
                     "v-rooms-alias-taken"
                 }

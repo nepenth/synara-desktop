@@ -112,10 +112,14 @@ protocol HomeserverResolving {
 }
 
 /// Core resolves with the SDK: `.well-known/matrix/client` delegation, else
-/// the address itself as a homeserver URL, validated with `/versions`.
+/// the address itself as a homeserver URL, validated with `/versions`. The
+/// requests carry `Synara-iOS/<version>`, like the signed-in client's.
 struct CoreHomeserverResolver: HomeserverResolving {
     func resolve(serverNameOrURL: String) async throws -> ResolvedHomeserverDto {
-        try await SynaraCore.resolveHomeserver(serverNameOrUrl: serverNameOrURL)
+        try await SynaraCore.resolveHomeserver(
+            serverNameOrUrl: serverNameOrURL,
+            appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        )
     }
 }
 

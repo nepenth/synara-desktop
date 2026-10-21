@@ -8,6 +8,7 @@ import {
 } from '../../utils/desktop';
 import { parseHermesAgentPayload, type HermesAgentPayload } from '../../utils/hermes';
 import { startVisibleOnlyPoll } from '../../utils/visibilityPoll';
+import { readReceiptsArePublic } from '../../state/settings';
 import type { RoomEncryptionStatus } from '../matrix-dto/room';
 import { devicePixelScale, nativeThumbnailContentUri } from '../../matrix/nativeThumbnail';
 import type { NativeTimelineEncryptionShield } from './nativeTimelineShield';
@@ -54,6 +55,10 @@ type NativeTimelineEventRowBase = {
   localEchoState?: NativeTimelineLocalEchoState;
   /** SDK transaction id for discard and retry. Not a server event id. */
   transactionId?: string;
+  /** Closed cause of a failed or wedged echo (`too_large`, `forbidden`, …). */
+  sendFailure?: string;
+  /** Core's verdict on that cause: `false` means the homeserver refuses a retry again. */
+  sendFailureRetryable?: boolean;
   /** SDK authenticity shield in an encrypted room. Absent when trusted. */
   encryptionShield?: NativeTimelineEncryptionShield;
   capabilities: NativeTimelineRowCapabilities;
@@ -64,6 +69,11 @@ export type NativeTimelineUnsentDelivery = {
   /** Visible, hover-independent name. Sending and failed stay distinct. */
   accessibleName: 'Sending' | 'Failed to send' | 'Not sent';
   wedged: boolean;
+  /**
+   * A failed row offers Retry. Off when Core says the same request is refused
+   * again (too large, forbidden, not joined, …); Discard stays.
+   */
+  retryable: boolean;
   transactionId?: string;
 };
 
@@ -81,6 +91,7 @@ export const nativeTimelineEchoFields = (
   eventId?: string;
   localEchoState?: NativeTimelineLocalEchoState;
   transactionId?: string;
+  sendFailureRetryable?: boolean;
   /** Virtual rows (dates, markers) are not local echoes just because they lack an event id. */
   candidate: boolean;
 } => {
@@ -122,21 +133,48 @@ export const nativeTimelineUnsentDelivery = (row: {
   eventId?: string;
   localEchoState?: string;
   transactionId?: string;
+  sendFailureRetryable?: boolean;
   candidate?: boolean;
 }): NativeTimelineUnsentDelivery | undefined => {
   const state = isNativeTimelineLocalEchoState(row.localEchoState) ? row.localEchoState : undefined;
   const transactionId = row.transactionId;
+  // An unknown cause (older snapshot) keeps Retry, as before.
+  const retryable = row.sendFailureRetryable !== false;
   if (state === 'sending') {
-    return { status: 'sending', accessibleName: 'Sending', wedged: false, transactionId };
+    return {
+      status: 'sending',
+      accessibleName: 'Sending',
+      wedged: false,
+      retryable: false,
+      transactionId,
+    };
   }
   if (state === 'failed') {
-    return { status: 'failed', accessibleName: 'Failed to send', wedged: false, transactionId };
+    return {
+      status: 'failed',
+      accessibleName: 'Failed to send',
+      wedged: false,
+      retryable,
+      transactionId,
+    };
   }
   if (state === 'wedged') {
-    return { status: 'failed', accessibleName: 'Failed to send', wedged: true, transactionId };
+    return {
+      status: 'failed',
+      accessibleName: 'Failed to send',
+      wedged: true,
+      retryable,
+      transactionId,
+    };
   }
   if (state === 'sent' || row.eventId || !row.candidate) return undefined;
-  return { status: 'unsent', accessibleName: 'Not sent', wedged: false, transactionId };
+  return {
+    status: 'unsent',
+    accessibleName: 'Not sent',
+    wedged: false,
+    retryable: false,
+    transactionId,
+  };
 };
 
 /**
@@ -1123,7 +1161,7 @@ export const useNativeTimelineView = (
       try {
         result = await invokeDesktopWithAvailability<NativeTimelineReadStateReadback>(
           'matrix_timeline_set_read_state',
-          { request: { streamId, ...request } }
+          { request: { streamId, ...request, publicReceipt: readReceiptsArePublic() } }
         );
       } catch (error) {
         if (superseded()) return;

@@ -207,6 +207,20 @@ fn send_http_error_diagnostic(error: &matrix_sdk::HttpError) -> &'static str {
     }
 }
 
+/// Whether Retry can help a send that failed with `cause`
+/// ([`send_failure_cause`]). The homeserver refuses the same request again
+/// when it is too large, forbidden, otherwise rejected (4xx), sent to a room
+/// the user left, or has unusable media, so those rows offer Discard only.
+/// Every other cause stays retryable, including the identity and
+/// verification wedges the user resolves first, and network or server
+/// trouble.
+pub fn send_failure_is_retryable(cause: &str) -> bool {
+    !matches!(
+        cause,
+        "too_large" | "forbidden" | "rejected" | "not_joined" | "media"
+    )
+}
+
 /// Closed, privacy-safe cause of a failed send: `too_large`, `forbidden`,
 /// `rate_limited`, `auth`, `network`, `server_error`, `rejected`,
 /// `encryption`, `insecure_devices`, `identity_violation`,

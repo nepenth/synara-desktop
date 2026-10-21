@@ -56,13 +56,13 @@ use crate::app::agent_approvals::{
     AGENT_APPROVAL_TTL_MS,
 };
 use crate::app::send::{
-    abort_queued_send, apply_poll_start_relations, edit_message_content,
-    enqueue_event_via_room_queue, is_wedged_send_diagnostic, message_content, normalize_poll,
-    parse_edit_event_id, parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id,
-    parse_transaction_id, poll_response_content, poll_start_content, queued_send_is_wedged,
-    queued_send_outcome, redact_via_room_queue, reenable_queued_send, send_event_via_room_queue,
-    unwedge_queued_send, wait_for_queued_send, MatrixPollRespondResult, MatrixSendPollResult,
-    MatrixSendTextResult, QueuedSendSession, SendQueue,
+    abort_queued_send, apply_poll_start_relations, enqueue_event_via_room_queue,
+    is_wedged_send_diagnostic, message_content, normalize_poll, parse_edit_event_id,
+    parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id, parse_transaction_id,
+    poll_response_content, poll_start_content, queued_send_is_wedged, queued_send_outcome,
+    redact_via_room_queue, reenable_queued_send, send_event_via_room_queue, unwedge_queued_send,
+    wait_for_queued_send, MatrixPollRespondResult, MatrixSendPollResult, MatrixSendTextResult,
+    QueuedSendSession, SendQueue,
 };
 use crate::app::threads::{
     rebuild_thread_index, NativeThreadListSnapshot, ThreadIndex, ThreadListItemProjection,
@@ -109,9 +109,13 @@ mod approval_history_tests;
 #[cfg(test)]
 mod cache_paths_tests;
 #[cfg(test)]
+mod edit_tests;
+#[cfg(test)]
 mod eviction_tests;
 #[cfg(test)]
 mod focused_route_tests;
+#[cfg(test)]
+mod read_receipt_target_tests;
 #[cfg(test)]
 mod registry_lock_tests;
 #[cfg(test)]
@@ -297,10 +301,154 @@ async fn thread_unread_count(
     Some(unread.min(u64::from(u32::MAX)) as u32)
 }
 
-fn exact_read_receipts(event_id: OwnedEventId) -> Receipts {
-    Receipts::new()
-        .fully_read_marker(Some(event_id.clone()))
-        .private_read_receipt(Some(event_id))
+/// The fully-read marker plus exactly one read receipt for `event_id`: public
+/// `m.read` when the user shares read receipts, else `m.read.private`
+/// (docs/timeline-room-state-reliability-contract.md, receipt privacy mode).
+fn exact_read_receipts(event_id: OwnedEventId, public_receipt: bool) -> Receipts {
+    let receipts = Receipts::new().fully_read_marker(Some(event_id.clone()));
+    if public_receipt {
+        receipts.public_read_receipt(Some(event_id))
+    } else {
+        receipts.private_read_receipt(Some(event_id))
+    }
+}
+
+/// Closed diagnostic for an SDK `make_edit_event` refusal.
+fn edit_error_diagnostic(error: matrix_sdk::room::edit::EditError) -> &'static str {
+    use matrix_sdk::room::edit::EditError;
+    match error {
+        EditError::NotAuthor => "v-send.r-edit-not-own-event",
+        EditError::StateEvent | EditError::IncompatibleEditType { .. } => {
+            "v-send.r-edit-incompatible-target"
+        }
+        EditError::Fetch(_) => "v-send.r-edit-target-unavailable",
+        EditError::Deserialize(_) => "v-send.r-edit-sdk-failed",
+    }
+}
+
+/// The receipt type a read write uses; see [`exact_read_receipts`].
+fn read_receipt_type(public_receipt: bool) -> ReceiptType {
+    if public_receipt {
+        ReceiptType::Read
+    } else {
+        ReceiptType::ReadPrivate
+    }
+}
+
+/// Events after the observed live tail an automatic read may also cover.
+/// Bounds the in-memory walk; a longer run of thread activity stays unread
+/// until the user reads it or uses Mark as Read.
+const THREAD_FOLLOW_UP_SCAN_LIMIT: usize = 200;
+
+/// The newest in-thread reply an automatic read at the live bottom may
+/// acknowledge with the room receipt (review S10).
+///
+/// The live timeline hides thread replies (`HIDE_THREADED_EVENTS`) and shows
+/// each one through its root's thread summary. Room unread counts still count
+/// them (threading support stays disabled, so thread replies keep marking
+/// rooms unread), so acknowledging only the main tail left such rooms unread
+/// forever. Every event after `observed_tail` in the room event cache must be
+/// either an in-thread reply whose root is an item of this timeline (its
+/// summary shows the reply) or an edit, reaction or redaction, which never
+/// adds a row. Anything else — a main-timeline event not rendered yet, an
+/// undecryptable event, a reply to a root outside the loaded window — keeps
+/// the receipt on the tail. Thread unread counts are unaffected: they follow
+/// thread receipts only.
+async fn thread_follow_up_read_target(
+    timeline: &Timeline,
+    observed_tail: &EventId,
+) -> Option<OwnedEventId> {
+    let (cache, _drop_handles) = timeline.room().event_cache().await.ok()?;
+    let mut newest_reply = None;
+    let mut roots = HashSet::new();
+    let mut scanned = 0usize;
+    // `Some(true)`: reached the tail with only covered events after it.
+    let reached_tail = cache
+        .rfind_map_event_in_memory_by(|event| {
+            scanned += 1;
+            if event.event_id() == Some(observed_tail) {
+                return Some(true);
+            }
+            if scanned > THREAD_FOLLOW_UP_SCAN_LIMIT {
+                return Some(false);
+            }
+            if let Some(root) = matrix_sdk::serde_helpers::extract_thread_root(event.raw()) {
+                if newest_reply.is_none() {
+                    newest_reply = event.event_id().map(ToOwned::to_owned);
+                }
+                roots.insert(root);
+                return None;
+            }
+            (!adds_no_timeline_row(event.raw())).then_some(false)
+        })
+        .await
+        .ok()
+        .flatten()?;
+    if !reached_tail {
+        return None;
+    }
+    let newest_reply = newest_reply?;
+    let items = timeline.items().await;
+    let loaded_roots = items
+        .iter()
+        .filter_map(|item| item.as_event().and_then(|event| event.event_id()))
+        .filter(|event_id| roots.contains(*event_id))
+        .count();
+    (loaded_roots == roots.len()).then_some(newest_reply)
+}
+
+/// Edits, reactions and redactions change existing rows; they never appear
+/// as a new one.
+fn adds_no_timeline_row(raw: &matrix_sdk::ruma::serde::Raw<AnySyncTimelineEvent>) -> bool {
+    #[derive(Deserialize)]
+    struct Relation {
+        rel_type: Option<String>,
+    }
+    #[derive(Deserialize)]
+    struct Content {
+        #[serde(rename = "m.relates_to")]
+        relates_to: Option<Relation>,
+    }
+    let event_type = raw.get_field::<String>("type").ok().flatten();
+    if matches!(
+        event_type.as_deref(),
+        Some("m.reaction" | "m.room.redaction")
+    ) {
+        return true;
+    }
+    raw.get_field::<Content>("content")
+        .ok()
+        .flatten()
+        .and_then(|content| content.relates_to)
+        .and_then(|relation| relation.rel_type)
+        .is_some_and(|rel_type| rel_type == "m.replace")
+}
+
+/// Whether this account's own unthreaded or main read receipt of the given
+/// type already sits on `event_id`.
+async fn own_read_receipt_is_at(
+    room: &Room,
+    receipt_type: ReceiptType,
+    event_id: &EventId,
+) -> bool {
+    let Some(own_user_id) = room.client().user_id().map(ToOwned::to_owned) else {
+        return false;
+    };
+    let receipt_type = match receipt_type {
+        ReceiptType::Read => EventReceiptType::Read,
+        _ => EventReceiptType::ReadPrivate,
+    };
+    for thread in [ReceiptThread::Unthreaded, ReceiptThread::Main] {
+        if let Ok(Some((receipt_event_id, _))) = room
+            .load_user_receipt(receipt_type.clone(), &thread, &own_user_id)
+            .await
+        {
+            if receipt_event_id == event_id {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -437,17 +585,21 @@ async fn resolve_explicit_read_target(
     .map_err(|_| "v-timeline-read-target-unresolved")?
 }
 
-/// Advance the private receipt and fully-read marker through the SDK owner.
+/// Advance the read receipt and fully-read marker through the SDK owner. The
+/// receipt is public `m.read` when `public_receipt`, else `m.read.private`.
 ///
 /// Automatic visibility requests are compare-and-target operations: the exact
 /// event painted by the client must still be the SDK-authoritative live tail.
 /// A newer arrival therefore produces a no-op, and the write can never jump to
-/// an event the client did not observe. Explicit user actions intentionally
-/// resolve the current tail at execution time.
+/// an event the client did not observe; the one extension is thread replies
+/// the tail's thread summaries already show ([`thread_follow_up_read_target`]).
+/// Explicit user actions intentionally resolve the current tail at execution
+/// time.
 async fn mark_live_timeline_read(
     timeline: &Timeline,
     intent: NativeTimelineReadIntent,
     observed_live_tail_event_id: Option<&str>,
+    public_receipt: bool,
 ) -> Result<LiveTimelineReadMark, &'static str> {
     // Use the same SDK-owned latest-event resolver as Timeline::mark_as_read;
     // hand-walking visible items diverges for local echoes, focus, and threads.
@@ -481,14 +633,38 @@ async fn mark_live_timeline_read(
             })
         }
         LiveReadTargetPlan::Send(event_id) => {
+            let thread_follow_up = if !timeline.is_threaded()
+                && intent == NativeTimelineReadIntent::AutomaticVisibility
+            {
+                thread_follow_up_read_target(timeline, &event_id).await
+            } else {
+                None
+            };
             if timeline.is_threaded() {
                 // 0.19 FullyRead receipts are always Unthreaded. Thread streams
-                // send a private receipt so Timeline infers ReceiptThread::Thread
-                // from TimelineFocus::Thread.
+                // send only the read receipt so Timeline infers
+                // ReceiptThread::Thread from TimelineFocus::Thread.
                 timeline
-                    .send_single_receipt(ReceiptType::ReadPrivate, event_id.clone())
+                    .send_single_receipt(read_receipt_type(public_receipt), event_id.clone())
                     .await
                     .map_err(|_| "v-timeline-send-thread-receipt-failed")?;
+            } else if let Some(reply_id) = thread_follow_up {
+                // The reply is not a main-timeline item, so `Timeline`'s
+                // deduplication cannot place it; skip only an exact repeat.
+                // The tail stays the acknowledged event the shell observed.
+                let room = timeline.room();
+                if own_read_receipt_is_at(room, read_receipt_type(public_receipt), &reply_id).await
+                {
+                    if room.is_marked_unread() {
+                        room.set_unread_flag(false)
+                            .await
+                            .map_err(|_| "v-timeline-send-read-markers-failed")?;
+                    }
+                } else {
+                    room.send_multiple_receipts(exact_read_receipts(reply_id, public_receipt))
+                        .await
+                        .map_err(|_| "v-timeline-send-read-markers-failed")?;
+                }
             } else if intent == NativeTimelineReadIntent::ExplicitUser {
                 // An explicit Mark as Read always writes. `Timeline`'s receipt
                 // deduplication compares against main-timeline positions and can
@@ -498,7 +674,7 @@ async fn mark_live_timeline_read(
                 // posts the markers and then clears the unread flag.
                 timeline
                     .room()
-                    .send_multiple_receipts(exact_read_receipts(event_id.clone()))
+                    .send_multiple_receipts(exact_read_receipts(event_id.clone(), public_receipt))
                     .await
                     .map_err(|_| "v-timeline-send-read-markers-failed")?;
             } else {
@@ -507,7 +683,7 @@ async fn mark_live_timeline_read(
                     // clears the SDK room's unread flag after a submitted marker update and
                     // also when receipt deduplication removes every unchanged marker. Keep
                     // this evidence in the adjacent regression test when upgrading the SDK.
-                    .send_multiple_receipts(exact_read_receipts(event_id.clone()))
+                    .send_multiple_receipts(exact_read_receipts(event_id.clone(), public_receipt))
                     .await
                     .map_err(|_| "v-timeline-send-read-markers-failed")?;
             }
@@ -530,6 +706,7 @@ async fn apply_stream_read_action(
                 timeline,
                 request.intent,
                 request.observed_live_tail_event_id.as_deref(),
+                request.public_receipt,
             )
             .await?;
             Ok((
@@ -1204,11 +1381,13 @@ impl NativeTimelineOwner {
     ///
     /// The registry lock covers only looking up or installing the live
     /// timeline. Building it, target resolution (which may paginate) and the
-    /// receipt write run without the lock.
+    /// receipt write run without the lock. `public_receipt` picks `m.read`
+    /// over `m.read.private` for Mark as Read.
     pub async fn set_room_read_state(
         &self,
         room_id: &str,
         action: NativeTimelineReadAction,
+        public_receipt: bool,
     ) -> Result<NativeRoomReadStateReadback, &'static str> {
         let room_id = parse_room_id(room_id)?;
         let room = self
@@ -1227,6 +1406,7 @@ impl NativeTimelineOwner {
                     &timeline,
                     NativeTimelineReadIntent::ExplicitUser,
                     None,
+                    public_receipt,
                 )
                 .await
                 .map_err(|_| "v-rooms-room-read-state-mark-read-failed")?;
@@ -2041,6 +2221,42 @@ impl NativeTimelineOwner {
         })
     }
 
+    /// Replace a queued message's content in place through `Timeline::edit`
+    /// on the room's live timeline (reused, or built and kept as the first
+    /// eviction candidate).
+    async fn edit_local_echo(
+        &self,
+        room_id: &RoomId,
+        txn: &matrix_sdk::ruma::TransactionId,
+        new_content: RoomMessageEventContentWithoutRelation,
+    ) -> Result<(), &'static str> {
+        let mut slots = Slots::Shared(self);
+        let (timeline, built) = slots
+            .live(&self.client, room_id.as_str())
+            .await
+            .map_err(|_| "v-send.r-edit-sdk-failed")?;
+        if built {
+            slots
+                .with(|registry| registry.demote_live(room_id.as_str()))
+                .await;
+        }
+        timeline
+            .edit(
+                &TimelineEventItemId::TransactionId(txn.to_owned()),
+                EditedContent::RoomMessage(new_content),
+            )
+            .await
+            .map_err(|error| match error {
+                matrix_sdk_ui::timeline::Error::EventNotInTimeline(_) => {
+                    "v-send.r-edit-target-not-found"
+                }
+                matrix_sdk_ui::timeline::Error::EditError(
+                    matrix_sdk_ui::timeline::EditError::InvalidLocalEchoState,
+                ) => "v-send.r-edit-target-not-found",
+                _ => "v-send.r-edit-sdk-failed",
+            })
+    }
+
     #[allow(clippy::too_many_arguments)] // Host boundary mirrors the typed Matrix edit contract.
     pub async fn edit_message(
         &self,
@@ -2052,22 +2268,65 @@ impl NativeTimelineOwner {
         mention_user_ids: Option<Vec<String>>,
         mention_room: Option<bool>,
         txn_id: Option<String>,
+        target_transaction_id: Option<String>,
     ) -> Result<MatrixSendTextResult, &'static str> {
         let parsed_room = parse_send_room_id(&room_id)?;
-        let parsed_event = parse_edit_event_id(&event_id)?;
+        let target_txn = parse_transaction_id(target_transaction_id)?;
+        // Only a queued-message edit may leave the event id empty.
+        let parsed_event = if target_txn.is_some() && event_id.trim().is_empty() {
+            None
+        } else {
+            Some(parse_edit_event_id(&event_id)?)
+        };
         let _txn_id = parse_transaction_id(txn_id)?;
-        let content = edit_message_content(
+        let new_content = RoomMessageEventContentWithoutRelation::from(message_content(
             body.clone(),
             msg_type,
             formatted_body,
             mention_user_ids,
             mention_room.unwrap_or(false),
-            parsed_event,
-        )?;
+            None,
+            None,
+        )?);
         let room = self
             .client
             .get_room(&parsed_room)
             .ok_or("v-send.r-edit-room-not-found")?;
+        if let Some(target_txn) = target_txn {
+            // A message still in the send queue has no event id yet. Edit the
+            // local echo in place through `Timeline::edit`, so the queue sends
+            // the new content instead of a later `m.replace`. Once the echo
+            // has been sent the timeline names it by event id; fall through.
+            match self
+                .edit_local_echo(&parsed_room, &target_txn, new_content.clone())
+                .await
+            {
+                Ok(()) => {
+                    return Ok(MatrixSendTextResult {
+                        room_id: parsed_room.to_string(),
+                        event_id: String::new(),
+                        local_txn_id: target_txn.to_string(),
+                        status: crate::dto::SendStatus::Queued,
+                    })
+                }
+                Err("v-send.r-edit-target-not-found") if parsed_event.is_some() => {}
+                Err(diagnostic) => return Err(diagnostic),
+            }
+        }
+        let parsed_event = parsed_event.ok_or("v-send.r-edit-invalid-event-id")?;
+        // `Timeline::edit`'s remote branch: the SDK builds the replacement
+        // from the original event (own, message-like, same type) and keeps
+        // only newly added mentions at the top level, so they notify once.
+        // It is sent through the tracked queue path so the caller still gets
+        // the sent event id or Queued.
+        let content = match room
+            .make_edit_event(&parsed_event, EditedContent::RoomMessage(new_content))
+            .await
+            .map_err(edit_error_diagnostic)?
+        {
+            AnyMessageLikeEventContent::RoomMessage(content) => content,
+            _ => return Err("v-send.r-edit-sdk-failed"),
+        };
         self.send_text_via_queue(room, parsed_room.to_string(), body, content)
             .await
             .map_err(|diagnostic| {
@@ -6423,7 +6682,7 @@ mod tests {
         assert!(source.contains("self.open(client, &room_id_string).await"));
         assert!(source.contains("v-rooms-room-read-state-mark-read-failed"));
         assert!(source.contains(
-            "mark_live_timeline_read(&timeline, NativeTimelineReadIntent::ExplicitUser, None)"
+            "mark_live_timeline_read(&timeline, NativeTimelineReadIntent::ExplicitUser, None, public_receipt)"
         ));
         assert!(source.contains("fully_read_marker(Some(event_id.clone()))"));
         assert!(source.contains("private_read_receipt(Some(event_id))"));
@@ -6435,10 +6694,15 @@ mod tests {
     #[test]
     fn exact_read_receipts_target_one_event_for_server_counts_and_private_receipt() {
         let event_id = OwnedEventId::try_from("$tail:example.org").unwrap();
-        let receipts = exact_read_receipts(event_id.clone());
+        let receipts = exact_read_receipts(event_id.clone(), false);
         assert_eq!(receipts.fully_read.as_ref(), Some(&event_id));
         assert_eq!(receipts.private_read_receipt.as_ref(), Some(&event_id));
         assert!(receipts.public_read_receipt.is_none());
+        // Receipt privacy off: exactly one public receipt, never both.
+        let receipts = exact_read_receipts(event_id.clone(), true);
+        assert_eq!(receipts.fully_read.as_ref(), Some(&event_id));
+        assert_eq!(receipts.public_read_receipt.as_ref(), Some(&event_id));
+        assert!(receipts.private_read_receipt.is_none());
 
         let sent = room_readback_from_mark(&LiveTimelineReadMark {
             acknowledged_event_id: Some(event_id.clone()),
@@ -6480,7 +6744,7 @@ mod tests {
         let mark_read_source = &source[mark_read_start..mark_read_end];
         assert!(mark_read_source.contains("timeline.latest_event_id().await"));
         assert!(mark_read_source.contains("timeline.is_threaded()"));
-        assert!(mark_read_source.contains("send_single_receipt(ReceiptType::ReadPrivate"));
+        assert!(mark_read_source.contains("send_single_receipt(read_receipt_type(public_receipt)"));
         assert!(mark_read_source.contains("send_multiple_receipts(exact_read_receipts"));
         assert!(!mark_read_source.contains("ReceiptThread::Unthreaded"));
         assert!(!mark_read_source.contains("items.iter().rev().find_map"));

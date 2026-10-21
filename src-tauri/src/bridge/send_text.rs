@@ -47,6 +47,7 @@ pub(crate) async fn edit_message(
     mention_user_ids: Option<Vec<String>>,
     mention_room: Option<bool>,
     txn_id: Option<String>,
+    target_transaction_id: Option<String>,
 ) -> Result<MatrixSendTextResult, MatrixAuthCommandError> {
     let response = core
         .edit_message(synara_core::core_api::MatrixEditMessageRequest {
@@ -58,6 +59,7 @@ pub(crate) async fn edit_message(
             mention_user_ids,
             mention_room,
             txn_id,
+            target_transaction_id,
         })
         .await
         .map_err(map_edit_message_core_error)?;
