@@ -342,6 +342,30 @@ struct ComposerEditSession: Equatable {
     }
 }
 
+/// A send that has finished, handed to the composer so it can drop the text
+/// it sent. The keyboard stays up after a send, so the user may have typed
+/// more while an upload or edit save was in flight; that text survives.
+struct ComposerSentDraft: Equatable {
+    /// Distinguishes two sends of the same text.
+    let id: UInt64
+    /// The composer text when the send began.
+    let sentText: String
+
+    /// The composer text to keep once the send finishes: nothing if it
+    /// still holds the sent text, what was typed after the sent text if the
+    /// user only added to it, else everything (they replaced it).
+    static func remainingText(current: String, sent: String) -> String {
+        if current == sent {
+            return ""
+        }
+        if current.hasPrefix(sent) {
+            let added = current.dropFirst(sent.count)
+            return String(added.drop(while: { $0.isWhitespace }))
+        }
+        return current
+    }
+}
+
 struct ComposerSendIntent: Equatable {
     let body: String
     let replyToEventID: String?

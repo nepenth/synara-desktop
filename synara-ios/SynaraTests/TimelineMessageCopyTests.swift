@@ -271,7 +271,13 @@ final class TimelineMessageCopyTests: XCTestCase {
         XCTAssertTrue(source.contains("Button(\"Reply\", systemImage: \"arrowshape.turn.up.left\", action: onReply)"))
         XCTAssertTrue(source.contains("Button(\"Open Thread\", systemImage: \"bubble.left.and.bubble.right\", action: onOpenThread)"))
         XCTAssertTrue(source.contains("Button(\"Edit\", systemImage: \"pencil\", action: onEdit)"))
-        XCTAssertTrue(source.contains("Button(\"React\", systemImage: \"face.smiling\", action: onReact)"))
+        XCTAssertTrue(source.contains(".controlGroupStyle(.palette)"), "React offers the quick-reaction row")
+        XCTAssertTrue(
+            source.contains(".menuActionDismissBehavior(.enabled)"),
+            "palette items stay open by default; a picked reaction must close the menu"
+        )
+        XCTAssertTrue(source.contains("Label(\"React\", systemImage: \"face.smiling\")"), "iOS 16 keeps a React submenu")
+        XCTAssertFalse(source.contains(".react(\"👍\")"), "React no longer always sends 👍")
         XCTAssertTrue(source.contains("Button(\"Redact\", systemImage: \"trash\", role: .destructive, action: onRedact)"))
     }
 

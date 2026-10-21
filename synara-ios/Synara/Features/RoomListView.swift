@@ -20,6 +20,9 @@ struct RoomListView: View {
     @State private var favoriteSort: RoomListSortOrder = RoomListSortOrder.stored(for: .favorites)
     @State private var roomsSort: RoomListSortOrder = RoomListSortOrder.stored(for: .rooms)
     @State private var directsSort: RoomListSortOrder = RoomListSortOrder.stored(for: .directs)
+    /// Direct-message peers whose MSC4426 status says they are in a call.
+    @State private var peersInCall: Set<String> = []
+    @State private var peerCallStatusGeneration: UInt64 = 0
     @FocusState private var isSearchFocused: Bool
 
     var body: some View {
@@ -324,6 +327,9 @@ struct RoomListView: View {
                 Text("\(roomPendingLeave.name) will be removed from your joined room list.")
             }
         }
+        .task(id: peerCallStatusKey) {
+            await refreshPeerCallStatus(peerIDs: peerCallStatusKey.peerIDs)
+        }
         // `.task` runs on every appearance and is cancelled on disappearance.
         // Opening a room (for example from a notification) can hide the list
         // before its first snapshot arrives, so each appearance starts the
@@ -354,8 +360,37 @@ struct RoomListView: View {
         }
     }
 
+    private var peerCallStatusKey: RoomListPeerCallStatus.Key {
+        guard case .loaded(let rooms) = state else {
+            return RoomListPeerCallStatus.Key(peerIDs: [], generation: peerCallStatusGeneration)
+        }
+        return RoomListPeerCallStatus.Key(
+            peerIDs: RoomListPeerCallStatus.peerIDs(in: rooms),
+            generation: peerCallStatusGeneration
+        )
+    }
+
+    /// One pass over the direct-message peers when that set changes or the
+    /// list is pulled to refresh, instead of a status read per row appearance.
+    private func refreshPeerCallStatus(peerIDs: [String]) async {
+        let peers = Set(peerIDs)
+        peersInCall.formIntersection(peers)
+        for peerID in peerIDs {
+            let snapshot = await environment.matrix.userStatus(userID: peerID)
+            guard Task.isCancelled == false else {
+                return
+            }
+            if snapshot?.inCall != nil {
+                peersInCall.insert(peerID)
+            } else {
+                peersInCall.remove(peerID)
+            }
+        }
+    }
+
     private func reloadRoomsForRefresh() async {
         loadRoomsTask?.cancel()
+        peerCallStatusGeneration &+= 1
         let signpostID = PerformanceTrace.begin("RoomListLoad")
         defer {
             PerformanceTrace.end("RoomListLoad", id: signpostID)
@@ -541,7 +576,7 @@ struct RoomListView: View {
                 dismissSearch(clearQuery: false)
                 environment.router.route(to: .room(id: room.id, title: room.name))
             } label: {
-                RoomListRow(room: room)
+                RoomListRow(room: room, peerInCall: RoomListPeerCallStatus.isInCall(room, peersInCall: peersInCall))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, SynaraSpacing.medium)
                     .padding(.vertical, SynaraSpacing.small)
@@ -1261,15 +1296,15 @@ private struct RoomSearchField: View {
 
 private struct RoomListRow: View {
     let room: RoomSummary
-    @Environment(\.appEnvironment) private var environment
+    /// The direct-message peer is in a call (batched by `RoomListView`).
+    var peerInCall = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var peerInCall = false
 
     private var accessibilityChildren: AccessibilityChildBehavior {
         // Production VoiceOver gets one concise, combined row. UI automation
         // exposes descendants only so it can assert the rendered title's real
         // frame instead of passing on the synthesized row label alone.
-        ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" ? .contain : .ignore
+        SynaraLaunchEnvironment.isUITest ? .contain : .ignore
     }
 
     private var hasUnreadActivity: Bool {
@@ -1287,17 +1322,19 @@ private struct RoomListRow: View {
         SynaraColor.secondaryText
     }
 
-    private var roomPrefix: String {
-        "#"
-    }
-
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
-            Text(roomPrefix)
-                .font(SynaraTypography.body.weight(.semibold))
-                .foregroundStyle(roomGlyphColor)
-                .frame(width: 20, alignment: .center)
-                .accessibilityHidden(true)
+            switch SynaraRoomGlyph.glyph(for: room) {
+            case .channel:
+                Text("#")
+                    .font(SynaraTypography.body.weight(.semibold))
+                    .foregroundStyle(roomGlyphColor)
+                    .frame(width: 20, alignment: .center)
+                    .accessibilityHidden(true)
+            case let .person(initial):
+                // Same 20 pt column as "#", so names stay aligned.
+                SynaraPersonGlyph(initial: initial, avatarURL: room.avatarURL, size: 20)
+            }
 
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                 HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
@@ -1403,17 +1440,6 @@ private struct RoomListRow: View {
         .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
         .accessibilityElement(children: accessibilityChildren)
         .accessibilityLabel(rowAccessibilityLabel)
-        .task(id: room.directUserId) {
-            peerInCall = false
-            guard room.hasActiveCall == false,
-                  room.kind == .directMessage,
-                  let peerID = room.directUserId,
-                  peerID.isEmpty == false else {
-                return
-            }
-            let snapshot = await environment.matrix.userStatus(userID: peerID)
-            peerInCall = snapshot?.inCall != nil
-        }
     }
 
     private var rowAccessibilityLabel: String {
@@ -1517,7 +1543,7 @@ private extension RoomSummary {
             return ""
         }
 
-        let isUITest = ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1"
+        let isUITest = SynaraLaunchEnvironment.isUITest
         let referenceDate = isUITest ? RoomListFixtures.now : Date()
 
         if isUITest == false, lastActivityAt > referenceDate.addingTimeInterval(60) {
@@ -1525,15 +1551,9 @@ private extension RoomSummary {
         }
 
         let calendar = Calendar.current
+        let formatters = SynaraTimeFormatting.formatters()
         if calendar.isDate(lastActivityAt, inSameDayAs: referenceDate) {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .none
-            if SynaraSharedConstants.boolSetting(SynaraSharedConstants.hour24ClockKey) {
-                formatter.dateFormat = "HH:mm"
-            } else {
-                formatter.timeStyle = .short
-            }
-            return formatter.string(from: lastActivityAt)
+            return formatters.clockTime.string(from: lastActivityAt)
         }
 
         if calendar.isDateInYesterday(lastActivityAt) {
@@ -1543,13 +1563,13 @@ private extension RoomSummary {
         if let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: lastActivityAt), to: calendar.startOfDay(for: referenceDate)).day,
            days > 0,
            days < 7 {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "EEE"
-            return formatter.string(from: lastActivityAt)
+            return formatters.weekday.string(from: lastActivityAt)
         }
 
-        let formatter = DateFormatter()
-        formatter.dateFormat = calendar.component(.year, from: lastActivityAt) == calendar.component(.year, from: referenceDate) ? "MMM d" : "MMM d, yyyy"
+        let isThisYear = calendar.component(.year, from: lastActivityAt) == calendar.component(.year, from: referenceDate)
+        let formatter = isThisYear
+            ? formatters.monthDay
+            : formatters.monthDayYear
         return formatter.string(from: lastActivityAt)
     }
 

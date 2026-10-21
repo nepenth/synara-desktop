@@ -658,6 +658,20 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.cells.firstMatch.exists)
     }
 
+    /// The table is flipped (newest row first in UIKit's order); assistive
+    /// technologies must still meet the messages oldest to newest.
+    func testTimelineAccessibilityOrderIsChronological() {
+        let app = launchRoomApp()
+        let viewport = timelineViewport(in: app)
+        XCTAssertTrue(viewport.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=true", timeout: 5))
+
+        let cells = viewport.cells.allElementsBoundByIndex.filter { $0.frame.height > 1 }
+        XCTAssertGreaterThan(cells.count, 2)
+        let tops = cells.map(\.frame.minY)
+        XCTAssertEqual(tops, tops.sorted(), "accessibility order must run top to bottom (oldest first): \(tops)")
+    }
+
     func testLargeTimelineFixtureRendersAndScrolls() {
         let app = launchLargeTimelineApp()
 

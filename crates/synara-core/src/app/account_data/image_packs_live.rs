@@ -667,6 +667,39 @@ impl NativeImagePackOwner {
         })
     }
 
+    /// The `io.element.recent_emoji` list, most recently used first.
+    pub async fn recent_emoji_snapshot(
+        &self,
+    ) -> Result<super::NativeRecentEmoji, RawAccountDataError> {
+        let stored = self
+            .account_data_get(super::RECENT_EMOJI_EVENT_TYPE, None)
+            .await?;
+        Ok(super::NativeRecentEmoji {
+            session_generation: self.session_generation,
+            entries: super::recent_emoji_entries(stored.content.as_ref()),
+        })
+    }
+
+    /// Records one use of `emoji` in `io.element.recent_emoji`, with the
+    /// rule desktop uses, and returns the list as written. The read comes
+    /// from the SDK store, which a write reaches only when it syncs back.
+    pub async fn recent_emoji_record(
+        &self,
+        emoji: &str,
+    ) -> Result<super::NativeRecentEmoji, RawAccountDataError> {
+        let stored = self
+            .account_data_get(super::RECENT_EMOJI_EVENT_TYPE, None)
+            .await?;
+        let next = super::record_recent_emoji(stored.content, emoji)?;
+        let written = self
+            .account_data_set(super::RECENT_EMOJI_EVENT_TYPE, None, next)
+            .await?;
+        Ok(super::NativeRecentEmoji {
+            session_generation: self.session_generation,
+            entries: super::recent_emoji_entries(written.content.as_ref()),
+        })
+    }
+
     fn raw_room(&self, room_id: &str) -> Result<matrix_sdk::Room, RawAccountDataError> {
         let room_id = parse_raw_room_id(room_id)?;
         self.client

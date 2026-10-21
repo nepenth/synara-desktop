@@ -130,8 +130,12 @@ enum SynaraSharedConstants {
         ]
     }
 
+    /// One suite instance per process: `boolSetting` runs per timestamp and
+    /// per keystroke, and `UserDefaults(suiteName:)` allocates on each call.
+    private static let cachedAppGroupDefaults = UserDefaults(suiteName: appGroupIdentifier)
+
     static func appGroupDefaults() -> UserDefaults? {
-        UserDefaults(suiteName: appGroupIdentifier)
+        cachedAppGroupDefaults
     }
 
     static func boolSetting(_ key: String) -> Bool {

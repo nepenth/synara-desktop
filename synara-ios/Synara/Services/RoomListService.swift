@@ -314,6 +314,8 @@ protocol RoomListServicing: AnyObject {
     func roomDisplayName(roomID: String) -> String?
     func isAgentRoom(roomID: String) -> Bool
     func hasUnreadMessages(roomID: String) -> Bool
+    /// The last listed summary of a room, if the list has it.
+    func roomSummary(roomID: String) -> RoomSummary?
     func clearCache()
 }
 
@@ -340,6 +342,10 @@ extension RoomListServicing {
 
     func hasUnreadMessages(roomID: String) -> Bool {
         false
+    }
+
+    func roomSummary(roomID: String) -> RoomSummary? {
+        nil
     }
 }
 
@@ -798,6 +804,39 @@ struct SpaceChannelGroup: Identifiable, Equatable {
     var id: String { space.id }
 }
 
+/// "In a call" for direct-message rows. The room list reads the peers'
+/// MSC4426 status once per change of this set (or pull to refresh) and
+/// passes the result to its rows; rows never read status themselves.
+enum RoomListPeerCallStatus {
+    struct Key: Equatable {
+        let peerIDs: [String]
+        let generation: UInt64
+    }
+
+    /// Sorted, unique peers of direct rooms without a live room call chip.
+    static func peerIDs(in rooms: [RoomSummary]) -> [String] {
+        Set(rooms.compactMap(peerID(for:))).sorted()
+    }
+
+    static func isInCall(_ room: RoomSummary, peersInCall: Set<String>) -> Bool {
+        guard let peerID = peerID(for: room) else {
+            return false
+        }
+        return peersInCall.contains(peerID)
+    }
+
+    private static func peerID(for room: RoomSummary) -> String? {
+        guard room.kind == .directMessage,
+              room.hasActiveCall == false,
+              let peerID = room.directUserId,
+              peerID.isEmpty == false
+        else {
+            return nil
+        }
+        return peerID
+    }
+}
+
 enum RoomListSpaceGrouping {
     static func unreadCountsBySpaceID(from rooms: [RoomSummary]) -> [String: Int] {
         var counts: [String: Int] = [:]
@@ -955,6 +994,10 @@ final class PlaceholderRoomListService: RoomListServicing {
         cachedRooms.first { $0.id == roomID }?.hasUnreadActivity ?? false
     }
 
+    func roomSummary(roomID: String) -> RoomSummary? {
+        cachedRooms.first { $0.id == roomID }
+    }
+
     func clearCache() {
         cachedRooms = []
     }
@@ -1012,6 +1055,13 @@ final class MockRoomListService: RoomListServicing {
             return false
         }
         return rooms.first { $0.id == roomID }?.hasUnreadActivity ?? false
+    }
+
+    func roomSummary(roomID: String) -> RoomSummary? {
+        guard case .loaded(let rooms) = state else {
+            return nil
+        }
+        return rooms.first { $0.id == roomID }
     }
 
     func roomUpdates() -> AsyncStream<RoomListState> {

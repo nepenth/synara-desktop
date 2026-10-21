@@ -1,6 +1,13 @@
 import SwiftUI
 import SynaraCore
 
+/// Launch switches read once per process. `ProcessInfo.environment` builds a
+/// new dictionary on every access, and these are read on row, scroll and
+/// keystroke paths.
+enum SynaraLaunchEnvironment {
+    static let isUITest = ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1"
+}
+
 enum SharedCoreLaunchReset {
     static func resetStoreRootIfRequested(
         _ storeRoot: URL,

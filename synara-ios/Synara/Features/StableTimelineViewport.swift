@@ -6,11 +6,12 @@ import SwiftUI
         static let environmentKey = "SYNARA_STABLE_SCROLL_ANCHORING"
         static let userDefaultsKey = "stableScrollAnchoring"
 
-        static var isEnabled: Bool {
-            let environmentValue = ProcessInfo.processInfo.environment[environmentKey]
-            let persistedValue = UserDefaults.standard.object(forKey: userDefaultsKey) as? Bool
-            return resolve(environmentValue: environmentValue, persistedValue: persistedValue)
-        }
+        /// Resolved once per launch: it is read on every timeline body pass,
+        /// and the render path must not switch under an open room.
+        static let isEnabled: Bool = resolve(
+            environmentValue: ProcessInfo.processInfo.environment[environmentKey],
+            persistedValue: UserDefaults.standard.object(forKey: userDefaultsKey) as? Bool
+        )
 
         static func resolve(environmentValue: String?, persistedValue: Bool?) -> Bool {
             if let environmentValue {
@@ -455,6 +456,9 @@ import SwiftUI
         /// reconfigures the cell; cells only redraw when their row changes.
         var isInlineThreadMode: Bool = false
         var isThreadExpanded: Bool = false
+        /// The clock time, formatted once by the row builder. Part of the row
+        /// value so a 24-hour clock change reconfigures the cell.
+        var timeText: String = ""
     }
 
     struct StableTimelineViewportRow: Equatable, Identifiable {
@@ -622,6 +626,116 @@ import SwiftUI
         }
     }
 
+    /// The flipped timeline table, read by VoiceOver in chronological order.
+    ///
+    /// Row 0 is the newest message drawn at the bottom, so UIKit's own
+    /// index-path order would read newest to oldest, bottom to top. This
+    /// table lists its on-screen cells top to bottom (oldest first) instead.
+    /// Because only on-screen cells are listed, a focused cell at either edge
+    /// is scrolled toward the middle so the next one comes on screen.
+    final class StableTimelineTableView: UITableView {
+        private var focusObserver: NSObjectProtocol?
+
+        override init(frame: CGRect, style: UITableView.Style) {
+            super.init(frame: frame, style: style)
+            focusObserver = NotificationCenter.default.addObserver(
+                forName: UIAccessibility.elementFocusedNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                self?.accessibilityFocusChanged(notification)
+            }
+        }
+
+        @available(*, unavailable)
+        required init?(coder _: NSCoder) {
+            fatalError("init(coder:) is unavailable")
+        }
+
+        deinit {
+            if let focusObserver {
+                NotificationCenter.default.removeObserver(focusObserver)
+            }
+        }
+
+        override var accessibilityElements: [Any]? {
+            get { chronologicalCells }
+            set {}
+        }
+
+        override func accessibilityElementCount() -> Int {
+            chronologicalCells.count
+        }
+
+        override func accessibilityElement(at index: Int) -> Any? {
+            let cells = chronologicalCells
+            return cells.indices.contains(index) ? cells[index] : nil
+        }
+
+        override func index(ofAccessibilityElement element: Any) -> Int {
+            guard let cell = element as? UITableViewCell else {
+                return NSNotFound
+            }
+            return chronologicalCells.firstIndex(of: cell) ?? NSNotFound
+        }
+
+        /// On-screen cells, top to bottom.
+        var chronologicalCells: [UITableViewCell] {
+            StableTimelineAccessibilityOrder.topToBottom(
+                visibleCells.map { ($0, $0.convert($0.bounds, to: nil).minY) }
+            )
+        }
+
+        private func accessibilityFocusChanged(_ notification: Notification) {
+            guard UIAccessibility.isVoiceOverRunning,
+                  let element = notification.userInfo?[UIAccessibility.focusedElementUserInfoKey],
+                  let cell = Self.containingCell(of: element),
+                  cell.superview != nil,
+                  cell.isDescendant(of: self),
+                  let indexPath = indexPath(for: cell)
+            else {
+                return
+            }
+            let cells = chronologicalCells
+            guard cell === cells.first || cell === cells.last else {
+                return
+            }
+            scrollToRow(at: indexPath, at: .middle, animated: false)
+        }
+
+        private static let containerSelector = NSSelectorFromString("accessibilityContainer")
+
+        private static func containingCell(of element: Any) -> UITableViewCell? {
+            var current: Any? = element
+            while let candidate = current {
+                if let cell = candidate as? UITableViewCell {
+                    return cell
+                }
+                if let view = candidate as? UIView {
+                    current = view.superview
+                } else if let element = candidate as? UIAccessibilityElement {
+                    current = element.accessibilityContainer
+                } else if let object = candidate as? NSObject,
+                          object.responds(to: containerSelector)
+                {
+                    // SwiftUI's accessibility nodes are not UIAccessibilityElements.
+                    current = object.perform(containerSelector)?.takeUnretainedValue()
+                } else {
+                    current = nil
+                }
+            }
+            return nil
+        }
+    }
+
+    enum StableTimelineAccessibilityOrder {
+        /// Elements sorted by their on-screen top edge (window coordinates,
+        /// so the table's flip is already applied).
+        static func topToBottom<Element>(_ elements: [(Element, CGFloat)]) -> [Element] {
+            elements.sorted { $0.1 < $1.1 }.map(\.0)
+        }
+    }
+
     final class StableTimelineViewController: UIViewController, UITableViewDelegate, UIGestureRecognizerDelegate {
         struct Configuration {
             let routeID: String
@@ -688,7 +802,7 @@ import SwiftUI
         }
 
         private let coordinator: StableTimelineViewport.Coordinator
-        private let tableView = UITableView(frame: .zero, style: .plain)
+        private let tableView = StableTimelineTableView(frame: .zero, style: .plain)
         private lazy var timestampRevealGesture: TimelineTimestampRevealGestureRecognizer = {
             let recognizer = TimelineTimestampRevealGestureRecognizer(
                 target: self,
@@ -1613,7 +1727,7 @@ import SwiftUI
         }
 
         private func updateDiagnostics() {
-            guard ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1",
+            guard SynaraLaunchEnvironment.isUITest,
                   let configuration
             else {
                 return
