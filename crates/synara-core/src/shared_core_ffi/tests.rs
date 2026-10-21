@@ -703,7 +703,6 @@ fn timeline_view_row_dto_carries_local_echo_transaction_id() {
         thread: None,
         reactions: vec![],
         media: None,
-        agent_approval_decision: None,
     }));
     let dto = timeline_view_row_dto(row);
     assert_eq!(dto.item_id, "local-item");
