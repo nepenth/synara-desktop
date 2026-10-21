@@ -46,6 +46,9 @@ enum SharedCoreRoomListRows {
     let encryptionStatus: SynaraRoomEncryptionStatus
     var isSpace: Bool = false
     var isLowPriority: Bool = false
+    /// Core's agent-room rule (listed agent member, or approval/workflow
+    /// content), shared with desktop.
+    var isAgentRoom: Bool = false
     }
 
     struct InviteRow {
@@ -97,6 +100,7 @@ enum SharedCoreRoomListRows {
                     namesByID: namesByID
                 ),
                 avatarURL: room.avatarUrl.flatMap(URL.init(string:)),
+                hasAgentActivity: room.isAgentRoom,
                 isFavorite: room.isFavorite,
                 isLowPriority: room.isLowPriority,
                 isCall: room.isCall,

@@ -1601,6 +1601,7 @@ public struct RoomListRoomDto: Equatable, Hashable
   public var isSpace: Bool
   public var isFavorite: Bool
   public var isLowPriority: Bool
+  public var isAgentRoom: Bool
   public var isCall: Bool
   public var hasActiveCall: Bool
   public var activeCallParticipantCount: UInt32
@@ -1613,7 +1614,7 @@ public struct RoomListRoomDto: Equatable, Hashable
   public var isEncrypted: Bool
   public var encryptionStatus: RoomEncryptionStatus
   public var notificationMode: String?
-  public init(roomId: String, name: String?, canonicalAlias: String?, avatarUrl: String?, membership: RoomMembershipDto, isDirect: Bool, directUserId: String?, isSpace: Bool, isFavorite: Bool, isLowPriority: Bool, isCall: Bool, hasActiveCall: Bool, activeCallParticipantCount: UInt32, unreadCount: UInt32, highlightCount: UInt32, markedUnread: Bool, lastActivityTs: UInt64?, lastMessagePreview: String?, lastMessageIsAgentApproval: Bool, isEncrypted: Bool, encryptionStatus: RoomEncryptionStatus, notificationMode: String?)
+  public init(roomId: String, name: String?, canonicalAlias: String?, avatarUrl: String?, membership: RoomMembershipDto, isDirect: Bool, directUserId: String?, isSpace: Bool, isFavorite: Bool, isLowPriority: Bool, isAgentRoom: Bool, isCall: Bool, hasActiveCall: Bool, activeCallParticipantCount: UInt32, unreadCount: UInt32, highlightCount: UInt32, markedUnread: Bool, lastActivityTs: UInt64?, lastMessagePreview: String?, lastMessageIsAgentApproval: Bool, isEncrypted: Bool, encryptionStatus: RoomEncryptionStatus, notificationMode: String?)
 public struct RoomListSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var orderedRoomIds: [String]

@@ -153,6 +153,9 @@ pub struct SyncServiceOwner {
     heartbeat_task: SupervisedTask,
     /// Re-checks credentials after an SDK `UnknownToken` broadcast.
     session_change_task: SupervisedTask,
+    /// Highlight notifications read from the server for mention badges;
+    /// refreshed by the room-list owner, read by room-list snapshots.
+    server_highlights: Arc<crate::app::room_list::ServerHighlights>,
 }
 
 #[derive(Default)]
@@ -315,6 +318,11 @@ impl SyncServiceOwner {
     /// Room list service accessor for later P4.2 — not projected here.
     pub fn room_list_service(&self) -> Arc<matrix_sdk_ui::RoomListService> {
         self.service.room_list_service()
+    }
+
+    /// Server highlight notifications for this session's mention badges.
+    pub fn server_highlights(&self) -> &Arc<crate::app::room_list::ServerHighlights> {
+        &self.server_highlights
     }
 
     /// Keep the SDK's latest-event calculation active for the current room-list
@@ -494,6 +502,7 @@ pub(crate) async fn build_sync_service_with_heartbeat(
         heartbeat_policy,
         heartbeat_task,
         session_change_task,
+        server_highlights: Arc::default(),
     })
 }
 
