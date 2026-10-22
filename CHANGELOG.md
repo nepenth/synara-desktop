@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [2.3.0] - 2026-10-21
+
 - Redact (desktop): choosing Redact on a message, in the room or in a thread, now asks "Remove this message? This can't be undone." first. Cancel is the default; Escape and clicking outside also cancel, and focus returns to the message's menu button. Only Remove deletes the message for everyone.
 - Redact (iOS): choosing Redact on a message, from its long-press menu, the VoiceOver action or in a thread, now asks "Remove this message? This can't be undone." first, with the same words as desktop. Cancel is the default; only Remove deletes the message for everyone.
 - iOS: "Sign Out" now says "Log Out", as on desktop. This covers the connection banner's button, logging out another session in Settings → Devices, its prompts and messages, and their VoiceOver labels.
@@ -103,7 +105,7 @@
 - iOS accessibility: VoiceOver reads each message as one item with the sender's name instead of their Matrix ID, its reactions ("thumbs up 3, you reacted") and reply count, and offers Reply, React and the other message actions in the actions rotor. The "Unread messages" divider and day headers are headings. Status text (the connection banner, errors, warnings, Retry, reply and thread links) meets WCAG AA contrast in light mode; the icons keep their colours. The banner's buttons, theme colour presets, thread links, the conversation header's buttons and Edit on an unsent message have 44-point touch areas.
 - iOS: at the largest text sizes, room names and previews wrap instead of truncating, room rows put their time and badges on a separate line, filter chips grow with the text, the "Unread messages" divider and day headers wrap, and Jump to Last Read becomes a round button so it no longer covers messages.
 - iOS memory: the notification extension opens its databases with two connections each and a small page cache, and the app uses the SDK's low-memory database settings, so a busy notification is less likely to hit the extension's memory limit. The app keeps at most 24 MB of decrypted images in memory (desktop 64 MB), drops them when it goes to the background or gets a memory warning, and reloads them from the encrypted media store.
-- The homeserver's device list names the app and its version: `Synara-iOS/2.2.6`, `Synara-iOS-NSE/2.2.6` for notification previews and `Synara-Desktop/2.2.6`. iOS used to send `Synara-Desktop/0.1.0` and desktop its core library's version.
+- The homeserver's device list names the app and its version: `Synara-iOS/2.3.0`, `Synara-iOS-NSE/2.3.0` for notification previews and `Synara-Desktop/2.3.0`. iOS used to send `Synara-Desktop/0.1.0` and desktop its core library's version.
 - iOS: Keychain reads and writes, store setup and local-data wipes no longer run on the threads that drive sync and the UI, including the token save after a refresh, which used to block one of them.
 - Desktop: after "Reset local data" for an account whose store key was lost, signing in works again instead of asking for the same reset every time. An existing key is kept, so the archived data stays readable with it.
 - iOS: Synara's core tells the app whether a failure is worth retrying, needs the user, or is final. A message sent during a brief network failure stays queued and goes out when the connection is back instead of showing as failed.
