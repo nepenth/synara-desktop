@@ -20,8 +20,12 @@ mod upload_queue;
 
 pub use bounded::{download_media_bounded, BoundedMediaError};
 pub use cache::{
-    clear_hot_media_cache, fetch_media_cached, HotMediaCache, HOT_MEDIA_CACHE_MAX_BYTES,
-    HOT_MEDIA_CACHE_MAX_ITEM_BYTES,
+    clear_hot_media_cache, clear_hot_media_cache_for_client, clear_hot_media_cache_for_user,
+    fetch_media_cached, HotMediaCache, HOT_MEDIA_CACHE_MAX_BYTES, HOT_MEDIA_CACHE_MAX_ITEM_BYTES,
+};
+#[cfg(test)]
+pub(crate) use cache::{
+    hot_media_cache_contains_for_test, hot_media_cache_insert_for_test, HOT_MEDIA_CACHE_TEST_LOCK,
 };
 pub use content::{
     parse_content_upload_mime, upload_content, validate_content_upload_filename,

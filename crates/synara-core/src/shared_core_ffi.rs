@@ -4,6 +4,9 @@
 //! Credentials use dedicated zeroizing arguments; generic command envelopes
 //! never carry recovery secrets. Narrow NSE product builds use synara-nse-core.
 
+mod error_kind;
+use error_kind::SEND_ROOM_NOT_FOUND_CODE;
+pub use error_kind::{CoreErrorKind, TypedFfiError};
 mod wire_enum;
 mod write_status;
 pub use write_status::*;
@@ -41,7 +44,8 @@ use crate::app::account_data::{
 };
 use crate::app::auth::{
     existing_sqlite_crypto_device_id, login_with_password as core_login_with_password,
-    DevicePlatform, LoginOptions,
+    require_native_sliding_sync, AuthError, DevicePlatform, LoginOptions,
+    LOGIN_SLIDING_SYNC_UNSUPPORTED_DIAGNOSTIC_ID,
 };
 use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig};
 use crate::app::dehydrated_devices::NativeDehydratedDevicesOwner;
@@ -50,9 +54,9 @@ use crate::app::devices::{
     NativeDeviceSnapshot, NativeDeviceTrust, NativeDeviceUpdateSignal,
 };
 use crate::app::lifecycle::{
-    persist_session_after_login, restore_session_from_vault,
-    restore_session_from_vault_with_room_load_settings, restore_session_onto_client,
-    SessionMaterial, SessionMaterialId, SessionMaterialVault,
+    persist_session_after_login, restore_session_onto_client,
+    restore_session_onto_client_with_room_load_settings, SessionMaterial, SessionMaterialId,
+    SessionMaterialVault,
 };
 use crate::app::media_cache::NativeMediaRetentionOwner;
 use crate::app::notifications::NativeHttpPusherOwner;
@@ -71,8 +75,8 @@ use crate::app::rtc_transports::{
     NativeRtcTransport, NativeRtcTransportsOwner, NativeRtcTransportsSnapshot,
 };
 use crate::app::store::{
-    get_or_create_store_key, AccountIdentity, StoreKeyId, StoreKeyMaterial, StoreKeyVault,
-    StoreKeyVaultError, STORE_KEY_LEN,
+    get_or_migrate_store_key, AccountIdentity, StoreKeyId, StoreKeyMaterial, StoreKeyVault,
+    StoreKeyVaultError, StorePaths, STORE_KEY_LEN,
 };
 use crate::app::sync::{
     build_sync_service, SyncReadiness, SyncReadinessSnapshot, SyncServiceConfig, SyncServiceOwner,
@@ -80,13 +84,14 @@ use crate::app::sync::{
 use crate::app::timeline::{
     NativeAgentApprovalDecisionResult, NativeComposerReplyDraft, NativeDecryptionState,
     NativeReactionMutation, NativeReactionMutationResult, NativeTimelineDirection,
-    NativeTimelineEventReadback, NativeTimelineItem, NativeTimelineOpenPosition,
-    NativeTimelineOpenReadback, NativeTimelineOwner, NativeTimelineReaction,
-    NativeTimelineReactionSender, NativeTimelineReadAction, NativeTimelineReadIntent,
-    NativeTimelineReadStateReadback, NativeTimelineViewportHint, TimelineMediaHandle,
-    TimelinePageState, TimelinePollAnswer, TimelinePollRow, TimelineReaction, TimelineReplyPreview,
-    TimelineRowCapabilities, TimelineThreadSummary, TimelineViewDeltaBatch, TimelineViewPosition,
-    TimelineViewRow, TimelineViewSnapshot, TimelineViewUpdateEmit, TIMELINE_VIEW_SCHEMA_VERSION,
+    NativeTimelineEventReadback, NativeTimelineEventRoute, NativeTimelineItem,
+    NativeTimelineOpenPosition, NativeTimelineOpenReadback, NativeTimelineOwner,
+    NativeTimelineReaction, NativeTimelineReactionSender, NativeTimelineReadAction,
+    NativeTimelineReadIntent, NativeTimelineReadStateReadback, NativeTimelineViewportHint,
+    TimelineMediaHandle, TimelinePageState, TimelinePollAnswer, TimelinePollRow, TimelineReaction,
+    TimelineReplyPreview, TimelineRowCapabilities, TimelineThreadSummary, TimelineViewDeltaBatch,
+    TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot, TimelineViewUpdateEmit,
+    TIMELINE_VIEW_SCHEMA_VERSION,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot, NativeTypingUpdateSignal};
 use crate::app::user_profile::{NativeOwnProfileOwner, OwnProfileUpdateEmit};
@@ -123,6 +128,16 @@ const RESTORE_FAILED_CODE: &str = "p4-s3b-restore-failed";
 const RESTORE_FAILED_DESCRIPTION: &str = "The persisted session could not be restored.";
 const ALREADY_RESTORED_CODE: &str = "p4-s3b-session-already-restored";
 const ALREADY_RESTORED_DESCRIPTION: &str = "A live session is already restored.";
+const RESTORED_IDENTITY_MISMATCH_CODE: &str = "p4-s3b-session-identity-mismatch";
+const RESTORED_IDENTITY_MISMATCH_DESCRIPTION: &str =
+    "A different account's session is already restored.";
+/// The account's encrypted local store exists but its key is missing or unusable
+/// (for example after a device restore: the Keychain item does not migrate).
+/// Never answered by generating a new key; the user resets local data.
+const STORE_RESET_REQUIRED_CODE: &str = "p4-s3b-store-reset-required";
+const STORE_RESET_REQUIRED_DESCRIPTION: &str =
+    "The local encrypted data for this account cannot be opened on this device.";
+const LOGIN_STORE_RESET_REQUIRED_CODE: &str = "p4-s3c-store-reset-required";
 const LOGIN_VAULT_UNAVAILABLE_CODE: &str = "p4-s3c-secret-vault-unavailable";
 const LOGIN_VAULT_UNAVAILABLE_DESCRIPTION: &str = "The secret store is unavailable.";
 const LOGIN_IDENTITY_INVALID_CODE: &str = "p4-s3c-identity-invalid";
@@ -131,6 +146,25 @@ const LOGIN_STORE_ROOT_INVALID_CODE: &str = "p4-s3c-store-root-invalid";
 const LOGIN_STORE_ROOT_INVALID_DESCRIPTION: &str = "The session store root is invalid.";
 const LOGIN_FAILED_CODE: &str = "p4-s3c-login-failed";
 const LOGIN_FAILED_DESCRIPTION: &str = "The session could not be authenticated.";
+// Classified sign-in failures (review L8): each keeps its own code so the
+// shell does not report an outage or a rate limit as a wrong password.
+const LOGIN_CREDENTIALS_REJECTED_CODE: &str = "p4-s3c-credentials-rejected";
+const LOGIN_CREDENTIALS_REJECTED_DESCRIPTION: &str = "The homeserver rejected the credentials.";
+const LOGIN_NETWORK_UNAVAILABLE_CODE: &str = "p4-s3c-network-unavailable";
+const LOGIN_NETWORK_UNAVAILABLE_DESCRIPTION: &str = "The homeserver could not be reached.";
+const LOGIN_SERVER_UNAVAILABLE_CODE: &str = "p4-s3c-server-unavailable";
+const LOGIN_SERVER_UNAVAILABLE_DESCRIPTION: &str = "The homeserver is unavailable.";
+const LOGIN_RATE_LIMITED_CODE: &str = "p4-s3c-rate-limited";
+const LOGIN_RATE_LIMITED_DESCRIPTION: &str = "The homeserver is rate limiting sign-in.";
+const LOGIN_USER_DEACTIVATED_CODE: &str = "p4-s3c-user-deactivated";
+const LOGIN_USER_DEACTIVATED_DESCRIPTION: &str = "The account is deactivated.";
+const LOGIN_UNSUPPORTED_CODE: &str = "p4-s3c-login-unsupported";
+const LOGIN_UNSUPPORTED_DESCRIPTION: &str = "The homeserver requires an unsupported sign-in step.";
+const LOGIN_STORE_LOCKED_CODE: &str = "p4-s3c-store-locked";
+const LOGIN_STORE_LOCKED_DESCRIPTION: &str = "The local store is in use by another process.";
+const LOGIN_SLIDING_SYNC_UNSUPPORTED_CODE: &str = "p4-s3c-sliding-sync-unsupported";
+const LOGIN_SLIDING_SYNC_UNSUPPORTED_DESCRIPTION: &str =
+    "The homeserver does not support simplified sliding sync (MSC4186).";
 const ATTACH_SESSION_MISSING_CODE: &str = "p4-s3d-session-missing";
 const ATTACH_SESSION_MISSING_DESCRIPTION: &str = "No retained session is available.";
 const ATTACH_ALREADY_CODE: &str = "p4-s3d-already-attached";
@@ -155,9 +189,15 @@ const SYNC_STOP_FAILED_CODE: &str = "p4-s12-sync-stop-failed";
 const SYNC_STOP_FAILED_DESCRIPTION: &str = "SyncService could not be stopped.";
 const CLIENT_PAUSE_FAILED_CODE: &str = "p4-s12-client-pause-failed";
 const CLIENT_PAUSE_FAILED_DESCRIPTION: &str = "The Matrix client stores could not be paused.";
+/// Shared by every store-touching export that gave up waiting for
+/// `start_sync` to reopen the stores `stop_sync` closed. Retryable.
+const SESSION_SUSPENDED_CODE: &str = "p4-session-suspended";
+const SESSION_SUSPENDED_DESCRIPTION: &str =
+    "The session is paused while the app is in the background.";
 const TIMELINE_VIEW_POLL_FAILED_CODE: &str = "p4-s14-timeline-view-poll-failed";
 const TIMELINE_VIEW_POLL_FAILED_DESCRIPTION: &str = "Timeline view updates could not be polled.";
-const TIMELINE_VIEW_UPDATE_QUEUE_CAP: usize = 32;
+/// Streams with an unpolled update; reached only when nobody polls.
+const TIMELINE_VIEW_DIRTY_STREAM_CAP: usize = 256;
 const OWNER_UPDATE_POLL_FAILED_CODE: &str = "p4-s17-owner-update-poll-failed";
 const OWNER_UPDATE_POLL_FAILED_DESCRIPTION: &str = "Owner updates could not be polled.";
 const OWNER_UPDATE_QUEUE_CAP: usize = 32;
@@ -221,6 +261,8 @@ const TIMELINE_INVALID_ROOM_CODE: &str = "d0.3-timeline-invalid-room-id";
 const TIMELINE_INVALID_ROOM_DESCRIPTION: &str = "The timeline room id is invalid.";
 const TIMELINE_VIEW_NOT_OPEN_CODE: &str = "v-timeline-view-not-open";
 const TIMELINE_VIEW_NOT_OPEN_DESCRIPTION: &str = "The timeline view is not open.";
+const TIMELINE_EVENT_ROUTE_INVALID_EVENT_CODE: &str = "v-crypto.6-invalid-event-id";
+const TIMELINE_EVENT_ROUTE_INVALID_EVENT_DESCRIPTION: &str = "The timeline event id is invalid.";
 const RTC_TRANSPORTS_NO_SESSION_CODE: &str = "p2-rtc-transports-snapshot-no-session";
 const RTC_TRANSPORTS_REFRESH_NO_SESSION_CODE: &str = "p2-rtc-transports-refresh-no-session";
 const RTC_TRANSPORTS_NO_SESSION_DESCRIPTION: &str = "No MatrixRTC transport session is available.";
@@ -303,6 +345,8 @@ const GET_ROOM_IMAGE_PACKS_NO_SESSION_CODE: &str = "p2-room-image-packs-no-sessi
 const SET_USER_IMAGE_PACK_NO_SESSION_CODE: &str = "p2-set-user-image-pack-no-session";
 const SET_GLOBAL_IMAGE_PACKS_NO_SESSION_CODE: &str = "p2-set-global-image-packs-no-session";
 const SET_ROOM_IMAGE_PACK_NO_SESSION_CODE: &str = "p2-set-room-image-pack-no-session";
+/// The raw account-data owner's no-session diagnostic, which recent emoji use.
+const RECENT_EMOJI_NO_SESSION_CODE: &str = "v-account-data.requires-session";
 const IMAGE_PACK_NO_SESSION_DESCRIPTION: &str = "No image-pack session is available.";
 const IMAGE_PACK_FAILED_CODE: &str = "p4-s9-4-image-pack-failed";
 const IMAGE_PACK_FAILED_DESCRIPTION: &str = "The image-pack request could not be completed.";
@@ -603,23 +647,25 @@ const SESSION_STATUS_OWNER_DESCRIPTION: &str = "The session or status request is
 pub struct SharedCore {
     core: Core,
     secret_store: Arc<dyn SecretVault + Send + Sync>,
-    restored_client: Mutex<RestoredClientSlot>,
-    owner_attach: Mutex<OwnerAttachSlot>,
-    /// Serializes the complete SyncService/Client lifecycle transaction.
+    /// User-Agent of every SDK client this Core builds.
+    user_agent: String,
+    /// The session slot, transition gate, recover gate, generation counter
+    /// and save-retry backoff, shared with desktop's `MatrixAuthState`.
+    lifecycle: Arc<crate::app::lifecycle::session::SessionLifecycleOwner<IosSession>>,
+    /// Serializes the complete SyncService/Client suspend and resume
+    /// transaction (`start_sync`, `stop_sync`, `restart_sync`, `logout`).
     /// Shell-side ordering remains useful, but the persistence boundary must
-    /// remain correct for every current and future FFI caller.
+    /// remain correct for every current and future FFI caller. Taken before
+    /// the lifecycle owner's transition gate.
     sync_lifecycle: tokio::sync::Mutex<()>,
-    timeline_view_updates: Arc<Mutex<Vec<TimelineViewDeltaBatch>>>,
+    /// Closed between `stop_sync` and the next `start_sync` (iOS suspension).
+    suspension: SessionSuspension,
+    timeline_view_updates: Arc<Mutex<timeline_view::TimelineViewDirtyStreams>>,
     owner_updates: Arc<Mutex<Vec<OwnerUpdateDto>>>,
     room_list_updates: Arc<Mutex<Vec<RoomListUpdateDto>>>,
     room_list_live: Arc<Mutex<Option<NativeRoomListOwner>>>,
     own_profile_live: Arc<Mutex<Option<NativeOwnProfileOwner>>>,
     media_retention_live: Arc<Mutex<Option<NativeMediaRetentionOwner>>>,
-    /// Monotonic per-instance session generation. A re-login in the same
-    /// process must not reuse the generation a retired session carried.
-    generations: crate::app::lifecycle::session::SessionGenerations,
-    /// Backoff for re-saving tokens after a failed rotation save.
-    maintenance: Mutex<crate::app::lifecycle::session::SessionMaintenance>,
     /// The generation (and account) whose sync reported a rejected refresh.
     /// Latched when observed so retirement does not depend on the live sync
     /// owner still existing, or still reporting, after the shell stops it.

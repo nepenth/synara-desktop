@@ -1,9 +1,17 @@
 import Foundation
 
 enum AppRoute: Hashable {
-    case login(homeserverURL: String)
+    /// `homeserverURL` is the resolved client-API URL; `requestedAddress` is
+    /// what the user typed, shown on the sign-in screen.
+    case login(homeserverURL: String, requestedAddress: String? = nil)
     case room(id: String, eventID: String? = nil, title: String? = nil)
-    case thread(roomID: String, rootEventID: String, roomTitle: String? = nil, rootTitle: String? = nil)
+    case thread(
+        roomID: String,
+        rootEventID: String,
+        roomTitle: String? = nil,
+        rootTitle: String? = nil,
+        focusedEventID: String? = nil
+    )
     case settings
     case notifications
     case later
@@ -21,7 +29,7 @@ enum AppRoute: Hashable {
         switch self {
         case .room(let id, _, _):
             return id
-        case .thread(let roomID, _, _, _):
+        case .thread(let roomID, _, _, _, _):
             return roomID
         case .login, .settings, .notifications, .later:
             return nil

@@ -1,7 +1,9 @@
-import { isTag } from 'domhandler';
+import { isTag, isText, type ChildNode } from 'domhandler';
 import { reactDomNodes } from '../../utils/reactDomNodes';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { attributesToProps, domToReact, HTMLReactParserOptions } from 'html-react-parser';
+import Linkify from 'linkify-react';
+import type { IntermediateRepresentation, Opts as LinkifyOpts } from 'linkifyjs';
 import '../../plugins/react-prism/ReactPrism.css';
 import {
   NATIVE_PRISM_CHAR_LIMIT,
@@ -20,6 +22,57 @@ import * as htmlCss from './nativeTimelineHtml.css';
 import { MatrixColorSpan, MatrixColorSurface } from '../../components/message/MatrixColorSpan';
 import { copyToClipboard } from '../../utils/dom';
 import { useTimeoutToggle } from '../../hooks/useTimeoutToggle';
+import * as customHtmlCss from '../../styles/CustomHtml.css';
+import { convertDesktopFileSrc } from '../../utils/desktop';
+import { IN_APP_LINK_ATTRIBUTE } from '../../utils/appLinks';
+import { getMyUserId } from '../../state/nativeIdentity';
+import { highlightText } from '../../utils/highlightText';
+import {
+  isNativeOpenableHref,
+  nativeCustomEmojiContentUri,
+  nativeLinkHostMismatch,
+  parseNativePermalink,
+  type NativePermalinkTarget,
+} from './nativeTimelineLinks';
+
+/** Opens a matrix.to user, room or event link inside Synara. */
+export type NativePermalinkHandler = (target: NativePermalinkTarget, anchor: HTMLElement) => void;
+
+const NativePermalinkContext = createContext<NativePermalinkHandler | undefined>(undefined);
+
+/**
+ * Supplies in-app navigation for permalinks in formatted messages. Without
+ * it (no router, e.g. a test harness) they stay ordinary external links.
+ */
+export const NativePermalinkProvider = NativePermalinkContext.Provider;
+
+const nodeText = (node: ChildNode): string => {
+  if (isText(node)) return node.data;
+  if (isTag(node)) return node.children.map(nodeText).join('');
+  return '';
+};
+
+const isModifiedClick = (event: React.MouseEvent): boolean =>
+  event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+
+/** A custom emoji through Core's authenticated media; its shortcode if that fails. */
+function NativeCustomEmoji({ mxc, label }: { mxc: string; label: string }) {
+  const [failed, setFailed] = useState(false);
+  const src = convertDesktopFileSrc(nativeCustomEmojiContentUri(mxc), 'synara-media');
+  if (!src || failed) {
+    return <span className={htmlCss.InlineImageFallback}>{label}</span>;
+  }
+  return (
+    <img
+      className={htmlCss.CustomEmoji}
+      src={src}
+      alt={label}
+      title={label}
+      data-mx-emoticon=""
+      onError={() => setFailed(true)}
+    />
+  );
+}
 
 export function NativeCodeBlock({ code, languageClass }: { code: string; languageClass?: string }) {
   // Chromium does not paint an extra gutter row for a final line terminator,
@@ -140,102 +193,208 @@ function NativeSpoiler({
   );
 }
 
-const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
-  replace: (domNode) => {
-    if (!isTag(domNode) || !('name' in domNode)) {
-      return undefined;
-    }
-    const parentName =
-      domNode.parent !== null && isTag(domNode.parent) ? domNode.parent.name : undefined;
-    const presentation = classifyNativeFormattedElement(domNode.name, domNode.attribs, parentName);
-    if (presentation === 'table') {
-      return (
-        <MatrixColorSurface surface="table">
-          <div
-            className={htmlCss.TableScroll}
-            role="region"
-            aria-label="Scrollable message table"
-            // Horizontal overflow needs an explicit keyboard focus target.
-            // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-            tabIndex={0}
-          >
-            <table {...attributesToProps(domNode.attribs)}>
-              {domToReact(reactDomNodes(domNode.children), nativeFormattedHtmlParserOptions)}
-            </table>
-          </div>
-        </MatrixColorSurface>
-      );
-    }
-    if (presentation === 'spoiler') {
-      return (
-        <NativeSpoiler
-          reason={domNode.attribs['data-mx-spoiler']}
-          foreground={domNode.attribs['data-mx-color']}
-          background={domNode.attribs['data-mx-bg-color']}
-        >
-          {domToReact(reactDomNodes(domNode.children), nativeFormattedHtmlParserOptions)}
-        </NativeSpoiler>
-      );
-    }
-    if (presentation === 'matrixColor') {
-      return (
-        <MatrixColorSpan
-          foreground={domNode.attribs['data-mx-color']}
-          background={domNode.attribs['data-mx-bg-color']}
-        >
-          {domToReact(reactDomNodes(domNode.children), nativeFormattedHtmlParserOptions)}
-        </MatrixColorSpan>
-      );
-    }
-    if (presentation === 'inlineImageFallback') {
-      // Matrix formatted HTML only permits mxc:// image sources. Loading those
-      // directly in the webview bypasses shared-core media authentication and
-      // simply fails. Preserve the accessible producer fallback without a
-      // resource request until inline media has an authenticated core handle.
-      const label = domNode.attribs.alt?.trim() || domNode.attribs.title?.trim() || 'Inline image';
-      return (
-        <span className={htmlCss.InlineImageFallback} role="img" aria-label={label}>
-          {label}
-        </span>
-      );
-    }
-    if (presentation === 'inlineCode') {
-      return (
-        <MatrixColorSurface surface="inlineCode">
-          <code {...attributesToProps(domNode.attribs)}>
-            {domToReact(reactDomNodes(domNode.children), nativeFormattedHtmlParserOptions)}
-          </code>
-        </MatrixColorSurface>
-      );
-    }
-    if (presentation !== 'codeBlock') return undefined;
-    const { code, languageClass } = nativeCodeBlockFromPreChildren(domNode.children);
+type NativeFormattedRenderContext = {
+  onPermalink?: NativePermalinkHandler;
+  ownUserId?: string;
+  /** Search terms to mark in the text (message search results). */
+  highlightRegex?: RegExp;
+};
+
+const renderNativeAnchor = (
+  href: string,
+  text: string,
+  children: React.ReactNode,
+  context: NativeFormattedRenderContext
+): React.JSX.Element => {
+  const permalink = parseNativePermalink(href);
+  if (permalink) {
+    const { onPermalink } = context;
     return (
-      <MatrixColorSurface surface="codeBlock">
-        <NativeCodeBlock code={code} languageClass={languageClass} />
-      </MatrixColorSurface>
+      <a
+        href={href}
+        className={customHtmlCss.Mention({
+          highlight: permalink.kind === 'user' && permalink.userId === context.ownUserId,
+        })}
+        {...(onPermalink
+          ? {
+              [IN_APP_LINK_ATTRIBUTE]: '',
+              onClick: (event: React.MouseEvent<HTMLAnchorElement>) => {
+                if (isModifiedClick(event)) return;
+                event.preventDefault();
+                onPermalink(permalink, event.currentTarget);
+              },
+            }
+          : { target: '_blank', rel: 'noreferrer noopener' })}
+      >
+        {children}
+      </a>
     );
-  },
+  }
+  // The desktop opener only opens web and mail links (`desktop_url.rs`); an
+  // ftp or magnet link would do nothing, so show its address to copy instead.
+  if (!isNativeOpenableHref(href)) {
+    return (
+      <span title={href} data-native-unopenable-link="true">
+        {children}
+        <span className={htmlCss.LinkAddress}>{` (${href})`}</span>
+      </span>
+    );
+  }
+  // The webview has no status bar: name the destination on hover, and say
+  // where a link really goes when its text is a different web address.
+  const mismatchHost = nativeLinkHostMismatch(text, href);
+  return (
+    <>
+      <a href={href} target="_blank" rel="noreferrer noopener" title={href}>
+        {children}
+      </a>
+      {mismatchHost ? (
+        <span className={htmlCss.LinkHostWarning} data-native-link-host-warning="true">
+          {` (link to ${mismatchHost})`}
+        </span>
+      ) : null}
+    </>
+  );
+};
+
+export const createNativeFormattedHtmlParserOptions = (
+  context: NativeFormattedRenderContext
+): HTMLReactParserOptions => {
+  const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
+    replace: (domNode) => {
+      if (isText(domNode)) {
+        const { highlightRegex } = context;
+        // Inline code keeps its exact text (code blocks never reach here).
+        const inCode =
+          domNode.parent !== null && isTag(domNode.parent) && domNode.parent.name === 'code';
+        if (!highlightRegex || inCode) return undefined;
+        return <>{highlightText(highlightRegex, [domNode.data])}</>;
+      }
+      if (!isTag(domNode) || !('name' in domNode)) {
+        return undefined;
+      }
+      if (domNode.name === 'a' && domNode.attribs.href) {
+        return renderNativeAnchor(
+          domNode.attribs.href,
+          nodeText(domNode),
+          domToReact(reactDomNodes(domNode.children), nativeFormattedHtmlParserOptions),
+          context
+        );
+      }
+      const parentName =
+        domNode.parent !== null && isTag(domNode.parent) ? domNode.parent.name : undefined;
+      const presentation = classifyNativeFormattedElement(
+        domNode.name,
+        domNode.attribs,
+        parentName
+      );
+      if (presentation === 'table') {
+        return (
+          <MatrixColorSurface surface="table">
+            <div
+              className={htmlCss.TableScroll}
+              role="region"
+              aria-label="Scrollable message table"
+              // Horizontal overflow needs an explicit keyboard focus target.
+              // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+              tabIndex={0}
+            >
+              <table {...attributesToProps(domNode.attribs)}>
+                {domToReact(reactDomNodes(domNode.children), nativeFormattedHtmlParserOptions)}
+              </table>
+            </div>
+          </MatrixColorSurface>
+        );
+      }
+      if (presentation === 'spoiler') {
+        return (
+          <NativeSpoiler
+            reason={domNode.attribs['data-mx-spoiler']}
+            foreground={domNode.attribs['data-mx-color']}
+            background={domNode.attribs['data-mx-bg-color']}
+          >
+            {domToReact(reactDomNodes(domNode.children), nativeFormattedHtmlParserOptions)}
+          </NativeSpoiler>
+        );
+      }
+      if (presentation === 'matrixColor') {
+        return (
+          <MatrixColorSpan
+            foreground={domNode.attribs['data-mx-color']}
+            background={domNode.attribs['data-mx-bg-color']}
+          >
+            {domToReact(reactDomNodes(domNode.children), nativeFormattedHtmlParserOptions)}
+          </MatrixColorSpan>
+        );
+      }
+      if (presentation === 'customEmoji') {
+        return (
+          <NativeCustomEmoji
+            mxc={domNode.attribs['data-mx-emoticon']}
+            label={nodeText(domNode).trim() || 'Custom emoji'}
+          />
+        );
+      }
+      if (presentation === 'inlineImageFallback') {
+        // Matrix formatted HTML only permits mxc:// image sources. Loading those
+        // directly in the webview bypasses shared-core media authentication and
+        // simply fails. Preserve the accessible producer fallback without a
+        // resource request until inline media has an authenticated core handle.
+        const label =
+          domNode.attribs.alt?.trim() || domNode.attribs.title?.trim() || 'Inline image';
+        return (
+          <span className={htmlCss.InlineImageFallback} role="img" aria-label={label}>
+            {label}
+          </span>
+        );
+      }
+      if (presentation === 'inlineCode') {
+        return (
+          <MatrixColorSurface surface="inlineCode">
+            <code {...attributesToProps(domNode.attribs)}>
+              {domToReact(reactDomNodes(domNode.children), nativeFormattedHtmlParserOptions)}
+            </code>
+          </MatrixColorSurface>
+        );
+      }
+      if (presentation !== 'codeBlock') return undefined;
+      const { code, languageClass } = nativeCodeBlockFromPreChildren(domNode.children);
+      return (
+        <MatrixColorSurface surface="codeBlock">
+          <NativeCodeBlock code={code} languageClass={languageClass} />
+        </MatrixColorSurface>
+      );
+    },
+  };
+  return nativeFormattedHtmlParserOptions;
 };
 
 export function NativeFormattedBody({
   html,
   fallbackBody,
   style,
+  highlightRegex,
 }: {
   html: string;
   fallbackBody: string;
   style?: React.CSSProperties;
+  highlightRegex?: RegExp;
 }) {
+  const onPermalink = useContext(NativePermalinkContext);
+  const ownUserId = getMyUserId() ?? undefined;
+  const parserOptions = useMemo(
+    () => createNativeFormattedHtmlParserOptions({ onPermalink, ownUserId, highlightRegex }),
+    [onPermalink, ownUserId, highlightRegex]
+  );
   const projection = useMemo(() => projectNativeFormattedBody(html), [html]);
   const parsed = useMemo(() => {
     if (!projection) return undefined;
     try {
-      return domToReact(projection.domNodes, nativeFormattedHtmlParserOptions);
+      return domToReact(projection.domNodes, parserOptions);
     } catch {
       return undefined;
     }
-  }, [projection]);
+  }, [parserOptions, projection]);
 
   return (
     <div
@@ -245,4 +404,72 @@ export function NativeFormattedBody({
       {parsed === undefined ? fallbackBody : parsed}
     </div>
   );
+}
+
+/**
+ * Plain-text links: only addresses the desktop opener handles (an ftp or
+ * magnet address is already readable as text), each through the formatted
+ * renderer's anchor, so matrix.to links become mentions and permalinks too.
+ */
+const createNativeLinkifyOptions = (context: NativeFormattedRenderContext): LinkifyOpts => ({
+  validate: {
+    url: (value) => isNativeOpenableHref(value),
+  },
+  ignoreTags: ['span'],
+  render: ({ tagName, attributes, content }: IntermediateRepresentation) => {
+    const href = typeof attributes.href === 'string' ? attributes.href : undefined;
+    if (tagName !== 'a' || !href) return <>{content}</>;
+    return renderNativeAnchor(href, content, content, context);
+  },
+});
+
+/**
+ * Plain text with its links: message bodies without HTML, room topics and
+ * pack attributions. Renders inline; the caller supplies the text box.
+ */
+export function NativeLinkifiedText({
+  text,
+  highlightRegex,
+}: {
+  text: string;
+  highlightRegex?: RegExp;
+}) {
+  const onPermalink = useContext(NativePermalinkContext);
+  const ownUserId = getMyUserId() ?? undefined;
+  const options = useMemo(
+    () => createNativeLinkifyOptions({ onPermalink, ownUserId }),
+    [onPermalink, ownUserId]
+  );
+  return (
+    <Linkify options={options}>
+      {highlightRegex ? highlightText(highlightRegex, [text]) : text}
+    </Linkify>
+  );
+}
+
+/**
+ * A message's text outside the timeline (inbox, pins, search): the timeline's
+ * sanitizer and renderer with no row state. Mentions, permalinks and custom
+ * emoji behave as in the timeline; inside `NativeRoomPermalinks` (or a room)
+ * permalinks open in Synara.
+ */
+export function NativeMessageText({
+  body,
+  formattedBody,
+  highlightRegex,
+}: {
+  body: string;
+  formattedBody?: string;
+  highlightRegex?: RegExp;
+}) {
+  if (formattedBody) {
+    return (
+      <NativeFormattedBody
+        html={formattedBody}
+        fallbackBody={body}
+        highlightRegex={highlightRegex}
+      />
+    );
+  }
+  return <NativeLinkifiedText text={body} highlightRegex={highlightRegex} />;
 }

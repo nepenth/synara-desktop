@@ -5,7 +5,8 @@ use super::*;
 
 pub use crate::app::account_data::{
     NativeAccountDataContent, NativeAccountDataGetRequest, NativeAccountDataSetRequest,
-    NativeAccountDataTypes, NativeAccountDataTypesRequest, RawAccountDataError,
+    NativeAccountDataTypes, NativeAccountDataTypesRequest, NativeRecentEmoji,
+    NativeRecentEmojiEntry, RawAccountDataError,
 };
 pub use crate::app::room_profile::{
     NativeBulkRedactRequest, NativeBulkRedactResult, NativeMutualRooms, NativeMutualRoomsRequest,
@@ -73,6 +74,25 @@ pub(super) async fn account_data_set(
             payload.room_id.as_deref(),
             payload.content,
         )
+        .await
+        .map_err(raw_account_data_error)
+}
+
+pub(super) async fn recent_emoji_snapshot(
+    state: &Arc<CoreState>,
+) -> Result<NativeRecentEmoji, MatrixIpcError> {
+    account_data_owner(state)?
+        .recent_emoji_snapshot()
+        .await
+        .map_err(raw_account_data_error)
+}
+
+pub(super) async fn recent_emoji_record(
+    state: &Arc<CoreState>,
+    emoji: &str,
+) -> Result<NativeRecentEmoji, MatrixIpcError> {
+    account_data_owner(state)?
+        .recent_emoji_record(emoji)
         .await
         .map_err(raw_account_data_error)
 }
@@ -174,6 +194,19 @@ impl Core {
         request: NativeAccountDataSetRequest,
     ) -> Result<NativeAccountDataContent, MatrixIpcError> {
         account_data_set(&self.state, request).await
+    }
+
+    /// The `io.element.recent_emoji` list (iOS quick reactions).
+    pub async fn recent_emoji_snapshot(&self) -> Result<NativeRecentEmoji, MatrixIpcError> {
+        recent_emoji_snapshot(&self.state).await
+    }
+
+    /// Records one use of `emoji` in `io.element.recent_emoji`, as desktop does.
+    pub async fn recent_emoji_record(
+        &self,
+        emoji: &str,
+    ) -> Result<NativeRecentEmoji, MatrixIpcError> {
+        recent_emoji_record(&self.state, emoji).await
     }
 
     /// Typed `matrix_room_local_aliases`.

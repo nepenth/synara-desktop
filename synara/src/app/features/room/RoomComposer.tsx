@@ -9,6 +9,8 @@ type RoomComposerProps = {
   editor: Editor;
   editableName?: string;
   placeholder?: string;
+  /** The textbox's accessible name, e.g. "Message #general"; defaults to the placeholder. */
+  ariaLabel?: string;
   maxHeight?: string;
   replyPreview?: ReactNode;
   linkPreview?: ReactNode;
@@ -28,6 +30,7 @@ export const RoomComposer = forwardRef<HTMLDivElement, RoomComposerProps>(
       editor,
       editableName,
       placeholder,
+      ariaLabel,
       maxHeight,
       replyPreview,
       linkPreview,
@@ -49,6 +52,7 @@ export const RoomComposer = forwardRef<HTMLDivElement, RoomComposerProps>(
         editableName={editableName}
         editor={editor}
         placeholder={placeholder}
+        ariaLabel={ariaLabel}
         maxHeight={maxHeight}
         onKeyDown={onKeyDown}
         onKeyUp={onKeyUp}

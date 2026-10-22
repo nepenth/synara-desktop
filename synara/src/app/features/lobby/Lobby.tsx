@@ -34,6 +34,8 @@ import { makeLobbyCategoryId } from '../../state/closedLobbyCategories';
 import { useCategoryHandler } from '../../hooks/useCategoryHandler';
 import { allRoomsAtom } from '../../state/room-list/roomList';
 import { getCanonicalAliasOrRoomId, rateLimitedActions } from '../../utils/matrix';
+import { bulkFailureMessage } from '../../utils/bulkActions';
+import { moveLobbyRoom } from './lobbyRoomMove';
 import { getSpaceRoomPath } from '../../pages/pathUtils';
 import { StateEvent } from '../../../types/matrix/room';
 import { CanDropCallback, useDnDMonitor } from './DnD';
@@ -257,13 +259,25 @@ export function Lobby() {
           });
 
         if (reorders) {
-          await rateLimitedActions(reorders, async (reorder) => {
+          const failures = await rateLimitedActions(reorders, async (reorder) => {
             if (!reorder.item.parentId) return;
             await setSpaceChild(reorder.item.parentId, reorder.item.roomId, {
               ...reorder.item.content,
               order: reorder.orderKey,
             });
           });
+          if (failures.length > 0) {
+            throw new Error(
+              bulkFailureMessage(
+                reorders.length,
+                failures.map(
+                  ({ item: reorder }) =>
+                    getNativeRoom(reorder.item.roomId)?.name ?? reorder.item.roomId
+                ),
+                { done: 'Saved the position of', verb: 'move', noun: 'spaces' }
+              )
+            );
+          }
         }
       },
       [hierarchy, lex, roomsPowerLevels]
@@ -281,21 +295,6 @@ export function Lobby() {
         const containerParentId: string =
           'space' in containerItem ? containerItem.roomId : containerItem.parentId;
         const itemContent = item.content;
-
-        // remove from current space
-        if (item.parentId !== containerParentId) {
-          await removeSpaceChild(item.parentId, item.roomId);
-        }
-
-        if (
-          itemRoom &&
-          itemRoom.getJoinRule() === 'restricted' &&
-          item.parentId !== containerParentId
-        ) {
-          // change join rule allow parameter when dragging
-          // restricted room from one space to another
-          await reparentRestrictedJoin(item.roomId, item.parentId, containerParentId);
-        }
 
         const itemSpaces = Array.from(
           hierarchy?.find((i) => i.space.roomId === containerParentId)?.rooms ?? []
@@ -328,20 +327,40 @@ export function Lobby() {
           }))
           .filter((reorder, index) => reorder.item && reorder.orderKey !== currentOrders[index]);
 
-        if (reorders) {
-          await rateLimitedActions(reorders, async (reorder) => {
-            await setSpaceChild(containerParentId, reorder.item.roomId, {
-              ...reorder.item.content,
-              order: reorder.orderKey,
-            });
-          });
-        }
+        // Add to the new space before leaving the old one (and update the
+        // restricted join rule in between), so a failure never orphans it.
+        await moveLobbyRoom(
+          {
+            roomId: item.roomId,
+            roomName: itemRoom?.name ?? item.roomId,
+            fromParentId: item.parentId,
+            toParentId: containerParentId,
+            toParentName: getNativeRoom(containerParentId)?.name ?? 'the space',
+            restricted: itemRoom?.getJoinRule() === 'restricted',
+            movedContent: { ...itemContent, order: undefined },
+            reorders: (reorders ?? []).map((reorder) => ({
+              roomId: reorder.item.roomId,
+              content: { ...reorder.item.content, order: reorder.orderKey },
+            })),
+          },
+          {
+            setSpaceChild,
+            removeSpaceChild,
+            reparentRestrictedJoin,
+            runWrites: rateLimitedActions,
+          }
+        );
       },
       [hierarchy, lex]
     )
   );
   const reorderingRoom = reorderRoomState.status === AsyncStatus.Loading;
   const reordering = reorderingRoom || reorderingSpace;
+  const [lobbyError, setLobbyError] = useState<string>();
+
+  const reportLobbyError = useCallback((error: unknown, fallback: string) => {
+    setLobbyError(error instanceof Error && error.message ? error.message : fallback);
+  }, []);
 
   useDnDMonitor(
     scrollRef,
@@ -351,13 +370,18 @@ export function Lobby() {
         if (!canDrop(item, container)) {
           return;
         }
+        setLobbyError(undefined);
         if ('space' in item) {
-          reorderSpace(item, container.item);
+          reorderSpace(item, container.item).catch((error) =>
+            reportLobbyError(error, "Couldn't save the new space order. Try again.")
+          );
         } else {
-          reorderRoom(item, container.item);
+          reorderRoom(item, container.item).catch((error) =>
+            reportLobbyError(error, "Couldn't move this room. Try again.")
+          );
         }
       },
-      [reorderRoom, reorderSpace, canDrop]
+      [reorderRoom, reorderSpace, canDrop, reportLobbyError]
     )
   );
 
@@ -388,10 +412,18 @@ export function Lobby() {
   const togglePinToSidebar = useCallback(
     (rId: string) => {
       const newItems = sidebarItemWithout(sidebarItems, rId);
-      if (!sidebarSpaces.has(rId)) {
+      const pinning = !sidebarSpaces.has(rId);
+      if (pinning) {
         newItems.push(rId);
       }
-      void saveSynaraSpacesContent(makeSynaraSpacesContent(newItems)).catch(() => undefined);
+      setLobbyError(undefined);
+      saveSynaraSpacesContent(makeSynaraSpacesContent(newItems)).catch(() =>
+        setLobbyError(
+          pinning
+            ? "Couldn't pin this space to the sidebar. Try again."
+            : "Couldn't unpin this space from the sidebar. Try again."
+        )
+      );
     },
     [sidebarItems, sidebarSpaces]
   );
@@ -493,6 +525,32 @@ export function Lobby() {
                         before={<Spinner variant="Secondary" fill="Soft" size="100" />}
                       >
                         <Text size="L400">Reordering</Text>
+                      </Chip>
+                    </Box>
+                  )}
+                  {!reordering && lobbyError && (
+                    <Box
+                      role="alert"
+                      style={{
+                        position: 'absolute',
+                        bottom: config.space.S400,
+                        left: 0,
+                        right: 0,
+                        zIndex: 2,
+                        paddingInline: config.space.S400,
+                      }}
+                      justifyContent="Center"
+                    >
+                      <Chip
+                        variant="Critical"
+                        outlined
+                        radii="Pill"
+                        style={{ height: 'auto', maxWidth: '100%' }}
+                        before={<Icon size="100" src={Icons.Warning} />}
+                        after={<Icon size="100" src={Icons.Cross} />}
+                        onClick={() => setLobbyError(undefined)}
+                      >
+                        <Text size="L400">{lobbyError}</Text>
                       </Chip>
                     </Box>
                   )}

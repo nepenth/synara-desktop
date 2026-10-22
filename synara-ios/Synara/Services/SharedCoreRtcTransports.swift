@@ -36,17 +36,17 @@ enum SharedCoreRtcTransports {
 
     static func diagnosticCopy(_ snapshot: SharedCoreRtcTransportsSnapshot) -> String {
         if snapshot.status == .unsupported || snapshot.status == .unavailable {
-            return "This homeserver does not advertise a call transport"
+            return String(localized: "This homeserver does not advertise a call transport")
         }
         if let livekit = snapshot.transports.first(where: { $0.kind == "livekit" }) {
             if let url = livekit.serviceURL, url.isEmpty == false {
-                return "MatrixRTC transport: LiveKit at \(url)"
+                return String(localized: "MatrixRTC transport: LiveKit at \(url)")
             }
-            return "MatrixRTC transport: LiveKit"
+            return String(localized: "MatrixRTC transport: LiveKit")
         }
         if snapshot.transports.contains(where: { $0.kind == "custom" }) {
-            return "MatrixRTC transport: custom"
+            return String(localized: "MatrixRTC transport: custom")
         }
-        return "MatrixRTC transport: ready"
+        return String(localized: "MatrixRTC transport: ready")
     }
 }

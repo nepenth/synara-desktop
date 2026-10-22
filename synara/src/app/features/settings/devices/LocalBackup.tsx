@@ -15,6 +15,7 @@ import {
   selectNativeRoomKeyImport,
 } from '../../room-keys/nativeRoomKeys';
 import { SettingsSection } from '../../../components/settings-layout';
+import { composerErrorMessage } from '../../room/composerSendError';
 
 function NativeExportKeys() {
   const alive = useAlive();
@@ -103,7 +104,12 @@ function NativeExportKeys() {
         )}
         {exportState.status === AsyncStatus.Error && (
           <Text size="T200" style={{ color: color.Critical.Main }}>
-            <b>{exportState.error.message}</b>
+            <b>
+              {composerErrorMessage(
+                exportState.error,
+                'Synara could not export your room keys. Try again.'
+              )}
+            </b>
           </Text>
         )}
       </Box>
@@ -214,7 +220,12 @@ function NativeImportKeys({
         )}
         {importState.status === AsyncStatus.Error && (
           <Text size="T200" style={{ color: color.Critical.Main }}>
-            <b>{importState.error.message}</b>
+            <b>
+              {composerErrorMessage(
+                importState.error,
+                'Synara could not import your room keys. Try again.'
+              )}
+            </b>
           </Text>
         )}
       </Box>
@@ -233,7 +244,9 @@ function NativeImportKeysTile() {
       const selected = await selectNativeRoomKeyImport();
       if (selected) setSelection(selected);
     } catch (error) {
-      setSelectionError(error instanceof Error ? error.message : 'Room-key file selection failed.');
+      setSelectionError(
+        composerErrorMessage(error, 'Synara could not open the room-key file. Try again.')
+      );
     } finally {
       setSelecting(false);
     }
@@ -243,7 +256,7 @@ function NativeImportKeysTile() {
     <>
       <SettingTile
         title="Import Messages Data"
-        description="Choose an encrypted room-key file; decryption and import stay in the native host."
+        description="Choose an encrypted room-key file. Synara decrypts and imports it on this device."
         after={
           selection ? (
             <Button

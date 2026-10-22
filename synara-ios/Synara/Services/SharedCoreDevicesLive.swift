@@ -44,37 +44,37 @@ enum SharedCoreDevicesLive {
     static func trustDisplayName(_ trust: DeviceTrustDto) -> String {
         switch trust {
         case .verified, .verifiedLocallyOnly:
-            return "Verified"
+            return String(localized: "Verified")
         case .verifiedByCertificate:
-            return "Verified (certificate)"
+            return String(localized: "Verified (certificate)")
         case .unverified:
-            return "Unverified"
+            return String(localized: "Unverified")
         case .dehydrated:
-            return "Backup device"
+            return String(localized: "Backup device")
         case .noEncryption:
-            return "Not encrypted"
+            return String(localized: "Not encrypted")
         }
     }
 
     static func lastActivityDisplay(lastSeenTs: UInt64?, now: Date = Date()) -> String? {
-        relativeTimestampDisplay(prefix: "Last activity", timestampMs: lastSeenTs, now: now)
+        relativeTimestamp(timestampMs: lastSeenTs, now: now).map { relative in
+            String(localized: "Last activity \(relative)")
+        }
     }
 
     static func firstSeenDisplay(firstSeenTs: UInt64?, now: Date = Date()) -> String? {
-        relativeTimestampDisplay(prefix: "First seen", timestampMs: firstSeenTs, now: now)
+        relativeTimestamp(timestampMs: firstSeenTs, now: now).map { relative in
+            String(localized: "First seen \(relative)")
+        }
     }
 
-    private static func relativeTimestampDisplay(
-        prefix: String,
-        timestampMs: UInt64?,
-        now: Date
-    ) -> String? {
+    private static func relativeTimestamp(timestampMs: UInt64?, now: Date) -> String? {
         guard let timestampMs else { return nil }
         let seconds = TimeInterval(timestampMs) / 1000
         guard seconds.isFinite, seconds > 0 else { return nil }
         let date = Date(timeIntervalSince1970: seconds)
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
-        return "\(prefix) \(formatter.localizedString(for: date, relativeTo: now))"
+        return formatter.localizedString(for: date, relativeTo: now)
     }
 }

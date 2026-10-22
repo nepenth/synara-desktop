@@ -11,9 +11,19 @@ type UserAvatarProps = {
   userId: string;
   src?: string;
   alt?: string;
+  fallbackBackground?: string;
+  fallbackColor?: string;
   renderFallback: () => ReactNode;
 };
-export function UserAvatar({ className, userId, src, alt, renderFallback }: UserAvatarProps) {
+export function UserAvatar({
+  className,
+  userId,
+  src,
+  alt,
+  fallbackBackground,
+  fallbackColor,
+  renderFallback,
+}: UserAvatarProps) {
   const resolvedSrc = useNativeMatrixMediaSrc(src, { size: NATIVE_AVATAR_THUMBNAIL_PX });
   const [error, setError] = useState(false);
 
@@ -28,7 +38,10 @@ export function UserAvatar({ className, userId, src, alt, renderFallback }: User
   if (!resolvedSrc || error) {
     return (
       <AvatarFallback
-        style={{ backgroundColor: colorMXID(userId), color: color.Surface.Container }}
+        style={{
+          backgroundColor: fallbackBackground ?? colorMXID(userId),
+          color: fallbackColor ?? color.Surface.Container,
+        }}
         className={classNames(css.UserAvatar, className)}
       >
         {renderFallback()}

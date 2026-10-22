@@ -61,7 +61,6 @@ export interface SharedSettings {
   gifSearchEnabled: boolean;
   indexedMessageSearch: boolean;
   gifOnboardingDismissed: boolean;
-  timelineVirtualizationEnabled: boolean;
   showHiddenEvents: boolean;
   legacyUsernameColor: boolean;
 
@@ -145,7 +144,6 @@ export const defaultSharedSettings: SharedSettings = {
   gifSearchEnabled: false,
   indexedMessageSearch: true,
   gifOnboardingDismissed: false,
-  timelineVirtualizationEnabled: true,
   showHiddenEvents: false,
   legacyUsernameColor: false,
 
@@ -195,10 +193,38 @@ const sanitizePlatformSettings = (settings: DesktopPlatformSettings): DesktopPla
   agentWidgetEntries: sanitizeAgentWidgetEntries(settings.agentWidgetEntries),
 });
 
-export const defaultDesktopPlatformSettings: DesktopPlatformSettings = {
+/**
+ * Global shortcuts take their keys from every other app while Synara runs, so
+ * the defaults use three modifiers. An empty value turns a shortcut off.
+ */
+export const DEFAULT_DESKTOP_SHORTCUTS = {
+  desktopShortcutShow: 'CmdOrCtrl+Alt+Shift+M',
+  desktopShortcutLater: 'CmdOrCtrl+Alt+Shift+L',
+  desktopShortcutNotifications: 'CmdOrCtrl+Alt+Shift+N',
+} as const;
+
+/** The defaults before 2.3; they took Copy in Linux terminals and New Folder in Finder. */
+const RETIRED_DESKTOP_SHORTCUTS = {
   desktopShortcutShow: 'CmdOrCtrl+Shift+C',
   desktopShortcutLater: 'CmdOrCtrl+Shift+L',
   desktopShortcutNotifications: 'CmdOrCtrl+Shift+N',
+} as const;
+
+/**
+ * A stored set equal to the retired defaults was never customised (it is
+ * written with the rest of the settings), so it moves to the new defaults.
+ */
+const migrateRetiredShortcutDefaults = (
+  settings: DesktopPlatformSettings
+): DesktopPlatformSettings =>
+  settings.desktopShortcutShow === RETIRED_DESKTOP_SHORTCUTS.desktopShortcutShow &&
+  settings.desktopShortcutLater === RETIRED_DESKTOP_SHORTCUTS.desktopShortcutLater &&
+  settings.desktopShortcutNotifications === RETIRED_DESKTOP_SHORTCUTS.desktopShortcutNotifications
+    ? { ...settings, ...DEFAULT_DESKTOP_SHORTCUTS }
+    : settings;
+
+export const defaultDesktopPlatformSettings: DesktopPlatformSettings = {
+  ...DEFAULT_DESKTOP_SHORTCUTS,
   desktopDiagnosticsEnabled: false,
   desktopDiagnosticsPerformance: false,
   desktopDiagnosticsSession: false,
@@ -290,10 +316,12 @@ export const createLocalStorageSettingsStore = (storage: SettingsStorage): Setti
         pickKnownSettings(defaultSharedSettings, legacyOrSharedSettings)
       ),
       platform: sanitizePlatformSettings(
-        pickKnownSettings(defaultPlatformSettings, {
-          ...legacyOrSharedSettings,
-          ...platformSettings,
-        })
+        migrateRetiredShortcutDefaults(
+          pickKnownSettings(defaultPlatformSettings, {
+            ...legacyOrSharedSettings,
+            ...platformSettings,
+          })
+        )
       ),
     };
   };
@@ -342,6 +370,12 @@ export const settingsStore: SettingsStore = {
 export const getSettings = () => {
   return settingsStore.getSettings();
 };
+
+/**
+ * The user's receipt privacy mode: read receipts are public `m.read` unless
+ * "Hide Typing & Read Receipts" is on, when Core sends `m.read.private`.
+ */
+export const readReceiptsArePublic = (): boolean => !getSettings().hideActivity;
 
 export const setSettings = (settings: Settings) => {
   settingsStore.setSettings(settings);

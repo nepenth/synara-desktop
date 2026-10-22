@@ -26,9 +26,34 @@ test('room read state invokes the native owner for a logged-in desktop session',
     { command: 'matrix_session_snapshot', args: undefined },
     {
       command: 'matrix_room_set_read_state',
-      args: { roomId: '!room:example.org', action: 'mark_read' },
+      args: { roomId: '!room:example.org', action: 'mark_read', publicReceipt: true },
     },
   ]);
+});
+
+test('hidden read receipts ask Core for a private receipt', async () => {
+  const stored = new Map([['settings', JSON.stringify({ hideActivity: true })]]);
+  const storage = {
+    getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => void stored.set(key, value),
+  };
+  Object.assign(globalThis, { localStorage: storage });
+  try {
+    const calls: Array<Record<string, unknown> | undefined> = [];
+    const invoke: NativeInvoke = async (command, args) => {
+      calls.push(args);
+      if (command === 'matrix_session_snapshot') {
+        return { available: true, value: { status: 'logged_in' } };
+      }
+      return { available: true, value: { receiptSent: true } };
+    };
+
+    await setRoomReadStateWithNativeOwner('!room:example.org', 'mark_read', true, invoke);
+
+    assert.equal(calls[1]?.publicReceipt, false);
+  } finally {
+    Reflect.deleteProperty(globalThis, 'localStorage');
+  }
 });
 
 test('explicit mark-read rejects a result that did not send a receipt or clear the flag', async () => {
@@ -57,7 +82,11 @@ test('room unread invokes the native unread-flag command', async () => {
   await setRoomReadStateWithNativeOwner('!room:example.org', 'mark_unread', true, invoke);
 
   assert.equal(calls[1]?.command, 'matrix_room_set_read_state');
-  assert.deepEqual(calls[1]?.args, { roomId: '!room:example.org', action: 'mark_unread' });
+  assert.deepEqual(calls[1]?.args, {
+    roomId: '!room:example.org',
+    action: 'mark_unread',
+    publicReceipt: true,
+  });
 });
 
 test('room read state fails closed outside the desktop product', async () => {

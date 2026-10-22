@@ -64,7 +64,7 @@ import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
 import { useRecursiveChildScopeFactory, useSpaceChildren } from '../../../state/hooks/roomList';
 import { roomToParentsAtom } from '../../../state/room/roomToParents';
-import { markAsReadFromExplicitUserActionInBackground } from '../../../utils/notifications';
+import { useMarkRoomsAsRead } from '../../../hooks/useMarkRoomsAsRead';
 import { useRoomsUnread } from '../../../state/hooks/unread';
 import { UseStateProvider } from '../../../components/UseStateProvider';
 import { LeaveSpacePrompt } from '../../../components/leave-space-prompt';
@@ -94,6 +94,7 @@ import { InviteUserPrompt } from '../../../components/invite-user-prompt';
 import * as depthCss from '../../../styles/Depth.css';
 
 import { getNativeRoom } from '../../../native/nativeSession';
+import { composerErrorMessage } from '../../../features/room/composerSendError';
 type SpaceMenuProps = {
   room: EventedRoomReading;
   requestClose: () => void;
@@ -117,9 +118,11 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
   );
   const unread = useRoomsUnread(allChild, roomToUnreadAtom);
 
-  const handleMarkAsRead = () => {
-    allChild.forEach((childRoomId) => markAsReadFromExplicitUserActionInBackground(childRoomId));
-    requestClose();
+  const { markRead, markingRead, markReadError } = useMarkRoomsAsRead();
+
+  const handleMarkAsRead = async () => {
+    if (markingRead) return;
+    if (await markRead(allChild)) requestClose();
   };
 
   const handleCopyLink = async () => {
@@ -168,6 +171,11 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
             Mark as Read
           </Text>
         </MenuItem>
+        {markReadError && (
+          <Text as="p" size="T200" role="alert" style={{ paddingInline: config.space.S200 }}>
+            {markReadError}
+          </Text>
+        )}
       </Box>
       <Line variant="Surface" size="300" />
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
@@ -287,7 +295,12 @@ function SpaceHeader() {
             {joinRules?.join_rule !== 'public' && <Icon src={Icons.Lock} size="50" />}
           </Box>
           <Box shrink="No">
-            <IconButton aria-pressed={!!menuAnchor} variant="Surface" onClick={handleOpenMenu}>
+            <IconButton
+              aria-label={`${spaceName} options`}
+              aria-pressed={!!menuAnchor}
+              variant="Surface"
+              onClick={handleOpenMenu}
+            >
               <Icon src={Icons.VerticalDots} size="200" />
             </IconButton>
           </Box>
@@ -303,7 +316,6 @@ function SpaceHeader() {
             <FocusTrap
               focusTrapOptions={{
                 initialFocus: false,
-                returnFocusOnDeactivate: false,
                 onDeactivate: () => setMenuAnchor(undefined),
                 clickOutsideDeactivates: true,
                 isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
@@ -360,7 +372,10 @@ export function SpaceTombstone({ roomId, replacementRoomId }: SpaceTombstoneProp
         <Text size="T200">This space has been replaced and is no longer active.</Text>
         {joinState.status === AsyncStatus.Error && (
           <Text className={BreakWord} style={{ color: color.Critical.Main }} size="T200">
-            {(joinState.error as any)?.message ?? 'Failed to join replacement space!'}
+            {composerErrorMessage(
+              joinState.error,
+              'Synara could not join the new space. Try again.'
+            )}
           </Text>
         )}
       </Box>
@@ -456,7 +471,7 @@ export function Space() {
     getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(roomId));
 
   return (
-    <PageNav>
+    <PageNav label="Space rooms">
       <SpaceHeader />
       <PageNavContent scrollRef={scrollRef}>
         <Box direction="Column" gap="300">
@@ -467,8 +482,11 @@ export function Space() {
             />
           )}
           <NavCategory>
-            <NavItem variant="Surface" radii="400" aria-selected={lobbySelected}>
-              <NavLink to={getSpaceLobbyPath(getCanonicalAliasOrRoomId(space.roomId))}>
+            <NavItem variant="Surface" radii="400" selected={lobbySelected}>
+              <NavLink
+                aria-current={lobbySelected ? 'page' : undefined}
+                to={getSpaceLobbyPath(getCanonicalAliasOrRoomId(space.roomId))}
+              >
                 <NavItemContent>
                   <Box as="span" grow="Yes" alignItems="Center" gap="200">
                     <Avatar size="200" radii="400">
@@ -483,8 +501,11 @@ export function Space() {
                 </NavItemContent>
               </NavLink>
             </NavItem>
-            <NavItem variant="Surface" radii="400" aria-selected={searchSelected}>
-              <NavLink to={getSpaceSearchPath(getCanonicalAliasOrRoomId(space.roomId))}>
+            <NavItem variant="Surface" radii="400" selected={searchSelected}>
+              <NavLink
+                aria-current={searchSelected ? 'page' : undefined}
+                to={getSpaceSearchPath(getCanonicalAliasOrRoomId(space.roomId))}
+              >
                 <NavItemContent>
                   <Box as="span" grow="Yes" alignItems="Center" gap="200">
                     <Avatar size="200" radii="400">

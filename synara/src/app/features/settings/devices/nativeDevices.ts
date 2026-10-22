@@ -11,15 +11,52 @@ export type {
   NativeOwnDeviceVerification,
 } from '../../matrix-dto/generated';
 
+// Minimum spacing between refreshes one subscriber runs for device signals.
+export const NATIVE_DEVICE_UPDATE_COALESCE_MS = 1000;
+
 // The shared native owner observes device lists, verification, recovery and
 // backup state. Signals invalidate status reads; they never carry secrets.
+// Each subscriber hears the first signal at once; further signals within
+// NATIVE_DEVICE_UPDATE_COALESCE_MS collapse into one trailing call, so a
+// burst (or a status read that re-triggers the owner) costs at most one read
+// per window. A new session generation is always delivered at once.
 export const subscribeNativeDeviceUpdates = (
-  onUpdate: (sessionGeneration: number) => void
+  onUpdate: (sessionGeneration: number) => void,
+  coalesceMs: number = NATIVE_DEVICE_UPDATE_COALESCE_MS
 ): (() => void) => {
   let disposed = false;
   let unlisten: (() => void | Promise<void>) | undefined;
+  let lastDeliveredAt = Number.NEGATIVE_INFINITY;
+  let lastGeneration: number | undefined;
+  let pendingGeneration: number | undefined;
+  let trailing: ReturnType<typeof setTimeout> | undefined;
+  const deliver = (sessionGeneration: number) => {
+    lastDeliveredAt = Date.now();
+    lastGeneration = sessionGeneration;
+    onUpdate(sessionGeneration);
+  };
+  const receive = (sessionGeneration: number) => {
+    const wait = lastDeliveredAt + coalesceMs - Date.now();
+    if (sessionGeneration !== lastGeneration || (wait <= 0 && trailing === undefined)) {
+      if (trailing !== undefined) clearTimeout(trailing);
+      trailing = undefined;
+      pendingGeneration = undefined;
+      deliver(sessionGeneration);
+      return;
+    }
+    pendingGeneration = sessionGeneration;
+    trailing ??= setTimeout(
+      () => {
+        trailing = undefined;
+        const generation = pendingGeneration;
+        pendingGeneration = undefined;
+        if (!disposed && generation !== undefined) deliver(generation);
+      },
+      Math.max(wait, 0)
+    );
+  };
   void listen<{ sessionGeneration: number }>('matrix-device-list-updated', (event) => {
-    if (!disposed) onUpdate(event.payload.sessionGeneration);
+    if (!disposed) receive(event.payload.sessionGeneration);
   })
     .then((cleanup) => {
       if (disposed) void cleanup?.();
@@ -28,6 +65,8 @@ export const subscribeNativeDeviceUpdates = (
     .catch(() => undefined);
   return () => {
     disposed = true;
+    if (trailing !== undefined) clearTimeout(trailing);
+    trailing = undefined;
     void unlisten?.();
   };
 };

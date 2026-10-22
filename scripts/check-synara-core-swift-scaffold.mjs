@@ -325,11 +325,11 @@ const assertions = [
   [udl, "namespace synara_core", "project-owned UniFFI namespace"],
   [udl, "binding_scaffold_version", "P4-1 binding bootstrap"],
   [udl, "[Async, Throws] sequence<LoginFlowDto> login_flows(", "async typed login-flow operation"],
-  [udl, "sequence<LoginFlowDto> login_flows(string homeserver_url)", "typed login-flow return"],
+  [udl, "sequence<LoginFlowDto> login_flows(string homeserver_url, string app_version)", "typed login-flow return"],
   [udl, "dictionary LoginFlowDto", "typed login-flow DTO"],
   [udl, "boolean? get_login_token", "optional token-capability metadata"],
   [udl, "interface LoginFlowsError", "typed privacy-safe login-flow error"],
-  [udl, "RegisterFlowsDto register_flows(string homeserver_url)", "typed registration-flow operation"],
+  [udl, "RegisterFlowsDto register_flows(string homeserver_url, string app_version)", "typed registration-flow operation"],
   [udl, "dictionary RegisterFlowsDto", "closed registration-flow DTO"],
   [udl, "interface RegisterFlowsError", "typed privacy-safe registration-flow error"],
   [udl, "dictionary SessionProjection", "P4-3 safe session-projection record"],
@@ -998,9 +998,9 @@ const assertions = [
     "live product auth uses caller-owned SharedCore",
   ],
   [ffi, "discover_login_flows", "shared-core login-flow discovery call"],
-  [ffi, "HttpLoginFlowTransport::new()", "bounded Core login-flow transport"],
+  [ffi, "HttpLoginFlowTransport::new_with_user_agent(app_user_agent(", "bounded Core login-flow transport with the app User-Agent"],
   [ffi, "probe_register_flows", "shared-core registration-flow probe call"],
-  [ffi, "HttpRegisterFlowTransport::new()", "bounded Core registration-flow transport"],
+  [ffi, "HttpRegisterFlowTransport::new_with_user_agent(app_user_agent(", "bounded Core registration-flow transport with the app User-Agent"],
   [packageManifest, 'name: "SynaraCore"', "Swift package target"],
   [packageManifest, 'name: "synara_coreFFI"', "generated C FFI binary target"],
   [packageManifest, '.binaryTarget(', "generated XCFramework binary target"],
@@ -2007,7 +2007,7 @@ for (const required of ["func sessionSnapshot()", "func syncStatus()"]) {
 // unrelated historical phase exclusions remain forbidden at this boundary.
 const recoveryBoundary = inspectTypedRecoveryBoundaries({ udl, ffi: sharedCoreFfi });
 if (!recoveryBoundary.ok) throw new Error(recoveryBoundary.errors.join("\n"));
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "matrix_timeline_edit_text", "matrix_timeline_redact", "matrix_timeline_report", "matrix_timeline_pin", "matrix_timeline_unpin", "matrix_timeline_poll_vote", "matrix_timeline_call_decline", "matrix_timeline_forward_text", "matrix_timeline_forward_media", "matrix_session_snapshot", "matrix_sync_status", "matrix_media_config", "matrix_secret_storage_status", "matrix_backup_status", "matrix_room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "matrix_crypto_status", "matrix_cross_signing_status"]) {
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "matrix_timeline_edit_text", "matrix_timeline_redact", "matrix_timeline_report", "matrix_timeline_pin", "matrix_timeline_unpin", "matrix_timeline_poll_vote", "matrix_timeline_call_decline", "matrix_timeline_forward_text", "matrix_timeline_forward_media", "matrix_session_snapshot", "matrix_sync_status", "matrix_media_config", "matrix_secret_storage_status", "matrix_backup_status", "matrix_room_key_transfer_status", "matrix_cross_signing_setup", "set_room_join_rule", "matrix_crypto_status", "matrix_cross_signing_status"]) {
   if (sharedCoreBody.includes(forbidden)) {
     throw new Error(`SharedCore must not expose generic or unapproved ${forbidden}`);
   }

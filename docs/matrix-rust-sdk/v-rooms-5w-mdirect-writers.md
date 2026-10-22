@@ -18,11 +18,12 @@ unmark rooms as direct. A room remains associated with at most one user key in
 ```text
 CreateChat / /startdm / /converttodm
   → matrix_mdirect_add { roomId, userId }
-  → fetch m.direct → exclusive add → set_account_data
+  → fetch m.direct → (listed for another user: Room::set_is_direct(false))
+  → Account::mark_as_dm (SDK m.direct lock; skipped when already listed)
 
 /converttoroom
   → matrix_mdirect_remove { roomId }
-  → fetch m.direct → remove room → set_account_data
+  → Room::set_is_direct(false)
 ```
 
 Disqualifying deviations: `mx.setAccountData('m.direct', …)` or

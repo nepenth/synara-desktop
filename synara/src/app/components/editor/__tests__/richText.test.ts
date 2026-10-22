@@ -652,10 +652,11 @@ test('unsupported clipboard data remains available to the platform default handl
 });
 
 test('room composer and message editor consume recognized rejected clipboard payloads', () => {
-  const sources = [
-    readFileSync('src/app/features/room/RoomInput.tsx', 'utf8'),
-    readFileSync('src/app/features/room/message/MessageEditor.tsx', 'utf8'),
-  ];
+  const sources = [readFileSync('src/app/features/room/RoomInput.tsx', 'utf8')];
+  assert.match(
+    readFileSync('src/app/features/room/NativeTimelineMessageEditor.tsx', 'utf8'),
+    /if \(shouldPreventDefaultForClipboardInsert\(insertion\)\) evt\.preventDefault\(\)/
+  );
 
   sources.forEach((source) => {
     assert.match(source, /const insertion = insertClipboardData\(/);

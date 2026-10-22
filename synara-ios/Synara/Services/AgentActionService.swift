@@ -26,11 +26,11 @@ enum SynaraAgentApprovalError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .signedOut:
-            return "Sign in to submit this agent action."
+            return String(localized: "Sign in to submit this agent action.")
         case .unsupportedAction:
-            return "This agent action cannot be submitted."
+            return String(localized: "This agent action cannot be submitted.")
         case .failed:
-            return "Agent action could not be submitted. Try again."
+            return String(localized: "Agent action could not be submitted. Try again.")
         }
     }
 }
@@ -87,11 +87,11 @@ enum SynaraAgentApprovalPromptReaction: String, CaseIterable, Equatable, Identif
     var title: String {
         switch self {
         case .approveOnce:
-            return "Approve once"
+            return String(localized: "Approve once")
         case .approveAlways:
-            return "Always"
+            return String(localized: "Always")
         case .deny:
-            return "Deny"
+            return String(localized: "Deny")
         }
     }
 
@@ -104,6 +104,54 @@ enum SynaraAgentApprovalPromptReaction: String, CaseIterable, Equatable, Identif
         case .deny:
             return "deny"
         }
+    }
+}
+
+/// Core-projected decision this account already made on an approval prompt
+/// (its own terminal reaction). The card shows it instead of the buttons.
+struct SynaraAgentApprovalCardDecision: Equatable {
+    let reaction: SynaraAgentApprovalPromptReaction
+    let decidedAt: Date?
+
+    /// Maps the closed Core strings `approve_once`, `approve_always`, `deny`.
+    init?(coreDecision: String?, decidedAtMilliseconds: UInt64?) {
+        switch coreDecision {
+        case "approve_once":
+            reaction = .approveOnce
+        case "approve_always":
+            reaction = .approveAlways
+        case "deny":
+            reaction = .deny
+        default:
+            return nil
+        }
+        decidedAt = decidedAtMilliseconds.flatMap { milliseconds in
+            milliseconds > 0 ? Date(timeIntervalSince1970: TimeInterval(milliseconds) / 1000) : nil
+        }
+    }
+
+    var title: String {
+        switch reaction {
+        case .approveOnce:
+            return String(localized: "Approved once")
+        case .approveAlways:
+            return String(localized: "Approved always")
+        case .deny:
+            return String(localized: "Denied")
+        }
+    }
+
+    func detail(timeStyle: (Date) -> String = SynaraAgentApprovalCardDecision.defaultTime) -> String {
+        guard let decidedAt else {
+            return String(localized: "Your decision was sent.")
+        }
+        return String(localized: "You decided at \(timeStyle(decidedAt)).")
+    }
+
+    static func defaultTime(_ date: Date) -> String {
+        Calendar.current.isDateInToday(date)
+            ? SynaraTimeFormatting.clockTime(date)
+            : SynaraTimeFormatting.dateTime(date)
     }
 }
 
@@ -182,7 +230,7 @@ enum SynaraAgentApprovalPromptDetector {
         let replyInstructions = extractReplyInstructions(from: body)
 
         return SynaraAgentApprovalPrompt(
-            title: "Approval Required: Dangerous Command",
+            title: String(localized: "Approval Required: Dangerous Command"),
             body: reason ?? "A Hermes Agent command is waiting for approval.",
             command: command,
             commandPreview: command.flatMap { commandPreview(for: $0) },

@@ -214,7 +214,7 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
   {
     page: SettingsPages.AppearancePage,
     title: 'Page Zoom',
-    description: 'Scale the whole interface, from 75% to 150%.',
+    description: 'Scale the whole interface, from 75% to 200%.',
     synonyms: ['zoom', 'scale', 'size', 'bigger', 'smaller', 'font size'],
   },
   {
@@ -250,7 +250,7 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
   {
     page: SettingsPages.NotificationPage,
     title: 'Desktop Notifications',
-    description: 'Show system notifications for new messages.',
+    description: 'Show system notifications for new messages. Approval requests always alert.',
     synonyms: ['alerts', 'popups', 'banners', 'notify'],
   },
   {
@@ -388,7 +388,7 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
     page: SettingsPages.DevicesPage,
     title: 'Others',
     description: 'Your other signed-in devices.',
-    synonyms: ['sessions', 'other devices', 'sign out', 'logout'],
+    synonyms: ['sessions', 'other devices', 'sign out', 'log out', 'logout'],
   },
   {
     page: SettingsPages.DevicesPage,

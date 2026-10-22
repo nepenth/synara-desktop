@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 @testable import Synara
 import SynaraCore
@@ -310,6 +311,40 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(service.syncStatus, .restoreFailed)
     }
 
+    func testSharedCorePauseSuspendsReadinessUntilTheForegroundResume() async throws {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let readiness = SignedInSessionReadiness()
+        let service = SharedCoreMatrixClientService(host: host, sessionReadiness: readiness)
+        let session = AuthenticatedSession(
+            userID: "@alice:example.org",
+            deviceID: "DEVICE",
+            homeserverURL: try XCTUnwrap(URL(string: "https://matrix.example.org")),
+            accessToken: "syt_secret_token"
+        )
+        _ = await readiness.claimPreparation(for: session)
+        _ = await readiness.markPrepared(for: session)
+
+        await service.pauseForBackground()
+        let waiter = Task { await readiness.waitUntilPrepared(for: session) }
+        var parked = await readiness.pendingWaiterCount()
+        var attempts = 0
+        while parked == 0, attempts < 200 {
+            try await Task.sleep(nanoseconds: 5_000_000)
+            parked = await readiness.pendingWaiterCount()
+            attempts += 1
+        }
+        XCTAssertEqual(parked, 1, "an open during background waits for the resume")
+
+        await service.resumeFromForeground(session: session)
+
+        let released = await waiter.value
+        XCTAssertTrue(released)
+    }
+
     func testSharedCoreColdBackgroundPauseWithoutOwnersStaysStopped() async {
         let host = SharedCoreProductHost(
             core: SharedCore(),
@@ -321,6 +356,60 @@ final class SynaraCoreBindingsTests: XCTestCase {
         await service.pauseForBackground()
 
         XCTAssertEqual(service.syncStatus, .stopped)
+    }
+
+    /// I23: the apply chain, the status watch, path monitor start/stop and
+    /// the main thread all touch the service's state. Run them together (and
+    /// under Thread Sanitizer) and read `syncStatus` throughout.
+    func testSharedCoreClientServiceStateSurvivesConcurrentLifecycleCalls() async throws {
+        let host = SharedCoreProductHost(
+            core: SharedCore.newForApp(store: InMemoryIosSecretVault(), appVersion: "2.2.6"),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreMatrixClientService(host: host)
+        let session = AuthenticatedSession(
+            userID: "@alice:example.org",
+            deviceID: "DEVICE",
+            homeserverURL: try XCTUnwrap(URL(string: "https://matrix.example.org")),
+            accessToken: "syt_secret_token"
+        )
+        let reads = Task.detached {
+            for _ in 0..<500 {
+                _ = service.syncStatus.description
+                _ = service.isMonitoringPath
+            }
+        }
+        await withTaskGroup(of: Void.self) { group in
+            for round in 0..<20 {
+                group.addTask {
+                    switch round % 4 {
+                    case 0: await service.resumeFromForeground(session: session)
+                    case 1: await service.pauseForBackground()
+                    case 2: service.setForegroundActive(true)
+                    default: await service.stop()
+                    }
+                }
+            }
+        }
+        await reads.value
+        await service.stop()
+        XCTAssertEqual(service.syncStatus, .stopped)
+        XCTAssertFalse(service.isMonitoringPath)
+    }
+
+    /// L14: a memory warning hands Core's decrypted media back.
+    func testMemoryWarningReleasesCoreMemory() {
+        let center = NotificationCenter()
+        let released = expectation(description: "released")
+        let token = SharedCoreMemoryPressure.observe(center: center) {
+            released.fulfill()
+        }
+        center.post(name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
+        wait(for: [released], timeout: 1)
+        center.removeObserver(token)
+        // The real export is safe to call without a session.
+        SharedCore.newForApp(store: InMemoryIosSecretVault(), appVersion: "2.2.6").releaseCachedMemory()
     }
 
     func testSharedCoreSessionStopDoesNotRevokeForegroundAuthorityForRelogin() async throws {
@@ -514,6 +603,18 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(hostileCode.kind, .temporarilyUnavailable)
         XCTAssertEqual(hostileCode.diagnosticCode, "timeline-invalid-diagnostic-code")
+
+        // Suspended stores (app in the background) wait for the connection
+        // instead of reading as an outage.
+        let suspended = SharedCoreTimelineService.failure(
+            from: TimelineError.Failed(
+                code: SharedCoreSessionSuspension.code,
+                description: "ignored owner text"
+            )
+        )
+        XCTAssertEqual(suspended.kind, .waitingToReconnect)
+        XCTAssertEqual(suspended.diagnosticCode, "p4-session-suspended")
+        XCTAssertTrue(suspended.userMessage.hasPrefix("Waiting to reconnect"))
     }
 
     func testSharedCoreTimelineSenderAvatarAcceptsOnlyValidMXCMetadata() {
@@ -542,7 +643,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 body: "@alex joined",
                 formattedBody: nil
             ),
-            .text("@alex joined")
+            .systemNotice("@alex joined")
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
@@ -550,7 +651,16 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 body: "Topic changed",
                 formattedBody: nil
             ),
-            .text("Topic changed")
+            .systemNotice("Topic changed")
+        )
+        // A room change Core could not describe is dropped, not shown as an
+        // "unsupported" message from its sender.
+        XCTAssertNil(
+            SharedCoreTimelineRows.displayKind(
+                rowKind: .state,
+                body: "  ",
+                formattedBody: nil
+            )
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
@@ -678,6 +788,137 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    private func approvalRow(decision: String?, decidedAt: UInt64?, isAgentApproval: Bool = true) -> TimelineViewRowDto {
+        TimelineViewRowDto(
+            kind: .message,
+            itemId: "item-approval",
+            eventId: "$approval:example.org",
+            sender: "@hermes:example.org",
+            senderName: "Hermes",
+            senderAvatarUrl: nil,
+            body: "Approval Required: Dangerous Command\n```\nrm -rf build/\n```",
+            originServerTs: 1_700_000_000_000,
+            edited: false,
+            replyToEventId: nil,
+            replyPreview: nil,
+            threadRootEventId: nil,
+            threadSummary: nil,
+            poll: nil,
+            capabilities: nil,
+            decryptionState: nil,
+            messageType: "m.text",
+            forwardTransport: "text",
+            formattedBody: nil,
+            agentCardJson: nil,
+            isAgentApproval: isAgentApproval,
+            agentApprovalDecision: decision,
+            agentApprovalDecidedAt: decidedAt,
+            mediaFilename: nil,
+            mediaCaption: nil,
+            reactions: [
+                TimelineViewReactionDto(key: "✅", count: 2, own: true, senders: []),
+                TimelineViewReactionDto(key: "♾️", count: 1, own: false, senders: []),
+                TimelineViewReactionDto(key: "❌", count: 1, own: false, senders: [])
+            ],
+            mediaHandleId: nil,
+            mediaMimeType: nil,
+            mediaWidth: nil,
+            mediaHeight: nil,
+            mediaDurationMs: nil,
+            encryptionShield: nil,
+            transactionId: nil,
+            localEchoState: nil,
+            sendFailure: nil,
+            sendFailureRetryable: nil
+        )
+    }
+
+    func testLivePollerRecordsTheNewestRevisionPerStream() {
+        let poller = SharedCoreLivePoller(core: SharedCore())
+        let update = { (stream: String, revision: UInt64) in
+            TimelineViewUpdateDto(
+                schemaVersion: 1,
+                sessionGeneration: 1,
+                streamId: stream,
+                roomId: "!room:example.org",
+                revision: revision,
+                opCount: 1
+            )
+        }
+        poller.receiveTimelineUpdates([update("live", 4), update("thread", 9), update("live", 3)])
+        XCTAssertEqual(poller.latestTimelineRevision(streamId: "live"), 4)
+        XCTAssertEqual(poller.latestTimelineRevision(streamId: "thread"), 9)
+        poller.forgetTimelineStream(streamId: "live")
+        XCTAssertNil(poller.latestTimelineRevision(streamId: "live"))
+    }
+
+    func testRowCacheConvertsOnlyNewOrChangedRows() {
+        var cache = SharedCoreTimelineRowCache()
+        let first = approvalRow(decision: nil, decidedAt: nil)
+        let items = cache.items(from: [first])
+        XCTAssertEqual(items, SharedCoreTimelineRows.items(from: [first]))
+        XCTAssertEqual(cache.conversionCount, 1)
+
+        // An unchanged row is reused; the receipt tail is still applied.
+        let tail = cache.items(
+            from: [first],
+            visibleTailEventID: first.eventId,
+            receiptTailEventID: "$receipt:example.org"
+        )
+        XCTAssertEqual(cache.conversionCount, 1)
+        XCTAssertEqual(tail.last?.readReceiptEventID, "$receipt:example.org")
+        XCTAssertEqual(
+            tail,
+            SharedCoreTimelineRows.items(
+                from: [first],
+                visibleTailEventID: first.eventId,
+                receiptTailEventID: "$receipt:example.org"
+            )
+        )
+
+        // A changed row converts again.
+        let decided = approvalRow(decision: "approve_once", decidedAt: 1_700_000_060_000)
+        let changed = cache.items(from: [decided])
+        XCTAssertEqual(cache.conversionCount, 2)
+        XCTAssertEqual(changed, SharedCoreTimelineRows.items(from: [decided]))
+    }
+
+    func testApprovalRowCarriesCoreDecisionAndKeepsOwnReactionChip() throws {
+        let decided = try XCTUnwrap(
+            SharedCoreTimelineRows.item(from: approvalRow(decision: "approve_once", decidedAt: 1_700_000_060_000))
+        )
+        let decision = try XCTUnwrap(decided.agentApprovalDecision)
+        XCTAssertEqual(decision.reaction, .approveOnce)
+        XCTAssertEqual(decision.title, "Approved once")
+        XCTAssertEqual(decision.decidedAt, Date(timeIntervalSince1970: 1_700_000_060))
+        XCTAssertEqual(decision.detail(timeStyle: { _ in "3:48 PM" }), "You decided at 3:48 PM.")
+        // The user's own ✅ stays in the chip strip next to Hermes's seeds.
+        XCTAssertEqual(decided.reactions, ["✅": 2, "♾️": 1, "❌": 1])
+        XCTAssertEqual(decided.reactionOwnership, .known(["✅"]))
+        // Delivery-status rewrites keep the decided state.
+        XCTAssertEqual(decided.withDeliveryStatus(nil).agentApprovalDecision, decision)
+
+        let pending = try XCTUnwrap(SharedCoreTimelineRows.item(from: approvalRow(decision: nil, decidedAt: nil)))
+        XCTAssertNil(pending.agentApprovalDecision)
+
+        let denied = SharedCoreTimelineRows.item(from: approvalRow(decision: "deny", decidedAt: nil))?
+            .agentApprovalDecision
+        XCTAssertEqual(denied?.title, "Denied")
+        XCTAssertEqual(denied?.detail(), "Your decision was sent.")
+        XCTAssertEqual(
+            SharedCoreTimelineRows.item(from: approvalRow(decision: "approve_always", decidedAt: 0))?
+                .agentApprovalDecision?.title,
+            "Approved always"
+        )
+        // Only Core-eligible approvals carry a decision; unknown strings are ignored.
+        XCTAssertNil(
+            SharedCoreTimelineRows.item(
+                from: approvalRow(decision: "approve_once", decidedAt: 1, isAgentApproval: false)
+            )?.agentApprovalDecision
+        )
+        XCTAssertNil(SynaraAgentApprovalCardDecision(coreDecision: "maybe", decidedAtMilliseconds: 1))
+    }
+
     func testSharedCoreTimelineRowsPreservesRelationsPollsCapabilitiesAndReactionOwnership() {
         let mappedRow = SharedCoreTimelineRows.item(
             from: TimelineViewRowDto(
@@ -702,6 +943,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 formattedBody: nil,
                 agentCardJson: nil,
                 isAgentApproval: false,
+                agentApprovalDecision: nil,
+                agentApprovalDecidedAt: nil,
                 mediaFilename: nil,
                 mediaCaption: nil,
                 reactions: [TimelineViewReactionDto(key: "👍", count: 2, own: true, senders: [])],
@@ -710,7 +953,11 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 mediaWidth: nil,
                 mediaHeight: nil,
                 mediaDurationMs: nil,
-                encryptionShield: nil
+                encryptionShield: nil,
+                transactionId: nil,
+                localEchoState: nil,
+                sendFailure: nil,
+                sendFailureRetryable: nil
             )
         )
         XCTAssertEqual(mappedRow?.senderProfileDisplayName, "Alice Example")
@@ -718,6 +965,38 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(mappedRow?.threadRootEventID, "$thread-root:example.org")
         XCTAssertEqual(mappedRow?.reactions, ["👍": 2])
         XCTAssertEqual(mappedRow?.reactionOwnership, .known(["👍"]))
+        XCTAssertNil(mappedRow?.transactionID)
+
+        // An SDK local echo (a queued upload) has no event id yet; it keeps
+        // the SDK item id as identity and carries its transaction id so the
+        // pending upload row can be matched to it.
+        let localEcho = SharedCoreTimelineRows.item(
+            from: TimelineViewRowDto(
+                kind: .message, itemId: "sdk-local-item", eventId: "",
+                sender: "@alice:example.org", senderName: "Alice", senderAvatarUrl: nil,
+                body: "photo.jpg", originServerTs: 1_700_000_000_000, edited: false,
+                replyToEventId: nil, replyPreview: nil, threadRootEventId: nil,
+                threadSummary: nil, poll: nil, capabilities: nil, decryptionState: nil,
+                messageType: "m.text", forwardTransport: nil, formattedBody: nil,
+                agentCardJson: nil, isAgentApproval: false, agentApprovalDecision: nil,
+                agentApprovalDecidedAt: nil, mediaFilename: nil,
+                mediaCaption: nil, reactions: [], mediaHandleId: nil, mediaMimeType: nil,
+                mediaWidth: nil, mediaHeight: nil, mediaDurationMs: nil,
+                encryptionShield: nil, transactionId: "synara-attachment-a",
+                localEchoState: "sending", sendFailure: nil, sendFailureRetryable: nil
+            )
+        )
+        XCTAssertEqual(localEcho?.eventID, "sdk-local-item")
+        XCTAssertEqual(localEcho?.transactionID, "synara-attachment-a")
+        XCTAssertEqual(localEcho?.withDeliveryStatus(nil).transactionID, "synara-attachment-a")
+        // The SDK send state reaches the bubble, and the item id is never
+        // mistaken for a server event id by receipt or tail code.
+        XCTAssertEqual(localEcho?.localEcho, .sending)
+        XCTAssertEqual(localEcho?.presentedDeliveryStatus, .sending)
+        XCTAssertEqual(localEcho?.isLocalPending, false)
+        XCTAssertNil(localEcho?.serverEventID)
+        XCTAssertNil(localEcho?.withDeliveryStatus(nil).serverEventID)
+        XCTAssertNil(localEcho?.withSenderAvatarURL(nil).serverEventID)
 
         let reply = SharedCoreTimelineRows.replyPreview(
             from: TimelineViewReplyPreviewDto(
@@ -863,6 +1142,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 formattedBody: nil,
                 agentCardJson: nil,
                 isAgentApproval: false,
+                agentApprovalDecision: nil,
+                agentApprovalDecidedAt: nil,
                 mediaFilename: nil,
                 mediaCaption: nil,
                 reactions: [],
@@ -871,7 +1152,11 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 mediaWidth: nil,
                 mediaHeight: nil,
                 mediaDurationMs: nil,
-                encryptionShield: nil
+                encryptionShield: nil,
+                transactionId: nil,
+                localEchoState: nil,
+                sendFailure: nil,
+                sendFailureRetryable: nil
             )
         }
 
@@ -1430,6 +1715,141 @@ final class SynaraCoreBindingsTests: XCTestCase {
         for forbidden in ["password", "syt_", "token"] {
             XCTAssertFalse(publicError.contains(forbidden))
         }
+    }
+
+    func testSharedCoreRoomListRowsAppendsInvitesMissingFromJoinedSnapshot() {
+        let joined = SharedCoreRoomListRows.RoomRow(
+            roomId: "!joined:example.org",
+            name: "Ops",
+            avatarUrl: nil,
+            membership: .join,
+            isDirect: false,
+            unreadCount: 2,
+            highlightCount: 0,
+            markedUnread: false,
+            lastActivityTs: 1_700_000_000_000,
+            lastMessagePreview: "Hello",
+            lastMessageIsAgentApproval: false,
+            isFavorite: false,
+            isCall: false,
+            hasActiveCall: false,
+            activeCallParticipantCount: 0,
+            directUserId: nil,
+            encryptionStatus: .encrypted
+        )
+        let rooms = SharedCoreRoomListRows.rooms(
+            rooms: [joined],
+            invites: [
+                SharedCoreRoomListRows.InviteRow(
+                    roomId: "!party:example.org",
+                    roomName: "Launch Party",
+                    roomTopic: nil,
+                    senderName: "Eve",
+                    reason: nil,
+                    isDirect: false,
+                    isEncrypted: false,
+                    inviteTs: 1_700_000_100_000
+                ),
+                SharedCoreRoomListRows.InviteRow(
+                    roomId: "!dm:example.org",
+                    roomName: "Eve",
+                    roomTopic: nil,
+                    senderName: "Eve",
+                    reason: "Quick question",
+                    isDirect: true,
+                    isEncrypted: true,
+                    inviteTs: nil
+                ),
+                // Core degrades an invite it cannot fully read to an empty
+                // sender instead of failing the whole invite snapshot.
+                SharedCoreRoomListRows.InviteRow(
+                    roomId: "!orphan:example.org",
+                    roomName: "Orphan",
+                    roomTopic: "Topic only",
+                    senderName: "",
+                    reason: nil
+                ),
+                // Already a list row: decorates it, never duplicates it.
+                SharedCoreRoomListRows.InviteRow(
+                    roomId: "!joined:example.org",
+                    roomName: "Ops",
+                    roomTopic: nil,
+                    senderName: "Eve",
+                    reason: nil
+                ),
+            ],
+            spaceParents: [
+                SharedCoreRoomListRows.SpaceParentRow(
+                    roomId: "!party:example.org",
+                    parentIds: ["!joined:example.org"]
+                ),
+            ]
+        )
+
+        XCTAssertEqual(rooms.map(\.id), [
+            "!joined:example.org",
+            "!party:example.org",
+            "!dm:example.org",
+            "!orphan:example.org",
+        ])
+        XCTAssertEqual(rooms[0].membership, .joined)
+        XCTAssertEqual(rooms[0].lastMessagePreview, "Hello")
+
+        let party = rooms[1]
+        XCTAssertEqual(party.membership, .invited)
+        XCTAssertEqual(party.name, "Launch Party")
+        XCTAssertEqual(party.lastMessagePreview, "Invited by Eve")
+        XCTAssertEqual(party.kind, .room)
+        XCTAssertEqual(party.unreadCount, 0)
+        XCTAssertEqual(party.encryptionStatus, .unknown)
+        XCTAssertEqual(party.lastActivityAt, Date(timeIntervalSince1970: 1_700_000_100))
+        XCTAssertEqual(party.parentSpaces, [SpaceSummary(id: "!joined:example.org", name: "Ops")])
+
+        let direct = rooms[2]
+        XCTAssertEqual(direct.kind, .directMessage)
+        XCTAssertEqual(direct.lastMessagePreview, "Quick question")
+        XCTAssertEqual(direct.encryptionStatus, .encrypted)
+        XCTAssertEqual(direct.lastActivityAt, .distantPast)
+
+        let orphan = rooms[3]
+        XCTAssertEqual(orphan.membership, .invited)
+        XCTAssertEqual(orphan.lastMessagePreview, "Topic only")
+
+        let sections = NotificationsInboxSections.make(from: rooms)
+        XCTAssertEqual(sections.invites.map(\.id), [
+            "!party:example.org",
+            "!dm:example.org",
+            "!orphan:example.org",
+        ])
+        XCTAssertEqual(NotificationBadgeSummary.inviteCount(from: rooms), 3)
+        let listed = RoomListScopeFilter.filteredRooms(
+            from: rooms,
+            filter: .all,
+            selectedSpaceID: nil,
+            searchQuery: ""
+        )
+        XCTAssertEqual(Set(listed.map(\.id)), Set(rooms.map(\.id)))
+        XCTAssertEqual(listed.first?.membership, .invited)
+    }
+
+    func testSharedCoreRoomListRowsInvitesOnlyStillLoad() {
+        let rooms = SharedCoreRoomListRows.rooms(
+            rooms: [],
+            invites: [
+                SharedCoreRoomListRows.InviteRow(
+                    roomId: "!party:example.org",
+                    roomName: "",
+                    roomTopic: nil,
+                    senderName: "",
+                    reason: nil
+                ),
+            ],
+            spaceParents: []
+        )
+        XCTAssertEqual(rooms.count, 1)
+        XCTAssertEqual(rooms.first?.name, "!party:example.org")
+        XCTAssertEqual(rooms.first?.membership, .invited)
+        XCTAssertEqual(rooms.first?.lastMessagePreview, "")
     }
 
     func testSharedCoreRoomListWithoutSessionIsEmptyWithoutEcho() async {
@@ -2521,7 +2941,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
             description: "Profile request was rate limited"
         )
         XCTAssertEqual(SharedCoreOwnProfile.writeStatus(for: limited), .rateLimited)
-        XCTAssertTrue(OwnProfileWriteStatus.rateLimited.message(for: "Avatar").contains("try again"))
+        XCTAssertTrue(OwnProfileWriteStatus.rateLimited.message(for: .avatar).contains("try again"))
         XCTAssertEqual(
             SharedCoreOwnProfile.writeStatus(
                 for: OwnProfileCommandError.Failed(code: "other-error", description: "Unknown")
@@ -3579,7 +3999,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         let hostileURL = "https://user:secret@example.invalid"
 
         do {
-            _ = try await SynaraCore.registerFlows(homeserverUrl: hostileURL)
+            _ = try await SynaraCore.registerFlows(homeserverUrl: hostileURL, appVersion: "1.0")
             XCTFail("Hostile registration-flow URL must fail before a request")
         } catch {
             let publicError = String(reflecting: error)

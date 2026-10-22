@@ -6,7 +6,7 @@
  */
 
 import to from 'await-to-js';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ClientConfig, clientAllowedServer } from '../../../hooks/useClientConfig';
 import { autoDiscovery, specVersions } from '../../../cs-api';
@@ -65,6 +65,7 @@ export enum LoginError {
   UserDeactivated = 'UserDeactivated',
   InvalidRequest = 'InvalidRequest',
   RateLimited = 'RateLimited',
+  SlidingSyncUnsupported = 'SlidingSyncUnsupported',
   Unknown = 'Unknown',
 }
 
@@ -173,6 +174,7 @@ const SAFE_NATIVE_LOGIN_DIAGNOSTIC_IDS = new Set([
   'p3.2-login-rejected',
   'p3.2-login-response-decode',
   'p3.2-login-sdk-timeout',
+  'p3.2-login-sliding-sync-unsupported',
   'p3.2-login-store-locked',
   'p3.2-login-store-migration-failed',
   'p3.2-login-store-migration-required',
@@ -407,32 +409,81 @@ export const completeNativeLoginBootstrap = async (
   });
 };
 
-export const useLoginComplete = (data?: NativeLoginResponse) => {
+/**
+ * Shown when the account is signed in (or was just created) but the app could
+ * not open the session. Retrying repeats only the handoff: signing in or
+ * registering again would create another device or hit "username taken".
+ */
+export const NATIVE_SESSION_HANDOFF_FAILED_COPY =
+  "You're signed in, but Synara couldn't open your session. Retry to continue.";
+
+export type NativeSessionHandoffDeps = {
+  completeBootstrap: () => Promise<void>;
+  takeRedirectPath: () => string | undefined;
+  navigate: (path: string) => void;
+  isActive: () => boolean;
+};
+
+/**
+ * Enter the app after a native login or registration. Resolves false (and
+ * records a diagnostic) when the session could not be opened, so the form can
+ * show the failure instead of an endless spinner.
+ */
+export const runNativeSessionHandoff = async (deps: NativeSessionHandoffDeps): Promise<boolean> => {
+  try {
+    // Native login persists credentials host-side. Rehydrate only identity
+    // metadata so route guards can enter the client.
+    await deps.completeBootstrap();
+  } catch (error) {
+    recordClientDiagnostic('session', 'bootstrap.failed', {
+      errorType: error instanceof Error ? error.name : typeof error,
+      outcome: 'native-login-handoff-failed',
+    });
+    return false;
+  }
+  if (deps.isActive()) {
+    deps.navigate(deps.takeRedirectPath() ?? getHomePath());
+  }
+  return true;
+};
+
+const takeAfterLoginRedirectPath = (): string | undefined => {
+  const afterLoginRedirectPath = getAfterLoginRedirectPath();
+  deleteAfterLoginRedirectPath();
+  return afterLoginRedirectPath;
+};
+
+/**
+ * Run the session handoff once `ready` turns true (login or registration
+ * completed). `retryHandoff` repeats only the handoff after a failure.
+ */
+export const useNativeSessionHandoff = (ready: boolean) => {
   const navigate = useNavigate();
+  const [handoffFailed, setHandoffFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (!data) return undefined;
+    if (!ready) return undefined;
 
     let active = true;
-    const persistAndNavigate = async () => {
-      // Native password login persists credentials host-side. Rehydrate only
-      // identity metadata so route guards can enter the client.
-      await completeNativeLoginBootstrap();
-      if (!active) return;
-      const afterLoginRedirectUrl = getAfterLoginRedirectPath();
-      deleteAfterLoginRedirectPath();
-      navigate(afterLoginRedirectUrl ?? getHomePath(), { replace: true });
-    };
-
-    void persistAndNavigate().catch((error) => {
-      recordClientDiagnostic('session', 'bootstrap.failed', {
-        errorType: error instanceof Error ? error.name : typeof error,
-        outcome: 'native-login-handoff-failed',
-      });
+    setHandoffFailed(false);
+    runNativeSessionHandoff({
+      completeBootstrap: () => completeNativeLoginBootstrap(),
+      takeRedirectPath: takeAfterLoginRedirectPath,
+      navigate: (path) => navigate(path, { replace: true }),
+      isActive: () => active,
+    }).then((entered) => {
+      if (active && !entered) setHandoffFailed(true);
     });
 
     return () => {
       active = false;
     };
-  }, [data, navigate]);
+  }, [ready, attempt, navigate]);
+
+  const retryHandoff = useCallback(() => setAttempt((value) => value + 1), []);
+
+  return { handoffFailed, retryHandoff };
 };
+
+export const useLoginComplete = (data?: NativeLoginResponse) => useNativeSessionHandoff(!!data);

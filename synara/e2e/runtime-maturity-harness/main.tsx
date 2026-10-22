@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import FocusTrap from 'focus-trap-react';
 import SafeFocusTrap from '../../src/app/components/FocusTrap';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
-import parse, { domToReact } from 'html-react-parser';
+import { domToReact } from 'html-react-parser';
 import { CDATA, Document, Element, Text } from 'domhandler';
 import { useForceUpdate } from '../../src/app/hooks/useForceUpdate';
 import {
@@ -13,18 +13,16 @@ import {
 } from '../../src/app/plugins/pdfjs-dist';
 import { AsyncStatus } from '../../src/app/hooks/useAsyncCallback';
 import {
-  getReactCustomHtmlParser,
-  LINKIFY_OPTS,
-} from '../../src/app/plugins/react-custom-html-parser';
+  createNativeFormattedHtmlParserOptions,
+  NativeFormattedBody,
+} from '../../src/app/features/room/nativeTimelineFormattedBody';
 import { reactDomNodes } from '../../src/app/utils/reactDomNodes';
 import { RoomComposer } from '../../src/app/features/room/RoomComposer';
 import { PdfViewer } from '../../src/app/components/Pdf-viewer/PdfViewer';
 import { useEditor } from '../../src/app/components/editor/Editor';
 
 // These code-block fixtures have no Matrix mentions or media.
-const parserOptions = getReactCustomHtmlParser(undefined, {
-  linkifyOpts: LINKIFY_OPTS,
-});
+const parserOptions = createNativeFormattedHtmlParserOptions({});
 const nestedXmlNodes = new Document([
   new Element('strong', {}, [new CDATA([new Text('nested literal <kept>')])]),
 ]);
@@ -165,7 +163,10 @@ function MaturityHarness() {
         {pageState.status === AsyncStatus.Success ? 'PDF rendered' : 'PDF loading'}
       </output>
       <section aria-label="Code block regression">
-        {parse('<pre></pre><pre><code></code></pre><pre><code>hello</code></pre>', parserOptions)}
+        <NativeFormattedBody
+          html="<pre></pre><pre><code></code></pre><pre><code>hello</code></pre>"
+          fallbackBody=""
+        />
       </section>
       <section aria-label="Nested XML regression">
         {domToReact(reactDomNodes([nestedXmlNodes]), parserOptions)}

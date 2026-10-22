@@ -1,6 +1,7 @@
 //! Live V-CRYPTO.7 device projection and session-scoped update signal.
 
 use std::collections::BTreeSet;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -8,7 +9,9 @@ use tokio::sync::Mutex as AsyncMutex;
 
 use futures_util::StreamExt;
 use matrix_sdk::{
-    encryption::{identities::UserDevices, VerificationState},
+    encryption::{
+        backups::BackupState, identities::UserDevices, recovery::RecoveryState, VerificationState,
+    },
     ruma::{
         api::client::uiaa::{
             AuthData, AuthType, MatrixUserIdentifier, Password, UiaaInfo, UserIdentifier,
@@ -65,6 +68,103 @@ pub struct NativeDeviceOwner {
     delete: Mutex<DeviceDeleteState>,
     room_keys: Arc<AsyncMutex<RoomKeyTransferFlow>>,
     pending_cross_signing: Mutex<Option<String>>,
+    /// A pending identity reset. Dropped, and cancelled, with the owner.
+    identity_reset: crate::app::cross_signing::IdentityResetFlow,
+    own_keys_query: OwnKeysQueryGate,
+    server_backup: crate::app::backup::ServerBackupCache,
+}
+
+/// One item from the four SDK sources the owner merges.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SecuritySourceUpdate {
+    /// A device-list update; `true` when it touched the user's own devices.
+    Devices {
+        own_user_changed: bool,
+    },
+    Verification(VerificationState),
+    /// `None` when the backup broadcast lagged and the value is unknown.
+    Backup(Option<BackupState>),
+    Recovery(RecoveryState),
+}
+
+/// The security state the shells were last woken for.
+///
+/// The SDK re-sets its verification state after every own `/keys/query` and
+/// its recovery state after every own master-key update, even when the value
+/// is unchanged, and `subscribe_reset` streams replay the current value. A
+/// shell's status read can cause that `/keys/query`, so forwarding every item
+/// turned each read into the next wakeup. Only real transitions, and own
+/// device-list changes, wake the shells.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SecuritySignalState {
+    verification: VerificationState,
+    backup: BackupState,
+    recovery: RecoveryState,
+}
+
+impl SecuritySignalState {
+    fn apply(&mut self, update: SecuritySourceUpdate) -> bool {
+        fn replace<T: PartialEq>(slot: &mut T, value: T) -> bool {
+            if *slot == value {
+                return false;
+            }
+            *slot = value;
+            true
+        }
+        match update {
+            SecuritySourceUpdate::Devices { own_user_changed } => own_user_changed,
+            SecuritySourceUpdate::Verification(state) => replace(&mut self.verification, state),
+            SecuritySourceUpdate::Backup(Some(state)) => replace(&mut self.backup, state),
+            SecuritySourceUpdate::Backup(None) => true,
+            SecuritySourceUpdate::Recovery(state) => replace(&mut self.recovery, state),
+        }
+    }
+}
+
+/// Fold the merged sources into wakeups, one per real change.
+fn security_wakeups(
+    updates: impl futures_util::Stream<Item = SecuritySourceUpdate>,
+    initial: SecuritySignalState,
+) -> impl futures_util::Stream<Item = ()> {
+    updates
+        .scan(initial, |state, update| {
+            std::future::ready(Some(state.apply(update)))
+        })
+        .filter_map(|changed| std::future::ready(changed.then_some(())))
+}
+
+/// Runs the SDK's own-user `/keys/query` (through
+/// `has_devices_to_verify_against` or an own-identity request) once per
+/// session generation instead of on every status read. After one successful
+/// query the SDK keeps the own device list and identity current from sync, so
+/// later reads project the same predicate over the local store. A failed or
+/// timed-out query re-arms the gate; a concurrent read uses the local store.
+#[derive(Debug, Default)]
+pub struct OwnKeysQueryGate(AtomicU8);
+
+impl OwnKeysQueryGate {
+    const IDLE: u8 = 0;
+    const RUNNING: u8 = 1;
+    const DONE: u8 = 2;
+
+    /// `true` when the caller should run the query and then call `finish`.
+    pub fn try_begin(&self) -> bool {
+        self.0
+            .compare_exchange(
+                Self::IDLE,
+                Self::RUNNING,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_ok()
+    }
+
+    pub fn finish(&self, succeeded: bool) {
+        self.0.store(
+            if succeeded { Self::DONE } else { Self::IDLE },
+            Ordering::Release,
+        );
+    }
 }
 
 impl NativeDeviceOwner {
@@ -86,21 +186,32 @@ impl NativeDeviceOwner {
         // the SDK's own trust, recovery and backup streams too, so a successful
         // verification does not leave the UI asking for recovery until restart.
         let encryption = client.encryption();
-        let mut updates = futures_util::stream::select_all([
+        let verification = encryption.verification_state();
+        let backup = encryption.backups().state_stream();
+        let recovery = encryption.recovery().state_stream();
+        // Sample after subscribing so a transition in between is still seen.
+        let initial = SecuritySignalState {
+            verification: verification.get(),
+            backup: encryption.backups().state(),
+            recovery: encryption.recovery().state(),
+        };
+        let updates = futures_util::stream::select_all([
             updates
-                .map(move |update| {
-                    update.new.contains_key(&user_id) || update.changed.contains_key(&user_id)
+                .map(move |update| SecuritySourceUpdate::Devices {
+                    own_user_changed: update.new.contains_key(&user_id)
+                        || update.changed.contains_key(&user_id),
                 })
                 .boxed(),
-            encryption.verification_state().map(|_| true).boxed(),
-            encryption.backups().state_stream().map(|_| true).boxed(),
-            encryption.recovery().state_stream().map(|_| true).boxed(),
+            verification.map(SecuritySourceUpdate::Verification).boxed(),
+            backup
+                .map(|state| SecuritySourceUpdate::Backup(state.ok()))
+                .boxed(),
+            recovery.map(SecuritySourceUpdate::Recovery).boxed(),
         ]);
+        let mut wakeups = Box::pin(security_wakeups(updates, initial));
         let task = tokio::spawn(async move {
-            while let Some(should_refresh) = updates.next().await {
-                if should_refresh {
-                    emit(NativeDeviceUpdateSignal { session_generation });
-                }
+            while wakeups.next().await.is_some() {
+                emit(NativeDeviceUpdateSignal { session_generation });
             }
         });
         Ok(Self {
@@ -115,7 +226,16 @@ impl NativeDeviceOwner {
                 session_generation,
             ))),
             pending_cross_signing: Mutex::new(None),
+            identity_reset: crate::app::cross_signing::IdentityResetFlow::new(session_generation),
+            own_keys_query: OwnKeysQueryGate::default(),
+            server_backup: crate::app::backup::ServerBackupCache::default(),
         })
+    }
+
+    /// Shared with shells that request the own identity themselves, so the
+    /// session issues its own-user `/keys/query` once, not once per read.
+    pub fn own_keys_query(&self) -> &OwnKeysQueryGate {
+        &self.own_keys_query
     }
 
     pub fn room_key_transfer(&self) -> Arc<AsyncMutex<RoomKeyTransferFlow>> {
@@ -128,14 +248,27 @@ impl NativeDeviceOwner {
     }
 
     /// UI reads still go through `Client::devices`. This is not a second list.
+    /// The own-user authority `/keys/query` runs once per generation.
     pub async fn snapshot(&self) -> Result<NativeDeviceSnapshot, &'static str> {
-        snapshot(&self.client, self.session_generation).await
+        snapshot_with_gate(
+            &self.client,
+            self.session_generation,
+            Some(&self.own_keys_query),
+        )
+        .await
     }
 
+    /// Screen and wakeup reads reuse the last homeserver backup answer while
+    /// the SDK's local backup state is unchanged (see `ServerBackupCache`).
     pub async fn backup_status(
         &self,
     ) -> Result<crate::app::backup::NativeBackupStatus, &'static str> {
-        crate::app::backup::status(&self.client, self.session_generation).await
+        crate::app::backup::cached_status(
+            &self.client,
+            self.session_generation,
+            &self.server_backup,
+        )
+        .await
     }
 
     /// Restore encryption backup. Recovery secret is a method argument only.
@@ -143,7 +276,11 @@ impl NativeDeviceOwner {
         &self,
         recovery_secret: &str,
     ) -> Result<crate::app::backup::MatrixRestoreBackupResult, &'static str> {
-        crate::app::backup::restore(&self.client, self.session_generation, recovery_secret).await
+        let result =
+            crate::app::backup::restore(&self.client, self.session_generation, recovery_secret)
+                .await;
+        self.server_backup.invalidate().await;
+        result
     }
 
     pub async fn secret_storage_status(
@@ -155,33 +292,56 @@ impl NativeDeviceOwner {
         &self,
         passphrase: &str,
     ) -> Result<crate::app::backup::NativeBackupOperationResult, &'static str> {
-        crate::app::backup::setup(&self.client, self.session_generation, passphrase).await
+        let result =
+            crate::app::backup::setup(&self.client, self.session_generation, passphrase).await;
+        self.server_backup.invalidate().await;
+        result
     }
     pub async fn backup_repair(
         &self,
         recovery_secret: &str,
     ) -> Result<crate::app::backup::NativeBackupOperationResult, &'static str> {
-        crate::app::backup::repair(&self.client, self.session_generation, recovery_secret).await
+        let result =
+            crate::app::backup::repair(&self.client, self.session_generation, recovery_secret)
+                .await;
+        self.server_backup.invalidate().await;
+        result
     }
     pub async fn secret_storage_bootstrap(
         &self,
         passphrase: &str,
     ) -> Result<crate::app::secret_storage::SecretStorageSetup, &'static str> {
-        crate::app::secret_storage::bootstrap(&self.client, self.session_generation, passphrase)
-            .await
+        let result = crate::app::secret_storage::bootstrap(
+            &self.client,
+            self.session_generation,
+            passphrase,
+        )
+        .await;
+        self.server_backup.invalidate().await;
+        result
     }
     pub async fn secret_storage_unlock(
         &self,
         recovery_secret: &str,
     ) -> Result<crate::app::secret_storage::NativeSecretStorageOperationResult, &'static str> {
-        crate::app::secret_storage::unlock(&self.client, self.session_generation, recovery_secret)
-            .await
+        let result = crate::app::secret_storage::unlock(
+            &self.client,
+            self.session_generation,
+            recovery_secret,
+        )
+        .await;
+        self.server_backup.invalidate().await;
+        result
     }
     pub async fn secret_storage_reset(
         &self,
         passphrase: &str,
     ) -> Result<crate::app::secret_storage::SecretStorageSetup, &'static str> {
-        crate::app::secret_storage::reset(&self.client, self.session_generation, passphrase).await
+        let result =
+            crate::app::secret_storage::reset(&self.client, self.session_generation, passphrase)
+                .await;
+        self.server_backup.invalidate().await;
+        result
     }
     pub async fn cross_signing_setup(
         &self,
@@ -213,6 +373,126 @@ impl NativeDeviceOwner {
     ) -> Result<crate::app::cross_signing::NativeCrossSigningSetupResult, &'static str> {
         self.set_pending_cross_signing(None)?;
         crate::app::cross_signing::complete(&self.client, self.session_generation).await
+    }
+
+    /// Answer the password stage of the pending setup. The password stays a
+    /// method argument; a rejected password re-arms the server's new session.
+    pub async fn authenticate_cross_signing_password(
+        &self,
+        password: &str,
+    ) -> Result<crate::app::cross_signing::NativeCrossSigningSetupResult, &'static str> {
+        use crate::app::cross_signing::CrossSigningPasswordError;
+        if password.is_empty() {
+            return Err("v-crypto.2-cross-signing-password-empty");
+        }
+        let auth_session = self.pending_cross_signing_auth()?;
+        match crate::app::cross_signing::authenticate_password(
+            &self.client,
+            self.session_generation,
+            auth_session,
+            password,
+        )
+        .await
+        {
+            Ok(result) => {
+                self.set_pending_cross_signing(None)?;
+                Ok(result)
+            }
+            Err(CrossSigningPasswordError::Rejected { auth_session }) => {
+                if auth_session.is_some() {
+                    self.set_pending_cross_signing(auth_session)?;
+                }
+                Err("v-crypto.2-cross-signing-password-rejected")
+            }
+            Err(CrossSigningPasswordError::Failed(diagnostic)) => Err(diagnostic),
+        }
+    }
+
+    /// Start an identity reset (S5). The SDK deletes key backup and disables
+    /// secret storage before it asks for authentication.
+    pub async fn identity_reset_start(
+        &self,
+    ) -> Result<crate::app::cross_signing::NativeIdentityResetState, &'static str> {
+        let result = self.identity_reset.start(&self.client).await;
+        self.server_backup.invalidate().await;
+        result
+    }
+
+    /// Answer the password stage of the pending identity reset. The password
+    /// stays a method argument.
+    pub async fn identity_reset_password(
+        &self,
+        password: &str,
+    ) -> Result<crate::app::cross_signing::NativeIdentityResetState, &'static str> {
+        let result = self
+            .identity_reset
+            .authenticate_password(&self.client, password)
+            .await;
+        self.server_backup.invalidate().await;
+        result
+    }
+
+    /// Continue the pending identity reset after account-page approval.
+    pub async fn identity_reset_continue(
+        &self,
+    ) -> Result<crate::app::cross_signing::NativeIdentityResetState, &'static str> {
+        let result = self
+            .identity_reset
+            .continue_after_approval(&self.client)
+            .await;
+        self.server_backup.invalidate().await;
+        result
+    }
+
+    pub async fn identity_reset_cancel(&self) {
+        self.identity_reset.cancel(&self.client).await;
+    }
+
+    /// Sign-out: drop a pending reset without a homeserver request.
+    pub async fn identity_reset_abandon(&self) {
+        self.identity_reset.abandon().await;
+    }
+
+    pub fn identity_reset_pending(&self) -> bool {
+        self.identity_reset.is_pending()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn identity_reset_handle(
+        &self,
+    ) -> Option<std::sync::Weak<matrix_sdk::encryption::recovery::IdentityResetHandle>> {
+        self.identity_reset.pending_handle()
+    }
+
+    /// Whether this device still needs verification by the account's
+    /// existing identity (the post-sign-in prompt's live condition).
+    pub async fn device_needs_verification(&self) -> Result<bool, &'static str> {
+        crate::app::cross_signing::device_needs_verification(&self.client).await
+    }
+
+    /// Core's `crypto_status` for this session; a local read.
+    pub async fn crypto_status(
+        &self,
+    ) -> Result<crate::platform::PlatformCryptoStatus, crate::platform::PlatformCryptoStatusError>
+    {
+        crate::app::cross_signing::crypto_status_projection(&self.client, self.session_generation)
+            .await
+    }
+
+    /// Core's `cross_signing_status` for this session. Shares the own-user
+    /// `/keys/query` gate with `snapshot`.
+    pub async fn cross_signing_status(
+        &self,
+    ) -> Result<
+        crate::platform::PlatformCrossSigningStatus,
+        crate::platform::PlatformCrossSigningStatusError,
+    > {
+        crate::app::cross_signing::cross_signing_status_projection(
+            &self.client,
+            self.session_generation,
+            &self.own_keys_query,
+        )
+        .await
     }
 
     /// Rename a device, then re-snapshot the live list.
@@ -497,8 +777,9 @@ fn trust_when_crypto_device_absent(crypto_store_loaded: bool) -> NativeDeviceTru
 
 /// Mirror of the SDK's `has_devices_to_verify_against` predicate over an
 /// already-fetched local device set: signed by the owner's cross-signing key,
-/// Olm-capable, and not dehydrated. Used only when the authority `/keys/query`
-/// itself fails or times out; the authoritative path above stays preferred.
+/// Olm-capable, and not dehydrated. Used when the authority `/keys/query`
+/// fails, times out or already ran this generation; after one successful
+/// query the SDK keeps this local set current from sync.
 fn eligible_local_authority(devices: Option<&UserDevices>) -> bool {
     devices.is_some_and(|devices| {
         devices.devices().any(|device| {
@@ -533,9 +814,20 @@ fn http_failure_category(error: &matrix_sdk::HttpError) -> &'static str {
     }
 }
 
+/// Device snapshot that always runs the authority `/keys/query`.
 pub async fn snapshot(
     client: &Client,
     session_generation: u64,
+) -> Result<NativeDeviceSnapshot, &'static str> {
+    snapshot_with_gate(client, session_generation, None).await
+}
+
+/// With a gate, the authority `/keys/query` runs only when the gate admits it
+/// (once per generation); other reads project the SDK predicate locally.
+async fn snapshot_with_gate(
+    client: &Client,
+    session_generation: u64,
+    authority_gate: Option<&OwnKeysQueryGate>,
 ) -> Result<NativeDeviceSnapshot, &'static str> {
     let encryption = client.encryption();
     // This performs the SDK's initial own-key query before we sample the
@@ -551,20 +843,36 @@ pub async fn snapshot(
     // Eligibility can perform an initial `/keys/query`. Run it beside the
     // authoritative homeserver session fetch and local crypto enrichment so a
     // slow authority lookup cannot hold the entire Sessions screen hostage.
+    // The SDK repeats that query on every call while the own identity is
+    // missing, and its answer re-sets the verification state, so the owner
+    // admits it once per generation.
+    let run_authority = authority_gate.is_none_or(OwnKeysQueryGate::try_begin);
     let (eligibility, server_devices, crypto_devices) = tokio::join!(
-        tokio::time::timeout(
-            Duration::from_secs(8),
-            encryption.has_devices_to_verify_against(),
-        ),
+        async {
+            if !run_authority {
+                return None;
+            }
+            Some(
+                tokio::time::timeout(
+                    Duration::from_secs(8),
+                    encryption.has_devices_to_verify_against(),
+                )
+                .await,
+            )
+        },
         client.devices(),
         encryption.get_user_devices(user_id),
     );
+    if let (Some(gate), true) = (authority_gate, run_authority) {
+        gate.finish(matches!(eligibility, Some(Ok(Ok(_)))));
+    }
     if std::env::var("SYNARA_VERIFICATION_DIAGNOSTICS").as_deref() == Ok("1") {
         let authority = match &eligibility {
-            Ok(Ok(true)) => "eligible",
-            Ok(Ok(false)) => "none",
-            Ok(Err(error)) => lookup_failure_category(error),
-            Err(_) => "timeout",
+            None => "local",
+            Some(Ok(Ok(true))) => "eligible",
+            Some(Ok(Ok(false))) => "none",
+            Some(Ok(Err(error))) => lookup_failure_category(error),
+            Some(Err(_)) => "timeout",
         };
         let server = server_devices
             .as_ref()
@@ -579,16 +887,16 @@ pub async fn snapshot(
         );
     }
     let has_devices_to_verify_against = match eligibility {
-        Ok(Ok(has_devices)) => Some(has_devices),
-        // The authority lookup performs its own `/keys/query`. When it fails
-        // or times out, project the same SDK predicate over the concurrently
-        // fetched local device set instead of blanking eligibility to
-        // "could not check". A fresh store with no tracked devices projects
-        // `Some(false)`, which keeps the actionable "open a verified session"
-        // guidance instead of a retry dead-end. If the local set itself failed
-        // to load, keep `None` so presenters show Retry rather than a false
-        // "no eligible session".
-        Ok(Err(_)) | Err(_) => match crypto_devices.as_ref() {
+        Some(Ok(Ok(has_devices))) => Some(has_devices),
+        // The authority lookup performs its own `/keys/query`. When it fails,
+        // times out or already ran this generation, project the same SDK
+        // predicate over the concurrently fetched local device set instead of
+        // blanking eligibility to "could not check". A fresh store with no
+        // tracked devices projects `Some(false)`, which keeps the actionable
+        // "open a verified session" guidance instead of a retry dead-end. If
+        // the local set itself failed to load, keep `None` so presenters show
+        // Retry rather than a false "no eligible session".
+        Some(Ok(Err(_))) | Some(Err(_)) | None => match crypto_devices.as_ref() {
             Ok(devices) => Some(eligible_local_authority(Some(devices))),
             Err(matrix_sdk::Error::NoOlmMachine) | Err(_) => None,
         },
@@ -778,6 +1086,185 @@ mod tests {
         })
         .await
         .expect("dropping the owner must release every status subscription");
+    }
+
+    #[tokio::test]
+    async fn security_wakeups_ignore_unchanged_sdk_values() {
+        use super::{security_wakeups, SecuritySignalState, SecuritySourceUpdate as Update};
+        use futures_util::StreamExt;
+        use matrix_sdk::encryption::{
+            backups::BackupState, recovery::RecoveryState, VerificationState,
+        };
+
+        let initial = SecuritySignalState {
+            verification: VerificationState::Unverified,
+            backup: BackupState::Unknown,
+            recovery: RecoveryState::Disabled,
+        };
+        // What one status read used to cause: the SDK re-sets verification
+        // after its `/keys/query` and recovery after the account-data GET,
+        // and `subscribe_reset` replays the current values.
+        let echo = [
+            Update::Verification(VerificationState::Unverified),
+            Update::Recovery(RecoveryState::Disabled),
+            Update::Backup(Some(BackupState::Unknown)),
+            Update::Devices {
+                own_user_changed: false,
+            },
+        ];
+        let echoes = futures_util::stream::iter(echo.into_iter().cycle().take(400));
+        assert_eq!(
+            security_wakeups(echoes, initial).count().await,
+            0,
+            "unchanged values must not wake the shells"
+        );
+
+        let transitions = futures_util::stream::iter([
+            Update::Verification(VerificationState::Unverified),
+            Update::Verification(VerificationState::Verified),
+            Update::Verification(VerificationState::Verified),
+            Update::Recovery(RecoveryState::Enabled),
+            Update::Recovery(RecoveryState::Enabled),
+            Update::Backup(Some(BackupState::Enabling)),
+            Update::Backup(Some(BackupState::Enabled)),
+            Update::Backup(Some(BackupState::Enabled)),
+            Update::Devices {
+                own_user_changed: true,
+            },
+            Update::Devices {
+                own_user_changed: false,
+            },
+            // A lagged backup broadcast hides the value; refresh once.
+            Update::Backup(None),
+        ]);
+        assert_eq!(
+            security_wakeups(transitions, initial).count().await,
+            6,
+            "verification, recovery, two backup transitions, own devices, lag"
+        );
+    }
+
+    #[tokio::test]
+    async fn owner_start_does_not_echo_the_current_sdk_state() {
+        use matrix_sdk::test_utils::mocks::MatrixMockServer;
+        use std::{sync::Arc, time::Duration};
+
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        // Let the SDK's own start-up transitions (verification leaves
+        // `Unknown`) happen first; those are real changes.
+        client
+            .encryption()
+            .wait_for_e2ee_initialization_tasks()
+            .await;
+        let mut verification = client.encryption().verification_state();
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while verification.get() == matrix_sdk::encryption::VerificationState::Unknown {
+                verification.next().await;
+            }
+        })
+        .await
+        .expect("the SDK settles its verification state");
+        let (send, mut receive) = tokio::sync::mpsc::unbounded_channel();
+        let observed = client.clone();
+        let before = (
+            client.encryption().verification_state().get(),
+            client.encryption().backups().state(),
+            client.encryption().recovery().state(),
+        );
+        let _owner = super::NativeDeviceOwner::start(
+            &client,
+            Arc::new(move |_| {
+                let _ = send.send((
+                    observed.encryption().verification_state().get(),
+                    observed.encryption().backups().state(),
+                    observed.encryption().recovery().state(),
+                ));
+            }),
+            7,
+        )
+        .await
+        .unwrap();
+        // Verification and recovery use `subscribe_reset`, which yields the
+        // current value at once. That replay is not a change.
+        let woke = tokio::time::timeout(Duration::from_millis(300), receive.recv()).await;
+        assert!(
+            woke.is_err(),
+            "starting the owner must not wake the shells: {before:?} -> {woke:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn owner_snapshots_send_the_authority_keys_query_once_per_generation() {
+        use matrix_sdk::{config::RequestConfig, test_utils::mocks::MatrixMockServer};
+        use std::sync::Arc;
+        use wiremock::{
+            matchers::{method, path_regex},
+            Mock, ResponseTemplate,
+        };
+
+        let server = MatrixMockServer::new().await;
+        let client = server
+            .client_builder()
+            .on_builder(|builder| builder.request_config(RequestConfig::new().disable_retry()))
+            .build()
+            .await;
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/_matrix/client/.*/keys/query$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .mount(server.server())
+            .await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/_matrix/client/.*/devices$"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"devices": []})),
+            )
+            .mount(server.server())
+            .await;
+        let keys_queries = || async {
+            server
+                .server()
+                .received_requests()
+                .await
+                .unwrap()
+                .iter()
+                .filter(|request| request.url.path().ends_with("/keys/query"))
+                .count()
+        };
+
+        let owner = super::NativeDeviceOwner::start(&client, Arc::new(|_| {}), 3)
+            .await
+            .unwrap();
+        // This account has no cross-signing identity, the case in which the
+        // SDK repeats its own-user query on every eligibility check.
+        let first = owner.snapshot().await.unwrap();
+        assert_eq!(first.has_devices_to_verify_against, Some(false));
+        let after_first = keys_queries().await;
+        assert!(after_first >= 1, "the first read asks the homeserver");
+        for _ in 0..3 {
+            let snapshot = owner.snapshot().await.unwrap();
+            assert_eq!(snapshot.has_devices_to_verify_against, Some(false));
+        }
+        assert_eq!(
+            keys_queries().await,
+            after_first,
+            "later reads project eligibility from the local store"
+        );
+
+        // The ungated function keeps the authoritative behaviour.
+        super::snapshot(&client, 3).await.unwrap();
+        assert!(keys_queries().await > after_first);
+    }
+
+    #[test]
+    fn own_keys_query_gate_admits_one_query_and_re_arms_after_failure() {
+        let gate = super::OwnKeysQueryGate::default();
+        assert!(gate.try_begin());
+        assert!(!gate.try_begin(), "a concurrent read uses the local store");
+        gate.finish(false);
+        assert!(gate.try_begin(), "a failed query is retried");
+        gate.finish(true);
+        assert!(!gate.try_begin());
     }
 
     #[test]

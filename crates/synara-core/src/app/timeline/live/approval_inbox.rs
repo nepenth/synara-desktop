@@ -325,7 +325,7 @@ impl ApprovalInboxOwner {
                 };
                 // Drop queued waits and SDK timeline subscriptions when the
                 // renderer vanishes. An SDK-owned in-flight pagination may
-                // outlive its waiter; view protection quiesces that SDK status.
+                // outlive its waiter; view protection stops the next page.
                 tokio::select! { _ = &mut observer => {}, _ = expiry => {} }
             }));
             running += 1;

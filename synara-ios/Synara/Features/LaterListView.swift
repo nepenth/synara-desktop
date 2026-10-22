@@ -20,12 +20,15 @@ struct LaterListView: View {
                 .accessibilityIdentifier("LaterLoading")
             case .empty:
                 SynaraEmptyState(
-                    title: "No Later Items",
+                    title: String(localized: "No Later Items"),
                     systemImage: "clock",
-                    message: "Items saved for later will appear here once synced."
+                    message: String(localized: "Items saved for later will appear here once synced.")
                 )
             case .failed(let error):
-                SynaraErrorState(title: "Could Not Load Later", message: error.errorDescription ?? "Try again") {
+                SynaraErrorState(
+                    title: String(localized: "Could Not Load Later"),
+                    message: error.errorDescription ?? String(localized: "Try again")
+                ) {
                     load()
                 }
             case .loaded(let activeItems, let completedItems):
@@ -218,7 +221,7 @@ private struct LaterListRow: View {
                 if !item.canNavigate {
                     Text("Destination unavailable")
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(SynaraColor.criticalText)
                 }
             }
         }
@@ -289,10 +292,10 @@ private extension SynaraLaterListItem {
 
     var stateLabel: String {
         guard isCompleted == false else {
-            return kind == .saved ? "Saved" : "Reminder"
+            return kind == .saved ? String(localized: "Saved") : String(localized: "Reminder")
         }
 
-        return kind == .saved ? "Saved" : "Reminder"
+        return kind == .saved ? String(localized: "Saved") : String(localized: "Reminder")
     }
 
     var dueUrgency: LaterDueUrgency {
@@ -301,19 +304,20 @@ private extension SynaraLaterListItem {
 
     var dueLabel: String {
         guard let dueTs else {
-            return "No due date"
+            return String(localized: "No due date")
         }
 
         let now = Date()
         let dueDate = Date(timeIntervalSince1970: TimeInterval(dueTs) / 1_000)
 
         if dueUrgency == .overdue {
-            return "Overdue"
+            return String(localized: "Overdue")
         }
 
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
-        return "Due \(formatter.localizedString(for: dueDate, relativeTo: now))"
+        let relative = formatter.localizedString(for: dueDate, relativeTo: now)
+        return String(localized: "Due \(relative)")
     }
 
     var showsDueBadge: Bool {
@@ -331,13 +335,13 @@ private extension SynaraLaterListItem {
     var dueAccessibilityLabel: String {
         switch dueUrgency {
         case .overdue:
-            return "Overdue"
+            return String(localized: "Overdue")
         case .dueSoon:
-            return "Due soon"
+            return String(localized: "Due soon")
         case .future:
-            return "Due later"
+            return String(localized: "Due later")
         case .none:
-            return "No due date"
+            return String(localized: "No due date")
         }
     }
 
@@ -360,17 +364,17 @@ private extension SynaraLaterListItem {
     func preview(roomName: String) -> String {
         switch kind {
         case .saved:
-            return "Saved\nRoom: \(roomName)"
+            return String(localized: "Saved\nRoom: \(roomName)")
         case .reminder:
             if let dueTs {
                 let formatter = RelativeDateTimeFormatter()
                 formatter.unitsStyle = .full
                 let dueDate = Date(timeIntervalSince1970: TimeInterval(dueTs) / 1_000)
                 let relative = formatter.localizedString(for: dueDate, relativeTo: Date())
-                return "Reminder: \(relative)\nRoom: \(roomName)"
+                return String(localized: "Reminder: \(relative)\nRoom: \(roomName)")
             }
 
-            return "Reminder\nRoom: \(roomName)"
+            return String(localized: "Reminder\nRoom: \(roomName)")
         }
     }
 

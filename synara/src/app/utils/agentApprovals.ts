@@ -22,6 +22,28 @@ export const AGENT_APPROVAL_REACTION_KEYS = [
   AGENT_APPROVAL_REACTION_DENY,
 ] as const;
 
+export type AgentApprovalOwnDecision = {
+  decision: 'approve_once' | 'approve_always' | 'deny';
+  /** Epoch milliseconds of this account's terminal reaction, when known. */
+  decidedAt?: number;
+};
+
+const AGENT_APPROVAL_DECISION_LABELS: Record<AgentApprovalOwnDecision['decision'], string> = {
+  approve_once: 'Approved once',
+  approve_always: 'Approved always',
+  deny: 'Denied',
+};
+
+/** Decided-state line for a Core-projected decision, e.g. "Approved once at 3:48 PM." */
+export function describeAgentApprovalDecision(
+  decision: AgentApprovalOwnDecision,
+  formatTime: (ms: number) => string = (ms) =>
+    new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+): string {
+  const label = AGENT_APPROVAL_DECISION_LABELS[decision.decision];
+  return decision.decidedAt ? `${label} at ${formatTime(decision.decidedAt)}.` : `${label}.`;
+}
+
 export type AgentApprovalNotificationActionId =
   | typeof AGENT_APPROVAL_NOTIFICATION_ACTION_REVIEW
   | typeof AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE

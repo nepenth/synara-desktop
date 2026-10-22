@@ -59,6 +59,7 @@ impl<K: Eq + Hash + Clone, V> RecencyMap<K, V> {
         self.entries.len()
     }
 
+    #[cfg(test)]
     pub(super) fn contains_key<Q>(&self, key: &Q) -> bool
     where
         K: Borrow<Q>,
@@ -91,6 +92,19 @@ impl<K: Eq + Hash + Clone, V> RecencyMap<K, V> {
         };
         self.entries.insert(key, (value, UseStamp::now()));
         evicted
+    }
+
+    pub(super) fn remove<Q>(&mut self, key: &Q) -> Option<V>
+    where
+        K: Borrow<Q>,
+        Q: Eq + Hash + ?Sized,
+    {
+        self.entries.remove(key).map(|(value, _)| value)
+    }
+
+    /// Keep only the entries `keep` accepts.
+    pub(super) fn retain(&mut self, mut keep: impl FnMut(&K, &V) -> bool) {
+        self.entries.retain(|key, (value, _)| keep(key, value));
     }
 
     /// Iterate without changing recency.

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect } from 'react';
 import FocusTrap from '../FocusTrap';
 import {
-  Dialog,
   Overlay,
   OverlayCenter,
   OverlayBackdrop,
@@ -16,10 +15,12 @@ import {
   Button,
   Spinner,
 } from 'folds';
+import { Dialog } from '../modal-dialog';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { stopPropagation } from '../../utils/keyboard';
 import { leaveRoomWithNativeOwner } from '../nativeRoomLeaveOwner';
+import { composerErrorMessage } from '../../features/room/composerSendError';
 
 type LeaveSpacePromptProps = {
   roomId: string;
@@ -67,7 +68,7 @@ export function LeaveSpacePrompt({ roomId, onDone, onCancel }: LeaveSpacePromptP
               <Box grow="Yes">
                 <Text size="H4">Leave Space</Text>
               </Box>
-              <IconButton size="300" onClick={onCancel} radii="300">
+              <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
                 <Icon src={Icons.Cross} />
               </IconButton>
             </Header>
@@ -76,7 +77,10 @@ export function LeaveSpacePrompt({ roomId, onDone, onCancel }: LeaveSpacePromptP
                 <Text priority="400">Are you sure you want to leave this space?</Text>
                 {leaveState.status === AsyncStatus.Error && (
                   <Text style={{ color: color.Critical.Main }} size="T300">
-                    Failed to leave space! {leaveState.error.message}
+                    {composerErrorMessage(
+                      leaveState.error,
+                      'Synara could not leave the space. Try again.'
+                    )}
                   </Text>
                 )}
               </Box>

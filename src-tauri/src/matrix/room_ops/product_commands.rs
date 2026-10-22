@@ -79,17 +79,24 @@ pub async fn matrix_room_set_favorite(
         .await
 }
 
-/// Persist an explicit user's private receipt or unread flag through the native
-/// Matrix SDK. Automatic visibility acknowledgements use the timeline command
-/// with an exact observed-tail precondition instead.
+/// Persist an explicit user's read receipt or unread flag through the native
+/// Matrix SDK: public `m.read` when `public_receipt`, else `m.read.private`.
+/// Automatic visibility acknowledgements use the timeline command with an
+/// exact observed-tail precondition instead.
 #[tauri::command]
 pub async fn matrix_room_set_read_state(
     core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     action: NativeTimelineReadAction,
+    public_receipt: Option<bool>,
 ) -> Result<synara_core::app::timeline::NativeRoomReadStateReadback, MatrixAuthCommandError> {
-    crate::bridge::room_read_state::room_set_read_state(core.inner().as_ref(), room_id, action)
-        .await
+    crate::bridge::room_read_state::room_set_read_state(
+        core.inner().as_ref(),
+        room_id,
+        action,
+        public_receipt.unwrap_or(false),
+    )
+    .await
 }
 
 /// V-ROOMS members moderation: invite a user through the live native Matrix SDK.

@@ -19,18 +19,26 @@ enum SharedCoreTimelineReadState {
         try await core.timelineEventReadback(roomId: roomId, eventId: eventId)
     }
 
+    /// The user's receipt privacy mode: public `m.read` unless Settings →
+    /// Hide Typing & Read Receipts is on, when Core sends `m.read.private`.
+    static var readReceiptsArePublic: Bool {
+        SynaraSharedConstants.boolSetting(SynaraSharedConstants.hideActivityKey) == false
+    }
+
     static func timelineSetReadState(
         core: SharedCore,
         streamId: String,
         action: TimelineReadActionDto,
         intent: TimelineReadIntentDto,
-        observedLiveTailEventId: String? = nil
+        observedLiveTailEventId: String? = nil,
+        publicReceipt: Bool = SharedCoreTimelineReadState.readReceiptsArePublic
     ) async throws -> TimelineReadStateDto {
         try await core.timelineSetReadState(
             streamId: streamId,
             action: action,
             intent: intent,
-            observedLiveTailEventId: observedLiveTailEventId
+            observedLiveTailEventId: observedLiveTailEventId,
+            publicReceipt: publicReceipt
         )
     }
 

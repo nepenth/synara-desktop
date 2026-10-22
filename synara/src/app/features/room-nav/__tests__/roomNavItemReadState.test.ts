@@ -17,8 +17,8 @@ test('RoomNavItem mark-as-read hits the native owner instead of the JS-sdk no-op
   const awaitIndex = markAsRead.indexOf('await markAsReadFromExplicitUserAction');
   const closeIndex = markAsRead.indexOf('requestClose()');
   assert.ok(awaitIndex >= 0 && closeIndex > awaitIndex);
-  assert.match(source, /unreadFromPresentation/);
-  assert.match(source, /useNativeRoomListSnapshot/);
+  assert.match(source, /useNativeRoomUnread\(room\.roomId\)/);
+  assert.match(source, /useNativeRoomSummary\(room\.roomId\)/);
   assert.match(source, /LiveCallChip/);
   assert.match(source, /hasActiveCall/);
   assert.match(source, /useNativeUserStatus/);

@@ -25,6 +25,7 @@ use matrix_sdk_ui::timeline::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
+use crate::app::account_data::SynaraAgentApprovalHistoryDecision;
 use crate::app::agent_approvals::is_eligible_agent_approval_prompt;
 use crate::dto::{EventId, LocalEchoState, RoomId, TimelineItemId, UserId};
 
@@ -33,7 +34,6 @@ use super::shield::{project_encryption_shield, TimelineEncryptionShield, STRICT_
 use super::TimelineMediaRegistry;
 
 pub const TIMELINE_VIEW_SCHEMA_VERSION: u32 = 1;
-pub const NATIVE_TIMELINE_VIEW_UPDATED_EVENT: &str = "matrix-timeline-view-updated";
 const MAX_AGENT_CARD_JSON_BYTES: usize = 200_000;
 const AGENT_CARD_CONTENT_KEYS: [&str; 4] = [
     "org.hermes.agent",
@@ -52,6 +52,9 @@ pub enum TimelineViewPosition {
     Focused {
         target_event_id: EventId,
     },
+    /// Wire-compatible placement Core no longer selects: a normal open lands
+    /// on the live provider at the unread frontier or the bottom, and the
+    /// presenter restores its own parked rows within that window.
     Restored {
         anchor_event_id: Option<EventId>,
     },
@@ -135,6 +138,36 @@ pub struct TimelineReaction {
     pub senders: Vec<TimelineReactionSender>,
 }
 
+/// This account's own terminal reaction on an approval prompt. Hermes acts on
+/// the first decision it sees, so the earliest own terminal reaction wins.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimelineAgentApprovalDecision {
+    pub decision: SynaraAgentApprovalHistoryDecision,
+    /// Reaction timestamp; absent while a local echo has no server time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decided_at: Option<u64>,
+}
+
+/// Project the account's own decision from `(key, own, timestamp_ms)`
+/// reaction entries. Seeded reactions from the agent are never decisions.
+pub fn own_agent_approval_decision<'a>(
+    reactions: impl IntoIterator<Item = (&'a str, bool, Option<u64>)>,
+) -> Option<TimelineAgentApprovalDecision> {
+    reactions
+        .into_iter()
+        .filter(|(_, own, _)| *own)
+        .filter_map(|(key, _, at)| {
+            SynaraAgentApprovalHistoryDecision::from_reaction_key(key).map(|decision| {
+                TimelineAgentApprovalDecision {
+                    decision,
+                    decided_at: at.filter(|at| *at > 0),
+                }
+            })
+        })
+        .min_by_key(|decision| decision.decided_at.unwrap_or(u64::MAX))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TimelineReplyPreview {
@@ -212,8 +245,20 @@ pub struct TimelineEventRowBase {
     /// snapshots. `SendingFailed.error` is never copied here.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub local_echo_state: Option<LocalEchoState>,
-    /// SDK transaction id while this row is still a local echo. Discard and
-    /// retry address this id; it is not a server event id.
+    /// Closed cause of a failed local echo (`send_failure_cause`), e.g.
+    /// `too_large` or `forbidden`. Absent unless the row is Failed or Wedged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub send_failure: Option<String>,
+    /// Whether Retry can help that failure (`send_failure_is_retryable`).
+    /// Set exactly when `send_failure` is; a shell offers only Discard when
+    /// `false` (too large, forbidden, rejected, not joined, unusable media).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub send_failure_retryable: Option<bool>,
+    /// Transaction id of this account's own send: the SDK id while the row is
+    /// a local echo (Discard and retry address it), then the remote event's
+    /// `unsigned.transaction_id` once the server echo replaced it. A shell
+    /// that shows its own pending row matches it by this id even when the
+    /// remote echo arrives first. Never a server event id.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transaction_id: Option<String>,
     /// SDK authenticity shield for an event in an encrypted room. Absent when
@@ -233,6 +278,8 @@ pub struct TimelineEventRowBase {
 pub struct ProjectedLocalEcho {
     pub state: Option<LocalEchoState>,
     pub event_id: Option<String>,
+    /// Closed cause (`send_failure_cause`) when the echo failed.
+    pub failure: Option<&'static str>,
 }
 
 pub fn project_local_echo_status(
@@ -243,24 +290,54 @@ pub fn project_local_echo_status(
         Some(EventSendState::NotSentYet { .. }) => ProjectedLocalEcho {
             state: Some(LocalEchoState::Sending),
             event_id: None,
+            failure: None,
         },
-        Some(EventSendState::SendingFailed { is_recoverable, .. }) => ProjectedLocalEcho {
+        Some(EventSendState::SendingFailed {
+            error,
+            is_recoverable,
+        }) => ProjectedLocalEcho {
             state: Some(if *is_recoverable {
                 LocalEchoState::Failed
             } else {
                 LocalEchoState::Wedged
             }),
             event_id: None,
+            failure: Some(crate::app::send::send_failure_cause(error)),
         },
         Some(EventSendState::Sent { event_id }) => ProjectedLocalEcho {
             state: Some(LocalEchoState::Sent),
             event_id: Some(event_id.to_string()),
+            failure: None,
         },
         None => ProjectedLocalEcho {
             state: None,
             event_id: known_event_id.map(str::to_owned),
+            failure: None,
         },
     }
+}
+
+/// The transaction id of this account's own event: the local echo's, or the
+/// remote echo's `unsigned.transaction_id`. The homeserver only returns the
+/// latter to the device that sent the event.
+pub fn own_event_transaction_id(event: &EventTimelineItem) -> Option<String> {
+    if let Some(txn) = event.transaction_id() {
+        return Some(txn.to_string());
+    }
+    if !event.is_own() {
+        return None;
+    }
+    #[derive(Deserialize)]
+    struct Unsigned {
+        transaction_id: Option<String>,
+    }
+    event
+        .original_json()?
+        .get_field::<Unsigned>("unsigned")
+        .ok()
+        .flatten()?
+        .transaction_id
+        .filter(|txn| !txn.is_empty())
 }
 
 /// Project the SDK-owned metadata common to every event row.
@@ -291,7 +368,11 @@ fn project_event_row_base_for_user(
         sender_avatar_url,
         origin_server_ts: event.timestamp().get().into(),
         local_echo_state: delivery.state,
-        transaction_id: event.transaction_id().map(ToString::to_string),
+        send_failure: delivery.failure.map(str::to_owned),
+        send_failure_retryable: delivery
+            .failure
+            .map(crate::app::send::send_failure_is_retryable),
+        transaction_id: own_event_transaction_id(event),
         encryption_shield: project_encryption_shield(event.get_shield(STRICT_SHIELDS)),
         capabilities: project_row_action_capabilities(event, own_user_id, authority),
     }
@@ -451,12 +532,25 @@ fn project_event_row_for_user(
                         current_user_id.as_str(),
                     )
                 });
+                let agent_approval_decision =
+                    own_user_id
+                        .filter(|_| is_agent_approval)
+                        .and_then(|user_id| {
+                            own_agent_approval_decision(content.reactions.iter().filter_map(
+                                |(key, senders)| {
+                                    senders.get(user_id).map(|info| {
+                                        (key.as_str(), true, Some(u64::from(info.timestamp.get())))
+                                    })
+                                },
+                            ))
+                        });
                 TimelineViewRow::Message(Box::new(TimelineMessageRow {
                     event: base,
                     body,
                     formatted_body: project_formatted_body(msgtype),
                     agent_card_json: project_agent_card_json(event, message.body()),
                     is_agent_approval,
+                    agent_approval_decision,
                     message_type,
                     forward_transport,
                     media_filename,
@@ -662,10 +756,19 @@ pub fn project_media_filename_and_caption(
 /// JSON. Direct custom-content fields are preferred; the body wrapper remains
 /// supported for compatibility with existing Hermes agents and encrypted
 /// messages whose decrypted custom content is represented by the SDK body.
+///
+/// Every message row is projected on each update, so both sources are probed
+/// cheaply first: the raw event must name a card content key, and the body
+/// must look like a JSON object, before anything is parsed.
 fn project_agent_card_json(event: &EventTimelineItem, body: &str) -> Option<String> {
     let direct = event
         .latest_json()
         .filter(|raw| raw.json().get().len() <= MAX_AGENT_CARD_JSON_BYTES * 2)
+        .filter(|raw| {
+            AGENT_CARD_CONTENT_KEYS
+                .iter()
+                .any(|key| raw.json().get().contains(key))
+        })
         .and_then(|raw| serde_json::from_str::<JsonValue>(raw.json().get()).ok())
         .and_then(|event| event.get("content").cloned())
         .and_then(|content| agent_card_payload_from_content(&content));
@@ -683,7 +786,7 @@ fn agent_card_payload_from_content(content: &JsonValue) -> Option<JsonValue> {
 }
 
 fn agent_card_payload_from_body(body: &str) -> Option<JsonValue> {
-    if body.len() > MAX_AGENT_CARD_JSON_BYTES {
+    if body.len() > MAX_AGENT_CARD_JSON_BYTES || !body.trim_start().starts_with('{') {
         return None;
     }
     let parsed = serde_json::from_str::<JsonValue>(body).ok()?;
@@ -1086,6 +1189,9 @@ pub struct TimelineMessageRow {
     /// display details only after this authoritative gate is true.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub is_agent_approval: bool,
+    /// Present only on an approval prompt this account already decided.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_approval_decision: Option<TimelineAgentApprovalDecision>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message_type: Option<String>,
     /// Core-owned dispatch route for forwarding this semantic event.
@@ -1287,6 +1393,51 @@ pub struct TimelineViewSnapshot {
     pub capabilities: TimelineViewCapabilities,
 }
 
+/// A [`TimelineViewSnapshot`] without its rows: what a command's readback
+/// needs when the rows already reach the presenter as delta batches.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimelineViewMetadata {
+    pub schema_version: u32,
+    pub session_generation: u64,
+    pub room_id: RoomId,
+    pub revision: u64,
+    pub position: TimelineViewPosition,
+    pub pagination: TimelinePaginationState,
+    pub read_state: TimelineReadState,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pinned_event_ids: Vec<EventId>,
+    pub capabilities: TimelineViewCapabilities,
+}
+
+impl From<TimelineViewSnapshot> for TimelineViewMetadata {
+    fn from(snapshot: TimelineViewSnapshot) -> Self {
+        let TimelineViewSnapshot {
+            schema_version,
+            session_generation,
+            room_id,
+            revision,
+            position,
+            pagination,
+            read_state,
+            pinned_event_ids,
+            rows: _,
+            capabilities,
+        } = snapshot;
+        Self {
+            schema_version,
+            session_generation,
+            room_id,
+            revision,
+            position,
+            pagination,
+            read_state,
+            pinned_event_ids,
+            capabilities,
+        }
+    }
+}
+
 /// One ordered native update to a `TimelineViewSnapshot` row list. This mirrors
 /// every SDK `VectorDiff` variant so the presenter never has to infer or poll
 /// a missing mutation.
@@ -1460,6 +1611,38 @@ mod tests {
         NoticeMessageEventContent, TextMessageEventContent,
     };
     use matrix_sdk::ruma::user_id;
+
+    #[test]
+    fn approval_card_projects_only_this_accounts_earliest_terminal_reaction() {
+        // Hermes seeds all three keys; those are never this account's decision.
+        assert_eq!(
+            own_agent_approval_decision([
+                ("✅", false, Some(1)),
+                ("♾️", false, Some(1)),
+                ("❌", false, Some(1)),
+            ]),
+            None
+        );
+        // An ordinary own reaction is not a decision either.
+        assert_eq!(own_agent_approval_decision([("👍", true, Some(5))]), None);
+        assert_eq!(
+            own_agent_approval_decision([
+                ("✅", false, Some(1)),
+                ("❌", true, Some(20)),
+                ("✅", true, Some(10)),
+            ]),
+            Some(TimelineAgentApprovalDecision {
+                decision: SynaraAgentApprovalHistoryDecision::ApproveOnce,
+                decided_at: Some(10),
+            })
+        );
+        // A local echo without a server time still shows the decided state.
+        let pending = own_agent_approval_decision([("❎", true, None)]).unwrap();
+        assert_eq!(pending.decision, SynaraAgentApprovalHistoryDecision::Deny);
+        assert_eq!(pending.decided_at, None);
+        let json = serde_json::to_value(pending).unwrap();
+        assert_eq!(json, serde_json::json!({ "decision": "deny" }));
+    }
 
     #[test]
     fn virtual_timeline_rows_serialize_camel_case_fields() {
@@ -1755,6 +1938,8 @@ mod tests {
                 sender_avatar_url: None,
                 origin_server_ts: 1,
                 local_echo_state: None,
+                send_failure: None,
+                send_failure_retryable: None,
                 transaction_id: None,
                 encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
@@ -1887,6 +2072,8 @@ mod tests {
                 sender_avatar_url: None,
                 origin_server_ts: 1,
                 local_echo_state: None,
+                send_failure: None,
+                send_failure_retryable: None,
                 transaction_id: None,
                 encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
@@ -1905,6 +2092,7 @@ mod tests {
             formatted_body: None,
             agent_card_json: None,
             is_agent_approval: false,
+            agent_approval_decision: None,
             message_type: Some("text".into()),
             forward_transport: Some(TimelineForwardTransport::Text),
             media_filename: None,
@@ -2043,6 +2231,8 @@ mod tests {
             sender_avatar_url: None,
             origin_server_ts: 1,
             local_echo_state: failed.state,
+            send_failure: None,
+            send_failure_retryable: None,
             transaction_id: Some("txn-failed".into()),
             encryption_shield: None,
             capabilities: TimelineRowCapabilities {
@@ -2131,6 +2321,12 @@ mod tests {
         let call_end = (call + 1200).min(source.len());
         let call_body = &source[call..call_end];
         assert!(call_body.contains("event.send_state()"));
-        assert!(call_body.contains("event.transaction_id()"));
+        assert!(call_body.contains("own_event_transaction_id(event)"));
+        // The SDK error only ever leaves as a closed cause code.
+        assert!(body.contains("send_failure_cause(error)"));
+        let helper = source
+            .find("pub fn own_event_transaction_id")
+            .expect("own transaction id helper");
+        assert!(source[helper..].contains("event.transaction_id()"));
     }
 }

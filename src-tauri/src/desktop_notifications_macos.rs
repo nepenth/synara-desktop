@@ -20,14 +20,18 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Runtime};
 
 use super::{
-    emit_notification_action, is_time_sensitive_agent_approval, macos_delivery,
-    navigate_notification_route, sanitize_notification_action_context,
-    sanitize_notification_actions, sanitize_notification_route, DesktopNotificationAction,
-    DesktopNotificationActionContext, DesktopNotificationPayload, DesktopNotificationSoundPolicy,
-    DismissKeyIndex,
+    handle_notification_response, is_critical_notification, is_time_sensitive_agent_approval,
+    macos_delivery, response_for_action, sanitize_dismiss_key,
+    sanitize_notification_action_context, sanitize_notification_actions,
+    sanitize_notification_route, DesktopNotificationAction, DesktopNotificationActionContext,
+    DesktopNotificationPayload, DesktopNotificationSoundPolicy, DismissKeyIndex,
+    NotificationBinding, NotificationResponse,
 };
 
 const CONTEXT_KEY: &str = "synara-response";
+/// A bound post waits this long for Notification Center's submission
+/// callback; it no longer holds the session lock meanwhile.
+const BOUND_SUBMISSION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 type ResponseHandler = Box<dyn Fn(&UNNotificationResponse) + Send + Sync>;
 static RESPONSE_HANDLER: OnceLock<ResponseHandler> = OnceLock::new();
 static DELEGATE: OnceLock<Retained<NotificationDelegate>> = OnceLock::new();
@@ -83,9 +87,27 @@ unsafe impl Sync for NotificationDelegate {}
 struct ResponseContext {
     #[serde(default)]
     session_generation: Option<u64>,
+    /// Account and process that posted the banner (absent before 2.3).
+    #[serde(default)]
+    account: Option<String>,
+    #[serde(default)]
+    process: Option<u64>,
     route: Option<String>,
     actions: Vec<DesktopNotificationAction>,
     action_context: Option<DesktopNotificationActionContext>,
+    /// Kept so a relaunched process can rebuild its dismiss index.
+    #[serde(default)]
+    dismiss_keys: Vec<String>,
+}
+
+impl ResponseContext {
+    fn binding(&self) -> NotificationBinding {
+        NotificationBinding {
+            session_generation: self.session_generation,
+            account: self.account.clone(),
+            process: self.process,
+        }
+    }
 }
 
 fn decode_context(json: &str) -> Option<ResponseContext> {
@@ -99,16 +121,38 @@ fn decode_context(json: &str) -> Option<ResponseContext> {
     context.action_context = context
         .action_context
         .and_then(sanitize_notification_action_context);
+    context.dismiss_keys = std::mem::take(&mut context.dismiss_keys)
+        .iter()
+        .filter_map(|key| sanitize_dismiss_key(key))
+        .collect();
     Some(context)
 }
 
 fn retained_response_has_required_binding(context: &ResponseContext) -> bool {
-    let critical = is_time_sensitive_agent_approval(context.action_context.as_ref())
-        || context
-            .actions
-            .iter()
-            .any(|action| action.id.starts_with("agent-approval."));
+    let critical = is_critical_notification(context.action_context.as_ref(), &context.actions);
     !critical || context.session_generation.is_some()
+}
+
+/// What a click or action on a delivered banner asks for; `None` when the
+/// banner has nothing to do (no route, an unknown action).
+fn response_for_context(context: &ResponseContext, action: &str) -> Option<NotificationResponse> {
+    if action == "default" {
+        return context
+            .route
+            .clone()
+            .map(|route| NotificationResponse::Open { route });
+    }
+    context
+        .actions
+        .iter()
+        .any(|item| item.id == action)
+        .then(|| {
+            response_for_action(
+                action,
+                context.route.as_deref(),
+                context.action_context.clone(),
+            )
+        })
 }
 
 pub(super) fn initialize<R: Runtime>(app: &AppHandle<R>) {
@@ -130,29 +174,22 @@ pub(super) fn initialize<R: Runtime>(app: &AppHandle<R>) {
                 return;
             };
             if !retained_response_has_required_binding(&context) {
+                super::log_notification_error(
+                    &app,
+                    "an approval banner without a session binding was ignored",
+                );
                 return;
             }
             let action = response.actionIdentifier();
-            if &*action == unsafe { UNNotificationDefaultActionIdentifier } {
-                if let Some(route) = context.route {
-                    let _ = navigate_notification_route(
-                        &app,
-                        &route,
-                        context.session_generation,
-                        false,
-                    );
-                }
-            } else if context
-                .actions
-                .iter()
-                .any(|item| item.id == action.to_string())
-            {
-                let _ = emit_notification_action(
-                    &app,
-                    &action.to_string(),
-                    context.action_context,
-                    context.session_generation,
-                );
+            let action = if &*action == unsafe { UNNotificationDefaultActionIdentifier } {
+                "default".to_owned()
+            } else {
+                action.to_string()
+            };
+            if let Some(next) = response_for_context(&context, &action) {
+                let critical =
+                    is_critical_notification(context.action_context.as_ref(), &context.actions);
+                handle_notification_response(&app, context.binding(), critical, next);
             }
         })
     });
@@ -165,9 +202,18 @@ pub(super) fn initialize<R: Runtime>(app: &AppHandle<R>) {
         .setDelegate(Some(ProtocolObject::from_ref(&**delegate)));
 }
 
+/// Only a granted permission posts; `default` (not asked yet) does not.
+fn posts_with_permission(permission: &str) -> bool {
+    permission == "granted"
+}
+
 pub(super) async fn permission() -> Result<String, String> {
     let status = macos_delivery::authorization_status().await?;
-    Ok(if status == UNAuthorizationStatus::NotDetermined {
+    Ok(permission_name(status))
+}
+
+fn permission_name(status: UNAuthorizationStatus) -> String {
+    if status == UNAuthorizationStatus::NotDetermined {
         "default"
     } else if status == UNAuthorizationStatus::Authorized
         || status == UNAuthorizationStatus::Provisional
@@ -177,7 +223,7 @@ pub(super) async fn permission() -> Result<String, String> {
     } else {
         "denied"
     }
-    .to_owned())
+    .to_owned()
 }
 
 pub(super) async fn request_permission() -> Result<String, String> {
@@ -351,11 +397,7 @@ fn register_category(actions: &[DesktopNotificationAction]) -> (String, bool) {
                     UNNotificationAction::actionWithIdentifier_title_options(
                         &NSString::from_str(&action.id),
                         &NSString::from_str(&action.label),
-                        if action.id == "agent-approval.deny" {
-                            UNNotificationActionOptions::Destructive
-                        } else {
-                            UNNotificationActionOptions::empty()
-                        },
+                        notification_action_options(&action.id),
                     )
                 })
                 .collect::<Vec<_>>();
@@ -370,6 +412,18 @@ fn register_category(actions: &[DesktopNotificationAction]) -> (String, bool) {
     UNUserNotificationCenter::currentNotificationCenter()
         .setNotificationCategories(&NSSet::from_retained_slice(&native_categories));
     (identifier, true)
+}
+
+/// Review opens the prompt, so it brings Synara forward even when hidden;
+/// Approve once runs in the background, and Deny is marked destructive.
+fn notification_action_options(action_id: &str) -> UNNotificationActionOptions {
+    match action_id {
+        "agent-approval.deny" => UNNotificationActionOptions::Destructive,
+        "agent-approval.review" | "agent-approval.approve-always" => {
+            UNNotificationActionOptions::Foreground
+        }
+        _ => UNNotificationActionOptions::empty(),
+    }
 }
 
 fn remove_requests(identifiers: &[String]) {
@@ -398,9 +452,67 @@ pub(super) fn dismiss(keys: &[String]) {
     remove_requests(&ids);
 }
 
+/// Remove every request this app posted, delivered or pending, including an
+/// earlier launch's, and forget the index.
+pub(super) fn dismiss_all() {
+    *DISMISS_INDEX.lock().unwrap_or_else(|p| p.into_inner()) = DismissKeyIndex::default();
+    let center = UNUserNotificationCenter::currentNotificationCenter();
+    center.removeAllPendingNotificationRequests();
+    center.removeAllDeliveredNotifications();
+}
+
+/// Index the banners an earlier launch left in Notification Center by their
+/// stored dismiss keys, so reading a room or signing out still withdraws
+/// them. Candidate keys are per process and are not carried over.
+pub(super) fn rebuild_dismiss_index() {
+    let completion = RcBlock::new(
+        move |notifications: std::ptr::NonNull<NSArray<UNNotification>>| {
+            // The array is valid for the duration of this callback only.
+            let notifications = unsafe { notifications.as_ref() };
+            let mut index = DISMISS_INDEX.lock().unwrap_or_else(|p| p.into_inner());
+            for notification in notifications.iter() {
+                let request = notification.request();
+                let Some(keys) = delivered_dismiss_keys(&request.content().userInfo()) else {
+                    continue;
+                };
+                // A banner this process posted meanwhile is already indexed.
+                let identifier = request.identifier().to_string();
+                if !index.keys_by_id.contains_key(&identifier) {
+                    index.register(identifier, &keys);
+                }
+            }
+        },
+    );
+    UNUserNotificationCenter::currentNotificationCenter()
+        .getDeliveredNotificationsWithCompletionHandler(&completion);
+}
+
+fn delivered_dismiss_keys(user_info: &NSDictionary) -> Option<Vec<String>> {
+    let value = user_info.objectForKey(&NSString::from_str(CONTEXT_KEY))?;
+    let value = value.downcast::<NSString>().ok()?;
+    let keys = carried_over_dismiss_keys(decode_context(&value.to_string())?);
+    (!keys.is_empty()).then_some(keys)
+}
+
+fn carried_over_dismiss_keys(context: ResponseContext) -> Vec<String> {
+    context
+        .dismiss_keys
+        .into_iter()
+        .filter(|key| !key.starts_with("candidate:"))
+        .collect()
+}
+
+/// Whether the banner asks Notification Center to play the default sound.
+/// Messages sound unless the renderer asked for silence (sounds off, or the
+/// push rule has no sound); macOS Focus then decides whether it plays.
+fn message_sound_enabled(sound: Option<DesktopNotificationSoundPolicy>) -> bool {
+    sound != Some(DesktopNotificationSoundPolicy::Silent)
+}
+
 pub(super) async fn show<R: Runtime>(
     app: &AppHandle<R>,
     notification: &DesktopNotificationPayload,
+    binding: &NotificationBinding,
 ) -> Result<bool, String> {
     let title = notification.title.as_str();
     let body = notification.body.as_deref();
@@ -408,10 +520,10 @@ pub(super) async fn show<R: Runtime>(
     let actions = notification.actions.as_deref().unwrap_or(&[]);
     let action_context = notification.action_context.as_ref();
     let dismiss_keys = notification.dismiss_keys.as_deref().unwrap_or(&[]);
-    let permission = permission().await?;
-    if permission == "denied"
-        || (permission == "default" && request_permission().await? != "granted")
-    {
+    // Never ask from here: the OS prompt would appear mid-use when the first
+    // message arrives. Until permission is granted (Settings, or the
+    // renderer's one-time request), the post is reported undelivered.
+    if !posts_with_permission(&permission().await?) {
         return Ok(false);
     }
     initialize(app);
@@ -451,15 +563,20 @@ pub(super) async fn show<R: Runtime>(
                 content.setSound(Some(&sound));
             }
             content.setInterruptionLevel(level);
+        } else if message_sound_enabled(notification.sound) {
+            content.setSound(Some(&UNNotificationSound::defaultSound()));
         }
         if let Some(category) = category.as_deref() {
             content.setCategoryIdentifier(&NSString::from_str(category));
         }
         let context = serde_json::to_string(&ResponseContext {
             session_generation: notification.session_generation,
+            account: binding.account.clone(),
+            process: binding.process,
             route: route.map(str::to_owned),
             actions: actions.to_vec(),
             action_context: action_context.cloned(),
+            dismiss_keys: dismiss_keys.to_vec(),
         })
         .map_err(|_| "macOS notification response encoding failed".to_owned())?;
         let key = NSString::from_str(CONTEXT_KEY);
@@ -504,21 +621,19 @@ pub(super) async fn show<R: Runtime>(
     };
     // The submission callback is the OS acceptance receipt. It is independent
     // of banner visibility and of later click/action callbacks. Never resend.
-    // Bound posts retain the auth transition gate until the actual OS
-    // callback completes. A renderer cancellation only drops its waiter;
-    // the owned acceptance task keeps running. Unbound system notices keep
-    // the existing receipt deadline. This governs acceptance, not display.
-    let accepted = if notification.session_generation.is_some() {
-        rx.await
-            .map_err(|_| "macOS notification submission closed".to_owned())
+    // Bound posts wait longer, without the session lock: the caller checks
+    // the generation again afterwards and withdraws the banner if it ended.
+    // Unbound system notices keep the existing receipt deadline. This
+    // governs acceptance, not display.
+    let deadline = if notification.session_generation.is_some() {
+        BOUND_SUBMISSION_TIMEOUT
     } else {
-        tokio::time::timeout(macos_delivery::RECEIPT_TIMEOUT, rx)
-            .await
-            .map_err(|_| "macOS notification submission timed out".to_owned())
-            .and_then(|result| {
-                result.map_err(|_| "macOS notification submission closed".to_owned())
-            })
+        macos_delivery::RECEIPT_TIMEOUT
     };
+    let accepted = tokio::time::timeout(deadline, rx)
+        .await
+        .map_err(|_| "macOS notification submission timed out".to_owned())
+        .and_then(|result| result.map_err(|_| "macOS notification submission closed".to_owned()));
     let remove = settle_submission_receipt(
         &mut DISMISS_INDEX.lock().unwrap_or_else(|p| p.into_inner()),
         &identifier,
@@ -636,6 +751,100 @@ mod tests {
         let mut legacy_critical = bound;
         legacy_critical.session_generation = None;
         assert!(!retained_response_has_required_binding(&legacy_critical));
+    }
+
+    #[test]
+    fn permission_not_asked_yet_reads_default_and_never_posts() {
+        assert_eq!(
+            permission_name(UNAuthorizationStatus::NotDetermined),
+            "default"
+        );
+        assert_eq!(
+            permission_name(UNAuthorizationStatus::Authorized),
+            "granted"
+        );
+        assert_eq!(
+            permission_name(UNAuthorizationStatus::Provisional),
+            "granted"
+        );
+        assert_eq!(permission_name(UNAuthorizationStatus::Denied), "denied");
+        assert!(posts_with_permission("granted"));
+        assert!(!posts_with_permission("default"));
+        assert!(!posts_with_permission("denied"));
+        // The post path only reads permission; asking is left to Settings
+        // and the renderer's one-time request.
+        let source = include_str!("desktop_notifications_macos.rs");
+        let show = source
+            .split("pub(super) async fn show<")
+            .nth(1)
+            .and_then(|rest| rest.split("\nfn settle_submission_receipt").next())
+            .expect("show body");
+        assert!(!show.contains("request_permission"));
+        assert!(!show.contains("rx.await"));
+    }
+
+    #[test]
+    fn messages_carry_the_default_sound_unless_silent() {
+        assert!(message_sound_enabled(Some(
+            DesktopNotificationSoundPolicy::Default
+        )));
+        assert!(message_sound_enabled(None));
+        assert!(!message_sound_enabled(Some(
+            DesktopNotificationSoundPolicy::Silent
+        )));
+        let source = include_str!("desktop_notifications_macos.rs");
+        assert!(source.contains(
+            "} else if message_sound_enabled(notification.sound) {\n            content.setSound(Some(&UNNotificationSound::defaultSound()));"
+        ));
+    }
+
+    #[test]
+    fn review_brings_synara_forward_and_approve_stays_in_the_background() {
+        assert_eq!(
+            notification_action_options("agent-approval.review"),
+            UNNotificationActionOptions::Foreground
+        );
+        assert_eq!(
+            notification_action_options("agent-approval.deny"),
+            UNNotificationActionOptions::Destructive
+        );
+        assert_eq!(
+            notification_action_options("agent-approval.approve-once"),
+            UNNotificationActionOptions::empty()
+        );
+        let context = decode_context(r#"{"sessionGeneration":3,"route":"/direct/!a:x/$e","actions":[{"id":"agent-approval.review","label":"Review"},{"id":"agent-approval.deny","label":"Deny"}],"actionContext":{"kind":"agent-approval","roomId":"!a:x","eventId":"$e"}}"#).unwrap();
+        assert_eq!(
+            response_for_context(&context, "agent-approval.review"),
+            Some(NotificationResponse::Open {
+                route: "/direct/!a:x/$e".to_owned()
+            })
+        );
+        assert!(matches!(
+            response_for_context(&context, "agent-approval.deny"),
+            Some(NotificationResponse::Action { .. })
+        ));
+        assert_eq!(response_for_context(&context, "agent-approval.other"), None);
+        assert!(matches!(
+            response_for_context(&context, "default"),
+            Some(NotificationResponse::Open { .. })
+        ));
+    }
+
+    #[test]
+    fn a_relaunch_reindexes_stored_dismiss_keys_but_not_candidates() {
+        let context = decode_context(r#"{"sessionGeneration":3,"account":"@a:x","process":9,"route":null,"actions":[],"actionContext":null,"dismissKeys":["room:!a:x","candidate:notif-3-1","bad key","invite:!b:x"]}"#).unwrap();
+        assert_eq!(
+            context.binding(),
+            NotificationBinding {
+                session_generation: Some(3),
+                account: Some("@a:x".to_owned()),
+                process: Some(9),
+            }
+        );
+        assert_eq!(
+            carried_over_dismiss_keys(context),
+            vec!["room:!a:x".to_owned(), "invite:!b:x".to_owned()]
+        );
     }
 
     #[test]

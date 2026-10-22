@@ -107,8 +107,10 @@ final class SynaraBackgroundAssertion: @unchecked Sendable {
     }
 }
 
-/// Approve once and Deny are background notification actions so they work
-/// from a locked iPhone and from mirrored Apple Watch alerts. Every other
+/// Approve once and Deny are background notification actions, so they finish
+/// without foregrounding the app. Approve once asks for an iPhone unlock first
+/// unless the user opted in to approving from the Lock Screen and Apple Watch;
+/// either way the response arrives here in the background. Every other
 /// response (body tap, Review, Approve always) still foregrounds the app.
 enum SynaraBackgroundApprovalActionPolicy {
     static func runsInBackground(actionIdentifier: String) -> Bool {
@@ -149,8 +151,39 @@ enum SynaraForegroundMatrixMutationPolicy {
     }
 }
 
-/// Owns the sole iOS suspension transition. Quiescence begins at
-/// `applicationWillResignActive`, before UIKit can suspend the process. The
+/// What a scene phase means for the Matrix stores. `.inactive` keeps the app
+/// on screen and running, so it never quiesces; only background does.
+enum SynaraScenePhasePolicy {
+    enum Transition: Equatable {
+        case foreground
+        case inactive
+        case background
+    }
+
+    static func transition(
+        for phase: ScenePhase,
+        applicationState: UIApplication.State
+    ) -> Transition {
+        // A SwiftUI scene sample cannot overrule process-level UIKit
+        // background state during notification or restoration launches.
+        if applicationState == .background {
+            return .background
+        }
+        switch phase {
+        case .active:
+            return applicationState == .active ? .foreground : .inactive
+        case .inactive:
+            return .inactive
+        case .background:
+            return .background
+        @unknown default:
+            return .background
+        }
+    }
+}
+
+/// Owns the sole iOS suspension transition. Quiescence begins when the scene
+/// enters the background, before UIKit can suspend the process. The
 /// background assertion remains held until the native lifecycle transaction
 /// has stopped SyncService, drained all in-flight store work, and released
 /// every SQLite connection. Foreground activation serially reopens the stores
@@ -258,6 +291,10 @@ final class SynaraBackgroundSyncCoordinator {
     }
 }
 
+/// Main-actor isolated: UIKit calls it on the main thread, but its async
+/// notification-center callbacks used to run on whatever thread resumed
+/// them and read and wrote `foregroundActive` and the pending response there.
+@MainActor
 final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     private var push: PushServicing?
     private var matrix: MatrixClientServicing?
@@ -420,7 +457,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
-        updateForegroundActive(false)
+        resignForegroundActive()
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
@@ -431,16 +468,29 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     /// UIApplicationDelegate callbacks remain as a redundant early signal,
     /// while this bridge closes pre-bind and scene-only delivery gaps.
     func updateScenePhase(_ phase: ScenePhase) {
-        switch phase {
-        case .active:
-            // A SwiftUI scene sample cannot overrule process-level UIKit
-            // background state during notification or restoration launches.
-            updateForegroundActive(UIApplication.shared.applicationState == .active)
-        case .inactive, .background:
-            updateForegroundActive(false)
-        @unknown default:
+        switch SynaraScenePhasePolicy.transition(
+            for: phase,
+            applicationState: UIApplication.shared.applicationState
+        ) {
+        case .foreground:
+            updateForegroundActive(true)
+        case .inactive:
+            resignForegroundActive()
+        case .background:
             updateForegroundActive(false)
         }
+    }
+
+    /// Inactive is still on screen and running: Control Center, Notification
+    /// Center, a system alert, the app-switcher peek, a permission prompt.
+    /// The app stops acting on notification responses and approvals, but the
+    /// stores stay open. Only background quiesces them, under the background
+    /// assertion and before UIKit can suspend the process; while running, the
+    /// NSE shares the stores through the same cross-process lock it uses when
+    /// the app is active.
+    private func resignForegroundActive() {
+        foregroundActive = false
+        PerformanceTrace.event("SceneInactive")
     }
 
     private func updateForegroundActive(_ active: Bool) {
@@ -466,10 +516,10 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
             return
         }
         PerformanceTrace.event("SceneBackground")
-        // Start at inactive, before background: a sync response can be
-        // committing an event-cache transaction while UIKit advances the app
-        // toward suspension. The coordinator is idempotent across duplicate
-        // SwiftUI and UIApplication lifecycle delivery.
+        // The coordinator takes the background assertion before it stops sync,
+        // so an in-flight event-cache transaction finishes before UIKit can
+        // suspend. It is idempotent across duplicate SwiftUI and
+        // UIApplication lifecycle delivery.
         backgroundSyncCoordinator.enterBackground(
             application: UIApplication.shared,
             matrix: matrix
@@ -693,8 +743,8 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
 
     private func postAgentApprovalNotSentNotice(userInfo: [AnyHashable: Any]) async {
         let content = UNMutableNotificationContent()
-        content.title = "Approval not sent"
-        content.body = "Open Synara to review the command. It may have expired."
+        content.title = String(localized: "Approval not sent")
+        content.body = String(localized: "Open Synara to review the command. It may have expired.")
         content.sound = .default
         if let target = SynaraForegroundNotificationPolicy.target(from: userInfo) {
             content.userInfo = ["room_id": target.roomID, "event_id": target.eventID]
@@ -909,6 +959,19 @@ private extension AppEnvironment {
                     unableToDecryptCount: 1
                 )
             )
+            : processEnvironment["SYNARA_UI_TEST_VERIFY_DEVICE_PROMPT"] == "1"
+            ? MockCryptoStatusService(
+                sessionCryptoStatus: SessionCryptoStatus(
+                    verification: .unverified,
+                    recovery: .incomplete,
+                    backup: .unavailable,
+                    hasDevicesToVerifyAgainst: true,
+                    isLastDevice: false,
+                    unableToDecryptCount: 0,
+                    crossSigning: .needsVerification
+                ),
+                verifyDevicePrompt: true
+            )
             : MockCryptoStatusService()
 
         if let inviteTransitionService {
@@ -927,9 +990,20 @@ private extension AppEnvironment {
             )
         }
 
+        let matrix = MockMatrixClientService()
+        switch processEnvironment["SYNARA_UI_TEST_CONNECTION_STATUS"] {
+        case "restoreFailed":
+            matrix.statusAfterStart = .restoreFailed
+        case "disconnected":
+            matrix.statusAfterStart = .disconnected
+        default:
+            break
+        }
+
         return .mock(
             router: router,
             session: session,
+            matrix: matrix,
             roomList: roomList,
             timeline: timeline,
             later: later,

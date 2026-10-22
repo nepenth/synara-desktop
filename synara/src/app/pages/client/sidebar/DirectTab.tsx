@@ -15,7 +15,7 @@ import { useDirectSelected } from '../../../hooks/router/useDirectSelected';
 import { UnreadBadge } from '../../../components/unread-badge';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { useNavToActivePathAtom } from '../../../state/hooks/navToActivePath';
-import { markAsReadFromExplicitUserActionInBackground } from '../../../utils/notifications';
+import { useMarkRoomsAsRead } from '../../../hooks/useMarkRoomsAsRead';
 import { stopPropagation } from '../../../utils/keyboard';
 
 type DirectMenuProps = {
@@ -24,10 +24,11 @@ type DirectMenuProps = {
 const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }, ref) => {
   const { roomIds, unread } = useNativeNavigationScope('direct');
 
-  const handleMarkAsRead = () => {
-    if (!unread) return;
-    roomIds.forEach((rId) => markAsReadFromExplicitUserActionInBackground(rId));
-    requestClose();
+  const { markRead, markingRead, markReadError } = useMarkRoomsAsRead();
+
+  const handleMarkAsRead = async () => {
+    if (!unread || markingRead) return;
+    if (await markRead(roomIds)) requestClose();
   };
 
   return (
@@ -44,6 +45,11 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
             Mark as Read
           </Text>
         </MenuItem>
+        {markReadError && (
+          <Text as="p" size="T200" role="alert" style={{ paddingInline: config.space.S200 }}>
+            {markReadError}
+          </Text>
+        )}
       </Box>
     </Menu>
   );
@@ -107,7 +113,6 @@ export function DirectTab() {
             <FocusTrap
               focusTrapOptions={{
                 initialFocus: false,
-                returnFocusOnDeactivate: false,
                 onDeactivate: () => setMenuAnchor(undefined),
                 clickOutsideDeactivates: true,
                 isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',

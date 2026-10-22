@@ -30,6 +30,7 @@ import {
   NavCategory,
   NavCategoryHeader,
   NavEmptyCenter,
+  NavLoading,
   NavEmptyLayout,
   NavItem,
   NavItemContent,
@@ -58,7 +59,10 @@ import {
   writeRoomListSort,
   type RoomListSort,
 } from './homeRoomList';
-import { useNativeRoomListSnapshot } from '../../../state/room-list/roomList';
+import {
+  useNativeRoomListLoaded,
+  useNativeRoomListSnapshot,
+} from '../../../state/room-list/roomList';
 import { VirtualTile } from '../../../components/virtualizer';
 import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
 import { makeNavCategoryId } from '../../../state/closedNavCategories';
@@ -67,7 +71,7 @@ import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { PageNav, PageNavHeader, PageNavContent } from '../../../components/page';
 import { useNativeNavigationScope } from '../../../state/hooks/navigationUnread';
-import { markAsReadFromExplicitUserActionInBackground } from '../../../utils/notifications';
+import { useMarkRoomsAsRead } from '../../../hooks/useMarkRoomsAsRead';
 import { useClosedNavCategoriesAtom } from '../../../state/hooks/closedNavCategories';
 import { stopPropagation } from '../../../utils/keyboard';
 import SynaraPNG from '../../../../../public/res/png/synara.png';
@@ -87,10 +91,11 @@ type HomeMenuProps = {
 const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, ref) => {
   const { roomIds: orphanRooms, unread } = useNativeNavigationScope('home');
 
-  const handleMarkAsRead = () => {
-    if (!unread) return;
-    orphanRooms.forEach((rId) => markAsReadFromExplicitUserActionInBackground(rId));
-    requestClose();
+  const { markRead, markingRead, markReadError } = useMarkRoomsAsRead();
+
+  const handleMarkAsRead = async () => {
+    if (!unread || markingRead) return;
+    if (await markRead(orphanRooms)) requestClose();
   };
 
   return (
@@ -109,6 +114,11 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
             Mark as Read
           </Text>
         </MenuItem>
+        {markReadError && (
+          <Text as="p" size="T200" role="alert" style={{ paddingInline: config.space.S200 }}>
+            {markReadError}
+          </Text>
+        )}
       </Box>
     </Menu>
   );
@@ -227,7 +237,12 @@ function HomeHeader() {
             </Text>
           </Box>
           <Box>
-            <IconButton aria-pressed={!!menuAnchor} variant="Surface" onClick={handleOpenMenu}>
+            <IconButton
+              aria-label="Home options"
+              aria-pressed={!!menuAnchor}
+              variant="Surface"
+              onClick={handleOpenMenu}
+            >
               <Icon src={Icons.VerticalDots} size="200" />
             </IconButton>
           </Box>
@@ -242,7 +257,6 @@ function HomeHeader() {
           <FocusTrap
             focusTrapOptions={{
               initialFocus: false,
-              returnFocusOnDeactivate: false,
               onDeactivate: () => setMenuAnchor(undefined),
               clickOutsideDeactivates: true,
               isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
@@ -313,6 +327,7 @@ export function Home() {
   const createRoomSelected = useHomeCreateSelected();
   const joinSelected = useHomeJoinSelected();
   const searchSelected = useHomeSearchSelected();
+  const roomListLoaded = useNativeRoomListLoaded();
   const noRoomToDisplay = rooms.length === 0;
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 
@@ -375,10 +390,14 @@ export function Home() {
   );
 
   return (
-    <PageNav>
+    <PageNav label="Rooms">
       <HomeHeader />
       {noRoomToDisplay ? (
-        <HomeEmpty />
+        roomListLoaded ? (
+          <HomeEmpty />
+        ) : (
+          <NavLoading label="Loading rooms…" />
+        )
       ) : (
         <PageNavContent scrollRef={scrollRef}>
           <Box direction="Column" gap="300">
@@ -387,9 +406,12 @@ export function Home() {
                 className={depthCss.quietInteractiveSurface}
                 variant="Surface"
                 radii="400"
-                aria-selected={createRoomSelected}
+                selected={createRoomSelected}
               >
-                <NavButton onClick={() => navigate(getHomeCreatePath())}>
+                <NavButton
+                  aria-current={createRoomSelected ? 'page' : undefined}
+                  onClick={() => navigate(getHomeCreatePath())}
+                >
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">
                       <Avatar size="200" radii="400">
@@ -408,9 +430,12 @@ export function Home() {
                 className={depthCss.quietInteractiveSurface}
                 variant="Surface"
                 radii="400"
-                aria-selected={joinSelected}
+                selected={joinSelected}
               >
-                <NavButton onClick={() => navigate(getHomeJoinPath())}>
+                <NavButton
+                  aria-current={joinSelected ? 'page' : undefined}
+                  onClick={() => navigate(getHomeJoinPath())}
+                >
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">
                       <Avatar size="200" radii="400">
@@ -429,9 +454,12 @@ export function Home() {
                 className={depthCss.quietInteractiveSurface}
                 variant="Surface"
                 radii="400"
-                aria-selected={searchSelected}
+                selected={searchSelected}
               >
-                <NavLink to={getHomeSearchPath()}>
+                <NavLink
+                  aria-current={searchSelected ? 'page' : undefined}
+                  to={getHomeSearchPath()}
+                >
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">
                       <Avatar size="200" radii="400">

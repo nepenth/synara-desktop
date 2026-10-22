@@ -33,6 +33,35 @@ enum SharedCoreSessionCrypto {
         )
     }
 
+    /// Core's cross-signing readiness. Before L11 iOS could never read it.
+    static func crossSigning(_ readiness: CrossSigningReadinessDto?) -> SynaraCryptoCrossSigningStatus {
+        switch readiness {
+        case .ready:
+            return .ready
+        case .setupRequired:
+            return .notSetUp
+        case .verificationRequired:
+            return .needsVerification
+        case .recoveryRequired:
+            return .needsRecovery
+        case .unavailable, nil:
+            return .unknown
+        }
+    }
+
+    /// Security offers "Set Up Recovery" only when the account has no secret
+    /// storage at all; an existing one is unlocked with "Recover Keys".
+    static func recoverySetupAvailable(_ action: SecretStorageActionDto?) -> Bool? {
+        switch action {
+        case .bootstrapRequired:
+            return true
+        case .unlockRequired, .noAction:
+            return false
+        case nil:
+            return nil
+        }
+    }
+
     static func verification(_ crossSigningState: CrossSigningStateDto?) -> SynaraCryptoVerificationStatus {
         switch crossSigningState {
         case .ready:

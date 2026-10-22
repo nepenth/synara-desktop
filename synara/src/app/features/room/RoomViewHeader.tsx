@@ -68,7 +68,8 @@ import { RoomNotesPanel } from './room-notes/RoomNotesPanel';
 import { RoomThreadListPanel } from './RoomThreadListPanel';
 import type { RoomSidePanelType } from './RoomSidePanel';
 import * as depthCss from '../../styles/Depth.css';
-import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
+import { useNativeRoomSummary } from '../../state/room-list/roomList';
+import { PersonGlyph, roomGlyphFor } from '../../components/room-glyph';
 import {
   snapshotRtcTransportsNative,
   type NativeRtcTransportsSnapshot,
@@ -113,9 +114,18 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
     }
   };
 
-  const handleMarkAsUnread = () => {
-    markAsUnread(room.roomId);
-    requestClose();
+  const handleMarkAsUnread = async () => {
+    if (readBusy) return;
+    setReadError(undefined);
+    setReadBusy(true);
+    try {
+      await markAsUnread(room.roomId);
+      requestClose();
+    } catch {
+      setReadError("Couldn't mark this channel as unread.");
+    } finally {
+      setReadBusy(false);
+    }
   };
 
   const handleInvite = () => {
@@ -157,9 +167,9 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
           fill="None"
           onClick={() => {
             if (unread) void handleMarkAsRead();
-            else handleMarkAsUnread();
+            else void handleMarkAsUnread();
           }}
-          disabled={unread && readBusy}
+          disabled={readBusy}
           size="300"
           after={<Icon size="100" src={unread ? Icons.CheckTwice : Icons.MessageUnread} />}
           radii="300"
@@ -170,7 +180,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
           </Text>
         </MenuItem>
         {readError && (
-          <Text as="p" size="T200" style={{ paddingInline: config.space.S200 }}>
+          <Text as="p" size="T200" role="alert" style={{ paddingInline: config.space.S200 }}>
             {readError}
           </Text>
         )}
@@ -309,8 +319,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
 
 const RoomCallMenu = forwardRef<HTMLDivElement>((_, ref) => {
   const room = useRoom();
-  const nativeRooms = useNativeRoomListSnapshot();
-  const nativeRoom = nativeRooms.rooms.find((summary) => summary.roomId === room.roomId);
+  const nativeRoom = useNativeRoomSummary(room.roomId);
   const [snapshot, setSnapshot] = useState<NativeRtcTransportsSnapshot | null>(null);
 
   useEffect(() => {
@@ -404,6 +413,7 @@ export function RoomViewHeader({
   const notesSummary = getRoomNotesSummary(notesContent, room.roomId);
   const name = useRoomName(room);
   const topic = useRoomTopic(room);
+  const glyph = roomGlyphFor(useNativeRoomSummary(room.roomId), name);
 
   const [peopleDrawer, setPeopleDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
   const pinsOpen = activeSidePanel === 'pins' || !!pinMenuAnchor;
@@ -480,6 +490,7 @@ export function RoomViewHeader({
                   className={depthCss.quietInteractiveSurface}
                   fill="None"
                   onClick={onBack}
+                  aria-label="Back"
                 >
                   <Icon src={Icons.ArrowLeft} />
                 </IconButton>
@@ -488,13 +499,16 @@ export function RoomViewHeader({
           </BackRouteHandler>
         )}
         <Box grow="Yes" alignItems="Center" gap="300">
-          {screenSize !== ScreenSize.Mobile && (
-            <Text as="span" className={css.RoomChannelGlyph} aria-hidden="true">
-              #
-            </Text>
-          )}
+          {screenSize !== ScreenSize.Mobile &&
+            (glyph.kind === 'person' ? (
+              <PersonGlyph className={css.RoomPersonGlyph} glyph={glyph} />
+            ) : (
+              <Text as="span" className={css.RoomChannelGlyph} aria-hidden="true">
+                #
+              </Text>
+            ))}
           <Box direction="Column">
-            <Text size={topic ? 'H5' : 'H3'} className={css.RoomTitle} truncate>
+            <Text as="h1" size={topic ? 'H5' : 'H3'} className={css.RoomTitle} truncate>
               {name}
             </Text>
             {topic && (
@@ -567,7 +581,6 @@ export function RoomViewHeader({
               <FocusTrap
                 focusTrapOptions={{
                   initialFocus: false,
-                  returnFocusOnDeactivate: false,
                   onDeactivate: () => setCallMenuAnchor(undefined),
                   clickOutsideDeactivates: true,
                   isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
@@ -595,6 +608,7 @@ export function RoomViewHeader({
                   fill="None"
                   ref={triggerRef}
                   onClick={() => onToggleSidePanel('widgets')}
+                  aria-label="Widgets"
                   aria-pressed={widgetsOpen}
                 >
                   <Icon size="400" src={Icons.Code} filled={widgetsOpen} />
@@ -617,6 +631,7 @@ export function RoomViewHeader({
                 fill="None"
                 ref={triggerRef}
                 onClick={handleSearchClick}
+                aria-label="Search"
               >
                 <Icon size="400" src={Icons.Search} />
               </IconButton>
@@ -650,7 +665,6 @@ export function RoomViewHeader({
                 <FocusTrap
                   focusTrapOptions={{
                     initialFocus: false,
-                    returnFocusOnDeactivate: false,
                     onDeactivate: () => setThreadsOverlayOpen(false),
                     clickOutsideDeactivates: true,
                     escapeDeactivates: stopPropagation,
@@ -677,6 +691,7 @@ export function RoomViewHeader({
                 style={{ position: 'relative' }}
                 onClick={handleOpenPinMenu}
                 ref={triggerRef}
+                aria-label={pinnedCount > 0 ? `Pinned Messages, ${pinnedCount}` : 'Pinned Messages'}
                 aria-pressed={pinsOpen}
               >
                 {pinnedCount > 0 && (
@@ -708,7 +723,6 @@ export function RoomViewHeader({
                 <FocusTrap
                   focusTrapOptions={{
                     initialFocus: false,
-                    returnFocusOnDeactivate: false,
                     onDeactivate: () => setPinMenuAnchor(undefined),
                     clickOutsideDeactivates: true,
                     isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
@@ -741,6 +755,7 @@ export function RoomViewHeader({
                 style={{ position: 'relative' }}
                 ref={triggerRef}
                 onClick={handleOpenNotes}
+                aria-label="Personal Notes"
                 aria-pressed={notesOpen}
               >
                 {notesSummary.total > 0 && (
@@ -770,7 +785,6 @@ export function RoomViewHeader({
                 <FocusTrap
                   focusTrapOptions={{
                     initialFocus: false,
-                    returnFocusOnDeactivate: false,
                     onDeactivate: () => setNotesOverlayOpen(false),
                     clickOutsideDeactivates: true,
                     escapeDeactivates: stopPropagation,
@@ -843,7 +857,6 @@ export function RoomViewHeader({
               <FocusTrap
                 focusTrapOptions={{
                   initialFocus: false,
-                  returnFocusOnDeactivate: false,
                   onDeactivate: () => setMenuAnchor(undefined),
                   clickOutsideDeactivates: true,
                   isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',

@@ -12,6 +12,7 @@ import * as css from './ThreadSidePanel.css';
 export function ThreadSidePanel({
   roomId,
   rootEventId,
+  focusEventId,
   width,
   availableWidth,
   onWidthChange,
@@ -20,6 +21,8 @@ export function ThreadSidePanel({
 }: {
   roomId: string;
   rootEventId: string;
+  /** A routed reply (notification or link) to scroll to when the pane opens. */
+  focusEventId?: string;
   width: number;
   /** Room area width, for the 60% ceiling. */
   availableWidth?: number;
@@ -94,6 +97,7 @@ export function ThreadSidePanel({
       aria-label="Thread"
       role="complementary"
       data-thread-side-panel={rootEventId}
+      data-file-drop-region="thread"
     >
       <button
         type="button"
@@ -127,6 +131,7 @@ export function ThreadSidePanel({
           key={`${roomId}:${rootEventId}`}
           roomId={roomId}
           threadRootEventId={rootEventId}
+          threadFocusEventId={focusEventId}
           onCloseThreadRoute={onClose}
           publishThreadRoot={false}
           showThreadBack={false}

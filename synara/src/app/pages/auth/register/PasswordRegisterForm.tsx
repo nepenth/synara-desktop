@@ -10,8 +10,7 @@ import {
   Text,
   color,
 } from 'folds';
-import React, { ChangeEventHandler, useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { ChangeEventHandler, useCallback, useEffect, useId, useState } from 'react';
 import { PasswordInput } from '../../../components/password-input';
 import {
   AuthStageType,
@@ -38,13 +37,8 @@ import {
 import { ConfirmPasswordMatch } from '../../../components/ConfirmPasswordMatch';
 import { UIAFlowOverlay } from '../../../components/UIAFlowOverlay';
 import { synaraDeviceDisplayName } from '../../../utils/user-agent';
-import { completeNativeLoginBootstrap } from '../login/loginUtil';
+import { useNativeSessionHandoff } from '../login/loginUtil';
 import { openExternalUrlFromClick } from '../../../utils/appLinks';
-import {
-  deleteAfterLoginRedirectPath,
-  getAfterLoginRedirectPath,
-} from '../../afterLoginRedirectPath';
-import { getHomePath } from '../../pathUtils';
 import { useAuthServerReady } from '../authServerResolution';
 import {
   generateRegisterClientSecret,
@@ -115,6 +109,8 @@ const toNativeAuthStage = (dict: RegisterAuthDict): NativeRegisterAuthStage => {
         clientSecret: dict.clientSecret,
         session: dict.session,
       };
+    case 'session_only':
+      return { type: 'session_only', session: dict.session };
     default:
       return { type: 'session_only' };
   }
@@ -129,6 +125,7 @@ type RegisterUIAFlowProps = {
   >[0];
   registerEmail: (email: string, clientSecret: string) => Promise<RegisterEmailTokenResult>;
   onRegisterStage: (dict: RegisterAuthDict) => void;
+  homeserverBaseUrl: string;
 };
 function RegisterUIAFlow({
   formData,
@@ -137,6 +134,7 @@ function RegisterUIAFlow({
   registerEmailState,
   registerEmail,
   onRegisterStage,
+  homeserverBaseUrl,
 }: RegisterUIAFlowProps) {
   const completed = useUIACompleted(authData);
   const { getStageToComplete } = useUIAFlow(authData, flow);
@@ -181,6 +179,7 @@ function RegisterUIAFlow({
           stageData={stageToComplete}
           submitAuthDict={handleAuthDict}
           onCancel={handleCancel}
+          homeserverBaseUrl={homeserverBaseUrl}
         />
       )}
       {stageToComplete.type === AuthStageType.Email && (
@@ -219,8 +218,12 @@ export function PasswordRegisterForm({
   defaultEmail,
   defaultRegisterToken,
 }: PasswordRegisterFormProps) {
-  const navigate = useNavigate();
   const serverReady = useAuthServerReady();
+  const usernameInputId = useId();
+  const passwordInputId = useId();
+  const confirmPasswordInputId = useId();
+  const tokenInputId = useId();
+  const emailInputId = useId();
   const serverDiscovery = useAutoDiscoveryInfo();
   const baseUrl = serverDiscovery['m.homeserver'].base_url;
   const params = useUIAParams(authData);
@@ -262,27 +265,21 @@ export function PasswordRegisterForm({
   const registerError =
     registerState.status === AsyncStatus.Error ? registerState.error : undefined;
 
+  // Registration installed the native session host-side (vault + desktop
+  // session envelope). The handoff rehydrates the frontend bootstrap from the
+  // envelope before entering the app; without it the router gate sees no
+  // active session. Fail-closed: no navigation if the envelope is missing,
+  // and the failure is shown with a Retry that repeats only the handoff.
+  const accountCreated =
+    registerState.status === AsyncStatus.Success && registerState.data.status === 'complete';
+  const { handoffFailed, retryHandoff } = useNativeSessionHandoff(accountCreated);
+
   useEffect(() => {
     if (registerState.status !== AsyncStatus.Success) return;
     const outcome = registerState.data;
-    if (outcome.status === 'complete') {
-      // Registration installed the native session host-side (vault + desktop
-      // session envelope). Rehydrate the frontend bootstrap from the envelope
-      // before entering the app; without it the router gate sees no active
-      // session. Fail-closed: no navigation if the envelope is missing.
-      void completeNativeLoginBootstrap()
-        .then(() => {
-          const afterLoginRedirectPath = getAfterLoginRedirectPath();
-          deleteAfterLoginRedirectPath();
-          navigate(afterLoginRedirectPath ?? getHomePath(), { replace: true });
-        })
-        .catch(() => {
-          // No navigation without a native bootstrap session.
-        });
-      return;
-    }
+    if (outcome.status === 'complete') return;
     setOngoingAuthData(uiaAuthDataFromChallenge(outcome));
-  }, [registerState, navigate]);
+  }, [registerState]);
 
   const handleSubmit: ChangeEventHandler<HTMLFormElement> = (evt) => {
     evt.preventDefault();
@@ -348,13 +345,15 @@ export function PasswordRegisterForm({
     <>
       <Box as="form" onSubmit={handleSubmit} direction="Inherit" gap="400">
         <Box direction="Column" gap="100">
-          <Text as="label" size="L400" priority="300">
+          <Text as="label" htmlFor={usernameInputId} size="L400" priority="300">
             Username
           </Text>
           <Input
+            id={usernameInputId}
             variant="Background"
             defaultValue={defaultUsername}
             name="usernameInput"
+            autoComplete="username"
             size="500"
             outlined
             required
@@ -373,13 +372,15 @@ export function PasswordRegisterForm({
           {(match, doMatch, passRef, confPassRef) => (
             <>
               <Box direction="Column" gap="100">
-                <Text as="label" size="L400" priority="300">
+                <Text as="label" htmlFor={passwordInputId} size="L400" priority="300">
                   Password
                 </Text>
                 <PasswordInput
+                  id={passwordInputId}
                   ref={passRef}
                   onChange={doMatch}
                   name="passwordInput"
+                  autoComplete="new-password"
                   variant="Background"
                   size="500"
                   outlined
@@ -403,13 +404,15 @@ export function PasswordRegisterForm({
                 )}
               </Box>
               <Box direction="Column" gap="100">
-                <Text as="label" size="L400" priority="300">
+                <Text as="label" htmlFor={confirmPasswordInputId} size="L400" priority="300">
                   Confirm Password
                 </Text>
                 <PasswordInput
+                  id={confirmPasswordInputId}
                   ref={confPassRef}
                   onChange={doMatch}
                   name="confirmPasswordInput"
+                  autoComplete="new-password"
                   variant="Background"
                   size="500"
                   style={{ color: match ? undefined : color.Critical.Main }}
@@ -422,12 +425,13 @@ export function PasswordRegisterForm({
         </ConfirmPasswordMatch>
         {hasStageInFlows(uiaFlows, AuthStageType.RegistrationToken) && (
           <Box direction="Column" gap="100">
-            <Text as="label" size="L400" priority="300">
+            <Text as="label" htmlFor={tokenInputId} size="L400" priority="300">
               {requiredStageInFlows(uiaFlows, AuthStageType.RegistrationToken)
                 ? 'Registration Token'
                 : 'Registration Token (Optional)'}
             </Text>
             <Input
+              id={tokenInputId}
               variant="Background"
               defaultValue={defaultRegisterToken}
               name="tokenInput"
@@ -439,14 +443,16 @@ export function PasswordRegisterForm({
         )}
         {hasStageInFlows(uiaFlows, AuthStageType.Email) && (
           <Box direction="Column" gap="100">
-            <Text as="label" size="L400" priority="300">
+            <Text as="label" htmlFor={emailInputId} size="L400" priority="300">
               {requiredStageInFlows(uiaFlows, AuthStageType.Email) ? 'Email' : 'Email (Optional)'}
             </Text>
             <Input
+              id={emailInputId}
               variant="Background"
               defaultValue={defaultEmail}
               name="emailInput"
               type="email"
+              autoComplete="email"
               size="500"
               required={requiredStageInFlows(uiaFlows, AuthStageType.Email)}
               outlined
@@ -486,8 +492,24 @@ export function PasswordRegisterForm({
         {registerError?.code === RegisterErrorCode.Unknown && (
           <FieldError message={registerError.message || 'Failed to register. Unknown Reason.'} />
         )}
+        {accountCreated && handoffFailed && (
+          <Box role="alert" direction="Column" gap="200">
+            <FieldError message="Your account was created, but Synara couldn't open it. Retry, or sign in with your new account." />
+            <Button type="button" variant="Secondary" fill="Soft" onClick={retryHandoff}>
+              <Text as="span" size="B400">
+                Retry
+              </Text>
+            </Button>
+          </Box>
+        )}
         <span data-spacing-node />
-        <Button variant="Primary" size="500" type="submit" disabled={!serverReady}>
+        {/* Registering again after the account exists would only say "username taken". */}
+        <Button
+          variant="Primary"
+          size="500"
+          type="submit"
+          disabled={!serverReady || accountCreated}
+        >
           <Text as="span" size="B500">
             Register
           </Text>
@@ -501,9 +523,10 @@ export function PasswordRegisterForm({
           registerEmail={registerEmail}
           registerEmailState={registerEmailState}
           onRegisterStage={handleStage}
+          homeserverBaseUrl={baseUrl}
         />
       )}
-      {registerState.status === AsyncStatus.Loading && (
+      {(registerState.status === AsyncStatus.Loading || (accountCreated && !handoffFailed)) && (
         <Overlay open backdrop={<OverlayBackdrop />}>
           <OverlayCenter>
             <Spinner variant="Secondary" size="600" />

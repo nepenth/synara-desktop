@@ -47,8 +47,50 @@ import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import { convertDesktopFileSrc } from '../../../utils/desktop';
 import { getDirectRoomPath, getHomeRoomPath, getSpacePath } from '../../pathUtils';
+import {
+  BulkActionError,
+  bulkFailureMessage,
+  runBulkAction,
+  type BulkFailureCopy,
+} from '../../../utils/bulkActions';
+import { composerErrorMessage } from '../../../features/room/composerSendError';
 
 const COMPACT_CARD_WIDTH = 548;
+
+/**
+ * Run an invite command for each item in order. One failure does not stop the
+ * rest; the thrown error says how many succeeded and which ones failed.
+ */
+const runInviteBulkAction = async <T,>(
+  items: T[],
+  label: (item: T) => string,
+  run: (item: T) => Promise<unknown>,
+  copy: BulkFailureCopy
+): Promise<void> => {
+  const failures = await runBulkAction(items, run);
+  if (failures.length > 0) {
+    throw new BulkActionError(
+      bulkFailureMessage(
+        items.length,
+        failures.map(({ item }) => label(item)),
+        copy
+      ),
+      failures
+    );
+  }
+};
+
+const inviteLabel = (invite: NativeInvite): string => invite.roomName || invite.roomId;
+
+const DECLINE_COPY: BulkFailureCopy = { done: 'Declined', verb: 'decline', noun: 'invites' };
+
+function BulkInviteError({ error }: { error: unknown }) {
+  return (
+    <Text size="T200" role="alert" style={{ color: color.Critical.Main }}>
+      {error instanceof BulkActionError ? error.message : "Couldn't finish this action. Try again."}
+    </Text>
+  );
+}
 
 type NavigateHandler = (invite: NativeInvite) => void;
 
@@ -178,12 +220,18 @@ function InviteCard({
             </Box>
             {joinState.status === AsyncStatus.Error && (
               <Text size="T200" style={{ color: color.Critical.Main }}>
-                {joinState.error.message}
+                {composerErrorMessage(
+                  joinState.error,
+                  'Synara could not accept the invite. Try again.'
+                )}
               </Text>
             )}
             {leaveState.status === AsyncStatus.Error && (
               <Text size="T200" style={{ color: color.Critical.Main }}>
-                {leaveState.error.message}
+                {composerErrorMessage(
+                  leaveState.error,
+                  'Synara could not decline the invite. Try again.'
+                )}
               </Text>
             )}
           </Box>
@@ -218,7 +266,14 @@ function InviteCard({
         <Box gap="200" alignItems="Baseline">
           <Box grow="Yes">
             <Text size="T200" priority="300">
-              From: <b>{invite.senderId}</b>
+              {/* Core sends an empty sender when the invite's own member event was unreadable. */}
+              {invite.senderId ? (
+                <>
+                  From: <b>{invite.senderId}</b>
+                </>
+              ) : (
+                'Sender unknown'
+              )}
             </Text>
           </Box>
           {typeof invite.inviteTs === 'number' && invite.inviteTs !== 0 && (
@@ -228,7 +283,6 @@ function InviteCard({
                 ts={invite.inviteTs}
                 hour24Clock={hour24Clock}
                 dateFormatString={dateFormatString}
-                priority="300"
               />
             </Box>
           )}
@@ -270,7 +324,7 @@ function InviteFilters({
     <Box gap="200">
       <Chip
         variant={isKnown ? 'Success' : 'Surface'}
-        aria-selected={isKnown}
+        aria-pressed={isKnown}
         outlined={!isKnown}
         onClick={() => onFilter(InviteFilter.Known)}
         before={isKnown && <Icon size="100" src={Icons.Check} />}
@@ -286,7 +340,7 @@ function InviteFilters({
       </Chip>
       <Chip
         variant={isUnknown ? 'Warning' : 'Surface'}
-        aria-selected={isUnknown}
+        aria-pressed={isUnknown}
         outlined={!isUnknown}
         onClick={() => onFilter(InviteFilter.Unknown)}
         before={isUnknown && <Icon size="100" src={Icons.Check} />}
@@ -302,7 +356,7 @@ function InviteFilters({
       </Chip>
       <Chip
         variant={isSpam ? 'Critical' : 'Surface'}
-        aria-selected={isSpam}
+        aria-pressed={isSpam}
         outlined={!isSpam}
         onClick={() => onFilter(InviteFilter.Spam)}
         before={isSpam && <Icon size="100" src={Icons.Check} />}
@@ -383,17 +437,23 @@ function UnknownInvites({
   const nativeInviteCommand = useNativeInviteCommand();
 
   const [declineAllStatus, declineAll] = useAsyncCallback(
-    useCallback(async () => {
-      for (const invite of invites) {
-        // Preserve the former sequential action pattern without reintroducing a
-        // JS Matrix retry/write owner.
-        // eslint-disable-next-line no-await-in-loop
-        await nativeInviteCommand('matrix_invites_decline', invite.roomId);
-      }
-    }, [invites, nativeInviteCommand])
+    useCallback(
+      () =>
+        runInviteBulkAction(
+          invites,
+          inviteLabel,
+          (invite) => nativeInviteCommand('matrix_invites_decline', invite.roomId),
+          DECLINE_COPY
+        ),
+      [invites, nativeInviteCommand]
+    )
   );
 
   const declining = declineAllStatus.status === AsyncStatus.Loading;
+  const handleDeclineAll = () => {
+    // The failure is rendered from `declineAllStatus`.
+    declineAll().catch(() => {});
+  };
 
   return (
     <Box direction="Column" gap="200">
@@ -403,7 +463,7 @@ function UnknownInvites({
           {invites.length > 0 && (
             <Chip
               variant="SurfaceVariant"
-              onClick={declineAll}
+              onClick={handleDeclineAll}
               before={declining && <Spinner size="50" variant="Secondary" fill="Soft" />}
               disabled={declining}
               radii="Pill"
@@ -413,6 +473,9 @@ function UnknownInvites({
           )}
         </Box>
       </Box>
+      {declineAllStatus.status === AsyncStatus.Error && (
+        <BulkInviteError error={declineAllStatus.error} />
+      )}
       {invites.length > 0 ? (
         <Box direction="Column" gap="100">
           {invites.map((invite) => (
@@ -460,37 +523,57 @@ function SpamInvites({
   const [showInvites, setShowInvites] = useState(false);
 
   const [declineAllStatus, declineAll] = useAsyncCallback(
-    useCallback(async () => {
-      for (const invite of invites) {
-        // eslint-disable-next-line no-await-in-loop
-        await nativeInviteCommand('matrix_invites_decline', invite.roomId);
-      }
-    }, [invites, nativeInviteCommand])
+    useCallback(
+      () =>
+        runInviteBulkAction(
+          invites,
+          inviteLabel,
+          (invite) => nativeInviteCommand('matrix_invites_decline', invite.roomId),
+          DECLINE_COPY
+        ),
+      [invites, nativeInviteCommand]
+    )
   );
 
+  // Reported invites stay listed, so a retry must skip the ones already sent.
+  const reportedRoomIds = useRef(new Set<string>());
   const [reportAllStatus, reportAll] = useAsyncCallback(
-    useCallback(async () => {
-      for (const invite of invites) {
-        // eslint-disable-next-line no-await-in-loop
-        await nativeInviteCommand('matrix_invites_report_spam', invite.roomId);
-      }
-    }, [invites, nativeInviteCommand])
+    useCallback(
+      () =>
+        runInviteBulkAction(
+          invites.filter((invite) => !reportedRoomIds.current.has(invite.roomId)),
+          inviteLabel,
+          async (invite) => {
+            await nativeInviteCommand('matrix_invites_report_spam', invite.roomId);
+            reportedRoomIds.current.add(invite.roomId);
+          },
+          { done: 'Reported', verb: 'report', noun: 'invites' }
+        ),
+      [invites, nativeInviteCommand]
+    )
   );
 
   const [blockAllStatus, blockAll] = useAsyncCallback(
     useCallback(async () => {
       const firstInviteForSender = new Map<string, NativeInvite>();
       invites.forEach((invite) => {
-        if (!invite.senderIgnored && !firstInviteForSender.has(invite.senderId)) {
+        // An empty sender (unreadable invite) cannot be blocked; skip it.
+        if (
+          invite.senderId &&
+          !invite.senderIgnored &&
+          !firstInviteForSender.has(invite.senderId)
+        ) {
           firstInviteForSender.set(invite.senderId, invite);
         }
       });
-      for (const invite of firstInviteForSender.values()) {
-        // `Account::ignore_user` is idempotent; one request per sender keeps
-        // this native operation equivalent to the former bulk account-data write.
-        // eslint-disable-next-line no-await-in-loop
-        await nativeInviteCommand('matrix_invites_block_sender', invite.roomId);
-      }
+      // `Account::ignore_user` is idempotent; one request per sender keeps
+      // this native operation equivalent to the former bulk account-data write.
+      await runInviteBulkAction(
+        Array.from(firstInviteForSender.values()),
+        (invite) => invite.senderId,
+        (invite) => nativeInviteCommand('matrix_invites_block_sender', invite.roomId),
+        { done: 'Blocked', verb: 'block', noun: 'senders' }
+      );
     }, [invites, nativeInviteCommand])
   );
 
@@ -498,6 +581,16 @@ function SpamInvites({
   const reporting = reportAllStatus.status === AsyncStatus.Loading;
   const blocking = blockAllStatus.status === AsyncStatus.Loading;
   const loading = blocking || reporting || declining;
+  // Each failure is rendered from its status below.
+  const handleDeclineAll = () => {
+    declineAll().catch(() => {});
+  };
+  const handleReportAll = () => {
+    reportAll().catch(() => {});
+  };
+  const handleBlockAll = () => {
+    blockAll().catch(() => {});
+  };
 
   return (
     <Box direction="Column" gap="200">
@@ -522,7 +615,7 @@ function SpamInvites({
                     variant="Critical"
                     fill="Solid"
                     radii="300"
-                    onClick={declineAll}
+                    onClick={handleDeclineAll}
                     before={declining && <Spinner size="100" variant="Critical" fill="Solid" />}
                     disabled={loading}
                   >
@@ -536,7 +629,7 @@ function SpamInvites({
                       variant="Secondary"
                       fill="Solid"
                       radii="300"
-                      onClick={reportAll}
+                      onClick={handleReportAll}
                       before={reporting && <Spinner size="100" variant="Secondary" fill="Solid" />}
                       disabled={loading}
                     >
@@ -545,14 +638,14 @@ function SpamInvites({
                       </Text>
                     </Button>
                   )}
-                  {invites.some((invite) => !invite.senderIgnored) && (
+                  {invites.some((invite) => invite.senderId && !invite.senderIgnored) && (
                     <Button
                       size="300"
                       variant="Secondary"
                       fill="Solid"
                       radii="300"
                       disabled={loading}
-                      onClick={blockAll}
+                      onClick={handleBlockAll}
                       before={blocking && <Spinner size="100" variant="Secondary" fill="Solid" />}
                     >
                       <Text size="B300" truncate>
@@ -561,6 +654,15 @@ function SpamInvites({
                     </Button>
                   )}
                 </Box>
+                {declineAllStatus.status === AsyncStatus.Error && (
+                  <BulkInviteError error={declineAllStatus.error} />
+                )}
+                {reportAllStatus.status === AsyncStatus.Error && (
+                  <BulkInviteError error={reportAllStatus.error} />
+                )}
+                {blockAllStatus.status === AsyncStatus.Error && (
+                  <BulkInviteError error={blockAllStatus.error} />
+                )}
 
                 <span data-spacing-node />
 
@@ -656,7 +758,7 @@ export function Invites() {
             {screenSize === ScreenSize.Mobile && (
               <BackRouteHandler>
                 {(onBack) => (
-                  <IconButton onClick={onBack}>
+                  <IconButton onClick={onBack} aria-label="Back">
                     <Icon src={Icons.ArrowLeft} />
                   </IconButton>
                 )}

@@ -7,17 +7,19 @@
 }
 
 :root {
-  --tc-link: hsl(213deg 100% 45%);
+  /* Links, user names and avatar initials keep 4.5:1 on every light surface,
+     the composer and rail included (utils/__tests__/a11yContrast.test.ts). */
+  --tc-link: hsl(213deg 100% 35%);
 
   /* user mxid colors */
-  --mx-uc-1: hsl(208, 100%, 45%);
+  --mx-uc-1: hsl(208, 100%, 31%);
   --mx-uc-2: hsl(302, 100%, 30%);
-  --mx-uc-3: hsl(163, 100%, 30%);
-  --mx-uc-4: hsl(343, 100%, 45%);
-  --mx-uc-5: hsl(24, 100%, 45%);
-  --mx-uc-6: hsl(181, 100%, 30%);
+  --mx-uc-3: hsl(163, 100%, 19%);
+  --mx-uc-4: hsl(343, 100%, 34%);
+  --mx-uc-5: hsl(24, 100%, 28%);
+  --mx-uc-6: hsl(181, 100%, 19%);
   --mx-uc-7: hsl(242, 100%, 45%);
-  --mx-uc-8: hsl(94, 100%, 35%);
+  --mx-uc-8: hsl(94, 100%, 19%);
 
   --font-emoji: 'Twemoji_DISABLED';
   --font-secondary: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -75,10 +77,10 @@
   --mx-uc-1: hsl(208, 100%, 75%);
   --mx-uc-2: hsl(301, 100%, 80%);
   --mx-uc-3: hsl(163, 100%, 70%);
-  --mx-uc-4: hsl(343, 100%, 75%);
+  --mx-uc-4: hsl(343, 100%, 76%);
   --mx-uc-5: hsl(24, 100%, 70%);
   --mx-uc-6: hsl(181, 100%, 60%);
-  --mx-uc-7: hsl(243, 100%, 80%);
+  --mx-uc-7: hsl(243, 100%, 82%);
   --mx-uc-8: hsl(94, 100%, 80%);
 
   --font-secondary: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -167,7 +169,10 @@ a:hover {
 }
 
 @media (prefers-contrast: more) {
-  :root {
+  /* ThemeManager writes the derived roles inline on body, so the light boosts
+     must target body as well as :root; .dark-theme below still wins on body. */
+  :root,
+  body {
     --synara-content-heading: #000000 !important;
     --synara-content-primary: #111111 !important;
     --synara-content-secondary: #292929 !important;
@@ -194,6 +199,31 @@ a:hover {
 @media (forced-colors: active) {
   * {
     forced-color-adjust: auto;
+  }
+
+  /* Forced colours drop box-shadows and background tints, which carry most
+     focus and selection states here; draw them with system-colour outlines. */
+  :focus-visible {
+    outline: 2px solid Highlight !important;
+  }
+
+  [aria-selected='true'],
+  [data-selected='true'],
+  [aria-current='page'],
+  [aria-current='true'] {
+    outline: 2px solid SelectedItem;
+    outline-offset: -2px;
+  }
+}
+
+/* Motion that is not needed to understand the interface: folds dialog,
+   menu and tooltip entrances. Spinners keep turning; they show progress. */
+@media (prefers-reduced-motion: reduce) {
+  [role='dialog'],
+  [role='alertdialog'],
+  [role='menu'],
+  [role='tooltip'] {
+    animation: none !important;
   }
 }
 

@@ -143,18 +143,12 @@ impl std::error::Error for AgentApprovalSendError {}
 /// Static fail-closed send-text error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SendTextError {
-    Failed { code: String, description: String },
+    Failed {
+        kind: CoreErrorKind,
+        code: String,
+        description: String,
+    },
 }
-
-impl std::fmt::Display for SendTextError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Failed { description, .. } => formatter.write_str(description),
-        }
-    }
-}
-
-impl std::error::Error for SendTextError {}
 
 /// Privacy-safe send-poll write ack from the registered Core command.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -558,6 +552,7 @@ pub(super) fn composer_reply_draft_dto(
 
 pub(super) fn send_text_failed(code: &str, description: &'static str) -> SendTextError {
     SendTextError::Failed {
+        kind: CoreErrorKind::for_code(code),
         code: code.to_owned(),
         description: description.to_owned(),
     }
@@ -577,9 +572,15 @@ pub(super) fn map_send_text_core_error(
     no_session: &'static str,
     error: MatrixIpcError,
 ) -> SendTextError {
+    let wrapped = CoreErrorKind::from_category(error.category);
     match error.diagnostic_id.as_deref() {
         Some(code) if code == no_session => {
             send_text_failed(code, SEND_TEXT_NO_SESSION_DESCRIPTION)
+                .with_kind(CoreErrorKind::NotReady)
+        }
+        // The room is not known yet while a restored session loads rooms.
+        Some(SEND_ROOM_NOT_FOUND_CODE) => {
+            send_text_failed(SEND_ROOM_NOT_FOUND_CODE, SEND_TEXT_OWNER_DESCRIPTION)
         }
         Some(code)
             if code.starts_with("p2-send-text-")
@@ -588,9 +589,11 @@ pub(super) fn map_send_text_core_error(
                 || code.starts_with("v-send.5-")
                 || code.starts_with("p6.1-") =>
         {
-            send_text_failed(code, SEND_TEXT_OWNER_DESCRIPTION)
+            send_text_failed(code, SEND_TEXT_OWNER_DESCRIPTION).with_kind(wrapped)
         }
-        _ => send_text_failed(SEND_TEXT_FAILED_CODE, SEND_TEXT_FAILED_DESCRIPTION),
+        _ => {
+            send_text_failed(SEND_TEXT_FAILED_CODE, SEND_TEXT_FAILED_DESCRIPTION).with_kind(wrapped)
+        }
     }
 }
 
@@ -1223,6 +1226,9 @@ impl SharedCore {
             Output = Result<crate::app::send::MatrixSendTextResult, MatrixIpcError>,
         >,
     ) -> Result<SendTextDto, SendTextError> {
+        self.await_open_stores().await.map_err(|()| {
+            send_text_failed(SESSION_SUSPENDED_CODE, SESSION_SUSPENDED_DESCRIPTION)
+        })?;
         let response = request
             .await
             .map_err(|error| map_send_text_core_error(SEND_TEXT_NO_SESSION_CODE, error))?;
@@ -1556,6 +1562,41 @@ impl SharedCore {
         self.send_text_command(self.core.send_text(request)).await
     }
 
+    /// Retry one unsent local echo under its SDK transaction id: unwedges an
+    /// unrecoverable failure, or wakes the room queue for a recoverable one.
+    /// Never creates a second event.
+    pub async fn local_echo_retry(
+        &self,
+        room_id: String,
+        transaction_id: String,
+    ) -> Result<(), SendTextError> {
+        self.core
+            .local_echo_retry(crate::core_api::MatrixLocalEchoRequest {
+                room_id,
+                transaction_id,
+            })
+            .await
+            .map(|_| ())
+            .map_err(|error| map_send_text_core_error("p2-local-echo-retry-no-session", error))
+    }
+
+    /// Discard one unsent local echo. `false` means the SDK no longer held it
+    /// because it was already sent; the row then turns into the sent event.
+    pub async fn local_echo_discard(
+        &self,
+        room_id: String,
+        transaction_id: String,
+    ) -> Result<bool, SendTextError> {
+        self.core
+            .local_echo_discard(crate::core_api::MatrixLocalEchoRequest {
+                room_id,
+                transaction_id,
+            })
+            .await
+            .map(|result| result.aborted)
+            .map_err(|error| map_send_text_core_error("p2-local-echo-discard-no-session", error))
+    }
+
     pub async fn send_poll(
         &self,
         room_id: String,
@@ -1603,6 +1644,9 @@ impl SharedCore {
             mention_user_ids,
             mention_room,
             txn_id,
+            // iOS edits only sent messages; a local echo edit names its
+            // transaction id (desktop `matrix_edit_message`).
+            target_transaction_id: None,
         };
         if !within_envelope_cap(&request) {
             return Err(edit_message_failed(
@@ -1856,7 +1900,7 @@ impl SharedCore {
                 )
             })?;
         }
-        let client = self.retained_client().map_err(|_| {
+        let client = self.retained_client().await.map_err(|_| {
             agent_approval_failed(
                 AGENT_APPROVAL_NO_SESSION_CODE,
                 AGENT_APPROVAL_NO_SESSION_DESCRIPTION,

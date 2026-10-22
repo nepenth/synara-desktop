@@ -45,6 +45,18 @@ struct ApprovalsView: View {
             load(discoveryActive: true)
             startHistoryUpdates()
         }
+        .task {
+            // Core's inbox is a snapshot, not a stream: the first call only
+            // starts room discovery, and the lease lapses unless renewed. Poll
+            // while visible, like desktop, so new prompts appear promptly.
+            while Task.isCancelled == false {
+                try? await Task.sleep(nanoseconds: Self.inboxRefreshNanoseconds)
+                guard Task.isCancelled == false else {
+                    return
+                }
+                await refreshInbox()
+            }
+        }
         .onDisappear {
             historyUpdatesTask?.cancel()
             historyUpdatesTask = nil
@@ -74,16 +86,18 @@ struct ApprovalsView: View {
                 .listStyle(.insetGrouped)
                 .accessibilityIdentifier("ApprovalsLoading")
             } else if let errorMessage, visibleItems.isEmpty {
-                SynaraErrorState(title: "Could Not Load Approvals", message: errorMessage) {
+                SynaraErrorState(title: String(localized: "Could Not Load Approvals"), message: errorMessage) {
                     load(discoveryActive: true)
                 }
             } else if visibleItems.isEmpty {
                 SynaraEmptyState(
-                    title: filter == .pending ? "No pending approvals" : "No recent requests",
+                    title: filter == .pending
+                        ? String(localized: "No pending approvals")
+                        : String(localized: "No recent requests"),
                     systemImage: filter == .pending ? "checkmark.shield" : "clock",
                     message: filter == .pending
-                        ? "New Hermes approval requests will appear here as they arrive."
-                        : "Decided approvals will appear here after you approve or deny a request."
+                        ? String(localized: "New Hermes approval requests will appear here as they arrive.")
+                        : String(localized: "Decided approvals will appear here after you approve or deny a request.")
                 )
             } else {
                 List {
@@ -153,6 +167,26 @@ struct ApprovalsView: View {
             }
             errorMessage = visibleItems.isEmpty ? nextError : nil
             isLoading = false
+        }
+    }
+
+    static let inboxRefreshNanoseconds: UInt64 = 5_000_000_000
+
+    /// Inbox-only renewal. Keeps the last good list on a transient failure.
+    private func refreshInbox() async {
+        guard case .success(let items) = await environment.agentApprovalHistory.loadInbox(
+            discoveryActive: true
+        ) else {
+            return
+        }
+        await MainActor.run {
+            // An unchanged poll must not re-render the rows a tap may be on.
+            if inboxItems != items {
+                inboxItems = items
+            }
+            if visibleItems.isEmpty == false, errorMessage != nil {
+                errorMessage = nil
+            }
         }
     }
 
@@ -232,7 +266,7 @@ private struct ApprovalsRow: View {
                 status: item.status
             )
         }
-        return "Pending"
+        return String(localized: "Pending")
     }
 
     private var statusTint: Color {
@@ -241,11 +275,11 @@ private struct ApprovalsRow: View {
 
     private var accessibilityLabel: String {
         let summary = item.summary?.isEmpty == false ? item.summary ?? item.body : item.body
-        return "\(statusLabel) from \(item.sender) in \(roomName). \(summary)"
+        return String(localized: "\(statusLabel) from \(item.sender) in \(roomName). \(summary)")
     }
 
     private func formatted(_ milliseconds: Double) -> String {
         let date = Date(timeIntervalSince1970: milliseconds / 1000)
-        return date.formatted(date: .abbreviated, time: .shortened)
+        return SynaraTimeFormatting.dateTime(date)
     }
 }

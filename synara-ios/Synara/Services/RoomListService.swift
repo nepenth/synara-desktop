@@ -5,6 +5,9 @@ struct RoomSummary: Identifiable, Equatable {
     enum RoomKind: Equatable {
         case room
         case directMessage
+        /// A space room. Spaces are navigation (the space chips), never a
+        /// channel row, matching desktop's room list.
+        case space
     }
 
     enum Membership: Equatable {
@@ -29,6 +32,8 @@ struct RoomSummary: Identifiable, Equatable {
     let latestAgentCardEventID: String?
     let pendingAgentApprovals: [PendingAgentCardRef]
     let isFavorite: Bool
+    /// Tagged `m.lowpriority`; listed in its own section after the others.
+    let isLowPriority: Bool
     let isCall: Bool
     let hasActiveCall: Bool
     let activeCallParticipantCount: Int
@@ -57,6 +62,7 @@ struct RoomSummary: Identifiable, Equatable {
         latestAgentCardEventID: String? = nil,
         pendingAgentApprovals: [PendingAgentCardRef] = [],
         isFavorite: Bool = false,
+        isLowPriority: Bool = false,
         isCall: Bool = false,
         hasActiveCall: Bool = false,
         activeCallParticipantCount: Int = 0,
@@ -81,6 +87,7 @@ struct RoomSummary: Identifiable, Equatable {
         self.latestAgentCardEventID = latestAgentCardEventID
         self.pendingAgentApprovals = pendingAgentApprovals
         self.isFavorite = isFavorite
+        self.isLowPriority = isLowPriority
         self.isCall = isCall
         self.hasActiveCall = hasActiveCall
         self.activeCallParticipantCount = activeCallParticipantCount
@@ -95,7 +102,9 @@ struct RoomSummary: Identifiable, Equatable {
     }
 
     var liveCallChipLabel: String {
-        activeCallParticipantCount > 1 ? "\(activeCallParticipantCount) live" : "In a call"
+        activeCallParticipantCount > 1
+            ? String(localized: "\(activeCallParticipantCount) live")
+            : String(localized: "In a call")
     }
 
     var isAgentRoom: Bool {
@@ -183,23 +192,23 @@ enum RoomListSortOrder: String, CaseIterable, Identifiable {
         switch self {
         case .recent:
             if let section, section.isEmpty == false {
-                return "Sort \(section) by recent activity"
+                return String(localized: "Sort \(section) by recent activity")
             }
-            return "Sort by recent activity"
+            return String(localized: "Sort by recent activity")
         case .name:
             if let section, section.isEmpty == false {
-                return "Sort \(section) by name"
+                return String(localized: "Sort \(section) by name")
             }
-            return "Sort by name"
+            return String(localized: "Sort by name")
         }
     }
 
     var shortTitle: String {
         switch self {
         case .recent:
-            return "Recent"
+            return String(localized: "Recent")
         case .name:
-            return "Name"
+            return String(localized: "Name")
         }
     }
 
@@ -219,6 +228,29 @@ enum RoomListFavorites {
         let remaining: [RoomSummary]
     }
 
+    struct Sections: Equatable {
+        let favorites: [RoomSummary]
+        let channels: [RoomSummary]
+        let directs: [RoomSummary]
+        let lowPriority: [RoomSummary]
+    }
+
+    /// Rows per section, unsorted. Spaces are navigation (the space chips)
+    /// and get no row, as on desktop. Joined `m.lowpriority` rooms that are
+    /// not favourites get their own section after the others; Core's section
+    /// orders put them last on desktop too.
+    static func sections(from rooms: [RoomSummary]) -> Sections {
+        let partition = partition(from: rooms.filter { $0.kind != .space })
+        let lowPriority = partition.remaining.filter { $0.membership == .joined && $0.isLowPriority }
+        let rest = partition.remaining.filter { $0.membership != .joined || $0.isLowPriority == false }
+        return Sections(
+            favorites: partition.favorites,
+            channels: rest.filter { $0.kind == .room },
+            directs: rest.filter { $0.kind == .directMessage },
+            lowPriority: lowPriority
+        )
+    }
+
     static func partition(from rooms: [RoomSummary]) -> Partition {
         Partition(
             favorites: rooms.filter { $0.membership == .joined && $0.isFavorite },
@@ -228,13 +260,17 @@ enum RoomListFavorites {
 
     /// Core owns section ordering and name normalization
     /// (`room_list::presentation::order_room_ids`), shared with desktop.
+    /// Pending invites lead their section, as in `RoomListScopeFilter`:
+    /// stripped invite state usually has no timestamp, so recency order
+    /// would otherwise bury them at the end.
     static func sorted(_ rooms: [RoomSummary], order: RoomListSortOrder) -> [RoomSummary] {
         let byID = Dictionary(rooms.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let ids = orderRoomIds(
             rooms: rooms.map(Self.orderInput),
             order: order == .name ? .name : .recent
         )
-        return ids.compactMap { byID[$0] }
+        let ordered = ids.compactMap { byID[$0] }
+        return ordered.filter { $0.membership == .invited } + ordered.filter { $0.membership != .invited }
     }
 
     static func orderInput(_ room: RoomSummary) -> RoomOrderInput {
@@ -242,7 +278,12 @@ enum RoomListFavorites {
         // latest-event time; Core sorts those rooms last.
         let seconds = room.lastActivityAt.timeIntervalSince1970
         let milliseconds = seconds > 0 ? UInt64(seconds * 1000) : nil
-        return RoomOrderInput(roomId: room.id, name: room.name, lastActivityMs: milliseconds)
+        return RoomOrderInput(
+            roomId: room.id,
+            name: room.name,
+            lastActivityMs: milliseconds,
+            isLowPriority: room.isLowPriority
+        )
     }
 }
 
@@ -261,62 +302,6 @@ enum RoomActivityTimestamp {
     }
 }
 
-enum RoomActivityEventKind {
-    case messageLike
-    case localEcho
-    case invite
-    case receipt
-    case typing
-    case state
-}
-
-enum RoomActivityQualification {
-    static func qualifies(_ kind: RoomActivityEventKind) -> Bool {
-        switch kind {
-        case .messageLike, .localEcho, .invite:
-            return true
-        case .receipt, .typing, .state:
-            return false
-        }
-    }
-}
-
-/// Recovers a room's newest message-like activity when the SDK's latest-event
-/// summary happens to be a state event. Recovery is deliberately cold-start
-/// only and bounded to one small SDK timeline page per affected room.
-enum RoomActivityRecoveryPolicy {
-    static let maximumTimelineEvents = 24
-
-    struct Candidate: Equatable {
-        let timestamp: Date
-        let kind: RoomActivityEventKind
-    }
-
-    static func shouldRecover(
-        latestRequiresRecovery: Bool,
-        previousActivityAt: Date?
-    ) -> Bool {
-        let previousState: SynaraCore.RoomActivityPreviousState
-        if previousActivityAt == nil || previousActivityAt == .distantPast {
-            previousState = .missing
-        } else {
-            previousState = .known
-        }
-        return SynaraCore.roomActivityRecoveryRequired(
-            latestRequiresRecovery: latestRequiresRecovery,
-            previousState: previousState
-        )
-    }
-
-    static func newestQualifyingTimestamp(from candidates: [Candidate]) -> Date? {
-        candidates
-            .suffix(maximumTimelineEvents)
-            .reversed()
-            .first { RoomActivityQualification.qualifies($0.kind) }?
-            .timestamp
-    }
-}
-
 enum RoomListState: Equatable {
     case idle
     case loading
@@ -331,6 +316,8 @@ protocol RoomListServicing: AnyObject {
     func roomDisplayName(roomID: String) -> String?
     func isAgentRoom(roomID: String) -> Bool
     func hasUnreadMessages(roomID: String) -> Bool
+    /// The last listed summary of a room, if the list has it.
+    func roomSummary(roomID: String) -> RoomSummary?
     func clearCache()
 }
 
@@ -358,6 +345,10 @@ extension RoomListServicing {
     func hasUnreadMessages(roomID: String) -> Bool {
         false
     }
+
+    func roomSummary(roomID: String) -> RoomSummary? {
+        nil
+    }
 }
 
 enum RoomDisplayNameLookup {
@@ -371,7 +362,7 @@ enum RoomDisplayNameLookup {
 
     static func resolve(roomID: String, names: [String: String]) -> String {
         guard roomID.isEmpty == false else {
-            return "Unknown room"
+            return String(localized: "Unknown room")
         }
 
         return names[roomID] ?? roomID
@@ -385,9 +376,9 @@ enum RoomMembershipError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .signedOut:
-            return "Sign in before changing room membership."
+            return String(localized: "Sign in before changing room membership.")
         case .failed:
-            return "Could not update the room invite. Try again."
+            return String(localized: "Could not update the room invite. Try again.")
         }
     }
 }
@@ -815,6 +806,39 @@ struct SpaceChannelGroup: Identifiable, Equatable {
     var id: String { space.id }
 }
 
+/// "In a call" for direct-message rows. The room list reads the peers'
+/// MSC4426 status once per change of this set (or pull to refresh) and
+/// passes the result to its rows; rows never read status themselves.
+enum RoomListPeerCallStatus {
+    struct Key: Equatable {
+        let peerIDs: [String]
+        let generation: UInt64
+    }
+
+    /// Sorted, unique peers of direct rooms without a live room call chip.
+    static func peerIDs(in rooms: [RoomSummary]) -> [String] {
+        Set(rooms.compactMap(peerID(for:))).sorted()
+    }
+
+    static func isInCall(_ room: RoomSummary, peersInCall: Set<String>) -> Bool {
+        guard let peerID = peerID(for: room) else {
+            return false
+        }
+        return peersInCall.contains(peerID)
+    }
+
+    private static func peerID(for room: RoomSummary) -> String? {
+        guard room.kind == .directMessage,
+              room.hasActiveCall == false,
+              let peerID = room.directUserId,
+              peerID.isEmpty == false
+        else {
+            return nil
+        }
+        return peerID
+    }
+}
+
 enum RoomListSpaceGrouping {
     static func unreadCountsBySpaceID(from rooms: [RoomSummary]) -> [String: Int] {
         var counts: [String: Int] = [:]
@@ -923,8 +947,8 @@ enum RoomListSearchFilter {
             return true
         }
 
-        return room.name.localizedCaseInsensitiveContains(trimmed)
-            || room.lastMessagePreview.localizedCaseInsensitiveContains(trimmed)
+        return room.name.localizedStandardContains(trimmed)
+            || room.lastMessagePreview.localizedStandardContains(trimmed)
     }
 
     static func mergeInvitedRooms(_ invitedRooms: [RoomSummary], into rooms: [RoomSummary]) -> [RoomSummary] {
@@ -970,6 +994,10 @@ final class PlaceholderRoomListService: RoomListServicing {
 
     func hasUnreadMessages(roomID: String) -> Bool {
         cachedRooms.first { $0.id == roomID }?.hasUnreadActivity ?? false
+    }
+
+    func roomSummary(roomID: String) -> RoomSummary? {
+        cachedRooms.first { $0.id == roomID }
     }
 
     func clearCache() {
@@ -1029,6 +1057,13 @@ final class MockRoomListService: RoomListServicing {
             return false
         }
         return rooms.first { $0.id == roomID }?.hasUnreadActivity ?? false
+    }
+
+    func roomSummary(roomID: String) -> RoomSummary? {
+        guard case .loaded(let rooms) = state else {
+            return nil
+        }
+        return rooms.first { $0.id == roomID }
     }
 
     func roomUpdates() -> AsyncStream<RoomListState> {

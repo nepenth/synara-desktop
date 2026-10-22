@@ -105,14 +105,85 @@ impl TimeoutPolicy {
     }
 }
 
-/// Product user agent string for Matrix HTTP requests.
+/// Fallback user agent for a config whose shell did not name itself.
+///
+/// It carries Core's crate version, not an app version. Product shells pass
+/// [`product_user_agent`] through [`ClientBuildConfig::with_user_agent`].
 pub fn default_user_agent() -> String {
     format!(
-        "Synara-Desktop/{} (matrix-sdk/{})",
+        "Synara-Core/{} (matrix-sdk/{})",
         env!("CARGO_PKG_VERSION"),
         super::MATRIX_SDK_PIN_VERSION
     )
 }
+
+/// The shell process a client belongs to, as named in its User-Agent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClientProduct {
+    Desktop,
+    Ios,
+    /// The iOS notification service extension.
+    IosNotificationExtension,
+}
+
+impl ClientProduct {
+    fn user_agent_name(self) -> &'static str {
+        match self {
+            Self::Desktop => "Synara-Desktop",
+            Self::Ios => "Synara-iOS",
+            Self::IosNotificationExtension => "Synara-iOS-NSE",
+        }
+    }
+}
+
+/// Longest app version kept in a User-Agent.
+const MAX_APP_VERSION_CHARS: usize = 32;
+
+/// `Synara-<platform>/<app version> (matrix-sdk/<pin>)`: what the homeserver
+/// records for each device. `app_version` comes from the shell (bundle short
+/// version, desktop package version). Characters outside `[0-9A-Za-z.+-]`
+/// are dropped so a malformed value cannot inject header syntax; an empty
+/// result reads `unknown`.
+pub fn product_user_agent(product: ClientProduct, app_version: &str) -> String {
+    let version: String = app_version
+        .trim()
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '+' | '-'))
+        .take(MAX_APP_VERSION_CHARS)
+        .collect();
+    let version = if version.is_empty() {
+        "unknown"
+    } else {
+        version.as_str()
+    };
+    format!(
+        "{}/{version} (matrix-sdk/{})",
+        product.user_agent_name(),
+        super::MATRIX_SDK_PIN_VERSION
+    )
+}
+
+/// How much memory a client's SQLite stores may hold.
+///
+/// Each of the four databases (state, crypto, event cache, media) has its own
+/// connection pool, and every connection keeps its own page cache.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StoreFootprint {
+    /// SDK defaults: up to physical CPUs × 4 connections per database, a
+    /// 2 MB page cache per connection and a 10 MB WAL limit. Desktop.
+    Standard,
+    /// The SDK's low-memory profile: one connection per physical CPU, a
+    /// 500 KB page cache and a 2 MB WAL limit. The iOS app, which iOS
+    /// terminates in the background when it holds too much memory.
+    LowMemory,
+    /// The low-memory profile with the SDK's minimum pool of two connections
+    /// (one writer, one reader). The notification extension resolves one
+    /// event under a memory ceiling of about 24 MB.
+    Extension,
+}
+
+/// SDK minimum: one connection for writes and one for reads.
+const EXTENSION_POOL_MAX_SIZE: usize = 2;
 
 /// Full configuration required to open an unauthenticated SDK client.
 ///
@@ -137,6 +208,8 @@ pub struct ClientBuildConfig {
     /// Persist and query the desktop local message index. Default on.
     /// Off skips `EncryptedDirectory` and product queries (no CS `/search` fallback).
     indexed_message_search: bool,
+    /// SQLite pool and page-cache sizing. Default [`StoreFootprint::Standard`].
+    store_footprint: StoreFootprint,
 }
 
 impl ClientBuildConfig {
@@ -160,6 +233,7 @@ impl ClientBuildConfig {
             cross_process_store_lock_holder: DEFAULT_STORE_LOCK_HOLDER.to_owned(),
             store_key,
             indexed_message_search: true,
+            store_footprint: StoreFootprint::Standard,
         };
         cfg.validate()?;
         Ok(cfg)
@@ -202,6 +276,36 @@ impl ClientBuildConfig {
 
     pub fn indexed_message_search(&self) -> bool {
         self.indexed_message_search
+    }
+
+    /// Size the SQLite pools and page caches for the hosting process.
+    pub fn with_store_footprint(mut self, footprint: StoreFootprint) -> Self {
+        self.store_footprint = footprint;
+        self
+    }
+
+    pub fn store_footprint(&self) -> StoreFootprint {
+        self.store_footprint
+    }
+
+    /// SQLite configuration for the state/crypto path. The SDK opens the
+    /// event-cache and media databases with the same pool and cache sizes.
+    pub(crate) fn sqlite_store_config(
+        &self,
+        passphrase: Option<&str>,
+    ) -> matrix_sdk::SqliteStoreConfig {
+        let path = self.state_store_path();
+        let config = match self.store_footprint {
+            StoreFootprint::Standard => matrix_sdk::SqliteStoreConfig::new(path),
+            StoreFootprint::LowMemory => {
+                matrix_sdk::SqliteStoreConfig::with_low_memory_config(path)
+            }
+            StoreFootprint::Extension => {
+                matrix_sdk::SqliteStoreConfig::with_low_memory_config(path)
+                    .pool_max_size(EXTENSION_POOL_MAX_SIZE)
+            }
+        };
+        config.passphrase(passphrase)
     }
 
     pub fn with_cross_process_store_lock_holder(
@@ -399,6 +503,64 @@ mod tests {
             .iter()
             .any(|feature| feature == "experimental-search"));
         assert_eq!(plan.store_layout.relative_search_dir, "search");
+    }
+
+    #[test]
+    fn product_user_agent_names_the_shell_and_its_app_version() {
+        let pin = super::super::MATRIX_SDK_PIN_VERSION;
+        assert_eq!(
+            product_user_agent(ClientProduct::Ios, "2.2.6"),
+            format!("Synara-iOS/2.2.6 (matrix-sdk/{pin})")
+        );
+        assert_eq!(
+            product_user_agent(ClientProduct::Desktop, "2.2.6"),
+            format!("Synara-Desktop/2.2.6 (matrix-sdk/{pin})")
+        );
+        assert_eq!(
+            product_user_agent(ClientProduct::IosNotificationExtension, " 2.3.0-rc.1 "),
+            format!("Synara-iOS-NSE/2.3.0-rc.1 (matrix-sdk/{pin})")
+        );
+        // Header syntax and whitespace never reach the request.
+        assert_eq!(
+            product_user_agent(ClientProduct::Ios, "2.2\r\nX-Evil: 1"),
+            format!("Synara-iOS/2.2X-Evil1 (matrix-sdk/{pin})")
+        );
+        assert_eq!(
+            product_user_agent(ClientProduct::Ios, " (/) "),
+            format!("Synara-iOS/unknown (matrix-sdk/{pin})")
+        );
+        assert!(product_user_agent(ClientProduct::Ios, &"9".repeat(500)).len() < 80);
+        // The fallback no longer claims to be the desktop app.
+        assert!(default_user_agent().starts_with("Synara-Core/"));
+        assert_eq!(make_config().user_agent, default_user_agent());
+    }
+
+    #[test]
+    fn store_footprint_sizes_every_sqlite_pool_and_cache() {
+        let config = make_config();
+        assert_eq!(config.store_footprint(), StoreFootprint::Standard);
+        let standard = format!("{:?}", config.sqlite_store_config(None));
+        assert!(standard.contains("cache_size: 2000000"), "{standard}");
+
+        let low = format!(
+            "{:?}",
+            make_config()
+                .with_store_footprint(StoreFootprint::LowMemory)
+                .sqlite_store_config(None)
+        );
+        assert!(low.contains("cache_size: 500000"), "{low}");
+        assert!(low.contains("journal_size_limit: 2000000"), "{low}");
+
+        let extension = make_config().with_store_footprint(StoreFootprint::Extension);
+        let rendered = format!("{:?}", extension.sqlite_store_config(Some("00")));
+        assert!(rendered.contains("max_size: 2,"), "{rendered}");
+        assert!(rendered.contains("cache_size: 500000"), "{rendered}");
+        assert!(
+            rendered.contains("journal_size_limit: 2000000"),
+            "{rendered}"
+        );
+        // The passphrase never appears in the debug output.
+        assert!(!rendered.contains("\"00\""), "{rendered}");
     }
 
     #[test]

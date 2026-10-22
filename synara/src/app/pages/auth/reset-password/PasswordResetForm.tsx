@@ -2,7 +2,6 @@ import React, { FormEventHandler, useCallback, useEffect, useRef, useState } fro
 import {
   Box,
   Button,
-  Dialog,
   Input,
   Overlay,
   OverlayBackdrop,
@@ -12,6 +11,7 @@ import {
   color,
   config,
 } from 'folds';
+import { Dialog } from '../../../components/modal-dialog';
 import { useNavigate } from 'react-router-dom';
 import FocusTrap from '../../../components/FocusTrap';
 import { useAutoDiscoveryInfo } from '../../../hooks/useAutoDiscoveryInfo';

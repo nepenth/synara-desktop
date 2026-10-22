@@ -1,6 +1,8 @@
 //! Inbox history shares the SDK room event cache with open views. A view
-//! protects that cache before opening, stops further inbox pages, and waits
-//! for any SDK-owned pagination request to settle.
+//! protects that cache before opening, which stops further inbox pages. It
+//! does not wait for an SDK-owned page already in flight: that page only adds
+//! older events the view would page in anyway, and waiting made opening an
+//! unread room wait on unrelated background backfill.
 use super::*;
 use tokio::sync::watch;
 
@@ -39,19 +41,11 @@ impl RoomHistory {
         self.protection.subscribe()
     }
 
-    pub(super) async fn protect(self: &Arc<Self>, room: &Room) -> HistoryProtection {
-        // Construct the guard before awaiting so cancelled opens release their
-        // protection, too. Concurrent views are reference-counted.
+    /// Protect the room's history for one view. Concurrent views are
+    /// reference-counted; a running inbox operation sees the change and stops.
+    pub(super) fn protect(self: &Arc<Self>) -> HistoryProtection {
         self.protection.send_modify(|count| *count += 1);
-        let guard = HistoryProtection(self.clone());
-        let _quiescent = self.operation.lock().await;
-        // SDK 0.19 retains a spawned shared pagination task after its caller
-        // is dropped. Wait for the *cache's* status (shared with
-        // `BackPaginationQueue`), not just our caller's mutex. Waiting is
-        // correct; failing the user's room open is not. After the timeout
-        // the view proceeds and the inbox defers while this guard lives.
-        let _ = timeout(Duration::from_secs(10), wait_for_cache_pagination(room)).await;
-        guard
+        HistoryProtection(self.clone())
     }
 
     pub(super) async fn run(&self, operation: impl std::future::Future<Output = ()>) -> bool {
@@ -74,29 +68,6 @@ impl RoomHistory {
             }
         }
     }
-}
-
-async fn wait_for_cache_pagination(room: &Room) -> Result<(), &'static str> {
-    let client = room.client();
-    let event_cache = client.event_cache();
-    event_cache
-        .subscribe()
-        .map_err(|_| "approval-history-cache-unavailable")?;
-    // User/inbox `paginate_backwards` and automatic latest-event backfill
-    // share this room cache status (and `BackPaginationQueue` when enabled).
-    let _shared_queue = event_cache.back_pagination_queue();
-    let (cache, _subscription) = room
-        .event_cache()
-        .await
-        .map_err(|_| "approval-history-cache-unavailable")?;
-    let mut status = cache.pagination().status();
-    while matches!(status.next_now(), PaginationStatus::Paginating) {
-        status
-            .next()
-            .await
-            .ok_or("approval-history-status-unavailable")?;
-    }
-    Ok(())
 }
 
 pub(super) struct HistoryProtection(Arc<RoomHistory>);

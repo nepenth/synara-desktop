@@ -11,6 +11,7 @@ import {
   Icons,
   Scroll,
   Text,
+  color,
   config,
   toRem,
 } from 'folds';
@@ -30,8 +31,6 @@ type NotificationsRoomReading = EventedRoomReading & {
 import type { EventedRoomReading } from '../../../utils/roomEvents';
 import type { MatrixEventReading } from '../../../utils/room';
 import { useSharedScrollVirtualizer } from '../../../hooks/useSharedScrollVirtualizer';
-import { HTMLReactParserOptions } from 'html-react-parser';
-import { Opts as LinkifyOpts } from 'linkifyjs';
 import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { Page, PageContent, PageContentCenter, PageHeader } from '../../../components/page';
@@ -62,13 +61,6 @@ import {
   Username,
   UsernameBold,
 } from '../../../components/message';
-import {
-  factoryRenderLinkifyWithMention,
-  getReactCustomHtmlParser,
-  LINKIFY_OPTS,
-  makeMentionCustomProps,
-  renderMatrixMention,
-} from '../../../plugins/react-custom-html-parser';
 import { RenderMessageContent } from '../../../components/RenderMessageContent';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
@@ -81,15 +73,15 @@ import * as customHtmlCss from '../../../styles/CustomHtml.css';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { useRoomUnread } from '../../../state/hooks/unread';
 import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
-import {
-  markAsReadFromExplicitUserAction,
-  markAsReadFromExplicitUserActionInBackground,
-} from '../../../utils/notifications';
+import { markAsReadFromExplicitUserAction } from '../../../utils/notifications';
 import { ContainerColor } from '../../../styles/ContainerColor.css';
 import { VirtualTile } from '../../../components/virtualizer';
 import { UserAvatar } from '../../../components/user-avatar';
-import { NativeEventContent, type NativeEventSource } from '../../../features/room/message';
-import { useMentionClickHandler } from '../../../hooks/useMentionClickHandler';
+import {
+  NativeEventContent,
+  type NativeEventSource,
+} from '../../../features/room/message/NativeEventContent';
+import { NativeRoomPermalinks } from '../../../features/room/NativeRoomPermalinks';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../../components/BackRouteHandler';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
@@ -235,7 +227,16 @@ type RoomNotificationsGroupProps = {
   hour24Clock: boolean;
   dateFormatString: string;
 };
-function RoomNotificationsGroupComp({
+/** The inbox sits outside any room view, so each group opens permalinks itself. */
+function RoomNotificationsGroupComp(props: RoomNotificationsGroupProps) {
+  return (
+    <NativeRoomPermalinks roomId={props.room.roomId}>
+      <RoomNotificationsGroupBody {...props} />
+    </NativeRoomPermalinks>
+  );
+}
+
+function RoomNotificationsGroupBody({
   room,
   notifications,
   mediaAutoLoad,
@@ -260,27 +261,6 @@ function RoomNotificationsGroupComp({
   const theme = useTheme();
   const accessibleTagColors = useAccessiblePowerTagColors(theme.kind, creatorsTag, powerLevelTags);
 
-  const mentionClickHandler = useMentionClickHandler(room.roomId);
-
-  const linkifyOpts = useMemo<LinkifyOpts>(
-    () => ({
-      ...LINKIFY_OPTS,
-      render: factoryRenderLinkifyWithMention((href) =>
-        renderMatrixMention(room.roomId, href, makeMentionCustomProps(mentionClickHandler))
-      ),
-    }),
-    [room, mentionClickHandler]
-  );
-  const htmlReactParserOptions = useMemo<HTMLReactParserOptions>(
-    () =>
-      getReactCustomHtmlParser(room.roomId, {
-        linkifyOpts,
-        useAuthentication,
-        handleMentionClick: mentionClickHandler,
-      }),
-    [room, linkifyOpts, mentionClickHandler, useAuthentication]
-  );
-
   const renderMatrixEvent = useMatrixEventRenderer<
     [NotificationEventReading, string, GetContentCallback]
   >(
@@ -297,8 +277,6 @@ function RoomNotificationsGroupComp({
             ts={event.origin_server_ts}
             getContent={getContent}
             mediaAutoLoad={mediaAutoLoad}
-            htmlReactParserOptions={htmlReactParserOptions}
-            linkifyOpts={linkifyOpts}
             outlineAttachment
             agentApprovalTarget={{
               roomId: room.roomId,
@@ -364,8 +342,6 @@ function RoomNotificationsGroupComp({
                     edited={!!editedEvent}
                     getContent={getContent}
                     mediaAutoLoad={mediaAutoLoad}
-                    htmlReactParserOptions={htmlReactParserOptions}
-                    linkifyOpts={linkifyOpts}
                     agentApprovalTarget={{
                       roomId: room.roomId,
                       eventId: evt.event_id,
@@ -438,8 +414,12 @@ function RoomNotificationsGroupComp({
     if (!eventId) return;
     onOpen(room.roomId, eventId);
   };
+  const [markReadState, markRead] = useAsyncCallback(
+    useCallback(() => markAsReadFromExplicitUserAction(room.roomId), [room.roomId])
+  );
   const handleMarkAsRead = () => {
-    markAsReadFromExplicitUserActionInBackground(room.roomId);
+    // The failure is rendered from `markReadState`.
+    markRead().catch(() => {});
   };
 
   return (
@@ -484,6 +464,7 @@ function RoomNotificationsGroupComp({
               variant="Primary"
               radii="Pill"
               onClick={handleMarkAsRead}
+              disabled={markReadState.status === AsyncStatus.Loading}
               before={<Icon size="100" src={Icons.CheckTwice} />}
             >
               <Text size="T200">Mark as Read</Text>
@@ -491,6 +472,11 @@ function RoomNotificationsGroupComp({
           )}
         </Box>
       </Header>
+      {markReadState.status === AsyncStatus.Error && (
+        <Text size="T200" role="alert" style={{ color: color.Critical.Main }}>
+          Couldn&apos;t mark {room.name} as read. Try again.
+        </Text>
+      )}
       <Box direction="Column" gap="100">
         {notifications.map((notification) => {
           const { event } = notification;
@@ -698,7 +684,7 @@ export function Notifications() {
             {screenSize === ScreenSize.Mobile && (
               <BackRouteHandler>
                 {(onBack) => (
-                  <IconButton onClick={onBack}>
+                  <IconButton onClick={onBack} aria-label="Back">
                     <Icon src={Icons.ArrowLeft} />
                   </IconButton>
                 )}

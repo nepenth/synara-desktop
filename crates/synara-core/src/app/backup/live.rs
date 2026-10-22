@@ -3,7 +3,11 @@
 //! Recovery secrets are method arguments only. This module never stores or
 //! serializes them.
 
+use std::time::{Duration, Instant};
+
 use crate::dto::WriteAck;
+use tokio::sync::Mutex as AsyncMutex;
+
 use matrix_sdk::{
     encryption::{
         backups::BackupState,
@@ -62,6 +66,7 @@ async fn fetch_server_backup(
     }
 }
 
+/// Homeserver backup status. Mutations read back through this.
 pub async fn status(
     client: &Client,
     session_generation: u64,
@@ -75,6 +80,77 @@ pub async fn status(
         enabled,
         backup_engine_phase(backups.state()),
         backup_recovery_phase(client.encryption().recovery().state()),
+    ))
+}
+
+/// How long a screen or wakeup read reuses the homeserver's backup answer.
+const SERVER_BACKUP_TTL: Duration = Duration::from_secs(60);
+
+/// The SDK-local state a cached homeserver answer was read under.
+type LocalBackupState = (BackupState, RecoveryState, bool);
+
+struct CachedServerBackup {
+    fetched_at: Instant,
+    local: LocalBackupState,
+    server: Option<ServerBackupProjection>,
+}
+
+/// The last `GET /room_keys/version` answer for one session.
+///
+/// Status reads driven by screens and device/security wakeups reuse it while
+/// the SDK's local backup and recovery state is unchanged and it is younger
+/// than `SERVER_BACKUP_TTL`. Any local transition (backup created, enabled,
+/// disabled, recovery completed) refetches. Concurrent readers share one
+/// request because the lock is held across the fetch.
+#[derive(Default)]
+pub struct ServerBackupCache {
+    entry: AsyncMutex<Option<CachedServerBackup>>,
+}
+
+impl ServerBackupCache {
+    /// Drop the cached answer so the next read asks the homeserver.
+    pub async fn invalidate(&self) {
+        *self.entry.lock().await = None;
+    }
+}
+
+/// Backup status for screens and wakeups; see [`ServerBackupCache`].
+pub async fn cached_status(
+    client: &Client,
+    session_generation: u64,
+    cache: &ServerBackupCache,
+) -> Result<NativeBackupStatus, &'static str> {
+    let backups = client.encryption().backups();
+    let enabled = backups.are_enabled().await;
+    let local = (
+        backups.state(),
+        client.encryption().recovery().state(),
+        enabled,
+    );
+    let mut entry = cache.entry.lock().await;
+    let server = match entry.as_ref() {
+        Some(cached)
+            if cached.local == local && cached.fetched_at.elapsed() < SERVER_BACKUP_TTL =>
+        {
+            cached.server.clone()
+        }
+        _ => {
+            let server = fetch_server_backup(client).await?;
+            *entry = Some(CachedServerBackup {
+                fetched_at: Instant::now(),
+                local,
+                server: server.clone(),
+            });
+            server
+        }
+    };
+    drop(entry);
+    Ok(project_backup_status(
+        session_generation,
+        server,
+        enabled,
+        backup_engine_phase(local.0),
+        backup_recovery_phase(local.1),
     ))
 }
 
@@ -318,6 +394,57 @@ mod tests {
             setup(&client, 8, "test-passphrase").await.unwrap_err(),
             "v-crypto.3-status-query-failed"
         );
+    }
+
+    #[tokio::test]
+    async fn cached_status_reuses_one_homeserver_answer_until_invalidated() {
+        use matrix_sdk::{config::RequestConfig, test_utils::mocks::MatrixMockServer};
+        use wiremock::{
+            matchers::{method, path_regex},
+            Mock, ResponseTemplate,
+        };
+        let server = MatrixMockServer::new().await;
+        let client = server
+            .client_builder()
+            .on_builder(|builder| builder.request_config(RequestConfig::new().disable_retry()))
+            .build()
+            .await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/_matrix/client/.*/room_keys/version$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "algorithm": "m.megolm_backup.v1.curve25519-aes-sha2",
+                "auth_data": {"public_key": "test-public-key", "signatures": {}},
+                "count": 3,
+                "etag": "1",
+                "version": "7",
+            })))
+            .mount(server.server())
+            .await;
+        let version_reads = || async {
+            server
+                .server()
+                .received_requests()
+                .await
+                .unwrap()
+                .iter()
+                .filter(|request| request.url.path().ends_with("/room_keys/version"))
+                .count()
+        };
+
+        let cache = ServerBackupCache::default();
+        for _ in 0..3 {
+            let status = cached_status(&client, 8, &cache).await.unwrap();
+            assert_eq!(status.version.as_deref(), Some("7"));
+            assert_eq!(status.key_count, Some(3));
+        }
+        assert_eq!(version_reads().await, 1, "repeated reads share one GET");
+
+        cache.invalidate().await;
+        cached_status(&client, 8, &cache).await.unwrap();
+        assert_eq!(version_reads().await, 2, "invalidation refetches");
+
+        status(&client, 8).await.unwrap();
+        assert_eq!(version_reads().await, 3, "mutation readback always asks");
     }
 }
 

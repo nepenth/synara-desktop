@@ -1,6 +1,13 @@
 import SwiftUI
 import SynaraCore
 
+/// Launch switches read once per process. `ProcessInfo.environment` builds a
+/// new dictionary on every access, and these are read on row, scroll and
+/// keystroke paths.
+enum SynaraLaunchEnvironment {
+    static let isUITest = ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1"
+}
+
 enum SharedCoreLaunchReset {
     static func resetStoreRootIfRequested(
         _ storeRoot: URL,
@@ -61,6 +68,8 @@ struct AppEnvironment {
     let mediaLoader: MediaLoading
     let mediaUploader: MediaUploading
     let crypto: CryptoStatusServicing
+    /// Shared, read-coalescing session crypto status over `crypto`.
+    let sessionCrypto: SessionCryptoStore
     let roomManagement: RoomManagementServicing
     let sessionReadiness: SignedInSessionReadinessServicing
     let connectionStatus: ConnectionStatusStore
@@ -83,7 +92,12 @@ struct AppEnvironment {
             environment: ProcessInfo.processInfo.environment,
             secureStore: secureStore,
         )
-        let core = SharedCore.newWithSecretStore(store: KeychainIosSecretVault())
+        // The bundle's short version names the app in every request
+        // (`Synara-iOS/<version>`), which the homeserver's device list shows.
+        let core = SharedCore.newForApp(
+            store: KeychainIosSecretVault(),
+            appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        )
         if let restoreFailure = session.restoreFailureLogDescription {
             logger.error("Session restore failed: \(restoreFailure)", category: .auth)
         } else if case .signedIn = session.currentState {
@@ -95,7 +109,12 @@ struct AppEnvironment {
             sessionStore: session
         )
         let connectionStatus = ConnectionStatusStore()
-        let matrix = SharedCoreMatrixClientService(host: host, connectionStatus: connectionStatus)
+        let sessionReadiness = SignedInSessionReadiness()
+        let matrix = SharedCoreMatrixClientService(
+            host: host,
+            connectionStatus: connectionStatus,
+            sessionReadiness: sessionReadiness
+        )
         let pusherService = SharedCorePusherService(
             host: host,
             gatewayURL: resolvedPushGatewayURL(),
@@ -104,20 +123,22 @@ struct AppEnvironment {
         let push = SynaraPushService(
             logger: logger,
             pusherService: pusherService,
-            sparseRouteResolver: SharedCoreSparsePushRouteResolver()
+            sparseRouteResolver: SharedCoreSparsePushRouteResolver(host: host, sessionReadiness: sessionReadiness)
         )
         let router = AppRouter()
-        let drafts = DraftStore()
+        // Drafts and messages Core has not accepted yet survive termination.
+        let composerStore = ComposerLocalStore.live()
+        let drafts = DraftStore(store: composerStore)
         let timeline = SharedCoreTimelineService(host: host)
         let roomList = SharedCoreRoomListService(host: host)
         let roomMembership = SharedCoreRoomMembershipService(host: host)
         let crypto = SharedCoreCryptoStatusService(host: host, timeline: timeline)
         let roomManagement = SharedCoreRoomManagementService(host: host)
-        let sessionReadiness = SignedInSessionReadiness()
         let messageSender = SharedCoreMessageSendService(host: host)
         let outgoingSends = OutgoingSendCoordinator(
             messageSender: messageSender,
-            connectionStatus: connectionStatus
+            connectionStatus: connectionStatus,
+            queue: OutgoingMessageQueue(store: composerStore)
         )
         return AppEnvironment(
             session: session,
@@ -157,6 +178,7 @@ struct AppEnvironment {
             mediaLoader: SharedCoreMediaLoader(host: host),
             mediaUploader: SharedCoreMediaUploadService(host: host),
             crypto: crypto,
+            sessionCrypto: SessionCryptoStore(crypto: crypto),
             roomManagement: roomManagement,
             sessionReadiness: sessionReadiness,
             connectionStatus: connectionStatus,
@@ -238,6 +260,7 @@ struct AppEnvironment {
             mediaLoader: mediaLoader,
             mediaUploader: mediaUploader,
             crypto: crypto,
+            sessionCrypto: SessionCryptoStore(crypto: crypto),
             roomManagement: roomManagement,
             sessionReadiness: sessionReadiness,
             connectionStatus: connectionStatus,

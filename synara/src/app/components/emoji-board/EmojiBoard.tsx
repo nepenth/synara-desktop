@@ -10,7 +10,7 @@ import React, {
   useRef,
 } from 'react';
 import { Box, config, Icons, Scroll } from 'folds';
-import FocusTrap from '../FocusTrap';
+import FocusTrap, { returnFocusOrFallback } from '../FocusTrap';
 import { isKeyHotkey } from 'is-hotkey';
 import { atom, PrimitiveAtom, useAtom, useSetAtom } from 'jotai';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -290,6 +290,11 @@ type EmojiBoardProps = {
   imagePackRooms: string[];
   requestClose: () => void;
   returnFocusOnDeactivate?: boolean;
+  /**
+   * Where focus goes when the board closes, e.g. `returnFocusOrFallback` for
+   * an opener that can unmount while the board is open.
+   */
+  setReturnFocus?: ReturnType<typeof returnFocusOrFallback>;
   onEmojiSelect?: (unicode: string, shortcode: string) => void;
   onCustomEmojiSelect?: (mxc: string, shortcode: string) => void;
   allowTextCustomEmoji?: boolean;
@@ -300,6 +305,7 @@ export function EmojiBoard({
   imagePackRooms,
   requestClose,
   returnFocusOnDeactivate,
+  setReturnFocus,
   onEmojiSelect,
   onCustomEmojiSelect,
   allowTextCustomEmoji,
@@ -413,6 +419,7 @@ export function EmojiBoard({
     <FocusTrap
       focusTrapOptions={{
         returnFocusOnDeactivate,
+        ...(setReturnFocus ? { setReturnFocus } : {}),
         initialFocus: false,
         onDeactivate: requestClose,
         clickOutsideDeactivates: true,

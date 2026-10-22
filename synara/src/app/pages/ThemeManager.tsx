@@ -1,5 +1,5 @@
 import React, { ReactNode, useEffect } from 'react';
-import { color, configClass, varsClass } from 'folds';
+import { color, config, configClass, varsClass } from 'folds';
 import {
   DarkTheme,
   LightTheme,
@@ -15,6 +15,7 @@ import { messageTextForeground } from '../utils/messageTextTone';
 import {
   deriveThemeSurfaceRamp,
   deriveThemeRichTextRoles,
+  MUTED_TEXT_OPACITY,
   resolveThemeBaseColor,
   shouldApplyDerivedThemeRamp,
   type ThemeContentRoles,
@@ -187,6 +188,12 @@ const syncThemeBaseColor = (
   return ramp.chrome;
 };
 
+/** folds dims `priority="300"` text by opacity; keep it at AA on our surfaces. */
+const syncMutedTextOpacity = (themeKind: ThemeKind) => {
+  const opacity = MUTED_TEXT_OPACITY[themeKind === ThemeKind.Dark ? 'dark' : 'light'];
+  setColorVar(document.body, config.opacity.P300, String(opacity));
+};
+
 const syncAccentColor = (accentColor: string | undefined, themeKind: ThemeKind) => {
   const target = document.body;
   const normalized = normalizeAccentColor(accentColor);
@@ -253,6 +260,7 @@ export function UnAuthRouteThemeManager() {
     const themeId = systemThemeKind === ThemeKind.Dark ? DarkTheme.id : LightTheme.id;
     const chrome = syncThemeBaseColor(storedBase, systemThemeKind, themeId);
     syncDocumentThemeChrome(systemThemeKind, chrome);
+    syncMutedTextOpacity(systemThemeKind);
   }, [systemThemeKind]);
 
   return null;
@@ -272,6 +280,7 @@ export function AuthRouteThemeManager({ children }: { children: ReactNode }) {
     document.body.classList.add(...activeTheme.classNames);
     const chrome = syncThemeBaseColor(themeBaseColor, activeTheme.kind, activeTheme.id);
     syncDocumentThemeChrome(activeTheme.kind, chrome);
+    syncMutedTextOpacity(activeTheme.kind);
     syncAccentColor(customAccentColor, activeTheme.kind);
     document.body.style.setProperty(
       '--synara-message-foreground',

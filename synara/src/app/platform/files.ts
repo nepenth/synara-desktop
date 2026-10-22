@@ -6,10 +6,12 @@ import {
   readDesktopDroppedFiles,
   saveDesktopFile,
   shouldStreamDesktopFileIpc,
+  type DesktopDroppedFiles,
   type DesktopNativeFileDropPayload,
 } from '../utils/desktop';
 
 export type PlatformNativeFileDropPayload = DesktopNativeFileDropPayload;
+export type PlatformDroppedFiles = DesktopDroppedFiles;
 
 export {
   DESKTOP_FILE_IPC_CHUNK_SIZE,

@@ -44,14 +44,27 @@ struct SynaraReactionPopModifier: ViewModifier {
                 guard isVisible == false else {
                     return
                 }
-                let delay = Double(animationIndex) * 0.04
-                withAnimation(.spring(response: 0.32, dampingFraction: 0.68).delay(delay)) {
-                    isVisible = true
-                }
+                pop(delay: Double(animationIndex) * 0.04)
             }
             .onChange(of: animationKey) { _ in
-                isVisible = false
+                // A changed count (for example your own reaction joining an
+                // existing chip) pops the same chip again. `onAppear` does not
+                // re-run for it, so it must become visible here.
+                var reset = Transaction()
+                reset.disablesAnimations = true
+                withTransaction(reset) {
+                    isVisible = false
+                }
+                DispatchQueue.main.async {
+                    pop(delay: 0)
+                }
             }
+    }
+
+    private func pop(delay: Double) {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.68).delay(delay)) {
+            isVisible = true
+        }
     }
 }
 

@@ -1,13 +1,60 @@
 import Foundation
 import SynaraCore
 
-/// Live encryption backup restore. Uses an already-constructed SharedCore.
+/// Live encryption backup restore and recovery setup. Uses an
+/// already-constructed SharedCore.
 ///
-/// Recovery secrets are dedicated arguments only. Failed errors stay static
-/// and must not echo the recovery key. Leftover `recover` stays unused by
-/// product iOS.
+/// Recovery secrets, passphrases and the account password are dedicated
+/// arguments only. Failed errors stay static and must not echo them. The
+/// generated recovery key comes back once, from `secretStorageBootstrap`.
+/// Leftover `recover` stays unused by product iOS.
 enum SharedCoreBackupRestore {
     static func restoreBackup(core: SharedCore, recoverySecret: String) async throws -> RestoreBackupDto {
         try await core.restoreBackup(recoverySecret: recoverySecret)
+    }
+
+    static func crossSigningSetup(core: SharedCore) async throws -> CrossSigningSetupDto {
+        try await core.crossSigningSetup()
+    }
+
+    static func crossSigningSetupPassword(
+        core: SharedCore,
+        password: String
+    ) async throws -> CrossSigningSetupDto {
+        try await core.crossSigningSetupPassword(password: password)
+    }
+
+    static func secretStorageBootstrap(
+        core: SharedCore,
+        passphrase: String
+    ) async throws -> SecretStorageSetupDto {
+        try await core.secretStorageBootstrap(passphrase: passphrase)
+    }
+
+    static func identityResetStart(core: SharedCore) async throws -> IdentityResetStateDto {
+        try await core.identityResetStart()
+    }
+
+    static func identityResetPassword(
+        core: SharedCore,
+        password: String
+    ) async throws -> IdentityResetStateDto {
+        try await core.identityResetPassword(password: password)
+    }
+
+    static func identityResetContinue(core: SharedCore) async throws -> IdentityResetStateDto {
+        try await core.identityResetContinue()
+    }
+
+    static func identityResetCancel(core: SharedCore) async throws {
+        try await core.identityResetCancel()
+    }
+
+    static func deviceVerificationPrompt(core: SharedCore) async throws -> DeviceVerificationPromptDto {
+        try await core.deviceVerificationPrompt()
+    }
+
+    static func dismissDeviceVerificationPrompt(core: SharedCore) throws {
+        _ = try core.dismissDeviceVerificationPrompt()
     }
 }

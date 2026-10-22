@@ -45,6 +45,13 @@ The registered and permissioned commands are:
 - `matrix_cross_signing_status`
 - `matrix_cross_signing_setup`
 - `matrix_cross_signing_setup_password`
+- `matrix_identity_reset_start`, `matrix_identity_reset_password`,
+  `matrix_identity_reset_continue`, `matrix_identity_reset_cancel` (S5 Reset
+  Identity over `Recovery::reset_identity`; Core keeps the SDK reset handle in
+  the session's device owner and cancels it on sign-out)
+- `matrix_device_verification_prompt`, `matrix_device_verification_prompt_dismiss`
+  (the one-time "Verify This Device" prompt Core arms after a password sign-in
+  that found an existing identity)
 
 Generated desktop and macOS schemas contain the same command permissions.
 Status and setup responses contain only session generation and enum/status

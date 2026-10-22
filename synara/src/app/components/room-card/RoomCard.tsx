@@ -4,7 +4,6 @@ import {
   Badge,
   Box,
   Button,
-  Dialog,
   Icon,
   Icons,
   Overlay,
@@ -16,6 +15,7 @@ import {
   color,
   config,
 } from 'folds';
+import { Dialog } from '../modal-dialog';
 import classNames from 'classnames';
 import FocusTrap from '../FocusTrap';
 import * as css from './style.css';

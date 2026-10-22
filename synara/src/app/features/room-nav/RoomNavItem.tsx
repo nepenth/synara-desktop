@@ -1,4 +1,10 @@
-import React, { MouseEventHandler, forwardRef, useState } from 'react';
+import React, {
+  KeyboardEventHandler,
+  MouseEventHandler,
+  forwardRef,
+  useRef,
+  useState,
+} from 'react';
 import {
   Box,
   Icon,
@@ -16,19 +22,18 @@ import {
   Spinner,
 } from 'folds';
 import { useFocusWithin, useHover } from 'react-aria';
-import FocusTrap from '../../components/FocusTrap';
+import FocusTrap, { returnFocusOrFallback } from '../../components/FocusTrap';
 import { NavItem, NavItemContent, NavItemOptions, NavLink } from '../../components/nav';
 import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { copyToClipboard } from '../../utils/dom';
-import { unreadFromPresentation } from '../../state/room-list/roomListPresentation';
 import { setRoomReadStateWithNativeOwner } from '../../utils/nativeRoomReadStateOwner';
 import { markAsReadFromExplicitUserAction } from '../../utils/notifications';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
 import { useRoomTypingMember } from '../../hooks/useRoomTypingMembers';
 import { TypingIndicator } from '../../components/typing-indicator';
-import { stopPropagation } from '../../utils/keyboard';
+import { listNavigationIndex, stopPropagation } from '../../utils/keyboard';
 import type { EventedRoomReading } from '../../utils/roomEvents';
 import { getMatrixToRoom } from '../../plugins/matrix-to';
 import { getCanonicalAliasOrRoomId, isRoomAlias } from '../../utils/matrix';
@@ -43,7 +48,7 @@ import { RoomNotificationModeSwitcher } from '../../components/RoomNotificationS
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { useRoomName } from '../../hooks/useRoomMeta';
-import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
+import { useNativeRoomSummary, useNativeRoomUnread } from '../../state/room-list/roomList';
 import { setRoomFavoriteWithNativeOwner } from '../../components/nativeRoomFavoriteOwner';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { LiveCallChip } from './LiveCallChip';
@@ -51,6 +56,7 @@ import { useNativeUserStatus } from '../matrix-presence/nativeUserStatus';
 import * as css from './styles.css';
 import * as depthCss from '../../styles/Depth.css';
 import { getMyUserId } from '../../state/nativeIdentity';
+import { PersonGlyph, roomGlyphFor } from '../../components/room-glyph';
 
 type RoomNavItemMenuProps = {
   room: EventedRoomReading;
@@ -59,9 +65,8 @@ type RoomNavItemMenuProps = {
 };
 const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
   ({ room, requestClose, notificationMode }, ref) => {
-    const nativeRooms = useNativeRoomListSnapshot();
-    const nativeRoom = nativeRooms.rooms.find((summary) => summary.roomId === room.roomId);
-    const unread = unreadFromPresentation(nativeRooms.presentation, room.roomId);
+    const nativeRoom = useNativeRoomSummary(room.roomId);
+    const unread = useNativeRoomUnread(room.roomId);
     const isFavorite = nativeRoom?.isFavorite === true;
     const [favoriteError, setFavoriteError] = useState<string>();
     const [favoriteBusy, setFavoriteBusy] = useState(false);
@@ -90,14 +95,23 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
       }
     };
 
-    const handleMarkAsUnread = () => {
-      void setRoomReadStateWithNativeOwner(
-        room.roomId,
-        'mark_unread',
-        isSynaraDesktop(),
-        invokeDesktopWithAvailability
-      ).catch(() => undefined);
-      requestClose();
+    const handleMarkAsUnread = async () => {
+      if (readBusy) return;
+      setReadError(undefined);
+      setReadBusy(true);
+      try {
+        await setRoomReadStateWithNativeOwner(
+          room.roomId,
+          'mark_unread',
+          isSynaraDesktop(),
+          invokeDesktopWithAvailability
+        );
+        requestClose();
+      } catch {
+        setReadError("Couldn't mark this channel as unread.");
+      } finally {
+        setReadBusy(false);
+      }
     };
 
     const handleToggleFavorite = async () => {
@@ -152,9 +166,9 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
             fill="None"
             onClick={() => {
               if (unread) void handleMarkAsRead();
-              else handleMarkAsUnread();
+              else void handleMarkAsUnread();
             }}
-            disabled={unread && readBusy}
+            disabled={readBusy}
             size="300"
             after={<Icon size="100" src={unread ? Icons.CheckTwice : Icons.MessageUnread} />}
             radii="300"
@@ -164,7 +178,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
             </Text>
           </MenuItem>
           {readError && (
-            <Text as="p" size="T200" style={{ paddingInline: config.space.S200 }}>
+            <Text as="p" size="T200" role="alert" style={{ paddingInline: config.space.S200 }}>
               {readError}
             </Text>
           )}
@@ -305,9 +319,15 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
   const { hoverProps } = useHover({ onHoverChange: setHover });
   const { focusWithinProps } = useFocusWithin({ onFocusWithinChange: setHover });
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
-  const nativeRooms = useNativeRoomListSnapshot();
-  const nativeRoom = nativeRooms.rooms.find((summary) => summary.roomId === room.roomId);
-  const unread = unreadFromPresentation(nativeRooms.presentation, room.roomId);
+  // The options button is hover-revealed: focus inside the menu portal clears
+  // the row's focus-within, so it must stay mounted while focus returns to it.
+  const [returningFocus, setReturningFocus] = useState(false);
+  const linkRef = useRef<HTMLAnchorElement>(null);
+  // Per-room subscriptions: a row re-renders when its own summary or unread
+  // state changes, not on every other room's activity (D10). A new summary
+  // also refreshes the reads that go through the in-place room facade.
+  const nativeRoom = useNativeRoomSummary(room.roomId);
+  const unread = useNativeRoomUnread(room.roomId);
   const dmPeerId =
     nativeRoom?.isDirect === true &&
     typeof nativeRoom.directUserId === 'string' &&
@@ -321,6 +341,7 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
   );
 
   const roomName = useRoomName(room);
+  const glyph = roomGlyphFor(nativeRoom, roomName);
 
   const handleContextMenu: MouseEventHandler<HTMLElement> = (evt) => {
     evt.preventDefault();
@@ -332,11 +353,22 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
     });
   };
 
+  // Arrow keys, Home and End move between rooms; Tab still leaves the list.
+  // Rows render in a virtual list, so only the rows on screen are reachable.
+  const handleLinkKeyDown: KeyboardEventHandler<HTMLAnchorElement> = (evt) => {
+    if (evt.altKey || evt.ctrlKey || evt.metaKey || evt.shiftKey) return;
+    const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[data-room-nav-link]'));
+    const next = listNavigationIndex(evt.key, links.indexOf(evt.currentTarget), links.length);
+    if (next === undefined) return;
+    evt.preventDefault();
+    links[next]?.focus();
+  };
+
   const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
     setMenuAnchor(evt.currentTarget.getBoundingClientRect());
   };
 
-  const optionsVisible = hover || !!menuAnchor;
+  const optionsVisible = hover || !!menuAnchor || returningFocus;
 
   return (
     <NavItem
@@ -344,24 +376,33 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
       variant="Surface"
       radii="300"
       highlight={unread !== undefined}
-      aria-selected={selected}
+      selected={selected}
       data-hover={!!menuAnchor}
       onContextMenu={handleContextMenu}
       {...hoverProps}
       {...focusWithinProps}
     >
-      <NavLink to={linkPath}>
+      <NavLink
+        to={linkPath}
+        ref={linkRef}
+        data-room-nav-link
+        aria-current={selected ? 'page' : undefined}
+        onKeyDown={handleLinkKeyDown}
+      >
         <NavItemContent>
           <Box as="span" grow="Yes" alignItems="Center" gap="200">
-            <Text as="span" className={css.RoomGlyph} aria-hidden="true">
-              #
-            </Text>
+            {glyph.kind === 'person' ? (
+              <PersonGlyph className={css.RoomPersonGlyph} glyph={glyph} />
+            ) : (
+              <Text as="span" className={css.RoomGlyph} aria-hidden="true">
+                #
+              </Text>
+            )}
             <Box as="span" grow="Yes" direction="Column">
               <Text
-                priority={unread ? '500' : '300'}
                 as="span"
                 size="Inherit"
-                className={css.RoomName}
+                className={unread ? css.RoomName : `${css.RoomName} ${css.RoomNameRead}`}
                 truncate
               >
                 {roomName}
@@ -385,7 +426,9 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
               <Icon
                 size="50"
                 src={getRoomNotificationModeIcon(notificationMode)}
-                aria-label={notificationMode}
+                aria-label={
+                  ROOM_NOTIFICATION_MODE_LABELS[notificationMode ?? RoomNotificationMode.Unset]
+                }
               />
             )}
           </Box>
@@ -405,8 +448,13 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
               <FocusTrap
                 focusTrapOptions={{
                   initialFocus: false,
-                  returnFocusOnDeactivate: false,
-                  onDeactivate: () => setMenuAnchor(undefined),
+                  // Keep the trigger mounted until focus is back on it (or the row).
+                  setReturnFocus: returnFocusOrFallback(() => linkRef.current),
+                  onDeactivate: () => {
+                    setReturningFocus(true);
+                    setMenuAnchor(undefined);
+                  },
+                  onPostDeactivate: () => setReturningFocus(false),
                   clickOutsideDeactivates: true,
                   isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
                   isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
@@ -424,7 +472,7 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
             <IconButton
               className={depthCss.quietInteractiveSurface}
               onClick={handleOpenMenu}
-              aria-pressed={!!menuAnchor}
+              aria-expanded={!!menuAnchor}
               aria-controls={`menu-${room.roomId}`}
               aria-label="More Options"
               variant="Background"
@@ -450,5 +498,13 @@ function areRoomNavItemPropsEqual(prev: RoomNavItemProps, next: RoomNavItemProps
   if (prev.notificationMode !== next.notificationMode) return false;
   return true;
 }
+
+/** Spoken names for the room row's notification icon (not the enum value). */
+const ROOM_NOTIFICATION_MODE_LABELS: Record<RoomNotificationMode, string> = {
+  [RoomNotificationMode.Unset]: 'Default notifications',
+  [RoomNotificationMode.AllMessages]: 'Notifications: all messages',
+  [RoomNotificationMode.SpecialMessages]: 'Notifications: mentions and keywords',
+  [RoomNotificationMode.Mute]: 'Muted',
+};
 
 export const RoomNavItem = React.memo(RoomNavItemImpl, areRoomNavItemPropsEqual);

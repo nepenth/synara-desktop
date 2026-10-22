@@ -73,6 +73,40 @@ enum RoomTimelineFocusPolicy {
         }
         return .focused(eventID: focusedEventID)
     }
+
+    /// How a routed event opens once Core has said where it lives. A thread
+    /// reply is never in the room timeline (it hides in-thread events), and an
+    /// event-focused open of one is a thread-only window with no back gap, so
+    /// it must open the thread with the live room behind it.
+    static func eventRouteDecision(
+        focusedEventID: String,
+        route: TimelineEventRoute,
+        liveItems: [TimelineItem]
+    ) -> RoomTimelineEventRouteDecision {
+        switch route {
+        case let .thread(rootEventID) where rootEventID != focusedEventID:
+            return .thread(
+                rootEventID: rootEventID,
+                roomMode: liveModeForEventRoute(focusedEventID: rootEventID, liveItems: liveItems) ?? .live
+            )
+        case .missing:
+            return .unavailable(notice: TimelineEventRouteNotice.missing)
+        case .room, .unreachable, .thread:
+            // An unreachable `/event` can still be served by the focused
+            // provider's `/context`; Core falls back to the live room if not.
+            return .room(liveMode: liveModeForEventRoute(focusedEventID: focusedEventID, liveItems: liveItems))
+        }
+    }
+}
+
+enum RoomTimelineEventRouteDecision: Equatable {
+    /// Show the event in the room. `liveMode` presents the live provider; nil
+    /// means only the event-focused provider can reach it.
+    case room(liveMode: RoomTimelineMode?)
+    /// Present the live room in `roomMode` and open the thread at the reply.
+    case thread(rootEventID: String, roomMode: RoomTimelineMode)
+    /// Present the live room and say why the message is not shown.
+    case unavailable(notice: String)
 }
 
 enum RoomTimelineTitlePolicy {
@@ -87,7 +121,7 @@ enum RoomTimelineTitlePolicy {
         if let routeTitle, routeTitle.isEmpty == false {
             return resolved ?? routeTitle
         }
-        return resolved ?? roomListName ?? "Room"
+        return resolved ?? roomListName ?? String(localized: "Room")
     }
 
     static func shouldAdoptRoomListName(routeTitle: String?) -> Bool {
@@ -96,6 +130,8 @@ enum RoomTimelineTitlePolicy {
 }
 
 enum RoomTimelinePaginationPolicy {
+    /// A user scroll near the oldest row pages back. Short content that
+    /// cannot scroll pages back on its own while Core still has history.
     static func shouldLoadOlderHistory(
         rowIndex: Int,
         topThreshold: Int,
@@ -103,20 +139,60 @@ enum RoomTimelinePaginationPolicy {
         hasPositionedInitialTimeline: Bool,
         isJumpingToLatest: Bool,
         isPaginating: Bool,
-        hasReachedOldestMessages: Bool
+        hasReachedOldestMessages: Bool,
+        isFillingShortContent: Bool = false,
+        backwardPagination: TimelineBackwardPagination = .unknown
     ) -> Bool {
         guard rowIndex < topThreshold else {
             return false
         }
-        guard hasUserInteractedWithTimeline,
-              hasPositionedInitialTimeline,
+        guard hasPositionedInitialTimeline,
               isJumpingToLatest == false,
               isPaginating == false,
               hasReachedOldestMessages == false
         else {
             return false
         }
-        return true
+        if isFillingShortContent {
+            return backwardPagination != .exhausted
+        }
+        return hasUserInteractedWithTimeline
+    }
+
+    /// "Reached the start" comes only from a page Core answered with the
+    /// start of the room, and clears when Core reports more history again
+    /// (it shrinks the room after a gappy sync).
+    static func reachedOldestAfterUpdate(
+        hasReachedOldestMessages: Bool,
+        backwardPagination: TimelineBackwardPagination
+    ) -> Bool {
+        hasReachedOldestMessages && backwardPagination != .available
+    }
+}
+
+enum RoomTimelineForwardPaginationPolicy {
+    /// An event-focused window pages toward the present when the user reaches
+    /// its newest row; the live provider is already there.
+    static func shouldLoadNewer(
+        providerIsLive: Bool,
+        isPinned: Bool,
+        hasPendingPlacement: Bool,
+        isJumpingToLatest: Bool,
+        isLoadingNewer: Bool
+    ) -> Bool {
+        providerIsLive == false
+            && isPinned
+            && hasPendingPlacement == false
+            && isJumpingToLatest == false
+            && isLoadingNewer == false
+    }
+
+    /// A focused window that cannot page further holds the live tail. When
+    /// the user scrolled down to its bottom, the live provider takes over.
+    /// Landing there from a route does not count: the live window may not
+    /// hold the routed message.
+    static func shouldReturnToLive(outcome: TimelineLoadOutcome, isPinned: Bool, hasUserScrolled: Bool) -> Bool {
+        outcome == .empty && isPinned && hasUserScrolled
     }
 }
 
@@ -174,6 +250,69 @@ enum RoomTimelineFailurePresentationPolicy {
         preservedItemCount: Int
     ) -> String? {
         preservedItemCount > 0 ? failure.userMessage : nil
+    }
+}
+
+/// Where the "Unread messages" divider goes: above the first message after
+/// the read marker that someone else sent. The user's own messages are read
+/// by definition, so the divider never sits above one of them.
+enum RoomTimelineUnreadDividerPolicy {
+    static func dividerEventID(
+        markerEventID: String?,
+        items: [TimelineItem],
+        currentUserID: String
+    ) -> String? {
+        guard let markerEventID, markerEventID.isEmpty == false,
+              let markerIndex = items.firstIndex(where: {
+                  $0.eventID == markerEventID || $0.id == markerEventID
+              })
+        else {
+            return nil
+        }
+        return items[(markerIndex + 1)...].first { item in
+            item.senderID != currentUserID
+                && item.isLocalPending == false
+                && item.localEcho == nil
+        }?.eventID
+    }
+}
+
+/// A room screen that comes back on screen (back from a pushed thread, a tab
+/// switch, Settings and back) keeps its loaded window, position and stream;
+/// only a different room or routed event, or a load that never finished,
+/// starts over.
+enum RoomTimelineReappearPolicy {
+    static func canResume(
+        loadedTaskID: String?,
+        taskID: String,
+        isStreamActive: Bool,
+        hasPresentedTimeline: Bool
+    ) -> Bool {
+        loadedTaskID == taskID && isStreamActive && hasPresentedTimeline
+    }
+}
+
+/// A timeline that failed to load tries again by itself once the likely
+/// cause is gone: the connection is live again, or the room has appeared in
+/// the room list (a cold notification open before the room synced).
+enum RoomTimelineAutoRetryPolicy {
+    static func shouldRetry(
+        afterConnection previous: MatrixSyncStatus?,
+        current: MatrixSyncStatus,
+        hasFailedLoad: Bool
+    ) -> Bool {
+        guard hasFailedLoad, let previous else {
+            return false
+        }
+        return OutgoingSendPolicy.becameSendReady(previous: previous, current: current)
+    }
+
+    static func shouldRetry(
+        afterRoomListed wasListed: Bool,
+        isListed: Bool,
+        hasFailedLoad: Bool
+    ) -> Bool {
+        hasFailedLoad && isListed && wasListed == false
     }
 }
 
@@ -305,8 +444,21 @@ enum RoomTimelineJumpLatestPolicy {
         providerIsLive && (isConfirmedPinned || (isFollowingLive && isLiveMode))
     }
 
-    static func shouldAdoptLiveFollowOnPin(position: RoomTimelinePositionState) -> Bool {
-        position != .readingHistory && position != .focusedEvent
+    /// A confirmed pin on the live provider follows the live tail. An unread
+    /// or focused placement pins briefly before it scrolls to its row, so
+    /// those positions adopt the pin only once their placement completed and
+    /// no drag is in progress: the placed rows fit on screen at the live edge.
+    static func shouldAdoptLiveFollowOnPin(
+        position: RoomTimelinePositionState,
+        hasPendingPlacement: Bool,
+        isUserDragging: Bool
+    ) -> Bool {
+        switch position {
+        case .readingHistory, .focusedEvent:
+            return hasPendingPlacement == false && isUserDragging == false
+        case .preparing, .placingInitial, .followingLive:
+            return true
+        }
     }
 }
 
@@ -332,11 +484,27 @@ enum RoomTimelineJumpLastReadPolicy {
     /// desktop presenter: it is cleared on successful placement, on an explicit
     /// Jump to Latest, or when the room changes. Rows loading later off-screen
     /// do not count as "already there".
-    static func shouldShow(pendingMarkerEventID: String?) -> Bool {
+    static func shouldShow(pendingMarkerEventID: String?, isMarkerVisible: Bool = false) -> Bool {
         guard let marker = pendingMarkerEventID, marker.isEmpty == false else {
             return false
         }
-        return true
+        // The marker row or the unread divider on screen is the answer already.
+        return isMarkerVisible == false
+    }
+
+    enum Route: Equatable {
+        /// The marker is in the live window: scroll there, stay live.
+        case scrollLiveWindow
+        /// Open an event-focused window beside the live provider.
+        case openFocusedWindow
+    }
+
+    static func route(
+        markerEventID: String,
+        providerIsLive: Bool,
+        loadedServerEventIDs: [String]
+    ) -> Route {
+        providerIsLive && loadedServerEventIDs.contains(markerEventID) ? .scrollLiveWindow : .openFocusedWindow
     }
 }
 
@@ -359,11 +527,11 @@ enum RoomTypingPresentation {
         case 0:
             return nil
         case 1:
-            return "\(names[0]) is typing..."
+            return String(localized: "\(names[0]) is typing...")
         case 2:
-            return "\(names[0]) and \(names[1]) are typing..."
+            return String(localized: "\(names[0]) and \(names[1]) are typing...")
         default:
-            return "\(names[0]), \(names[1]), and \(names.count - 2) more are typing..."
+            return String(localized: "\(names[0]), \(names[1]), and \(names.count - 2) more are typing...")
         }
     }
 }
@@ -392,6 +560,9 @@ struct RoomTimelineView: View {
     @State private var resolvedRoomTitle: String?
     @State private var state: TimelineViewState = .idle
     @State private var draft: String = ""
+    @State private var sentDraft: ComposerSentDraft?
+    @State private var sentDraftSerial: UInt64 = 0
+    @StateObject private var quickReactions = TimelineQuickReactionStore()
     @State private var replyTarget: ComposerRelationTarget?
     @State private var editSession: ComposerEditSession?
     @State private var sendError: String?
@@ -407,11 +578,14 @@ struct RoomTimelineView: View {
     @State private var roomNotesActionMessage: String?
     @State private var timelineActionMessage: String?
     @State private var reportTarget: TimelineItem?
+    @State private var redactConfirmation = TimelineRedactConfirmation<TimelineItem>()
     @State private var reportReason = ""
     @State private var forwardTarget: TimelineItem?
     @State private var threadDisplay: ThreadDisplayMode = ThreadDisplayMode.defaultMode
     @State private var expandedThreadRoots: Set<String> = []
     @State private var threadSheet: ThreadSheetTarget?
+    @State private var eventRouteNotice: String?
+    @State private var handledEventRouteID: String?
     @State private var inFlightTimelineActionKeys: Set<String> = []
     @State private var cryptoStatus: RoomCryptoStatus = .unknown
     @State private var cryptoActionMessage: String?
@@ -423,14 +597,24 @@ struct RoomTimelineView: View {
     @State private var lastRenderedTimelineCount = 0
     @State private var showJumpToLatest = false
     @State private var hasPositionedInitialTimeline = false
-    /// Used only for unread-divider presentation after the user has reached a live event.
-    /// Must never drive post-load scroll restore (v1.2.28 open-at-live-end policy).
-    @State private var initialReadMarkerEventID: String?
+    /// The row the "Unread messages" divider sits above. Fixed when the room
+    /// opens and kept until the user leaves it, even after the read receipt
+    /// is sent; never one of the user's own messages. Presentation only: it
+    /// must never drive post-load scroll restore (v1.2.28 open-at-live-end
+    /// policy).
+    @State private var unreadDividerEventID: String?
     @State private var pendingLastReadEventID: String?
+    @State private var isLastReadMarkerVisible = false
+    /// The marker of a Jump to Last Read in progress. Its placement failing
+    /// says so and returns to the latest messages instead of offering it again.
+    @State private var lastReadJumpEventID: String?
+    @State private var isLoadingNewerTimeline = false
+    @State private var lastNewerPaginationAt = Date.distantPast
     @State private var sendLatestRequest = 0
     @State private var sendFollowLatestTask: Task<Void, Never>?
     @State private var hasReachedOldestMessages = false
     @State private var lastOlderPaginationAt = Date.distantPast
+    @State private var olderPaginationCompletions: UInt64 = 0
     @State private var paginationScrollAnchorID: String?
     @State private var isJumpingToLatest = false
     @State private var isComposerFocused = false
@@ -441,6 +625,16 @@ struct RoomTimelineView: View {
     @State private var markFullyReadTaskGeneration: UInt64 = 0
     @State private var readMarkerQueue = RoomTimelineReadMarkerQueue()
     @State private var timelineUpdatesTask: Task<Void, Never>?
+    /// The tab whose navigation holds this screen. While it still holds the
+    /// room, a disappear means covered (a pushed thread, another tab), not
+    /// left, and the stream keeps running.
+    @State private var hostTab: AppTab?
+    /// The room (and routed event) whose timeline finished loading. A
+    /// re-appear of the same route resumes it instead of reloading.
+    @State private var loadedTimelineTaskID: String?
+    @State private var isTimelineStreamActive = false
+    @State private var observedSyncStatus: MatrixSyncStatus?
+    @State private var isRoomListed = false
     @State private var cryptoUpdatesTask: Task<Void, Never>?
     @State private var timelineSession: RoomTimelineSession?
     @State private var activeTimelineMode: RoomTimelineMode = .live
@@ -486,6 +680,8 @@ struct RoomTimelineView: View {
             TimelineHeader(
                 title: displayRoomTitle,
                 subtitle: timelineSubtitle,
+                glyph: SynaraRoomGlyph.glyph(for: roomSummary),
+                avatarURL: roomSummary?.avatarURL,
                 cryptoLabel: cryptoStatus.observing(loadedTimelineItems).roomHeaderLabel,
                 cryptoSystemImage: cryptoStatus.observing(loadedTimelineItems).roomHeaderSystemImage,
                 showsBackButton: canvasLayout.showsConversationBackButton,
@@ -497,6 +693,11 @@ struct RoomTimelineView: View {
                 }
             )
             timelineContent
+            if let eventRouteNotice {
+                TimelineEventRouteNoticeBanner(message: eventRouteNotice) {
+                    self.eventRouteNotice = nil
+                }
+            }
             if let failure = timelineAvailability.failure {
                 TimelineAvailabilityBanner(failure: failure) {
                     Task { await loadTimeline() }
@@ -528,7 +729,8 @@ struct RoomTimelineView: View {
                 attachmentDrafts: $attachmentDrafts,
                 isSending: isSendingMessage,
                 onPasteImages: draftPastedImages,
-                isFocusedExternally: $isComposerFocused
+                isFocusedExternally: $isComposerFocused,
+                sentDraft: sentDraft
             )
             .padding(.bottom, canvasLayout == .stacked && !isComposerFocused ? SynaraSpacing.large : 0)
             .background { SynaraChrome.composer.ignoresSafeArea(edges: .bottom) }
@@ -545,7 +747,9 @@ struct RoomTimelineView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(canvasLayout.hidesTabBarInConversation ? .hidden : .automatic, for: .tabBar)
-        .preferredColorScheme(isAgentRoom ? .dark : nil)
+        // Only the agent conversation reads dark; the window, tab bar and
+        // the rest of the app keep following the system appearance.
+        .environment(\.colorScheme, conversationColorScheme)
         .sheet(item: $viewerResource) { resource in
             MediaViewer(resource: resource)
         }
@@ -592,6 +796,9 @@ struct RoomTimelineView: View {
                 }
             )
         }
+        .timelineRedactConfirmation($redactConfirmation) { item in
+            applyAction(.redact, to: item)
+        }
         .alert("Report Message", isPresented: Binding(
             get: { reportTarget != nil },
             set: {
@@ -617,7 +824,7 @@ struct RoomTimelineView: View {
                 applyAction(
                     .report(reason: trimmedReason.isEmpty ? nil : trimmedReason),
                     to: item,
-                    successMessage: "Message reported."
+                    successMessage: String(localized: "Message reported.")
                 )
             }
         } message: {
@@ -659,6 +866,10 @@ struct RoomTimelineView: View {
         } message: {
             Text(roomNotesActionMessage ?? "")
         }
+        .task {
+            let matrix = environment.matrix
+            await quickReactions.refresh { await matrix.recentEmoji() }
+        }
         .task(id: "room-title-\(currentUserID)-\(roomID)") {
             // Notification routes carry stable room/event IDs, not room metadata.
             // Hydrate presentation from the room-list owner only when the route
@@ -678,6 +889,15 @@ struct RoomTimelineView: View {
             }
         }
         .task(id: timelineTaskID) {
+            if RoomTimelineReappearPolicy.canResume(
+                loadedTaskID: loadedTimelineTaskID,
+                taskID: timelineTaskID,
+                isStreamActive: isTimelineStreamActive,
+                hasPresentedTimeline: hasPresentedTimeline
+            ) {
+                resumeTimelineAfterReappear()
+                return
+            }
             resetTimelineState()
             let expectedTimelineTaskID = timelineTaskID
             let expectedUserID = currentUserID
@@ -703,13 +923,22 @@ struct RoomTimelineView: View {
             startVerificationAutoRetry()
             await loadTimeline()
             applyOutgoingQueueToTimeline()
-            flushOutgoingSendsIfReady(environment.connectionStatus.status)
             _ = await initialCryptoStatus
             await ownAvatarLoad
-            _ = await loadCryptoStatus()
+            let openedStatus = await loadCryptoStatus()
+            guard !Task.isCancelled, expectedTimelineTaskID == timelineTaskID else { return }
+            // A verified session without undecryptable rows has nothing to
+            // retry, so the room does not keep the session subscription.
+            if !RoomCryptoObservationPolicy.needsSessionUpdates(openedStatus.observing(loadedTimelineItems)) {
+                cryptoUpdatesTask?.cancel()
+                cryptoUpdatesTask = nil
+            }
         }
         .onAppear {
             isReadSceneActive = scenePhase == .active
+            if hostTab == nil {
+                hostTab = environment.router.selectedTab
+            }
             threadDisplay = ThreadDisplayMode.resolve(
                 environment.settings.string(for: ThreadDisplayMode.settingsKey)
             )
@@ -719,7 +948,8 @@ struct RoomTimelineView: View {
                 roomID: roomID,
                 rootEventID: target.rootEventID,
                 roomTitle: displayRoomTitle,
-                rootTitle: target.rootTitle
+                rootTitle: target.rootTitle,
+                focusedEventID: target.focusedEventID
             )
             .environment(\.appEnvironment, environment)
             .presentationDetents([.medium, .large])
@@ -728,7 +958,12 @@ struct RoomTimelineView: View {
         .onDisappear {
             isReadSceneActive = false
             dismissKeyboard()
-            stopTimelineUpdates(reason: "view-disappeared")
+            // A pushed thread or another tab covers the room without leaving
+            // it: keep the stream, window and position for when it comes
+            // back. Leaving the room ends the stream so Core can close it.
+            if environment.router.holdsRoom(id: roomID, eventID: focusedEventID, in: hostTab) == false {
+                stopTimelineUpdates(reason: "room-left")
+            }
             stopTypingUpdates()
             cryptoUpdatesTask?.cancel()
             cryptoUpdatesTask = nil
@@ -758,7 +993,32 @@ struct RoomTimelineView: View {
             applyOutgoingQueueToTimeline()
         }
         .onReceive(environment.connectionStatus.$status) { status in
-            flushOutgoingSendsIfReady(status)
+            let previous = observedSyncStatus
+            observedSyncStatus = status
+            if RoomTimelineAutoRetryPolicy.shouldRetry(
+                afterConnection: previous,
+                current: status,
+                hasFailedLoad: hasFailedTimelineLoad
+            ) {
+                retryFailedTimelineLoad(reason: "connection-live")
+            }
+        }
+        .task(id: "room-listed-\(currentUserID)-\(roomID)") {
+            isRoomListed = false
+            for await update in environment.roomList.roomUpdates() {
+                guard !Task.isCancelled else { return }
+                guard case let .loaded(rooms) = update else { continue }
+                let isListed = rooms.contains { $0.id == roomID }
+                let wasListed = isRoomListed
+                isRoomListed = isListed
+                if RoomTimelineAutoRetryPolicy.shouldRetry(
+                    afterRoomListed: wasListed,
+                    isListed: isListed,
+                    hasFailedLoad: hasFailedTimelineLoad
+                ) {
+                    retryFailedTimelineLoad(reason: "room-listed")
+                }
+            }
         }
         .onChange(of: draft) { value in
             environment.drafts.setDraft(value, roomID: roomID)
@@ -796,9 +1056,13 @@ struct RoomTimelineView: View {
             .background(isAgentRoom ? SynaraChrome.agentReview : SynaraChrome.chat)
             .accessibilityIdentifier("TimelineLoading")
         case .empty:
-            SynaraEmptyState(title: "No Messages", systemImage: "text.bubble", message: "Messages will appear here.")
+            SynaraEmptyState(
+                title: String(localized: "No Messages"),
+                systemImage: "text.bubble",
+                message: String(localized: "Messages will appear here.")
+            )
         case let .failed(message):
-            SynaraErrorState(title: "Could Not Load Timeline", message: message) {
+            SynaraErrorState(title: String(localized: "Could Not Load Timeline"), message: message) {
                 Task {
                     await loadTimeline()
                 }
@@ -833,14 +1097,22 @@ struct RoomTimelineView: View {
                                 currentUserID: currentUserID
                             )
 
+                            let dayHeaders = TimelineDayHeaderPolicy.headers(for: items)
+                            let userID = currentUserID
+                            let isInlineThreadMode = threadDisplay == .inline
                             ForEach(Array(items.enumerated()), id: \.element.eventID) { index, item in
+                                if let day = dayHeaders[item.eventID] {
+                                    TimelineDayHeader(day: day)
+                                        .padding(.vertical, SynaraSpacing.small)
+                                }
                                 if shouldShowUnreadDivider(before: item, at: index, in: items) {
                                     UnreadMessagesDivider()
                                         .padding(.vertical, SynaraSpacing.small)
                                 }
                                 TimelineRow(
                                     item: item,
-                                    currentUserID: currentUserID,
+                                    currentUserID: userID,
+                                    timeText: item.timestamp.timelineTime,
                                     isGroupedWithPrevious: isGroupedWithPrevious(index: index, items: items),
                                     isTimestampRevealed: false,
                                     animateSend: sendAnimationItemIDs.contains(item.id),
@@ -854,13 +1126,13 @@ struct RoomTimelineView: View {
                                     ),
                                     availability: environment.eventActions.availability(
                                         for: item,
-                                        currentUserID: currentUserID,
+                                        currentUserID: userID,
                                         roomID: roomID
                                     ),
                                     onReply: { beginReply(item) },
                                     onReplyInThread: { replyInThread(item) },
                                     onOpenThread: { openThread(root: item) },
-                                    isInlineThreadMode: threadDisplay == .inline,
+                                    isInlineThreadMode: isInlineThreadMode,
                                     isThreadExpanded: isThreadExpanded(item),
                                     inlineThread: inlineThread(
                                         for: item,
@@ -870,22 +1142,23 @@ struct RoomTimelineView: View {
                                         )
                                     ),
                                     onEdit: { beginEdit(item) },
-                                    onRedact: { applyAction(.redact, to: item) },
-                                    onReact: { applyAction(.react("👍"), to: item) },
+                                    onRedact: { redactConfirmation.request(item) },
+                                    onToggleReaction: { key in toggleReaction(key, on: item) },
+                                    quickReactions: quickReactions,
                                     onReport: { beginReport(item) },
                                     onForward: { forwardTarget = item },
                                     onPollVote: { answerIDs in
                                         await performAction(
                                             .pollVote(answerIDs: answerIDs),
                                             to: item,
-                                            successMessage: "Vote submitted."
+                                            successMessage: String(localized: "Vote submitted.")
                                         )
                                     },
                                     onDeclineCall: {
                                         await performAction(
                                             .declineCall,
                                             to: item,
-                                            successMessage: "Call declined."
+                                            successMessage: String(localized: "Call declined.")
                                         )
                                     },
                                     onPinToNotes: { pinToNotes(item) },
@@ -898,6 +1171,9 @@ struct RoomTimelineView: View {
                                     },
                                     onRetryFailedSend: {
                                         retryFailedMessage(item)
+                                    },
+                                    onDiscardFailedSend: {
+                                        discardFailedMessage(item)
                                     }
                                 )
                                 .id(item.eventID)
@@ -923,6 +1199,8 @@ struct RoomTimelineView: View {
                                             scheduleMarkFullyRead(eventID: latestEventID)
                                         }
                                         showJumpToLatest = false
+                                    } else {
+                                        loadNewerTimelineIfNeeded()
                                     }
                                     logTimelineEvent("bottom-visible", fields: ["items": "\(items.count)"])
                                 }
@@ -1046,7 +1324,7 @@ struct RoomTimelineView: View {
             backgroundColor: SynaraThemeRamp.uiColor(
                 isAgentRoom ? SynaraChrome.agentReviewToken : SynaraChrome.chatToken,
                 baseHex: themeBaseHex,
-                dark: colorScheme == .dark
+                dark: conversationColorScheme == .dark
             ),
             rowContent: { row in
                 AnyView(stableViewportRowContent(row))
@@ -1067,14 +1345,18 @@ struct RoomTimelineView: View {
                 }
                 handleStableUserInteractionChanged(isInteracting: isInteracting)
             },
-            onPaginationThresholdReached: { callbackRouteID, callbackGeneration, anchorEventID in
+            onPaginationThresholdReached: { callbackRouteID, callbackGeneration, anchorEventID, fillsShortContent in
                 guard callbackRouteID == stableViewportRouteID,
                       callbackGeneration == timelineBottomAnchorGeneration,
                       let oldestEventID = loadedTimelineItems.first?.eventID
                 else {
                     return false
                 }
-                return loadOlderTimeline(before: oldestEventID, scrollAnchorID: anchorEventID)
+                return loadOlderTimeline(
+                    before: oldestEventID,
+                    scrollAnchorID: anchorEventID,
+                    isFillingShortContent: fillsShortContent
+                )
             },
             onTimestampRevealRequested: { callbackRouteID, callbackGeneration, eventID in
                 guard callbackRouteID == stableViewportRouteID,
@@ -1091,6 +1373,16 @@ struct RoomTimelineView: View {
                     return
                 }
                 handleStableCommandCompleted(command, success: success, targetEventID: targetEventID)
+            },
+            lastReadMarkerEventID: pendingLastReadEventID,
+            paginationCompletions: olderPaginationCompletions,
+            onLastReadMarkerVisibilityChanged: { callbackRouteID, callbackGeneration, isVisible in
+                guard callbackRouteID == stableViewportRouteID,
+                      callbackGeneration == timelineBottomAnchorGeneration
+                else {
+                    return
+                }
+                isLastReadMarkerVisible = isVisible
             }
         )
         .id(routeID)
@@ -1120,7 +1412,8 @@ struct RoomTimelineView: View {
         onJumpToLatest: @escaping () -> Void
     ) -> some View {
         let showLastRead = RoomTimelineJumpLastReadPolicy.shouldShow(
-            pendingMarkerEventID: pendingLastReadEventID
+            pendingMarkerEventID: pendingLastReadEventID,
+            isMarkerVisible: StableScrollAnchoringFeatureFlag.isEnabled && isLastReadMarkerVisible
         )
         if showLastRead || showLatest {
             VStack(alignment: .trailing, spacing: SynaraSpacing.small) {
@@ -1138,8 +1431,18 @@ struct RoomTimelineView: View {
         }
     }
 
-    @ViewBuilder
+    /// Rows are hosted in UIKit cells (`UIHostingConfiguration`), outside this
+    /// view's SwiftUI tree. Carry the app environment and theme in
+    /// explicitly, as sheets do, so avatars, media and inline threads never
+    /// fall back to `AppEnvironment.mock()`.
     private func stableViewportRowContent(_ row: StableTimelineViewportRow) -> some View {
+        stableViewportRowBody(row)
+            .environment(\.appEnvironment, environment)
+            .environment(\.synaraThemeBaseHex, themeBaseHex)
+    }
+
+    @ViewBuilder
+    private func stableViewportRowBody(_ row: StableTimelineViewportRow) -> some View {
         switch row.content {
         case .pagination:
             ProgressView()
@@ -1156,6 +1459,10 @@ struct RoomTimelineView: View {
             )
             .padding(.horizontal, timelineHorizontalPadding)
             .padding(.vertical, SynaraSpacing.xSmall)
+        case let .dayHeader(day):
+            TimelineDayHeader(day: day)
+                .padding(.horizontal, timelineHorizontalPadding)
+                .padding(.vertical, SynaraSpacing.small)
         case .unreadDivider:
             UnreadMessagesDivider()
                 .padding(.horizontal, timelineHorizontalPadding)
@@ -1164,6 +1471,7 @@ struct RoomTimelineView: View {
             TimelineRow(
                 item: eventRow.item,
                 currentUserID: currentUserID,
+                timeText: eventRow.timeText,
                 isGroupedWithPrevious: eventRow.isGroupedWithPrevious,
                 isTimestampRevealed: eventRow.isTimestampRevealed,
                 animateSend: eventRow.animateSend,
@@ -1177,22 +1485,23 @@ struct RoomTimelineView: View {
                 isThreadExpanded: eventRow.isThreadExpanded,
                 inlineThread: inlineThread(for: eventRow.item, replyCount: eventRow.replyCount),
                 onEdit: { beginEdit(eventRow.item) },
-                onRedact: { applyAction(.redact, to: eventRow.item) },
-                onReact: { applyAction(.react("👍"), to: eventRow.item) },
+                onRedact: { redactConfirmation.request(eventRow.item) },
+                onToggleReaction: { key in toggleReaction(key, on: eventRow.item) },
+                quickReactions: quickReactions,
                 onReport: { beginReport(eventRow.item) },
                 onForward: { forwardTarget = eventRow.item },
                 onPollVote: { answerIDs in
                     await performAction(
                         .pollVote(answerIDs: answerIDs),
                         to: eventRow.item,
-                        successMessage: "Vote submitted."
+                        successMessage: String(localized: "Vote submitted.")
                     )
                 },
                 onDeclineCall: {
                     await performAction(
                         .declineCall,
                         to: eventRow.item,
-                        successMessage: "Call declined."
+                        successMessage: String(localized: "Call declined.")
                     )
                 },
                 onPinToNotes: { pinToNotes(eventRow.item) },
@@ -1203,7 +1512,8 @@ struct RoomTimelineView: View {
                 onAgentApprovalReaction: { actionIdentifier in
                     submitAgentApprovalDecision(actionIdentifier: actionIdentifier, sourceEventID: eventRow.item.eventID)
                 },
-                onRetryFailedSend: { retryFailedMessage(eventRow.item) }
+                onRetryFailedSend: { retryFailedMessage(eventRow.item) },
+                onDiscardFailedSend: { discardFailedMessage(eventRow.item) }
             )
             .padding(.horizontal, timelineHorizontalPadding)
             .padding(.bottom, SynaraSpacing.xSmall)
@@ -1211,8 +1521,11 @@ struct RoomTimelineView: View {
     }
 
     private func stableViewportRows(items: [TimelineItem], isPaginating: Bool) -> [StableTimelineViewportRow] {
+        // Read once per pass, not once per row.
+        let userID = currentUserID
+        let isInlineThreadMode = threadDisplay == .inline
         let replyCounts = TimelineReplyCounter.replyCounts(for: items)
-        let previews = TimelineReplyPreview.previewsByEventID(in: items, currentUserID: currentUserID)
+        let previews = TimelineReplyPreview.previewsByEventID(in: items, currentUserID: userID)
         var rows: [StableTimelineViewportRow] = []
         rows.reserveCapacity(items.count + 3)
 
@@ -1223,8 +1536,14 @@ struct RoomTimelineView: View {
             rows.append(.init(id: .cryptoBanner, content: .cryptoBanner(cryptoStatus.observing(items))))
         }
 
+        let dayHeaders = TimelineDayHeaderPolicy.headers(for: items)
         for (index, item) in items.enumerated() {
             let stableEventID = item.eventID.isEmpty ? item.id : item.eventID
+            if let day = dayHeaders[item.eventID] {
+                rows.append(
+                    .init(id: .dayHeader(TimelineDayHeaderPolicy.key(for: day)), content: .dayHeader(day))
+                )
+            }
             if shouldShowUnreadDivider(before: item, at: index, in: items) {
                 rows.append(.init(id: .unreadDivider(stableEventID), content: .unreadDivider))
             }
@@ -1247,11 +1566,12 @@ struct RoomTimelineView: View {
                             ),
                             availability: environment.eventActions.availability(
                                 for: item,
-                                currentUserID: currentUserID,
+                                currentUserID: userID,
                                 roomID: roomID
                             ),
-                            isInlineThreadMode: threadDisplay == .inline,
-                            isThreadExpanded: isThreadExpanded(item)
+                            isInlineThreadMode: isInlineThreadMode,
+                            isThreadExpanded: isThreadExpanded(item),
+                            timeText: item.timestamp.timelineTime
                         )
                     )
                 )
@@ -1509,9 +1829,9 @@ struct RoomTimelineView: View {
             await MainActor.run {
                 switch result {
                 case .success:
-                    roomNotesActionMessage = "Message pinned to your private notes."
+                    roomNotesActionMessage = String(localized: "Message pinned to your private notes.")
                 case .failure(let error):
-                    roomNotesActionMessage = error.errorDescription ?? "Could not pin this message."
+                    roomNotesActionMessage = error.errorDescription ?? String(localized: "Could not pin this message.")
                 }
             }
         }
@@ -1526,23 +1846,32 @@ struct RoomTimelineView: View {
 
     private var timelineSubtitle: String {
         guard case let .loaded(items, _) = state else {
-            return "Matrix room"
+            return String(localized: "Matrix room")
         }
 
         let participantCount = Set(items.map(\.senderID)).count
         guard participantCount > 0 else {
-            return "Matrix room"
+            return String(localized: "Matrix room")
         }
-        if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1",
+        if SynaraLaunchEnvironment.isUITest,
            roomID == "!project:matrix.org"
         {
             return "21 members"
         }
-        return "\(participantCount) members"
+        return String(localized: "\(participantCount) members")
+    }
+
+    /// Agent rooms read dark; every other room follows the system.
+    private var conversationColorScheme: ColorScheme {
+        isAgentRoom ? .dark : colorScheme
     }
 
     private var isAgentRoom: Bool {
         environment.roomList.isAgentRoom(roomID: roomID)
+    }
+
+    private var roomSummary: RoomSummary? {
+        environment.roomList.roomSummary(roomID: roomID)
     }
 
     private var timelineHorizontalPadding: CGFloat {
@@ -1551,9 +1880,13 @@ struct RoomTimelineView: View {
 
     private var composerPlaceholder: String {
         if let editTarget = editSession?.editTarget {
-            return editTarget.isLocalPending ? "Edit unsent message..." : "Edit message..."
+            return editTarget.isLocalPending
+                ? String(localized: "Edit unsent message...")
+                : String(localized: "Edit message...")
         }
-        return isAgentRoom ? "Reply to the agent workflow..." : "Send a message..."
+        return isAgentRoom
+            ? String(localized: "Reply to the agent workflow...")
+            : String(localized: "Send a message...")
     }
 
     private func isGroupedWithPrevious(index: Int, items: [TimelineItem]) -> Bool {
@@ -1580,6 +1913,7 @@ struct RoomTimelineView: View {
         sendFollowLatestTask = nil
         cancelTimestampReveal()
         ownAvatarURL = nil
+        loadedTimelineTaskID = nil
         state = .idle
         draft = environment.drafts.draft(roomID: roomID)
         replyTarget = nil
@@ -1602,7 +1936,11 @@ struct RoomTimelineView: View {
         lastRenderedTimelineCount = 0
         showJumpToLatest = false
         hasPositionedInitialTimeline = false
-        initialReadMarkerEventID = nil
+        unreadDividerEventID = nil
+        isLastReadMarkerVisible = false
+        lastReadJumpEventID = nil
+        isLoadingNewerTimeline = false
+        lastNewerPaginationAt = .distantPast
         hasReachedOldestMessages = false
         lastOlderPaginationAt = .distantPast
         paginationScrollAnchorID = nil
@@ -1634,7 +1972,7 @@ struct RoomTimelineView: View {
     }
 
     private func shouldShowUnreadDivider(before item: TimelineItem, at index: Int, in items: [TimelineItem]) -> Bool {
-        if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1",
+        if SynaraLaunchEnvironment.isUITest,
            roomID == "!project:matrix.org",
            index > 0,
            item.eventID.contains("$security:")
@@ -1642,20 +1980,21 @@ struct RoomTimelineView: View {
             return true
         }
 
-        guard let markerID = initialReadMarkerEventID,
-              markerID.isEmpty == false,
-              item.eventID != markerID,
-              item.id != markerID
-        else {
+        guard let unreadDividerEventID else {
             return false
         }
+        return item.eventID == unreadDividerEventID
+    }
 
-        guard index > 0 else {
-            return false
-        }
-
-        let previous = items[index - 1]
-        return previous.eventID == markerID || previous.id == markerID
+    /// Fixes the divider for this visit at the first message after `marker`
+    /// that someone else sent. Own messages are read by definition, so the
+    /// divider never sits above the user's own message.
+    private func placeUnreadDivider(markerEventID: String?) {
+        unreadDividerEventID = RoomTimelineUnreadDividerPolicy.dividerEventID(
+            markerEventID: markerEventID,
+            items: loadedTimelineItems,
+            currentUserID: currentUserID
+        )
     }
 
     private func applyTimelineOutcome(_ outcome: TimelineLoadOutcome, isPaginating: Bool = false) {
@@ -1740,7 +2079,7 @@ struct RoomTimelineView: View {
         }
         let combined = TimelinePendingReconciler.combining(
             localItems: fromState,
-            storedPending: environment.outgoingSends.queue.timelineItems(in: roomID)
+            storedPending: environment.outgoingSends.queue.timelineItems(in: roomID, threadRootEventID: nil)
         )
         return combined.isEmpty ? nil : combined
     }
@@ -1760,8 +2099,8 @@ struct RoomTimelineView: View {
             localItems = []
         }
 
-        let storedPending = environment.outgoingSends.queue.timelineItems(in: roomID)
-        environment.outgoingSends.dropConfirmed(matching: streamItems, currentUserID: currentUserID)
+        let storedPending = environment.outgoingSends.queue.timelineItems(in: roomID, threadRootEventID: nil)
+        environment.outgoingSends.dropConfirmed(matching: streamItems)
         return TimelinePendingReconciler.merge(
             streamItems: streamItems,
             localItems: TimelinePendingReconciler.combining(
@@ -1788,17 +2127,22 @@ struct RoomTimelineView: View {
 
     /// Opens the full thread with its composer. Inline mode uses a sheet, the
     /// way desktop inline threads reply in the side panel.
-    private func presentThread(rootEventID: String, rootTitle: String?) {
+    private func presentThread(rootEventID: String, rootTitle: String?, focusedEventID: String? = nil) {
         switch threadDisplay {
         case .inline, .sheet:
-            threadSheet = ThreadSheetTarget(rootEventID: rootEventID, rootTitle: rootTitle)
+            threadSheet = ThreadSheetTarget(
+                rootEventID: rootEventID,
+                rootTitle: rootTitle,
+                focusedEventID: focusedEventID
+            )
         case .full:
             environment.router.route(
                 to: .thread(
                     roomID: roomID,
                     rootEventID: rootEventID,
                     roomTitle: displayRoomTitle,
-                    rootTitle: rootTitle
+                    rootTitle: rootTitle,
+                    focusedEventID: focusedEventID
                 )
             )
         }
@@ -1844,17 +2188,10 @@ struct RoomTimelineView: View {
         if preservesCurrentSnapshot == false {
             showJumpToLatest = false
             hasPositionedInitialTimeline = false
-            initialReadMarkerEventID = nil
+            unreadDividerEventID = nil
             timelinePosition = focusedEventID == nil ? .preparing : .focusedEvent
         }
         logTimelineEvent("initial-load-started")
-        let signpostID = PerformanceTrace.begin("TimelineInitialLoad")
-        defer {
-            PerformanceTrace.end("TimelineInitialLoad", id: signpostID)
-        }
-        await MainActor.run {
-            initialReadMarkerEventID = nil
-        }
     }
 
     private func loadTimeline() async {
@@ -1871,21 +2208,35 @@ struct RoomTimelineView: View {
         }
 
         let feed: RoomTimelineSessionFeed
+        var routedThreadRootEventID: String?
+        var routeNotice: String?
         if let focusedEventID, focusedEventID.isEmpty == false {
             guard let liveFeed = await session.open(mode: .live) else {
                 return
             }
-            if let liveMode = RoomTimelineFocusPolicy.liveModeForEventRoute(
+            // Ask Core where the event lives before choosing a provider.
+            let route = await environment.timeline.resolveEventRoute(roomID: roomID, eventID: focusedEventID)
+            switch RoomTimelineFocusPolicy.eventRouteDecision(
                 focusedEventID: focusedEventID,
+                route: route,
                 liveItems: timelineItems(from: liveFeed.initialOutcome)
             ) {
+            case let .room(liveMode?):
                 logTimelineEvent("event-route-provider", fields: ["provider": "live"])
                 feed = liveFeed.presenting(mode: liveMode)
-            } else {
+            case .room(.none):
                 guard let focusedFeed = await session.open(mode: .focused(eventID: focusedEventID)) else {
                     return
                 }
                 feed = focusedFeed
+            case let .thread(rootEventID, roomMode):
+                logTimelineEvent("event-route-provider", fields: ["provider": "live", "route": "thread"])
+                feed = liveFeed.presenting(mode: roomMode)
+                routedThreadRootEventID = rootEventID
+            case let .unavailable(notice):
+                logTimelineEvent("event-route-provider", fields: ["provider": "live", "route": "unavailable"])
+                feed = liveFeed
+                routeNotice = notice
             }
         } else {
             guard let liveFeed = await session.open(mode: .live) else {
@@ -1917,8 +2268,22 @@ struct RoomTimelineView: View {
             return
         }
 
+        let routedThread = routedThreadRootEventID
+        let notice = routeNotice
         await MainActor.run {
             applySessionFeed(feed)
+            loadedTimelineTaskID = timelineTaskID
+            // A retry reloads the room; the routed thread or notice is shown once.
+            guard let focusedEventID, handledEventRouteID != focusedEventID else {
+                return
+            }
+            handledEventRouteID = focusedEventID
+            if let notice {
+                eventRouteNotice = notice
+            }
+            if let routedThread {
+                presentThread(rootEventID: routedThread, rootTitle: nil, focusedEventID: focusedEventID)
+            }
         }
     }
 
@@ -1936,13 +2301,12 @@ struct RoomTimelineView: View {
         timelineBottomAnchorGeneration = feed.generation
         activeTimelineMode = feed.mode
         timelineProviderIsLive = feed.providerIsLive
-        initialReadMarkerEventID = {
-            if case let .unread(markerEventID) = feed.mode {
-                return markerEventID
-            }
-            return nil
-        }()
         applyTimelineOutcome(feed.initialOutcome)
+        // A provider opened at the unread marker places the divider; any
+        // other provider (jump to latest, a later page) keeps it in place.
+        if case let .unread(markerEventID) = feed.mode {
+            placeUnreadDivider(markerEventID: markerEventID)
+        }
         if StableScrollAnchoringFeatureFlag.isEnabled {
             enqueueStableInitialCommand(for: feed.mode, generation: feed.generation)
         }
@@ -1950,6 +2314,8 @@ struct RoomTimelineView: View {
             "stream-started",
             fields: ["mode": feed.mode.isLive ? "live" : "focused", "generation": "\(feed.generation)"]
         )
+        isTimelineStreamActive = true
+        let streamGeneration = feed.generation
         timelineUpdatesTask = Task {
             for await outcome in feed.updates {
                 guard Task.isCancelled == false else {
@@ -1959,6 +2325,10 @@ struct RoomTimelineView: View {
                     switch outcome {
                     case let .loaded(items):
                         applyTimelineOutcome(.loaded(items))
+                        hasReachedOldestMessages = RoomTimelinePaginationPolicy.reachedOldestAfterUpdate(
+                            hasReachedOldestMessages: hasReachedOldestMessages,
+                            backwardPagination: currentBackwardPagination
+                        )
                     case .empty:
                         timelineAvailability.recordSuccess()
                         if case .loading = state {
@@ -1990,6 +2360,9 @@ struct RoomTimelineView: View {
             if Task.isCancelled == false {
                 await MainActor.run {
                     logTimelineEvent("stream-ended")
+                    if timelineBottomAnchorGeneration == streamGeneration {
+                        isTimelineStreamActive = false
+                    }
                 }
             }
         }
@@ -2001,6 +2374,49 @@ struct RoomTimelineView: View {
         }
         timelineUpdatesTask?.cancel()
         timelineUpdatesTask = nil
+        isTimelineStreamActive = false
+    }
+
+    private var hasPresentedTimeline: Bool {
+        switch state {
+        case .loaded, .empty:
+            return true
+        case .idle, .loading, .failed:
+            return false
+        }
+    }
+
+    private var hasFailedTimelineLoad: Bool {
+        if case .failed = state {
+            return true
+        }
+        return false
+    }
+
+    private func retryFailedTimelineLoad(reason: String) {
+        guard hasFailedTimelineLoad else {
+            return
+        }
+        logTimelineEvent("timeline-auto-retry", fields: ["reason": reason])
+        state = .loading
+        Task {
+            await loadTimeline()
+        }
+    }
+
+    /// The room is back on screen with its window and stream intact: restart
+    /// only what stopped when it disappeared.
+    private func resumeTimelineAfterReappear() {
+        logTimelineEvent("room-reappeared", fields: ["items": "\(loadedTimelineItems.count)"])
+        startTypingUpdates()
+        startVerificationAutoRetry()
+        applyOutgoingQueueToTimeline()
+        if timelineProviderIsLive,
+           isTimelineBottomVisible,
+           let newestEventID = loadedTimelineItems.reversed().compactMap(\.serverEventID).first
+        {
+            scheduleMarkFullyRead(eventID: newestEventID)
+        }
     }
 
     private func startTypingUpdates() {
@@ -2024,11 +2440,19 @@ struct RoomTimelineView: View {
         typingUserIDs = []
     }
 
-    private func loadCryptoStatus() async -> RoomCryptoStatus {
+    /// Room status over the shared session status: `session` from a store
+    /// update, or the store's (recent or single-flight) read.
+    private func loadCryptoStatus(session: SessionCryptoStatus? = nil) async -> RoomCryptoStatus {
         let traceID = PerformanceTrace.begin("LoadCryptoStatus")
         defer { PerformanceTrace.end("LoadCryptoStatus", id: traceID) }
         let expectedTimelineTaskID = timelineTaskID
-        let status = await environment.crypto.roomStatus(roomID: roomID)
+        let sessionStatus: SessionCryptoStatus
+        if let session {
+            sessionStatus = session
+        } else {
+            sessionStatus = await environment.sessionCrypto.read()
+        }
+        let status = await environment.crypto.roomStatus(roomID: roomID, session: sessionStatus)
         await MainActor.run {
             guard !Task.isCancelled, expectedTimelineTaskID == timelineTaskID else { return }
             cryptoStatus = status
@@ -2069,20 +2493,29 @@ struct RoomTimelineView: View {
 
     private func startVerificationAutoRetry() {
         cryptoUpdatesTask?.cancel()
+        cryptoUpdatesTask = nil
+        guard RoomCryptoObservationPolicy.needsSessionUpdates(cryptoStatus.observing(loadedTimelineItems)) else {
+            return
+        }
         let expectedTimelineTaskID = timelineTaskID
         cryptoUpdatesTask = Task {
-            // Device-owner updates include verification and peer changes.
-            // Subscribe before reading so completion cannot be lost during a read.
-            let updates = environment.crypto.sessionDeviceUpdates()
-            for await _ in updates {
+            // The shared store's updates carry verification and recovery
+            // changes. Subscribe before reading so completion cannot be lost
+            // during a read; the store publishes only real changes.
+            let updates = environment.sessionCrypto.updates()
+            for await session in updates {
                 guard !Task.isCancelled, expectedTimelineTaskID == timelineTaskID else { return }
                 let previousStatus = cryptoStatus
-                let status = await loadCryptoStatus()
+                let status = await loadCryptoStatus(session: session)
                 guard !Task.isCancelled, expectedTimelineTaskID == timelineTaskID else { return }
                 if status != previousStatus { isCryptoBannerDismissed = false }
-                if status.observing(loadedTimelineItems).shouldRetryAfterVerification(previous: previousStatus) {
+                let observed = status.observing(loadedTimelineItems)
+                if observed.shouldRetryAfterVerification(previous: previousStatus) {
                     _ = await environment.crypto.retryDecryption(roomID: roomID)
                 }
+                // Retrying after verification is the purpose; once verified,
+                // stop holding the session-wide subscription for this room.
+                guard RoomCryptoObservationPolicy.needsSessionUpdates(observed) else { return }
             }
         }
     }
@@ -2145,7 +2578,7 @@ struct RoomTimelineView: View {
         if drafts.isEmpty {
             attachmentSendTransaction = nil
             Task {
-                await performSend(composerIntent)
+                await performSend(composerIntent, sentText: rawBody)
                 await MainActor.run {
                     isSendingMessage = false
                 }
@@ -2182,12 +2615,11 @@ struct RoomTimelineView: View {
                     attachmentSendTransaction = nil
                 }
                 if let trailingText = ComposerAttachmentSendPlan.trailingText(in: plan) {
-                    await performSend(composerIntent.replacingBody(with: trailingText))
+                    await performSend(composerIntent.replacingBody(with: trailingText), sentText: rawBody)
                 } else {
                     await MainActor.run {
                         uploadState = .idle
-                        draft = ""
-                        environment.drafts.clearDraft(roomID: roomID)
+                        finishComposerSend(sentText: rawBody, persisting: true)
                         completeComposerRelation()
                         if StableScrollAnchoringFeatureFlag.isEnabled {
                             followLatestAfterSend()
@@ -2204,6 +2636,21 @@ struct RoomTimelineView: View {
     }
 
     private func retryFailedMessage(_ item: TimelineItem) {
+        guard item.isLocalPending else {
+            // An SDK local echo: Core retries the same request (unwedge or
+            // wake the room queue); it never sends a second event.
+            sendError = nil
+            Task {
+                let retried = await environment.outgoingSends.retryLocalEcho(item, roomID: roomID)
+                await MainActor.run {
+                    if retried == false {
+                        sendError = MessageSendError.failed.localizedDescription
+                        SynaraHaptics.trigger(.warning)
+                    }
+                }
+            }
+            return
+        }
         guard let queued = environment.outgoingSends.retry(
             item,
             roomID: roomID,
@@ -2220,13 +2667,46 @@ struct RoomTimelineView: View {
         }
     }
 
+    /// Discard an unsent own message: a pending row Core never accepted, or
+    /// an SDK local echo (Core aborts it in the send queue).
+    private func discardFailedMessage(_ item: TimelineItem) {
+        sendError = nil
+        Task {
+            let discarded = await environment.outgoingSends.discard(item, roomID: roomID)
+            await MainActor.run {
+                switch discarded {
+                case .some(true):
+                    removeDiscardedRow(item)
+                case .some(false):
+                    // Already sent: the row becomes the sent message.
+                    break
+                case .none:
+                    sendError = String(localized: "The unsent message could not be discarded.")
+                    SynaraHaptics.trigger(.warning)
+                }
+            }
+        }
+    }
+
+    /// The SDK removes a discarded echo with its next timeline update; drop
+    /// the row now so it does not linger as Failed.
+    private func removeDiscardedRow(_ item: TimelineItem) {
+        guard case let .loaded(items, isPaginating) = state else {
+            return
+        }
+        state = .loaded(items.filter { $0.id != item.id }, isPaginating: isPaginating)
+    }
+
+    /// `sentText` is the composer text when the send began; only that is
+    /// cleared once the send is accepted.
     @MainActor
     private func performSend(
         body rawBody: String,
         replyToEventID: String?,
         threadRootEventID: String?,
         editEventID: String?,
-        retrying failedItem: TimelineItem? = nil
+        retrying failedItem: TimelineItem? = nil,
+        sentText: String
     ) async {
         let draftBody = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
         guard draftBody.isEmpty == false else {
@@ -2254,8 +2734,7 @@ struct RoomTimelineView: View {
                 }
                 let item = try await environment.messageSender.send(request)
                 replace(item)
-                draft = ""
-                environment.drafts.clearDraft(roomID: roomID)
+                finishComposerSend(sentText: sentText, persisting: true)
                 completeComposerRelation()
                 sendError = nil
             } catch {
@@ -2265,8 +2744,12 @@ struct RoomTimelineView: View {
             return
         }
 
+        // The message is written to the durable outbox and the draft cleared
+        // in one write, then handed to Core at once (whatever the sync state).
+        let clientTransactionID = OutgoingQueuedMessage.newClientTransactionID()
         let queued = environment.outgoingSends.enqueue(
-            localID: failedItem?.id ?? "$pending-\(UUID().uuidString)",
+            localID: failedItem?.id ?? "$pending-\(clientTransactionID)",
+            clientTransactionID: clientTransactionID,
             roomID: roomID,
             body: body,
             formattedBody: request.formattedBody,
@@ -2274,7 +2757,8 @@ struct RoomTimelineView: View {
             threadRootEventID: threadRootEventID,
             senderID: currentUserID,
             senderAvatarURL: ownAvatarURL,
-            timestamp: failedItem?.timestamp ?? Date()
+            timestamp: failedItem?.timestamp ?? Date(),
+            clearingDraft: true
         )
         registerSendAnimation(for: queued.id, isRetry: failedItem != nil)
         applyOutgoingQueueToTimeline()
@@ -2284,8 +2768,8 @@ struct RoomTimelineView: View {
             sendLatestRequest &+= 1
         }
 
-        draft = ""
-        environment.drafts.clearDraft(roomID: roomID)
+        // The outbox write above already cleared the stored draft.
+        finishComposerSend(sentText: sentText, persisting: false)
         completeComposerRelation()
         sendError = nil
 
@@ -2299,7 +2783,7 @@ struct RoomTimelineView: View {
         defer {
             PerformanceTrace.end("MessageSend", id: signpostID)
         }
-        await environment.outgoingSends.transmitIfNeeded(id: id)
+        await environment.outgoingSends.flush()
         await MainActor.run {
             applyOutgoingQueueToTimeline()
             guard let status = environment.outgoingSends.queue.item(id: id)?.deliveryStatus else {
@@ -2309,7 +2793,7 @@ struct RoomTimelineView: View {
             case .sent:
                 sendError = nil
                 SynaraHaptics.trigger(.lightImpact)
-                if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1",
+                if SynaraLaunchEnvironment.isUITest,
                    case let .loaded(items, _) = state,
                    let confirmed = items.first(where: { $0.id == id })
                 {
@@ -2323,20 +2807,8 @@ struct RoomTimelineView: View {
         }
     }
 
-    private func flushOutgoingSendsIfReady(_ status: MatrixSyncStatus) {
-        guard OutgoingSendPolicy.isSendReady(status) else {
-            return
-        }
-        Task {
-            await environment.outgoingSends.flushWhenSendReady()
-            await MainActor.run {
-                applyOutgoingQueueToTimeline()
-            }
-        }
-    }
-
     private func applyOutgoingQueueToTimeline() {
-        let pendingItems = environment.outgoingSends.queue.timelineItems(in: roomID)
+        let pendingItems = environment.outgoingSends.queue.timelineItems(in: roomID, threadRootEventID: nil)
         switch OutgoingQueueTimelineMerge.applying(
             pendingItems: pendingItems,
             to: outgoingQueuePresentation
@@ -2417,7 +2889,7 @@ struct RoomTimelineView: View {
     #if canImport(UIKit)
         private func draftCameraImage(_ image: UIImage) {
             guard let data = MediaAttachmentSupport.jpegData(from: image) else {
-                uploadState = .failed("Attachment could not be loaded. Try again.")
+                uploadState = .failed(String(localized: "Attachment could not be loaded. Try again."))
                 return
             }
             applyIncomingDrafts([
@@ -2448,7 +2920,7 @@ struct RoomTimelineView: View {
                 )
             }
             if incoming.isEmpty {
-                uploadState = .failed("Attachment could not be loaded. Try again.")
+                uploadState = .failed(String(localized: "Attachment could not be loaded. Try again."))
                 return
             }
             applyIncomingDrafts(incoming)
@@ -2486,7 +2958,7 @@ struct RoomTimelineView: View {
                 selectedPhotos = []
                 applyIncomingDrafts(incoming)
                 if incoming.isEmpty, loadFailed {
-                    uploadState = .failed("Attachment could not be loaded. Try again.")
+                    uploadState = .failed(String(localized: "Attachment could not be loaded. Try again."))
                 }
             }
         }
@@ -2530,7 +3002,11 @@ struct RoomTimelineView: View {
     }
 
     @discardableResult
-    private func loadOlderTimeline(before eventID: String?, scrollAnchorID: String? = nil) -> Bool {
+    private func loadOlderTimeline(
+        before eventID: String?,
+        scrollAnchorID: String? = nil,
+        isFillingShortContent: Bool = false
+    ) -> Bool {
         guard let eventID,
               hasReachedOldestMessages == false,
               case .loaded(let items, false) = state
@@ -2545,7 +3021,9 @@ struct RoomTimelineView: View {
             hasPositionedInitialTimeline: hasPositionedInitialTimeline,
             isJumpingToLatest: isJumpingToLatest,
             isPaginating: false,
-            hasReachedOldestMessages: hasReachedOldestMessages
+            hasReachedOldestMessages: hasReachedOldestMessages,
+            isFillingShortContent: isFillingShortContent,
+            backwardPagination: currentBackwardPagination
         ) else {
             return false
         }
@@ -2560,8 +3038,14 @@ struct RoomTimelineView: View {
             paginationScrollAnchorID = scrollAnchorID
         }
 
-        timelinePosition = .readingHistory
-        logTimelineEvent("pagination-started", fields: ["rendered": "\(items.count)"])
+        // Filling short content is not the user leaving the live tail.
+        if isFillingShortContent == false {
+            timelinePosition = .readingHistory
+        }
+        logTimelineEvent(
+            "pagination-started",
+            fields: ["rendered": "\(items.count)", "fill": "\(isFillingShortContent)"]
+        )
         state = .loaded(items, isPaginating: true)
         Task {
             let signpostID = PerformanceTrace.begin("TimelineLoadOlder")
@@ -2572,30 +3056,30 @@ struct RoomTimelineView: View {
                   let outcome = await timelineSession.loadOlder(before: eventID)
             else {
                 await MainActor.run {
-                    state = .loaded(items, isPaginating: false)
+                    state = .loaded(loadedTimelineItems.isEmpty ? items : loadedTimelineItems, isPaginating: false)
                     paginationScrollAnchorID = nil
+                    olderPaginationCompletions &+= 1
                 }
                 return
             }
-            let updatedGeneration = await timelineSession.currentGeneration()
             await MainActor.run {
+                olderPaginationCompletions &+= 1
                 let currentItems = loadedTimelineItems.isEmpty ? items : loadedTimelineItems
                 switch outcome {
-                case let .loaded(boundedItems):
+                case let .loaded(windowItems):
+                    // The live provider stays live: the page is the same SDK
+                    // timeline growing older, and its update stream keeps
+                    // applying new messages, edits and receipts while the
+                    // viewport restores the visible anchor.
                     timelineAvailability.recordSuccess()
                     let currentServerIDs = Set(currentItems.filter { $0.isLocalPending == false }.map(\.eventID))
-                    let addedCount = boundedItems.reduce(into: 0) { count, item in
+                    let addedCount = windowItems.reduce(into: 0) { count, item in
                         if currentServerIDs.contains(item.eventID) == false {
                             count += 1
                         }
                     }
-                    stopTimelineUpdates(reason: "history-provider-activated")
-                    timelineBottomAnchorGeneration = updatedGeneration
-                    activeTimelineMode = .focused(eventID: eventID)
-                    timelineProviderIsLive = false
-                    let merged = mergeTimelineItems(boundedItems, isPaginating: false)
+                    let merged = mergeTimelineItems(windowItems, isPaginating: false)
                     state = .loaded(merged, isPaginating: false)
-                    showJumpToLatest = true
                     logTimelineEvent(
                         "pagination-completed",
                         fields: ["added": "\(addedCount)", "rendered": "\(merged.count)"]
@@ -2702,8 +3186,8 @@ struct RoomTimelineView: View {
                 }
                 markFullyReadTask = nil
                 if didAcknowledge {
+                    // The divider stays where it was until the room is left.
                     lastMarkedFullyReadEventID = observation.receiptEventID
-                    initialReadMarkerEventID = observation.visibleEventID
                     showJumpToLatest = false
                 }
                 if let nextObservation = readMarkerQueue.pending {
@@ -2746,6 +3230,7 @@ struct RoomTimelineView: View {
         hasUserInteractedWithTimeline = false
         isJumpingToLatest = true
         pendingLastReadEventID = nil
+        lastReadJumpEventID = nil
         showJumpToLatest = true
 
         if timelineProviderIsLive {
@@ -2764,7 +3249,6 @@ struct RoomTimelineView: View {
                 guard self.timelineSession === timelineSession else { return }
                 switch transition {
                 case let .succeeded(feed):
-                    initialReadMarkerEventID = nil
                     hasPositionedInitialTimeline = true
                     timelinePosition = .placingInitial
                     applySessionFeed(feed)
@@ -2826,6 +3310,7 @@ struct RoomTimelineView: View {
         hasReachedOldestMessages = false
         hasUserInteractedWithTimeline = false
         pendingLastReadEventID = nil
+        lastReadJumpEventID = nil
 
         // Already following the live tail: pin the current rows. Remounting
         // would drop local echoes and just-uploaded attachments that the live
@@ -2862,7 +3347,6 @@ struct RoomTimelineView: View {
                 guard self.timelineSession === timelineSession else { return }
                 switch transition {
                 case let .succeeded(feed):
-                    initialReadMarkerEventID = nil
                     hasPositionedInitialTimeline = false
                     timelinePosition = .placingInitial
                     applySessionFeed(feed)
@@ -2937,21 +3421,135 @@ struct RoomTimelineView: View {
     }
 
     private func jumpToLastRead(eventID: String) {
-        guard let timelineSession else { return }
+        guard let timelineSession, lastReadJumpEventID == nil else { return }
         let routeID = stableViewportRouteID
         cancelMarkFullyRead()
-        Task {
-            guard let feed = await timelineSession.open(mode: .unread(markerEventID: eventID)) else { return }
-            await MainActor.run {
-                guard self.timelineSession === timelineSession, stableViewportRouteID == routeID else { return }
-                let hasAnchor = timelineItems(from: feed.initialOutcome).contains(where: { $0.serverEventID == eventID })
-                pendingLastReadEventID = hasAnchor ? nil : eventID
-                hasPositionedInitialTimeline = false
-                // Bind the returned generation even on failure; applying a
-                // failed outcome preserves the last nonempty rendered window.
-                applySessionFeed(feed)
+        lastReadJumpEventID = eventID
+        // The legacy scroll view places a read marker only when a provider opens.
+        let isStableViewport = StableScrollAnchoringFeatureFlag.isEnabled
+        switch RoomTimelineJumpLastReadPolicy.route(
+            markerEventID: eventID,
+            providerIsLive: timelineProviderIsLive && isStableViewport,
+            loadedServerEventIDs: loadedTimelineItems.compactMap(\.serverEventID)
+        ) {
+        case .scrollLiveWindow:
+            logTimelineEvent("jump-last-read", fields: ["provider": "live"])
+            pendingLastReadEventID = nil
+            placeUnreadDivider(markerEventID: eventID)
+            activeTimelineMode = .unread(markerEventID: eventID)
+            timelinePosition = .readingHistory
+            enqueueStableViewportCommand(.readMarker(eventID: eventID), generation: timelineBottomAnchorGeneration)
+        case .openFocusedWindow:
+            logTimelineEvent("jump-last-read", fields: ["provider": "focused"])
+            Task {
+                // Its own stream key: the live stream keeps running until the
+                // focused window is known to hold the marker.
+                let result = await timelineSession.switchProvider(
+                    to: .unread(markerEventID: eventID),
+                    holding: eventID
+                )
+                await MainActor.run {
+                    guard self.timelineSession === timelineSession, stableViewportRouteID == routeID else { return }
+                    switch result {
+                    case let .switched(feed):
+                        pendingLastReadEventID = nil
+                        hasPositionedInitialTimeline = false
+                        applySessionFeed(feed)
+                        if isStableViewport == false {
+                            lastReadJumpEventID = nil
+                        }
+                    case .missing, .failed:
+                        lastReadJumpEventID = nil
+                        failJumpToLastRead()
+                    case .superseded:
+                        lastReadJumpEventID = nil
+                    }
+                }
             }
         }
+    }
+
+    /// The last-read message could not be shown: say so and stay on, or
+    /// return to, the latest messages. Never a silent no-op.
+    private func failJumpToLastRead() {
+        logTimelineEvent("jump-last-read-unavailable")
+        pendingLastReadEventID = nil
+        eventRouteNotice = TimelineEventRouteNotice.lastReadUnavailable
+        guard StableScrollAnchoringFeatureFlag.isEnabled else {
+            sendLatestRequest &+= 1
+            return
+        }
+        Task { @MainActor in
+            await Task.yield()
+            jumpToLatestStable(currentItems: loadedTimelineItems, dismissComposer: false)
+        }
+    }
+
+    /// Pages an event-focused window toward the present when the user
+    /// reaches its newest row, and hands over to the live provider once the
+    /// window reaches the live tail.
+    private func loadNewerTimelineIfNeeded() {
+        guard RoomTimelineForwardPaginationPolicy.shouldLoadNewer(
+            providerIsLive: timelineProviderIsLive,
+            isPinned: isTimelineBottomVisible,
+            hasPendingPlacement: stableViewportCommand != nil,
+            isJumpingToLatest: isJumpingToLatest,
+            isLoadingNewer: isLoadingNewerTimeline
+        ),
+            hasPositionedInitialTimeline,
+            case .loaded = state,
+            let timelineSession
+        else {
+            return
+        }
+        let now = Date()
+        guard now.timeIntervalSince(lastNewerPaginationAt) >= Self.olderPaginationDebounceInterval else {
+            return
+        }
+        lastNewerPaginationAt = now
+        isLoadingNewerTimeline = true
+        logTimelineEvent("forward-pagination-started", fields: ["rendered": "\(loadedTimelineItems.count)"])
+        Task {
+            let outcome = await timelineSession.loadNewer()
+            await MainActor.run {
+                guard self.timelineSession === timelineSession else { return }
+                isLoadingNewerTimeline = false
+                guard let outcome else { return }
+                switch outcome {
+                case let .loaded(windowItems):
+                    timelineAvailability.recordSuccess()
+                    state = .loaded(
+                        mergeTimelineItems(windowItems, isPaginating: false),
+                        isPaginating: currentTimelineIsPaginating
+                    )
+                    logTimelineEvent("forward-pagination-completed", fields: ["rendered": "\(loadedTimelineItems.count)"])
+                case .empty:
+                    logTimelineEvent("forward-pagination-reached-live")
+                    if RoomTimelineForwardPaginationPolicy.shouldReturnToLive(
+                        outcome: outcome,
+                        isPinned: isTimelineBottomVisible,
+                        hasUserScrolled: hasUserInteractedWithTimeline
+                    ) {
+                        if StableScrollAnchoringFeatureFlag.isEnabled {
+                            jumpToLatestStable(currentItems: loadedTimelineItems, dismissComposer: false, animated: false)
+                        } else {
+                            sendLatestRequest &+= 1
+                        }
+                    }
+                case let .failed(failure):
+                    timelineAvailability.recordFailure(failure, preservingRows: true)
+                    logTimelineEvent("forward-pagination-failed", fields: ["code": failure.diagnosticCode])
+                }
+            }
+        }
+    }
+
+    /// Core's backward pagination state for the provider on screen.
+    private var currentBackwardPagination: TimelineBackwardPagination {
+        environment.timeline.backwardPagination(
+            roomID: roomID,
+            focusedEventID: timelineProviderFocusedEventID
+        )
     }
 
     private func enqueueStableInitialCommand(for mode: RoomTimelineMode, generation: UInt64) {
@@ -2985,9 +3583,14 @@ struct RoomTimelineView: View {
 
     private func handleStableBottomPinnedChanged(isPinned: Bool, newestEventID: String?) {
         isTimelineBottomVisible = isPinned
+        if isPinned, timelineProviderIsLive == false {
+            loadNewerTimelineIfNeeded()
+        }
         if isPinned, timelineProviderIsLive {
             guard RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(
-                position: timelinePosition
+                position: timelinePosition,
+                hasPendingPlacement: stableViewportCommand != nil,
+                isUserDragging: isUserDraggingTimeline
             ) else {
                 return
             }
@@ -3043,6 +3646,10 @@ struct RoomTimelineView: View {
     }
 
     private func resumeLivePresentationAtBottom() {
+        if timelineProviderIsLive, let timelineSession {
+            // Back on the live tail: later updates may trim the rows above.
+            Task { await timelineSession.followLiveTail() }
+        }
         let nextMode = RoomTimelineProviderPresentationPolicy.modeWhenPinned(
             providerIsLive: timelineProviderIsLive,
             currentMode: activeTimelineMode
@@ -3050,8 +3657,8 @@ struct RoomTimelineView: View {
         guard nextMode != activeTimelineMode else {
             return
         }
+        // Following the live tail keeps the unread divider where it is.
         activeTimelineMode = nextMode
-        initialReadMarkerEventID = nil
     }
 
     private func handleStableCommandCompleted(
@@ -3081,23 +3688,32 @@ struct RoomTimelineView: View {
                 )
             }
         case let .readMarker(eventID):
-            if success == false { pendingLastReadEventID = eventID }
             hasPositionedInitialTimeline = true
             timelinePosition = .readingHistory
             showJumpToLatest = true
+            if lastReadJumpEventID == eventID {
+                lastReadJumpEventID = nil
+                // A drag interrupting the placement is not a failure; a
+                // window without the marker is.
+                if success == false,
+                   loadedTimelineItems.contains(where: { $0.serverEventID == eventID }) == false
+                {
+                    failJumpToLastRead()
+                }
+            } else if success == false {
+                pendingLastReadEventID = eventID
+            }
         case .focused:
             hasAnchoredEvent = success
             hasPositionedInitialTimeline = true
             timelinePosition = .focusedEvent
             showJumpToLatest = targetEventID != loadedTimelineItems.last?.eventID
             if success == false {
-                timelineAvailability.recordFailure(
-                    TimelineLoadFailure(
-                        kind: .viewUnavailable,
-                        diagnosticCode: "timeline-focused-event-unavailable"
-                    ),
-                    preservingRows: true
-                )
+                // The rows loaded but the routed message is not among them (a
+                // hidden event, or Core fell back to the live room). Say so
+                // rather than reporting the whole timeline unavailable.
+                eventRouteNotice = TimelineEventRouteNotice.notShown
+                logTimelineEvent("timeline-focused-event-unavailable")
                 shouldRecoverMissingFocus = true
             }
         }
@@ -3164,14 +3780,47 @@ struct RoomTimelineView: View {
     }
 
     @MainActor
-    private func performSend(_ intent: ComposerSendIntent) async {
+    private func performSend(_ intent: ComposerSendIntent, sentText: String) async {
         await performSend(
             body: intent.body,
             replyToEventID: intent.replyToEventID,
             threadRootEventID: intent.threadRootEventID,
             editEventID: intent.editEventID,
-            retrying: intent.retrying
+            retrying: intent.retrying,
+            sentText: sentText
         )
+    }
+
+    /// A send that began with `sentText` was accepted. The composer drops
+    /// that text from its live contents and keeps anything typed since (the
+    /// keyboard stays up, so the user may have gone on typing during an
+    /// upload or edit save). `draft` is left to the composer: it lags the
+    /// editor by a debounce, and clearing it here would lose the newest
+    /// keystrokes.
+    private func finishComposerSend(sentText: String, persisting: Bool) {
+        if persisting {
+            let remaining = ComposerSentDraft.remainingText(current: draft, sent: sentText)
+            if remaining.isEmpty {
+                environment.drafts.clearDraft(roomID: roomID)
+            } else {
+                environment.drafts.setDraft(remaining, roomID: roomID)
+            }
+        }
+        sentDraftSerial &+= 1
+        sentDraft = ComposerSentDraft(id: sentDraftSerial, sentText: sentText)
+    }
+
+    /// A pill or quick reaction: toggles the user's reaction, and records
+    /// an added one in the recent-emoji list desktop shares.
+    private func toggleReaction(_ key: String, on item: TimelineItem) {
+        let isAdding = item.reactionOwnership.contains(key) == false
+        let matrix = environment.matrix
+        Task {
+            let succeeded = await performAction(.react(key), to: item)
+            if succeeded, isAdding {
+                await quickReactions.recordUse(key) { await matrix.recordRecentEmoji($0) }
+            }
+        }
     }
 
     private func applyAction(
@@ -3240,7 +3889,7 @@ struct RoomTimelineView: View {
                 roomID: roomID
             )
             replace(updated)
-            timelineActionMessage = "Message forwarded."
+            timelineActionMessage = String(localized: "Message forwarded.")
             return nil
         } catch let error as EventActionError {
             return error
@@ -3274,9 +3923,11 @@ struct RoomTimelineView: View {
     private func appendAcknowledgedUpload(_ item: TimelineItem) {
         // HTTP send completion precedes the timeline echo. Reuse the same local
         // echo lifecycle as text, preserving the exact acknowledged event ID.
+        // A queued upload arrives already pending under its transaction id and
+        // keeps that state until the SDK echo for the same transaction shows.
         let merged = TimelinePendingReconciler.merge(
             streamItems: loadedTimelineItems,
-            localItems: [item.withDeliveryStatus(.sent)],
+            localItems: [item.isLocalPending ? item : item.withDeliveryStatus(.sent)],
             currentUserID: currentUserID
         )
         state = .loaded(merged, isPaginating: currentTimelineIsPaginating)
@@ -3316,13 +3967,13 @@ struct RoomTimelineView: View {
         case let .failure(error):
             switch error {
             case let .unsupportedKind(unsupported):
-                agentActionMessage = "Unsupported action: \(unsupported)"
+                agentActionMessage = String(localized: "Unsupported action: \(unsupported)")
             case .missingPayload:
-                agentActionMessage = "Action payload is missing"
+                agentActionMessage = String(localized: "Action payload is missing")
             case .unsafeURL:
-                agentActionMessage = "Action link is not allowed"
+                agentActionMessage = String(localized: "Action link is not allowed")
             case .encodingFailure:
-                agentActionMessage = "Could not copy action payload"
+                agentActionMessage = String(localized: "Could not copy action payload")
             }
         }
     }
@@ -3348,15 +3999,18 @@ struct RoomTimelineView: View {
                     } else {
                         SynaraHaptics.trigger(.lightImpact)
                     }
-                    agentActionMessage = decision == .approve ? "Agent action approved" : "Agent action rejected"
+                    agentActionMessage = decision == .approve
+                        ? String(localized: "Agent action approved")
+                        : String(localized: "Agent action rejected")
                 }
             } catch let error as SynaraAgentApprovalError {
                 await MainActor.run {
-                    agentActionMessage = error.errorDescription ?? "Agent action could not be submitted"
+                    agentActionMessage = error.errorDescription
+                        ?? String(localized: "Agent action could not be submitted")
                 }
             } catch {
                 await MainActor.run {
-                    agentActionMessage = "Agent action could not be submitted"
+                    agentActionMessage = String(localized: "Agent action could not be submitted")
                 }
             }
         }
@@ -3379,16 +4033,17 @@ struct RoomTimelineView: View {
                         SynaraHaptics.trigger(.success)
                     }
                     agentActionMessage = outcome == .alreadyDecided
-                        ? "This approval was already decided on this account."
-                        : "Approval decision sent."
+                        ? String(localized: "This approval was already decided on this account.")
+                        : String(localized: "Approval decision sent.")
                 }
             } catch let error as SynaraAgentApprovalError {
                 await MainActor.run {
-                    agentActionMessage = error.errorDescription ?? "Approval decision could not be submitted."
+                    agentActionMessage = error.errorDescription
+                        ?? String(localized: "Approval decision could not be submitted.")
                 }
             } catch {
                 await MainActor.run {
-                    agentActionMessage = "Approval decision could not be submitted."
+                    agentActionMessage = String(localized: "Approval decision could not be submitted.")
                 }
             }
         }
@@ -3408,6 +4063,30 @@ private enum TimelineViewState: Equatable {
     case empty
     case failed(String)
     case loaded([TimelineItem], isPaginating: Bool)
+}
+
+private struct TimelineEventRouteNoticeBanner: View {
+    let message: String
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: SynaraSpacing.small) {
+            Image(systemName: "info.circle")
+                .foregroundStyle(SynaraColor.secondaryText)
+            Text(message)
+                .font(SynaraTypography.supporting)
+                .foregroundStyle(SynaraColor.secondaryText)
+            Spacer(minLength: SynaraSpacing.small)
+            Button("Dismiss", action: onDismiss)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityIdentifier("TimelineEventRouteNoticeDismiss")
+        }
+        .padding(.horizontal, SynaraSpacing.medium)
+        .padding(.vertical, SynaraSpacing.xSmall)
+        .background(SynaraColor.surface)
+        .accessibilityIdentifier("TimelineEventRouteNotice")
+    }
 }
 
 private struct TimelineAvailabilityBanner: View {
@@ -3475,7 +4154,7 @@ private struct RoomIdentityWarningBanner: View {
                 if failed {
                     Text("Couldn't update this identity change.")
                         .font(SynaraTypography.messageMeta)
-                        .foregroundStyle(SynaraColor.critical)
+                        .foregroundStyle(SynaraColor.criticalText)
                 }
             }
             Spacer(minLength: SynaraSpacing.small)
@@ -3562,29 +4241,47 @@ private struct JumpToLatestButton: View {
     }
 }
 
-private struct JumpToLastReadButton: View {
+struct JumpToLastReadButton: View {
     let action: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: SynaraSpacing.xSmall) {
-                Image(systemName: "arrow.up.to.line")
-                    .font(.system(size: 13, weight: .bold))
-                Text("Jump to Last Read")
-                    .font(SynaraTypography.fineMetaBold)
+            if SynaraDynamicTypeLayout.jumpToLastReadShowsTitle(dynamicTypeSize) {
+                HStack(spacing: SynaraSpacing.xSmall) {
+                    Image(systemName: "arrow.up.to.line")
+                        .font(.system(size: 13, weight: .bold))
+                    Text("Jump to Last Read")
+                        .font(SynaraTypography.fineMetaBold)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, SynaraSpacing.medium)
+                .frame(minHeight: SynaraHitTarget.minimum)
+                .background(
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(SynaraColor.separator.opacity(0.8), lineWidth: 1)
+                )
+                .foregroundStyle(SynaraColor.accentText)
+                .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
+            } else {
+                // At accessibility sizes the titled pill spans most of the
+                // width over the messages; match Jump to latest instead.
+                ZStack {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                    Circle()
+                        .stroke(SynaraColor.separator.opacity(0.8), lineWidth: 1)
+                    Image(systemName: "arrow.up.to.line")
+                        .font(.system(size: 17, weight: .bold))
+                }
+                .frame(width: SynaraHitTarget.minimum, height: SynaraHitTarget.minimum)
+                .foregroundStyle(SynaraColor.accent)
+                .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
             }
-            .padding(.horizontal, SynaraSpacing.medium)
-            .frame(height: 36)
-            .background(
-                Capsule()
-                    .fill(.ultraThinMaterial)
-            )
-            .overlay(
-                Capsule()
-                    .stroke(SynaraColor.separator.opacity(0.8), lineWidth: 1)
-            )
-            .foregroundStyle(SynaraColor.accent)
-            .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Jump to last read message")
@@ -3595,12 +4292,15 @@ private struct JumpToLastReadButton: View {
 private struct TimelineHeader: View {
     let title: String
     let subtitle: String
+    var glyph: SynaraRoomGlyph = .channel
+    var avatarURL: URL?
     let cryptoLabel: String?
     let cryptoSystemImage: String
     var showsBackButton = true
     let onSearch: () -> Void
     let onDetails: () -> Void
     let onBack: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
@@ -3608,45 +4308,65 @@ private struct TimelineHeader: View {
                 Button(action: onBack) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 19, weight: .semibold))
-                        .frame(width: 34, height: 34)
+                        .frame(width: SynaraHitTarget.minimum, height: SynaraHitTarget.minimum)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .padding(.leading, -5)
                 .accessibilityLabel("Back")
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: SynaraSpacing.xSmall) {
-                    Text("#")
-                        .foregroundStyle(SynaraColor.secondaryText)
+                HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.xSmall) {
+                    // At accessibility sizes the glyph would take the
+                    // title's width.
+                    if dynamicTypeSize.isAccessibilitySize == false {
+                        switch glyph {
+                        case .channel:
+                            Text("#")
+                                .foregroundStyle(SynaraColor.secondaryText)
+                                .accessibilityHidden(true)
+                        case let .person(initial):
+                            SynaraPersonGlyph(initial: initial, avatarURL: avatarURL, size: 22)
+                                .alignmentGuide(.firstTextBaseline) { dimensions in
+                                    dimensions[.bottom] - 4
+                                }
+                        }
+                    }
                     Text(title)
                         .accessibilityIdentifier("TimelineRoomTitle")
                         .font(SynaraTypography.sectionTitle.weight(.semibold))
                         .foregroundStyle(SynaraColor.headingText)
-                        .lineLimit(1)
+                        .lineLimit(SynaraDynamicTypeLayout.titleLineLimit(dynamicTypeSize))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
                 }
                 HStack(spacing: SynaraSpacing.small) {
                     Text(subtitle)
                     if let cryptoLabel {
                         Label(cryptoLabel, systemImage: cryptoSystemImage)
                             .foregroundStyle(
-                                cryptoLabel == "Encrypted"
+                                cryptoLabel == String(localized: "Encrypted")
                                     ? SynaraColor.secondaryText
-                                    : SynaraColor.warning
+                                    : SynaraColor.warningText
                             )
                             .accessibilityIdentifier("RoomEncryptionStatus")
                     }
                 }
                 .font(SynaraTypography.messageMeta)
                 .foregroundStyle(SynaraColor.secondaryText)
-                .lineLimit(1)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
             }
+            .layoutPriority(1)
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            HStack(spacing: SynaraSpacing.small) {
+            HStack(spacing: 0) {
                 Button(action: onSearch) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 17, weight: .medium))
+                        .frame(width: SynaraHitTarget.minimum, height: SynaraHitTarget.minimum)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Search messages")
@@ -3654,15 +4374,18 @@ private struct TimelineHeader: View {
                 Button(action: onDetails) {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 17, weight: .medium))
+                        .frame(width: SynaraHitTarget.minimum, height: SynaraHitTarget.minimum)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Room details")
                 .accessibilityIdentifier("RoomDetailsButton")
             }
+            .padding(.trailing, -SynaraSpacing.small)
             .foregroundStyle(SynaraColor.primaryText)
         }
         .padding(.horizontal, SynaraSpacing.large)
-        .padding(.vertical, SynaraSpacing.medium)
+        .padding(.vertical, SynaraSpacing.small)
         .background(SynaraColor.surface)
         .overlay(alignment: .bottom) {
             Divider()
@@ -3710,16 +4433,16 @@ private struct TimelineSearchSheet: View {
 
                 if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     SynaraEmptyState(
-                        title: "Search Messages",
+                        title: String(localized: "Search Messages"),
                         systemImage: "magnifyingglass",
-                        message: "Filter messages currently loaded in this room."
+                        message: String(localized: "Filter messages currently loaded in this room.")
                     )
                     .frame(maxHeight: .infinity)
                 } else if filteredItems.isEmpty {
                     SynaraEmptyState(
-                        title: "No Matching Messages",
+                        title: String(localized: "No Matching Messages"),
                         systemImage: "text.magnifyingglass",
-                        message: "Try another keyword from the loaded timeline."
+                        message: String(localized: "Try another keyword from the loaded timeline.")
                     )
                     .frame(maxHeight: .infinity)
                 } else {
@@ -3768,11 +4491,16 @@ struct ThreadTimelineView: View {
     let rootEventID: String
     let roomTitle: String?
     let rootTitle: String?
+    /// A routed reply (notification or link) to scroll to once it loads.
+    var focusedEventID: String? = nil
     @Environment(\.appEnvironment) private var environment
     @Environment(\.dismiss) private var dismiss
     @Environment(\.synaraCanvasLayout) private var canvasLayout
     @State private var state: TimelineViewState = .idle
     @State private var draft = ""
+    @State private var sentDraft: ComposerSentDraft?
+    @State private var sentDraftSerial: UInt64 = 0
+    @StateObject private var quickReactions = TimelineQuickReactionStore()
     @State private var sendError: String?
     @State private var uploadState: MediaUploadState = .idle
     @State private var selectedPhotos: [PhotosPickerItem] = []
@@ -3785,18 +4513,28 @@ struct ThreadTimelineView: View {
     @State private var pendingReplies: [TimelineItem] = []
     @State private var isLoadingEarlier = false
     @State private var reachedThreadStart = false
+    @State private var hasSettledFocusedReply = false
+    @State private var focusedReplyEarlierPages = 0
     @State private var notesActionMessage: String?
     @State private var timelineActionMessage: String?
     @State private var reportTarget: TimelineItem?
+    @State private var redactConfirmation = TimelineRedactConfirmation<TimelineItem>()
     @State private var reportReason = ""
     @State private var forwardTarget: TimelineItem?
     @State private var inFlightTimelineActionKeys: Set<String> = []
     @State private var cryptoStatus: RoomCryptoStatus = .unknown
+    @State private var replyTarget: ComposerRelationTarget?
+    @State private var editSession: ComposerEditSession?
+    @State private var viewerResource: MediaResource?
+    /// Bumped to scroll to the newest reply (after a send).
+    @State private var scrollToNewestRequest: UInt64 = 0
+    @State private var hasPlacedInitialThread = false
+    private static let bottomAnchorID = "thread-bottom-anchor"
 
     var body: some View {
         VStack(spacing: 0) {
             ThreadHeader(
-                subtitle: rootTitle ?? roomTitle ?? "Room message",
+                subtitle: rootTitle ?? roomTitle ?? String(localized: "Room message"),
                 onBack: { dismiss() }
             )
 
@@ -3807,12 +4545,14 @@ struct ThreadTimelineView: View {
             ComposerView(
                 roomID: roomID,
                 text: $draft,
-                placeholder: "Reply in thread...",
-                replyTarget: nil,
-                editTarget: nil,
+                placeholder: editSession == nil
+                    ? String(localized: "Reply in thread...")
+                    : String(localized: "Edit message..."),
+                replyTarget: replyTarget,
+                editTarget: editSession?.editTarget,
                 uploadState: uploadState,
                 sendError: sendError,
-                onCancelRelation: {},
+                onCancelRelation: clearComposerRelation,
                 onSend: sendThreadReply,
                 onMockMediaUpload: draftMockThreadAttachment,
                 onFileURL: draftThreadFile,
@@ -3824,7 +4564,8 @@ struct ThreadTimelineView: View {
                 attachmentDrafts: $attachmentDrafts,
                 isSending: isSendingMessage,
                 onPasteImages: draftThreadPastedImages,
-                isFocusedExternally: $isComposerFocused
+                isFocusedExternally: $isComposerFocused,
+                sentDraft: sentDraft
             )
             .padding(.bottom, canvasLayout == .stacked ? SynaraSpacing.large : 0)
         }
@@ -3833,6 +4574,10 @@ struct ThreadTimelineView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(canvasLayout.hidesTabBarInConversation ? .hidden : .automatic, for: .tabBar)
+        .task {
+            let matrix = environment.matrix
+            await quickReactions.refresh { await matrix.recentEmoji() }
+        }
         .task(id: roomID + rootEventID) {
             async let status = environment.crypto.roomStatus(roomID: roomID)
             if ThreadComposerFocusRequests.shared.consume(roomID: roomID, rootEventID: rootEventID) {
@@ -3850,10 +4595,16 @@ struct ThreadTimelineView: View {
         .onChange(of: selectedPhotos) { items in
             draftThreadPickedPhotos(items)
         }
+        .onReceive(environment.outgoingSends.queue.$items) { _ in
+            refreshPendingReplies()
+        }
+        .sheet(item: $viewerResource) { resource in
+            MediaViewer(resource: resource)
+        }
         .alert("Personal Notes", isPresented: notesActionMessageBinding) {
             Button("OK", role: .cancel) { notesActionMessage = nil }
         } message: {
-            Text(notesActionMessage ?? "Try again.")
+            Text(notesActionMessage ?? String(localized: "Try again."))
         }
         .sheet(item: $forwardTarget) { item in
             TimelineForwardSheet(
@@ -3870,6 +4621,9 @@ struct ThreadTimelineView: View {
                     )
                 }
             )
+        }
+        .timelineRedactConfirmation($redactConfirmation) { item in
+            applyAction(.redact, to: item)
         }
         .alert("Report Message", isPresented: Binding(
             get: { reportTarget != nil },
@@ -3896,7 +4650,7 @@ struct ThreadTimelineView: View {
                 applyAction(
                     .report(reason: trimmedReason.isEmpty ? nil : trimmedReason),
                     to: item,
-                    successMessage: "Message reported."
+                    successMessage: String(localized: "Message reported.")
                 )
             }
         } message: {
@@ -3923,65 +4677,185 @@ struct ThreadTimelineView: View {
             }
             .accessibilityIdentifier("ThreadLoading")
         case .empty:
-            SynaraEmptyState(title: "No Thread Replies", systemImage: "bubble.left.and.bubble.right", message: "Replies will appear here.")
+            SynaraEmptyState(
+                title: String(localized: "No Thread Replies"),
+                systemImage: "bubble.left.and.bubble.right",
+                message: String(localized: "Replies will appear here.")
+            )
         case let .failed(message):
-            SynaraErrorState(title: "Could Not Load Thread", message: message) {
+            SynaraErrorState(title: String(localized: "Could Not Load Thread"), message: message) {
                 Task {
                     await loadThread()
                 }
             }
         case let .loaded(items, _):
             let visibleItems = threadItems(from: items)
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: SynaraSpacing.medium) {
-                    if canLoadEarlier(visibleItems) {
-                        Button(action: loadEarlierReplies) {
-                            if isLoadingEarlier {
-                                ProgressView().controlSize(.small)
-                            } else {
-                                Label("Load earlier replies", systemImage: "arrow.up")
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                        if canLoadEarlier(visibleItems) {
+                            Button(action: loadEarlierReplies) {
+                                if isLoadingEarlier {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Label("Load earlier replies", systemImage: "arrow.up")
+                                }
                             }
+                            .font(SynaraTypography.chipLabel)
+                            .foregroundStyle(SynaraColor.accent)
+                            .buttonStyle(.plain)
+                            .disabled(isLoadingEarlier)
+                            .frame(maxWidth: .infinity)
+                            .accessibilityIdentifier("ThreadLoadEarlier")
                         }
-                        .font(SynaraTypography.chipLabel)
-                        .foregroundStyle(SynaraColor.accent)
-                        .buttonStyle(.plain)
-                        .disabled(isLoadingEarlier)
-                        .frame(maxWidth: .infinity)
-                        .accessibilityIdentifier("ThreadLoadEarlier")
-                    }
-                    ForEach(visibleItems) { item in
-                        ThreadMessageRow(
-                            item: item,
-                            availability: environment.eventActions.availability(
-                                for: item,
-                                currentUserID: currentUserID,
-                                roomID: roomID
-                            ),
-                            onReport: { beginReport(item) },
-                            onForward: { forwardTarget = item },
-                            onPollVote: { answerIDs in
-                                await performAction(
-                                    .pollVote(answerIDs: answerIDs),
-                                    to: item,
-                                    successMessage: "Vote submitted."
-                                )
-                            },
-                            onDeclineCall: {
-                                await performAction(
-                                    .declineCall,
-                                    to: item,
-                                    successMessage: "Call declined."
-                                )
-                            },
-                            onPinToNotes: { pinToNotes(item) }
+                        let dayHeaders = TimelineDayHeaderPolicy.headers(for: visibleItems)
+                        let replyPreviews = TimelineReplyPreview.previewsByEventID(
+                            in: visibleItems,
+                            currentUserID: currentUserID
                         )
+                        ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
+                            if let day = dayHeaders[item.eventID] {
+                                TimelineDayHeader(day: day)
+                                    .padding(.vertical, SynaraSpacing.xSmall)
+                            }
+                            threadRow(
+                                item,
+                                isGroupedWithPrevious: TimelineMessageGroupingPolicy.shouldGroup(
+                                    previous: index > 0 ? visibleItems[index - 1] : nil,
+                                    current: item
+                                ),
+                                replyPreviews: replyPreviews
+                            )
+                            .id(item.id)
+                        }
+                        Color.clear
+                            .frame(height: 1)
+                            .id(Self.bottomAnchorID)
+                            .accessibilityHidden(true)
+                    }
+                    .padding(.horizontal, SynaraSpacing.medium)
+                    .padding(.top, SynaraSpacing.large)
+                    .padding(.bottom, SynaraSpacing.large)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .accessibilityIdentifier("ThreadTimelineList")
+                .onAppear {
+                    anchorFocusedReply(in: visibleItems, proxy: proxy)
+                    placeInitialThread(items: visibleItems, proxy: proxy)
+                }
+                .onChange(of: visibleItems.map(\.id)) { _ in
+                    anchorFocusedReply(in: visibleItems, proxy: proxy)
+                    placeInitialThread(items: visibleItems, proxy: proxy)
+                }
+                .onChange(of: scrollToNewestRequest) { _ in
+                    DispatchQueue.main.async {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
+                        }
                     }
                 }
-                .padding(.horizontal, SynaraSpacing.xLarge)
-                .padding(.top, SynaraSpacing.large)
-                .padding(.bottom, SynaraSpacing.large)
+                .onChange(of: isLoadingEarlier) { loading in
+                    if loading == false {
+                        anchorFocusedReply(in: visibleItems, proxy: proxy)
+                    }
+                }
             }
-            .accessibilityIdentifier("ThreadTimelineList")
+        }
+    }
+
+    /// The same row as the room timeline, with the same actions; a reply
+    /// in a thread stays in this thread.
+    private func threadRow(
+        _ item: TimelineItem,
+        isGroupedWithPrevious: Bool,
+        replyPreviews: [String: TimelineReplyPreview]
+    ) -> some View {
+        TimelineRow(
+            item: item,
+            currentUserID: currentUserID,
+            timeText: item.timestamp.timelineTime,
+            isGroupedWithPrevious: isGroupedWithPrevious,
+            isTimestampRevealed: false,
+            animateSend: false,
+            replyPreview: TimelineRelationPresentation.replyPreview(
+                for: item,
+                locallyResolvedByEventID: replyPreviews
+            ),
+            replyCount: 0,
+            availability: environment.eventActions.availability(
+                for: item,
+                currentUserID: currentUserID,
+                roomID: roomID
+            ),
+            onReply: { beginReply(item) },
+            onReplyInThread: { beginReply(item) },
+            onOpenThread: {},
+            isInlineThreadMode: false,
+            isThreadExpanded: false,
+            inlineThread: nil,
+            onEdit: { beginEdit(item) },
+            onRedact: { redactConfirmation.request(item) },
+            onToggleReaction: { key in toggleReaction(key, on: item) },
+            quickReactions: quickReactions,
+            onReport: { beginReport(item) },
+            onForward: { forwardTarget = item },
+            onPollVote: { answerIDs in
+                await performAction(
+                    .pollVote(answerIDs: answerIDs),
+                    to: item,
+                    successMessage: String(localized: "Vote submitted.")
+                )
+            },
+            onDeclineCall: {
+                await performAction(
+                    .declineCall,
+                    to: item,
+                    successMessage: String(localized: "Call declined.")
+                )
+            },
+            onPinToNotes: { pinToNotes(item) },
+            onOpenMedia: { resource in viewerResource = resource },
+            onAgentAction: { _ in },
+            onAgentApprovalReaction: { _ in },
+            onRetryFailedSend: { retryFailedReply(item) },
+            onDiscardFailedSend: { discardFailedReply(item) }
+        )
+    }
+
+    /// A thread opened without a routed reply starts at its newest reply,
+    /// like the room timeline.
+    private func placeInitialThread(items: [TimelineItem], proxy: ScrollViewProxy) {
+        guard focusedEventID == nil, hasPlacedInitialThread == false, items.isEmpty == false else {
+            return
+        }
+        hasPlacedInitialThread = true
+        DispatchQueue.main.async {
+            proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
+        }
+    }
+
+    /// Scroll a routed thread to its reply, loading earlier pages until the
+    /// reply is in the window or the policy gives up.
+    private func anchorFocusedReply(in items: [TimelineItem], proxy: ScrollViewProxy) {
+        guard let focusedEventID, hasSettledFocusedReply == false, isLoadingEarlier == false else {
+            return
+        }
+        switch ThreadFocusAnchorPolicy.nextStep(
+            focusedEventID: focusedEventID,
+            items: items,
+            canLoadEarlier: canLoadEarlier(items),
+            earlierPagesLoaded: focusedReplyEarlierPages
+        ) {
+        case let .scroll(itemID):
+            hasSettledFocusedReply = true
+            DispatchQueue.main.async {
+                proxy.scrollTo(itemID, anchor: .center)
+            }
+        case .loadEarlier:
+            focusedReplyEarlierPages += 1
+            loadEarlierReplies()
+        case .settle:
+            hasSettledFocusedReply = true
         }
     }
 
@@ -4031,20 +4905,41 @@ struct ThreadTimelineView: View {
         case let .loaded(items):
             snapshotItems = items
             pendingReplies = ThreadTimelineMerge.unresolved(pending: pendingReplies, snapshot: items)
+            // The room timeline never shows thread replies, so this thread
+            // confirms its own queued sends.
+            environment.outgoingSends.dropConfirmed(matching: items)
             if items.contains(where: { $0.eventID == rootEventID }) {
                 reachedThreadStart = true
             }
             showMergedItems()
         case .empty:
-            state = pendingReplies.isEmpty ? .empty : .loaded(pendingReplies, isPaginating: false)
+            showMergedItems()
         case let .failed(failure):
             state = .failed(failure.userMessage)
         }
     }
 
+    /// Uploads this screen sent, plus this thread's queued text sends: each
+    /// shows once, until the thread stream has its local or remote echo.
+    private var pendingThreadItems: [TimelineItem] {
+        pendingReplies + environment.outgoingSends.queue.timelineItems(
+            in: roomID,
+            threadRootEventID: rootEventID
+        )
+    }
+
     private func showMergedItems() {
-        let merged = ThreadTimelineMerge.merged(snapshot: snapshotItems, pending: pendingReplies)
+        let merged = ThreadTimelineMerge.merged(snapshot: snapshotItems, pending: pendingThreadItems)
         state = merged.isEmpty ? .empty : .loaded(merged, isPaginating: false)
+    }
+
+    private func refreshPendingReplies() {
+        switch state {
+        case .loaded, .empty:
+            showMergedItems()
+        case .idle, .loading, .failed:
+            break
+        }
     }
 
     /// The thread stream reaches its start when the root is loaded.
@@ -4066,6 +4961,9 @@ struct ThreadTimelineView: View {
                     applyThreadOutcome(outcome)
                 case .empty:
                     reachedThreadStart = true
+                    if focusedEventID != nil, hasSettledFocusedReply == false {
+                        hasSettledFocusedReply = true
+                    }
                 case let .failed(failure):
                     timelineActionMessage = failure.userMessage
                 }
@@ -4095,6 +4993,19 @@ struct ThreadTimelineView: View {
     private func beginReport(_ item: TimelineItem) {
         reportReason = ""
         reportTarget = item
+    }
+
+    /// A pill or quick reaction: toggles the user's reaction, and records
+    /// an added one in the recent-emoji list desktop shares.
+    private func toggleReaction(_ key: String, on item: TimelineItem) {
+        let isAdding = item.reactionOwnership.contains(key) == false
+        let matrix = environment.matrix
+        Task {
+            let succeeded = await performAction(.react(key), to: item)
+            if succeeded, isAdding {
+                await quickReactions.recordUse(key) { await matrix.recordRecentEmoji($0) }
+            }
+        }
     }
 
     private func applyAction(
@@ -4159,7 +5070,7 @@ struct ThreadTimelineView: View {
                 currentUserID: currentUserID,
                 roomID: roomID
             )
-            timelineActionMessage = "Message forwarded."
+            timelineActionMessage = String(localized: "Message forwarded.")
             return nil
         } catch let error as EventActionError {
             return error
@@ -4174,9 +5085,9 @@ struct ThreadTimelineView: View {
             await MainActor.run {
                 switch result {
                 case .success:
-                    notesActionMessage = "Message pinned to your private room notes."
+                    notesActionMessage = String(localized: "Message pinned to your private room notes.")
                 case .failure(let error):
-                    notesActionMessage = error.errorDescription ?? "The message could not be pinned."
+                    notesActionMessage = error.errorDescription ?? String(localized: "The message could not be pinned.")
                 }
             }
         }
@@ -4198,6 +5109,14 @@ struct ThreadTimelineView: View {
 
         sendError = nil
         isSendingMessage = true
+        // The relation belongs to the send gesture, not to composer state
+        // after an upload has started.
+        let intent = ComposerEditFlow.sendIntent(
+            body: rawBody,
+            replyToEventID: replyTarget?.eventID,
+            threadRootEventID: rootEventID,
+            session: editSession
+        )
         let plan = ComposerAttachmentSendPlan.reusableOrNew(
             existing: attachmentSendSteps,
             drafts: drafts,
@@ -4212,7 +5131,7 @@ struct ThreadTimelineView: View {
                     drafts,
                     steps: plan,
                     roomID: roomID,
-                    replyToEventID: nil,
+                    replyToEventID: intent.replyToEventID,
                     threadRootEventID: rootEventID,
                     uploader: environment.mediaUploader,
                     onState: { state in
@@ -4241,46 +5160,204 @@ struct ThreadTimelineView: View {
                 await MainActor.run {
                     attachmentSendSteps = nil
                     uploadState = .idle
-                    draft = ""
+                    finishComposerSend(sentText: rawBody)
                     isSendingMessage = false
                 }
                 return
             }
 
+            await MainActor.run {
+                attachmentSendSteps = nil
+                isSendingMessage = false
+            }
+            await sendThreadText(intent.replacingBody(with: trailingText), sentText: rawBody)
+        }
+    }
+
+    /// Text goes through the same durable outbox as the room composer, so a
+    /// thread reply has the same Sending / Failed state, Retry and Discard,
+    /// and shows once: the queued row gives way to the SDK echo with the
+    /// same transaction id.
+    @MainActor
+    private func sendThreadText(_ intent: ComposerSendIntent, sentText: String) async {
+        let draftBody = intent.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard draftBody.isEmpty == false else {
+            sendError = MessageSendError.emptyMessage.localizedDescription
+            return
+        }
+        let formattedBody = ComposerMatrixFormatting.formattedBody(for: draftBody)
+        let body = ComposerMatrixFormatting.plainBody(for: draftBody, formattedBody: formattedBody)
+
+        if let editEventID = intent.editEventID {
             do {
                 let signpostID = PerformanceTrace.begin("ThreadMessageSend")
                 defer {
                     PerformanceTrace.end("ThreadMessageSend", id: signpostID)
                 }
-                let formattedBody = ComposerMatrixFormatting.formattedBody(for: trailingText)
-                let item = try await environment.messageSender.send(
+                _ = try await environment.messageSender.send(
                     MessageSendRequest(
                         roomID: roomID,
-                        body: ComposerMatrixFormatting.plainBody(for: trailingText, formattedBody: formattedBody),
+                        body: body,
                         formattedBody: formattedBody,
                         replyToEventID: nil,
-                        editEventID: nil,
+                        editEventID: editEventID,
                         threadRootEventID: rootEventID
                     )
                 )
-                await MainActor.run {
-                    attachmentSendSteps = nil
-                    draft = ""
-                    append(item)
-                    isSendingMessage = false
-                }
-            } catch let error as MessageSendError {
-                await MainActor.run {
-                    sendError = error.localizedDescription
-                    isSendingMessage = false
-                }
+                finishComposerSend(sentText: sentText)
+                completeComposerRelation()
+                sendError = nil
             } catch {
+                sendError = MessageSendError.failed.localizedDescription
+                SynaraHaptics.trigger(.warning)
+            }
+            return
+        }
+
+        let clientTransactionID = OutgoingQueuedMessage.newClientTransactionID()
+        let queued = environment.outgoingSends.enqueue(
+            localID: intent.retrying?.id ?? "$pending-\(clientTransactionID)",
+            clientTransactionID: clientTransactionID,
+            roomID: roomID,
+            body: body,
+            formattedBody: formattedBody,
+            replyToEventID: intent.replyToEventID,
+            threadRootEventID: rootEventID,
+            senderID: currentUserID,
+            timestamp: intent.retrying?.timestamp ?? Date()
+        )
+        finishComposerSend(sentText: sentText)
+        completeComposerRelation()
+        sendError = nil
+        refreshPendingReplies()
+        scrollToNewestRequest &+= 1
+        await transmitThreadReply(id: queued.id)
+    }
+
+    private func transmitThreadReply(id: String) async {
+        let signpostID = PerformanceTrace.begin("ThreadMessageSend")
+        defer {
+            PerformanceTrace.end("ThreadMessageSend", id: signpostID)
+        }
+        await environment.outgoingSends.flush()
+        await MainActor.run {
+            refreshPendingReplies()
+            switch environment.outgoingSends.queue.item(id: id)?.deliveryStatus {
+            case .failed:
+                SynaraHaptics.trigger(.warning)
+            case .sent:
+                SynaraHaptics.trigger(.lightImpact)
+            case .queued, .sending, .none:
+                break
+            }
+        }
+    }
+
+    private func retryFailedReply(_ item: TimelineItem) {
+        guard item.isLocalPending else {
+            // An SDK local echo: Core retries the same request.
+            sendError = nil
+            Task {
+                let retried = await environment.outgoingSends.retryLocalEcho(item, roomID: roomID)
                 await MainActor.run {
-                    sendError = MessageSendError.failed.localizedDescription
-                    isSendingMessage = false
+                    if retried == false {
+                        sendError = MessageSendError.failed.localizedDescription
+                        SynaraHaptics.trigger(.warning)
+                    }
+                }
+            }
+            return
+        }
+        guard let queued = environment.outgoingSends.retry(
+            item,
+            roomID: roomID,
+            senderID: currentUserID
+        ) else {
+            return
+        }
+        sendError = nil
+        refreshPendingReplies()
+        Task {
+            await transmitThreadReply(id: queued.id)
+        }
+    }
+
+    private func discardFailedReply(_ item: TimelineItem) {
+        sendError = nil
+        Task {
+            let discarded = await environment.outgoingSends.discard(item, roomID: roomID)
+            await MainActor.run {
+                switch discarded {
+                case .some(true):
+                    // The SDK drops a discarded echo with its next update.
+                    snapshotItems.removeAll { $0.id == item.id }
+                    pendingReplies.removeAll { $0.id == item.id }
+                    refreshPendingReplies()
+                case .some(false):
+                    break
+                case .none:
+                    sendError = String(localized: "The unsent message could not be discarded.")
+                    SynaraHaptics.trigger(.warning)
                 }
             }
         }
+    }
+
+    private func beginReply(_ item: TimelineItem) {
+        guard isSendingMessage == false else {
+            return
+        }
+        attachmentSendSteps = nil
+        if editSession != nil {
+            cancelEdit()
+        }
+        replyTarget = ComposerRelationTarget(item: item, kind: .reply, currentUserID: currentUserID)
+        isComposerFocused = true
+    }
+
+    private func beginEdit(_ item: TimelineItem) {
+        guard isSendingMessage == false else {
+            return
+        }
+        attachmentSendSteps = nil
+        let session = ComposerEditFlow.begin(
+            item: item,
+            currentUserID: currentUserID,
+            currentDraft: editSession?.previousDraft ?? draft
+        )
+        replyTarget = nil
+        editSession = session
+        if TimelinePendingReconciler.messageBody(for: item) != nil {
+            draft = session.draft
+        }
+        isComposerFocused = true
+    }
+
+    private func clearComposerRelation() {
+        attachmentSendSteps = nil
+        if editSession != nil {
+            cancelEdit()
+        }
+        replyTarget = nil
+    }
+
+    private func completeComposerRelation() {
+        attachmentSendSteps = nil
+        replyTarget = nil
+        editSession = nil
+    }
+
+    /// As in the room composer: drop the sent text, keep what was typed since.
+    private func finishComposerSend(sentText: String) {
+        sentDraftSerial &+= 1
+        sentDraft = ComposerSentDraft(id: sentDraftSerial, sentText: sentText)
+    }
+
+    private func cancelEdit() {
+        if let session = editSession {
+            draft = ComposerEditFlow.cancel(session)
+        }
+        editSession = nil
     }
 
     private func draftMockThreadAttachment(source: MediaUploadSource) {
@@ -4342,7 +5419,7 @@ struct ThreadTimelineView: View {
                 selectedPhotos = []
                 applyThreadIncomingDrafts(incoming)
                 if incoming.isEmpty, loadFailed {
-                    uploadState = .failed("Attachment could not be loaded. Try again.")
+                    uploadState = .failed(String(localized: "Attachment could not be loaded. Try again."))
                 }
             }
         }
@@ -4373,7 +5450,7 @@ struct ThreadTimelineView: View {
     #if canImport(UIKit)
         private func draftThreadCameraImage(_ image: UIImage) {
             guard let data = MediaAttachmentSupport.jpegData(from: image) else {
-                uploadState = .failed("Attachment could not be loaded. Try again.")
+                uploadState = .failed(String(localized: "Attachment could not be loaded. Try again."))
                 return
             }
             applyThreadIncomingDrafts([
@@ -4404,7 +5481,7 @@ struct ThreadTimelineView: View {
                 )
             }
             if incoming.isEmpty {
-                uploadState = .failed("Attachment could not be loaded. Try again.")
+                uploadState = .failed(String(localized: "Attachment could not be loaded. Try again."))
                 return
             }
             applyThreadIncomingDrafts(incoming)
@@ -4457,152 +5534,6 @@ private struct ThreadHeader: View {
         .padding(.horizontal, SynaraSpacing.large)
         .padding(.vertical, SynaraSpacing.medium)
         .background(SynaraColor.surface)
-    }
-}
-
-private struct ThreadMessageRow: View {
-    let item: TimelineItem
-    let availability: EventActionAvailability
-    let onReport: () -> Void
-    let onForward: () -> Void
-    let onPollVote: ([String]) async -> Bool
-    let onDeclineCall: () async -> Bool
-    let onPinToNotes: () -> Void
-    @State private var isSelectingText = false
-    @State private var isDeclinePending = false
-
-    var body: some View {
-        VStack(spacing: SynaraSpacing.medium) {
-            HStack(alignment: .top, spacing: SynaraSpacing.medium) {
-                TimelineAvatar(senderID: item.senderID, avatarURL: item.senderAvatarURL, size: 34)
-
-                VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-                    HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
-                        Text(item.senderDisplayName)
-                            .font(SynaraTypography.emphasis)
-                            .foregroundStyle(SynaraColor.primaryText)
-                        Text(item.timestamp.timelineTime)
-                            .font(SynaraTypography.messageMeta)
-                            .foregroundStyle(SynaraColor.secondaryText)
-                    }
-
-                    threadBody
-                        .contextMenu {
-                            threadMessageActions
-                        } preview: {
-                            threadBody
-                        }
-
-                    if item.reactions.isEmpty == false {
-                        HStack(spacing: SynaraSpacing.xSmall) {
-                            ForEach(Array(item.reactions.keys.sorted().enumerated()), id: \.element) { index, reaction in
-                                ReactionPill(
-                                    title: reaction,
-                                    count: item.reactions[reaction] ?? 0,
-                                    isSelected: item.reactionOwnership.contains(reaction),
-                                    animationIndex: index
-                                )
-                            }
-                            ReactionPill(
-                                title: "face.smiling",
-                                count: nil,
-                                isSystemImage: true,
-                                animationIndex: item.reactions.count
-                            )
-                        }
-                    }
-                }
-
-                Spacer(minLength: 0)
-            }
-
-            Divider()
-                .padding(.leading, 46)
-        }
-        .accessibilityElement(children: item.poll == nil ? .combine : .contain)
-        .accessibilityIdentifier("ThreadItem-\(item.eventID)")
-        .sheet(isPresented: $isSelectingText) {
-            if let copyPayload = TimelineMessageCopy.payload(for: item) {
-                MessageTextSelectionSheet(payload: copyPayload)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var threadBody: some View {
-        if let poll = item.poll {
-            TimelinePollCard(
-                poll: poll,
-                canVote: availability.canVote,
-                onVote: onPollVote
-            )
-        } else {
-            switch item.kind {
-        case let .text(body):
-            Text(body)
-                .font(SynaraTypography.messageBody)
-                .foregroundStyle(SynaraColor.primaryText)
-                .lineSpacing(2.5)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-        case let .formattedText(body, html):
-            MatrixFormattedMessageView(fallbackBody: body, html: html, font: SynaraTypography.messageBody)
-        case let .mediaPlaceholder(resource):
-            MediaAttachmentCard(resource: resource)
-        case .redacted:
-            Text("Message deleted")
-                .font(SynaraTypography.messageBody)
-                .foregroundStyle(SynaraColor.secondaryText)
-        case .encryptedPlaceholder:
-            Label("Encrypted content unavailable.", systemImage: "lock")
-                .font(SynaraTypography.messageBody)
-                .foregroundStyle(SynaraColor.secondaryText)
-        case let .agentCard(card):
-            AgentCardTimelineRow(card: card, onAction: { _ in })
-        case let .unknown(type):
-            Text("Unsupported event: \(type)")
-                .font(SynaraTypography.messageBody)
-                .foregroundStyle(SynaraColor.secondaryText)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var threadMessageActions: some View {
-        if let copyPayload = TimelineMessageCopy.payload(for: item) {
-            Button("Copy", systemImage: "doc.on.doc") {
-                TimelineMessageCopy.copyToPasteboard(copyPayload)
-            }
-            .accessibilityIdentifier("TimelineItemCopy-\(item.eventID)")
-            Button("Select Text", systemImage: "text.cursor") {
-                isSelectingText = true
-            }
-            .accessibilityIdentifier("TimelineItemSelectText-\(item.eventID)")
-        }
-        if TimelinePinActionAvailability.forItem(item).canPinToPrivateNotes {
-            Button("Pin to Notes", systemImage: "note.text.badge.plus", action: onPinToNotes)
-                .accessibilityIdentifier("ThreadItemPinToNotes-\(item.eventID)")
-        }
-        if availability.canForward {
-            Button("Forward", systemImage: "arrowshape.turn.up.right", action: onForward)
-                .accessibilityIdentifier("ThreadItemForward-\(item.eventID)")
-        }
-        if availability.canDeclineCall {
-            Button("Decline Call", systemImage: "phone.down.fill", role: .destructive) {
-                guard isDeclinePending == false else { return }
-                isDeclinePending = true
-                Task { @MainActor in
-                    _ = await onDeclineCall()
-                    isDeclinePending = false
-                }
-            }
-            .disabled(isDeclinePending)
-            .accessibilityIdentifier("ThreadItemDeclineCall-\(item.eventID)")
-        }
-        if availability.canReport {
-            Button("Report", systemImage: "exclamationmark.bubble", role: .destructive, action: onReport)
-                .accessibilityIdentifier("ThreadItemReport-\(item.eventID)")
-        }
     }
 }
 
@@ -4935,7 +5866,8 @@ func matrixInlineAttributedText(
                     )
                 )
             } else {
-                let label = block.reason.map { "[Spoiler: \($0) · Reveal]" } ?? "[Spoiler · Reveal]"
+                let label = block.reason.map { String(localized: "[Spoiler: \($0) · Reveal]") }
+                    ?? String(localized: "[Spoiler · Reveal]")
                 var placeholder = AttributedString(label)
                 placeholder.link = matrixInlineSpoilerURL(index: spoilerIndex)
                 placeholder.foregroundColor = SynaraColor.secondaryText
@@ -5007,7 +5939,10 @@ private struct MatrixSpoilerBlockView: View {
             Button {
                 isRevealed = true
             } label: {
-                Text(block.reason.map { "Spoiler: \($0) · Reveal" } ?? "Spoiler · Reveal")
+                Text(
+                    block.reason.map { String(localized: "Spoiler: \($0) · Reveal") }
+                        ?? String(localized: "Spoiler · Reveal")
+                )
                     .font(font)
                     .foregroundStyle(SynaraColor.secondaryText)
                     .padding(.horizontal, SynaraSpacing.small)
@@ -5020,7 +5955,7 @@ private struct MatrixSpoilerBlockView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(
-                block.reason.map { "Reveal spoiler: \($0)" } ?? "Reveal spoiler"
+                block.reason.map { String(localized: "Reveal spoiler: \($0)") } ?? String(localized: "Reveal spoiler")
             )
         }
     }
@@ -5162,14 +6097,14 @@ private struct MatrixTableBlockView: View {
         isHeader: Bool
     ) -> String {
         if isHeader {
-            return "Column \(cellIndex + 1), \(cell)"
+            return String(localized: "Column \(cellIndex + 1), \(cell)")
         }
         let headers = block.rows.first(where: \.isHeader)?.cells ?? []
         let header = headers.indices.contains(cellIndex) ? headers[cellIndex].plainText : nil
         if let header, header.isEmpty == false {
-            return "Row \(rowIndex + 1), \(header): \(cell)"
+            return String(localized: "Row \(rowIndex + 1), \(header): \(cell)")
         }
-        return "Row \(rowIndex + 1), column \(cellIndex + 1): \(cell)"
+        return String(localized: "Row \(rowIndex + 1), column \(cellIndex + 1): \(cell)")
     }
 }
 
@@ -5326,7 +6261,7 @@ private struct MatrixCodeBlockView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text(block.language ?? "Code")
+                Text(block.language ?? String(localized: "Code"))
                     .font(SynaraTypography.chipLabel)
                     .foregroundStyle(SynaraColor.primaryText)
 
@@ -5540,21 +6475,51 @@ private struct RoomDetailsView: View {
                             .foregroundStyle(SynaraColor.secondaryText)
                             .accessibilityIdentifier("RoomDetailsMessage")
                     }
-                    SettingsInfo(title: "Room ID", value: roomID)
-                    SettingsInfo(title: "Encryption", value: details?.encryptionLabel ?? "Unknown")
-                    SettingsInfo(title: "Members", value: "\(details?.memberCount ?? 0)")
-                    SettingsInfo(title: "Avatar", value: details?.avatarURL ?? "None")
+                    SettingsInfo(title: String(localized: "Room ID"), value: roomID)
+                    SettingsInfo(
+                        title: String(localized: "Encryption"),
+                        value: details?.encryptionLabel ?? String(localized: "Unknown")
+                    )
+                    SettingsInfo(title: String(localized: "Members"), value: "\(details?.memberCount ?? 0)")
+                    SettingsInfo(
+                        title: String(localized: "Avatar"),
+                        value: details?.avatarURL ?? String(localized: "None")
+                    )
                 }
 
                 if let powerLevels = details?.powerLevels {
                     Section("Permissions") {
-                        SettingsInfo(title: "Your level", value: "\(powerLevels.ownUserLevel)")
-                        PermissionInfo(title: "Send messages", threshold: powerLevels.eventsDefault, allowed: true)
-                        PermissionInfo(title: "Invite users", threshold: powerLevels.invite, allowed: powerLevels.canInvite)
-                        PermissionInfo(title: "Change name", threshold: powerLevels.roomName, allowed: powerLevels.canEditName)
-                        PermissionInfo(title: "Change topic", threshold: powerLevels.roomTopic, allowed: powerLevels.canEditTopic)
-                        PermissionInfo(title: "Change avatar", threshold: powerLevels.roomAvatar, allowed: powerLevels.canEditAvatar)
-                        PermissionInfo(title: "Moderate", threshold: powerLevels.kick, allowed: powerLevels.canKick || powerLevels.canBan || powerLevels.canRedactOther)
+                        SettingsInfo(title: String(localized: "Your level"), value: "\(powerLevels.ownUserLevel)")
+                        PermissionInfo(
+                            title: String(localized: "Send messages"),
+                            threshold: powerLevels.eventsDefault,
+                            allowed: true
+                        )
+                        PermissionInfo(
+                            title: String(localized: "Invite users"),
+                            threshold: powerLevels.invite,
+                            allowed: powerLevels.canInvite
+                        )
+                        PermissionInfo(
+                            title: String(localized: "Change name"),
+                            threshold: powerLevels.roomName,
+                            allowed: powerLevels.canEditName
+                        )
+                        PermissionInfo(
+                            title: String(localized: "Change topic"),
+                            threshold: powerLevels.roomTopic,
+                            allowed: powerLevels.canEditTopic
+                        )
+                        PermissionInfo(
+                            title: String(localized: "Change avatar"),
+                            threshold: powerLevels.roomAvatar,
+                            allowed: powerLevels.canEditAvatar
+                        )
+                        PermissionInfo(
+                            title: String(localized: "Moderate"),
+                            threshold: powerLevels.kick,
+                            allowed: powerLevels.canKick || powerLevels.canBan || powerLevels.canRedactOther
+                        )
                     }
                     .accessibilityIdentifier("RoomPermissionsSection")
                 }
@@ -5562,7 +6527,7 @@ private struct RoomDetailsView: View {
                 Section("Notifications") {
                     Picker("Mode", selection: $notificationMode) {
                         ForEach(SynaraRoomNotificationMode.allCases) { mode in
-                            Text(mode.rawValue).tag(mode)
+                            Text(mode.roomDetailsTitle).tag(mode)
                         }
                     }
                     .accessibilityIdentifier("RoomNotificationModePicker")
@@ -5753,7 +6718,7 @@ private struct RoomDetailsView: View {
                 )
                 await loadDetails()
                 await MainActor.run {
-                    message = "Profile updated."
+                    message = String(localized: "Profile updated.")
                     isLoading = false
                 }
             } catch let error as RoomManagementError {
@@ -5775,7 +6740,7 @@ private struct RoomDetailsView: View {
             do {
                 try await environment.roomManagement.setNotificationMode(mode, roomID: roomID)
                 await MainActor.run {
-                    message = "Notification mode updated."
+                    message = String(localized: "Notification mode updated.")
                 }
             } catch {
                 await MainActor.run {
@@ -5793,7 +6758,7 @@ private struct RoomDetailsView: View {
                 try await environment.roomManagement.inviteUser(roomID: roomID, userID: userID)
                 await MainActor.run {
                     inviteUserID = ""
-                    message = "Invitation sent."
+                    message = String(localized: "Invitation sent.")
                     isLoading = false
                 }
             } catch let error as RoomManagementError {
@@ -5828,7 +6793,7 @@ private struct RoomDetailsView: View {
                 await loadDetails()
                 await MainActor.run {
                     selectedAvatarPhoto = nil
-                    message = "Avatar updated."
+                    message = String(localized: "Avatar updated.")
                     isLoading = false
                 }
             } catch let error as RoomManagementError {
@@ -5861,7 +6826,7 @@ private struct RoomDetailsView: View {
                 )
                 await loadDetails()
                 await MainActor.run {
-                    message = "Avatar removed."
+                    message = String(localized: "Avatar removed.")
                     isLoading = false
                 }
             } catch {
@@ -5887,6 +6852,22 @@ private struct RoomDetailsView: View {
                     isLoading = false
                 }
             }
+        }
+    }
+}
+
+private extension SynaraRoomNotificationMode {
+    /// Picker copy; `rawValue` stays the stable identifier.
+    var roomDetailsTitle: String {
+        switch self {
+        case .default:
+            return String(localized: "Default")
+        case .allMessages:
+            return String(localized: "All")
+        case .mentionsOnly:
+            return String(localized: "Mentions")
+        case .mute:
+            return String(localized: "Mute")
         }
     }
 }
@@ -5967,7 +6948,7 @@ private struct PermissionInfo: View {
             Spacer()
 
             SynaraStatusChip(
-                title: allowed ? "Allowed" : "Restricted",
+                title: allowed ? String(localized: "Allowed") : String(localized: "Restricted"),
                 tint: allowed ? SynaraColor.success : SynaraColor.warning,
                 systemImage: allowed ? "checkmark.circle" : "lock"
             )
@@ -6051,6 +7032,8 @@ private struct CryptoRecoveryBanner: View {
 private struct TimelineRow: View {
     let item: TimelineItem
     let currentUserID: String
+    /// The message's clock time, formatted once by the row builder.
+    let timeText: String
     let isGroupedWithPrevious: Bool
     let isTimestampRevealed: Bool
     let animateSend: Bool
@@ -6065,7 +7048,10 @@ private struct TimelineRow: View {
     let inlineThread: AnyView?
     let onEdit: () -> Void
     let onRedact: () -> Void
-    let onReact: () -> Void
+    /// Adds or removes the user's reaction with this key.
+    let onToggleReaction: (String) -> Void
+    /// The long-press menu's quick reactions (most-used emoji).
+    @ObservedObject var quickReactions: TimelineQuickReactionStore
     let onReport: () -> Void
     let onForward: () -> Void
     let onPollVote: ([String]) async -> Bool
@@ -6075,11 +7061,21 @@ private struct TimelineRow: View {
     let onAgentAction: (SynaraAgentCardAction) -> Void
     let onAgentApprovalReaction: (String) -> Void
     let onRetryFailedSend: () -> Void
+    var onDiscardFailedSend: () -> Void = {}
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var isSelectingText = false
     @State private var isDeclinePending = false
 
     var body: some View {
+        if case let .systemNotice(text) = item.kind {
+            TimelineSystemNoticeRow(text: text, timestamp: item.timestamp, eventID: item.eventID)
+        } else {
+            messageRow
+        }
+    }
+
+    @ViewBuilder
+    private var messageRow: some View {
         let row = HStack(alignment: .top, spacing: rowHorizontalSpacing) {
             if isGroupedWithPrevious {
                 if groupedLeadingGutter > 0 {
@@ -6098,7 +7094,7 @@ private struct TimelineRow: View {
                                 .font(SynaraTypography.emphasis)
                                 .foregroundStyle(SynaraColor.headingText)
                                 .lineLimit(1)
-                            Text(item.timestamp.timelineTime)
+                            Text(timeText)
                                 .font(SynaraTypography.messageMeta)
                                 .foregroundStyle(SynaraColor.secondaryText)
                             if item.isEdited {
@@ -6125,6 +7121,8 @@ private struct TimelineRow: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Message actions")
+                        // A one-element row offers these as custom actions.
+                        .accessibilityHidden(combinesAccessibilityChildren)
                         .accessibilityIdentifier("TimelineItemActions-\(item.eventID)")
                     }
                 }
@@ -6138,6 +7136,11 @@ private struct TimelineRow: View {
         .accessibilityElement(children: accessibilityChildBehavior)
         .accessibilityLabel(accessibilitySummary)
         .accessibilityHint(accessibilityHint)
+        .accessibilityActions {
+            ForEach(accessibilityActionList, id: \.title) { action in
+                Button(action.title) { performAccessibilityAction(action) }
+            }
+        }
         .accessibilityIdentifier("TimelineItem-\(item.eventID)")
         .sheet(isPresented: $isSelectingText) {
             if let copyPayload = TimelineMessageCopy.payload(for: item) {
@@ -6155,7 +7158,7 @@ private struct TimelineRow: View {
         VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
             ZStack(alignment: .trailing) {
                 if isGroupedWithPrevious {
-                    Text(item.timestamp.timelineTime)
+                    Text(timeText)
                         .font(SynaraTypography.messageMeta)
                         .foregroundStyle(SynaraColor.secondaryText)
                         .opacity(timestampRevealProgress)
@@ -6178,15 +7181,45 @@ private struct TimelineRow: View {
 
     @ViewBuilder
     private func withFailedRetryAccessibilityAction<Content: View>(_ content: Content) -> some View {
-        if TimelineRowAccessibility.retryActionTitle(deliveryStatus: item.deliveryStatus) != nil {
+        let canRetry = TimelineRowAccessibility.retryActionTitle(
+            deliveryStatus: item.presentedDeliveryStatus
+        ) != nil && OutgoingSendPolicy.canRetry(item)
+        let canDiscard = isOutgoing && OutgoingSendPolicy.canDiscard(item)
+        if canRetry && canDiscard {
+            content
+                .accessibilityAction(named: Text("Retry"), onRetryFailedSend)
+                .accessibilityAction(named: Text("Discard"), onDiscardFailedSend)
+        } else if canRetry {
             content.accessibilityAction(named: Text("Retry"), onRetryFailedSend)
+        } else if canDiscard {
+            content.accessibilityAction(named: Text("Discard"), onDiscardFailedSend)
         } else {
             content
         }
     }
 
+    /// Retry for a failed own message whose cause can succeed on retry.
+    private var bubbleRetryAction: (() -> Void)? {
+        item.presentedDeliveryStatus == .failed && OutgoingSendPolicy.canRetry(item)
+            ? onRetryFailedSend
+            : nil
+    }
+
+    /// Discard for a failed own message (pending, or SDK local echo).
+    private var bubbleDiscardAction: (() -> Void)? {
+        item.presentedDeliveryStatus == .failed && isOutgoing && OutgoingSendPolicy.canDiscard(item)
+            ? onDiscardFailedSend
+            : nil
+    }
+
     @ViewBuilder
     private var messageActions: some View {
+        if isOutgoing, OutgoingSendPolicy.canDiscard(item) {
+            Button("Discard Unsent Message", systemImage: "trash", role: .destructive) {
+                onDiscardFailedSend()
+            }
+            .accessibilityIdentifier("TimelineItemDiscard-\(item.eventID)")
+        }
         if let copyPayload = TimelineMessageCopy.payload(for: item) {
             Button("Copy", systemImage: "doc.on.doc") {
                 TimelineMessageCopy.copyToPasteboard(copyPayload)
@@ -6208,8 +7241,8 @@ private struct TimelineRow: View {
         if availability.canEdit {
             Button("Edit", systemImage: "pencil", action: onEdit)
         }
-        if availability.canReact {
-            Button("React", systemImage: "face.smiling", action: onReact)
+        if TimelineReactionTogglePolicy.canToggle(availability: availability, ownership: item.reactionOwnership) {
+            quickReactionMenu
         }
         if availability.canForward {
             Button("Forward", systemImage: "arrowshape.turn.up.right", action: onForward)
@@ -6242,9 +7275,9 @@ private struct TimelineRow: View {
 
     private var threadChipHint: String {
         guard isInlineThreadMode else {
-            return "Opens the thread."
+            return String(localized: "Opens the thread.")
         }
-        return isThreadExpanded ? "Collapses the replies." : "Shows the replies."
+        return isThreadExpanded ? String(localized: "Collapses the replies.") : String(localized: "Shows the replies.")
     }
 
     private var failedMessageEditButton: some View {
@@ -6254,11 +7287,13 @@ private struct TimelineRow: View {
             Button(action: onEdit) {
                 Label("Edit", systemImage: "pencil")
                     .font(SynaraTypography.chipLabel)
-                    .foregroundStyle(SynaraColor.accent)
+                    .foregroundStyle(SynaraColor.accentText)
                     .padding(.horizontal, SynaraSpacing.small)
                     .padding(.vertical, SynaraSpacing.xSmall)
                     .background(SynaraColor.accent.opacity(0.12))
                     .clipShape(Capsule())
+                    .frame(minWidth: SynaraHitTarget.minimum, minHeight: SynaraHitTarget.minimum)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Edit unsent message")
@@ -6282,21 +7317,20 @@ private struct TimelineRow: View {
                 }
 
             if item.reactions.isEmpty == false {
+                let canToggleReactions = TimelineReactionTogglePolicy.canToggle(
+                    availability: availability,
+                    ownership: item.reactionOwnership
+                )
                 HStack(spacing: SynaraSpacing.xSmall) {
                     ForEach(Array(item.reactions.keys.sorted().enumerated()), id: \.element) { index, reaction in
                         ReactionPill(
                             title: reaction,
                             count: item.reactions[reaction] ?? 0,
                             isSelected: item.reactionOwnership.contains(reaction),
-                            animationIndex: index
+                            animationIndex: index,
+                            onToggle: canToggleReactions ? { onToggleReaction(reaction) } : nil
                         )
                     }
-                    ReactionPill(
-                        title: "face.smiling",
-                        count: nil,
-                        isSystemImage: true,
-                        animationIndex: item.reactions.count
-                    )
                 }
             }
 
@@ -6304,17 +7338,22 @@ private struct TimelineRow: View {
                 Button(action: onOpenThread) {
                     HStack(spacing: SynaraSpacing.xSmall) {
                         Image(systemName: "bubble.left.and.bubble.right.fill")
-                        Text(replyCount == 1 ? "1 reply" : "\(replyCount) replies")
+                            .accessibilityHidden(true)
+                        Text(TimelineRowAccessibility.replyCountLabel(replyCount))
                         if isInlineThreadMode {
                             Image(systemName: isThreadExpanded ? "chevron.up" : "chevron.down")
+                                .accessibilityHidden(true)
                         }
                     }
                     .font(SynaraTypography.chipLabel)
-                    .foregroundStyle(SynaraColor.accent)
+                    .foregroundStyle(SynaraColor.accentText)
+                    .frame(minHeight: SynaraHitTarget.minimum)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("ThreadButton-\(item.eventID)")
                 .accessibilityHint(threadChipHint)
+                .accessibilityValue(isInlineThreadMode ? (isThreadExpanded ? "Expanded" : "Collapsed") : "")
             }
 
             if let inlineThread {
@@ -6355,6 +7394,7 @@ private struct TimelineRow: View {
                 AgentApprovalPromptTimelineCard(
                     prompt: approvalPrompt,
                     eventID: item.eventID,
+                    decision: item.agentApprovalDecision,
                     onReaction: onAgentApprovalReaction
                 )
             }
@@ -6365,9 +7405,10 @@ private struct TimelineRow: View {
                     text: body,
                     alignment: bubbleAlignment,
                     isGrouped: isGroupedWithPrevious,
-                    deliveryStatus: item.deliveryStatus,
+                    deliveryStatus: item.presentedDeliveryStatus,
                     statusEventID: item.eventID,
-                    onRetryFailedSend: item.deliveryStatus == .failed ? onRetryFailedSend : nil,
+                    onRetryFailedSend: bubbleRetryAction,
+                    onDiscardFailedSend: bubbleDiscardAction,
                     encryptionShield: item.encryptionShield
                 )
             case let .formattedText(body, html):
@@ -6377,9 +7418,10 @@ private struct TimelineRow: View {
                     depth: SynaraSurfaceDepthRole.standardMessage,
                     isGrouped: isGroupedWithPrevious,
                     showsBackground: SynaraSurfaceDepthRole.standardMessageShowsBackground,
-                    deliveryStatus: item.deliveryStatus,
+                    deliveryStatus: item.presentedDeliveryStatus,
                     statusEventID: item.eventID,
-                    onRetryFailedSend: item.deliveryStatus == .failed ? onRetryFailedSend : nil,
+                    onRetryFailedSend: bubbleRetryAction,
+                    onDiscardFailedSend: bubbleDiscardAction,
                     encryptionShield: item.encryptionShield
                 ) {
                     MatrixFormattedMessageView(
@@ -6464,10 +7506,16 @@ private struct TimelineRow: View {
                 showsBackground: true,
                 deliveryStatus: nil
             ) {
-                Text("Unsupported event: \(type)")
+                Text(TimelineUnavailableMessageCopy.text)
                     .font(SynaraTypography.messageBody)
                     .foregroundStyle(SynaraColor.secondaryText)
+                    .accessibilityIdentifier("TimelineUnavailableMessage-\(type)")
             }
+        case let .systemNotice(text):
+            // Rendered by `TimelineSystemNoticeRow`; kept for exhaustiveness.
+            Text(text)
+                .font(SynaraTypography.messageMeta)
+                .foregroundStyle(SynaraColor.secondaryText)
         }
     }
 
@@ -6476,66 +7524,161 @@ private struct TimelineRow: View {
     }
 
     private var accessibilitySummary: String {
-        let senderAndTime = "\(item.senderID) at \(item.timestamp.timelineTime)"
-        switch item.kind {
-        case let .text(body):
-            return "\(senderAndTime): \(body)"
-        case let .formattedText(body, _):
-            return "\(senderAndTime): \(body)"
-        case let .mediaPlaceholder(resource):
-            if resource.isEncrypted {
-                return "\(senderAndTime) sent encrypted media that cannot be opened until keys are available"
-            }
-            if let caption = resource.caption {
-                return "\(senderAndTime) sent \(resource.safeDescription): \(caption)"
-            }
-            return "\(senderAndTime) sent \(resource.safeDescription)"
-        case .redacted:
-            return "\(senderAndTime): message deleted"
-        case .encryptedPlaceholder:
-            return "\(senderAndTime): encrypted message unavailable"
-        case let .unknown(type):
-            return "\(senderAndTime): unsupported event \(type)"
-        case let .agentCard(card):
-            let status = card.status.map { ", status \($0)" } ?? ""
-            let primaryAction = card.actions.first(where: SynaraAgentCardActionResolver.shouldRender)
-                .map { ", primary action \($0.title)" } ?? ""
-            return "\(senderAndTime): agent card: \(card.title)\(status)\(primaryAction)"
-        }
+        TimelineRowAccessibility.summary(
+            sender: senderDisplayName,
+            time: timeText,
+            kind: item.kind,
+            isEdited: item.isEdited,
+            reactions: item.reactions,
+            ownReactions: item.reactionOwnership,
+            replyCount: replyCount
+        )
     }
 
+    /// One element per message, first of a group or not, unless the row
+    /// holds controls VoiceOver must reach on their own (retry, polls,
+    /// approval and agent cards, the thread chip). The menu's actions are
+    /// then custom actions on that element.
     private var accessibilityChildBehavior: AccessibilityChildBehavior {
-        if isGroupedWithPrevious == false {
-            return .contain
-        }
+        combinesAccessibilityChildren ? .combine : .contain
+    }
 
-        return TimelineRowAccessibility.containsChildren(
-            deliveryStatus: item.deliveryStatus,
+    /// UI automation keeps descendants (as `RoomListRow` does) so it can
+    /// reach the rendered body and the actions menu.
+    private var combinesAccessibilityChildren: Bool {
+        rowContainsAccessibleChildren == false
+            && SynaraLaunchEnvironment.isUITest == false
+    }
+
+    private var rowContainsAccessibleChildren: Bool {
+        TimelineRowAccessibility.containsChildren(
+            deliveryStatus: item.presentedDeliveryStatus,
             kind: item.kind,
             replyCount: replyCount,
             hasApprovalPrompt: approvalPrompt != nil,
             hasInteractivePoll: item.poll != nil
-        ) ? .contain : .combine
+        )
+    }
+
+    /// The quick reactions as a row of emoji at the top of the menu (a
+    /// "React" submenu before iOS 17, which has no palette menus). Each one
+    /// toggles the user's reaction, as the pills do.
+    @ViewBuilder
+    private var quickReactionMenu: some View {
+        if #available(iOS 17.0, *) {
+            ControlGroup {
+                quickReactionButtons
+                    // Palette items keep the menu open by default; a
+                    // reaction is a finished choice, like any other action.
+                    .menuActionDismissBehavior(.enabled)
+            }
+            .controlGroupStyle(.palette)
+        } else {
+            Menu {
+                quickReactionButtons
+            } label: {
+                Label("React", systemImage: "face.smiling")
+            }
+        }
+    }
+
+    private var quickReactionButtons: some View {
+        ForEach(quickReactions.keys, id: \.self) { key in
+            let action = TimelineRowAccessibility.Action.toggleReaction(
+                key: key,
+                isOwn: item.reactionOwnership.contains(key)
+            )
+            Button {
+                onToggleReaction(key)
+            } label: {
+                // The palette builds its items from the label: a label set
+                // only on the Button is dropped there, and VoiceOver would
+                // read the bare emoji name instead of the action.
+                Text(key)
+                    .accessibilityLabel(action.title)
+            }
+            .accessibilityLabel(action.title)
+            .accessibilityIdentifier("QuickReaction-\(key)")
+        }
+    }
+
+    private var accessibilityActionList: [TimelineRowAccessibility.Action] {
+        guard rowContainsAccessibleChildren == false else { return [] }
+        return TimelineRowAccessibility.actions(
+            availability: availability,
+            replyCount: replyCount,
+            canCopy: TimelineMessageCopy.payload(for: item) != nil,
+            canPinToNotes: TimelinePinActionAvailability.forItem(item).canPinToPrivateNotes,
+            reactions: item.reactions,
+            ownReactions: item.reactionOwnership,
+            quickReactions: quickReactions.keys
+        )
+    }
+
+    private func performAccessibilityAction(_ action: TimelineRowAccessibility.Action) {
+        switch action {
+        case .reply:
+            onReply()
+        case .replyInThread:
+            onReplyInThread()
+        case .openThread:
+            onOpenThread()
+        case .react:
+            if let key = quickReactions.keys.first {
+                onToggleReaction(key)
+            }
+        case let .toggleReaction(key, _):
+            onToggleReaction(key)
+        case .edit:
+            onEdit()
+        case .copy:
+            if let payload = TimelineMessageCopy.payload(for: item) {
+                TimelineMessageCopy.copyToPasteboard(payload)
+            }
+        case .selectText:
+            isSelectingText = true
+        case .forward:
+            onForward()
+        case .pinToNotes:
+            onPinToNotes()
+        case .declineCall:
+            guard isDeclinePending == false else { return }
+            isDeclinePending = true
+            Task { @MainActor in
+                _ = await onDeclineCall()
+                isDeclinePending = false
+            }
+        case .report:
+            onReport()
+        case .redact:
+            onRedact()
+        }
     }
 
     private var accessibilityHint: String {
         if approvalPrompt != nil {
-            return "Review available approval reactions"
+            return item.agentApprovalDecision == nil
+                ? String(localized: "Review available approval reactions")
+                : String(localized: "You already decided this approval")
         }
 
-        if item.deliveryStatus == .failed {
-            return availability.canEdit
-                ? "Tap Retry to send this message again. Edit is also available."
-                : "Tap Retry to send this message again"
+        if item.presentedDeliveryStatus == .failed {
+            guard OutgoingSendPolicy.canRetry(item) else {
+                return String(localized: "This message was not sent. Use the Discard action to remove it")
+            }
+            return availability.canEdit && item.isLocalPending
+                ? String(localized: "Tap Retry to send this message again. Edit is also available.")
+                : String(localized: "Tap Retry to send this message again")
         }
 
         switch item.kind {
         case .agentCard:
-            return "Review available agent actions"
+            return String(localized: "Review available agent actions")
         default:
-            return isGroupedWithPrevious
-                ? "Swipe left to reveal the sent time. Long press for message actions"
-                : "Use the Message actions button or long press for message actions"
+            // A one-element row lists its actions in the VoiceOver actions rotor.
+            return rowContainsAccessibleChildren
+                ? String(localized: "Use the Message actions button or long press for message actions")
+                : ""
         }
     }
 
@@ -6686,7 +7829,7 @@ private struct MediaAttachmentCard: View {
                 if resource.isEncrypted {
                     Text("Encrypted media requires recovered keys")
                         .font(SynaraTypography.fineMeta)
-                        .foregroundStyle(SynaraColor.warning)
+                        .foregroundStyle(SynaraColor.warningText)
                         .lineLimit(2)
                 }
             }
@@ -6764,21 +7907,91 @@ private struct MediaAttachmentCard: View {
     }
 }
 
-private struct UnreadMessagesDivider: View {
+/// What a row shows for an event this app cannot display. User copy: never
+/// the event's wire type.
+enum TimelineUnavailableMessageCopy {
+    static let text = String(localized: "This message can't be shown in Synara.")
+}
+
+/// The day the rows below belong to, in the unread divider's rule style.
+private struct TimelineDayHeader: View {
+    let day: Date
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        let label = TimelineDayHeaderPolicy.label(for: day)
+        HStack(spacing: SynaraSpacing.medium) {
+            Rectangle()
+                .fill(SynaraColor.separator.opacity(0.55))
+                .frame(height: 0.5)
+            Text(label)
+                .font(SynaraTypography.chipLabel)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .multilineTextAlignment(.center)
+                .lineLimit(SynaraDynamicTypeLayout.ruleLabelLineLimit(dynamicTypeSize))
+                .fixedSize(horizontal: dynamicTypeSize.isAccessibilitySize == false, vertical: true)
+                .layoutPriority(1)
+            Rectangle()
+                .fill(SynaraColor.separator.opacity(0.55))
+                .frame(height: 0.5)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityIdentifier("TimelineDayHeader")
+    }
+}
+
+/// A membership or room-state change ("Ada joined the room"): one quiet
+/// centered line with no avatar or bubble, so it never reads as a message
+/// from its sender.
+private struct TimelineSystemNoticeRow: View {
+    let text: String
+    let timestamp: Date
+    let eventID: String
+
+    var body: some View {
+        Text(text)
+            .font(SynaraTypography.messageMeta)
+            .foregroundStyle(SynaraColor.secondaryText)
+            .multilineTextAlignment(.center)
+            .lineLimit(3)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, SynaraSpacing.xLarge)
+            .padding(.vertical, SynaraSpacing.xSmall)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(text), \(timestamp.timelineTime)")
+            .accessibilityIdentifier("TimelineSystemNotice-\(eventID)")
+    }
+}
+
+struct UnreadMessagesDivider: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
             Rectangle()
                 .fill(SynaraColor.separator.opacity(0.55))
                 .frame(height: 0.5)
+            // The label wins the width over the rules ("Unr…" at AX5).
             Text("Unread messages")
                 .font(SynaraTypography.chipLabel)
-                .foregroundStyle(SynaraColor.accent)
-                .lineLimit(1)
+                .foregroundStyle(SynaraColor.accentText)
+                .multilineTextAlignment(.center)
+                .lineLimit(SynaraDynamicTypeLayout.ruleLabelLineLimit(dynamicTypeSize))
+                .fixedSize(horizontal: dynamicTypeSize.isAccessibilitySize == false, vertical: true)
+                .layoutPriority(1)
             Rectangle()
                 .fill(SynaraColor.separator.opacity(0.55))
                 .frame(height: 0.5)
         }
-        .padding(.leading, 46)
+        .padding(.leading, dynamicTypeSize.isAccessibilitySize ? 0 : 46)
+        // A heading, so the rotor can jump to where unread messages start.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Unread messages")
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityIdentifier("TimelineUnreadDivider")
     }
 }
 
@@ -6940,12 +8153,12 @@ private struct TimelinePollCard: View {
 
     private var pollFooter: String {
         if poll.isClosed {
-            return "Poll closed"
+            return String(localized: "Poll closed")
         }
         if poll.maximumSelections == 1 {
-            return "Choose one answer"
+            return String(localized: "Choose one answer")
         }
-        return "Choose up to \(poll.maximumSelections) answers"
+        return String(localized: "Choose up to \(poll.maximumSelections) answers")
     }
 }
 
@@ -6999,7 +8212,7 @@ private struct TimelineForwardSheet: View {
                     .padding(SynaraSpacing.large)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .failed(let message):
-                    SynaraErrorState(title: "Could Not Load Rooms", message: message) {
+                    SynaraErrorState(title: String(localized: "Could Not Load Rooms"), message: message) {
                         Task { await loadRooms() }
                     }
                 case .loaded:
@@ -7096,7 +8309,7 @@ private struct TimelineForwardSheet: View {
             return eligible.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         }
         return eligible
-            .filter { $0.name.localizedCaseInsensitiveContains(trimmed) }
+            .filter { $0.name.localizedStandardContains(trimmed) }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
@@ -7127,10 +8340,10 @@ private struct TimelineForwardSheet: View {
             case .some(.forwardEncryptionUnavailable):
                 forwardAlert = .blocked(
                     EventActionError.forwardEncryptionUnavailable.errorDescription
-                        ?? "Room encryption status is unavailable. Forwarding was not started."
+                        ?? String(localized: "Room encryption status is unavailable. Forwarding was not started.")
                 )
             case .some(let error):
-                forwardAlert = .blocked(error.errorDescription ?? "Forwarding was not completed.")
+                forwardAlert = .blocked(error.errorDescription ?? String(localized: "Forwarding was not completed."))
             }
         }
     }
@@ -7143,7 +8356,7 @@ private struct TimelineForwardSheet: View {
         ) {
         case .unavailable:
             forwardAlert = .blocked(
-                "Room encryption status is unavailable. Forwarding was not started."
+                String(localized: "Room encryption status is unavailable. Forwarding was not started.")
             )
             return
         case .confirmDowngrade:
@@ -7158,39 +8371,52 @@ private struct TimelineForwardSheet: View {
 
 private struct ReactionPill: View {
     let title: String
-    let count: Int?
-    var isSystemImage = false
+    let count: Int
     var isSelected = false
     var animationIndex = 0
+    /// Adds or removes the user's reaction; nil when it cannot change.
+    var onToggle: (() -> Void)?
 
     private var reactionAnimationKey: String {
-        if let count {
-            return "\(title)-\(count)-\(isSystemImage)"
-        }
-        return "\(title)-\(isSystemImage)"
+        "\(title)-\(count)"
+    }
+
+    /// "👍 3, you reacted"; VoiceOver names the emoji.
+    private var accessibilityLabel: String {
+        TimelineRowAccessibility.reactionLabel(key: title, count: count, isOwn: isSelected)
     }
 
     var body: some View {
+        if let onToggle {
+            Button(action: onToggle) {
+                pill
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+            .accessibilityHint(TimelineRowAccessibility.reactionToggleHint(isOwn: isSelected))
+            .accessibilityIdentifier("ReactionPill-\(title)")
+        } else {
+            pill
+        }
+    }
+
+    private var pill: some View {
         HStack(spacing: SynaraSpacing.xSmall) {
-            if isSystemImage {
-                Image(systemName: title)
-                    .font(SynaraTypography.messageMeta)
-            } else {
-                Text(title)
-                    .font(SynaraTypography.messageMeta)
-            }
-            if let count {
-                Text("\(count)")
-                    .font(SynaraTypography.chipLabel)
-                    .monospacedDigit()
-            }
+            Text(title)
+                .font(SynaraTypography.messageMeta)
+            Text("\(count)")
+                .font(SynaraTypography.chipLabel)
+                .monospacedDigit()
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
-        .foregroundStyle(isSelected ? SynaraColor.accent : SynaraColor.primaryText)
+        .foregroundStyle(isSelected ? SynaraColor.accentText : SynaraColor.primaryText)
         .background(isSelected ? SynaraColor.accent.opacity(0.14) : SynaraColor.elevatedSurface)
         .clipShape(Capsule())
         .synaraDepth(.raised, shape: Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .synaraReactionPop(animationIndex: animationIndex, animationKey: reactionAnimationKey)
     }
@@ -7199,6 +8425,8 @@ private struct ReactionPill: View {
 private struct AgentApprovalPromptTimelineCard: View {
     let prompt: SynaraAgentApprovalPrompt
     let eventID: String
+    /// This account's own terminal reaction, projected by Core.
+    let decision: SynaraAgentApprovalCardDecision?
     let onReaction: (String) -> Void
     @State private var isCommandExpanded = true
     @State private var confirmApproveAlways = false
@@ -7243,7 +8471,10 @@ private struct AgentApprovalPromptTimelineCard: View {
                     }
                     .frame(maxHeight: 160)
                 } label: {
-                    Text(prompt.commandPreview.map { "Command: \($0)" } ?? "Review command")
+                    Text(
+                        prompt.commandPreview.map { String(localized: "Command: \($0)") }
+                            ?? String(localized: "Review command")
+                    )
                         .font(SynaraTypography.messageMeta.weight(.medium))
                         .foregroundStyle(SynaraColor.primaryText)
                         .lineLimit(2)
@@ -7284,86 +8515,117 @@ private struct AgentApprovalPromptTimelineCard: View {
                 .synaraDepth(.raised, cornerRadius: SynaraRadius.control)
             }
 
-            if confirmApproveAlways {
-                VStack(alignment: .leading, spacing: SynaraSpacing.small) {
-                    Text("Approve always permanently trusts this command pattern. Confirm only if you intend to allow it without future prompts.")
-                        .font(SynaraTypography.messageMeta)
-                        .foregroundStyle(SynaraColor.critical)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: SynaraSpacing.small) {
-                        Button("Confirm approve always") {
-                            confirmApproveAlways = false
-                            onReaction(SynaraAgentApprovalPromptReaction.approveAlways.actionIdentifier)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(SynaraColor.critical)
-                        .accessibilityIdentifier("AgentApprovalPromptConfirmApproveAlways-\(eventID)")
-
-                        Button("Cancel") {
-                            confirmApproveAlways = false
-                        }
-                        .buttonStyle(.bordered)
+            if let decision {
+                HStack(alignment: .top, spacing: SynaraSpacing.small) {
+                    Text(decision.reaction.reactionKey)
+                        .font(.system(size: 21, weight: .semibold))
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(decision.title)
+                            .font(SynaraTypography.emphasis)
+                            .foregroundStyle(decision.reaction.tint)
+                        Text(decision.detail())
+                            .font(SynaraTypography.messageMeta)
+                            .foregroundStyle(SynaraColor.secondaryText)
                     }
+                    Spacer(minLength: 0)
                 }
                 .padding(SynaraSpacing.small)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .synaraAccessibleSurfaceFill(
-                    SynaraColor.critical.opacity(0.08),
+                    decision.reaction.tint.opacity(0.10),
                     opaqueFill: SynaraColor.secondarySurface
                 )
                 .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
                 .synaraDepth(
-                    .floating,
+                    .raised,
                     cornerRadius: SynaraRadius.control,
-                    boundaryColor: SynaraColor.critical
+                    boundaryColor: decision.reaction.tint
                 )
-            }
-
-            LazyVGrid(columns: actionColumns, spacing: SynaraSpacing.small) {
-                ForEach(SynaraAgentApprovalPromptReaction.allCases) { action in
-                    if confirmApproveAlways, action == .approveAlways {
-                        EmptyView()
-                    } else {
-                        Button {
-                            if action == .approveAlways {
-                                confirmApproveAlways = true
-                            } else {
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("AgentApprovalPromptDecision-\(eventID)")
+            } else {
+                if confirmApproveAlways {
+                    VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+                        Text("Approve always permanently trusts this command pattern. Confirm only if you intend to allow it without future prompts.")
+                            .font(SynaraTypography.messageMeta)
+                            .foregroundStyle(SynaraColor.criticalText)
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: SynaraSpacing.small) {
+                            Button("Confirm approve always") {
                                 confirmApproveAlways = false
-                                onReaction(action.actionIdentifier)
+                                onReaction(SynaraAgentApprovalPromptReaction.approveAlways.actionIdentifier)
                             }
-                        } label: {
-                            VStack(spacing: SynaraSpacing.xSmall) {
-                                Text(action.reactionKey)
-                                    .font(.system(size: 21, weight: .semibold))
-                                Text(action.title)
-                                    .font(SynaraTypography.chipLabel.weight(.semibold))
-                                    .multilineTextAlignment(.center)
-                                    .lineLimit(2)
+                            .buttonStyle(.borderedProminent)
+                            .tint(SynaraColor.critical)
+                            .accessibilityIdentifier("AgentApprovalPromptConfirmApproveAlways-\(eventID)")
+
+                            Button("Cancel") {
+                                confirmApproveAlways = false
                             }
-                            .frame(maxWidth: .infinity)
-                            .frame(minHeight: 58)
-                            .foregroundStyle(action.tint)
-                            .synaraAccessibleSurfaceFill(
-                                action.tint.opacity(action == .deny ? 0.08 : 0.10),
-                                opaqueFill: SynaraColor.secondarySurface
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
-                            .synaraDepth(
-                                .raised,
-                                cornerRadius: SynaraRadius.control,
-                                boundaryColor: action.tint
-                            )
+                            .buttonStyle(.bordered)
                         }
-                        .buttonStyle(SynaraTactileButtonStyle())
-                        .accessibilityLabel("\(action.title) \(action.reactionKey)")
-                        .accessibilityIdentifier("AgentApprovalPromptReaction-\(action.accessibilityIdentifierSuffix)-\(eventID)")
+                    }
+                    .padding(SynaraSpacing.small)
+                    .synaraAccessibleSurfaceFill(
+                        SynaraColor.critical.opacity(0.08),
+                        opaqueFill: SynaraColor.secondarySurface
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+                    .synaraDepth(
+                        .floating,
+                        cornerRadius: SynaraRadius.control,
+                        boundaryColor: SynaraColor.critical
+                    )
+                }
+
+                LazyVGrid(columns: actionColumns, spacing: SynaraSpacing.small) {
+                    ForEach(SynaraAgentApprovalPromptReaction.allCases) { action in
+                        if confirmApproveAlways, action == .approveAlways {
+                            EmptyView()
+                        } else {
+                            Button {
+                                if action == .approveAlways {
+                                    confirmApproveAlways = true
+                                } else {
+                                    confirmApproveAlways = false
+                                    onReaction(action.actionIdentifier)
+                                }
+                            } label: {
+                                VStack(spacing: SynaraSpacing.xSmall) {
+                                    Text(action.reactionKey)
+                                        .font(.system(size: 21, weight: .semibold))
+                                    Text(action.title)
+                                        .font(SynaraTypography.chipLabel.weight(.semibold))
+                                        .multilineTextAlignment(.center)
+                                        .lineLimit(2)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(minHeight: 58)
+                                .foregroundStyle(action.tint)
+                                .synaraAccessibleSurfaceFill(
+                                    action.tint.opacity(action == .deny ? 0.08 : 0.10),
+                                    opaqueFill: SynaraColor.secondarySurface
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+                                .synaraDepth(
+                                    .raised,
+                                    cornerRadius: SynaraRadius.control,
+                                    boundaryColor: action.tint
+                                )
+                            }
+                            .buttonStyle(SynaraTactileButtonStyle())
+                            .accessibilityLabel("\(action.title) \(action.reactionKey)")
+                            .accessibilityIdentifier("AgentApprovalPromptReaction-\(action.accessibilityIdentifierSuffix)-\(eventID)")
+                        }
                     }
                 }
-            }
 
-            Text("Session approval is available only by replying !approve session; Hermes does not define a session-approval reaction.")
-                .font(SynaraTypography.messageMeta)
-                .foregroundStyle(SynaraColor.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
+                Text("To approve for the whole session, reply !approve session.")
+                    .font(SynaraTypography.messageMeta)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }
@@ -7378,7 +8640,7 @@ private struct AgentApprovalButtonStyle: ViewModifier {
                 .buttonStyle(.plain)
                 .padding(.vertical, SynaraSpacing.small)
                 .padding(.horizontal, SynaraSpacing.medium)
-                .foregroundStyle(SynaraColor.success)
+                .foregroundStyle(SynaraColor.successText)
                 .background(SynaraColor.success.opacity(0.08))
                 .overlay(
                     RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
@@ -7390,7 +8652,7 @@ private struct AgentApprovalButtonStyle: ViewModifier {
                 .buttonStyle(.plain)
                 .padding(.vertical, SynaraSpacing.small)
                 .padding(.horizontal, SynaraSpacing.medium)
-                .foregroundStyle(SynaraColor.critical)
+                .foregroundStyle(SynaraColor.criticalText)
                 .background(SynaraColor.critical.opacity(0.06))
                 .overlay(
                     RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
@@ -7542,10 +8804,13 @@ private struct AgentApprovalDetails: View {
 
     var body: some View {
         VStack(spacing: SynaraSpacing.small) {
-            AgentDetailRow(title: "Target", value: card.artifacts.first?.title ?? "Synara workflow")
-            AgentDetailRow(title: "Changes", value: changeSummary)
-            AgentDetailRow(title: "Checks", value: checkSummary, valueTint: SynaraColor.success)
-            AgentDetailRow(title: "Summary", value: card.summary ?? card.title)
+            AgentDetailRow(
+                title: String(localized: "Target"),
+                value: card.artifacts.first?.title ?? String(localized: "Synara workflow")
+            )
+            AgentDetailRow(title: String(localized: "Changes"), value: changeSummary)
+            AgentDetailRow(title: String(localized: "Checks"), value: checkSummary, valueTint: SynaraColor.success)
+            AgentDetailRow(title: String(localized: "Summary"), value: card.summary ?? card.title)
         }
         .padding(SynaraSpacing.small)
         .synaraCard(
@@ -7557,14 +8822,14 @@ private struct AgentApprovalDetails: View {
 
     private var changeSummary: String {
         let count = card.artifacts.count + card.code.count + card.diffs.count
-        return count == 1 ? "1 item changed" : "\(max(count, 1)) items changed"
+        return String(localized: "\(max(count, 1)) items changed")
     }
 
     private var checkSummary: String {
         if card.logs.isEmpty {
-            return "Ready"
+            return String(localized: "Ready")
         }
-        return "\(card.logs.count) passed"
+        return String(localized: "\(card.logs.count) passed")
     }
 }
 
@@ -7649,9 +8914,12 @@ private struct ComposerView: View {
         var onPasteImages: ([UIImage]) -> Void = { _ in }
     #endif
     @Binding var isFocusedExternally: Bool
+    /// The latest finished send; the composer drops what it sent and keeps
+    /// what was typed since.
+    var sentDraft: ComposerSentDraft?
     @Environment(\.appEnvironment) private var environment
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var lastOutgoingTyping = false
+    @State private var typingNotifier: ComposerTypingNotifier?
     @State private var isAttachmentSheetPresented = false
     @State private var isFileImporterPresented = false
     #if canImport(UIKit)
@@ -7699,7 +8967,7 @@ private struct ComposerView: View {
             if let sendError {
                 Text(sendError)
                     .font(SynaraTypography.supporting)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SynaraColor.criticalText)
                     .accessibilityIdentifier("ComposerErrorText")
             }
 
@@ -7727,7 +8995,7 @@ private struct ComposerView: View {
             } else if case let .failed(message) = uploadState {
                 Text(message)
                     .font(SynaraTypography.supporting)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SynaraColor.criticalText)
                     .accessibilityIdentifier("MediaUploadErrorText")
             }
         }
@@ -7750,9 +9018,21 @@ private struct ComposerView: View {
         .onChange(of: text) { value in
             reconcileExternalText(value)
         }
+        .onChange(of: sentDraft) { sent in
+            if let sent {
+                finishSentDraft(sent)
+            }
+        }
+        .onChange(of: roomID) { _ in
+            typingNotifier?.stop()
+            typingNotifier = makeTypingNotifier()
+        }
         .onAppear {
             if liveText == nil {
                 liveText = text
+            }
+            if typingNotifier == nil {
+                typingNotifier = makeTypingNotifier()
             }
             isFocusedExternally = isComposerFocused
             updateOutgoingTyping()
@@ -7760,7 +9040,7 @@ private struct ComposerView: View {
         .onDisappear {
             flushExternalText()
             isFocusedExternally = false
-            setOutgoingTyping(false)
+            typingNotifier?.stop()
         }
         .sheet(isPresented: $isAttachmentSheetPresented) {
             AttachmentOptionsSheet(
@@ -7786,7 +9066,7 @@ private struct ComposerView: View {
                         if CameraCaptureSupport.isAvailable {
                             isCameraPresented = true
                         } else {
-                            onUploadFailed("Camera is not available on this device.")
+                            onUploadFailed(String(localized: "Camera is not available on this device."))
                         }
                     #endif
                 },
@@ -7813,7 +9093,7 @@ private struct ComposerView: View {
                 }
                 onFileURL(url)
             case .failure:
-                onUploadFailed("Attachment could not be loaded. Try again.")
+                onUploadFailed(String(localized: "Attachment could not be loaded. Try again."))
             }
         }
         #if canImport(UIKit)
@@ -7950,18 +9230,22 @@ private struct ComposerView: View {
 
     private var resolvedPlaceholder: String {
         if let editTarget {
-            return editTarget.isLocalPending ? "Edit unsent message..." : "Edit message..."
+            return editTarget.isLocalPending
+                ? String(localized: "Edit unsent message...")
+                : String(localized: "Edit message...")
         }
         return placeholder
     }
 
     private var composerSendAccessibilityHint: String {
         if editTarget != nil {
-            return isSending ? "Saving the edited message" : "Saves the edited message"
+            return isSending
+                ? String(localized: "Saving the edited message")
+                : String(localized: "Saves the edited message")
         }
         return isSending
-            ? "Sending the current message and attachments"
-            : "Sends the current message and attachments"
+            ? String(localized: "Sending the current message and attachments")
+            : String(localized: "Sends the current message and attachments")
     }
 
     private var remainingAttachmentSlots: Int {
@@ -7998,10 +9282,16 @@ private struct ComposerView: View {
         max(1, currentText.components(separatedBy: .newlines).count)
     }
 
+    private var composerPromptMetricsText: String {
+        let characters = String(localized: "\(currentText.count) chars")
+        let lines = String(localized: "\(composerLineCount) lines")
+        return "\(characters) · \(lines)"
+    }
+
     private var composerPromptMetrics: some View {
         HStack(spacing: SynaraSpacing.small) {
             Spacer()
-            Text("\(currentText.count) chars · \(composerLineCount) line\(composerLineCount == 1 ? "" : "s")")
+            Text(composerPromptMetricsText)
                 .font(SynaraTypography.composerMetric)
                 .foregroundStyle(SynaraColor.tertiaryText)
                 .monospacedDigit()
@@ -8081,11 +9371,12 @@ private struct ComposerView: View {
         guard isSending == false else {
             return
         }
+        // The keyboard stays up after a send, as in Messages; the cleared
+        // draft reaches the focused editor through `reconcileExternalText`.
         #if canImport(UIKit)
-            ComposerTextInputRegistry.dismissKeyboard()
+            ComposerTextInputRegistry.commitPendingInput()
         #endif
-        isComposerFocused = false
-        setOutgoingTyping(false)
+        typingNotifier?.stop()
         let messageBody = currentText
         text = messageBody
         onSend(messageBody)
@@ -8096,17 +9387,17 @@ private struct ComposerView: View {
             isComposerFocused
             && currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             && SynaraSharedConstants.boolSetting(SynaraSharedConstants.hideActivityKey) == false
-        setOutgoingTyping(shouldType)
+        typingNotifier?.update(isTyping: shouldType)
     }
 
-    private func setOutgoingTyping(_ typing: Bool) {
-        guard lastOutgoingTyping != typing else {
-            return
-        }
-        lastOutgoingTyping = typing
-        Task {
-            await environment.matrix.setOutgoingTyping(roomID: roomID, typing: typing)
-        }
+    private func makeTypingNotifier() -> ComposerTypingNotifier {
+        let matrix = environment.matrix
+        let roomID = roomID
+        return ComposerTypingNotifier(
+            send: ComposerTypingNotifier.serialSender { typing in
+                await matrix.setOutgoingTyping(roomID: roomID, typing: typing)
+            }
+        )
     }
 
     private var currentText: String {
@@ -8134,6 +9425,25 @@ private struct ComposerView: View {
         guard value != currentText else { return }
         draftPublishTask?.cancel()
         liveText = value
+        // A focused editor keeps its own text; a revision bump makes it take
+        // this one (a send clearing the draft, an edit loading its body).
+        composerSelection = ComposerTextSelection(location: (value as NSString).length, length: 0)
+        formattingRevision += 1
+    }
+
+    /// Works from the live editor text, not the debounced draft, so
+    /// keystrokes from the last moment before the send finished survive.
+    private func finishSentDraft(_ sent: ComposerSentDraft) {
+        let remaining = ComposerSentDraft.remainingText(current: currentText, sent: sent.sentText)
+        draftPublishTask?.cancel()
+        if remaining != currentText {
+            liveText = remaining
+            composerSelection = ComposerTextSelection(location: (remaining as NSString).length, length: 0)
+            formattingRevision += 1
+        }
+        if text != remaining {
+            text = remaining
+        }
     }
 
     private func flushExternalText() {
@@ -8208,13 +9518,31 @@ private struct AttachmentOptionsSheet: View {
     var maxSelectionCount: Int
 
     private let options: [AttachmentOption] = [
-        AttachmentOption(title: "Photo or Video", systemImage: "photo", tint: SynaraColor.success, kind: .photo),
-        AttachmentOption(title: "File", systemImage: "doc", tint: SynaraColor.accent, kind: .file),
-        AttachmentOption(title: "Camera", systemImage: "camera", tint: SynaraColor.warning, kind: .camera),
+        AttachmentOption(
+            identifier: "Photo or Video",
+            title: String(localized: "Photo or Video"),
+            systemImage: "photo",
+            tint: SynaraColor.success,
+            kind: .photo
+        ),
+        AttachmentOption(
+            identifier: "File",
+            title: String(localized: "File"),
+            systemImage: "doc",
+            tint: SynaraColor.accent,
+            kind: .file
+        ),
+        AttachmentOption(
+            identifier: "Camera",
+            title: String(localized: "Camera"),
+            systemImage: "camera",
+            tint: SynaraColor.warning,
+            kind: .camera
+        ),
     ]
 
     private var isUITestEnvironment: Bool {
-        ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1"
+        SynaraLaunchEnvironment.isUITest
     }
 
     var body: some View {
@@ -8247,7 +9575,7 @@ private struct AttachmentOptionsSheet: View {
                     AttachmentOptionLabel(option: option)
                 }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("AttachmentOption-\(option.title)")
+                .accessibilityIdentifier("AttachmentOption-\(option.identifier)")
             } else if maxSelectionCount > 0 {
                 PhotosPicker(
                     selection: $selectedPhotos,
@@ -8257,11 +9585,11 @@ private struct AttachmentOptionsSheet: View {
                     AttachmentOptionLabel(option: option)
                 }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("AttachmentOption-\(option.title)")
+                .accessibilityIdentifier("AttachmentOption-\(option.identifier)")
             } else {
                 AttachmentOptionLabel(option: option)
                     .opacity(0.45)
-                    .accessibilityIdentifier("AttachmentOption-\(option.title)")
+                    .accessibilityIdentifier("AttachmentOption-\(option.identifier)")
             }
         case .file:
             Button {
@@ -8279,7 +9607,7 @@ private struct AttachmentOptionsSheet: View {
             .buttonStyle(.plain)
             .disabled(maxSelectionCount == 0)
             .opacity(maxSelectionCount == 0 ? 0.45 : 1)
-            .accessibilityIdentifier("AttachmentOption-\(option.title)")
+            .accessibilityIdentifier("AttachmentOption-\(option.identifier)")
         case .camera:
             Button {
                 if maxSelectionCount == 0 {
@@ -8296,7 +9624,7 @@ private struct AttachmentOptionsSheet: View {
             .buttonStyle(.plain)
             .disabled(maxSelectionCount == 0)
             .opacity(maxSelectionCount == 0 ? 0.45 : 1)
-            .accessibilityIdentifier("AttachmentOption-\(option.title)")
+            .accessibilityIdentifier("AttachmentOption-\(option.identifier)")
         }
     }
 }
@@ -8367,12 +9695,14 @@ private struct AttachmentOption: Identifiable {
         case camera
     }
 
+    /// Stable English name for the accessibility identifier; `title` is localized.
+    let identifier: String
     let title: String
     let systemImage: String
     let tint: Color
     let kind: Kind
 
-    var id: String { title }
+    var id: String { identifier }
 }
 
 private struct AttachmentOptionLabel: View {
@@ -8458,7 +9788,7 @@ private struct ComposerRelationBanner: View {
             Spacer(minLength: SynaraSpacing.small)
             Button("Cancel", action: onCancel)
                 .disabled(isCancelDisabled)
-                .accessibilityLabel("Cancel \(target.kind == .edit ? "editing" : "reply")")
+                .accessibilityLabel(target.kind == .edit ? "Cancel editing" : "Cancel reply")
         }
         .padding(SynaraSpacing.small)
         .synaraCard(fill: SynaraColor.accent.opacity(0.08), stroke: SynaraColor.accent)
@@ -8492,7 +9822,7 @@ private struct MediaViewer: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    mediaErrorView(message: "Media could not be loaded.")
+                    mediaErrorView(message: String(localized: "Media could not be loaded."))
                 }
             }
             .padding(.horizontal, resource.isImageMedia ? 0 : SynaraSpacing.xLarge)
@@ -8535,12 +9865,12 @@ private struct MediaViewer: View {
         lastScale = 1
 
         guard resource.isEncrypted == false else {
-            errorMessage = "Encrypted media requires recovered keys before it can be opened."
+            errorMessage = String(localized: "Encrypted media requires recovered keys before it can be opened.")
             return
         }
 
         guard resource.authenticatedURL != nil else {
-            errorMessage = "Media is unavailable."
+            errorMessage = String(localized: "Media is unavailable.")
             return
         }
 
@@ -8550,7 +9880,7 @@ private struct MediaViewer: View {
         guard let data = await environment.mediaLoader.loadMediaData(for: resource),
               let loadedImage = UIImage(data: data)
         else {
-            errorMessage = "Media could not be loaded."
+            errorMessage = String(localized: "Media could not be loaded.")
             return
         }
 
@@ -8621,14 +9951,18 @@ private struct InlineThreadReplies: View {
 
             if hasEarlier {
                 Button(action: showEarlier) {
-                    if isLoadingEarlier {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Text("Show earlier replies")
+                    Group {
+                        if isLoadingEarlier {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Text("Show earlier replies")
+                        }
                     }
+                    .frame(minWidth: SynaraHitTarget.minimum, minHeight: SynaraHitTarget.minimum, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
                 .font(SynaraTypography.chipLabel)
-                .foregroundStyle(SynaraColor.accent)
+                .foregroundStyle(SynaraColor.accentText)
                 .buttonStyle(.plain)
                 .disabled(isLoadingEarlier)
                 .accessibilityIdentifier("InlineThreadEarlier-\(rootEventID)")
@@ -8643,15 +9977,19 @@ private struct InlineThreadReplies: View {
             HStack(spacing: SynaraSpacing.medium) {
                 Button(action: onReplyInThread) {
                     Label("Reply in thread", systemImage: "arrowshape.turn.up.left")
+                        .frame(minHeight: SynaraHitTarget.minimum)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityIdentifier("InlineThreadReply-\(rootEventID)")
                 Button(action: onOpenThread) {
                     Label("Open thread", systemImage: "arrow.up.left.and.arrow.down.right")
+                        .frame(minHeight: SynaraHitTarget.minimum)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityIdentifier("InlineThreadOpen-\(rootEventID)")
             }
             .font(SynaraTypography.chipLabel)
-            .foregroundStyle(SynaraColor.accent)
+            .foregroundStyle(SynaraColor.accentText)
             .buttonStyle(.plain)
         }
         .padding(.leading, SynaraSpacing.medium)
@@ -8762,14 +10100,7 @@ private struct InlineThreadReplyRow: View {
 
 private extension Date {
     var timelineTime: String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .none
-        if SynaraSharedConstants.boolSetting(SynaraSharedConstants.hour24ClockKey) {
-            formatter.dateFormat = "HH:mm"
-        } else {
-            formatter.timeStyle = .short
-        }
-        return formatter.string(from: self)
+        SynaraTimeFormatting.clockTime(self)
     }
 }
 
@@ -8785,11 +10116,13 @@ private extension TimelineItem {
         case let .agentCard(card):
             return card.title
         case .redacted:
-            return "Deleted message"
+            return String(localized: "Deleted message")
         case .encryptedPlaceholder:
-            return "Encrypted message"
-        case let .unknown(type):
-            return type
+            return String(localized: "Encrypted message")
+        case let .systemNotice(text):
+            return text
+        case .unknown:
+            return TimelineUnavailableMessageCopy.text
         }
     }
 }

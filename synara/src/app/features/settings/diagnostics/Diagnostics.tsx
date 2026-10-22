@@ -264,9 +264,7 @@ export function Diagnostics({ requestClose }: DiagnosticsProps) {
           gap="400"
         >
           <SettingTile
-            title={
-              status?.available === false ? 'Native diagnostics unavailable' : 'Local diagnostics'
-            }
+            title={status?.available === false ? 'Diagnostics unavailable' : 'Local diagnostics'}
             description={
               status?.available === false
                 ? 'Diagnostic report storage is not available in this client.'

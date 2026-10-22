@@ -252,8 +252,9 @@ mod markdown_tests {
 mod ffi;
 #[cfg(feature = "full-uniffi")]
 pub use ffi::{
-    login_flows, register_flows, LoginFlowDto, LoginFlowsError, RegisterFlowsDto,
-    RegisterFlowsError, RegisterFlowsStatus, RegisterUiaFlowDto,
+    login_flows, register_flows, resolve_homeserver, LoginFlowDto, LoginFlowsError,
+    RegisterFlowsDto, RegisterFlowsError, RegisterFlowsStatus, RegisterUiaFlowDto,
+    ResolvedHomeserverDto,
 };
 
 #[cfg(feature = "full-uniffi")]
@@ -274,9 +275,9 @@ pub use shared_core_ffi::{
     AgentNotificationPreferencesDto, AgentNotificationPreferencesError, BackupActionDto,
     BackupAvailabilityDto, BackupDeviceStateDto, BackupRecoveryStateDto, BackupStatusDto,
     CommandGateDto, ComposerReplyDraftDto, ComposerReplyDraftError, ComposerReplyDraftPreviewDto,
-    CrossSigningReadinessDto, CrossSigningStateDto, CrossSigningStatusDto, CryptoStatusDto,
-    DeviceCommandError, DeviceDeleteAuthenticationDto, DeviceDeleteChallengeDto, DeviceDeleteDto,
-    DeviceDeleteOutcomeDto, DeviceSnapshotDto, DeviceSummaryDto, DeviceTrustDto,
+    CoreErrorKind, CrossSigningReadinessDto, CrossSigningStateDto, CrossSigningStatusDto,
+    CryptoStatusDto, DeviceCommandError, DeviceDeleteAuthenticationDto, DeviceDeleteChallengeDto,
+    DeviceDeleteDto, DeviceDeleteOutcomeDto, DeviceSnapshotDto, DeviceSummaryDto, DeviceTrustDto,
     DirectorySearchCommandError, DirectoryVisibilityCommandError, EditMessageDto, EditMessageError,
     GlobalImagePacksSnapshotDto, HttpPusherOwner, IgnoredUsersCommandError,
     IgnoredUsersSnapshotDto, IgnoredUsersWriteDto, ImagePackCommandError, ImagePackDto,
@@ -290,9 +291,10 @@ pub use shared_core_ffi::{
     OwnProfileDto, OwnProfileUploadDto, OwnProfileWriteDto, OwnerUpdateDto, OwnerUpdateError,
     PlainMediaError, PollRespondDto, PollRespondError, PresenceCommandError, PresenceSnapshotDto,
     PresenceSubscriptionDto, PresenceWriteDto, PushRuleMentionsDto, PushRulesCommandError,
-    PushRulesSnapshotDto, PushRulesWriteDto, PusherCommandError, PusherWriteDto, RestoreBackupDto,
-    RestoreBackupError, RestrictedJoinReparentDto, RoomCreateCommandError, RoomCreateDto,
-    RoomCreateRequestDto, RoomCreatorsSnapshotDto, RoomDirectoryHitDto, RoomDirectoryPageDto,
+    PushRulesSnapshotDto, PushRulesWriteDto, PusherCommandError, PusherWriteDto,
+    RecentEmojiEntryDto, RecentEmojiSnapshotDto, RestoreBackupDto, RestoreBackupError,
+    RestrictedJoinReparentDto, RoomCreateCommandError, RoomCreateDto, RoomCreateRequestDto,
+    RoomCreatorsSnapshotDto, RoomDirectoryHitDto, RoomDirectoryPageDto,
     RoomDirectoryProtocolInstanceDto, RoomDirectoryProtocolsDto, RoomDirectorySearchDto,
     RoomDirectoryVisibilityDto, RoomDirectoryVisibilityWriteDto, RoomImagePacksSnapshotDto,
     RoomJoinRuleSnapshotDto, RoomJoinRuleWriteDto, RoomKeyTransferPhaseDto,
@@ -324,12 +326,13 @@ pub use shared_core_ffi::{
     TimelineSnapshotDto, TimelineViewPollAnswerDto, TimelineViewPollDto, TimelineViewPositionDto,
     TimelineViewReactionDto, TimelineViewReplyPreviewDto, TimelineViewRowCapabilitiesDto,
     TimelineViewRowDto, TimelineViewThreadSummaryDto, TimelineViewUpdateDto,
-    TimelineViewUpdateError, TimelineVoteDeclineDto, TimelineVoteDeclineError, TypingCommandError,
-    TypingRoomDto, TypingSnapshotDto, UserDirectoryHitDto, UserDirectorySearchDto,
-    UserDirectorySearchError, UserImagePackSnapshotDto, UserInCallDto, UserStatusCommandError,
-    UserStatusFieldDto, UserStatusSnapshotDto, UserStatusWriteDto, VerificationDirectionDto,
-    VerificationEmojiDto, VerificationInboxDto, VerificationListError, VerificationPhaseDto,
-    VerificationQrDto, VerificationRequestDto, VerificationSasDto, VerificationSasError,
+    TimelineViewUpdateError, TimelineVoteDeclineDto, TimelineVoteDeclineError, TypedFfiError,
+    TypingCommandError, TypingRoomDto, TypingSnapshotDto, UserDirectoryHitDto,
+    UserDirectorySearchDto, UserDirectorySearchError, UserImagePackSnapshotDto, UserInCallDto,
+    UserStatusCommandError, UserStatusFieldDto, UserStatusSnapshotDto, UserStatusWriteDto,
+    VerificationDirectionDto, VerificationEmojiDto, VerificationInboxDto, VerificationListError,
+    VerificationPhaseDto, VerificationQrDto, VerificationRequestDto, VerificationSasDto,
+    VerificationSasError,
 };
 
 #[cfg(feature = "full-app")]
@@ -340,10 +343,10 @@ pub use core::{
 };
 
 pub mod app;
+pub mod ffi_runtime;
 #[cfg(feature = "full-app")]
 pub use app::room_list::{
-    room_activity_recovery_required, room_unread_presentation, RoomActivityPreviousState,
-    RoomEncryptionStatus, RoomUnreadMembership, RoomUnreadPresentationDto,
+    room_unread_presentation, RoomEncryptionStatus, RoomUnreadMembership, RoomUnreadPresentationDto,
 };
 
 #[cfg(feature = "full-app")]

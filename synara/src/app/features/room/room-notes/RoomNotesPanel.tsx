@@ -88,32 +88,47 @@ function RoomNoteItem({
   canMoveDown,
 }: RoomNoteItemProps) {
   const { navigateRoom } = useRoomNavigate();
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string>();
   const senderName =
     item.sender &&
     (memberDisplayNames.get(item.sender) ?? getMxIdLocalPart(item.sender) ?? item.sender);
+  const itemLabel = item.kind === 'todo' ? 'ToDo' : item.kind === 'message' ? 'message' : 'note';
+
+  /** Run one item action; a failure stays visible on the item. */
+  const runAction = (failure: string, action: () => Promise<unknown>) => {
+    if (busy) return;
+    setBusy(true);
+    setActionError(undefined);
+    action()
+      .catch(() => setActionError(failure))
+      .finally(() => setBusy(false));
+  };
 
   const handleDelete = () => {
-    void deleteRoomNoteWithNativeOwner(roomId, item.id).catch(() => undefined);
+    runAction(`Couldn't delete this ${itemLabel}. Try again.`, () =>
+      deleteRoomNoteWithNativeOwner(roomId, item.id)
+    );
   };
   const handleToggleTodo = () => {
-    void completeRoomTodoWithNativeOwner(roomId, item.id, !item.completedAt).catch(() => undefined);
+    runAction(
+      item.completedAt
+        ? "Couldn't reopen this ToDo. Try again."
+        : "Couldn't complete this ToDo. Try again.",
+      () => completeRoomTodoWithNativeOwner(roomId, item.id, !item.completedAt)
+    );
   };
-  const handleMoveUp = () => {
+  const handleMove = (direction: 'up' | 'down') => {
+    const failure = `Couldn't move this ${itemLabel}. Try again.`;
     if (item.kind === 'todo') {
-      void moveRoomTodoWithNativeOwner(roomId, item.id, 'up').catch(() => undefined);
+      runAction(failure, () => moveRoomTodoWithNativeOwner(roomId, item.id, direction));
       return;
     }
-    const ranked = rankRoomNoteItem(roomItems, item.id, 'up');
-    if (ranked) void upsertRoomNoteWithNativeOwner(ranked).catch(() => undefined);
+    const ranked = rankRoomNoteItem(roomItems, item.id, direction);
+    if (ranked) runAction(failure, () => upsertRoomNoteWithNativeOwner(ranked));
   };
-  const handleMoveDown = () => {
-    if (item.kind === 'todo') {
-      void moveRoomTodoWithNativeOwner(roomId, item.id, 'down').catch(() => undefined);
-      return;
-    }
-    const ranked = rankRoomNoteItem(roomItems, item.id, 'down');
-    if (ranked) void upsertRoomNoteWithNativeOwner(ranked).catch(() => undefined);
-  };
+  const handleMoveUp = () => handleMove('up');
+  const handleMoveDown = () => handleMove('down');
   const handleOpenMessage = () => {
     if (item.eventId) navigateRoom(roomId, item.eventId);
   };
@@ -124,6 +139,7 @@ function RoomNoteItem({
         {item.kind === 'todo' && (
           <Checkbox
             checked={!!item.completedAt}
+            disabled={busy}
             onClick={handleToggleTodo}
             size="300"
             variant="Primary"
@@ -172,7 +188,7 @@ function RoomNoteItem({
                 className={css.ItemAction}
                 size="300"
                 radii="300"
-                disabled={!canMoveUp}
+                disabled={busy || !canMoveUp}
                 onClick={handleMoveUp}
                 aria-label={`Move ${item.kind === 'todo' ? 'ToDo' : 'note'} up`}
               >
@@ -182,7 +198,7 @@ function RoomNoteItem({
                 className={css.ItemAction}
                 size="300"
                 radii="300"
-                disabled={!canMoveDown}
+                disabled={busy || !canMoveDown}
                 onClick={handleMoveDown}
                 aria-label={`Move ${item.kind === 'todo' ? 'ToDo' : 'note'} down`}
               >
@@ -210,12 +226,18 @@ function RoomNoteItem({
             radii="300"
             variant="Critical"
             fill="None"
+            disabled={busy}
             onClick={handleDelete}
           >
             <Text size="B300">Delete</Text>
           </Button>
         </Box>
       </Box>
+      {actionError && (
+        <Text size="T200" role="alert" style={{ color: color.Critical.Main }}>
+          {actionError}
+        </Text>
+      )}
     </Box>
   );
 }
@@ -363,7 +385,7 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
         <Box alignItems="Center" gap="200" style={{ minWidth: 0 }}>
           <Box grow="Yes">
             {error && (
-              <Text size="T200" style={{ color: color.Critical.Main }}>
+              <Text size="T200" role="alert" style={{ color: color.Critical.Main }}>
                 {error}
               </Text>
             )}

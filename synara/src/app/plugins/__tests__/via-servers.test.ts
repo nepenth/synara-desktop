@@ -115,7 +115,6 @@ test('via-server owner and all callers keep the native read before effects', () 
       /await getViaServers\(mentionRoom\)/,
     ],
     ['src/app/features/room/RoomTombstone.tsx', /const via = await getViaServers\(currentRoom\)/],
-    ['src/app/features/room/message/Message.tsx', /const viaServers = await getViaServers\(room\)/],
     ['src/app/features/room/RoomViewHeader.tsx', /await getViaServers\(room\)/],
   ] as const;
 

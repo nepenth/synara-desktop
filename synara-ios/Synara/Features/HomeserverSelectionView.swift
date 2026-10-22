@@ -17,7 +17,7 @@ struct HomeserverSelectionView: View {
             Section {
                 SynaraProductHeader(
                     title: "Synara",
-                    subtitle: "Native Matrix rooms, agent approvals, and private workflows across your devices."
+                    subtitle: String(localized: "Native Matrix rooms, agent approvals, and private workflows across your devices.")
                 )
                 .accessibilityIdentifier("HomeserverProductHeader")
             }
@@ -28,6 +28,11 @@ struct HomeserverSelectionView: View {
                     .keyboardType(.URL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .submitLabel(.continue)
+                    .onSubmit {
+                        guard state.isLoading == false else { return }
+                        validateAndContinue()
+                    }
                     .accessibilityIdentifier("HomeserverAddressField")
 
                 Button {
@@ -73,7 +78,7 @@ struct HomeserverSelectionView: View {
             if case .failed(let message) = state {
                 Section {
                     Text(message)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(SynaraColor.criticalText)
                         .accessibilityIdentifier("HomeserverErrorText")
                 }
             }
@@ -92,7 +97,12 @@ struct HomeserverSelectionView: View {
                 await MainActor.run {
                     state = .ready(result)
                     environment.logger.info("Homeserver discovery succeeded", category: .auth)
-                    environment.router.route(to: .login(homeserverURL: result.homeserverBaseURL.absoluteString))
+                    environment.router.route(
+                        to: .login(
+                            homeserverURL: result.homeserverBaseURL.absoluteString,
+                            requestedAddress: result.requestedURL.absoluteString
+                        )
+                    )
                 }
             } catch let error as HomeserverDiscoveryError {
                 await MainActor.run {

@@ -4,7 +4,6 @@ import {
   Button,
   color,
   config,
-  Dialog,
   Header,
   Icon,
   IconButton,
@@ -15,6 +14,7 @@ import {
   Spinner,
   Text,
 } from 'folds';
+import { Dialog } from '../../../components/modal-dialog';
 import React, { useCallback, useState } from 'react';
 import type { MatrixError } from '../../../utils/matrix';
 import FocusTrap from '../../../components/FocusTrap';
@@ -29,7 +29,7 @@ import { stopPropagation } from '../../../utils/keyboard';
 import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom, getSharedSettings } from '../../../state/settings';
-import { useNativeRoomListSnapshot } from '../../../state/room-list/roomList';
+import { useNativeRoomSummary } from '../../../state/room-list/roomList';
 import {
   desktopUsesNativeStateEventOwner,
   enableRoomEncryptedStateWithNativeOwner,
@@ -53,8 +53,7 @@ type RoomEncryptionProps = {
 export function RoomEncryption({ permissions }: RoomEncryptionProps) {
   const room = useRoom();
   const [encryptedStateEventsSetting] = useSetting(settingsAtom, 'encryptedStateEvents');
-  const nativeRooms = useNativeRoomListSnapshot();
-  const nativeSummary = nativeRooms.rooms.find((item) => item.roomId === room.roomId);
+  const nativeSummary = useNativeRoomSummary(room.roomId);
 
   const canEnable = permissions.stateEvent(StateEvent.RoomEncryption);
   const content = useStateEvent(room, StateEvent.RoomEncryption)?.getContent<{
@@ -175,7 +174,12 @@ export function RoomEncryption({ permissions }: RoomEncryptionProps) {
                     <Box grow="Yes">
                       <Text size="H4">Enable Encryption</Text>
                     </Box>
-                    <IconButton size="300" onClick={() => setPrompt(false)} radii="300">
+                    <IconButton
+                      size="300"
+                      onClick={() => setPrompt(false)}
+                      radii="300"
+                      aria-label="Close"
+                    >
                       <Icon src={Icons.Cross} />
                     </IconButton>
                   </Header>
@@ -250,7 +254,12 @@ export function RoomEncryption({ permissions }: RoomEncryptionProps) {
                       <Box grow="Yes">
                         <Text size="H4">Encrypt state events</Text>
                       </Box>
-                      <IconButton size="300" onClick={() => setOptInPrompt(false)} radii="300">
+                      <IconButton
+                        size="300"
+                        onClick={() => setOptInPrompt(false)}
+                        radii="300"
+                        aria-label="Close"
+                      >
                         <Icon src={Icons.Cross} />
                       </IconButton>
                     </Header>

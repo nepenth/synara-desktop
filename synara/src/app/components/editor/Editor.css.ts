@@ -97,7 +97,9 @@ export const EditorTextareaWithFloatingOptions = style({
 export const EditorPlaceholderContainer = style([
   DefaultReset,
   {
-    opacity: config.opacity.Placeholder,
+    // Opaque secondary text: AA on the composer, unlike the folds placeholder opacity.
+    color: 'var(--synara-content-secondary)',
+    opacity: 1,
     pointerEvents: 'none',
     userSelect: 'none',
   },

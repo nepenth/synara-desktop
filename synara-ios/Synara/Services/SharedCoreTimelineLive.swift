@@ -38,12 +38,22 @@ enum SharedCoreTimelineUpdateBootstrap {
 /// Stream identity and open position for a room's own timeline and for each
 /// thread in it. Thread streams use `TimelineOpenKindDto.thread`, which Core
 /// maps to an SDK thread-focused timeline holding the root and its replies.
-/// The room's live and focused streams hide in-thread events.
+/// The room's live and focused streams hide in-thread events. An
+/// event-focused window has its own key, so opening one never closes the
+/// live stream behind it; a room has at most one focused window open.
 enum SharedCoreTimelineStreamKey {
     private static let separator = "\u{1F}"
 
     static func room(_ roomID: String) -> String {
         roomID
+    }
+
+    static func focused(_ roomID: String) -> String {
+        roomID + separator + "focused"
+    }
+
+    static func room(_ roomID: String, focusedEventID: String?) -> String {
+        focusedEventID == nil ? room(roomID) : focused(roomID)
     }
 
     static func thread(roomID: String, rootEventID: String) -> String {
@@ -70,6 +80,66 @@ enum SharedCoreTimelineStreamKey {
             updatedAtMs: nil,
             eventId: rootEventID
         )
+    }
+}
+
+/// Whether a room signal should refresh one stream. Signals are per room, but
+/// a room can have live, focused and thread streams: a stream whose own
+/// revision has not moved past the snapshot it shows has nothing new.
+enum SharedCoreTimelineRefreshPolicy {
+    static func shouldRefresh(shownRevision: UInt64?, announcedRevision: UInt64?) -> Bool {
+        guard let shownRevision, let announcedRevision else {
+            // Nothing shown yet, or no batch seen for this stream: read it.
+            return true
+        }
+        return announcedRevision > shownRevision
+    }
+}
+
+/// What an empty forward page means, from Core's forward state. Core reports
+/// the SDK's own end of timeline for an event-focused window, and no forward
+/// pagination at all for a thread.
+enum SharedCoreTimelineForwardPagination {
+    enum Next: Equatable {
+        /// The window reaches the present.
+        case reachedPresent
+        /// More newer events remain; page again.
+        case pageAgain
+    }
+
+    static func next(after forward: TimelinePageStateDto) -> Next {
+        switch forward {
+        case .available, .loading:
+            return .pageAgain
+        case .exhausted, .unavailable:
+            return .reachedPresent
+        }
+    }
+}
+
+/// Counts the update subscriptions of each stream key. A room view stops its
+/// subscription when it disappears; the last one ending releases the native
+/// stream, unless a newer open already replaced the stream it watched.
+struct SharedCoreTimelineSubscriptions {
+    private var counts: [String: Int] = [:]
+
+    mutating func begin(key: String) {
+        counts[key, default: 0] += 1
+    }
+
+    /// Ends one subscription. Returns true when it was the key's last.
+    mutating func end(key: String) -> Bool {
+        let remaining = max((counts[key] ?? 0) - 1, 0)
+        if remaining == 0 {
+            counts.removeValue(forKey: key)
+        } else {
+            counts[key] = remaining
+        }
+        return remaining == 0
+    }
+
+    func count(key: String) -> Int {
+        counts[key] ?? 0
     }
 }
 
@@ -126,6 +196,9 @@ final class SharedCoreLivePoller: @unchecked Sendable {
     private var waiters: [UUID: (roomId: String, continuation: AsyncStream<Void>.Continuation)] = [:]
     private var roomListWaiters: [UUID: AsyncStream<Void>.Continuation] = [:]
     private var ownerWaiters: [UUID: (families: Set<String>, continuation: AsyncStream<OwnerUpdateDto>.Continuation)] = [:]
+    /// Newest revision Core announced for each native stream, so a stream's
+    /// consumer can skip a room signal that another stream of the room sent.
+    private var latestRevisions: [String: UInt64] = [:]
     private var pollTask: Task<Void, Never>?
 
     init(core: SharedCore) {
@@ -263,8 +336,26 @@ final class SharedCoreLivePoller: @unchecked Sendable {
         return ownerWaiters.isEmpty == false
     }
 
+    /// The newest revision announced for `streamId`, or nil before its first
+    /// batch.
+    func latestTimelineRevision(streamId: String) -> UInt64? {
+        lock.lock()
+        defer { lock.unlock() }
+        return latestRevisions[streamId]
+    }
+
+    /// Drops the revision record of a stream that was closed.
+    func forgetTimelineStream(streamId: String) {
+        lock.lock()
+        latestRevisions.removeValue(forKey: streamId)
+        lock.unlock()
+    }
+
     func receiveTimelineUpdates(_ updates: [TimelineViewUpdateDto]) {
         lock.lock()
+        for update in updates where update.streamId.isEmpty == false {
+            latestRevisions[update.streamId] = max(latestRevisions[update.streamId] ?? 0, update.revision)
+        }
         let waiters = self.waiters
         lock.unlock()
         // A room may have live, focused and transient read-marker streams.

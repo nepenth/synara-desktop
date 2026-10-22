@@ -3,6 +3,8 @@ import SwiftUI
 struct PlaceholderScreen: View {
     let title: String
     let systemImage: String
+    /// Stable, non-localized prefix for the screen's accessibility identifier.
+    let identifier: String
     @Environment(\.appEnvironment) private var environment
 
     var body: some View {
@@ -14,12 +16,12 @@ struct PlaceholderScreen: View {
         .navigationTitle(title)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                SynaraToolbarIconButton(systemImage: "person.crop.circle", accessibilityLabel: "Accounts") {
+                SynaraToolbarIconButton(systemImage: "person.crop.circle", accessibilityLabel: String(localized: "Accounts")) {
                     environment.router.present(.accountSwitcher)
                 }
             }
         }
-        .accessibilityIdentifier("\(title)Screen")
+        .accessibilityIdentifier("\(identifier)Screen")
     }
 }
 
@@ -29,8 +31,8 @@ struct RoutePlaceholderView: View {
 
     var body: some View {
         switch route {
-        case .login(let homeserverURL):
-            LoginView(homeserverURLString: homeserverURL)
+        case .login(let homeserverURL, let requestedAddress):
+            LoginView(homeserverURLString: homeserverURL, requestedAddress: requestedAddress)
         case .room(let id, let eventID, let title):
             RoomTimelineView(
                 roomID: id,
@@ -40,19 +42,20 @@ struct RoutePlaceholderView: View {
             .id("\(id)-\(eventID ?? "")")
             .synaraInteractiveSwipeBack()
             .environment(\.synaraAllowsConversationSwipeBack, canvasLayout == .stacked)
-        case .thread(let roomID, let rootEventID, let roomTitle, let rootTitle):
+        case .thread(let roomID, let rootEventID, let roomTitle, let rootTitle, let focusedEventID):
             ThreadTimelineView(
                 roomID: roomID,
                 rootEventID: rootEventID,
                 roomTitle: roomTitle,
-                rootTitle: rootTitle
+                rootTitle: rootTitle,
+                focusedEventID: focusedEventID
             )
             .synaraInteractiveSwipeBack()
             .environment(\.synaraAllowsConversationSwipeBack, true)
         case .settings:
             EmptyView()
         case .notifications:
-            PlaceholderScreen(title: "Notifications", systemImage: "bell")
+            PlaceholderScreen(title: String(localized: "Notifications"), systemImage: "bell", identifier: "Notifications")
         case .later:
             LaterListView()
         }
@@ -73,7 +76,7 @@ struct SheetPlaceholderView: View {
 private struct AccountMenuSheet: View {
     @Environment(\.appEnvironment) private var environment
     @Environment(\.dismiss) private var dismiss
-    @State private var isLogoutConfirmationPresented = false
+    @StateObject private var logoutConfirmation = SignOutConfirmationModel()
     @State private var isLoggingOut = false
     @State private var logoutError: String?
 
@@ -83,11 +86,14 @@ private struct AccountMenuSheet: View {
                 Section("Account") {
                     switch environment.session.currentState {
                     case .signedIn(let session):
-                        AccountMenuInfoRow(title: "User", value: session.userID)
+                        AccountMenuInfoRow(title: String(localized: "User"), value: session.userID)
                             .accessibilityIdentifier("AccountMenuUserRow")
-                        AccountMenuInfoRow(title: "Homeserver", value: session.homeserverURL.host ?? session.homeserverURL.absoluteString)
+                        AccountMenuInfoRow(
+                            title: String(localized: "Homeserver"),
+                            value: session.homeserverURL.host ?? session.homeserverURL.absoluteString
+                        )
                             .accessibilityIdentifier("AccountMenuHomeserverRow")
-                        AccountMenuInfoRow(title: "Device", value: session.deviceID)
+                        AccountMenuInfoRow(title: String(localized: "Device"), value: session.deviceID)
                             .accessibilityIdentifier("AccountMenuDeviceRow")
                     case .signedOut:
                         Text("Not signed in")
@@ -106,7 +112,7 @@ private struct AccountMenuSheet: View {
                     .accessibilityIdentifier("AccountMenuSettingsButton")
 
                     Button(role: .destructive) {
-                        isLogoutConfirmationPresented = true
+                        logoutConfirmation.request(using: environment.sessionCrypto)
                     } label: {
                         if isLoggingOut {
                             ProgressView()
@@ -121,7 +127,7 @@ private struct AccountMenuSheet: View {
                 if let logoutError {
                     Section {
                         Text(logoutError)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(SynaraColor.criticalText)
                             .accessibilityIdentifier("AccountMenuLogoutErrorText")
                     }
                 }
@@ -135,18 +141,9 @@ private struct AccountMenuSheet: View {
                     }
                 }
             }
-            .confirmationDialog(
-                "Log out of Synara?",
-                isPresented: $isLogoutConfirmationPresented,
-                titleVisibility: .visible
-            ) {
-                Button("Log Out", role: .destructive) {
-                    logout()
-                }
-                .accessibilityIdentifier("AccountMenuConfirmLogoutButton")
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This clears local session data, sync state, cached rooms, and push registration on this device.")
+            // Same confirmation as Settings, last-device warning included.
+            .signOutConfirmation(logoutConfirmation, confirmIdentifier: "AccountMenuConfirmLogoutButton") {
+                logout()
             }
         }
     }
@@ -196,7 +193,7 @@ private struct AccountMenuInfoRow: View {
 struct PlaceholderScreen_Previews: PreviewProvider {
     static var previews: some View {
         NavigationStack {
-            PlaceholderScreen(title: "Rooms", systemImage: "bubble.left.and.bubble.right")
+            PlaceholderScreen(title: "Rooms", systemImage: "bubble.left.and.bubble.right", identifier: "Rooms")
         }
         .environment(\.appEnvironment, AppEnvironment.mock())
     }

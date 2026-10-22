@@ -1,6 +1,27 @@
 import Foundation
 import Network
 import SynaraCore
+#if canImport(UIKit)
+import UIKit
+#endif
+
+/// Hands rebuildable memory back to Core when iOS warns about memory: the
+/// decrypted media cache, which Core refills from its encrypted store.
+enum SharedCoreMemoryPressure {
+    static func observe(
+        center: NotificationCenter = .default,
+        release: @escaping @Sendable () -> Void
+    ) -> NSObjectProtocol {
+        #if canImport(UIKit)
+        let name = UIApplication.didReceiveMemoryWarningNotification
+        #else
+        let name = Notification.Name("SynaraMemoryWarning")
+        #endif
+        return center.addObserver(forName: name, object: nil, queue: nil) { _ in
+            release()
+        }
+    }
+}
 
 /// Caller-owned SharedCore used by live product services after S10 leftover retirement.
 /// UniFFI must not construct-and-drop this instance.
@@ -118,18 +139,37 @@ final class SharedCoreProductHost {
     }
 }
 
+/// Core's sign-in codes (`session_lifecycle.rs` `login_auth_error`). Only a
+/// homeserver rejection reads as wrong credentials; anything unclassified is
+/// a generic failure rather than "incorrect password".
 enum SharedCoreLoginErrorMapping {
     static func loginError(for error: Error) -> LoginError {
-        guard case let SessionLoginError.Failed(code, _) = error else {
-            return .invalidCredentials
+        guard let code = (error as? SessionLoginError)?.coreErrorCode else {
+            return .signInFailed
         }
         switch code {
+        case "p4-s3c-credentials-rejected":
+            return .invalidCredentials
+        case "p4-s3c-network-unavailable":
+            return .networkFailure
+        case "p4-s3c-server-unavailable":
+            return .serverUnavailable
+        case "p4-s3c-rate-limited":
+            return .rateLimited
+        case "p4-s3c-user-deactivated":
+            return .accountDeactivated
+        case "p4-s3c-login-unsupported", "p4-s3c-identity-invalid":
+            return .unsupported
         case "p4-s3c-secret-vault-unavailable", "p4-s3c-store-root-invalid":
             return .sessionPersistenceFailed
-        case "p4-s3c-identity-invalid":
-            return .unsupported
+        case "p4-s3c-sliding-sync-unsupported":
+            return .slidingSyncUnsupported
+        case "p4-s3c-store-reset-required":
+            return .localDataUnreadable
+        case "p4-s3c-store-locked":
+            return .localDataInUse
         default:
-            return .invalidCredentials
+            return .signInFailed
         }
     }
 }
@@ -145,9 +185,7 @@ struct SharedCoreAuthService: AuthServicing {
         guard request.password.isEmpty == false else {
             throw LoginError.missingPassword
         }
-        let userID = username.hasPrefix("@")
-            ? username
-            : "@\(username):\(request.homeserverURL.host ?? "localhost")"
+        let userID = request.userID
         do {
             let dto = try await SharedCoreSessionLogin.loginWithPassword(
                 userID: userID,
@@ -165,6 +203,14 @@ struct SharedCoreAuthService: AuthServicing {
         } catch {
             throw SharedCoreLoginErrorMapping.loginError(for: error)
         }
+    }
+
+    func resetLocalData(for request: LoginRequest) async throws {
+        _ = try await host.core.resetLocalAccountStore(
+            userId: request.userID,
+            homeserverUrl: request.homeserverURL.absoluteString,
+            storeRoot: host.storeRoot.path
+        )
     }
 }
 
@@ -227,7 +273,7 @@ struct RejectedAuthenticationRetirer {
 }
 
 enum ExplicitRoomReadReceipt {
-    static let failureCopy = "Couldn't mark this channel as read."
+    static let failureCopy = String(localized: "Couldn't mark this channel as read.")
 
     /// Fixed copy for the channel menu when explicit mark-read did not publish
     /// a fully-read marker. Nil means the mark-read landed.
@@ -243,9 +289,158 @@ enum ExplicitRoomReadReceipt {
     }
 }
 
+/// The parts of an `NWPath` that decide whether sync must reconnect.
+struct ConnectionPathSnapshot: Equatable, Sendable {
+    var isSatisfied: Bool
+    /// The interface the system routes through first, e.g. "wifi".
+    var primaryInterface: String?
+    var isExpensive: Bool
+    var isConstrained: Bool
+
+    init(isSatisfied: Bool, primaryInterface: String?, isExpensive: Bool = false, isConstrained: Bool = false) {
+        self.isSatisfied = isSatisfied
+        self.primaryInterface = primaryInterface
+        self.isExpensive = isExpensive
+        self.isConstrained = isConstrained
+    }
+
+    init(_ path: NWPath) {
+        let primary: String?
+        switch path.availableInterfaces.first?.type {
+        case .wifi: primary = "wifi"
+        case .cellular: primary = "cellular"
+        case .wiredEthernet: primary = "wiredEthernet"
+        case .loopback: primary = "loopback"
+        case .other: primary = "other"
+        case nil: primary = nil
+        @unknown default: primary = "unknown"
+        }
+        self.init(
+            isSatisfied: path.status == .satisfied,
+            primaryInterface: primary,
+            isExpensive: path.isExpensive,
+            isConstrained: path.isConstrained
+        )
+    }
+
+    /// Same reachability, different route: a long-poll opened on the old
+    /// route is dead even though nothing reported an error.
+    func changedRoute(from previous: ConnectionPathSnapshot) -> Bool {
+        primaryInterface != previous.primaryInterface
+            || isExpensive != previous.isExpensive
+            || isConstrained != previous.isConstrained
+    }
+}
+
+enum ConnectionPathPolicy {
+    enum Action: Equatable {
+        case none
+        case markReconnecting
+        case restartSync
+    }
+
+    /// What one path update means for a session in `status`. The first
+    /// update after the monitor starts only describes the current route.
+    static func action(
+        previous: ConnectionPathSnapshot?,
+        current: ConnectionPathSnapshot,
+        status: MatrixSyncStatus
+    ) -> Action {
+        guard mayRestart(status) else {
+            return .none
+        }
+        guard current.isSatisfied else {
+            switch status {
+            case .connected, .syncing, .starting:
+                return .markReconnecting
+            default:
+                return .none
+            }
+        }
+        if status == .reconnecting {
+            return .restartSync
+        }
+        guard let previous else {
+            return .none
+        }
+        if previous.isSatisfied == false || current.changedRoute(from: previous) {
+            return .restartSync
+        }
+        return .none
+    }
+
+    /// Stopped (background, sign-out) and failed-restore sessions have
+    /// nothing a path change could restart.
+    static func mayRestart(_ status: MatrixSyncStatus) -> Bool {
+        switch status {
+        case .stopped, .restoreFailed:
+            return false
+        case .starting, .syncing, .connected, .reconnecting, .disconnected, .failed:
+            return true
+        }
+    }
+}
+
+/// Hands path updates to one consumer, in delivery order, together with the
+/// update it applied before. A `Task` per update ran in any order and let a
+/// restart overlap the next update.
+final class ConnectionPathSequencer: @unchecked Sendable {
+    private let continuation: AsyncStream<ConnectionPathSnapshot>.Continuation
+    private let consumer: Task<Void, Never>
+
+    init(handle: @escaping (_ previous: ConnectionPathSnapshot?, _ current: ConnectionPathSnapshot) async -> Void) {
+        var captured: AsyncStream<ConnectionPathSnapshot>.Continuation?
+        let stream = AsyncStream<ConnectionPathSnapshot>(bufferingPolicy: .unbounded) {
+            captured = $0
+        }
+        // The build closure runs synchronously inside `AsyncStream.init`.
+        continuation = captured!
+        consumer = Task {
+            var previous: ConnectionPathSnapshot?
+            for await path in stream {
+                await handle(previous, path)
+                previous = path
+            }
+        }
+    }
+
+    func receive(_ path: ConnectionPathSnapshot) {
+        continuation.yield(path)
+    }
+
+    func finish() {
+        continuation.finish()
+        consumer.cancel()
+    }
+}
+
+/// Reconnect after a path change: restart sync in place, and run the full
+/// restore → attach → start only when Core has nothing to restart.
+enum SharedCoreSyncReconnect {
+    enum Outcome: Equatable {
+        case restarted(SyncReadinessDto)
+        case fullStart
+    }
+
+    static func run(
+        restartSync: () async throws -> SyncReadinessDto,
+        fullStart: () async -> Void
+    ) async -> Outcome {
+        do {
+            return .restarted(try await restartSync())
+        } catch {
+            await fullStart()
+            return .fullStart
+        }
+    }
+}
+
 final class SharedCoreMatrixClientService: MatrixClientServicing {
     private let host: SharedCoreProductHost
     private let connectionStatus: ConnectionStatusStore
+    /// Guards every mutable property below. The apply chain, the status
+    /// watch, path updates, retirement and the main thread all read and write
+    /// them; none of them holds the lock across an `await`.
     private let applyLock = NSLock()
     private var applyChain: Task<Void, Never> = Task {}
     /// Fail closed until the app delegate binds UIKit's actual state. This
@@ -260,16 +455,48 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     /// or has finished. Cleared only after a failed sign-out so a later poll
     /// may retry.
     private var retiringAuthenticationGeneration: UInt64?
-    private(set) var syncStatus: MatrixSyncStatus = .stopped
-    private static let syncNotAttachedCode = "p4-s12-sync-not-attached"
+    private var currentSyncStatus: MatrixSyncStatus = .stopped
+    /// Suspended while the stores are closed for background, so rooms and
+    /// timelines opened meanwhile wait for the resume instead of failing.
+    private let sessionReadiness: SignedInSessionReadinessServicing
+    /// Applies path updates one at a time, in delivery order.
+    private var pathSequencer: ConnectionPathSequencer?
+
+    /// Read on the main thread (session coordinator, app shell) while the
+    /// apply chain and the status watch publish it, so it is read under
+    /// `applyLock`: a torn `.failed(String)` could crash.
+    var syncStatus: MatrixSyncStatus {
+        applyLock.withLock { currentSyncStatus }
+    }
 
     var syncStatusDescription: String {
         syncStatus.description
     }
 
-    init(host: SharedCoreProductHost, connectionStatus: ConnectionStatusStore = ConnectionStatusStore()) {
+    private func setLastSession(_ session: AuthenticatedSession?) {
+        applyLock.withLock { lastSession = session }
+    }
+
+    private var memoryWarningObserver: NSObjectProtocol?
+
+    init(
+        host: SharedCoreProductHost,
+        connectionStatus: ConnectionStatusStore = ConnectionStatusStore(),
+        sessionReadiness: SignedInSessionReadinessServicing = ImmediateSignedInSessionReadiness()
+    ) {
         self.host = host
         self.connectionStatus = connectionStatus
+        self.sessionReadiness = sessionReadiness
+        let core = host.core
+        memoryWarningObserver = SharedCoreMemoryPressure.observe {
+            core.releaseCachedMemory()
+        }
+    }
+
+    deinit {
+        if let memoryWarningObserver {
+            NotificationCenter.default.removeObserver(memoryWarningObserver)
+        }
     }
 
     func start(session: AuthenticatedSession) async {
@@ -362,15 +589,19 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     private func applyBackgroundPause(clearLastSession: Bool) async {
         PerformanceTrace.event("MatrixStoreCloseBegin")
         defer { PerformanceTrace.event("MatrixStoreCloseComplete") }
+        if clearLastSession == false {
+            // Before the stores close, so nothing new is opened against them.
+            await sessionReadiness.suspend()
+        }
         do {
             let stopped = try await SharedCoreSyncStop.stopSync(core: host.core)
             if clearLastSession {
-                lastSession = nil
+                setLastSession(nil)
             }
             await publish(stopped.stopped ? .stopped : .failed("Native sync did not stop"))
-        } catch let SyncStopError.Failed(code, _) where code == Self.syncNotAttachedCode {
+        } catch let error as SyncStopError where error.coreErrorKind == .notReady {
             if clearLastSession {
-                lastSession = nil
+                setLastSession(nil)
             }
             // A cold background launch has no native owners or open stores to
             // quiesce. Preserve the fail-closed state instead of inventing a
@@ -378,14 +609,14 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
             await publish(.stopped)
         } catch {
             if clearLastSession {
-                lastSession = nil
+                setLastSession(nil)
             }
             await publish(.failed("Native sync stop failed"))
         }
     }
 
     private func applyLiveSession(_ session: AuthenticatedSession) async {
-        lastSession = session
+        setLastSession(session)
         await publish(.starting)
         let outcome = await SharedCoreSessionBootstrap.prepareLiveSession(
             userID: session.userID,
@@ -395,6 +626,11 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         )
         if outcome.hasLiveClient {
             _ = try? SharedCoreProductHost.publishNseStoreReady(at: host.storeRoot)
+        }
+        // Release opens parked since the pause. A background mutation pauses
+        // again right after its one operation, so it releases nothing.
+        if applyLock.withLock({ foregroundActive }) {
+            await sessionReadiness.resume(for: session)
         }
         if let failure = outcome.failure {
             await publish(failure.syncStatus)
@@ -413,23 +649,28 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     }
 
     private func startStatusWatch() {
-        if statusWatchTask != nil {
-            return
-        }
-        statusWatchTask = Task { [weak self] in
-            while Task.isCancelled == false {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                guard Task.isCancelled == false else {
-                    return
+        applyLock.withLock {
+            guard statusWatchTask == nil else {
+                return
+            }
+            statusWatchTask = Task { [weak self] in
+                while Task.isCancelled == false {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    guard Task.isCancelled == false else {
+                        return
+                    }
+                    await self?.refreshLiveSyncStatus()
                 }
-                await self?.refreshLiveSyncStatus()
             }
         }
     }
 
     private func stopStatusWatch() {
-        statusWatchTask?.cancel()
-        statusWatchTask = nil
+        let watch: Task<Void, Never>? = applyLock.withLock {
+            defer { statusWatchTask = nil }
+            return statusWatchTask
+        }
+        watch?.cancel()
     }
 
     private func refreshLiveSyncStatus() async {
@@ -440,7 +681,9 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
             beginRejectedAuthenticationRetirement(generation: dto.sessionGeneration)
             return
         }
-        switch syncStatus {
+        connectionStatus.updateSlidingSyncCapability(dto.slidingSyncCapable)
+        let previous = syncStatus
+        switch previous {
         case .restoreFailed, .stopped:
             return
         default:
@@ -449,7 +692,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         await publish(
             ConnectionStatusCopy.fromReadiness(
                 dto.readiness,
-                previous: syncStatus,
+                previous: previous,
                 commandGate: dto.commandGate
             )
         )
@@ -491,7 +734,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
             guard let self else {
                 return
             }
-            self.lastSession = nil
+            self.setLastSession(nil)
             switch outcome {
             case .retired, .signedOutCredentialsKept:
                 self.stopStatusWatch()
@@ -508,51 +751,96 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     }
 
     private func publish(_ status: MatrixSyncStatus) async {
-        syncStatus = status
+        applyLock.withLock { currentSyncStatus = status }
         await MainActor.run {
             connectionStatus.update(status)
         }
     }
 
+    /// Started and stopped from the apply chain, background pause, the
+    /// retirement task and background mutations, so the monitor and its
+    /// sequencer are installed and removed together under `applyLock`.
     private func startPathMonitor() {
-        if pathMonitor != nil {
-            return
+        applyLock.withLock {
+            guard pathMonitor == nil else {
+                return
+            }
+            // One consumer, so updates apply in delivery order and a restart
+            // finishes before the next update is judged against it.
+            let sequencer = ConnectionPathSequencer { [weak self] previous, path in
+                await self?.handlePath(path, previous: previous)
+            }
+            let monitor = NWPathMonitor()
+            monitor.pathUpdateHandler = { path in
+                sequencer.receive(ConnectionPathSnapshot(path))
+            }
+            pathMonitor = monitor
+            pathSequencer = sequencer
+            monitor.start(queue: pathQueue)
         }
-        let monitor = NWPathMonitor()
-        monitor.pathUpdateHandler = { [weak self] path in
-            Task { await self?.handlePath(path) }
-        }
-        monitor.start(queue: pathQueue)
-        pathMonitor = monitor
     }
 
     private func stopPathMonitor() {
-        pathMonitor?.cancel()
-        pathMonitor = nil
+        let (monitor, sequencer): (NWPathMonitor?, ConnectionPathSequencer?) = applyLock.withLock {
+            defer {
+                pathMonitor = nil
+                pathSequencer = nil
+            }
+            return (pathMonitor, pathSequencer)
+        }
+        monitor?.cancel()
+        sequencer?.finish()
     }
 
-    private func handlePath(_ path: NWPath) async {
-        switch syncStatus {
-        case .restoreFailed, .stopped:
-            return
-        default:
+    /// Whether a path monitor is installed. Tests only.
+    var isMonitoringPath: Bool {
+        applyLock.withLock { pathMonitor != nil && pathSequencer != nil }
+    }
+
+    private func handlePath(_ path: ConnectionPathSnapshot, previous: ConnectionPathSnapshot?) async {
+        switch ConnectionPathPolicy.action(previous: previous, current: path, status: syncStatus) {
+        case .none:
             break
+        case .markReconnecting:
+            await publish(.reconnecting)
+        case .restartSync:
+            await enqueueSyncRestart()
         }
-        switch path.status {
-        case .unsatisfied, .requiresConnection:
-            switch syncStatus {
-            case .connected, .syncing, .starting:
-                await publish(.reconnecting)
-            default:
-                break
+    }
+
+    /// Replaces the sync connection after a path change, on the same chain as
+    /// pause and resume so it never races them. Only a session Core cannot
+    /// restart in place (owners not attached) runs the full bootstrap again.
+    private func enqueueSyncRestart() async {
+        let queued: Task<Void, Never> = applyLock.withLock {
+            let previous = applyChain
+            let next = Task { [weak self] in
+                await previous.value
+                guard let self else {
+                    return
+                }
+                let session = self.applyLock.withLock {
+                    self.foregroundActive ? self.lastSession : nil
+                }
+                guard let session, ConnectionPathPolicy.mayRestart(self.syncStatus) else {
+                    return
+                }
+                PerformanceTrace.event("MatrixSyncRestartForPath")
+                let core = self.host.core
+                let outcome = await SharedCoreSyncReconnect.run(
+                    restartSync: { try await SharedCoreSyncRestart.restartSync(core: core).readiness },
+                    fullStart: { await self.applyLiveSession(session) }
+                )
+                if case let .restarted(readiness) = outcome {
+                    await self.publish(
+                        ConnectionStatusCopy.fromReadiness(readiness, previous: self.syncStatus)
+                    )
+                }
             }
-        case .satisfied:
-            if syncStatus == .reconnecting, let lastSession {
-                await enqueueLiveSession(lastSession)
-            }
-        @unknown default:
-            break
+            applyChain = next
+            return next
         }
+        await queued.value
     }
 
     func syncForBackgroundNotification(session: AuthenticatedSession) async -> Bool {
@@ -751,6 +1039,14 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         )
     }
 
+    func recentEmoji() async -> [SharedCoreRecentEmojiEntry]? {
+        try? await SharedCoreRecentEmoji.snapshot(core: host.core)
+    }
+
+    func recordRecentEmoji(_ emoji: String) async -> [SharedCoreRecentEmojiEntry]? {
+        try? await SharedCoreRecentEmoji.record(core: host.core, emoji: emoji)
+    }
+
     func ignoredUserIDs() async -> [String] {
         (try? await SharedCoreAccountSettings.ignoredUsersSnapshot(core: host.core))?.userIds ?? []
     }
@@ -944,7 +1240,9 @@ final class SharedCoreRoomListService: RoomListServicing {
         do {
             let snapshot = try await SharedCoreRoomList.roomListSnapshot(core: host.core)
             let invites = (try? await SharedCoreInvites.invitesSnapshot(core: host.core))?.invites ?? []
-            let spaceParents = (try? await SharedCoreSpaces.spaceParentsSnapshot(core: host.core))?.entries ?? []
+            // The room-list snapshot carries the parent-space graph Core
+            // already built for it; no second graph scan per refresh.
+            let spaceParents = snapshot.spaceParents
             let rooms = SharedCoreRoomListRows.rooms(
                 rooms: snapshot.rooms.map {
                     SharedCoreRoomListRows.RoomRow(
@@ -964,7 +1262,10 @@ final class SharedCoreRoomListService: RoomListServicing {
                         hasActiveCall: $0.hasActiveCall,
                         activeCallParticipantCount: Int($0.activeCallParticipantCount),
                         directUserId: $0.directUserId,
-                        encryptionStatus: SharedCoreRoomListRows.encryptionStatus($0.encryptionStatus)
+                        encryptionStatus: SharedCoreRoomListRows.encryptionStatus($0.encryptionStatus),
+                        isSpace: $0.isSpace,
+                        isLowPriority: $0.isLowPriority,
+                        isAgentRoom: $0.isAgentRoom
                     )
                 },
                 invites: invites.map {
@@ -973,7 +1274,10 @@ final class SharedCoreRoomListService: RoomListServicing {
                         roomName: $0.roomName,
                         roomTopic: $0.roomTopic,
                         senderName: $0.senderName,
-                        reason: $0.reason
+                        reason: $0.reason,
+                        isDirect: $0.isDirect,
+                        isEncrypted: $0.isEncrypted,
+                        inviteTs: $0.inviteTs
                     )
                 },
                 spaceParents: spaceParents.map {
@@ -983,7 +1287,7 @@ final class SharedCoreRoomListService: RoomListServicing {
                     )
                 }
             )
-            let state: RoomListState = rooms.isEmpty ? .empty : .loaded(rooms)
+            let state = Self.state(rooms: rooms, loading: snapshot.loading)
             stateLock.withLock {
                 cachedNames = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0.name) })
                 cachedRooms = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0) })
@@ -991,8 +1295,42 @@ final class SharedCoreRoomListService: RoomListServicing {
             }
             return state
         } catch {
+            return Self.state(afterLoadError: error, lastGood: stateLock.withLock { latestState })
+        }
+    }
+
+    static let loadFailedMessage = String(localized: "Rooms could not be loaded. Try again.")
+
+    /// An empty list before the first room-list response means "not synced
+    /// yet" (fresh login, cold start with an empty store): keep loading
+    /// rather than claiming the account has no rooms.
+    static func state(rooms: [RoomSummary], loading: RoomListLoadingDto) -> RoomListState {
+        if rooms.isEmpty == false {
+            return .loaded(rooms)
+        }
+        switch loading {
+        case .notLoaded:
+            return .loading
+        case .loaded:
             return .empty
         }
+    }
+
+    /// A failed read must not look like an account without rooms, which also
+    /// zeroed every unread badge: keep the last good list. Without one, a
+    /// read that waited out a suspension stays loading (the next room-list
+    /// signal reloads it), and other failures show Retry.
+    static func state(afterLoadError error: Error, lastGood: RoomListState?) -> RoomListState {
+        guard case let RoomListSnapshotError.Failed(code, _) = error else {
+            return lastGood ?? .failed(loadFailedMessage)
+        }
+        if code == "p2-room-list-snapshot-no-session" {
+            return .empty
+        }
+        if let lastGood {
+            return lastGood
+        }
+        return code == SharedCoreSessionSuspension.code ? .loading : .failed(loadFailedMessage)
     }
 
     func roomDisplayName(roomID: String) -> String? {
@@ -1004,6 +1342,12 @@ final class SharedCoreRoomListService: RoomListServicing {
     func isAgentRoom(roomID: String) -> Bool {
         stateLock.withLock {
             cachedRooms[roomID]?.isAgentRoom ?? false
+        }
+    }
+
+    func roomSummary(roomID: String) -> RoomSummary? {
+        stateLock.withLock {
+            cachedRooms[roomID]
         }
     }
 
@@ -1133,6 +1477,19 @@ struct SharedCoreTimelinePaginationProgress {
             && consecutiveNoProgressPages < Self.maximumConsecutiveNoProgressPages
     }
 
+    /// Backwards, unchanged rows are not a stall: Core pages lazily through
+    /// hidden events before it reaches the server, and its own state ends the
+    /// run. Only the page count bounds it.
+    var hasPageBudget: Bool {
+        pageRequestCount < Self.maximumPageRequests
+    }
+
+    /// Consecutive pages left the rows unchanged: there is nothing further in
+    /// that direction right now.
+    var stoppedMakingProgress: Bool {
+        consecutiveNoProgressPages >= Self.maximumConsecutiveNoProgressPages
+    }
+
     mutating func recordPage(rowIDs: Set<String>) {
         pageRequestCount += 1
         if let lastRowIDs, lastRowIDs == rowIDs {
@@ -1174,7 +1531,38 @@ actor SharedCoreTimelineRecoveryGate {
 final class SharedCoreTimelineService: TimelineServicing {
     private struct OpenStreamState {
         let streamID: String
+        /// The event an event-focused window opened at; nil for live and
+        /// thread streams. Pages must name the window they extend.
+        let focusedEventID: String?
         var visibleItemIDs: Set<String>
+        var backwardPagination: TimelineBackwardPagination = .unknown
+        /// Revision of the newest snapshot handed to this stream's consumer.
+        var revision: UInt64?
+    }
+
+    /// The native stream an update subscription last read.
+    private final class WatchedStream: @unchecked Sendable {
+        private let lock = NSLock()
+        private var streamID: String?
+
+        init(_ streamID: String?) {
+            self.streamID = streamID
+        }
+
+        var value: String? {
+            lock.lock()
+            defer { lock.unlock() }
+            return streamID
+        }
+
+        func set(_ streamID: String?) {
+            guard let streamID else {
+                return
+            }
+            lock.lock()
+            self.streamID = streamID
+            lock.unlock()
+        }
     }
 
     private let host: SharedCoreProductHost
@@ -1183,17 +1571,25 @@ final class SharedCoreTimelineService: TimelineServicing {
     /// Keyed by `SharedCoreTimelineStreamKey`: a room's own stream and each of
     /// its open thread streams live side by side and never evict each other.
     private var streams: [String: OpenStreamState] = [:]
+    /// Converted rows per native stream id.
+    private var rowCaches: [String: SharedCoreTimelineRowCache] = [:]
+    private var subscriptions = SharedCoreTimelineSubscriptions()
 
     init(host: SharedCoreProductHost) {
         self.host = host
     }
 
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
-        await openStream(
+        let outcome = await openStream(
             roomID: roomID,
-            key: SharedCoreTimelineStreamKey.room(roomID),
+            key: SharedCoreTimelineStreamKey.room(roomID, focusedEventID: focusedEventID),
             position: SharedCoreTimelineStreamKey.roomPosition(focusedEventID: focusedEventID)
         )
+        if focusedEventID == nil, case .loaded = outcome {
+            // Back on the live room: the event-focused window it replaced is done.
+            closeStream(for: SharedCoreTimelineStreamKey.focused(roomID))
+        }
+        return outcome
     }
 
     func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome {
@@ -1205,23 +1601,72 @@ final class SharedCoreTimelineService: TimelineServicing {
     }
 
     func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome {
-        _ = eventID
-        return await paginateOlder(roomID: roomID, key: SharedCoreTimelineStreamKey.room(roomID))
+        await loadOlderTimeline(roomID: roomID, before: eventID, focusedEventID: nil)
     }
 
-    func loadOlderThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome {
-        await paginateOlder(
-            roomID: roomID,
-            key: SharedCoreTimelineStreamKey.thread(roomID: roomID, rootEventID: rootEventID)
+    func loadOlderTimeline(roomID: String, before eventID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
+        _ = eventID
+        return await paginate(
+            key: SharedCoreTimelineStreamKey.room(roomID, focusedEventID: focusedEventID),
+            focusedEventID: focusedEventID,
+            direction: .backwards
         )
     }
 
+    func loadNewerTimeline(roomID: String, focusedEventID: String) async -> TimelineLoadOutcome {
+        await paginate(
+            key: SharedCoreTimelineStreamKey.room(roomID, focusedEventID: focusedEventID),
+            focusedEventID: focusedEventID,
+            direction: .forwards
+        )
+    }
+
+    func backwardPagination(roomID: String, focusedEventID: String?) -> TimelineBackwardPagination {
+        stream(for: SharedCoreTimelineStreamKey.room(roomID, focusedEventID: focusedEventID))?
+            .backwardPagination ?? .unknown
+    }
+
+    func loadOlderThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome {
+        await paginate(
+            key: SharedCoreTimelineStreamKey.thread(roomID: roomID, rootEventID: rootEventID),
+            focusedEventID: nil,
+            direction: .backwards
+        )
+    }
+
+    func resolveEventRoute(roomID: String, eventID: String) async -> TimelineEventRoute {
+        do {
+            return SharedCoreTimeline.eventRoute(
+                from: try await SharedCoreTimeline.timelineEventRoute(
+                    core: host.core,
+                    roomId: roomID,
+                    eventId: eventID
+                )
+            )
+        } catch {
+            // No route lookup: keep placing the event in the room.
+            return .room
+        }
+    }
+
     func closeThreadTimeline(roomID: String, rootEventID: String) {
-        guard let streamID = takeStream(
-            for: SharedCoreTimelineStreamKey.thread(roomID: roomID, rootEventID: rootEventID)
-        ) else {
+        closeStream(for: SharedCoreTimelineStreamKey.thread(roomID: roomID, rootEventID: rootEventID))
+    }
+
+    func closeFocusedTimeline(roomID: String) {
+        closeStream(for: SharedCoreTimelineStreamKey.focused(roomID))
+    }
+
+    private func closeStream(for key: String) {
+        guard let streamID = takeStream(for: key) else {
             return
         }
+        release(streamID: streamID)
+    }
+
+    /// Closes a native stream this service no longer tracks.
+    private func release(streamID: String) {
+        host.livePoller.forgetTimelineStream(streamId: streamID)
         Task {
             _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: streamID)
         }
@@ -1230,7 +1675,7 @@ final class SharedCoreTimelineService: TimelineServicing {
     func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome> {
         streamUpdates(
             roomID: roomID,
-            key: SharedCoreTimelineStreamKey.room(roomID),
+            key: SharedCoreTimelineStreamKey.room(roomID, focusedEventID: focusedEventID),
             position: SharedCoreTimelineStreamKey.roomPosition(focusedEventID: focusedEventID),
             refreshOnAttach: SharedCoreTimelineUpdateBootstrap.shouldRefreshOpenStream(
                 focusedEventID: focusedEventID
@@ -1272,20 +1717,27 @@ final class SharedCoreTimelineService: TimelineServicing {
     }
 
     func retryDecryption(roomID: String) async -> CryptoActionResult {
-        guard let streamID = stream(for: SharedCoreTimelineStreamKey.room(roomID))?.streamID else {
-            return .unavailable("Open this room to retry decryption.")
+        // The live stream closes while an event-focused window replaces it.
+        guard let streamID = (
+            stream(for: SharedCoreTimelineStreamKey.room(roomID))
+                ?? stream(for: SharedCoreTimelineStreamKey.focused(roomID))
+        )?.streamID else {
+            return .unavailable(String(localized: "Open this room to retry decryption."))
         }
         do {
             let requested = try await SharedCoreTimeline.timelineRetryDecryption(core: host.core, streamId: streamID)
-            return requested ? .completed("Decryption requested. Messages update when keys are available.")
-                : .failed("Decryption could not be retried.")
+            return requested ? .completed(String(localized: "Decryption requested. Messages update when keys are available."))
+                : .failed(String(localized: "Decryption could not be retried."))
         } catch {
-            return .failed("Decryption could not be retried. Reopen the room and try again.")
+            return .failed(String(localized: "Decryption could not be retried. Reopen the room and try again."))
         }
     }
 
     func clearSessionCaches() {
         let streamIds = takeAllStreams()
+        for streamId in streamIds {
+            host.livePoller.forgetTimelineStream(streamId: streamId)
+        }
         Task {
             for streamId in streamIds {
                 _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: streamId)
@@ -1300,6 +1752,7 @@ final class SharedCoreTimelineService: TimelineServicing {
     ) async -> TimelineLoadOutcome {
         do {
             if let previous = takeStream(for: key) {
+                host.livePoller.forgetTimelineStream(streamId: previous)
                 _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: previous)
             }
             let opened = try await SharedCoreTimeline.timelineOpen(
@@ -1307,7 +1760,11 @@ final class SharedCoreTimelineService: TimelineServicing {
                 roomId: roomID,
                 position: position
             )
-            storeStream(opened.streamId, visibleItemIDs: [], for: key)
+            storeStream(
+                opened.streamId,
+                focusedEventID: position.kind == .focused ? position.eventId : nil,
+                for: key
+            )
             return await resolveInitialSnapshot(
                 opened.snapshot,
                 key: key,
@@ -1318,35 +1775,62 @@ final class SharedCoreTimelineService: TimelineServicing {
         }
     }
 
-    private func paginateOlder(roomID: String, key: String) async -> TimelineLoadOutcome {
-        _ = roomID
-        guard let initialState = stream(for: key) else {
+    /// Pages a provider in `direction` until Core delivers rows this stream
+    /// has not shown before. Backwards, `.empty` only when Core reports the
+    /// start of the room. Forwards (event-focused windows), `.empty` when
+    /// Core reports the window reaches the present. `focusedEventID` names
+    /// the window the caller extends; a different window is not paged.
+    private func paginate(
+        key: String,
+        focusedEventID: String?,
+        direction: TimelineDirectionDto
+    ) async -> TimelineLoadOutcome {
+        guard let initialState = stream(for: key),
+              initialState.focusedEventID == focusedEventID
+        else {
             return .failed(Self.viewUnavailableFailure)
         }
         var knownItemIDs = initialState.visibleItemIDs
         var paginationProgress = SharedCoreTimelinePaginationProgress()
+        var lastItems: [TimelineItem]?
         while Task.isCancelled == false {
-            guard paginationProgress.canRequestPage else {
+            guard paginationProgress.hasPageBudget else {
+                if let lastItems {
+                    // Still more behind a long hidden run: no new rows yet,
+                    // not a failure and not the end. The caller may ask
+                    // again.
+                    return .loaded(lastItems)
+                }
                 return .failed(Self.temporarilyUnavailableFailure)
             }
             do {
                 let snapshot = try await SharedCoreTimeline.timelinePaginate(
                     core: host.core,
                     streamId: initialState.streamID,
-                    direction: .backwards
+                    direction: direction
                 )
                 paginationProgress.recordPage(rowIDs: Self.nativeRowIDs(snapshot.rows))
-                let items = SharedCoreTimelineRows.items(from: snapshot.rows, visibleTailEventID: snapshot.visibleTailEventId, receiptTailEventID: snapshot.receiptTailEventId)
+                let items = convert(snapshot, streamID: initialState.streamID)
                 let itemIDs = Self.stableItemIDs(items)
                 let containsNewItems = itemIDs.isSubset(of: knownItemIDs) == false
                 knownItemIDs.formUnion(itemIDs)
+                lastItems = items
                 updateVisibleItemIDs(
                     knownItemIDs,
+                    snapshot: snapshot,
                     key: key,
                     streamID: initialState.streamID
                 )
                 if containsNewItems {
                     return .loaded(items)
+                }
+                guard direction == .backwards else {
+                    switch SharedCoreTimelineForwardPagination.next(after: snapshot.paginationForward) {
+                    case .reachedPresent:
+                        return .empty
+                    case .pageAgain:
+                        continue
+                    }
                 }
                 if snapshot.paginationBackward == .exhausted {
                     return .empty
@@ -1370,27 +1854,90 @@ final class SharedCoreTimelineService: TimelineServicing {
         // Register before the task begins so an SDK update cannot be lost
         // between the initial snapshot and the first live readback.
         let signals = host.livePoller.timelineSignals(roomId: roomID)
+        let watched = WatchedStream(stream(for: key)?.streamID)
         return AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+            beginSubscription(key: key)
             let task = Task {
                 if refreshOnAttach {
                     continuation.yield(
                         await refreshOpenTimeline(roomID: roomID, key: key, position: position)
                     )
+                    watched.set(stream(for: key)?.streamID)
                 }
                 for await _ in signals {
                     guard Task.isCancelled == false else {
                         break
                     }
+                    // The signal may come from another stream of the room.
+                    guard needsRefresh(key: key) else {
+                        continue
+                    }
                     continuation.yield(
                         await refreshOpenTimeline(roomID: roomID, key: key, position: position)
                     )
+                    watched.set(stream(for: key)?.streamID)
                 }
                 continuation.finish()
             }
-            continuation.onTermination = { _ in
+            continuation.onTermination = { [weak self] _ in
                 task.cancel()
+                self?.endSubscription(key: key, watchedStreamID: watched.value)
             }
         }
+    }
+
+    private func needsRefresh(key: String) -> Bool {
+        guard let state = stream(for: key) else {
+            return true
+        }
+        return SharedCoreTimelineRefreshPolicy.shouldRefresh(
+            shownRevision: state.revision,
+            announcedRevision: host.livePoller.latestTimelineRevision(streamId: state.streamID)
+        )
+    }
+
+    private func beginSubscription(key: String) {
+        streamLock.lock()
+        subscriptions.begin(key: key)
+        streamLock.unlock()
+    }
+
+    /// The view stopped listening (it disappeared, or moved to another
+    /// provider). When no subscription is left for the key, release the
+    /// stream it watched; a stream a newer open stored meanwhile stays.
+    private func endSubscription(key: String, watchedStreamID: String?) {
+        streamLock.lock()
+        var released: String?
+        if subscriptions.end(key: key),
+           let watchedStreamID,
+           streams[key]?.streamID == watchedStreamID {
+            streams.removeValue(forKey: key)
+            rowCaches.removeValue(forKey: watchedStreamID)
+            released = watchedStreamID
+        }
+        streamLock.unlock()
+        if let released {
+            release(streamID: released)
+        }
+    }
+
+    /// Product items for a snapshot, reusing rows this stream already
+    /// converted.
+    private func convert(_ snapshot: TimelineSnapshotDto, streamID: String) -> [TimelineItem] {
+        streamLock.lock()
+        var cache = rowCaches[streamID] ?? SharedCoreTimelineRowCache()
+        streamLock.unlock()
+        let items = cache.items(
+            from: snapshot.rows,
+            visibleTailEventID: snapshot.visibleTailEventId,
+            receiptTailEventID: snapshot.receiptTailEventId
+        )
+        streamLock.lock()
+        if streams.values.contains(where: { $0.streamID == streamID }) {
+            rowCaches[streamID] = cache
+        }
+        streamLock.unlock()
+        return items
     }
 
     private func refreshOpenTimeline(
@@ -1424,6 +1971,7 @@ final class SharedCoreTimelineService: TimelineServicing {
                         ) else {
                             return await self.refreshCurrentTimelineAfterRecoveryRace(key: key)
                         }
+                        self.host.livePoller.forgetTimelineStream(streamId: staleStreamID)
                         _ = try? await SharedCoreTimeline.timelineClose(
                             core: self.host.core,
                             streamId: staleStreamID
@@ -1446,17 +1994,16 @@ final class SharedCoreTimelineService: TimelineServicing {
         var paginationProgress = SharedCoreTimelinePaginationProgress()
         paginationProgress.observeInitial(rowIDs: Self.nativeRowIDs(snapshot.rows))
         while Task.isCancelled == false {
-            let items = SharedCoreTimelineRows.items(from: snapshot.rows, visibleTailEventID: snapshot.visibleTailEventId, receiptTailEventID: snapshot.receiptTailEventId)
+            let items = convert(snapshot, streamID: streamID)
             updateVisibleItemIDs(
                 Self.stableItemIDs(items),
+                snapshot: snapshot,
                 key: key,
                 streamID: streamID
             )
             if let outcome = SharedCoreTimelineRows.authoritativeOutcome(
-                from: snapshot.rows,
-                paginationBackward: snapshot.paginationBackward,
-                visibleTailEventID: snapshot.visibleTailEventId,
-                receiptTailEventID: snapshot.receiptTailEventId
+                items: items,
+                paginationBackward: snapshot.paginationBackward
             ) {
                 return outcome
             }
@@ -1488,19 +2035,21 @@ final class SharedCoreTimelineService: TimelineServicing {
 
     private func storeStream(
         _ streamID: String,
-        visibleItemIDs: Set<String>,
+        focusedEventID: String?,
         for key: String
     ) {
         streamLock.lock()
         streams[key] = OpenStreamState(
             streamID: streamID,
-            visibleItemIDs: visibleItemIDs
+            focusedEventID: focusedEventID,
+            visibleItemIDs: []
         )
         streamLock.unlock()
     }
 
     private func updateVisibleItemIDs(
         _ itemIDs: Set<String>,
+        snapshot: TimelineSnapshotDto,
         key: String,
         streamID: String
     ) {
@@ -1510,13 +2059,19 @@ final class SharedCoreTimelineService: TimelineServicing {
             return
         }
         state.visibleItemIDs.formUnion(itemIDs)
+        state.backwardPagination = SharedCoreTimelineRows.backwardPagination(from: snapshot.paginationBackward)
+        state.revision = max(state.revision ?? 0, snapshot.revision)
         streams[key] = state
     }
 
     private func takeStream(for key: String) -> String? {
         streamLock.lock()
         defer { streamLock.unlock() }
-        return streams.removeValue(forKey: key)?.streamID
+        let streamID = streams.removeValue(forKey: key)?.streamID
+        if let streamID {
+            rowCaches.removeValue(forKey: streamID)
+        }
+        return streamID
     }
 
     private func takeStream(for key: String, ifMatching expectedStreamID: String) -> String? {
@@ -1525,6 +2080,7 @@ final class SharedCoreTimelineService: TimelineServicing {
         guard streams[key]?.streamID == expectedStreamID else {
             return nil
         }
+        rowCaches.removeValue(forKey: expectedStreamID)
         return streams.removeValue(forKey: key)?.streamID
     }
 
@@ -1552,6 +2108,7 @@ final class SharedCoreTimelineService: TimelineServicing {
         defer { streamLock.unlock() }
         let values = streams.values.map(\.streamID)
         streams.removeAll()
+        rowCaches.removeAll()
         return values
     }
 
@@ -1589,6 +2146,8 @@ final class SharedCoreTimelineService: TimelineServicing {
                 kind = .roomUnavailable
             case "v-timeline-view-not-open":
                 kind = .viewUnavailable
+            case SharedCoreSessionSuspension.code:
+                kind = .waitingToReconnect
             default:
                 kind = .temporarilyUnavailable
             }
@@ -1698,6 +2257,60 @@ final class SharedCoreMessageSendService: MessageSending {
                 threadRootEventID: request.threadRootEventID,
                 isEdited: request.editEventID != nil,
                 reactions: [:]
+            )
+        } catch {
+            throw MessageSendError.failed
+        }
+    }
+
+    func sendText(_ request: MessageSendRequest) async throws -> MessageSendReceipt {
+        let body = request.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard body.isEmpty == false else {
+            throw MessageSendError.emptyMessage
+        }
+        do {
+            let result = try await SharedCoreSendText.sendText(
+                core: host.core,
+                roomId: request.roomID,
+                body: body,
+                msgType: nil,
+                formattedBody: request.formattedBody,
+                mentionUserIds: nil,
+                mentionRoom: nil,
+                replyTo: request.replyToEventID,
+                threadRoot: request.threadRootEventID,
+                txnId: request.transactionID
+            )
+            // `queued` is the normal answer: the SDK's persisted queue holds
+            // the message and its timeline row shows the send state.
+            return MessageSendReceipt(
+                transactionID: result.localTxnId.isEmpty ? nil : result.localTxnId,
+                eventID: result.eventId.isEmpty ? nil : result.eventId,
+                isQueued: result.status == .queued
+            )
+        } catch {
+            throw SharedCoreSendText.isNotReady(error) ? MessageSendError.notReady : MessageSendError.failed
+        }
+    }
+
+    func retryLocalEcho(roomID: String, transactionID: String) async throws {
+        do {
+            try await SharedCoreSendText.retryLocalEcho(
+                core: host.core,
+                roomId: roomID,
+                transactionId: transactionID
+            )
+        } catch {
+            throw MessageSendError.failed
+        }
+    }
+
+    func discardLocalEcho(roomID: String, transactionID: String) async throws -> Bool {
+        do {
+            return try await SharedCoreSendText.discardLocalEcho(
+                core: host.core,
+                roomId: roomID,
+                transactionId: transactionID
             )
         } catch {
             throw MessageSendError.failed
@@ -2155,7 +2768,10 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     }
 
     func roomStatus(roomID: String) async -> RoomCryptoStatus {
-        let session = await sessionStatus()
+        await roomStatus(roomID: roomID, session: await sessionStatus())
+    }
+
+    func roomStatus(roomID: String, session: SessionCryptoStatus) async -> RoomCryptoStatus {
         // Timeline actions address joined rooms. Their encryption authority is
         // the joined-room Core snapshot only; an invite Bool is not a valid
         // fallback when that snapshot is missing or failed.
@@ -2170,16 +2786,18 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     }
 
     func sessionStatus() async -> SessionCryptoStatus {
-        let crypto = try? await SharedCoreLeftovers.cryptoStatus(core: host.core)
+        // Core answers cross-signing through the attached device owner (L11):
+        // the local identity, and at most one own-user key query a session.
+        let crossSigning = try? await SharedCoreLeftovers.crossSigningStatus(core: host.core)
         let backup = try? await SharedCoreLeftovers.backupStatus(core: host.core)
         let secretStorage = try? await SharedCoreSessionStatus.secretStorageStatus(core: host.core)
         let deviceSnapshot = try? await SharedCoreDevices.deviceSnapshot(core: host.core)
         let devices = deviceSnapshot?.devices ?? []
-        guard crypto != nil || backup != nil || secretStorage != nil || deviceSnapshot != nil else {
+        guard crossSigning != nil || backup != nil || secretStorage != nil || deviceSnapshot != nil else {
             return .unknown
         }
         let mapped = SharedCoreSessionCrypto.status(
-            crossSigningState: crypto?.crossSigningState,
+            crossSigningState: nil,
             backupEnabled: backup?.enabled,
             backupAvailability: backup?.availability,
             backupDeviceState: backup?.deviceState,
@@ -2206,8 +2824,168 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
             backup: mapped.backup,
             hasDevicesToVerifyAgainst: deviceSnapshot?.hasDevicesToVerifyAgainst,
             isLastDevice: devices.isEmpty ? nil : hasOtherDevices == false,
-            unableToDecryptCount: mapped.unableToDecryptCount
+            unableToDecryptCount: mapped.unableToDecryptCount,
+            crossSigning: SharedCoreSessionCrypto.crossSigning(crossSigning?.readiness),
+            recoverySetupAvailable: SharedCoreSessionCrypto.recoverySetupAvailable(secretStorage?.action)
         )
+    }
+
+    func startCrossSigningSetup() async -> CrossSigningSetupResult {
+        do {
+            let dto = try await SharedCoreBackupRestore.crossSigningSetup(core: host.core)
+            return Self.crossSigningSetupResult(dto.outcome)
+        } catch {
+            return Self.crossSigningSetupFailure(error)
+        }
+    }
+
+    func authenticateCrossSigningSetup(password: String) async -> CrossSigningSetupResult {
+        guard password.isEmpty == false else {
+            return .failed(String(localized: "Enter your account password."))
+        }
+        do {
+            let dto = try await SharedCoreBackupRestore.crossSigningSetupPassword(
+                core: host.core,
+                password: password
+            )
+            return Self.crossSigningSetupResult(dto.outcome)
+        } catch {
+            return Self.crossSigningSetupFailure(error)
+        }
+    }
+
+    func enableRecovery(passphrase: String) async -> RecoveryEnrollmentResult {
+        guard passphrase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+            return .failed(String(localized: "Choose a recovery passphrase."))
+        }
+        do {
+            let dto = try await SharedCoreBackupRestore.secretStorageBootstrap(
+                core: host.core,
+                passphrase: passphrase
+            )
+            guard let key = dto.recoveryKey else { return .alreadyEnabled }
+            return .enabled(recoveryKey: key)
+        } catch {
+            return Self.recoveryEnrollmentFailure(error)
+        }
+    }
+
+    func deviceVerificationPromptVisible() async -> Bool {
+        (try? await SharedCoreBackupRestore.deviceVerificationPrompt(core: host.core).show) ?? false
+    }
+
+    func dismissDeviceVerificationPrompt() async {
+        try? SharedCoreBackupRestore.dismissDeviceVerificationPrompt(core: host.core)
+    }
+
+    func startIdentityReset() async -> IdentityResetResult {
+        do {
+            return Self.identityResetResult(try await SharedCoreBackupRestore.identityResetStart(core: host.core))
+        } catch {
+            return Self.identityResetFailure(error)
+        }
+    }
+
+    func authenticateIdentityReset(password: String) async -> IdentityResetResult {
+        guard password.isEmpty == false else {
+            return .failed(String(localized: "Enter your account password."))
+        }
+        do {
+            return Self.identityResetResult(
+                try await SharedCoreBackupRestore.identityResetPassword(core: host.core, password: password)
+            )
+        } catch {
+            return Self.identityResetFailure(error)
+        }
+    }
+
+    func continueIdentityReset() async -> IdentityResetResult {
+        do {
+            return Self.identityResetResult(try await SharedCoreBackupRestore.identityResetContinue(core: host.core))
+        } catch {
+            return Self.identityResetFailure(error)
+        }
+    }
+
+    func cancelIdentityReset() async {
+        try? await SharedCoreBackupRestore.identityResetCancel(core: host.core)
+    }
+
+    /// Only an http(s) account page is opened for approval.
+    static func identityResetResult(_ dto: IdentityResetStateDto) -> IdentityResetResult {
+        switch dto.step {
+        case .complete:
+            return .complete
+        case .passwordRequired:
+            return .passwordRequired
+        case .approvalRequired:
+            guard let raw = dto.approvalUrl,
+                  let url = URL(string: raw),
+                  let scheme = url.scheme?.lowercased(),
+                  scheme == "https" || scheme == "http" else {
+                return .failed(IdentityResetCopy.failed)
+            }
+            return .approvalRequired(url)
+        }
+    }
+
+    static func identityResetFailure(_ error: Error) -> IdentityResetResult {
+        guard let code = (error as? SessionStatusError)?.coreErrorCode else {
+            return .failed(IdentityResetCopy.failed)
+        }
+        switch code {
+        case "v-crypto.2-identity-reset-password-rejected":
+            return .passwordRejected
+        case "v-crypto.2-identity-reset-approval-pending":
+            return .approvalPending
+        case "v-crypto.2-identity-reset-network":
+            return .failed(IdentityResetCopy.network)
+        case "v-crypto.2-identity-reset-auth-unsupported":
+            return .failed(IdentityResetCopy.authUnsupported)
+        default:
+            return .failed(IdentityResetCopy.failed)
+        }
+    }
+
+    static func crossSigningSetupResult(_ outcome: CrossSigningSetupOutcomeDto) -> CrossSigningSetupResult {
+        switch outcome {
+        case .complete, .alreadyConfigured:
+            return .ready
+        case .authenticationRequired:
+            return .passwordRequired
+        }
+    }
+
+    static func crossSigningSetupFailure(_ error: Error) -> CrossSigningSetupResult {
+        guard let code = (error as? SessionStatusError)?.coreErrorCode else {
+            return .failed(RecoverySetupCopy.setupFailed)
+        }
+        switch code {
+        case "v-crypto.2-cross-signing-password-rejected":
+            return .passwordRejected
+        case "v-crypto.2-cross-signing-auth-unsupported":
+            return .failed(String(localized: "This homeserver asks for a sign-in step Synara cannot complete for device verification setup."))
+        case "v-crypto.2-cross-signing-partial-private-identity":
+            return .failed(String(localized: "This device has only part of your cross-signing identity. Verify it with another device or recover with your recovery key."))
+        default:
+            return .failed(RecoverySetupCopy.setupFailed)
+        }
+    }
+
+    static func recoveryEnrollmentFailure(_ error: Error) -> RecoveryEnrollmentResult {
+        guard let code = (error as? SessionStatusError)?.coreErrorCode else {
+            return .failed(RecoverySetupCopy.enrollmentFailed)
+        }
+        switch code {
+        case "v-crypto.4-bootstrap-existing-backup":
+            return .failed(String(localized: "This account already has a key backup. Use Recover Keys with its recovery key instead."))
+        case "v-crypto.4-bootstrap-cross-signing-required":
+            return .failed(String(localized: "Set up device verification first so its identity can be protected by secret storage."))
+        case "v-crypto.4-operation-incomplete", "v-crypto.4-passphrase-not-configured":
+            return .failed(String(localized: "Recovery was only partly set up. Synara will not enrol again automatically; use Recover Keys or set it up from another device."))
+        default:
+            return .failed(RecoverySetupCopy.enrollmentFailed)
+        }
     }
 
     func verificationUpdates() -> AsyncStream<CryptoVerificationSnapshot?> {
@@ -2239,7 +3017,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     }
 
     func retryDecryption(roomID: String) async -> CryptoActionResult {
-        guard let timeline else { return .unavailable("Open this room to retry decryption.") }
+        guard let timeline else { return .unavailable(String(localized: "Open this room to retry decryption.")) }
         return await timeline.retryDecryption(roomID: roomID)
     }
 
@@ -2253,7 +3031,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 deviceId: deviceId
             )
             storeFlow(dto.flowId)
-            return "Device verification request sent."
+            return String(localized: "Device verification request sent.")
         }
     }
 
@@ -2264,17 +3042,17 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 flowId: flowID
             )
             clearFlow(matching: flowID)
-            return .completed("Verification closed.")
+            return .completed(String(localized: "Verification closed."))
         } catch let error as VerificationSasError {
             // An already-removed result is acknowledged. Other failures must
             // remain visible so the UI does not pretend it dismissed the flow.
             if case let .Failed(code, _) = error, code == "v-crypto.1-flow-not-found" {
                 clearFlow(matching: flowID)
-                return .completed("Verification closed.")
+                return .completed(String(localized: "Verification closed."))
             }
-            return .failed("Could not close verification. Try Done again.")
+            return .failed(String(localized: "Could not close verification. Try Done again."))
         } catch {
-            return .failed("Could not close verification. Try Done again.")
+            return .failed(String(localized: "Could not close verification. Try Done again."))
         }
     }
 
@@ -2284,7 +3062,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 core: host.core,
                 flowId: flowId
             )
-            return "Verification request accepted."
+            return String(localized: "Verification request accepted.")
         }
     }
 
@@ -2294,7 +3072,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 core: host.core,
                 flowId: flowId
             )
-            return "Verification comparison started."
+            return String(localized: "Verification comparison started.")
         }
     }
 
@@ -2304,7 +3082,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 core: host.core,
                 flowId: flowId
             )
-            return "Codes confirmed. Waiting for the other device."
+            return String(localized: "Codes confirmed. Waiting for the other device.")
         }
     }
 
@@ -2314,7 +3092,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 core: host.core,
                 flowId: flowId
             )
-            return "Verification declined."
+            return String(localized: "Verification declined.")
         }
     }
 
@@ -2324,21 +3102,21 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 core: host.core,
                 flowId: flowId
             )
-            return "Verification cancelled."
+            return String(localized: "Verification cancelled.")
         }
     }
 
     func recover(recoveryKey: String) async -> CryptoActionResult {
         let trimmed = recoveryKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else {
-            return .failed("Enter your recovery key or passphrase.")
+            return .failed(String(localized: "Enter your recovery key or passphrase."))
         }
         do {
             _ = try await SharedCoreBackupRestore.restoreBackup(
                 core: host.core,
                 recoverySecret: trimmed
             )
-            return .completed("Recovery completed.")
+            return .completed(String(localized: "Recovery completed."))
         } catch {
             return Self.restoreBackupResult(for: error)
         }
@@ -2346,19 +3124,19 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
 
     private static func restoreBackupResult(for error: Error) -> CryptoActionResult {
         guard case let RestoreBackupError.Failed(code, _) = error else {
-            return .failed("Could not restore encryption backup.")
+            return .failed(String(localized: "Could not restore encryption backup."))
         }
         switch code {
         case "v-crypto.3-restore-rejected":
-            return .failed("The recovery key or passphrase was rejected. Check it and try again.")
+            return .failed(String(localized: "The recovery key or passphrase was rejected. Check it and try again."))
         case "v-crypto.3-recovery-secret-empty":
-            return .failed("Enter your recovery key or passphrase.")
+            return .failed(String(localized: "Enter your recovery key or passphrase."))
         case "p2-restore-backup-no-session":
-            return .failed("Sign in to restore encryption backup.")
+            return .failed(String(localized: "Sign in to restore encryption backup."))
         case "v-crypto.3-restore-incomplete":
-            return .failed("Native encryption backup could not be activated.")
+            return .failed(String(localized: "Native encryption backup could not be activated."))
         default:
-            return .failed("Could not restore encryption backup.")
+            return .failed(String(localized: "Could not restore encryption backup."))
         }
     }
 
@@ -2398,7 +3176,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     func signOutSession(deviceId: String, password: String) async -> CryptoActionResult {
         let trimmedPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
         guard deviceId.isEmpty == false, trimmedPassword.isEmpty == false else {
-            return .failed("Enter your account password to sign out that session.")
+            return .failed(String(localized: "Enter your account password to log out that session."))
         }
         do {
             let started = try await SharedCoreDevices.deviceDeleteStart(
@@ -2406,12 +3184,12 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 deviceIds: [deviceId]
             )
             if started.outcome == .complete {
-                return .completed("Session signed out.")
+                return .completed(String(localized: "Session logged out."))
             }
             guard started.outcome == .authenticationRequired,
                   let challenge = started.challenge
             else {
-                return .failed("Could not sign out that session.")
+                return .failed(String(localized: "Could not log out that session."))
             }
             let finished = try await SharedCoreDevices.deviceDeletePassword(
                 core: host.core,
@@ -2420,14 +3198,14 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 password: trimmedPassword
             )
             if finished.outcome == .complete {
-                return .completed("Session signed out.")
+                return .completed(String(localized: "Session logged out."))
             }
             if finished.challenge?.authenticationFailed == true {
-                return .failed("Check your password and try again.")
+                return .failed(String(localized: "Check your password and try again."))
             }
-            return .failed("Could not sign out that session.")
+            return .failed(String(localized: "Could not log out that session."))
         } catch {
-            return .failed("Could not sign out that session.")
+            return .failed(String(localized: "Could not log out that session."))
         }
     }
 
@@ -2483,7 +3261,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         do {
             return .completed(try await message())
         } catch {
-            return .failed("Device verification is unavailable.")
+            return .failed(String(localized: "Device verification is unavailable."))
         }
     }
 
@@ -2493,12 +3271,12 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     ) async -> CryptoActionResult {
         _ = requiresFlow
         guard let flowId = resolvedFlowId() else {
-            return .unavailable("Device verification is unavailable.")
+            return .unavailable(String(localized: "Device verification is unavailable."))
         }
         do {
             return .completed(try await message(flowId))
         } catch {
-            return .failed("Device verification is unavailable.")
+            return .failed(String(localized: "Device verification is unavailable."))
         }
     }
 
@@ -2890,13 +3668,18 @@ final class SharedCoreMediaLoader: MediaLoading {
 
     func loadThumbnail(for resource: MediaResource) async -> MediaLoadState {
         guard resource.isEncrypted == false else {
-            return .failed("Encrypted media requires recovered keys before it can be opened.")
+            return .failed(String(localized: "Encrypted media requires recovered keys before it can be opened."))
         }
         if SharedCoreTimelineMedia.handleId(from: resource.authenticatedURL) != nil {
             return .thumbnail(resource)
         }
+        if LocalUploadPreviewStore.isLocalPreview(resource.authenticatedURL) {
+            return LocalUploadPreviewStore.shared.data(for: resource.authenticatedURL) == nil
+                ? .failed(String(localized: "Media is unavailable."))
+                : .thumbnail(resource)
+        }
         guard let url = resource.authenticatedURL, url.scheme == "mxc" else {
-            return .failed("Media is unavailable.")
+            return .failed(String(localized: "Media is unavailable."))
         }
         do {
             let bytes = try await SharedCorePlainMedia.thumbnail(
@@ -2906,17 +3689,20 @@ final class SharedCoreMediaLoader: MediaLoading {
                 height: 480
             )
             guard bytes.isEmpty == false else {
-                return .failed("Media could not be loaded.")
+                return .failed(String(localized: "Media could not be loaded."))
             }
             return .thumbnail(resource)
         } catch {
-            return .failed("Media could not be loaded.")
+            return .failed(String(localized: "Media could not be loaded."))
         }
     }
 
     func loadThumbnailData(for resource: MediaResource, width: UInt64, height: UInt64) async -> Data? {
         guard resource.isEncrypted == false else {
             return nil
+        }
+        if LocalUploadPreviewStore.isLocalPreview(resource.authenticatedURL) {
+            return LocalUploadPreviewStore.shared.data(for: resource.authenticatedURL)
         }
         if let handle = SharedCoreTimelineMedia.handleId(from: resource.authenticatedURL) {
             return try? await SharedCoreTimelineMedia.mediaBytes(core: host.core, handleId: handle)
@@ -2935,6 +3721,9 @@ final class SharedCoreMediaLoader: MediaLoading {
     func loadMediaData(for resource: MediaResource) async -> Data? {
         guard resource.isEncrypted == false else {
             return nil
+        }
+        if LocalUploadPreviewStore.isLocalPreview(resource.authenticatedURL) {
+            return LocalUploadPreviewStore.shared.data(for: resource.authenticatedURL)
         }
         if let handle = SharedCoreTimelineMedia.handleId(from: resource.authenticatedURL) {
             return try? await SharedCoreTimelineMedia.mediaBytes(core: host.core, handleId: handle)
@@ -2958,10 +3747,10 @@ final class SharedCoreMediaUploadService: MediaUploading {
 
     func upload(_ request: MediaUploadRequest) async -> MediaUploadState {
         guard case .signedIn = host.sessionStore.currentState else {
-            return .failed("Sign in before uploading media.")
+            return .failed(String(localized: "Sign in before uploading media."))
         }
         guard request.data.isEmpty == false else {
-            return .failed("Attachment is empty.")
+            return .failed(String(localized: "Attachment is empty."))
         }
         do {
             let result = try await SharedCoreMediaSend.sendRoomAttachment(
@@ -2978,33 +3767,19 @@ final class SharedCoreMediaUploadService: MediaUploading {
                 mentionUserIds: request.mentionUserIDs,
                 mentionRoom: request.mentionRoom
             )
-            let safeName = URL(fileURLWithPath: request.displayName).lastPathComponent
-            let resource = MediaResource(
-                id: result.eventId,
-                filename: safeName.isEmpty ? "Attachment" : safeName,
-                caption: request.caption,
-                formattedCaption: request.formattedCaption,
-                authenticatedURL: URL(string: "mxc://local/upload"),
-                requiresAuthentication: true,
-                mimeType: request.mimeType,
-                byteSize: UInt64(request.data.count)
-            )
             let senderID = await coreSessionUserID() ?? ""
-            let item = TimelineItem(
-                id: result.eventId,
+            // A queued result is still in the SDK send queue with no event id
+            // yet; the builder keeps it pending under its transaction id.
+            let item = MediaUploadAcknowledgement.item(
                 eventID: result.eventId,
-                serverEventID: result.eventId,
-                senderID: senderID,
-                timestamp: Date(),
-                kind: .mediaPlaceholder(resource),
-                replyToEventID: request.replyToEventID,
-                threadRootEventID: request.threadRootEventID,
-                isEdited: false,
-                reactions: [:]
+                transactionID: result.localTxnId,
+                isQueued: result.status == .queued,
+                request: request,
+                senderID: senderID
             )
             return .uploaded(item)
         } catch {
-            return .failed("Media could not be uploaded.")
+            return .failed(String(localized: "Media could not be uploaded."))
         }
     }
 
@@ -3016,10 +3791,74 @@ final class SharedCoreMediaUploadService: MediaUploading {
     }
 }
 
+/// A sparse push carries an event id and no room. Core finds the joined room
+/// whose local event cache holds the event; the room screen then resolves
+/// where in the room it lives (a thread reply opens its thread).
 struct SharedCoreSparsePushRouteResolver: SparsePushRouteResolving {
+    typealias Lookup = @Sendable (String) async throws -> TimelineEventLocationDto?
+    typealias Pause = @Sendable (UInt64) async -> Void
+
+    private let lookup: Lookup
+    private let isReady: @Sendable () async -> Bool
+    private let pause: Pause
+    /// The tap can arrive before sync has stored the event: look a few times.
+    private let attempts: Int
+    private let retryDelayNanoseconds: UInt64
+
+    init(host: SharedCoreProductHost, sessionReadiness: SignedInSessionReadinessServicing) {
+        self.init(
+            lookup: { eventID in
+                try await SharedCoreTimeline.timelineEventLocation(core: host.core, eventId: eventID)
+            },
+            isReady: {
+                guard case let .signedIn(session) = host.sessionStore.currentState else {
+                    return false
+                }
+                return await sessionReadiness.waitUntilPrepared(for: session)
+            }
+        )
+    }
+
+    init(
+        lookup: @escaping Lookup,
+        isReady: @escaping @Sendable () async -> Bool = { true },
+        pause: @escaping Pause = { try? await Task.sleep(nanoseconds: $0) },
+        attempts: Int = 4,
+        retryDelayNanoseconds: UInt64 = 1_000_000_000
+    ) {
+        self.lookup = lookup
+        self.isReady = isReady
+        self.pause = pause
+        self.attempts = max(1, attempts)
+        self.retryDelayNanoseconds = retryDelayNanoseconds
+    }
+
     func resolveRoute(eventID: String) async -> AppRoute? {
-        _ = eventID
+        guard eventID.isEmpty == false, await isReady() else {
+            return nil
+        }
+        for attempt in 0 ..< attempts {
+            if attempt > 0 {
+                await pause(retryDelayNanoseconds)
+            }
+            guard Task.isCancelled == false else {
+                return nil
+            }
+            // A failed lookup (stores suspended, owner not attached) counts
+            // as not found yet.
+            if let location = (try? await lookup(eventID)) ?? nil,
+               let route = Self.route(eventID: eventID, location: location) {
+                return route
+            }
+        }
         return nil
+    }
+
+    static func route(eventID: String, location: TimelineEventLocationDto) -> AppRoute? {
+        guard location.roomId.isEmpty == false else {
+            return nil
+        }
+        return .room(id: location.roomId, eventID: eventID)
     }
 }
 
@@ -3088,19 +3927,19 @@ private final class SharedCoreBoundPusherService: MatrixPusherAccountServicing {
         self.logger = logger
     }
 
-    func registerPusher(pushKey: String) async throws {
+    func registerPusher(pushKey: String) async throws -> String? {
         guard let gatewayURL else {
             logger.info("Push gateway URL is not configured; skipping pusher registration", category: .push)
-            return
+            return nil
         }
-        _ = try await SharedCoreHttpPusher.register(
+        return try await SharedCoreHttpPusher.register(
             owner: owner,
             pushKey: pushKey,
             appId: appID,
             gatewayUrl: gatewayURL.absoluteString,
             appDisplayName: "Synara",
             lang: "en-US"
-        )
+        ).editSuppressionDiagnosticId
     }
 
     func unregisterPusher(pushKey: String) async throws {

@@ -106,6 +106,7 @@ async fn thread_mark_read_sends_a_private_receipt_not_unthreaded_read_markers() 
             action: NativeTimelineReadAction::MarkRead,
             intent: NativeTimelineReadIntent::ExplicitUser,
             observed_live_tail_event_id: None,
+            public_receipt: false,
         }),
     )
     .await

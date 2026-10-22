@@ -137,7 +137,7 @@ final class SharedCoreSessionBootstrapTests: XCTestCase {
         XCTAssertEqual(outcome.failure, .attachFailed)
         XCTAssertEqual(outcome.failure?.syncStatus, .disconnected)
         XCTAssertTrue(ConnectionStatusCopy.showsRetryAction(.disconnected))
-        XCTAssertTrue(ConnectionStatusCopy.showsSignOutAction(.disconnected))
+        XCTAssertFalse(ConnectionStatusCopy.showsSignOutAction(.disconnected))
         assertPrivacySafe(outcome)
     }
 

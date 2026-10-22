@@ -188,7 +188,8 @@ async fn registration_installs_confirms_then_registers_and_repeated_policy_is_re
         step("POST", PUSHER, serde_json::json!({})),
     ])
     .await;
-    register(&client).await.unwrap();
+    let first = register(&client).await.unwrap();
+    assert_eq!(first.edit_suppression_diagnostic_id, None);
     register(&client).await.unwrap();
     let bodies = server.await.unwrap();
     assert_eq!(
@@ -200,29 +201,44 @@ async fn registration_installs_confirms_then_registers_and_repeated_policy_is_re
 }
 
 #[tokio::test]
-async fn policy_write_failure_prevents_pusher_registration() {
+async fn policy_write_failure_still_registers_and_reports_the_degraded_policy() {
     let mut failed = step(
         "PUT",
         PUT,
         serde_json::json!({"errcode":"M_FORBIDDEN","error":"denied"}),
     );
     failed.status = 403;
-    let (client, server) =
-        client_and_script(vec![step("GET", GET, rules_response(false, true)), failed]).await;
-    assert_eq!(register(&client).await.unwrap_err(), POLICY_FAILED);
-    assert_eq!(server.await.unwrap().len(), 2);
+    let (client, server) = client_and_script(vec![
+        step("GET", GET, rules_response(false, true)),
+        failed,
+        step("POST", PUSHER, serde_json::json!({})),
+    ])
+    .await;
+    let result = register(&client).await.unwrap();
+    assert_eq!(
+        result.edit_suppression_diagnostic_id.as_deref(),
+        Some(POLICY_FAILED)
+    );
+    let bodies = server.await.unwrap();
+    assert_eq!(bodies.len(), 3);
+    assert_eq!(bodies[2]["data"]["format"], "event_id_only");
 }
 
 #[tokio::test]
-async fn unconfirmed_readback_prevents_pusher_registration() {
+async fn unconfirmed_readback_still_registers_and_reports_the_degraded_policy() {
     let (client, server) = client_and_script(vec![
         step("GET", GET, rules_response(false, true)),
         step("PUT", PUT, serde_json::json!({})),
         step("GET", GET, rules_response(false, true)),
+        step("POST", PUSHER, serde_json::json!({})),
     ])
     .await;
-    assert_eq!(register(&client).await.unwrap_err(), POLICY_UNCONFIRMED);
-    assert_eq!(server.await.unwrap().len(), 3);
+    let result = register(&client).await.unwrap();
+    assert_eq!(
+        result.edit_suppression_diagnostic_id.as_deref(),
+        Some(POLICY_UNCONFIRMED)
+    );
+    assert_eq!(server.await.unwrap().len(), 4);
 }
 
 #[tokio::test]
@@ -290,7 +306,26 @@ async fn unavailable_authoritative_rules_do_not_become_default_rules() {
         serde_json::json!({"errcode":"M_FORBIDDEN","error":"denied"}),
     );
     failed.status = 403;
-    let (client, server) = client_and_script(vec![failed]).await;
-    assert_eq!(register(&client).await.unwrap_err(), POLICY_FAILED);
-    assert_eq!(server.await.unwrap().len(), 1);
+    let (client, server) =
+        client_and_script(vec![failed, step("POST", PUSHER, serde_json::json!({}))]).await;
+    let result = register(&client).await.unwrap();
+    assert_eq!(
+        result.edit_suppression_diagnostic_id.as_deref(),
+        Some(POLICY_FAILED)
+    );
+    assert_eq!(server.await.unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn a_failed_pusher_write_still_fails_registration() {
+    let mut failed = step(
+        "POST",
+        PUSHER,
+        serde_json::json!({"errcode":"M_UNKNOWN","error":"down"}),
+    );
+    failed.status = 500;
+    let (client, server) =
+        client_and_script(vec![step("GET", GET, rules_response(true, true)), failed]).await;
+    assert_eq!(register(&client).await.unwrap_err(), "v-pusher.sdk-failed");
+    assert_eq!(server.await.unwrap().len(), 2);
 }

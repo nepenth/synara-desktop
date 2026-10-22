@@ -2,14 +2,15 @@ import PhotosUI
 import SwiftUI
 import SynaraCore
 import UIKit
+import UniformTypeIdentifiers
 import UserNotifications
 
 /// Log Out confirmation copy, including the last-device warning.
 enum SignOutCopy {
     static let standardMessage =
-        "This clears local sign-in data and cached rooms. Synara also attempts to revoke this session and remove its push registration; remote cleanup requires a connection."
+        String(localized: "This clears local sign-in data and cached rooms. Synara also attempts to revoke this session and remove its push registration; remote cleanup requires a connection.")
     static let lastDeviceWarning =
-        "This is your last signed-in device. Save your recovery key before logging out, or you will lose access to your encrypted messages."
+        String(localized: "This is your last signed-in device. Save your recovery key before logging out, or you will lose access to your encrypted messages.")
 
     /// `isLastDevice` is `nil` while the device list is unknown; only a
     /// confirmed last device shows the warning.
@@ -22,13 +23,86 @@ enum SignOutCopy {
     }
 }
 
+/// The one Log Out confirmation behind every sign-out entry point (Settings,
+/// the account menu, the connection banner). A request only opens the dialog
+/// and reads the device list for the last-device warning; nothing signs out
+/// until `confirm`.
+@MainActor
+final class SignOutConfirmationModel: ObservableObject {
+    @Published var isPresented = false
+    @Published private(set) var isLastDevice: Bool?
+    private var requestGeneration = 0
+
+    var message: String {
+        SignOutCopy.message(isLastDevice: isLastDevice)
+    }
+
+    /// `known` is the crypto status already on hand; `refresh` reads the
+    /// current device list.
+    func request(
+        known: SessionCryptoStatus,
+        refresh: @escaping () async -> SessionCryptoStatus
+    ) {
+        requestGeneration += 1
+        let generation = requestGeneration
+        isLastDevice = known.isLastDevice
+        isPresented = true
+        Task { @MainActor in
+            let status = await refresh()
+            guard generation == requestGeneration else { return }
+            isLastDevice = status.isLastDevice
+        }
+    }
+
+    func request(using store: SessionCryptoStore) {
+        request(known: store.status, refresh: { await store.refresh() })
+    }
+
+    func confirm(_ signOut: () -> Void) {
+        isPresented = false
+        signOut()
+    }
+}
+
+private struct SignOutConfirmationDialog: ViewModifier {
+    @ObservedObject var model: SignOutConfirmationModel
+    let confirmIdentifier: String
+    let onConfirm: () -> Void
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(
+            "Log out of Synara?",
+            isPresented: $model.isPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Log Out", role: .destructive) {
+                model.confirm(onConfirm)
+            }
+            .accessibilityIdentifier(confirmIdentifier)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(model.message)
+        }
+    }
+}
+
+extension View {
+    /// Settings' Log Out confirmation, including the last-device warning.
+    func signOutConfirmation(
+        _ model: SignOutConfirmationModel,
+        confirmIdentifier: String,
+        onConfirm: @escaping () -> Void
+    ) -> some View {
+        modifier(SignOutConfirmationDialog(model: model, confirmIdentifier: confirmIdentifier, onConfirm: onConfirm))
+    }
+}
+
 struct SettingsView: View {
     @Environment(\.appEnvironment) private var environment
     @State private var state: SettingsState = .idle
     @State private var logoutAttempt = 0
     @State private var inFlightLogout: Task<Void, Error>?
-    @State private var isLogoutConfirmationPresented = false
-    @StateObject private var logoutCrypto = SessionCryptoStatusObserver()
+    @StateObject private var logoutConfirmation = SignOutConfirmationModel()
 
     var body: some View {
         Form {
@@ -56,21 +130,21 @@ struct SettingsView: View {
                 NavigationLink {
                     NotificationSettingsView()
                 } label: {
-                    SettingsNavigationRow(title: "Notifications", systemImage: "bell")
+                    SettingsNavigationRow(title: String(localized: "Notifications"), systemImage: "bell")
                 }
                 .accessibilityIdentifier("NotificationSettingsLink")
 
                 NavigationLink {
                     AppearanceSettingsView()
                 } label: {
-                    SettingsNavigationRow(title: "Appearance", systemImage: "textformat.size")
+                    SettingsNavigationRow(title: String(localized: "Appearance"), systemImage: "textformat.size")
                 }
                 .accessibilityIdentifier("AppearanceSettingsLink")
 
                 NavigationLink {
                     SecuritySettingsView()
                 } label: {
-                    SettingsNavigationRow(title: "Security & Recovery", systemImage: "lock.shield")
+                    SettingsNavigationRow(title: String(localized: "Security & Recovery"), systemImage: "lock.shield")
                 }
                 .accessibilityIdentifier("SecuritySettingsLink")
             }
@@ -79,37 +153,35 @@ struct SettingsView: View {
                 NavigationLink {
                     AboutSettingsView()
                 } label: {
-                    SettingsNavigationRow(title: "About Synara", systemImage: "info.circle")
+                    SettingsNavigationRow(title: String(localized: "About Synara"), systemImage: "info.circle")
                 }
                 .accessibilityIdentifier("AboutSettingsLink")
 
                 NavigationLink {
                     LicensesSettingsView()
                 } label: {
-                    SettingsNavigationRow(title: "Licenses", systemImage: "doc.text")
+                    SettingsNavigationRow(title: String(localized: "Licenses"), systemImage: "doc.text")
                 }
                 .accessibilityIdentifier("LicensesSettingsLink")
 
                 NavigationLink {
                     PrivacyPolicySettingsView()
                 } label: {
-                    SettingsNavigationRow(title: "Privacy Policy", systemImage: "hand.raised")
+                    SettingsNavigationRow(title: String(localized: "Privacy Policy"), systemImage: "hand.raised")
                 }
                 .accessibilityIdentifier("PrivacyPolicySettingsLink")
 
                 NavigationLink {
                     SupportSettingsView()
                 } label: {
-                    SettingsNavigationRow(title: "Support", systemImage: "questionmark.circle")
+                    SettingsNavigationRow(title: String(localized: "Support"), systemImage: "questionmark.circle")
                 }
                 .accessibilityIdentifier("SupportSettingsLink")
             }
 
             Section("Danger Zone") {
                 Button(role: .destructive) {
-                    isLogoutConfirmationPresented = true
-                    // Read the device list for the last-device warning.
-                    Task { await logoutCrypto.refresh(crypto: environment.crypto) }
+                    logoutConfirmation.request(using: environment.sessionCrypto)
                 } label: {
                     if state.isLoading {
                         ProgressView()
@@ -120,25 +192,15 @@ struct SettingsView: View {
                 .disabled(state.isLoading)
                 .accessibilityIdentifier("LogoutButton")
                 .accessibilityHint("Requires confirmation and clears local session data from this device")
-                .confirmationDialog(
-                    "Log out of Synara?",
-                    isPresented: $isLogoutConfirmationPresented,
-                    titleVisibility: .visible
-                ) {
-                    Button("Log Out", role: .destructive) {
-                        logout()
-                    }
-                    .accessibilityIdentifier("ConfirmLogoutButton")
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text(SignOutCopy.message(isLastDevice: logoutCrypto.status.isLastDevice))
+                .signOutConfirmation(logoutConfirmation, confirmIdentifier: "ConfirmLogoutButton") {
+                    logout()
                 }
             }
 
             if case .failed(let message) = state {
                 Section {
                     Text(message)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(SynaraColor.criticalText)
                         .accessibilityIdentifier("LogoutErrorText")
                 }
             }
@@ -249,12 +311,15 @@ private struct AccountSettingsView: View {
                     coreSessionIdentity,
                     for: session
                 )
-                SettingsInfoRow(title: "User", value: displayIdentity?.userID ?? session.userID)
+                SettingsInfoRow(title: String(localized: "User"), value: displayIdentity?.userID ?? session.userID)
                     .accessibilityIdentifier("SettingsAccountUser")
-                SettingsInfoRow(title: "Device", value: displayIdentity?.deviceID ?? session.deviceID)
+                SettingsInfoRow(
+                    title: String(localized: "Device"),
+                    value: displayIdentity?.deviceID ?? session.deviceID
+                )
                     .accessibilityIdentifier("SettingsAccountDevice")
                 SettingsInfoRow(
-                    title: "Homeserver",
+                    title: String(localized: "Homeserver"),
                     value: SettingsAccountIdentitySelection.homeserverDisplayValue(
                         for: displayIdentity,
                         fallback: session.homeserverURL
@@ -388,7 +453,7 @@ private struct AccountSettingsView: View {
                     applyPresence(newValue)
                 }
                 if let status = ownPresence?.statusMessage, status.isEmpty == false {
-                    SettingsInfoRow(title: "Message", value: status)
+                    SettingsInfoRow(title: String(localized: "Message"), value: status)
                         .accessibilityIdentifier("SettingsPresenceMessage")
                 }
             }
@@ -421,7 +486,7 @@ private struct AccountSettingsView: View {
             Section {
                 Text(
                     rtcTransports.map(SharedCoreRtcTransports.diagnosticCopy)
-                        ?? "Native MatrixRTC transports are unavailable."
+                        ?? String(localized: "Native MatrixRTC transports are unavailable.")
                 )
                 .font(SynaraTypography.supporting)
                 .foregroundStyle(SynaraColor.secondaryText)
@@ -470,7 +535,7 @@ private struct AccountSettingsView: View {
             } header: {
                 Text("Sessions")
             } footer: {
-                Text("Sign out a session to revoke it on the homeserver. This device uses Log Out instead.")
+                Text("Log out a session to revoke it on the homeserver. This device uses Log Out instead.")
             }
 
             if sessionCrypto.showsVerifyThisDevice {
@@ -498,7 +563,7 @@ private struct AccountSettingsView: View {
                     if sessionCrypto.status.hasDevicesToVerifyAgainst == nil {
                         Button("Retry Availability Check") {
                             Task {
-                                await sessionCrypto.refresh(crypto: environment.crypto)
+                                await sessionCrypto.refresh(store: environment.sessionCrypto)
                             }
                         }
                         .disabled(isRequestingVerification)
@@ -547,7 +612,7 @@ private struct AccountSettingsView: View {
         }
         .accessibilityIdentifier("AccountSettingsScreen")
         .alert(
-            "Sign out session?",
+            "Log out session?",
             isPresented: Binding(
                 get: { signOutDevice != nil },
                 set: { presented in
@@ -560,7 +625,7 @@ private struct AccountSettingsView: View {
         ) {
             SecureField("Account password", text: $signOutPassword)
                 .textContentType(.password)
-            Button("Sign Out", role: .destructive) {
+            Button("Log Out", role: .destructive) {
                 confirmSignOut()
             }
             .disabled(isSigningOut || signOutPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -570,16 +635,15 @@ private struct AccountSettingsView: View {
                 signOutPassword = ""
             }
         } message: {
-            Text("Enter your account password to revoke \(signOutDevice?.displayName ?? "this session").")
+            Text("Enter your account password to revoke \(signOutDevice?.displayName ?? String(localized: "this session")).")
         }
         .task {
-            await sessionCrypto.start(crypto: environment.crypto)
+            await sessionCrypto.start(store: environment.sessionCrypto)
         }
-        .task {
-            for await _ in environment.crypto.sessionDeviceUpdates() {
-                guard Task.isCancelled == false else { break }
-                await refreshSessionDevices()
-            }
+        // The session list follows the store's coalesced device wakeups
+        // instead of a second subscription of its own.
+        .onReceive(environment.sessionCrypto.$wakeupRevision.dropFirst()) { _ in
+            Task { await refreshSessionDevices() }
         }
         .onChange(of: selectedAvatarPhoto) { item in
             if let item {
@@ -642,8 +706,8 @@ private struct AccountSettingsView: View {
             await MainActor.run {
                 isSettingStatus = false
                 statusMessage = ok
-                    ? "Status updated."
-                    : "This homeserver does not support user status."
+                    ? String(localized: "Status updated.")
+                    : String(localized: "This homeserver does not support user status.")
             }
         }
     }
@@ -658,9 +722,9 @@ private struct AccountSettingsView: View {
                 if ok {
                     statusEmojiDraft = ""
                     statusTextDraft = ""
-                    statusMessage = "Status cleared."
+                    statusMessage = String(localized: "Status cleared.")
                 } else {
-                    statusMessage = "This homeserver does not support user status."
+                    statusMessage = String(localized: "This homeserver does not support user status.")
                 }
             }
         }
@@ -701,13 +765,13 @@ private struct AccountSettingsView: View {
                 await MainActor.run {
                     selectedAvatarPhoto = nil
                     isUploadingAvatar = false
-                    displayNameMessage = status.message(for: "Avatar")
+                    displayNameMessage = status.message(for: .avatar)
                 }
             } catch {
                 await MainActor.run {
                     selectedAvatarPhoto = nil
                     isUploadingAvatar = false
-                    displayNameMessage = "Could not update avatar."
+                    displayNameMessage = String(localized: "Could not update avatar.")
                 }
             }
         }
@@ -720,20 +784,20 @@ private struct AccountSettingsView: View {
         Task {
             let requested = await environment.matrix.requestThreepidEmailToken(email)
             guard requested else {
-                await MainActor.run { emailMessage = "Could not send verification email." }
+                await MainActor.run { emailMessage = String(localized: "Could not send verification email.") }
                 return
             }
             let status = await environment.matrix.addThreepidEmail()
             await MainActor.run {
                 if status == .authenticationRequired {
                     needsEmailPassword = true
-                    emailMessage = "Enter your account password to confirm this email."
+                    emailMessage = String(localized: "Enter your account password to confirm this email.")
                 } else if status == .ok {
                     emailDraft = ""
                     needsEmailPassword = false
-                    emailMessage = "Email attached."
+                    emailMessage = String(localized: "Email attached.")
                 } else {
-                    emailMessage = "Could not attach this email."
+                    emailMessage = String(localized: "Could not attach this email.")
                 }
             }
             emails = await environment.matrix.threepidEmails()
@@ -749,9 +813,9 @@ private struct AccountSettingsView: View {
                 if status == .ok {
                     emailDraft = ""
                     needsEmailPassword = false
-                    emailMessage = "Email attached."
+                    emailMessage = String(localized: "Email attached.")
                 } else {
-                    emailMessage = "Could not confirm this email."
+                    emailMessage = String(localized: "Could not confirm this email.")
                 }
             }
             emails = await environment.matrix.threepidEmails()
@@ -761,7 +825,7 @@ private struct AccountSettingsView: View {
     private func blockUser() {
         let userID = ignoreDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard userID.hasPrefix("@") else {
-            ignoreMessage = "Enter a full Matrix user ID."
+            ignoreMessage = String(localized: "Enter a full Matrix user ID.")
             return
         }
         ignoreMessage = nil
@@ -773,7 +837,7 @@ private struct AccountSettingsView: View {
                 if ok {
                     ignoreDraft = ""
                 } else {
-                    ignoreMessage = "Could not block this user."
+                    ignoreMessage = String(localized: "Could not block this user.")
                 }
             }
         }
@@ -788,7 +852,7 @@ private struct AccountSettingsView: View {
             let status = await environment.matrix.setOwnDisplayNameStatus(name)
             await MainActor.run {
                 isSavingDisplayName = false
-                displayNameMessage = status.message(for: "Display name")
+                displayNameMessage = status.message(for: .displayName)
             }
         }
     }
@@ -857,7 +921,7 @@ private struct SessionDeviceRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
             HStack(alignment: .firstTextBaseline) {
-                Text(device.isCurrent ? "This device" : device.displayName)
+                Text(device.isCurrent ? String(localized: "This device") : device.displayName)
                     .font(SynaraTypography.body)
                     .foregroundStyle(SynaraColor.primaryText)
                 Spacer()
@@ -866,7 +930,7 @@ private struct SessionDeviceRow: View {
                         Button("Verify", systemImage: "checkmark.shield", action: onVerify)
                             .disabled(isRequestingVerification)
                             .accessibilityIdentifier("VerifySessionButton-\(device.id)")
-                        Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive, action: onSignOut)
+                        Button("Log Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive, action: onSignOut)
                             .disabled(isSigningOut)
                             .accessibilityIdentifier("SignOutSessionButton-\(device.id)")
                     } label: {
@@ -917,17 +981,107 @@ private struct SessionDeviceRow: View {
     }
 }
 
+/// Push rules on the Notifications screen. Toggles and pickers move at once
+/// and roll back with an inline message when the server refuses; they used
+/// to snap back until the round trip finished, and failures were silent.
+@MainActor
+final class PushRuleSettingsModel: ObservableObject {
+    @Published private(set) var snapshot: SynaraPushRulesSnapshot?
+    @Published private(set) var message: String?
+    /// Bumps per edit; an older write neither rolls back nor overwrites a
+    /// newer edit.
+    private var revision = 0
+
+    static let failureMessage = String(localized: "Could not update push rules. Check your connection and try again.")
+
+    func load(using matrix: PushRuleSettingsServicing) async {
+        let started = revision
+        let loaded = await matrix.pushRulesSnapshot()
+        guard started == revision else { return }
+        snapshot = loaded
+    }
+
+    func setMention(
+        _ keyPath: WritableKeyPath<SynaraPushRuleMentions, Bool>,
+        ruleID: String,
+        enabled: Bool,
+        using matrix: PushRuleSettingsServicing
+    ) async {
+        await apply({ $0.mentions[keyPath: keyPath] = enabled }, using: matrix) {
+            await matrix.setPushRuleMention(ruleID: ruleID, enabled: enabled)
+        }
+    }
+
+    func setDefault(
+        _ keyPath: WritableKeyPath<SynaraPushRulesSnapshot, String>,
+        encrypted: Bool,
+        oneToOne: Bool,
+        mode: String,
+        using matrix: PushRuleSettingsServicing
+    ) async {
+        await apply({ $0[keyPath: keyPath] = mode }, using: matrix) {
+            await matrix.setPushRuleDefault(encrypted: encrypted, oneToOne: oneToOne, mode: mode)
+        }
+    }
+
+    @discardableResult
+    func addKeyword(_ keyword: String, using matrix: PushRuleSettingsServicing) async -> Bool {
+        await apply({ snapshot in
+            if snapshot.keywords.contains(keyword) == false {
+                snapshot.keywords.append(keyword)
+            }
+        }, using: matrix) {
+            await matrix.addPushKeyword(keyword)
+        }
+    }
+
+    func removeKeyword(_ keyword: String, using matrix: PushRuleSettingsServicing) async {
+        await apply({ $0.keywords.removeAll { $0 == keyword } }, using: matrix) {
+            await matrix.removePushKeyword(keyword)
+        }
+    }
+
+    @discardableResult
+    private func apply(
+        _ change: (inout SynaraPushRulesSnapshot) -> Void,
+        using matrix: PushRuleSettingsServicing,
+        write: () async -> Bool
+    ) async -> Bool {
+        guard let previous = snapshot else { return false }
+        var next = previous
+        change(&next)
+        revision += 1
+        let edit = revision
+        snapshot = next
+        message = nil
+        guard await write() else {
+            if edit == revision {
+                snapshot = previous
+            }
+            message = Self.failureMessage
+            return false
+        }
+        // The server's rules, unless a newer edit is already showing.
+        let refreshed = await matrix.pushRulesSnapshot()
+        if edit == revision, let refreshed {
+            snapshot = refreshed
+        }
+        return true
+    }
+}
+
 private struct NotificationSettingsView: View {
     @Environment(\.appEnvironment) private var environment
     @State private var notificationStatus: NotificationPermissionStatus = .unavailable
     @State private var isRequestingNotifications = false
     @State private var isRegisteringPush = false
+    @State private var pushRegistrationStatus = ""
     @State private var showLockScreenMessagePreviews = SynaraSharedConstants.defaultLockScreenMessagePreviews
     @State private var timeSensitiveAgentApprovals = SynaraSharedConstants.defaultTimeSensitiveAgentApprovals
     @State private var approvalNotificationDetails = SynaraSharedConstants.defaultApprovalNotificationDetails
-    @State private var pushRules: SynaraPushRulesSnapshot?
+    @State private var approveOnceWithoutUnlock = SynaraSharedConstants.defaultApproveOnceWithoutUnlock
+    @StateObject private var pushRuleSettings = PushRuleSettingsModel()
     @State private var keywordDraft = ""
-    @State private var pushRulesMessage: String?
     @State private var notificationDiagnostics: [SynaraNotificationDiagnosticEntry] = []
     @State private var notificationDiagnosticReport = ""
 
@@ -957,11 +1111,14 @@ private struct NotificationSettingsView: View {
             }
 
             Section {
-                SettingsInfoRow(title: "Status", value: environment.push.registrationStateDescription)
+                SettingsInfoRow(
+                    title: String(localized: "Status"),
+                    value: pushRegistrationStatus.isEmpty
+                        ? environment.push.registrationStateDescription
+                        : pushRegistrationStatus
+                )
                 Button {
-                    isRegisteringPush = true
-                    environment.push.beginRegistration()
-                    isRegisteringPush = false
+                    registerPush()
                 } label: {
                     if isRegisteringPush {
                         ProgressView()
@@ -994,10 +1151,29 @@ private struct NotificationSettingsView: View {
                             for: SynaraSharedConstants.approvalNotificationDetailsKey
                         )
                     }
+                Toggle(
+                    SynaraApprovalNotificationSettingsCopy.approveOnceWithoutUnlockTitle,
+                    isOn: $approveOnceWithoutUnlock
+                )
+                    .accessibilityIdentifier("ApproveOnceWithoutUnlockToggle")
+                    .onChange(of: approveOnceWithoutUnlock) { value in
+                        environment.settings.set(
+                            value,
+                            for: SynaraSharedConstants.approveOnceWithoutUnlockKey
+                        )
+                        SynaraNotificationActionContract.registerCategories(
+                            approveOnceWithoutUnlock: value
+                        )
+                    }
             } header: {
                 Text("Agent Approvals")
             } footer: {
-                Text("Fresh, locally verified approval prompts use Critical Alerts when this build supports them and you allow them in iOS; otherwise they use Time Sensitive alerts. Use Request Notification Permission to allow Critical Alerts in a supported build. Show approval details puts the reason and requested command on the notification, including the Lock Screen and Apple Watch, independent of message previews. Approve once and Deny require authentication. Always approval remains in-app only.")
+                Text(
+                    SynaraApprovalNotificationSettingsCopy.footer(
+                        approveOnceWithoutUnlock: approveOnceWithoutUnlock
+                    )
+                )
+                .accessibilityIdentifier("AgentApprovalsFooter")
             }
 
             Section {
@@ -1064,64 +1240,91 @@ private struct NotificationSettingsView: View {
             } header: {
                 Text("Local Delivery Diagnostics")
             } footer: {
-                Text("Copy or share a report after reproducing a missing preview. It includes app version, notification settings, push registration and shared-store readiness, plus up to 256 fixed stage codes and timestamps. Reports stay on this device until you share them and exclude message content, Matrix IDs, senders, push payloads, tokens, URLs and account secrets.")
+                Text("Copy or share a report after reproducing a missing preview. It includes app version, notification settings, push registration and shared-store readiness, up to 256 fixed stage codes and timestamps, and how many previews failed because the server rejected your session. Reports stay on this device until you share them and exclude message content, Matrix IDs, senders, push payloads, tokens, URLs and account secrets.")
             }
 
-            if let pushRules {
-                Section("1-to-1 Chats") {
-                    pushModePicker("Unencrypted", current: pushRules.dm) { mode in
-                        await updateDefault(encrypted: false, oneToOne: true, mode: mode)
+            if let pushRules = pushRuleSettings.snapshot {
+                if let message = pushRuleSettings.message {
+                    Section {
+                        Text(message)
+                            .font(SynaraTypography.supporting)
+                            .foregroundStyle(SynaraColor.criticalText)
+                            .accessibilityIdentifier("PushRulesErrorText")
                     }
-                    pushModePicker("Encrypted", current: pushRules.dmEncrypted) { mode in
-                        await updateDefault(encrypted: true, oneToOne: true, mode: mode)
+                }
+                Section("1-to-1 Chats") {
+                    pushModePicker(String(localized: "Unencrypted"), current: pushRules.dm) { mode in
+                        await updateDefault(\.dm, encrypted: false, oneToOne: true, mode: mode)
+                    }
+                    pushModePicker(String(localized: "Encrypted"), current: pushRules.dmEncrypted) { mode in
+                        await updateDefault(\.dmEncrypted, encrypted: true, oneToOne: true, mode: mode)
                     }
                 }
                 Section("Rooms") {
-                    pushModePicker("Unencrypted", current: pushRules.group) { mode in
-                        await updateDefault(encrypted: false, oneToOne: false, mode: mode)
+                    pushModePicker(String(localized: "Unencrypted"), current: pushRules.group) { mode in
+                        await updateDefault(\.group, encrypted: false, oneToOne: false, mode: mode)
                     }
-                    pushModePicker("Encrypted", current: pushRules.groupEncrypted) { mode in
-                        await updateDefault(encrypted: true, oneToOne: false, mode: mode)
+                    pushModePicker(String(localized: "Encrypted"), current: pushRules.groupEncrypted) { mode in
+                        await updateDefault(\.groupEncrypted, encrypted: true, oneToOne: false, mode: mode)
                     }
                 }
                 Section("Mentions") {
-                    mentionToggle("User ID", enabled: pushRules.mentions.userMention, ruleID: "userMention")
-                    mentionToggle("Display name", enabled: pushRules.mentions.displayName, ruleID: "displayName")
-                    mentionToggle("Username", enabled: pushRules.mentions.userName, ruleID: "userName")
-                    mentionToggle("@room mention", enabled: pushRules.mentions.roomMention, ruleID: "roomMention")
-                    mentionToggle("Contains @room", enabled: pushRules.mentions.atRoom, ruleID: "atRoom")
+                    mentionToggle(
+                        String(localized: "User ID"),
+                        enabled: pushRules.mentions.userMention,
+                        keyPath: \.userMention,
+                        ruleID: "userMention"
+                    )
+                    mentionToggle(
+                        String(localized: "Display name"),
+                        enabled: pushRules.mentions.displayName,
+                        keyPath: \.displayName,
+                        ruleID: "displayName"
+                    )
+                    mentionToggle(
+                        String(localized: "Username"),
+                        enabled: pushRules.mentions.userName,
+                        keyPath: \.userName,
+                        ruleID: "userName"
+                    )
+                    mentionToggle(
+                        String(localized: "@room mention"),
+                        enabled: pushRules.mentions.roomMention,
+                        keyPath: \.roomMention,
+                        ruleID: "roomMention"
+                    )
+                    mentionToggle(
+                        String(localized: "Contains @room"),
+                        enabled: pushRules.mentions.atRoom,
+                        keyPath: \.atRoom,
+                        ruleID: "atRoom"
+                    )
                 }
                 Section("Keywords") {
                     ForEach(pushRules.keywords, id: \.self) { keyword in
                         Button(role: .destructive) {
-                            Task {
-                                _ = await environment.matrix.removePushKeyword(keyword)
-                                self.pushRules = await environment.matrix.pushRulesSnapshot()
-                            }
+                            let matrix = environment.matrix
+                            Task { await pushRuleSettings.removeKeyword(keyword, using: matrix) }
                         } label: {
                             Text(keyword)
                         }
+                        .accessibilityHint("Removes this keyword")
                     }
                     TextField("Keyword", text: $keywordDraft)
                         .accessibilityIdentifier("NotificationKeywordField")
                     Button("Add Keyword") {
                         let keyword = keywordDraft.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard keyword.isEmpty == false else { return }
+                        let matrix = environment.matrix
                         Task {
-                            _ = await environment.matrix.addPushKeyword(keyword)
-                            keywordDraft = ""
-                            self.pushRules = await environment.matrix.pushRulesSnapshot()
+                            // Keep the draft when the server refuses it.
+                            if await pushRuleSettings.addKeyword(keyword, using: matrix) {
+                                keywordDraft = ""
+                            }
                         }
                     }
                     .disabled(keywordDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .accessibilityIdentifier("NotificationAddKeywordButton")
-                }
-                if let pushRulesMessage {
-                    Section {
-                        Text(pushRulesMessage)
-                            .font(SynaraTypography.supporting)
-                            .foregroundStyle(SynaraColor.secondaryText)
-                    }
                 }
             }
         }
@@ -1138,8 +1341,11 @@ private struct NotificationSettingsView: View {
             approvalNotificationDetails = environment.settings.bool(
                 for: SynaraSharedConstants.approvalNotificationDetailsKey
             )
+            approveOnceWithoutUnlock = environment.settings.bool(
+                for: SynaraSharedConstants.approveOnceWithoutUnlockKey
+            )
             notificationStatus = await environment.notificationPermission.currentStatus()
-            pushRules = await environment.matrix.pushRulesSnapshot()
+            await pushRuleSettings.load(using: environment.matrix)
             reloadNotificationDiagnostics()
         }
     }
@@ -1157,7 +1363,8 @@ private struct NotificationSettingsView: View {
             )
             notificationDiagnosticReport = SynaraNotificationDiagnosticReport.text(
                 context: context,
-                entries: notificationDiagnostics
+                entries: notificationDiagnostics,
+                sessionRejectedCount: SynaraNotificationDiagnostics.sessionRejectedCount()
             )
         }
     }
@@ -1180,27 +1387,54 @@ private struct NotificationSettingsView: View {
         }
     }
 
-    private func mentionToggle(_ title: String, enabled: Bool, ruleID: String) -> some View {
+    private func mentionToggle(
+        _ title: String,
+        enabled: Bool,
+        keyPath: WritableKeyPath<SynaraPushRuleMentions, Bool>,
+        ruleID: String
+    ) -> some View {
         Toggle(title, isOn: Binding(
             get: { enabled },
             set: { value in
+                let matrix = environment.matrix
                 Task {
-                    _ = await environment.matrix.setPushRuleMention(ruleID: ruleID, enabled: value)
-                    pushRules = await environment.matrix.pushRulesSnapshot()
+                    await pushRuleSettings.setMention(keyPath, ruleID: ruleID, enabled: value, using: matrix)
                 }
             }
         ))
+        .accessibilityIdentifier("PushRuleMention-\(ruleID)")
     }
 
-    private func updateDefault(encrypted: Bool, oneToOne: Bool, mode: String) async {
-        let ok = await environment.matrix.setPushRuleDefault(
+    private func updateDefault(
+        _ keyPath: WritableKeyPath<SynaraPushRulesSnapshot, String>,
+        encrypted: Bool,
+        oneToOne: Bool,
+        mode: String
+    ) async {
+        await pushRuleSettings.setDefault(
+            keyPath,
             encrypted: encrypted,
             oneToOne: oneToOne,
-            mode: mode
+            mode: mode,
+            using: environment.matrix
         )
-        pushRules = await environment.matrix.pushRulesSnapshot()
-        if ok == false {
-            pushRulesMessage = "Could not update push rules."
+    }
+
+    /// APNs and the pusher answer after `beginRegistration` returns, so the
+    /// spinner stays until the service's status moves (bounded).
+    private func registerPush() {
+        guard isRegisteringPush == false else { return }
+        isRegisteringPush = true
+        let push = environment.push
+        let before = push.registrationStateDescription
+        push.beginRegistration()
+        Task { @MainActor in
+            for _ in 0..<20 {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if push.registrationStateDescription != before { break }
+            }
+            pushRegistrationStatus = push.registrationStateDescription
+            isRegisteringPush = false
         }
     }
 
@@ -1235,11 +1469,12 @@ private struct AppearanceSettingsView: View {
     var body: some View {
         Form {
             Section {
-                SettingsInfoRow(title: "Appearance", value: "System")
+                SettingsInfoRow(title: String(localized: "Appearance"), value: String(localized: "System"))
                     .accessibilityIdentifier("AppearanceThemeRow")
                 themeRampPreview
-                HStack(spacing: SynaraSpacing.small) {
+                HStack(spacing: 0) {
                     ForEach(SynaraThemeRamp.presets, id: \.hex) { preset in
+                        let isSelected = SynaraThemeRamp.normalize(baseColor.synaraHexString()) == preset.hex
                         Button {
                             persistBaseColor(preset.hex)
                             baseColor = Color(synaraHex: preset.hex)
@@ -1249,17 +1484,22 @@ private struct AppearanceSettingsView: View {
                                 .frame(width: 22, height: 22)
                                 .overlay(
                                     Circle().stroke(
-                                        SynaraThemeRamp.normalize(baseColor.synaraHexString()) == preset.hex
+                                        isSelected
                                             ? SynaraColor.primaryText
                                             : SynaraColor.separator.opacity(0.5),
                                         lineWidth: 1.5
                                     )
                                 )
+                                .frame(width: SynaraHitTarget.minimum, height: SynaraHitTarget.minimum)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(preset.label)
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
+                        .accessibilityIdentifier("AppearancePreset-\(preset.key)")
                     }
                 }
+                .padding(.leading, -11)
                 ColorPicker("Custom", selection: $baseColor, supportsOpacity: false)
                     .accessibilityIdentifier("AppearanceBaseColorPicker")
                     .onChange(of: baseColor) { newValue in
@@ -1307,7 +1547,7 @@ private struct AppearanceSettingsView: View {
             } header: {
                 Text("Thread Display")
             } footer: {
-                Text(threadDisplay.detail + " Matches desktop Settings → Appearance → Thread Display.")
+                Text(String(localized: "\(threadDisplay.detail) Matches desktop Settings → Appearance → Thread Display."))
             }
 
             Section {
@@ -1323,7 +1563,10 @@ private struct AppearanceSettingsView: View {
             }
 
             Section {
-                SettingsInfoRow(title: "Text Size", value: "Uses iOS Dynamic Type")
+                SettingsInfoRow(
+                    title: String(localized: "Text Size"),
+                    value: String(localized: "Uses iOS Dynamic Type")
+                )
                     .accessibilityIdentifier("AppearanceTextSizeRow")
             } header: {
                 Text("Text")
@@ -1363,9 +1606,9 @@ private struct AppearanceSettingsView: View {
             dark: colorScheme == .dark
         )
         return HStack(spacing: SynaraSpacing.medium) {
-            rampSwatch(title: "Rail", hex: tokens.groupedSurface)
-            rampSwatch(title: "List", hex: tokens.secondarySurface)
-            rampSwatch(title: "Chat", hex: tokens.surface)
+            rampSwatch(title: String(localized: "Rail"), hex: tokens.groupedSurface)
+            rampSwatch(title: String(localized: "List"), hex: tokens.secondarySurface)
+            rampSwatch(title: String(localized: "Chat"), hex: tokens.surface)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Theme ramp preview")
@@ -1434,20 +1677,23 @@ final class SessionCryptoStatusObserver: ObservableObject {
         SecuritySettingsVerificationPolicy.availabilityMessage(status)
     }
 
-    func start(crypto: CryptoStatusServicing) async {
+    /// Mirror the shared store while the calling view is on screen. Every
+    /// screen shares the store's one wakeup subscription and its reads.
+    func start(store: SessionCryptoStore) async {
         // Device authority can change without any SAS flow in the inbox.
         // Subscribe before the initial read so an in-flight key query's update
         // is retained while that read is being projected.
-        let updates = crypto.sessionDeviceUpdates()
-        await refresh(crypto: crypto)
-        for await _ in updates {
+        let updates = store.updates()
+        status = store.status
+        status = await store.refresh()
+        for await update in updates {
             guard Task.isCancelled == false else { break }
-            await refresh(crypto: crypto)
+            status = update
         }
     }
 
-    func refresh(crypto: CryptoStatusServicing) async {
-        status = await crypto.sessionStatus()
+    func refresh(store: SessionCryptoStore) async {
+        status = await store.refresh()
     }
 
     func apply(_ status: SessionCryptoStatus) {
@@ -1455,28 +1701,169 @@ final class SessionCryptoStatusObserver: ObservableObject {
     }
 }
 
+/// The generated recovery key stays on this device's pasteboard only, and
+/// only briefly: no Universal Clipboard hand-off, gone after two minutes.
+enum RecoveryKeyPasteboard {
+    static let lifetime: TimeInterval = 120
+
+    static func copy(_ key: String, to pasteboard: UIPasteboard = .general) {
+        pasteboard.setItems(
+            [[UTType.plainText.identifier: key]],
+            options: [
+                .localOnly: true,
+                .expirationDate: Date().addingTimeInterval(lifetime),
+            ]
+        )
+    }
+}
+
+/// Security → Set Up Recovery, in desktop's order: publish the account's
+/// cross-signing identity (asking for the account password when the
+/// homeserver wants it), then enrol secret storage and key backup with a
+/// recovery passphrase and show the generated recovery key once.
+///
+/// Core refuses partial or existing prior state, so a repeated tap never
+/// enrols twice; an already-enabled account reports `.finished` with no key.
+@MainActor
+final class RecoverySetupFlow: ObservableObject {
+    enum Phase: Equatable {
+        case idle
+        case working
+        case passwordRequired
+        case showingKey(String)
+        case finished
+    }
+
+    @Published private(set) var phase: Phase = .idle
+    @Published private(set) var errorMessage: String?
+    /// Held only between the passphrase step and the password step.
+    private var pendingPassphrase: String?
+
+    var isWorking: Bool { phase == .working }
+
+    func start(passphrase: String, confirmation: String, crypto: CryptoStatusServicing) async {
+        guard phase == .idle else { return }
+        guard passphrase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+            errorMessage = String(localized: "Choose a recovery passphrase.")
+            return
+        }
+        guard passphrase == confirmation else {
+            errorMessage = String(localized: "Recovery passphrases do not match.")
+            return
+        }
+        errorMessage = nil
+        phase = .working
+        switch await crypto.startCrossSigningSetup() {
+        case .ready:
+            await enrol(passphrase: passphrase, crypto: crypto)
+        case .passwordRequired, .passwordRejected:
+            pendingPassphrase = passphrase
+            phase = .passwordRequired
+        case .failed(let message):
+            fail(message)
+        }
+    }
+
+    func authenticate(password: String, crypto: CryptoStatusServicing) async {
+        guard phase == .passwordRequired, let passphrase = pendingPassphrase else { return }
+        guard password.isEmpty == false else {
+            errorMessage = String(localized: "Enter your account password.")
+            return
+        }
+        errorMessage = nil
+        phase = .working
+        switch await crypto.authenticateCrossSigningSetup(password: password) {
+        case .ready:
+            await enrol(passphrase: passphrase, crypto: crypto)
+        case .passwordRequired, .passwordRejected:
+            phase = .passwordRequired
+            errorMessage = RecoverySetupCopy.passwordRejected
+        case .failed(let message):
+            fail(message)
+        }
+    }
+
+    /// Leave the password step; nothing is enrolled.
+    func cancel() {
+        guard phase == .passwordRequired else { return }
+        pendingPassphrase = nil
+        errorMessage = nil
+        phase = .idle
+    }
+
+    /// The user copied or noted the key. It is dropped from memory.
+    func acknowledgeKey() {
+        guard case .showingKey = phase else { return }
+        phase = .finished
+    }
+
+    private func enrol(passphrase: String, crypto: CryptoStatusServicing) async {
+        pendingPassphrase = nil
+        switch await crypto.enableRecovery(passphrase: passphrase) {
+        case .enabled(let recoveryKey):
+            phase = .showingKey(recoveryKey)
+        case .alreadyEnabled:
+            phase = .finished
+        case .failed(let message):
+            fail(message)
+        }
+    }
+
+    private func fail(_ message: String) {
+        pendingPassphrase = nil
+        errorMessage = message
+        phase = .idle
+    }
+}
+
 private struct SecuritySettingsView: View {
     @Environment(\.appEnvironment) private var environment
     @StateObject private var sessionCrypto = SessionCryptoStatusObserver()
+    @StateObject private var recoverySetup = RecoverySetupFlow()
     @State private var recoveryKey = ""
     @State private var cryptoActionMessage: String?
     @State private var isRunningCryptoAction = false
+    @State private var showsIdentityReset = false
+
+    /// Shown while the account has no recovery, and kept while a setup is in
+    /// progress or its key is on screen, even after status refreshes.
+    private var showsRecoverySetup: Bool {
+        sessionCrypto.status.recoverySetupAvailable == true
+            || (recoverySetup.phase != .idle && recoverySetup.phase != .finished)
+    }
 
     var body: some View {
         Form {
             Section("Protection") {
-                SettingsInfoRow(title: "Session Storage", value: "Keychain")
+                SettingsInfoRow(title: String(localized: "Session Storage"), value: String(localized: "Keychain"))
                     .accessibilityIdentifier("SecuritySessionStorageRow")
-                SettingsInfoRow(title: "Message Security", value: "Matrix Rust SDK")
+                SettingsInfoRow(title: String(localized: "Message Security"), value: "Matrix Rust SDK")
                     .accessibilityIdentifier("SecurityMatrixSDKRow")
-                SettingsInfoRow(title: "Device Verification", value: sessionCrypto.status.verification.settingsDisplayName)
-                    .accessibilityIdentifier("SecurityDeviceVerificationRow")
-                SettingsInfoRow(title: "Key Recovery", value: sessionCrypto.status.recovery.settingsDisplayName)
-                    .accessibilityIdentifier("SecurityKeyRecoveryRow")
-                SettingsInfoRow(title: "Key Backup", value: sessionCrypto.status.backup.settingsDisplayName)
-                    .accessibilityIdentifier("SecurityKeyBackupRow")
-                SettingsInfoRow(title: "Decryption Issues", value: sessionCrypto.status.decryptionIssuesLabel)
-                    .accessibilityIdentifier("SecurityDecryptionIssuesRow")
+                SettingsInfoRow(
+                    title: String(localized: "Device Verification"),
+                    value: sessionCrypto.status.verification.settingsDisplayName
+                )
+                .accessibilityIdentifier("SecurityDeviceVerificationRow")
+                SettingsInfoRow(
+                    title: String(localized: "Cross-Signing"),
+                    value: sessionCrypto.status.crossSigning.settingsDisplayName
+                )
+                .accessibilityIdentifier("SecurityCrossSigningRow")
+                SettingsInfoRow(
+                    title: String(localized: "Key Recovery"),
+                    value: sessionCrypto.status.recovery.settingsDisplayName
+                )
+                .accessibilityIdentifier("SecurityKeyRecoveryRow")
+                SettingsInfoRow(
+                    title: String(localized: "Key Backup"),
+                    value: sessionCrypto.status.backup.settingsDisplayName
+                )
+                .accessibilityIdentifier("SecurityKeyBackupRow")
+                SettingsInfoRow(
+                    title: String(localized: "Decryption Issues"),
+                    value: sessionCrypto.status.decryptionIssuesLabel
+                )
+                .accessibilityIdentifier("SecurityDecryptionIssuesRow")
             }
 
             if sessionCrypto.showsVerifyThisDevice {
@@ -1486,7 +1873,7 @@ private struct SecuritySettingsView: View {
                             await environment.crypto.requestDeviceVerification()
                         }
                     } label: {
-                        cryptoActionLabel("Verify This Device")
+                        cryptoActionLabel(String(localized: "Verify This Device"))
                     }
                     .disabled(isRunningCryptoAction || sessionCrypto.enablesVerifyThisDevice == false)
                     .accessibilityIdentifier("RequestDeviceVerificationButton")
@@ -1494,7 +1881,7 @@ private struct SecuritySettingsView: View {
                     if sessionCrypto.status.hasDevicesToVerifyAgainst == nil {
                         Button("Retry Availability Check") {
                             Task {
-                                await sessionCrypto.refresh(crypto: environment.crypto)
+                                await sessionCrypto.refresh(store: environment.sessionCrypto)
                             }
                         }
                         .disabled(isRunningCryptoAction)
@@ -1505,26 +1892,32 @@ private struct SecuritySettingsView: View {
                 }
             }
 
-            Section {
-                SecureField("Recovery key", text: $recoveryKey)
-                    .textContentType(.oneTimeCode)
-                    .accessibilityIdentifier("RecoveryKeyField")
-                Button {
-                    let key = recoveryKey
-                    runCryptoAction {
-                        await environment.crypto.recover(recoveryKey: key)
-                    } onComplete: {
-                        recoveryKey = ""
-                    }
-                } label: {
-                    cryptoActionLabel("Recover Keys")
+            if showsRecoverySetup {
+                RecoverySetupSection(flow: recoverySetup) {
+                    sessionCrypto.apply(await environment.sessionCrypto.refresh())
                 }
-                .disabled(isRunningCryptoAction || recoveryKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .accessibilityIdentifier("RecoverKeysButton")
-            } header: {
-                Text("Recovery")
-            } footer: {
-                Text("Recovery keys are used only for this request and are not stored by Synara.")
+            } else {
+                Section {
+                    SecureField("Recovery key", text: $recoveryKey)
+                        .textContentType(.oneTimeCode)
+                        .accessibilityIdentifier("RecoveryKeyField")
+                    Button {
+                        let key = recoveryKey
+                        runCryptoAction {
+                            await environment.crypto.recover(recoveryKey: key)
+                        } onComplete: {
+                            recoveryKey = ""
+                        }
+                    } label: {
+                        cryptoActionLabel(String(localized: "Recover Keys"))
+                    }
+                    .disabled(isRunningCryptoAction || recoveryKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .accessibilityIdentifier("RecoverKeysButton")
+                } header: {
+                    Text("Recovery")
+                } footer: {
+                    Text("Recovery keys are used only for this request and are not stored by Synara.")
+                }
             }
 
             if let cryptoActionMessage {
@@ -1535,12 +1928,29 @@ private struct SecuritySettingsView: View {
                         .accessibilityIdentifier("CryptoActionMessage")
                 }
             }
+
+            if sessionCrypto.status.crossSigning.offersIdentityReset {
+                Section {
+                    Button(IdentityResetCopy.title, role: .destructive) {
+                        showsIdentityReset = true
+                    }
+                    .accessibilityIdentifier("ResetIdentityButton")
+                } footer: {
+                    Text(IdentityResetCopy.settingsDescription)
+                }
+            }
+        }
+        .sheet(isPresented: $showsIdentityReset, onDismiss: {
+            Task { sessionCrypto.apply(await environment.sessionCrypto.refresh()) }
+        }) {
+            IdentityResetSheet()
+                .environment(\.appEnvironment, environment)
         }
         .navigationTitle("Security")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("SecuritySettingsScreen")
         .task {
-            await sessionCrypto.start(crypto: environment.crypto)
+            await sessionCrypto.start(store: environment.sessionCrypto)
         }
     }
 
@@ -1561,13 +1971,543 @@ private struct SecuritySettingsView: View {
         cryptoActionMessage = nil
         Task {
             let result = await action()
-            let status = await environment.crypto.sessionStatus()
+            let status = await environment.sessionCrypto.refresh()
             await MainActor.run {
                 sessionCrypto.apply(status)
                 cryptoActionMessage = result.message
                 isRunningCryptoAction = false
                 onComplete()
             }
+        }
+    }
+}
+
+/// Desktop's bootstrap steps and wording (Setup Device Verification, then
+/// Set Up Recovery), on the existing Form controls. Security shows it while
+/// the account has no recovery; Reset Identity shows it right after a reset.
+struct RecoverySetupSection: View {
+    @Environment(\.appEnvironment) private var environment
+    @ObservedObject var flow: RecoverySetupFlow
+    /// Re-read status after anything was set up.
+    var onSetUp: () async -> Void = {}
+    @State private var recoveryPassphrase = ""
+    @State private var recoveryPassphraseConfirmation = ""
+    @State private var accountPassword = ""
+    @State private var copiedRecoveryKey = false
+
+    var body: some View {
+        Section {
+            switch flow.phase {
+            case .idle, .working, .finished:
+                SecureField("Recovery Passphrase", text: $recoveryPassphrase)
+                    .textContentType(.newPassword)
+                    .accessibilityIdentifier("RecoveryPassphraseField")
+                SecureField("Confirm Recovery Passphrase", text: $recoveryPassphraseConfirmation)
+                    .textContentType(.newPassword)
+                    .accessibilityIdentifier("RecoveryPassphraseConfirmField")
+                Button {
+                    let passphrase = recoveryPassphrase
+                    let confirmation = recoveryPassphraseConfirmation
+                    Task {
+                        await flow.start(
+                            passphrase: passphrase,
+                            confirmation: confirmation,
+                            crypto: environment.crypto
+                        )
+                        await finishRecoverySetupStep()
+                    }
+                } label: {
+                    recoverySetupLabel(String(localized: "Set Up Recovery"))
+                }
+                .disabled(flow.isWorking || recoveryPassphrase.isEmpty)
+                .accessibilityIdentifier("SetUpRecoveryButton")
+            case .passwordRequired:
+                Text("Synara will create and securely store your cross-signing identity on this device. Enter your account password to continue.")
+                    .font(SynaraTypography.supporting)
+                SecureField("Account Password", text: $accountPassword)
+                    .textContentType(.password)
+                    .accessibilityIdentifier("RecoveryAccountPasswordField")
+                Button {
+                    let password = accountPassword
+                    Task {
+                        await flow.authenticate(password: password, crypto: environment.crypto)
+                        accountPassword = ""
+                        await finishRecoverySetupStep()
+                    }
+                } label: {
+                    recoverySetupLabel(String(localized: "Authenticate"))
+                }
+                .disabled(accountPassword.isEmpty)
+                .accessibilityIdentifier("RecoveryAuthenticateButton")
+                Button("Cancel", role: .cancel) {
+                    accountPassword = ""
+                    flow.cancel()
+                }
+                .accessibilityIdentifier("RecoveryCancelButton")
+            case .showingKey(let key):
+                Text("Recovery is ready. Copy this key now. Synara does not save it.")
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.primaryText)
+                    .accessibilityIdentifier("RecoveryKeyReadyText")
+                Text(key)
+                    .font(.system(.body, design: .monospaced))
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("GeneratedRecoveryKeyText")
+                Button {
+                    RecoveryKeyPasteboard.copy(key)
+                    copiedRecoveryKey = true
+                } label: {
+                    Label(copiedRecoveryKey ? "Copied" : "Copy Recovery Key", systemImage: "doc.on.doc")
+                }
+                .accessibilityIdentifier("CopyRecoveryKeyButton")
+                Button("Done") {
+                    copiedRecoveryKey = false
+                    flow.acknowledgeKey()
+                }
+                .accessibilityIdentifier("RecoveryKeyDoneButton")
+            }
+            if let message = flow.errorMessage {
+                Text(message)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.criticalText)
+                    .accessibilityIdentifier("RecoverySetupErrorText")
+            }
+        } header: {
+            Text("Set Up Recovery")
+        } footer: {
+            Text("Choose a recovery passphrase. Synara sets up device verification for this account, then protects it and your message keys with secret storage and key backup. The recovery key is shown once.")
+        }
+    }
+
+    @ViewBuilder
+    private func recoverySetupLabel(_ title: String) -> some View {
+        if flow.isWorking {
+            ProgressView()
+        } else {
+            Text(title)
+        }
+    }
+
+    /// Clear typed secrets once a step leaves the form, and re-read status
+    /// after anything was set up.
+    @MainActor
+    private func finishRecoverySetupStep() async {
+        switch flow.phase {
+        case .showingKey, .finished:
+            recoveryPassphrase = ""
+            recoveryPassphraseConfirmation = ""
+            await onSetUp()
+        case .idle, .working, .passwordRequired:
+            break
+        }
+    }
+}
+extension SynaraCryptoCrossSigningStatus {
+    /// Reset Identity is offered once the account has an identity.
+    var offersIdentityReset: Bool {
+        switch self {
+        case .ready, .needsVerification, .needsRecovery:
+            return true
+        case .unknown, .notSetUp:
+            return false
+        }
+    }
+}
+
+/// Reset Identity, in desktop's order: the warning, then the password or the
+/// browser approval the homeserver asks for, then recovery setup.
+///
+/// Leaving the password or approval step cancels the reset in Core; the SDK
+/// has already deleted key backup and disabled recovery by then, so the
+/// cancelled state and terminal failures point back to recovery setup.
+@MainActor
+final class IdentityResetFlow: ObservableObject {
+    enum Phase: Equatable {
+        case warning
+        case passwordRequired
+        case approvalRequired(URL)
+        case complete
+        /// A pending reset was cancelled after Start.
+        case cancelled
+    }
+
+    @Published private(set) var phase: Phase = .warning
+    @Published private(set) var isWorking = false
+    @Published private(set) var errorMessage: String?
+    /// A step failed after Start in a way that may have left the account
+    /// without key backup and recovery.
+    @Published private(set) var recoveryMayBeOff = false
+
+    /// A reset is waiting on the password or the approval.
+    var isPending: Bool {
+        switch phase {
+        case .passwordRequired, .approvalRequired:
+            return true
+        case .warning, .complete, .cancelled:
+            return false
+        }
+    }
+
+    /// The sheet is done: closing it needs no cancel in Core.
+    var isFinished: Bool {
+        phase == .complete || phase == .cancelled
+    }
+
+    func start(crypto: CryptoStatusServicing) async {
+        guard phase == .warning, isWorking == false else { return }
+        await run { await crypto.startIdentityReset() }
+    }
+
+    func authenticate(password: String, crypto: CryptoStatusServicing) async {
+        guard phase == .passwordRequired, isWorking == false else { return }
+        guard password.isEmpty == false else {
+            errorMessage = String(localized: "Enter your account password.")
+            return
+        }
+        await run { await crypto.authenticateIdentityReset(password: password) }
+    }
+
+    func continueAfterApproval(crypto: CryptoStatusServicing) async {
+        guard case .approvalRequired = phase, isWorking == false else { return }
+        await run { await crypto.continueIdentityReset() }
+    }
+
+    /// Cancel a pending reset in Core and say what that left behind. With
+    /// nothing pending this only clears the step.
+    func cancel(crypto: CryptoStatusServicing) async {
+        errorMessage = nil
+        guard isPending else {
+            if phase != .cancelled { phase = .warning }
+            return
+        }
+        await crypto.cancelIdentityReset()
+        phase = .cancelled
+    }
+
+    private func run(_ step: () async -> IdentityResetResult) async {
+        isWorking = true
+        errorMessage = nil
+        let result = await step()
+        isWorking = false
+        switch result {
+        case .complete:
+            phase = .complete
+        case .passwordRequired:
+            phase = .passwordRequired
+        case .approvalRequired(let url):
+            phase = .approvalRequired(url)
+        case .passwordRejected:
+            phase = .passwordRequired
+            errorMessage = IdentityResetCopy.passwordRejected
+        case .approvalPending:
+            errorMessage = IdentityResetCopy.approvalPending
+        case .failed(let message):
+            errorMessage = message
+            recoveryMayBeOff = true
+        }
+    }
+}
+
+/// The Reset Identity steps as Form sections, shared by the Security sheet
+/// and the "Verify This Device" prompt.
+struct IdentityResetSections: View {
+    @Environment(\.appEnvironment) private var environment
+    @Environment(\.openURL) private var openURL
+    @ObservedObject var flow: IdentityResetFlow
+    @ObservedObject var recoverySetup: RecoverySetupFlow
+    let onDone: () -> Void
+    @State private var accountPassword = ""
+    @State private var openedApprovalURL: URL?
+
+    var body: some View {
+        switch flow.phase {
+        case .warning:
+            Section {
+                Text(IdentityResetCopy.warningIntro)
+                ForEach(IdentityResetCopy.warnings, id: \.self) { warning in
+                    Label(warning, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(SynaraColor.primaryText)
+                }
+            }
+            .accessibilityIdentifier("IdentityResetWarning")
+            Section {
+                Button(role: .destructive) {
+                    Task { await flow.start(crypto: environment.crypto) }
+                } label: {
+                    workingLabel(IdentityResetCopy.title)
+                }
+                .disabled(flow.isWorking)
+                .accessibilityIdentifier("ConfirmResetIdentityButton")
+            }
+        case .passwordRequired:
+            Section {
+                Text(IdentityResetCopy.password)
+                    .font(SynaraTypography.supporting)
+                SecureField("Account Password", text: $accountPassword)
+                    .textContentType(.password)
+                    .accessibilityIdentifier("IdentityResetPasswordField")
+                Button(role: .destructive) {
+                    let password = accountPassword
+                    Task {
+                        await flow.authenticate(password: password, crypto: environment.crypto)
+                        accountPassword = ""
+                    }
+                } label: {
+                    workingLabel(String(localized: "Authenticate"))
+                }
+                .disabled(flow.isWorking || accountPassword.isEmpty)
+                .accessibilityIdentifier("IdentityResetAuthenticateButton")
+            }
+        case .approvalRequired(let url):
+            Section {
+                Text(IdentityResetCopy.approval)
+                    .font(SynaraTypography.supporting)
+                Button(IdentityResetCopy.openAccountPage) {
+                    openURL(url)
+                }
+                .disabled(flow.isWorking)
+                .accessibilityIdentifier("IdentityResetOpenAccountPageButton")
+                Button {
+                    Task { await flow.continueAfterApproval(crypto: environment.crypto) }
+                } label: {
+                    workingLabel(String(localized: "Continue"))
+                }
+                .disabled(flow.isWorking)
+                .accessibilityIdentifier("IdentityResetContinueButton")
+            }
+            .onAppear {
+                // Open the account page once; the button reopens it.
+                guard openedApprovalURL != url else { return }
+                openedApprovalURL = url
+                openURL(url)
+            }
+        case .cancelled:
+            Section {
+                Text(IdentityResetCopy.cancelled)
+                Button("Close", action: onDone)
+                    .accessibilityIdentifier("IdentityResetCloseButton")
+            }
+        case .complete:
+            if recoverySetup.phase == .finished {
+                Section {
+                    Text(IdentityResetCopy.configured)
+                    Button("Done", action: onDone)
+                        .accessibilityIdentifier("IdentityResetDoneButton")
+                }
+            } else {
+                Section {
+                    Text(IdentityResetCopy.recovery)
+                        .font(SynaraTypography.supporting)
+                }
+                RecoverySetupSection(flow: recoverySetup) {
+                    _ = await environment.sessionCrypto.refresh()
+                }
+            }
+        }
+        if let message = flow.errorMessage {
+            Section {
+                Text(message)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.criticalText)
+                    .accessibilityIdentifier("IdentityResetErrorText")
+                if flow.recoveryMayBeOff {
+                    Text(IdentityResetCopy.recoveryMayBeOff)
+                        .font(SynaraTypography.supporting)
+                        .accessibilityIdentifier("IdentityResetRecoveryOffText")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func workingLabel(_ title: String) -> some View {
+        if flow.isWorking {
+            ProgressView()
+        } else {
+            Text(title)
+        }
+    }
+}
+
+/// Security → Reset Identity.
+struct IdentityResetSheet: View {
+    @Environment(\.appEnvironment) private var environment
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var flow = IdentityResetFlow()
+    @StateObject private var recoverySetup = RecoverySetupFlow()
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                IdentityResetSections(flow: flow, recoverySetup: recoverySetup) {
+                    dismiss()
+                }
+            }
+            .navigationTitle(IdentityResetCopy.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(flow.isFinished ? "Close" : "Cancel") {
+                        Task {
+                            // A pending reset stays open on its cancelled state.
+                            let wasPending = flow.isPending
+                            await flow.cancel(crypto: environment.crypto)
+                            if wasPending == false { dismiss() }
+                        }
+                    }
+                    .disabled(flow.isWorking)
+                    .accessibilityIdentifier("IdentityResetCancelButton")
+                }
+            }
+        }
+        .interactiveDismissDisabled(flow.isPending || flow.isWorking)
+        .accessibilityIdentifier("IdentityResetSheet")
+    }
+}
+
+/// When the "Verify This Device" prompt shows, and what follows it. "Verify
+/// from Another Device" only records the choice and closes the sheet; the
+/// request starts from the sheet's `onDismiss`, once it is gone, so the
+/// verification sheet can present.
+@MainActor
+final class VerifyDevicePromptPresentation: ObservableObject {
+    @Published var isPresented = false
+    private var verifyAfterDismiss = false
+
+    func showIfNeeded(crypto: CryptoStatusServicing) async {
+        if await crypto.deviceVerificationPromptVisible() {
+            isPresented = true
+        }
+    }
+
+    func verifyWithAnotherDevice() {
+        verifyAfterDismiss = true
+        isPresented = false
+    }
+
+    /// The sheet is gone: hide it in Core for the session, then start the
+    /// recorded verification request. Nil when none was asked for.
+    func didDismiss(crypto: CryptoStatusServicing) async -> CryptoActionResult? {
+        await crypto.dismissDeviceVerificationPrompt()
+        guard verifyAfterDismiss else { return nil }
+        verifyAfterDismiss = false
+        return await crypto.requestDeviceVerification()
+    }
+}
+
+/// "Verify This Device", once after signing in on a new device of an account
+/// that already has an identity. Core decides when; closing it in any way
+/// dismisses it for the session, and Security keeps every entry.
+struct VerifyThisDevicePromptSheet: View {
+    @Environment(\.appEnvironment) private var environment
+    @Environment(\.dismiss) private var dismiss
+    /// Record the choice and close; verification starts once the sheet is gone.
+    let onVerifyWithAnotherDevice: () -> Void
+    @StateObject private var reset = IdentityResetFlow()
+    @StateObject private var recoverySetup = RecoverySetupFlow()
+    @State private var showsReset = false
+    @State private var showsRecoveryKey = false
+    @State private var recoveryKey = ""
+    @State private var recoveryMessage: String?
+    @State private var isRecovering = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if showsReset {
+                    IdentityResetSections(flow: reset, recoverySetup: recoverySetup) {
+                        dismiss()
+                    }
+                } else {
+                    choices
+                }
+            }
+            .navigationTitle(showsReset ? IdentityResetCopy.title : VerifyDevicePromptCopy.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(closeTitle) {
+                        Task {
+                            let wasPending = reset.isPending
+                            await reset.cancel(crypto: environment.crypto)
+                            if wasPending == false { dismiss() }
+                        }
+                    }
+                    .disabled(reset.isWorking || isRecovering)
+                    .accessibilityIdentifier("VerifyDevicePromptLaterButton")
+                }
+            }
+        }
+        .interactiveDismissDisabled(reset.isPending || reset.isWorking)
+        .accessibilityIdentifier("VerifyDevicePromptSheet")
+    }
+
+    private var closeTitle: String {
+        if showsReset {
+            return reset.isFinished ? String(localized: "Close") : String(localized: "Cancel")
+        }
+        return VerifyDevicePromptCopy.later
+    }
+
+    @ViewBuilder
+    private var choices: some View {
+        Section {
+            Text(VerifyDevicePromptCopy.description)
+        }
+        Section {
+            Button(VerifyDevicePromptCopy.verifyWithDevice) {
+                onVerifyWithAnotherDevice()
+            }
+            .accessibilityIdentifier("VerifyDevicePromptVerifyButton")
+            Button(VerifyDevicePromptCopy.recoveryKey) {
+                showsRecoveryKey = true
+            }
+            .disabled(showsRecoveryKey)
+            .accessibilityIdentifier("VerifyDevicePromptRecoveryKeyButton")
+            if showsRecoveryKey {
+                SecureField("Recovery key", text: $recoveryKey)
+                    .textContentType(.oneTimeCode)
+                    .accessibilityIdentifier("VerifyDevicePromptRecoveryKeyField")
+                Button {
+                    recover()
+                } label: {
+                    if isRecovering {
+                        ProgressView()
+                    } else {
+                        Text("Recover Keys")
+                    }
+                }
+                .disabled(isRecovering || recoveryKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityIdentifier("VerifyDevicePromptRecoverButton")
+            }
+        } footer: {
+            if let recoveryMessage {
+                Text(recoveryMessage)
+            } else if showsRecoveryKey {
+                Text("Recovery keys are used only for this request and are not stored by Synara.")
+            }
+        }
+        Section {
+            Button(IdentityResetCopy.title, role: .destructive) {
+                showsReset = true
+            }
+            .accessibilityIdentifier("VerifyDevicePromptResetButton")
+        } header: {
+            Text(VerifyDevicePromptCopy.cantVerify)
+                .textCase(nil)
+        }
+    }
+
+    private func recover() {
+        let key = recoveryKey
+        isRecovering = true
+        recoveryMessage = nil
+        Task {
+            let result = await environment.crypto.recover(recoveryKey: key)
+            _ = await environment.sessionCrypto.refresh()
+            isRecovering = false
+            recoveryKey = ""
+            recoveryMessage = result.message
         }
     }
 }
@@ -1635,11 +2575,11 @@ extension SynaraCryptoVerificationStatus {
     var settingsDisplayName: String {
         switch self {
         case .verified:
-            return "Verified"
+            return String(localized: "Verified")
         case .unverified:
-            return "Unverified"
+            return String(localized: "Unverified")
         case .unknown:
-            return "Unknown"
+            return String(localized: "Unknown")
         }
     }
 }
@@ -1648,13 +2588,30 @@ private extension SynaraCryptoRecoveryStatus {
     var settingsDisplayName: String {
         switch self {
         case .enabled:
-            return "Enabled"
+            return String(localized: "Enabled")
         case .disabled:
-            return "Disabled"
+            return String(localized: "Disabled")
         case .incomplete:
-            return "Needs Recovery"
+            return String(localized: "Needs Recovery")
         case .unknown:
-            return "Unknown"
+            return String(localized: "Unknown")
+        }
+    }
+}
+
+extension SynaraCryptoCrossSigningStatus {
+    var settingsDisplayName: String {
+        switch self {
+        case .ready:
+            return String(localized: "Ready")
+        case .notSetUp:
+            return String(localized: "Not Set Up")
+        case .needsVerification:
+            return String(localized: "Needs Verification")
+        case .needsRecovery:
+            return String(localized: "Needs Recovery")
+        case .unknown:
+            return String(localized: "Unknown")
         }
     }
 }
@@ -1663,13 +2620,13 @@ private extension SynaraCryptoBackupStatus {
     var settingsDisplayName: String {
         switch self {
         case .enabled:
-            return "Enabled"
+            return String(localized: "Enabled")
         case .unavailable:
-            return "Unavailable"
+            return String(localized: "Unavailable")
         case .syncing:
-            return "Syncing"
+            return String(localized: "Syncing")
         case .unknown:
-            return "Unknown"
+            return String(localized: "Unknown")
         }
     }
 }
@@ -1690,22 +2647,22 @@ private struct AboutSettingsView: View {
             }
 
             Section("Build") {
-                SettingsInfoRow(title: "Version", value: AppBuildInfo.version)
+                SettingsInfoRow(title: String(localized: "Version"), value: AppBuildInfo.version)
                     .accessibilityIdentifier("AboutVersionRow")
-                SettingsInfoRow(title: "Build", value: AppBuildInfo.build)
+                SettingsInfoRow(title: String(localized: "Build"), value: AppBuildInfo.build)
                     .accessibilityIdentifier("AboutBuildRow")
-                SettingsInfoRow(title: "Bundle", value: AppBuildInfo.bundleIdentifier)
+                SettingsInfoRow(title: String(localized: "Bundle"), value: AppBuildInfo.bundleIdentifier)
                     .accessibilityIdentifier("AboutBundleRow")
             }
 
             Section("Links") {
                 Link(destination: SettingsLink.privacy.url) {
-                    SettingsNavigationRow(title: "Privacy Policy", systemImage: "hand.raised")
+                    SettingsNavigationRow(title: String(localized: "Privacy Policy"), systemImage: "hand.raised")
                 }
                 .accessibilityIdentifier("AboutPrivacyLink")
 
                 Link(destination: SettingsLink.support.url) {
-                    SettingsNavigationRow(title: "Support", systemImage: "questionmark.circle")
+                    SettingsNavigationRow(title: String(localized: "Support"), systemImage: "questionmark.circle")
                 }
                 .accessibilityIdentifier("AboutSupportLink")
             }
@@ -1720,12 +2677,24 @@ private struct LicensesSettingsView: View {
     var body: some View {
         List {
             Section("App") {
-                LicenseRow(name: "Synara", license: "AGPL-3.0-only", note: "Final App Store distribution requires legal review of repository licensing.")
+                LicenseRow(
+                    name: "Synara",
+                    license: "AGPL-3.0-only",
+                    note: String(localized: "Final App Store distribution requires legal review of repository licensing.")
+                )
             }
 
             Section("Dependencies") {
-                LicenseRow(name: "Matrix Rust SDK Swift", license: "Apache-2.0", note: "Pinned through Swift Package Manager.")
-                LicenseRow(name: "Apple SwiftUI and iOS SDK", license: "Apple platform SDK", note: "Provided by Xcode and iOS.")
+                LicenseRow(
+                    name: "Matrix Rust SDK Swift",
+                    license: "Apache-2.0",
+                    note: String(localized: "Pinned through Swift Package Manager.")
+                )
+                LicenseRow(
+                    name: "Apple SwiftUI and iOS SDK",
+                    license: String(localized: "Apple platform SDK"),
+                    note: String(localized: "Provided by Xcode and iOS.")
+                )
             }
         }
         .navigationTitle("Licenses")
@@ -1766,10 +2735,22 @@ private struct PrivacyPolicySettingsView: View {
             }
 
             Section("Current Data Inventory") {
-                DataInventoryRow(title: "Account", detail: "Matrix user ID, device ID, homeserver, and access tokens are stored locally for session restore.")
-                DataInventoryRow(title: "Messages and Rooms", detail: "Room metadata, timeline content, media, and account data come from the selected Matrix homeserver.")
-                DataInventoryRow(title: "Notifications", detail: "APNs device tokens and Matrix pusher registration are used only when notifications are enabled.")
-                DataInventoryRow(title: "Diagnostics", detail: "No analytics or crash SDK is enabled. Logs are local and redacted.")
+                DataInventoryRow(
+                    title: String(localized: "Account"),
+                    detail: String(localized: "Matrix user ID, device ID, homeserver, and access tokens are stored locally for session restore.")
+                )
+                DataInventoryRow(
+                    title: String(localized: "Messages and Rooms"),
+                    detail: String(localized: "Room metadata, timeline content, media, and account data come from the selected Matrix homeserver.")
+                )
+                DataInventoryRow(
+                    title: String(localized: "Notifications"),
+                    detail: String(localized: "APNs device tokens and Matrix pusher registration are used only when notifications are enabled.")
+                )
+                DataInventoryRow(
+                    title: String(localized: "Diagnostics"),
+                    detail: String(localized: "No analytics or crash SDK is enabled. Logs are local and redacted.")
+                )
             }
         }
         .navigationTitle("Privacy")
@@ -1790,9 +2771,9 @@ private struct SupportSettingsView: View {
             }
 
             Section("Diagnostics") {
-                SettingsInfoRow(title: "Version", value: AppBuildInfo.version)
-                SettingsInfoRow(title: "Build", value: AppBuildInfo.build)
-                SettingsInfoRow(title: "Bundle", value: AppBuildInfo.bundleIdentifier)
+                SettingsInfoRow(title: String(localized: "Version"), value: AppBuildInfo.version)
+                SettingsInfoRow(title: String(localized: "Build"), value: AppBuildInfo.build)
+                SettingsInfoRow(title: String(localized: "Bundle"), value: AppBuildInfo.bundleIdentifier)
             }
         }
         .navigationTitle("Support")
@@ -1842,15 +2823,15 @@ private enum SettingsLink {
 
 private enum AppBuildInfo {
     static var version: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? String(localized: "Unknown")
     }
 
     static var build: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? String(localized: "Unknown")
     }
 
     static var bundleIdentifier: String {
-        Bundle.main.bundleIdentifier ?? "Unknown"
+        Bundle.main.bundleIdentifier ?? String(localized: "Unknown")
     }
 }
 

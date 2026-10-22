@@ -44,7 +44,7 @@ enum SynaraNotificationPresentationPolicy {
         content.badge = original.badge
         content.title = "Synara"
         content.subtitle = ""
-        content.body = "New activity"
+        content.body = String(localized: "New activity", table: "SynaraShared")
         content.categoryIdentifier = ""
         content.interruptionLevel = .active
         content.sound = original.sound == nil ? nil : .default
@@ -78,8 +78,8 @@ enum SynaraNotificationPresentationPolicy {
             content.title = approvalSummary.title
             content.body = approvalSummary.body
         } else if !showPreview || preview == nil {
-            content.title = "Agent approval needed"
-            content.body = "Review a time-sensitive request in Synara."
+            content.title = String(localized: "Agent approval needed", table: "SynaraShared")
+            content.body = String(localized: "Review a time-sensitive request in Synara.", table: "SynaraShared")
         }
         content.categoryIdentifier = approvalCategory
         content.interruptionLevel = criticalAlertsAuthorized ? .critical : .timeSensitive
@@ -111,23 +111,31 @@ enum SynaraSharedConstants {
     static let defaultTimeSensitiveAgentApprovals = true
     static let approvalNotificationDetailsKey = "synara.settings.showApprovalNotificationDetails"
     static let defaultApprovalNotificationDetails = true
+    static let approveOnceWithoutUnlockKey = "synara.settings.approveOnceWithoutUnlock"
+    static let defaultApproveOnceWithoutUnlock = false
     static let themeBaseColorKey = "themeBaseColor"
     static let hour24ClockKey = "synara.settings.hour24Clock"
     static let hideActivityKey = "synara.settings.hideActivity"
     static let notificationDiagnosticsKey = "synara.notification.previewDiagnostics.v1"
+    static let notificationSessionRejectedCountKey = "synara.notification.sessionRejectedCount.v1"
 
     static var registeredUserDefaults: [String: Any] {
         [
             lockScreenMessagePreviewsKey: defaultLockScreenMessagePreviews,
             timeSensitiveAgentApprovalsKey: defaultTimeSensitiveAgentApprovals,
             approvalNotificationDetailsKey: defaultApprovalNotificationDetails,
+            approveOnceWithoutUnlockKey: defaultApproveOnceWithoutUnlock,
             hour24ClockKey: false,
             hideActivityKey: false
         ]
     }
 
+    /// One suite instance per process: `boolSetting` runs per timestamp and
+    /// per keystroke, and `UserDefaults(suiteName:)` allocates on each call.
+    private static let cachedAppGroupDefaults = UserDefaults(suiteName: appGroupIdentifier)
+
     static func appGroupDefaults() -> UserDefaults? {
-        UserDefaults(suiteName: appGroupIdentifier)
+        cachedAppGroupDefaults
     }
 
     static func boolSetting(_ key: String) -> Bool {
@@ -230,6 +238,7 @@ enum SynaraNotificationDiagnostics {
         case pusherGatewayUnavailable = "pusher-gateway-unavailable"
         case pusherRegistrationStarted = "pusher-registration-started"
         case pusherRegistrationSucceeded = "pusher-registration-succeeded"
+        case pusherEditPolicyDegraded = "pusher-edit-policy-degraded"
         case pusherRegistrationFailed = "pusher-registration-failed"
         case pusherRegistrationSuperseded = "pusher-registration-superseded"
         case pusherUnregistrationStarted = "pusher-unregistration-started"
@@ -330,11 +339,26 @@ enum SynaraNotificationDiagnostics {
         return entriesWithoutLock(defaults: defaults)
     }
 
+    /// How often the homeserver rejected the shared session's access token
+    /// while the extension resolved a push, since diagnostics were last
+    /// cleared. Kept outside the bounded records so it survives rollover; a
+    /// rising count means previews fall back because the token expired or
+    /// was revoked.
+    static func sessionRejectedCount(
+        defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()
+    ) -> Int {
+        guard let defaults else { return 0 }
+        lock.lock()
+        defer { lock.unlock() }
+        return max(0, defaults.integer(forKey: SynaraSharedConstants.notificationSessionRejectedCountKey))
+    }
+
     static func clear(defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()) {
         guard let defaults else { return }
         lock.lock()
         defer { lock.unlock() }
         defaults.removeObject(forKey: SynaraSharedConstants.notificationDiagnosticsKey)
+        defaults.removeObject(forKey: SynaraSharedConstants.notificationSessionRejectedCountKey)
     }
 
     private static func entriesWithoutLock(defaults: UserDefaults) -> [SynaraNotificationDiagnosticEntry] {
@@ -364,6 +388,11 @@ enum SynaraNotificationDiagnostics {
         }
         guard let data = try? JSONEncoder().encode(current) else { return }
         defaults.set(data, forKey: SynaraSharedConstants.notificationDiagnosticsKey)
+        let rejected = additions.filter { $0.stage == Stage.coreSessionRejected.rawValue }.count
+        if rejected > 0 {
+            let key = SynaraSharedConstants.notificationSessionRejectedCountKey
+            defaults.set(max(0, defaults.integer(forKey: key)) + rejected, forKey: key)
+        }
     }
 }
 
@@ -547,6 +576,18 @@ enum SynaraApprovalNotificationDetailsPreference {
     }
 }
 
+/// Opt-in, default off: lets Approve once run from the Lock Screen and Apple
+/// Watch without unlocking the iPhone. Deny never needs an unlock.
+enum SynaraApproveOnceWithoutUnlockPreference {
+    static func isEnabled(defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()) -> Bool {
+        guard let defaults,
+              defaults.object(forKey: SynaraSharedConstants.approveOnceWithoutUnlockKey) != nil else {
+            return SynaraSharedConstants.defaultApproveOnceWithoutUnlock
+        }
+        return defaults.bool(forKey: SynaraSharedConstants.approveOnceWithoutUnlockKey)
+    }
+}
+
 /// Core's bounded `agent_approval_notification_summary` for one prompt.
 struct SynaraAgentApprovalSummary: Equatable {
     let sender: String?
@@ -558,14 +599,17 @@ struct SynaraAgentApprovalSummary: Equatable {
     }
 
     var title: String {
-        let name = Self.nonEmpty(sender) ?? "Agent"
-        let reason = Self.nonEmpty(reason) ?? "Approval required"
-        return SynaraMatrixEventPreviewComposer.clamp("\(name): \(reason)", limit: 120)
+        let name = Self.nonEmpty(sender) ?? String(localized: "Agent", table: "SynaraShared")
+        let reason = Self.nonEmpty(reason) ?? String(localized: "Approval required", table: "SynaraShared")
+        return SynaraMatrixEventPreviewComposer.clamp(
+            String(localized: "\(name): \(reason)", table: "SynaraShared"),
+            limit: 120
+        )
     }
 
     var body: String {
         SynaraMatrixEventPreviewComposer.clamp(
-            Self.nonEmpty(command) ?? "Review the command in Synara.",
+            Self.nonEmpty(command) ?? String(localized: "Review the command in Synara.", table: "SynaraShared"),
             limit: 240
         )
     }
@@ -580,6 +624,47 @@ struct SynaraAgentApprovalSummary: Equatable {
 /// Mirrors `classify_agent_approval` in crates/synara-core/src/app/agent_approvals.rs,
 /// which the NSE cannot call over the FFI. Both sides read the vectors in
 /// crates/synara-core/tests/support/notification-policy-vectors.json.
+/// Per-room budget for urgent (Time Sensitive/Critical, actionable) approval
+/// alerts, matching Core's desktop limit. Over budget, the prompt is shown as
+/// an ordinary notification. State lives in the app group because each push
+/// may run in a new extension process.
+enum SynaraApprovalAlertRateLimit {
+    static let windowSeconds: TimeInterval = 60
+    static let alertsPerRoomPerWindow = 3
+    static let storageKey = "synara.notification.approvalAlertTimes.v1"
+    private static let maxTrackedRooms = 64
+
+    static func reserve(
+        roomID: String,
+        now: Date = Date(),
+        defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()
+    ) -> Bool {
+        guard let defaults else {
+            return true
+        }
+        let nowSeconds = now.timeIntervalSince1970
+        let cutoff = nowSeconds - windowSeconds
+        var rooms = (defaults.dictionary(forKey: storageKey) as? [String: [Double]]) ?? [:]
+        rooms = rooms.compactMapValues { times in
+            let recent = times.filter { $0 > cutoff && $0 <= nowSeconds + windowSeconds }
+            return recent.isEmpty ? nil : recent
+        }
+        var times = rooms[roomID] ?? []
+        guard times.count < alertsPerRoomPerWindow else {
+            defaults.set(rooms, forKey: storageKey)
+            return false
+        }
+        times.append(nowSeconds)
+        rooms[roomID] = times
+        if rooms.count > maxTrackedRooms,
+           let oldest = rooms.min(by: { ($0.value.last ?? 0) < ($1.value.last ?? 0) })?.key {
+            rooms.removeValue(forKey: oldest)
+        }
+        defaults.set(rooms, forKey: storageKey)
+        return true
+    }
+}
+
 enum SynaraAgentApprovalFreshness {
     static let ttlMilliseconds: UInt64 = 5 * 60 * 1_000
     static let futureToleranceMilliseconds: UInt64 = 60 * 1_000
@@ -663,13 +748,13 @@ enum SynaraMatrixEventPreviewComposer {
     private static func messageBody(from input: SynaraMatrixEventPreviewInput) -> String? {
         switch input.messageType {
         case "m.image":
-            return input.body?.isEmpty == false ? input.body : "sent an image"
+            return input.body?.isEmpty == false ? input.body : String(localized: "sent an image", table: "SynaraShared")
         case "m.video":
-            return input.body?.isEmpty == false ? input.body : "sent a video"
+            return input.body?.isEmpty == false ? input.body : String(localized: "sent a video", table: "SynaraShared")
         case "m.file":
-            return input.body?.isEmpty == false ? input.body : "sent a file"
+            return input.body?.isEmpty == false ? input.body : String(localized: "sent a file", table: "SynaraShared")
         case "m.audio":
-            return input.body?.isEmpty == false ? input.body : "sent audio"
+            return input.body?.isEmpty == false ? input.body : String(localized: "sent audio", table: "SynaraShared")
         default:
             let trimmed = input.body?.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed?.isEmpty == false ? trimmed : nil

@@ -25,12 +25,12 @@ import {
   Spinner,
   color,
   TextArea,
-  Dialog,
   Menu,
   toRem,
   Scroll,
   MenuItem,
 } from 'folds';
+import { Dialog } from '../modal-dialog';
 
 import { isKeyHotkey } from 'is-hotkey';
 import FocusTrap from '../FocusTrap';
@@ -39,7 +39,7 @@ import { useDirectUsers } from '../../hooks/useDirectUsers';
 import { getMxIdLocalPart, getMxIdServer, isUserId } from '../../utils/matrix';
 import { Membership } from '../../../types/matrix/room';
 import { useAsyncSearch, UseAsyncSearchOptions } from '../../hooks/useAsyncSearch';
-import { highlightText, makeHighlightRegex } from '../../plugins/react-custom-html-parser';
+import { highlightText, makeHighlightRegex } from '../../utils/highlightText';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { BreakWord } from '../../styles/Text.css';
 import { useAlive } from '../../hooks/useAlive';
@@ -47,6 +47,7 @@ import { inviteUserWithNativeOwner } from '../nativeRoomModerationOwner';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { isNativeMatrixSession } from '../../features/verification/nativeVerification';
 import { isObject, optString, reqString } from '../../features/matrix-dto/parseUtil';
+import { composerErrorMessage } from '../../features/room/composerSendError';
 
 const SEARCH_OPTIONS: UseAsyncSearchOptions = {
   limit: 1000,
@@ -260,7 +261,7 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
                   </Text>
                 </Box>
                 <Box shrink="No">
-                  <IconButton size="300" radii="300" onClick={requestClose}>
+                  <IconButton size="300" radii="300" onClick={requestClose} aria-label="Close">
                     <Icon src={Icons.Cross} />
                   </IconButton>
                 </Box>
@@ -296,7 +297,6 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
                             resetSearch();
                             cancelDirectorySearch();
                           },
-                          returnFocusOnDeactivate: false,
                           clickOutsideDeactivates: true,
                           allowOutsideClick: true,
                           isKeyForward: (evt: KeyboardEvent) => isKeyHotkey('arrowdown', evt),
@@ -361,7 +361,12 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
                 </Box>
                 {inviteState.status === AsyncStatus.Error && (
                   <Text size="T200" style={{ color: color.Critical.Main }} className={BreakWord}>
-                    <b>{inviteState.error.message}</b>
+                    <b>
+                      {composerErrorMessage(
+                        inviteState.error,
+                        'Synara could not send the invite. Try again.'
+                      )}
+                    </b>
                   </Text>
                 )}
                 <Button

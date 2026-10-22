@@ -1,11 +1,11 @@
-import to from 'await-to-js';
 import { type MatrixEventReading, type RoomReading } from './room';
 import { IImageInfo, IVideoInfo } from '../../types/matrix/common';
 import { getStateEvent } from './room';
 import { Membership, StateEvent } from '../../types/matrix/room';
 
-import { getNativeRoom, getNativeRooms } from '../native/nativeSession';
-import { mxcUrlToNative, uploadNativeMedia } from '../native/nativeCommands';
+import { getNativeRoom, getNativeRooms, getNativeRoomSummary } from '../native/nativeSession';
+import { mxcUrlToNative } from '../native/nativeCommands';
+import type { BulkActionFailure } from './bulkActions';
 export type UploadProgress = {
   loaded: number;
   total?: number;
@@ -50,15 +50,8 @@ export class MatrixError extends Error {
   }
 }
 
-type SdkRoomMemberReading = {
-  userId: string;
-  events?: { member?: { getTs(): number } };
-};
-
 type DMRoomReading = RoomReading & {
   getCanonicalAlias(): string | null;
-  hasEncryptionStateEvent(): boolean;
-  getJoinedMembers(): SdkRoomMemberReading[];
 };
 
 const DOMAIN_REGEX = /\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b/;
@@ -118,34 +111,6 @@ export const getVideoInfo = (video: HTMLVideoElement, fileOrBlob: File | Blob): 
 
 export type TUploadContent = File;
 
-export type ContentUploadOptions = {
-  name?: string;
-  fileType?: string;
-  hideFilename?: boolean;
-  onPromise?: (promise: Promise<UploadResponse>) => void;
-  onProgress?: (progress: UploadProgress) => void;
-  onSuccess: (mxc: string) => void;
-  onError: (error: MatrixError) => void;
-};
-
-export const uploadContent = async (file: TUploadContent, options: ContentUploadOptions) => {
-  // Native upload reads the file itself; name, type and progress options have
-  // no native counterpart.
-  const { onPromise, onSuccess, onError } = options;
-  const uploadPromise: Promise<UploadResponse> = uploadNativeMedia(file);
-  onPromise?.(uploadPromise);
-  try {
-    const data = await uploadPromise;
-    const mxc = data.content_uri;
-    if (mxc) onSuccess(mxc);
-    else onError(new MatrixError(data));
-  } catch (e: any) {
-    const message = typeof e?.message === 'string' ? e.message : undefined;
-    const errcode = typeof e?.errcode === 'string' ? e.errcode : undefined;
-    onError(new MatrixError({ error: message, errcode }));
-  }
-};
-
 export const matrixEventByRecency = (m1: MatrixEventReading, m2: MatrixEventReading) =>
   m2.getTs() - m1.getTs();
 
@@ -155,51 +120,40 @@ export const factoryEventSentBy = (senderId: string) => (ev: MatrixEventReading)
 export const eventWithShortcode = (ev: MatrixEventReading) =>
   typeof ev.getContent().shortcode === 'string';
 
+/**
+ * The joined direct-message room with exactly `userId`, from Core's room
+ * summaries (`isDirect` + `directUserId`, which Core derives from `m.direct`).
+ * The most recently active one wins when there are several.
+ */
 export const getDMRoomFor = (userId: string): RoomReading | undefined => {
-  const dmLikeRooms = getNativeRooms().filter(
-    (room) =>
-      room.getMyMembership() === Membership.Join &&
-      (room as DMRoomReading).hasEncryptionStateEvent() &&
-      room.getMembers().length <= 2
-  );
-
-  return dmLikeRooms.find((room) => room.getMember(userId));
+  let best: { room: RoomReading; activity: number } | undefined;
+  getNativeRooms().forEach((room) => {
+    const summary = getNativeRoomSummary(room.roomId);
+    if (
+      !summary ||
+      summary.membership !== Membership.Join ||
+      !summary.isDirect ||
+      summary.directUserId !== userId
+    ) {
+      return;
+    }
+    const activity = summary.lastActivityTs ?? 0;
+    if (!best || activity > best.activity) best = { room, activity };
+  });
+  return best?.room;
 };
 
-export const guessDmRoomUserId = (room: RoomReading, myUserId: string): string => {
-  const getOldestMember = (members: SdkRoomMemberReading[]): SdkRoomMemberReading | undefined => {
-    let oldestMemberTs: number | undefined;
-    let oldestMember: SdkRoomMemberReading | undefined;
-
-    const pickOldestMember = (member: SdkRoomMemberReading) => {
-      if (member.userId === myUserId) return;
-
-      if (
-        oldestMemberTs === undefined ||
-        (member.events?.member && member.events.member.getTs() < oldestMemberTs)
-      ) {
-        oldestMember = member;
-        oldestMemberTs = member.events?.member?.getTs();
-      }
-    };
-
-    members.forEach(pickOldestMember);
-
-    return oldestMember;
-  };
-
-  // Pick the joined user who's been here longest (and isn't us),
-  const member = getOldestMember((room as DMRoomReading).getJoinedMembers());
-  if (member) return member.userId;
-
-  // if there are no joined members other than us, use the oldest member
-  const currentState = room.currentState as
-    | (typeof room.currentState & {
-        getMembers(): SdkRoomMemberReading[];
-      })
-    | undefined;
-  const member1 = getOldestMember(currentState?.getMembers() ?? []);
-  return member1?.userId ?? myUserId;
+/**
+ * The other person in a direct-message room, or `undefined` when Core does
+ * not know exactly one. Never falls back to the signed-in user: writing
+ * `m.direct` with yourself as the peer corrupts the DM map (D15).
+ */
+export const guessDmRoomUserId = (room: RoomReading, myUserId: string): string | undefined => {
+  const summary = getNativeRoomSummary(room.roomId);
+  if (!summary) return undefined;
+  if (summary.directUserId && summary.directUserId !== myUserId) return summary.directUserId;
+  const heroes = (summary.heroes ?? []).filter((hero) => hero.userId !== myUserId);
+  return heroes.length === 1 ? heroes[0].userId : undefined;
 };
 
 export const mxcUrlToHttp = (
@@ -216,14 +170,20 @@ export const downloadMedia = async (src: string): Promise<Blob> => {
   return blob;
 };
 
+/**
+ * Run `callback` for each item in order, waiting out 429 rate limits. Other
+ * failures do not stop the run; they are returned so callers can report which
+ * items did not complete instead of claiming success.
+ */
 export const rateLimitedActions = async <T, R = void>(
   data: T[],
   callback: (item: T, index: number) => Promise<R>,
   maxRetryCount?: number
-) => {
+): Promise<BulkActionFailure<T>[]> => {
   let retryCount = 0;
 
   let actionInterval = 0;
+  const failures: BulkActionFailure<T>[] = [];
 
   const sleepForMs = (ms: number) =>
     new Promise((resolve) => {
@@ -231,20 +191,27 @@ export const rateLimitedActions = async <T, R = void>(
     });
 
   const performAction = async (dataItem: T, index: number) => {
-    const [err] = await to<R, MatrixError>(callback(dataItem, index));
+    // A rejection may not be an object at all (`undefined`, a string).
+    let err: MatrixError | undefined;
+    try {
+      await callback(dataItem, index);
+      return;
+    } catch (error) {
+      err = error as MatrixError | undefined;
+    }
 
-    if (err?.httpStatus === 429) {
-      if (retryCount === maxRetryCount) {
-        return;
-      }
-
-      const waitMS = err.getRetryAfterMs() ?? 3000;
+    if (err?.httpStatus === 429 && retryCount !== maxRetryCount) {
+      const waitMS =
+        (typeof err.getRetryAfterMs === 'function' ? err.getRetryAfterMs() : undefined) ?? 3000;
       actionInterval = waitMS * 1.5;
       await sleepForMs(waitMS);
       retryCount += 1;
 
       await performAction(dataItem, index);
+      return;
     }
+
+    failures.push({ item: dataItem, error: err });
   };
 
   for (let i = 0; i < data.length; i += 1) {
@@ -257,6 +224,8 @@ export const rateLimitedActions = async <T, R = void>(
       await sleepForMs(actionInterval);
     }
   }
+
+  return failures;
 };
 
 export const knockSupported = (version: string): boolean => {

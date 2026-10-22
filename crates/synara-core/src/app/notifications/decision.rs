@@ -44,6 +44,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::dto::{NotificationCandidate, NotificationKind};
 
+use super::approval_alert_limit::ApprovalAlertLimiter;
 use super::error::NotificationError;
 use super::index::NotificationIndex;
 
@@ -314,6 +315,8 @@ pub struct NativeNotificationDecisionOwner {
     client: Option<Client>,
     index: Mutex<NotificationIndex>,
     delivery: Mutex<NotificationDeliveryLedger>,
+    /// Per-room budget for urgent approval alerts (see `approval_alert_limit`).
+    approval_alerts: Mutex<ApprovalAlertLimiter>,
     agent_preferences_pending: Arc<Mutex<AgentPreferencesProjection>>,
     agent_preferences_operation: tokio::sync::Mutex<()>,
     _agent_preferences_sync: Option<matrix_sdk::event_handler::EventHandlerDropGuard>,
@@ -346,6 +349,11 @@ struct ObservedEvent {
     push: NotificationPushEvaluation,
     agent_approval: bool,
     agent_policy_filtered: bool,
+    /// Push-rule outcome used when an urgent approval is over its room budget
+    /// and is delivered as an ordinary message instead.
+    message_push: NotificationPushEvaluation,
+    /// SDK-cached room display name for approval text; never message content.
+    room_name: Option<String>,
 }
 
 impl NativeNotificationDecisionOwner {
@@ -382,6 +390,7 @@ impl NativeNotificationDecisionOwner {
             client: Some(client.clone()),
             index: Mutex::new(NotificationIndex::new(session_generation)),
             delivery: Mutex::new(NotificationDeliveryLedger::default()),
+            approval_alerts: Mutex::new(ApprovalAlertLimiter::default()),
             agent_preferences_pending,
             agent_preferences_operation: tokio::sync::Mutex::new(()),
             _agent_preferences_sync: Some(client.event_handler_drop_guard(handle)),
@@ -535,6 +544,7 @@ impl NativeNotificationDecisionOwner {
             client: None,
             index: Mutex::new(NotificationIndex::new(session_generation)),
             delivery: Mutex::new(NotificationDeliveryLedger::default()),
+            approval_alerts: Mutex::new(ApprovalAlertLimiter::default()),
             agent_preferences_pending: Arc::new(Mutex::new(AgentPreferencesProjection::default())),
             agent_preferences_operation: tokio::sync::Mutex::new(()),
             _agent_preferences_sync: None,
@@ -599,12 +609,16 @@ impl NativeNotificationDecisionOwner {
                 diagnostic_id: "v-notify.owner-retired",
             });
         }
-        let mut kind = NotificationDecisionKind::parse(&request.kind)
+        let requested_kind = NotificationDecisionKind::parse(&request.kind)
             .map_err(|diagnostic_id| NotificationError::Invalid { diagnostic_id })?;
-        let observed = match kind {
+        let observed = match requested_kind {
             NotificationDecisionKind::Message | NotificationDecisionKind::AgentApproval => {
-                self.observe_message_event(&request.room_id, request.event_id.as_deref(), kind)
-                    .await?
+                self.observe_message_event(
+                    &request.room_id,
+                    request.event_id.as_deref(),
+                    requested_kind,
+                )
+                .await?
             }
             NotificationDecisionKind::Invite | NotificationDecisionKind::LaterReminder => {
                 ObservedEvent {
@@ -613,37 +627,85 @@ impl NativeNotificationDecisionOwner {
                     push: NotificationPushEvaluation::surface(),
                     agent_approval: false,
                     agent_policy_filtered: false,
+                    message_push: NotificationPushEvaluation::surface(),
+                    room_name: None,
                 }
             }
         };
         if observed.agent_policy_filtered {
             return Ok(suppressed(NotificationSuppressReason::AgentPolicy));
         }
-        if observed.agent_approval {
-            kind = NotificationDecisionKind::AgentApproval;
-        }
-        self.decide(NotificationDecisionInput {
-            room_id: request.room_id,
+        // Only an eligible approval inside its room's budget raises the urgent,
+        // actionable alert. Anything else submitted as an approval (a sender
+        // off the agent list, or a flood) is decided as an ordinary message.
+        let reserved_at = if observed.agent_approval && !observed.is_own_event {
+            let now = notification_now_ms();
+            let reserved = self
+                .approval_alerts
+                .lock()
+                .map_err(|_| NotificationError::Invalid {
+                    diagnostic_id: "v-notify.owner-poisoned",
+                })?
+                .try_reserve(&request.room_id, now);
+            reserved.then_some(now)
+        } else {
+            None
+        };
+        let urgent = reserved_at.is_some();
+        let downgraded = !urgent
+            && (observed.agent_approval
+                || requested_kind == NotificationDecisionKind::AgentApproval);
+        let room_name = observed
+            .room_name
+            .clone()
+            .filter(|name| !name.trim().is_empty());
+        let (kind, title, body) = if urgent {
+            (
+                NotificationDecisionKind::AgentApproval,
+                "Approval Required: Dangerous Command".to_owned(),
+                format!(
+                    "Review a request in {}.",
+                    room_name.as_deref().unwrap_or("Synara")
+                ),
+            )
+        } else if downgraded {
+            // The renderer's approval text may carry the reason or command;
+            // an ordinary message shows only the room and a fixed summary.
+            (
+                NotificationDecisionKind::Message,
+                room_name.unwrap_or_else(|| "Synara".to_owned()),
+                "New message".to_owned(),
+            )
+        } else {
+            (requested_kind, request.title, request.body)
+        };
+        let room_id = request.room_id;
+        let readback = self.decide(NotificationDecisionInput {
+            room_id: room_id.clone(),
             event_id: request.event_id,
             kind,
-            title: if observed.agent_approval {
-                "Approval Required: Dangerous Command".into()
-            } else {
-                request.title
-            },
-            body: if observed.agent_approval {
-                "Review a request in Synara.".into()
-            } else {
-                request.body
-            },
+            title,
+            body,
             route: request.route,
             // SDK-validated approvals remain actionable even in the focused room,
             // including a message request promoted after late decryption.
-            suppress_if_focused_room: !observed.agent_approval && request.suppress_if_focused_room,
+            suppress_if_focused_room: !urgent && (downgraded || request.suppress_if_focused_room),
             is_encrypted: observed.is_encrypted,
-            push: observed.push,
+            push: if urgent || !observed.agent_approval {
+                observed.push
+            } else {
+                observed.message_push
+            },
             is_own_event: observed.is_own_event,
-        })
+        });
+        if let Some(reserved_at) = reserved_at {
+            if !matches!(&readback, Ok(readback) if readback.decision == "show") {
+                if let Ok(mut alerts) = self.approval_alerts.lock() {
+                    alerts.release(&room_id, reserved_at);
+                }
+            }
+        }
+        readback
     }
 
     async fn observe_message_event(
@@ -715,29 +777,44 @@ impl NativeNotificationDecisionOwner {
             notification_now_ms(),
             requested_kind,
         )?;
-        if approval {
-            return Ok(ObservedEvent {
-                is_own_event,
-                is_encrypted: room.encryption_state().is_encrypted(),
-                push: NotificationPushEvaluation::surface(),
-                agent_approval: true,
-                agent_policy_filtered: false,
-            });
-        }
         let preferences = self.effective_agent_preferences().await;
-        if let matrix_sdk::ruma::events::AnySyncTimelineEvent::MessageLike(
-            matrix_sdk::ruma::events::AnySyncMessageLikeEvent::RoomMessage(message),
-        ) = &timeline
-        {
-            if let Some(original) = message.as_original() {
-                if preferences.suppresses(original.sender.as_str(), original.content.body()) {
-                    return Ok(ObservedEvent {
-                        is_own_event,
-                        is_encrypted: room.encryption_state().is_encrypted(),
-                        push: NotificationPushEvaluation::surface(),
-                        agent_approval: false,
-                        agent_policy_filtered: true,
-                    });
+        let is_encrypted = room.encryption_state().is_encrypted();
+        let room_name = match room.cached_display_name() {
+            Some(
+                matrix_sdk::RoomDisplayName::Named(name)
+                | matrix_sdk::RoomDisplayName::Aliased(name)
+                | matrix_sdk::RoomDisplayName::Calculated(name),
+            ) => Some(name),
+            _ => None,
+        };
+        // An approval is only text. Once the user lists their agents, only a
+        // listed sender may raise one; without a list, push rules decide, so
+        // a muted room never alerts. A listed agent bypasses push rules.
+        let trust = if approval {
+            event
+                .sender()
+                .map(|sender| preferences.approval_alert_trust(sender.as_str()))
+        } else {
+            None
+        };
+        let approval = approval && trust != Some(super::ApprovalAlertTrust::NotAnAgent);
+        if !approval {
+            if let matrix_sdk::ruma::events::AnySyncTimelineEvent::MessageLike(
+                matrix_sdk::ruma::events::AnySyncMessageLikeEvent::RoomMessage(message),
+            ) = &timeline
+            {
+                if let Some(original) = message.as_original() {
+                    if preferences.suppresses(original.sender.as_str(), original.content.body()) {
+                        return Ok(ObservedEvent {
+                            is_own_event,
+                            is_encrypted,
+                            push: NotificationPushEvaluation::surface(),
+                            agent_approval: false,
+                            agent_policy_filtered: true,
+                            message_push: NotificationPushEvaluation::surface(),
+                            room_name,
+                        });
+                    }
                 }
             }
         }
@@ -746,22 +823,37 @@ impl NativeNotificationDecisionOwner {
         // `/event` fetch before room state settled), so recompute once with
         // the current room context instead of guessing.
         let actions = match event.push_actions() {
-            Some(actions) => actions.to_vec(),
-            None => room
-                .event_push_actions(event.raw())
-                .await
-                .ok()
-                .flatten()
-                .ok_or(NotificationError::Invalid {
+            Some(actions) => Some(actions.to_vec()),
+            None => room.event_push_actions(event.raw()).await.ok().flatten(),
+        };
+        let message_push = match actions {
+            Some(actions) => NotificationPushEvaluation::from_actions(&actions),
+            // A listed agent's approval does not wait on push context; if it
+            // is ever downgraded, an unknown rule outcome stays silent.
+            None if trust == Some(super::ApprovalAlertTrust::ConfiguredAgent) => {
+                NotificationPushEvaluation::default()
+            }
+            // Room state that cannot evaluate rules is not a mute: a fresh
+            // approval keeps surfacing rather than being silently dropped.
+            None if approval => NotificationPushEvaluation::surface(),
+            None => {
+                return Err(NotificationError::Invalid {
                     diagnostic_id: "v-notify.push-context-unavailable",
-                })?,
+                })
+            }
         };
         Ok(ObservedEvent {
             is_own_event,
-            is_encrypted: room.encryption_state().is_encrypted(),
-            push: NotificationPushEvaluation::from_actions(&actions),
-            agent_approval: false,
+            is_encrypted,
+            push: if approval && trust == Some(super::ApprovalAlertTrust::ConfiguredAgent) {
+                NotificationPushEvaluation::surface()
+            } else {
+                message_push
+            },
+            agent_approval: approval,
             agent_policy_filtered: false,
+            message_push,
+            room_name,
         })
     }
 
@@ -1073,6 +1165,7 @@ mod tests {
             client: None,
             index: Mutex::new(NotificationIndex::new(7)),
             delivery: Mutex::new(NotificationDeliveryLedger::default()),
+            approval_alerts: Mutex::new(ApprovalAlertLimiter::default()),
             agent_preferences_pending: Arc::new(Mutex::new(AgentPreferencesProjection::default())),
             agent_preferences_operation: tokio::sync::Mutex::new(()),
             _agent_preferences_sync: None,

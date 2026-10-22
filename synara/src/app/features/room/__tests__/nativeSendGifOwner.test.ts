@@ -16,6 +16,7 @@ const sampleGif: GifResult = {
 
 test('native logged-in session owns GIF send via matrix_send_attachment', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const staged: Uint8Array[] = [];
   const gifBytes = new Uint8Array([0x47, 0x49, 0x46, 0x38]); // GIF8
   const owner = await sendGifWithNativeOwner(
     {
@@ -26,6 +27,10 @@ test('native logged-in session owns GIF send via matrix_send_attachment', async 
     },
     true,
     async (command, args) => {
+      if (args instanceof Uint8Array) {
+        staged.push(args);
+        return { available: true, value: 'staged-gif' };
+      }
       calls.push({ command, args });
       if (command === 'matrix_session_snapshot') {
         return { available: true, value: { status: 'logged_in' } };
@@ -56,7 +61,10 @@ test('native logged-in session owns GIF send via matrix_send_attachment', async 
   assert.equal(attachCall?.args?.mimeType, 'image/gif');
   assert.equal(attachCall?.args?.replyTo, '$event:example.org');
   assert.equal(attachCall?.args?.threadRoot, '$root:example.org');
-  assert.deepEqual(attachCall?.args?.bytes, Array.from(gifBytes));
+  // The GIF bytes go as one raw IPC body and the send names them by id.
+  assert.equal(attachCall?.args?.stagedId, 'staged-gif');
+  assert.equal(attachCall?.args?.bytes, undefined);
+  assert.deepEqual(Array.from(staged[0] ?? []), Array.from(gifBytes));
 });
 
 test('web and logged-out sessions fail closed without a legacy GIF owner', async () => {

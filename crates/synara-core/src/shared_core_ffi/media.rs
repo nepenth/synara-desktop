@@ -24,10 +24,13 @@ impl std::fmt::Display for MediaUploadError {
 
 impl std::error::Error for MediaUploadError {}
 
-/// Privacy-safe room attachment send ack. Event id and status only.
+/// Privacy-safe room attachment send ack. Event id, transaction id and
+/// status only. `event_id` is empty while `status` is `Queued`; the SDK keeps
+/// sending, and its local echo row carries `local_txn_id`.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SendRoomAttachmentDto {
     pub event_id: String,
+    pub local_txn_id: String,
     pub status: SendStatusDto,
 }
 
@@ -323,6 +326,7 @@ impl SharedCore {
             })?;
         Ok(SendRoomAttachmentDto {
             event_id: result.event_id,
+            local_txn_id: result.local_txn_id,
             status: result.status.into(),
         })
     }
@@ -422,7 +426,7 @@ impl SharedCore {
         mxc: String,
     ) -> Result<LeftoverBytesDto, LeftoverCommandError> {
         leftover_reject_oversize(mxc.len())?;
-        if !self.has_retained_client() {
+        if !self.has_retained_client().await {
             return Err(leftover_failed(
                 LEFTOVER_NO_SESSION_CODE,
                 LEFTOVER_NO_SESSION_DESCRIPTION,
@@ -442,7 +446,7 @@ impl SharedCore {
     ) -> Result<LeftoverBytesDto, LeftoverCommandError> {
         leftover_reject_oversize(mxc.len())?;
         let _ = (width, height);
-        if !self.has_retained_client() {
+        if !self.has_retained_client().await {
             return Err(leftover_failed(
                 LEFTOVER_NO_SESSION_CODE,
                 LEFTOVER_NO_SESSION_DESCRIPTION,
@@ -461,7 +465,7 @@ impl SharedCore {
         filename: String,
     ) -> Result<LeftoverAckDto, LeftoverCommandError> {
         leftover_reject_oversize(payload.len() + mime_type.len() + filename.len())?;
-        if !self.has_retained_client() {
+        if !self.has_retained_client().await {
             return Err(leftover_failed(
                 LEFTOVER_NO_SESSION_CODE,
                 LEFTOVER_NO_SESSION_DESCRIPTION,
@@ -478,7 +482,7 @@ impl SharedCore {
         room_id: String,
     ) -> Result<LeftoverBytesDto, LeftoverCommandError> {
         leftover_reject_oversize(room_id.len())?;
-        if !self.has_retained_client() {
+        if !self.has_retained_client().await {
             return Err(leftover_failed(
                 LEFTOVER_NO_SESSION_CODE,
                 LEFTOVER_NO_SESSION_DESCRIPTION,

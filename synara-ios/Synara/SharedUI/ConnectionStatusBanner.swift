@@ -2,56 +2,89 @@ import SwiftUI
 
 /// Signed-in connection/sync chrome. Hidden in steady Connected; Lost waits
 /// for the store hold so SDK blips do not paint a banner.
+///
+/// `onSignOut` only asks for sign-out: the owner shows the same confirmation
+/// as Settings → Log Out before anything is wiped.
 struct ConnectionStatusBanner: View {
     @ObservedObject var store: ConnectionStatusStore
     var onRetry: (() -> Void)?
     var onSignOut: (() -> Void)?
 
     var body: some View {
-        if store.isBannerVisible {
+        if store.presentsBanner {
             banner
         }
     }
 
     @ViewBuilder
     private var banner: some View {
-        let status = store.status
-        let variant = ConnectionStatusCopy.variant(status)
+        let variant = store.bannerVariant
+        let hasAction = (store.showsRetryAction && onRetry != nil)
+            || (store.showsSignOutAction && onSignOut != nil)
         HStack(spacing: SynaraSpacing.small) {
-            Image(systemName: ConnectionStatusCopy.systemImage(status))
+            Image(systemName: store.bannerSystemImage)
                 .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(iconTint(variant))
                 .accessibilityHidden(true)
-            Text(ConnectionStatusCopy.banner(status))
+            Text(store.bannerText)
                 .font(SynaraTypography.fineMetaBold)
-                .lineLimit(2)
+                .foregroundStyle(textColor(variant))
+                .lineLimit(store.slidingSyncUnsupported ? 4 : 2)
                 .minimumScaleFactor(0.85)
+                .accessibilityIdentifier("ConnectionStatusText")
             Spacer(minLength: SynaraSpacing.small)
-            if ConnectionStatusCopy.showsRetryAction(status), let onRetry {
+            // Retry and Sign Out never show together (ConnectionStatusCopy).
+            if store.showsRetryAction, let onRetry {
                 Button("Retry", action: onRetry)
-                    .font(SynaraTypography.fineMetaBold)
-                    .buttonStyle(.bordered)
-                    .controlSize(.mini)
+                    .buttonStyle(SynaraCompactBorderedButtonStyle())
                     .accessibilityIdentifier("ConnectionStatusRetryButton")
             }
-            if ConnectionStatusCopy.showsSignOutAction(status), let onSignOut {
-                Button("Sign Out", action: onSignOut)
-                    .font(SynaraTypography.fineMetaBold)
-                    .buttonStyle(.bordered)
-                    .controlSize(.mini)
+            if store.showsSignOutAction, let onSignOut {
+                Button("Log Out", action: onSignOut)
+                    .buttonStyle(SynaraCompactBorderedButtonStyle())
+                    .accessibilityHint("Asks for confirmation before logging out of this device")
                     .accessibilityIdentifier("ConnectionStatusSignOutButton")
             }
         }
-        .foregroundStyle(foreground(variant))
         .padding(.horizontal, SynaraSpacing.large)
-        .padding(.vertical, SynaraSpacing.small)
+        // The buttons carry their own 44-point touch area.
+        .padding(.vertical, hasAction ? 0 : SynaraSpacing.small)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(background(variant))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ConnectionStatusBanner")
-        .accessibilityLabel(ConnectionStatusCopy.banner(status))
+        .accessibilityLabel(store.bannerText)
     }
 
-    private func foreground(_ variant: ConnectionStatusCopy.Variant) -> Color {
+    /// Text color per variant; light mode would fail AA with the raw
+    /// system status colors (orange 1.96:1, green 2.01:1, red 3.01:1).
+    static func textPalette(for variant: ConnectionStatusCopy.Variant) -> SynaraStatusTextPalette.Pair? {
+        switch variant {
+        case .success:
+            return SynaraStatusTextPalette.success
+        case .warning:
+            return SynaraStatusTextPalette.warning
+        case .critical:
+            return SynaraStatusTextPalette.critical
+        case .neutral:
+            return nil
+        }
+    }
+
+    private func textColor(_ variant: ConnectionStatusCopy.Variant) -> Color {
+        switch variant {
+        case .success:
+            return SynaraColor.successText
+        case .warning:
+            return SynaraColor.warningText
+        case .critical:
+            return SynaraColor.criticalText
+        case .neutral:
+            return SynaraColor.secondaryText
+        }
+    }
+
+    private func iconTint(_ variant: ConnectionStatusCopy.Variant) -> Color {
         switch variant {
         case .success:
             return SynaraColor.success

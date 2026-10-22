@@ -12,7 +12,7 @@ use matrix_sdk::Client;
 use matrix_sdk_crypto::CollectStrategy;
 
 use super::ClientBuilderError;
-use super::{ClientBuildConfig, HomeserverMode};
+use super::{ClientBuildConfig, HomeserverMode, TimeoutPolicy};
 use crate::transport::MatrixIpcErrorCategory;
 
 /// Which devices receive this client's room keys.
@@ -46,6 +46,90 @@ pub async fn build_memory_only_client(
     config: &ClientBuildConfig,
 ) -> Result<Client, ClientBuilderError> {
     build_client(config, ClientStoreMode::Memory).await
+}
+
+/// Build a memory-only, unauthenticated client whose homeserver the SDK
+/// resolves from what the user typed: a `.well-known/matrix/client` lookup on
+/// a server name, falling back to `/versions` on the input as a homeserver URL.
+/// Used only for sign-in discovery; it has no account, store layout, search
+/// index, session callback or vault entry.
+pub async fn build_discovery_client(
+    server_name_or_url: &str,
+    user_agent: &str,
+    timeouts: TimeoutPolicy,
+) -> Result<Client, ClientBuilderError> {
+    timeouts.validate()?;
+    #[cfg(feature = "x509-identity")]
+    crate::app::x509::ensure_aws_lc_rustls_provider();
+    Client::builder()
+        .request_config(
+            RequestConfig::new()
+                .timeout(timeouts.request_timeout)
+                .retry_limit(timeouts.retry_limit),
+        )
+        .user_agent(user_agent)
+        .server_name_or_homeserver_url(server_name_or_url)
+        .store_config(StoreConfig::new(CrossProcessLockConfig::SingleProcess))
+        .respect_login_well_known(false)
+        .build()
+        .await
+        .map_err(map_build_error)
+}
+
+/// Build a memory-only, unauthenticated client for one pre-session auth
+/// probe (`get_login_types`, the empty `register` UIA probe) against a
+/// homeserver URL used as given: no well-known lookup and no `/versions`
+/// request. Both endpoints are v3 since Matrix 1.1, so that version is
+/// declared up front and each probe sends exactly one request.
+///
+/// The reqwest client handed to the SDK keeps the probes redirect-free and
+/// time-bounded; it sends nothing itself.
+#[cfg(feature = "full-app")]
+pub async fn build_auth_probe_client(
+    homeserver_url: &str,
+    user_agent: &str,
+    request_timeout: std::time::Duration,
+) -> Result<Client, ClientBuilderError> {
+    #[cfg(feature = "x509-identity")]
+    crate::app::x509::ensure_aws_lc_rustls_provider();
+    // A redirect is an error, not a 3xx answer: the SDK would try to parse a
+    // 3xx body as a successful response and lose its status.
+    let http = reqwest::ClientBuilder::new()
+        .timeout(request_timeout)
+        .redirect(reqwest::redirect::Policy::custom(|attempt| {
+            attempt.error("auth probes do not follow redirects")
+        }))
+        .user_agent(user_agent)
+        .build()
+        .map_err(|_| ClientBuilderError::InvalidConfig("auth probe http client"))?;
+    Client::builder()
+        .homeserver_url(homeserver_url)
+        .http_client(http)
+        .server_versions([matrix_sdk::ruma::api::MatrixVersion::V1_1])
+        .request_config(
+            RequestConfig::new()
+                .timeout(request_timeout)
+                .disable_retry(),
+        )
+        .store_config(StoreConfig::new(CrossProcessLockConfig::SingleProcess))
+        .build()
+        .await
+        .map_err(map_build_error)
+}
+
+/// Event-cache policy shared by every product client (and by tests that
+/// build their client through `MatrixMockServer`).
+///
+/// Automatic back-pagination stays off, the SDK default. When on, the SDK
+/// back-paginates every room in a sliding-sync response that has no
+/// displayable latest event (unbounded, invites included, which the server
+/// rejects with 403) and every room whose read receipt is not loaded (up to
+/// 20 pages). At login that was about two `/messages` per room. Previews and
+/// client-side unread counts come instead from the room-list timeline window
+/// (`ROOM_LIST_TIMELINE_LIMIT`) and the recent-room subscriptions; the
+/// timeline still paginates when a room is opened or scrolled.
+pub fn apply_event_cache_policy(builder: matrix_sdk::ClientBuilder) -> matrix_sdk::ClientBuilder {
+    builder.with_enable_automatic_back_pagination(false)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -88,7 +172,12 @@ async fn build_client(
         .user_agent(&config.user_agent)
         .with_encryption_settings(encryption_settings)
         .with_room_key_recipient_strategy(ROOM_KEY_RECIPIENT_STRATEGY)
-        .cross_process_store_config(cross_process.clone());
+        .cross_process_store_config(cross_process.clone())
+        // Sign-in resolves the homeserver before login, and both shells key the
+        // account identity (store path, vault entry) by that URL. A login
+        // response `well_known` would otherwise switch `client.homeserver()`
+        // after the identity was built and fail the identity check.
+        .respect_login_well_known(false);
 
     match config.homeserver_mode {
         HomeserverMode::ExplicitUrl => {
@@ -105,10 +194,9 @@ async fn build_client(
         ClientStoreMode::Persistent => {
             // Keep state and cache paths separate in the product layout.
             let passphrase = config.store_passphrase_hex();
-            builder = builder.sqlite_store_with_cache_path(
-                config.state_store_path(),
-                config.cache_store_path(),
-                passphrase.as_deref(),
+            builder = builder.sqlite_store_with_config_and_cache_path(
+                config.sqlite_store_config(passphrase.as_deref()),
+                Some(config.cache_store_path()),
             );
             #[cfg(feature = "search-index")]
             {
@@ -132,7 +220,7 @@ async fn build_client(
         builder = builder.handle_refresh_tokens();
     }
 
-    builder = builder.with_enable_automatic_back_pagination(true);
+    builder = apply_event_cache_policy(builder);
 
     #[cfg(feature = "x509-identity")]
     {
@@ -671,9 +759,11 @@ mod privacy_tests {
     }
 
     #[test]
-    fn product_builder_enables_automatic_back_pagination() {
+    fn product_builder_keeps_automatic_back_pagination_off() {
         let source = include_str!("open.rs");
-        assert!(source.contains("with_enable_automatic_back_pagination(true)"));
+        assert!(source.contains("builder = apply_event_cache_policy(builder);"));
+        assert!(source.contains("with_enable_automatic_back_pagination(false)"));
+        assert!(!source.contains(concat!("with_enable_automatic_back_pagination(", "true)")));
         assert!(!source.contains(&format!("{}{}", "experimental", "-")));
     }
 }

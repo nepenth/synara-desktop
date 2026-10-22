@@ -111,11 +111,11 @@ test('a failed native restore stays retryable across repeated failures without s
   await page.route('**/.well-known/matrix/client', (route) => route.fulfill({ json: {} }));
   await page.clock.install();
   await page.goto('/e2e/runtime-maturity-harness/index.html?sync-recovery=offline&restore-error');
-  await expect(page.getByText('Failed to load. Controlled native restore failure')).toBeVisible();
+  await expect(page.getByText('Synara could not load your account. Try again.')).toBeVisible();
   await expect(page.getByTestId('native-restore-count')).toHaveText('1');
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.getByTestId('native-restore-count')).toHaveText('2');
-  await expect(page.getByText('Failed to load. Controlled native restore failure')).toBeVisible();
+  await expect(page.getByText('Synara could not load your account. Try again.')).toBeVisible();
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.getByTestId('native-restore-count')).toHaveText('3');
   await expect(page.getByText('Reconnecting', { exact: true })).toBeVisible();
@@ -138,7 +138,7 @@ test('Retry clears a renderer startup read failure through native recovery and f
   );
   await page.route('**/.well-known/matrix/client', (route) => route.fulfill({ json: {} }));
   await page.goto('/e2e/runtime-maturity-harness/index.html?sync-recovery=offline&startup-error');
-  await expect(page.getByText('Failed to start. Controlled startup read failure')).toBeVisible();
+  await expect(page.getByText('Controlled startup read failure')).toBeVisible();
   const retry = page.getByRole('button', { name: 'Retry', exact: true });
   await retry.click();
   await expect(page.getByTestId('native-recovery-count')).toHaveText('1');
@@ -180,36 +180,30 @@ test('an established client requests native recovery on network return and conta
   expect(errors).toEqual([]);
 });
 
-for (const metadataFailure of ['failed', 'hanging']) {
-  test(`a ${metadataFailure} renderer versions request cannot block a restored native client`, async ({
-    page,
-  }) => {
-    const errors: string[] = [];
-    page.on('pageerror', (error) => errors.push(error.message));
-    let releaseRequest: (() => void) | undefined;
-    const hold = new Promise<void>((resolve) => {
-      releaseRequest = resolve;
-    });
-    await page.route('**/mock-homeserver/_matrix/client/versions', async (route) => {
-      if (metadataFailure === 'hanging') await hold;
-      await route.abort('failed');
-    });
-    await page.route('**/.well-known/matrix/client', (route) => route.fulfill({ json: {} }));
-    try {
-      await page.goto('/e2e/runtime-maturity-harness/index.html?sync-recovery=running');
-      await expect(page.getByText('Native client ready')).toBeVisible();
-      await expect(page.getByTestId('native-readiness')).toHaveText('running');
-      await expect(
-        page.getByText('Unable to connect to the homeserver.', { exact: false })
-      ).toHaveCount(0);
-      await expect(page.getByTestId('native-recovery-count')).toHaveText('0');
-      await expect(page.getByTestId('native-logout-count')).toHaveText('0');
-      expect(errors).toEqual([]);
-    } finally {
-      releaseRequest?.();
-    }
+test('a restored native client makes no renderer /versions or /.well-known request', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  const metadataRequests: string[] = [];
+  await page.route('**/mock-homeserver/_matrix/client/versions', async (route) => {
+    metadataRequests.push(route.request().url());
+    await route.abort('failed');
   });
-}
+  await page.route('**/.well-known/matrix/client', async (route) => {
+    metadataRequests.push(route.request().url());
+    await route.abort('failed');
+  });
+  await page.goto('/e2e/runtime-maturity-harness/index.html?sync-recovery=running');
+  await expect(page.getByText('Native client ready')).toBeVisible();
+  await expect(page.getByTestId('native-readiness')).toHaveText('running');
+  // Core owns discovery and capabilities after login (D83).
+  expect(metadataRequests).toEqual([]);
+  await expect(page.getByTestId('native-restore-count')).toHaveText('1');
+  await expect(page.getByTestId('native-recovery-count')).toHaveText('0');
+  await expect(page.getByTestId('native-logout-count')).toHaveText('0');
+  expect(errors).toEqual([]);
+});
 
 test('failed renderer metadata leaves the real native sync recovery controls reachable', async ({
   page,
@@ -229,32 +223,6 @@ test('failed renderer metadata leaves the real native sync recovery controls rea
   await expect(page.getByText('Native client ready')).toBeVisible();
   await expect(page.getByTestId('native-logout-count')).toHaveText('0');
   expect(errors).toEqual([]);
-});
-
-test('optional versions metadata updates capabilities without blocking or remounting native readiness', async ({
-  page,
-}) => {
-  let releaseRequest: (() => void) | undefined;
-  const hold = new Promise<void>((resolve) => {
-    releaseRequest = resolve;
-  });
-  await page.route('**/mock-homeserver/_matrix/client/versions', async (route) => {
-    await hold;
-    await route.fulfill({ json: { versions: ['v1.11'], unstable_features: {} } });
-  });
-  await page.route('**/.well-known/matrix/client', (route) => route.fulfill({ json: {} }));
-  try {
-    await page.goto('/e2e/runtime-maturity-harness/index.html?sync-recovery=running');
-    await expect(page.getByText('Native client ready')).toBeVisible();
-    await expect(page.getByTestId('server-versions')).toHaveText('');
-    releaseRequest?.();
-    await expect(page.getByTestId('server-versions')).toHaveText('v1.11');
-    await expect(page.getByText('Native client ready')).toBeVisible();
-    await expect(page.getByTestId('native-restore-count')).toHaveText('1');
-    await expect(page.getByTestId('native-recovery-count')).toHaveText('0');
-  } finally {
-    releaseRequest?.();
-  }
 });
 
 test('the default pre-login metadata loader still blocks and retries failed server validation', async ({
@@ -353,21 +321,22 @@ test('a focus trap whose only control is disabled opens without crashing', async
   expect(errors).toEqual([]);
 });
 
-test('the production custom parser renders empty pre and code blocks without crashing', async ({
+test('the production formatted renderer renders empty pre and code blocks without crashing', async ({
   page,
 }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/e2e/runtime-maturity-harness/index.html', { waitUntil: 'domcontentloaded' });
-  const blocks = page.getByRole('region', { name: 'Code block regression' }).locator('pre');
+  const blocks = page
+    .getByRole('region', { name: 'Code block regression' })
+    .locator('pre[data-native-code-block]');
   await expect(blocks).toHaveCount(3);
   for (let index = 0; index < 3; index += 1) {
-    await expect(blocks.nth(index).getByText('Code', { exact: true })).toBeVisible();
     await expect(
-      blocks.nth(index).getByRole('button', { name: 'Copy', exact: true })
+      blocks.nth(index).getByRole('button', { name: 'Copy code', exact: true })
     ).toBeVisible();
   }
-  await expect(blocks.nth(0).locator('code')).toHaveCount(0);
+  await expect(blocks.nth(0).locator('code')).toBeEmpty();
   await expect(blocks.nth(1).locator('code')).toBeEmpty();
   await expect(blocks.nth(2).locator('code')).toHaveText('hello');
   expect(errors).toEqual([]);
@@ -462,7 +431,9 @@ test('the compatibility PDF API and real worker render when newer builtins are a
   expect(warnings.some((warning) => warning.includes('fake worker'))).toBe(false);
 });
 
-test('nested CDATA retains literal text through the production custom parser', async ({ page }) => {
+test('nested CDATA retains literal text through the production formatted renderer', async ({
+  page,
+}) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/e2e/runtime-maturity-harness/index.html', { waitUntil: 'domcontentloaded' });

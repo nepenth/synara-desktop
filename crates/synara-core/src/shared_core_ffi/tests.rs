@@ -134,7 +134,7 @@ async fn session_logout_revokes_exact_device_and_cannot_restore_after_forget() {
         .await
         .unwrap();
     assert!(shared.core.session_snapshot().unwrap().is_none());
-    assert!(shared.retained_client().is_err());
+    assert!(shared.retained_client().await.is_err());
     let relaunched = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries)));
     let error = relaunched
         .restore_persisted_session(
@@ -240,12 +240,35 @@ fn sync_stop_closes_retained_client_stores_and_start_reopens_them() {
     .expect("planted persist retains a SQLite-backed Client");
     rt.block_on(shared.attach_session_owners())
         .expect("attach retained session owners");
-    let client = shared.retained_client().expect("retained Client");
+    let client = rt
+        .block_on(shared.retained_client())
+        .expect("retained Client");
+    let _serial = crate::app::media::HOT_MEDIA_CACHE_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let other_account = "@sync-stop-other:example.org";
+    crate::app::media::hot_media_cache_insert_for_test(identity.user_id(), "photo", vec![1; 8]);
+    crate::app::media::hot_media_cache_insert_for_test(other_account, "photo", vec![2; 8]);
 
     let stopped = rt
         .block_on(shared.stop_sync())
         .expect("stop must complete the full store quiescence boundary");
     assert!(stopped.stopped);
+    // L14: suspension drops this account's decrypted media, nobody else's.
+    assert!(!crate::app::media::hot_media_cache_contains_for_test(
+        identity.user_id(),
+        "photo"
+    ));
+    assert!(crate::app::media::hot_media_cache_contains_for_test(
+        other_account,
+        "photo"
+    ));
+    // A memory warning drops every account's.
+    shared.release_cached_memory();
+    assert!(!crate::app::media::hot_media_cache_contains_for_test(
+        other_account,
+        "photo"
+    ));
     let paused_store_access = rt.block_on(client.event_cache_store().lock());
     assert!(
         paused_store_access.is_err(),
@@ -268,6 +291,114 @@ fn sync_stop_closes_retained_client_stores_and_start_reopens_them() {
     rt.block_on(shared.stop_sync())
         .expect("final stop releases store resources before teardown");
     drop(client);
+    drop(shared);
+    drop(_enter);
+    drop(rt);
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn store_calls_while_suspended_wait_for_resume_or_fail_retryably() {
+    let identity = alice();
+    let values = std::sync::Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(
+        std::sync::Arc::clone(&values),
+    )));
+    let root = temp_root("suspended-store-calls");
+    let rt = test_runtime();
+    let _enter = rt.enter();
+
+    rt.block_on(shared.persist_planted_session_for_test(
+        identity.user_id().to_owned(),
+        identity.homeserver_url().to_owned(),
+        root.to_string_lossy().into_owned(),
+        "DEVICEABC".to_owned(),
+        "syt_suspended_store_calls_access".to_owned(),
+        None,
+    ))
+    .expect("planted persist retains a SQLite-backed Client");
+    rt.block_on(shared.attach_session_owners())
+        .expect("attach retained session owners");
+    let status = rt.block_on(shared.sync_status()).expect("status");
+    assert!(
+        !status.suspended,
+        "an attached, unstarted session is not suspended"
+    );
+
+    rt.block_on(shared.stop_sync())
+        .expect("stop closes the stores");
+    let status = rt.block_on(shared.sync_status()).expect("status");
+    assert!(status.suspended);
+    assert_eq!(status.readiness, SyncReadinessDto::Idle);
+
+    // Past the bound, every gated family fails with the one retryable code
+    // instead of a generic open or store failure.
+    shared
+        .suspension
+        .set_wait_bound_for_test(std::time::Duration::from_millis(50));
+    let suspended = |text: String| text.contains(SESSION_SUSPENDED_CODE);
+    let room_list = rt.block_on(shared.room_list_snapshot());
+    assert!(suspended(format!(
+        "{:?}",
+        room_list.expect_err("room list")
+    )));
+    let invites = rt.block_on(shared.invites_snapshot());
+    assert!(suspended(format!("{:?}", invites.expect_err("invites"))));
+    let open = rt.block_on(shared.timeline_open(
+        "!room:example.org".to_owned(),
+        TimelineOpenPositionDto {
+            kind: TimelineOpenKindDto::LiveBottom,
+            at_bottom: true,
+            restored_anchor_event_id: None,
+            live_tail_event_id: None,
+            updated_at_ms: None,
+            event_id: None,
+        },
+    ));
+    assert!(suspended(format!("{:?}", open.expect_err("timeline open"))));
+    let readback = rt.block_on(
+        shared.timeline_event_readback("!room:example.org".to_owned(), "$event".to_owned()),
+    );
+    assert!(suspended(format!("{:?}", readback.expect_err("readback"))));
+    let send = rt.block_on(shared.send_text(
+        "!room:example.org".to_owned(),
+        "hello".to_owned(),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        Some("txn-suspended".to_owned()),
+    ));
+    assert!(suspended(format!("{:?}", send.expect_err("send"))));
+    // A network change while suspended must not start sync on closed stores.
+    let restarted = rt
+        .block_on(shared.restart_sync())
+        .expect("restart is a no-op while suspended");
+    assert_eq!(restarted.readiness, SyncReadinessDto::Idle);
+    assert!(rt.block_on(shared.sync_status()).expect("status").suspended);
+
+    // Within the bound, a call made while suspended waits for the resume and
+    // then runs against the reopened stores.
+    shared
+        .suspension
+        .set_wait_bound_for_test(std::time::Duration::from_secs(20));
+    let (room_list, started) = rt.block_on(async {
+        tokio::join!(shared.room_list_snapshot(), async {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            tokio::time::timeout(std::time::Duration::from_secs(15), shared.start_sync())
+                .await
+                .expect("start_sync timed out")
+        })
+    });
+    started.expect("start reopens the stores");
+    let room_list = room_list.expect("a room-list read parked on the suspension succeeds");
+    assert!(room_list.rooms.is_empty());
+    assert!(!rt.block_on(shared.sync_status()).expect("status").suspended);
+
+    rt.block_on(shared.stop_sync())
+        .expect("final stop releases store resources before teardown");
     drop(shared);
     drop(_enter);
     drop(rt);
@@ -318,6 +449,41 @@ fn restore_without_vault_fails_closed_without_echoing_identity() {
     assert!(!text.contains("@alice"));
     assert!(!text.contains("matrix.example.org"));
     assert!(!text.contains(root.to_string_lossy().as_ref()));
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_restore_or_login_in_flight_answers_a_second_attempt_at_once() {
+    let shared = SharedCore::new();
+    let root = temp_root("install-in-flight");
+    let rt = test_runtime();
+    let restore = || {
+        rt.block_on(shared.restore_persisted_session(
+            "@alice:example.org".to_owned(),
+            "https://matrix.example.org".to_owned(),
+            root.to_string_lossy().into_owned(),
+        ))
+        .expect_err("no restorable session")
+    };
+    // Another install holds the lifecycle owner's transition gate.
+    let in_flight = shared
+        .lifecycle
+        .try_begin_detached_install()
+        .expect("gate free");
+    assert!(format!("{:?}", restore()).contains(RESTORE_FAILED_CODE));
+    let login = rt
+        .block_on(shared.login_with_password(
+            "@alice:example.org".to_owned(),
+            "https://matrix.example.org".to_owned(),
+            root.to_string_lossy().into_owned(),
+            "password".to_owned(),
+        ))
+        .expect_err("sign-in waits for nothing");
+    assert!(format!("{login:?}").contains(LOGIN_FAILED_CODE));
+    // Ordinary commands keep failing closed on the empty slot meanwhile.
+    assert!(!rt.block_on(shared.has_retained_client()));
+    drop(in_flight);
+    assert!(format!("{:?}", restore()).contains(VAULT_UNAVAILABLE_CODE));
     let _ = fs::remove_dir_all(&root);
 }
 
@@ -381,10 +547,7 @@ fn restore_from_vault_installs_session_without_password_or_token_leak() {
     assert!(!dbg.contains("password"));
     let snapshot = shared.core.session_snapshot().expect("projection");
     assert!(snapshot.is_some());
-    assert!(matches!(
-        *shared.restored_client.lock().expect("client"),
-        RestoredClientSlot::Ready(..)
-    ));
+    assert!(rt.block_on(shared.has_retained_client()));
     let keys: Vec<String> = map.lock().expect("vault").keys().cloned().collect();
     assert!(keys.iter().any(|key| key.starts_with("store-key:")));
     assert!(keys.iter().any(|key| key.starts_with("matrix-session:")));
@@ -398,10 +561,33 @@ fn restore_from_vault_installs_session_without_password_or_token_leak() {
         .expect_err("second restore");
     assert!(format!("{second:?}").contains(ALREADY_RESTORED_CODE));
     assert!(!format!("{second:?}").contains(RESTORE_FAILED_CODE));
-    assert!(matches!(
-        *shared.restored_client.lock().expect("client"),
-        RestoredClientSlot::Ready(..)
-    ));
+    assert!(rt.block_on(shared.has_retained_client()));
+    // "Already restored" means success to the shells, so another account,
+    // or the same user id on another homeserver, must not get it.
+    for (user_id, homeserver_url) in [
+        ("@bob:example.org", "https://matrix.example.org"),
+        ("@alice:example.org", "https://other.example.org"),
+    ] {
+        let other = rt
+            .block_on(shared.restore_persisted_session(
+                user_id.to_owned(),
+                homeserver_url.to_owned(),
+                root.to_string_lossy().into_owned(),
+            ))
+            .expect_err("another account's restore");
+        assert!(format!("{other:?}").contains(RESTORED_IDENTITY_MISMATCH_CODE));
+        assert!(!format!("{other:?}").contains(ALREADY_RESTORED_CODE));
+    }
+    // Normalization differences of the same account still match.
+    let same = rt
+        .block_on(shared.restore_persisted_session(
+            identity.user_id().to_owned(),
+            format!("{}/", identity.homeserver_url()),
+            root.to_string_lossy().into_owned(),
+        ))
+        .expect_err("same account, trailing slash");
+    assert!(format!("{same:?}").contains(ALREADY_RESTORED_CODE));
+    assert!(rt.block_on(shared.has_retained_client()));
     drop(shared);
     drop(_enter);
     drop(rt);
@@ -441,7 +627,8 @@ fn restore_rejects_wrong_length_store_key_without_replacing_it() {
             root.to_string_lossy().into_owned(),
         ))
         .expect_err("corrupt store key");
-    assert!(format!("{error:?}").contains(RESTORE_FAILED_CODE));
+    // A key that cannot open the store asks for a reset; it is never replaced.
+    assert!(format!("{error:?}").contains(STORE_RESET_REQUIRED_CODE));
     let stored = map
         .lock()
         .expect("vault")
@@ -545,6 +732,8 @@ fn timeline_view_row_dto_maps_message_without_token_echo() {
             sender_avatar_url: Some("mxc://example.org/alice".to_owned()),
             origin_server_ts: 1_700_000_000_000,
             local_echo_state: None,
+            send_failure: None,
+            send_failure_retryable: None,
             transaction_id: None,
             encryption_shield: None,
             capabilities: TimelineRowCapabilities {
@@ -563,6 +752,10 @@ fn timeline_view_row_dto_maps_message_without_token_echo() {
         formatted_body: None,
         agent_card_json: Some(r#"{"title":"Approval"}"#.to_owned()),
         is_agent_approval: true,
+        agent_approval_decision: Some(crate::app::timeline::TimelineAgentApprovalDecision {
+            decision: crate::app::account_data::SynaraAgentApprovalHistoryDecision::ApproveOnce,
+            decided_at: Some(1_700_000_060_000),
+        }),
         message_type: Some("m.text".to_owned()),
         forward_transport: Some(TimelineForwardTransport::Text),
         media_filename: None,
@@ -613,6 +806,8 @@ fn timeline_view_row_dto_maps_message_without_token_echo() {
         Some(r#"{"title":"Approval"}"#)
     );
     assert!(dto.is_agent_approval);
+    assert_eq!(dto.agent_approval_decision.as_deref(), Some("approve_once"));
+    assert_eq!(dto.agent_approval_decided_at, Some(1_700_000_060_000));
     assert_eq!(dto.reply_to_event_id.as_deref(), Some("$reply:example.org"));
     assert_eq!(
         dto.thread_root_event_id.as_deref(),
@@ -642,10 +837,68 @@ fn timeline_view_row_dto_maps_message_without_token_echo() {
     assert!(!capabilities.vote);
     assert!(dto.poll.is_none());
     assert!(dto.media_handle_id.is_none());
+    assert!(dto.transaction_id.is_none(), "remote rows carry no txn id");
     let text = format!("{dto:?}");
     assert!(!text.contains("syt_"));
     assert!(!text.contains("password"));
     assert!(text.contains("mxc://example.org/alice"));
+}
+
+#[test]
+fn timeline_view_row_dto_carries_local_echo_transaction_id() {
+    use crate::app::timeline::{TimelineEventRowBase, TimelineMessageRow, TimelineRowCapabilities};
+    use crate::dto::LocalEchoState;
+
+    // A queued attachment: the SDK local echo has no event id yet. The shell
+    // matches its own pending row to this one by transaction id, so the id
+    // must cross the FFI even though `event_id` is empty.
+    let row = TimelineViewRow::Message(Box::new(TimelineMessageRow {
+        event: TimelineEventRowBase {
+            item_id: "local-item".to_owned(),
+            event_id: None,
+            sender_id: "@alice:example.org".to_owned(),
+            sender_name: "Alice".to_owned(),
+            sender_avatar_url: None,
+            origin_server_ts: 1_700_000_000_001,
+            local_echo_state: Some(LocalEchoState::Sending),
+            send_failure: None,
+            send_failure_retryable: None,
+            transaction_id: Some("synara-attachment-1".to_owned()),
+            encryption_shield: None,
+            capabilities: TimelineRowCapabilities {
+                react: false,
+                reply: false,
+                edit: false,
+                redact: false,
+                report: false,
+                pin: false,
+                forward: false,
+                vote: false,
+                decline_call: false,
+            },
+        },
+        body: "photo.jpg".to_owned(),
+        formatted_body: None,
+        agent_card_json: None,
+        is_agent_approval: false,
+        agent_approval_decision: None,
+        message_type: Some("m.image".to_owned()),
+        forward_transport: None,
+        media_filename: Some("photo.jpg".to_owned()),
+        media_caption: None,
+        edited: false,
+        reply: None,
+        thread_root: None,
+        thread: None,
+        reactions: vec![],
+        media: None,
+    }));
+    let dto = timeline_view_row_dto(row);
+    assert_eq!(dto.item_id, "local-item");
+    assert!(dto.event_id.is_empty());
+    assert_eq!(dto.transaction_id.as_deref(), Some("synara-attachment-1"));
+    assert_eq!(dto.local_echo_state.as_deref(), Some("sending"));
+    assert_eq!(dto.send_failure, None);
 }
 
 #[test]
@@ -664,6 +917,8 @@ fn timeline_view_row_dto_preserves_open_and_closed_poll_semantics() {
                 sender_avatar_url: None,
                 origin_server_ts: 1_700_000_000_002,
                 local_echo_state: None,
+                send_failure: None,
+                send_failure_retryable: None,
                 transaction_id: None,
                 encryption_shield: None,
                 capabilities: TimelineRowCapabilities {
@@ -753,6 +1008,8 @@ fn timeline_view_row_dto_preserves_incoming_sticker_media() {
             sender_avatar_url: Some("mxc://example.org/alice".to_owned()),
             origin_server_ts: 1_700_000_000_001,
             local_echo_state: None,
+            send_failure: None,
+            send_failure_retryable: None,
             transaction_id: None,
             encryption_shield: None,
             capabilities: TimelineRowCapabilities {
@@ -826,6 +1083,8 @@ fn timeline_view_row_dto_preserves_base_metadata_for_non_message_events() {
         sender_avatar_url: Some("mxc://example.org/alice".to_owned()),
         origin_server_ts: 1_700_000_000_003,
         local_echo_state: None,
+        send_failure: None,
+        send_failure_retryable: None,
         transaction_id: None,
         encryption_shield: None,
         capabilities: TimelineRowCapabilities {
@@ -918,10 +1177,11 @@ fn logout_fences_late_token_rotation_saves_out_of_the_vault() {
     .expect("planted session");
 
     // The SDK save callback holds this lease; capture it like the callback does.
-    let lease = match &*shared.restored_client.lock().expect("client") {
-        RestoredClientSlot::Ready(_, persistence) => persistence.callback_lease(),
-        _ => panic!("planted session is retained"),
-    };
+    let lease = rt
+        .block_on(shared.with_installed_session(|active| {
+            active.map(|active| active.persistence.callback_lease())
+        }))
+        .expect("planted session is retained");
     assert!(!lease.is_revoked());
 
     rt.block_on(shared.logout()).expect("logout");
@@ -1000,16 +1260,14 @@ fn failed_rotation_save_is_retried_with_backoff_and_stops_after_logout() {
     ))
     .expect("planted session");
     let start = Instant::now();
-    assert_eq!(
-        shared.retry_failed_session_save(start),
-        None,
-        "nothing to retry after a good save"
-    );
+    let retry = |now| rt.block_on(shared.retry_failed_session_save(now));
+    assert_eq!(retry(start), None, "nothing to retry after a good save");
 
-    let lease = match &*shared.restored_client.lock().expect("client") {
-        RestoredClientSlot::Ready(_, persistence) => persistence.callback_lease(),
-        _ => panic!("planted session is retained"),
-    };
+    let lease = rt
+        .block_on(shared.with_installed_session(|active| {
+            active.map(|active| active.persistence.callback_lease())
+        }))
+        .expect("planted session is retained");
     // A rotation save fails (vault unavailable).
     let _ = lease.save(|| {
         Err::<(), _>(crate::app::lifecycle::session::SessionFault::unavailable(
@@ -1019,19 +1277,16 @@ fn failed_rotation_save_is_retried_with_backoff_and_stops_after_logout() {
     assert!(lease.save_failed());
 
     fail_puts.store(true, Ordering::Relaxed);
-    assert_eq!(shared.retry_failed_session_save(start), Some(false));
+    assert_eq!(retry(start), Some(false));
     assert_eq!(
-        shared.retry_failed_session_save(start + Duration::from_secs(4)),
+        retry(start + Duration::from_secs(4)),
         None,
         "backoff holds the next attempt"
     );
 
     fail_puts.store(false, Ordering::Relaxed);
     map.lock().expect("vault").clear();
-    assert_eq!(
-        shared.retry_failed_session_save(start + Duration::from_secs(5)),
-        Some(true)
-    );
+    assert_eq!(retry(start + Duration::from_secs(5)), Some(true));
     assert!(!lease.save_failed());
     assert!(map
         .lock()
@@ -1046,7 +1301,7 @@ fn failed_rotation_save_is_retried_with_backoff_and_stops_after_logout() {
     });
     rt.block_on(shared.logout()).expect("logout");
     assert_eq!(
-        shared.retry_failed_session_save(start + Duration::from_secs(120)),
+        retry(start + Duration::from_secs(120)),
         None,
         "logout ends retries"
     );
@@ -1238,6 +1493,26 @@ fn ios_logout_and_attach_use_the_shared_core_policies() {
     assert!(logout.contains("session_policy::LogoutPolicy::IOS"));
     assert!(logout.contains("session_policy::run_local_logout("));
     assert!(!logout.contains("matrix_auth().logout()"));
+    // One slot, transition gate and recover gate with desktop (review L21).
+    assert!(logout.contains("self.lifecycle\n            .logout_in_place("));
+    let restart = source
+        .split("pub async fn restart_sync(&self)")
+        .nth(1)
+        .and_then(|rest| rest.split("pub async fn wipe_persisted_stores(").next())
+        .expect("restart body");
+    assert!(restart.contains(".recover_live("));
+    for install in [
+        "restore_persisted_session_with_policy(",
+        "login_with_password_inner(",
+        "persist_planted_session_for_test(",
+    ] {
+        let body = source
+            .split(&format!("async fn {install}"))
+            .nth(1)
+            .expect("install body");
+        let body = body.split("\n    }\n").next().expect("install body end");
+        assert!(body.contains("begin_session_install(&self.lifecycle, &identity)"));
+    }
     let attach = source
         .split("pub async fn attach_session_owners(&self)")
         .nth(1)
@@ -1252,11 +1527,652 @@ fn ios_logout_and_attach_use_the_shared_core_policies() {
             .split(&format!("async fn {restore_or_login}("))
             .nth(1)
             .expect("restore/login body");
-        let prepare = body.find("prepare_session_store(root, &identity)").unwrap();
+        // Restore migrates inline on the blocking pool; sign-in through
+        // `prepare_login_store`, which does the same off the async threads.
+        let prepare = body
+            .find("prepare_session_store(&root, &identity)")
+            .or_else(|| body.find("self.prepare_login_store(root, &identity)"))
+            .unwrap();
         let build = body.find("build_unauthenticated_client(&config)").unwrap();
         assert!(
             prepare < build,
             "{restore_or_login} migrates before the SDK opens the store"
         );
     }
+}
+
+fn vault_session_secrets(
+    entries: &Mutex<HashMap<String, Vec<u8>>>,
+    identity: &AccountIdentity,
+) -> crate::app::lifecycle::HostMatrixSessionSecrets {
+    let key = SessionMaterialId::from_identity(identity)
+        .account()
+        .to_owned();
+    let bytes = entries
+        .lock()
+        .expect("vault")
+        .get(&key)
+        .cloned()
+        .expect("session material");
+    SessionMaterial::from_sealed_blob(bytes)
+        .decode_host_secrets()
+        .expect("decodes")
+}
+
+#[tokio::test]
+async fn ios_password_login_requests_no_refresh_token_and_restores_without_one() {
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, ResponseTemplate};
+    let server = MatrixMockServer::new().await;
+    server
+        .mock_versions()
+        .with_simplified_sliding_sync()
+        .ok()
+        .mount()
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/_matrix/client/v3/login"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "user_id": "@alice:example.org",
+            "access_token": "syt_ios_login_access",
+            "device_id": "IOSDEVICE",
+        })))
+        .expect(1)
+        .mount(server.server())
+        .await;
+    let identity = AccountIdentity::new("@alice:example.org", &server.uri()).unwrap();
+    let entries = Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries.clone())));
+    let root = temp_root("ios-login-no-refresh");
+    let root_path = root.to_string_lossy().into_owned();
+    let dto = shared
+        .login_with_password_inner(
+            identity.user_id(),
+            identity.homeserver_url(),
+            &root_path,
+            "fixture-password",
+        )
+        .await
+        .expect("login");
+    assert_eq!(dto.device_id, "IOSDEVICE");
+
+    let requests = server.server().received_requests().await.unwrap();
+    let login = requests
+        .iter()
+        .find(|request| request.url.path() == "/_matrix/client/v3/login")
+        .expect("login request");
+    let body: serde_json::Value = serde_json::from_slice(&login.body).unwrap();
+    assert_eq!(body["type"], "m.login.password");
+    assert_ne!(
+        body.get("refresh_token"),
+        Some(&serde_json::Value::Bool(true)),
+        "iOS password login does not opt into refresh tokens"
+    );
+    let saved = vault_session_secrets(&entries, &identity);
+    assert_eq!(saved.access_token, "syt_ios_login_access");
+    assert!(!saved.has_refresh_token());
+
+    // Relaunch: restore from the vault without a refresh token.
+    drop(shared);
+    let relaunched = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries)));
+    let restored = relaunched
+        .restore_persisted_session(
+            identity.user_id().to_owned(),
+            identity.homeserver_url().to_owned(),
+            root_path,
+        )
+        .await
+        .expect("restore without refresh token");
+    assert_eq!(restored.device_id, "IOSDEVICE");
+    let tokens = relaunched
+        .retained_client()
+        .await
+        .unwrap()
+        .session_tokens()
+        .expect("tokens");
+    assert_eq!(tokens.access_token, "syt_ios_login_access");
+    assert!(tokens.refresh_token.is_none());
+    drop(relaunched);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn ios_restore_keeps_refreshing_and_saving_an_existing_refresh_token_session() {
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, ResponseTemplate};
+    let server = MatrixMockServer::new().await;
+    server.mock_versions().ok().mount().await;
+    let identity = AccountIdentity::new("@alice:example.org", &server.uri()).unwrap();
+    // A session saved by a build that still requested refresh tokens.
+    let material = SessionMaterial::from_matrix_tokens(
+        &identity,
+        "DEVICEABC",
+        "syt_legacy_expired",
+        Some("syr_legacy_refresh"),
+    )
+    .unwrap();
+    let entries = Arc::new(Mutex::new(HashMap::new()));
+    persist_session_material(
+        &SecretStoreSessionVault {
+            store: Arc::new(CallbackSecretVault {
+                inner: Box::new(MemoryCallbackVault(entries.clone())),
+            }),
+        },
+        &identity,
+        &material,
+    )
+    .unwrap();
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries.clone())));
+    let root = temp_root("ios-legacy-refresh");
+    shared
+        .restore_persisted_session(
+            identity.user_id().to_owned(),
+            identity.homeserver_url().to_owned(),
+            root.to_string_lossy().into_owned(),
+        )
+        .await
+        .expect("restore with refresh token");
+
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/v3/account/whoami"))
+        .and(header("authorization", "Bearer syt_legacy_expired"))
+        .respond_with(ResponseTemplate::new(401).set_body_json(serde_json::json!({
+            "errcode": "M_UNKNOWN_TOKEN",
+            "error": "Access token has expired",
+            "soft_logout": true,
+        })))
+        .expect(1)
+        .mount(server.server())
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/_matrix/client/v3/refresh"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "access_token": "syt_legacy_rotated",
+            "refresh_token": "syr_legacy_rotated",
+            "expires_in_ms": 300000,
+        })))
+        .expect(1)
+        .mount(server.server())
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/v3/account/whoami"))
+        .and(header("authorization", "Bearer syt_legacy_rotated"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "user_id": "@alice:example.org",
+            "device_id": "DEVICEABC",
+        })))
+        .expect(1)
+        .mount(server.server())
+        .await;
+
+    shared
+        .retained_client()
+        .await
+        .unwrap()
+        .whoami()
+        .await
+        .expect("the app refreshes the expired token and retries");
+    let saved = vault_session_secrets(&entries, &identity);
+    assert_eq!(saved.access_token, "syt_legacy_rotated");
+    assert_eq!(saved.refresh_token.as_deref(), Some("syr_legacy_rotated"));
+    server.server().verify().await;
+    drop(shared);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn ios_password_login_never_opts_into_refresh_tokens() {
+    let source = include_str!("session_lifecycle.rs");
+    let login = source
+        .split("async fn login_with_password_inner(")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("pub async fn persist_planted_session_for_test(")
+                .next()
+        })
+        .expect("login body");
+    assert!(login.contains("request_refresh_token: false"));
+    assert!(!login.contains("request_refresh_token: true"));
+}
+
+#[tokio::test]
+async fn ios_password_login_refuses_a_server_without_simplified_sliding_sync() {
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, ResponseTemplate};
+    let server = MatrixMockServer::new().await;
+    server.mock_versions().ok().mount().await;
+    Mock::given(method("POST"))
+        .and(path("/_matrix/client/v3/login"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "user_id": "@alice:example.org",
+            "access_token": "syt_never_issued",
+            "device_id": "NEVER",
+        })))
+        .expect(0)
+        .mount(server.server())
+        .await;
+    let identity = AccountIdentity::new("@alice:example.org", &server.uri()).unwrap();
+    let entries = Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries.clone())));
+    let root = temp_root("ios-login-no-sliding-sync");
+    let error = shared
+        .login_with_password_inner(
+            identity.user_id(),
+            identity.homeserver_url(),
+            &root.to_string_lossy(),
+            "fixture-password",
+        )
+        .await
+        .expect_err("no device is created on a server Synara cannot sync with");
+    assert_eq!(
+        error,
+        login_failed(
+            LOGIN_SLIDING_SYNC_UNSUPPORTED_CODE,
+            LOGIN_SLIDING_SYNC_UNSUPPORTED_DESCRIPTION
+        )
+    );
+    assert!(
+        vault_session_entries_are_empty(&entries, &identity),
+        "no session saved"
+    );
+    assert!(!shared.has_retained_client().await);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn ios_password_login_ignores_a_login_response_well_known() {
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, ResponseTemplate};
+    let server = MatrixMockServer::new().await;
+    server
+        .mock_versions()
+        .with_simplified_sliding_sync()
+        .ok()
+        .mount()
+        .await;
+    // Synapse with `serve_client_wellknown` names its public base URL here,
+    // which can differ from the client-API URL discovery already resolved.
+    Mock::given(method("POST"))
+        .and(path("/_matrix/client/v3/login"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "user_id": "@alice:example.org",
+            "access_token": "syt_ios_well_known_access",
+            "device_id": "IOSWELLKNOWN",
+            "well_known": {"m.homeserver": {"base_url": "https://matrix-client.example.org/"}},
+        })))
+        .expect(1)
+        .mount(server.server())
+        .await;
+    let identity = AccountIdentity::new("@alice:example.org", &server.uri()).unwrap();
+    let entries = Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries.clone())));
+    let root = temp_root("ios-login-well-known");
+    let dto = shared
+        .login_with_password_inner(
+            identity.user_id(),
+            identity.homeserver_url(),
+            &root.to_string_lossy(),
+            "fixture-password",
+        )
+        .await
+        .expect("a login-response well_known does not trip the identity check");
+    assert_eq!(dto.homeserver_url, identity.homeserver_url());
+    assert_eq!(dto.device_id, "IOSWELLKNOWN");
+    assert_eq!(
+        shared
+            .retained_client()
+            .await
+            .unwrap()
+            .homeserver()
+            .as_str(),
+        format!("{}/", server.uri())
+    );
+    drop(shared);
+    let _ = fs::remove_dir_all(root);
+}
+
+fn vault_session_entries_are_empty(
+    entries: &Mutex<HashMap<String, Vec<u8>>>,
+    identity: &AccountIdentity,
+) -> bool {
+    let key = SessionMaterialId::from_identity(identity)
+        .account()
+        .to_owned();
+    !entries.lock().expect("vault").contains_key(&key)
+}
+
+fn store_key_entry(
+    entries: &Mutex<HashMap<String, Vec<u8>>>,
+    identity: &AccountIdentity,
+) -> Option<Vec<u8>> {
+    let key = StoreKeyId::from_identity(identity).account().to_owned();
+    entries.lock().expect("vault").get(&key).cloned()
+}
+
+/// L23: a store restored to a new device (app-group data backed up, Keychain
+/// item `ThisDeviceOnly` not) must not get a fresh key that can never open
+/// it. Sign-in and restore ask for a reset; the reset removes only that
+/// account's store and key; a fresh key is created once and then reused.
+#[tokio::test]
+async fn ios_existing_store_without_its_key_asks_for_reset_instead_of_a_new_key() {
+    let identity = alice();
+    let bob = AccountIdentity::new("@bob:example.org", "https://matrix.example.org").unwrap();
+    let entries = Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries.clone())));
+    let root = temp_root("store-key-missing");
+    let root_path = root.to_string_lossy().into_owned();
+    let alice_paths = StorePaths::derive(&root, &identity).unwrap();
+    alice_paths.ensure_dirs().unwrap();
+    let bob_paths = StorePaths::derive(&root, &bob).unwrap();
+    bob_paths.ensure_dirs().unwrap();
+
+    let login = shared
+        .login_with_password_inner(
+            identity.user_id(),
+            identity.homeserver_url(),
+            &root_path,
+            "fixture-password",
+        )
+        .await
+        .expect_err("no key for an existing store");
+    match login {
+        SessionLoginError::Failed { code, .. } => {
+            assert_eq!(code, LOGIN_STORE_RESET_REQUIRED_CODE)
+        }
+    }
+    assert!(store_key_entry(&entries, &identity).is_none());
+
+    let material =
+        SessionMaterial::from_matrix_tokens(&identity, "IOSDEVICE", "syt_s3b_restore", None)
+            .unwrap();
+    let session_vault = SecretStoreSessionVault {
+        store: Arc::clone(&shared.secret_store),
+    };
+    persist_session_material(&session_vault, &identity, &material).unwrap();
+    let restore = shared
+        .restore_persisted_session(
+            identity.user_id().to_owned(),
+            identity.homeserver_url().to_owned(),
+            root_path.clone(),
+        )
+        .await
+        .expect_err("restore asks for the same reset");
+    assert!(format!("{restore:?}").contains(STORE_RESET_REQUIRED_CODE));
+    assert!(store_key_entry(&entries, &identity).is_none());
+
+    let reset = shared
+        .reset_local_account_store(
+            identity.user_id().to_owned(),
+            identity.homeserver_url().to_owned(),
+            root_path.clone(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(reset.status, LeftoverAckStatusDto::Wiped);
+    assert!(!alice_paths.account_root().exists());
+    assert!(bob_paths.account_root().exists(), "other accounts stay");
+
+    let created = store_key_for(&shared.secret_store, &root, &identity).unwrap();
+    let reused = store_key_for(&shared.secret_store, &root, &identity).unwrap();
+    assert_eq!(created.as_bytes(), reused.as_bytes());
+    assert_eq!(
+        store_key_entry(&entries, &identity).as_deref(),
+        Some(created.as_bytes().as_slice())
+    );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn ios_existing_store_reuses_its_stored_key() {
+    let identity = alice();
+    let entries = Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries.clone())));
+    let root = temp_root("store-key-reuse");
+    let first = store_key_for(&shared.secret_store, &root, &identity).unwrap();
+    StorePaths::derive(&root, &identity)
+        .unwrap()
+        .ensure_dirs()
+        .unwrap();
+    let again = store_key_for(&shared.secret_store, &root, &identity).unwrap();
+    assert_eq!(first.as_bytes(), again.as_bytes());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn ios_store_reset_is_refused_while_a_session_is_retained() {
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    let server = MatrixMockServer::new().await;
+    let entries = Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries.clone())));
+    let root = temp_root("store-reset-live");
+    let root_path = root.to_string_lossy().into_owned();
+    shared
+        .persist_planted_session_for_test(
+            "@alice:example.org".into(),
+            server.server().uri(),
+            root_path.clone(),
+            "DEVICE".into(),
+            "fixture-token".into(),
+            None,
+        )
+        .await
+        .unwrap();
+    let identity = AccountIdentity::new("@alice:example.org", &server.server().uri()).unwrap();
+    assert!(shared
+        .reset_local_account_store(
+            identity.user_id().to_owned(),
+            identity.homeserver_url().to_owned(),
+            root_path,
+        )
+        .await
+        .is_err());
+    assert!(StorePaths::derive(&root, &identity)
+        .unwrap()
+        .account_root()
+        .exists());
+    assert!(store_key_entry(&entries, &identity).is_some());
+    drop(shared);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn ios_login_errors_keep_their_cause_instead_of_wrong_credentials() {
+    let code = |error: AuthError| match login_auth_error(&error) {
+        SessionLoginError::Failed { code, .. } => code,
+    };
+    assert_eq!(
+        code(AuthError::AuthenticationRejected {
+            diagnostic_id: "p3.2-login-rejected"
+        }),
+        LOGIN_CREDENTIALS_REJECTED_CODE
+    );
+    assert_eq!(
+        code(AuthError::Connectivity {
+            diagnostic_id: "p3.2-login-http-connect"
+        }),
+        LOGIN_NETWORK_UNAVAILABLE_CODE
+    );
+    assert_eq!(
+        code(AuthError::HomeserverUnavailable {
+            diagnostic_id: "p3.2-login-homeserver-unavailable"
+        }),
+        LOGIN_SERVER_UNAVAILABLE_CODE
+    );
+    assert_eq!(
+        code(AuthError::RateLimited {
+            diagnostic_id: "p3.2-login-rate-limited",
+            retry_after_ms: Some(2_000),
+        }),
+        LOGIN_RATE_LIMITED_CODE
+    );
+    assert_eq!(
+        code(AuthError::UserDeactivated {
+            diagnostic_id: "p3.2-login-user-deactivated"
+        }),
+        LOGIN_USER_DEACTIVATED_CODE
+    );
+    for unsupported in [
+        AuthError::UnsupportedCapability {
+            diagnostic_id: "p3.2-login-unrecognized",
+        },
+        AuthError::InteractiveAuthRequired {
+            diagnostic_id: "p3.2-login-uiaa-required",
+        },
+    ] {
+        assert_eq!(code(unsupported), LOGIN_UNSUPPORTED_CODE);
+    }
+    assert_eq!(
+        code(AuthError::SdkInvariant {
+            diagnostic_id: "p3.2-login-store-reset-required"
+        }),
+        LOGIN_STORE_RESET_REQUIRED_CODE
+    );
+    assert_eq!(
+        code(AuthError::SdkInvariant {
+            diagnostic_id: "p3.2-login-store-locked"
+        }),
+        LOGIN_STORE_LOCKED_CODE
+    );
+    for unclassified in [
+        AuthError::SdkInvariant {
+            diagnostic_id: "p3.2-login-olm-unavailable",
+        },
+        AuthError::Unknown {
+            diagnostic_id: "p3.2-login-unknown",
+        },
+    ] {
+        assert_eq!(code(unclassified), LOGIN_FAILED_CODE);
+    }
+}
+
+#[tokio::test]
+async fn ios_password_login_reports_rejection_rate_limit_and_outage_distinctly() {
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, ResponseTemplate};
+    let cases = [
+        (
+            ResponseTemplate::new(403).set_body_json(serde_json::json!({
+                "errcode": "M_FORBIDDEN",
+                "error": "Invalid password",
+            })),
+            LOGIN_CREDENTIALS_REJECTED_CODE,
+        ),
+        (
+            ResponseTemplate::new(429).set_body_json(serde_json::json!({
+                "errcode": "M_LIMIT_EXCEEDED",
+                "error": "Too many requests",
+                "retry_after_ms": 2000,
+            })),
+            LOGIN_RATE_LIMITED_CODE,
+        ),
+        (
+            ResponseTemplate::new(403).set_body_json(serde_json::json!({
+                "errcode": "M_USER_DEACTIVATED",
+                "error": "This account has been deactivated",
+            })),
+            LOGIN_USER_DEACTIVATED_CODE,
+        ),
+    ];
+    for (index, (response, expected)) in cases.into_iter().enumerate() {
+        let server = MatrixMockServer::new().await;
+        server
+            .mock_versions()
+            .with_simplified_sliding_sync()
+            .ok()
+            .mount()
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/_matrix/client/v3/login"))
+            .respond_with(response)
+            .mount(server.server())
+            .await;
+        let identity = AccountIdentity::new("@alice:example.org", &server.uri()).unwrap();
+        let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(Arc::new(
+            Mutex::new(HashMap::new()),
+        ))));
+        let root = temp_root(&format!("ios-login-error-{index}"));
+        let error = shared
+            .login_with_password_inner(
+                identity.user_id(),
+                identity.homeserver_url(),
+                &root.to_string_lossy(),
+                "fixture-password",
+            )
+            .await
+            .expect_err("login fails");
+        match error {
+            SessionLoginError::Failed {
+                code, description, ..
+            } => {
+                assert_eq!(code, expected, "case {index}");
+                assert!(!description.contains("fixture-password"));
+            }
+        }
+        drop(shared);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    // A proxy in front of a down homeserver: `/versions` answers 502.
+    let server = MatrixMockServer::new().await;
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/versions"))
+        .respond_with(ResponseTemplate::new(502).set_body_string("Bad Gateway"))
+        .mount(server.server())
+        .await;
+    let identity = AccountIdentity::new("@alice:example.org", &server.uri()).unwrap();
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(Arc::new(
+        Mutex::new(HashMap::new()),
+    ))));
+    let root = temp_root("ios-login-error-outage");
+    let error = shared
+        .login_with_password_inner(
+            identity.user_id(),
+            identity.homeserver_url(),
+            &root.to_string_lossy(),
+            "fixture-password",
+        )
+        .await
+        .expect_err("server down");
+    match error {
+        SessionLoginError::Failed { code, .. } => {
+            assert_eq!(code, LOGIN_SERVER_UNAVAILABLE_CODE)
+        }
+    }
+    drop(shared);
+    let _ = fs::remove_dir_all(root);
+
+    // Nothing listens on the homeserver port: the `/versions` probe fails as
+    // a connection error, not as wrong credentials.
+    let unreachable = {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        format!("http://127.0.0.1:{port}")
+    };
+    let identity = AccountIdentity::new("@alice:example.org", &unreachable).unwrap();
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(Arc::new(
+        Mutex::new(HashMap::new()),
+    ))));
+    let root = temp_root("ios-login-error-unreachable");
+    let error = shared
+        .login_with_password_inner(
+            identity.user_id(),
+            identity.homeserver_url(),
+            &root.to_string_lossy(),
+            "fixture-password",
+        )
+        .await
+        .expect_err("no server");
+    match error {
+        SessionLoginError::Failed { code, .. } => {
+            assert_eq!(code, LOGIN_NETWORK_UNAVAILABLE_CODE)
+        }
+    }
+    drop(shared);
+    let _ = fs::remove_dir_all(root);
 }

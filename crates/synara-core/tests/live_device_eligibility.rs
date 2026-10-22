@@ -421,7 +421,7 @@ async fn failed_remote_cleanup_is_not_success_and_does_not_remove_store() {
     let fresh = SharedCore::new_with_secret_store(Box::new(vault.clone()));
     let restored = SharedCore::new_with_secret_store(Box::new(vault.clone()));
     let root = std::env::temp_dir().join(format!(
-        "synara-eligibility-cleanup-test-{}",
+        "synara-eligibility-remote-failure-test-{}",
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()

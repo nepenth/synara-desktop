@@ -79,7 +79,7 @@ async fn borrowed_covered_and_uncovered_windows_are_read_only_until_view_release
         };
         let before_ids = ids(before.iter().cloned().collect());
         let history = ApprovalHistory::default().room(id.as_str()).unwrap();
-        let protection = history.protect(&room).await;
+        let protection = history.protect();
         let state = Arc::new(std::sync::Mutex::new(RoomSnapshot::default()));
         let task = {
             let (room, user, state, history, borrowed) = (
@@ -191,7 +191,7 @@ async fn sdk_independent_timelines_share_pagination_status_and_history() {
 }
 
 #[tokio::test]
-async fn view_open_waits_for_detached_sdk_pagination_and_failed_open_releases_protection() {
+async fn view_open_does_not_wait_for_detached_sdk_pagination_and_failed_open_releases_protection() {
     let server = MatrixMockServer::new().await;
     let client = server.client_builder().build().await;
     client.event_cache().subscribe().unwrap();
@@ -243,19 +243,24 @@ async fn view_open_waits_for_detached_sdk_pagination_and_failed_open_releases_pr
                 .await
         })
     };
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    assert!(
-        !opening.is_finished(),
-        "dropping the caller cannot quiesce SDK-owned pagination"
-    );
-    let opened = opening.await.unwrap().unwrap();
+    let opened = timeout(Duration::from_millis(400), opening)
+        .await
+        .expect("an open must not wait for an inbox page already in flight")
+        .unwrap()
+        .unwrap();
+    // Once the detached page settles, the protected room takes no more
+    // inbox pages.
     let (cache, _subscription) = room.event_cache().await.unwrap();
-    assert!(matches!(
-        cache.pagination().status().get(),
-        PaginationStatus::Idle { .. }
-    ));
+    let mut status = cache.pagination().status();
+    timeout(Duration::from_secs(3), async {
+        while matches!(status.next_now(), PaginationStatus::Paginating) {
+            status.next().await;
+        }
+    })
+    .await
+    .expect("the detached page settles");
     let requests = message_requests(&server).await;
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
     assert_eq!(message_requests(&server).await, requests);
     let gate = owner
         .registry
@@ -286,7 +291,7 @@ async fn view_open_waits_for_detached_sdk_pagination_and_failed_open_releases_pr
 }
 
 #[tokio::test]
-async fn view_open_succeeds_when_discovery_pagination_exceeds_protect_timeout() {
+async fn view_open_does_not_wait_for_a_stuck_discovery_page() {
     let server = MatrixMockServer::new().await;
     let client = server.client_builder().build().await;
     client.event_cache().subscribe().unwrap();
@@ -338,14 +343,9 @@ async fn view_open_succeeds_when_discovery_pagination_exceeds_protect_timeout() 
                 .await
         })
     };
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    assert!(
-        !opening.is_finished(),
-        "open must still wait for in-flight discovery pagination"
-    );
-    let opened = timeout(Duration::from_secs(12), opening)
+    let opened = timeout(Duration::from_secs(2), opening)
         .await
-        .expect("stuck discovery pagination must not fail the user's room open")
+        .expect("a stuck discovery page must not delay the user's room open")
         .expect("open task")
         .expect("open_at");
     assert_eq!(opened.snapshot.room_id, id.as_str());
@@ -366,7 +366,7 @@ async fn view_open_succeeds_when_discovery_pagination_exceeds_protect_timeout() 
         .unwrap();
     assert!(
         gate.protected(),
-        "fail-open still holds protection so the inbox defers"
+        "the open view holds protection so the inbox defers"
     );
     owner
         .registry

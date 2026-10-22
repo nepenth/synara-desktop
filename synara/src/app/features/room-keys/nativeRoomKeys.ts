@@ -23,7 +23,7 @@ export type NativeRoomKeyTransferResult = {
 };
 
 export const nativeRoomKeyErrorMessage = (): string =>
-  'Native room-key transfer is unavailable. Restart Synara and try again.';
+  'Synara could not transfer room keys. Restart Synara and try again.';
 
 const invokeNativeRoomKeys = async <T>(
   command: string,

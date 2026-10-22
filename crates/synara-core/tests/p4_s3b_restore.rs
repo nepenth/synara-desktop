@@ -192,7 +192,8 @@ fn restore_rejects_wrong_length_store_key_without_replacing_it() {
             root.to_string_lossy().into_owned(),
         ))
         .expect_err("corrupt store key");
-    assert!(format!("{error:?}").contains("p4-s3b-restore-failed"));
+    // An unusable key asks for a local-data reset; it is never replaced.
+    assert!(format!("{error:?}").contains("p4-s3b-store-reset-required"));
     let stored = map
         .lock()
         .expect("vault")

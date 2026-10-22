@@ -28,6 +28,7 @@ import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import { NativeDevice, nativeDeviceTrustLabel, renameNativeDevice } from './nativeDevices';
 import { RefreshDeviceList } from '../../../hooks/useDeviceList';
+import { composerErrorMessage } from '../../room/composerSendError';
 
 export function DeviceTilePlaceholder() {
   return (
@@ -205,7 +206,10 @@ function DeviceRename({ device, onCancel, onRename, refreshDeviceList }: DeviceR
       </Box>
       {renameState.status === AsyncStatus.Error ? (
         <Text size="T200" style={{ color: color.Critical.Main }}>
-          {renameState.error.message}
+          {composerErrorMessage(
+            renameState.error,
+            'Synara could not rename this session. Try again.'
+          )}
         </Text>
       ) : (
         <Text size="T200">Device names are visible to public.</Text>
@@ -222,7 +226,7 @@ export function DeviceLogoutBtn() {
   return (
     <>
       <Chip variant="Secondary" fill="Soft" radii="Pill" onClick={() => setPrompt(true)}>
-        <Text size="B300">Logout</Text>
+        <Text size="B300">Log Out</Text>
       </Chip>
       {prompt && (
         <Overlay open backdrop={<OverlayBackdrop />}>
@@ -272,6 +276,7 @@ export function DeviceDeleteBtn({
       radii="Pill"
       onClick={() => onDeleteToggle(deviceId)}
       disabled={disabled}
+      aria-label="Delete device"
     >
       <Icon size="50" src={Icons.Delete} />
     </Chip>

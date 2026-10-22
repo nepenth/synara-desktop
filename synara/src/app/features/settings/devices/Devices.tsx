@@ -24,6 +24,8 @@ import { canOfferNativeDeviceVerification } from '../../cross-signing/nativeCros
 import { NativeSecretStorageTile } from '../../../components/SecretStorage';
 import { X509IdentityCard } from './X509IdentityCard';
 import { SettingsPage, SettingsSection } from '../../../components/settings-layout';
+import { IdentityResetButton } from '../../cross-signing/IdentityReset';
+import { IDENTITY_RESET_COPY } from '../../cross-signing/nativeIdentityReset';
 
 function DevicesPlaceholder() {
   return (
@@ -138,6 +140,13 @@ export function Devices({ requestClose }: DevicesProps) {
               refreshing={deviceLoadState.fetching}
               onRetry={() => void refreshDeviceList()}
               onVerified={() => void refreshDeviceList()}
+            />
+          )}
+          {nativeSession && crossSigningActive && (
+            <SettingTile
+              title={IDENTITY_RESET_COPY.title}
+              description={IDENTITY_RESET_COPY.settingsDescription}
+              after={<IdentityResetButton />}
             />
           )}
         </SequenceCard>

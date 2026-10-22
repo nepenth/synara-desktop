@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
-import type { MemberReading, RoomReading } from '../utils/room';
+import type { RoomReading } from '../utils/room';
+import type { RoomMember } from '../features/matrix-dto/member';
+import { readRoomMembersWithNativeOwner } from './nativeRoomMembersOwner';
 import { useTranslation } from 'react-i18next';
 import {
   getDMRoomFor,
@@ -36,8 +38,8 @@ import {
   nativeIgnoredUsersUnignore,
 } from '../features/settings/account/nativeIgnoredUsers';
 import { bulkRedact } from '../native/nativeRoomExtras';
-
-type ServerMemberReading = MemberReading & { membership: string };
+import type { BulkActionFailure, BulkFailureCopy } from '../utils/bulkActions';
+import { ComposerUserError, commandFailureError } from '../features/room/composerSendError';
 
 type RoomServerAclEventContent = {
   allow?: string[];
@@ -110,9 +112,26 @@ export const parseServers = (payload: string): string[] => {
   return servers;
 };
 
-const getServerMembers = (room: RoomReading, server: string): ServerMemberReading[] => {
-  const members = room.getMembers() as ServerMemberReading[];
-  return members.filter((member) => member.userId.endsWith(`:${server}`));
+/**
+ * Members of `room` on any of `servers`, from Core's member list. The room
+ * facade has no members, so a server argument used to match nobody (D15).
+ */
+const getServerMembers = async (room: RoomReading, servers: string[]): Promise<RoomMember[]> => {
+  if (servers.length === 0) return [];
+  const members = (await readRoomMembersWithNativeOwner(room.roomId, isSynaraDesktop())) ?? [];
+  return members.filter((member) => servers.some((server) => member.userId.endsWith(`:${server}`)));
+};
+
+/** The one other joined member of `room`, or `undefined` when there is not exactly one. */
+const onlyOtherJoinedMember = async (
+  room: RoomReading,
+  myUserId: string
+): Promise<string | undefined> => {
+  const members = (await readRoomMembersWithNativeOwner(room.roomId, isSynaraDesktop())) ?? [];
+  const others = members.filter(
+    (member) => member.membership === Membership.Join && member.userId !== myUserId
+  );
+  return others.length === 1 ? others[0].userId : undefined;
 };
 
 export const parseTimestampFlag = (input: string): number | undefined => {
@@ -150,6 +169,20 @@ export const parseTimestampFlag = (input: string): number | undefined => {
 };
 
 export type CommandExe = (payload: string) => Promise<void>;
+
+const throwOnCommandFailures = (
+  users: readonly string[],
+  failures: BulkActionFailure<string>[],
+  copy: BulkFailureCopy
+): void => {
+  const error = commandFailureError(users, failures, copy);
+  if (error) throw error;
+};
+
+const PEOPLE = 'people';
+const MEMBERSHIP_UNREADABLE =
+  'Synara could not read your membership in this room yet. Try again in a moment.';
+const MEMBERSHIP_WRITE_FAILED = 'Synara could not update your room profile. Try again.';
 
 export enum Command {
   Me = 'me',
@@ -226,7 +259,11 @@ export const useCommands = (
         exe: async (payload) => {
           const rawIds = splitWithSpace(payload);
           const userIds = rawIds.filter((id) => isUserId(id) && id !== getSafeMyUserId());
-          if (userIds.length === 0) return;
+          if (userIds.length === 0) {
+            throw new ComposerUserError(
+              'Add the Matrix ID of the person to message, like /startdm @name:server.'
+            );
+          }
           if (userIds.length === 1) {
             const dmRoomId = getDMRoomFor(userIds[0])?.roomId;
             if (dmRoomId) {
@@ -257,6 +294,9 @@ export const useCommands = (
           const roomIdOrAliases = rawIds.filter(
             (idOrAlias) => isRoomId(idOrAlias) || isRoomAlias(idOrAlias)
           );
+          if (roomIdOrAliases.length === 0) {
+            throw new ComposerUserError('Add a room address, like /join #room:server.');
+          }
           await Promise.all(
             roomIdOrAliases.map((idOrAlias) =>
               joinRoomWithNativeOwner(
@@ -292,7 +332,12 @@ export const useCommands = (
           const users = parseUsers(content);
           const flagToContent = parseFlags(flags);
           const reason = flagToContent.r;
-          await rateLimitedActions(users, (id) =>
+          if (users.length === 0) {
+            throw new ComposerUserError(
+              'Add the Matrix ID of each person to invite, like /invite @name:server.'
+            );
+          }
+          const failures = await rateLimitedActions(users, (id) =>
             inviteUserWithNativeOwner(
               room.roomId,
               id,
@@ -301,6 +346,11 @@ export const useCommands = (
               invokeDesktopWithAvailability
             )
           );
+          throwOnCommandFailures(users, failures, {
+            done: 'Invited',
+            verb: 'invite',
+            noun: PEOPLE,
+          });
         },
       },
       [Command.DisInvite]: {
@@ -311,7 +361,12 @@ export const useCommands = (
           const users = parseUsers(content);
           const flagToContent = parseFlags(flags);
           const reason = flagToContent.r;
-          await rateLimitedActions(users, (id) =>
+          if (users.length === 0) {
+            throw new ComposerUserError(
+              'Add the Matrix ID of each invite to withdraw, like /disinvite @name:server.'
+            );
+          }
+          const failures = await rateLimitedActions(users, (id) =>
             kickUserWithNativeOwner(
               room.roomId,
               id,
@@ -320,6 +375,11 @@ export const useCommands = (
               invokeDesktopWithAvailability
             )
           );
+          throwOnCommandFailures(users, failures, {
+            done: 'Withdrew invites for',
+            verb: 'withdraw the invite for',
+            noun: PEOPLE,
+          });
         },
       },
       [Command.Kick]: {
@@ -332,7 +392,7 @@ export const useCommands = (
           const flagToContent = parseFlags(flags);
           const reason = flagToContent.r;
 
-          const serverMembers = servers?.flatMap((server) => getServerMembers(room, server));
+          const serverMembers = await getServerMembers(room, servers);
           const serverUsers = serverMembers
             ?.filter((m) => m.membership !== Membership.Ban)
             .map((m) => m.userId);
@@ -343,7 +403,12 @@ export const useCommands = (
             });
           }
 
-          await rateLimitedActions(users, (id) =>
+          if (users.length === 0) {
+            throw new ComposerUserError(
+              'Add the Matrix ID of each person to remove, like /kick @name:server.'
+            );
+          }
+          const failures = await rateLimitedActions(users, (id) =>
             kickUserWithNativeOwner(
               room.roomId,
               id,
@@ -352,6 +417,11 @@ export const useCommands = (
               invokeDesktopWithAvailability
             )
           );
+          throwOnCommandFailures(users, failures, {
+            done: 'Removed',
+            verb: 'remove',
+            noun: PEOPLE,
+          });
         },
       },
       [Command.Ban]: {
@@ -364,7 +434,7 @@ export const useCommands = (
           const flagToContent = parseFlags(flags);
           const reason = flagToContent.r;
 
-          const serverMembers = servers?.flatMap((server) => getServerMembers(room, server));
+          const serverMembers = await getServerMembers(room, servers);
           const serverUsers = serverMembers?.map((m) => m.userId);
 
           if (Array.isArray(serverUsers)) {
@@ -373,7 +443,12 @@ export const useCommands = (
             });
           }
 
-          await rateLimitedActions(users, (id) =>
+          if (users.length === 0) {
+            throw new ComposerUserError(
+              'Add the Matrix ID of each person to ban, like /ban @name:server.'
+            );
+          }
+          const failures = await rateLimitedActions(users, (id) =>
             banUserWithNativeOwner(
               room.roomId,
               id,
@@ -382,6 +457,7 @@ export const useCommands = (
               invokeDesktopWithAvailability
             )
           );
+          throwOnCommandFailures(users, failures, { done: 'Banned', verb: 'ban', noun: PEOPLE });
         },
       },
       [Command.UnBan]: {
@@ -390,7 +466,12 @@ export const useCommands = (
         exe: async (payload) => {
           const rawIds = splitWithSpace(payload);
           const users = rawIds.filter((id) => isUserId(id));
-          await rateLimitedActions(users, (id) =>
+          if (users.length === 0) {
+            throw new ComposerUserError(
+              'Add the Matrix ID of each person to unban, like /unban @name:server.'
+            );
+          }
+          const failures = await rateLimitedActions(users, (id) =>
             unbanUserWithNativeOwner(
               room.roomId,
               id,
@@ -398,6 +479,11 @@ export const useCommands = (
               invokeDesktopWithAvailability
             )
           );
+          throwOnCommandFailures(users, failures, {
+            done: 'Unbanned',
+            verb: 'unban',
+            noun: PEOPLE,
+          });
         },
       },
       [Command.Ignore]: {
@@ -406,6 +492,11 @@ export const useCommands = (
         exe: async (payload) => {
           const rawIds = splitWithSpace(payload);
           const userIds = rawIds.filter((id) => isUserId(id));
+          if (userIds.length === 0) {
+            throw new ComposerUserError(
+              'Add the Matrix ID of each person to ignore, like /ignore @name:server.'
+            );
+          }
           for (const userId of new Set(userIds)) {
             // eslint-disable-next-line no-await-in-loop
             await nativeIgnoredUsersIgnore(userId);
@@ -418,6 +509,11 @@ export const useCommands = (
         exe: async (payload) => {
           const rawIds = splitWithSpace(payload);
           const userIds = rawIds.filter((id) => isUserId(id));
+          if (userIds.length === 0) {
+            throw new ComposerUserError(
+              'Add the Matrix ID of each person to unignore, like /unignore @name:server.'
+            );
+          }
           for (const userId of new Set(userIds)) {
             // eslint-disable-next-line no-await-in-loop
             await nativeIgnoredUsersUnignore(userId);
@@ -429,13 +525,15 @@ export const useCommands = (
         description: 'Change nick in current room.',
         exe: async (payload) => {
           const nick = payload.trim();
-          if (nick === '') return;
+          if (nick === '') {
+            throw new ComposerUserError('Add the nickname to use, like /myroomnick Sam.');
+          }
           const mEvent = getRoomCurrentState(
             room as unknown as Parameters<typeof getRoomCurrentState>[0]
           )?.getStateEvents(StateEvent.RoomMember, getSafeMyUserId());
           const content = mEvent?.getContent();
-          if (!content) return;
-          await sendNativeStateEvent(
+          if (!content) throw new ComposerUserError(MEMBERSHIP_UNREADABLE);
+          const result = await sendNativeStateEvent(
             room.roomId,
             StateEvent.RoomMember as any,
             {
@@ -444,35 +542,48 @@ export const useCommands = (
             },
             getSafeMyUserId()
           );
+          if (!result) throw new ComposerUserError(MEMBERSHIP_WRITE_FAILED);
         },
       },
       [Command.MyRoomAvatar]: {
         name: Command.MyRoomAvatar,
         description: 'Change profile picture in current room. Example /myroomavatar mxc://xyzabc',
         exe: async (payload) => {
-          if (payload.match(/^mxc:\/\/\S+$/)) {
+          if (payload.trim().match(/^mxc:\/\/\S+$/)) {
             const mEvent = getRoomCurrentState(
               room as unknown as Parameters<typeof getRoomCurrentState>[0]
             )?.getStateEvents(StateEvent.RoomMember, getSafeMyUserId());
             const content = mEvent?.getContent();
-            if (!content) return;
-            await sendNativeStateEvent(
+            if (!content) throw new ComposerUserError(MEMBERSHIP_UNREADABLE);
+            const result = await sendNativeStateEvent(
               room.roomId,
               StateEvent.RoomMember as any,
               {
                 ...content,
-                avatar_url: payload,
+                avatar_url: payload.trim(),
               },
               getSafeMyUserId()
             );
+            if (!result) throw new ComposerUserError(MEMBERSHIP_WRITE_FAILED);
+            return;
           }
+          throw new ComposerUserError(
+            'Add an mxc:// image address, like /myroomavatar mxc://server/id.'
+          );
         },
       },
       [Command.ConvertToDm]: {
         name: Command.ConvertToDm,
         description: 'Convert room to direct message',
         exe: async () => {
-          const dmUserId = guessDmRoomUserId(room, getSafeMyUserId());
+          const myUserId = getSafeMyUserId();
+          const dmUserId =
+            guessDmRoomUserId(room, myUserId) ?? (await onlyOtherJoinedMember(room, myUserId));
+          if (!dmUserId) {
+            throw new ComposerUserError(
+              'Synara could not tell who this direct message is with. /converttodm works in a room with one other member.'
+            );
+          }
           await addRoomIdToMDirect(room.roomId, dmUserId);
         },
       },
@@ -499,9 +610,13 @@ export const useCommands = (
           const messageTypes: string[] = msgTypeContent ? splitWithSpace(msgTypeContent) : [];
 
           const ts = parseTimestampFlag(pastContent);
-          if (!ts) return;
+          if (!ts) {
+            throw new ComposerUserError(
+              'Add how far back to delete with -past, like -past 1d, 2h, 5m or 30s.'
+            );
+          }
 
-          const serverMembers = servers?.flatMap((server) => getServerMembers(room, server));
+          const serverMembers = await getServerMembers(room, servers);
           const serverUsers = serverMembers?.map((m) => m.userId);
 
           if (Array.isArray(serverUsers)) {
@@ -510,7 +625,11 @@ export const useCommands = (
             });
           }
 
-          if (users.length === 0) return;
+          if (users.length === 0) {
+            throw new ComposerUserError(
+              'Add the Matrix ID or server of the people whose messages to delete.'
+            );
+          }
           // Core walks history newest-first from the live end, so events
           // newer than `ts` are reached without a start-event lookup.
           await bulkRedact({
@@ -587,7 +706,11 @@ export const useCommands = (
         ),
         exe: async (payload) => {
           const poll = parsePollCommand(payload);
-          if (!poll) return;
+          if (!poll) {
+            throw new ComposerUserError(
+              'Write the poll as /poll Question | Option 1 | Option 2, with at least two options.'
+            );
+          }
           if (executePoll) {
             await executePoll(poll);
             return;

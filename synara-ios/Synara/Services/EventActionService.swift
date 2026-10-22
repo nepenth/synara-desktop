@@ -133,15 +133,15 @@ enum EventActionError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .signedOut:
-            return "Sign in before changing messages."
+            return String(localized: "Sign in before changing messages.")
         case .alreadyInProgress:
-            return "That action is already in progress."
+            return String(localized: "That action is already in progress.")
         case .failed:
-            return "That action could not be completed. Try again."
+            return String(localized: "That action could not be completed. Try again.")
         case .forwardEncryptionUnavailable:
-            return "Room encryption status is unavailable. Forwarding was not started."
+            return String(localized: "Room encryption status is unavailable. Forwarding was not started.")
         case .forwardDowngradeNotConfirmed:
-            return "Confirm before forwarding from an encrypted room to an unencrypted room."
+            return String(localized: "Confirm before forwarding from an encrypted room to an unencrypted room.")
         }
     }
 }

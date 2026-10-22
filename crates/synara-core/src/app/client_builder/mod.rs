@@ -10,12 +10,18 @@ mod features;
 mod open;
 
 pub use config::{
-    default_user_agent, ClientBuildConfig, ClientBuildPlan, HomeserverMode, NetworkPolicy,
-    TimeoutPolicy, DEFAULT_REQUEST_TIMEOUT_SECS, DEFAULT_RETRY_LIMIT,
+    default_user_agent, product_user_agent, ClientBuildConfig, ClientBuildPlan, ClientProduct,
+    HomeserverMode, NetworkPolicy, StoreFootprint, TimeoutPolicy, DEFAULT_REQUEST_TIMEOUT_SECS,
+    DEFAULT_RETRY_LIMIT,
 };
 pub use error::{ClientBuilderError, FactoryError};
 pub use features::{
     forbidden_requested_features, requested_cargo_features, APPROVED_MATRIX_SDK_FEATURES,
     FORBIDDEN_MATRIX_SDK_FEATURES, MATRIX_SDK_PIN_VERSION,
 };
-pub use open::{build_memory_only_client, build_unauthenticated_client};
+#[cfg(feature = "full-app")]
+pub use open::build_auth_probe_client;
+pub use open::{
+    apply_event_cache_policy, build_discovery_client, build_memory_only_client,
+    build_unauthenticated_client,
+};

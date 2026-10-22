@@ -61,35 +61,46 @@ fn parse_shortcut(shortcut: &str) -> Result<Shortcut, String> {
         .map_err(|error| format!("Failed to parse shortcut '{shortcut}': {error}"))
 }
 
+/// An empty slot is a disabled shortcut. Every other slot must parse, and no
+/// two enabled slots may share a key combination.
 fn validate_shortcuts(shortcuts: &DesktopShortcutConfig) -> Result<DesktopShortcutConfig, String> {
-    let show = normalize_shortcut(&shortcuts.show);
-    let later = normalize_shortcut(&shortcuts.later);
-    let notifications = normalize_shortcut(&shortcuts.notifications);
-    if show.is_empty() || later.is_empty() || notifications.is_empty() {
-        return Err("Shortcut values cannot be empty".to_string());
-    }
-    if show.len() > ALLOWED_SHORTCUT_LEN
-        || later.len() > ALLOWED_SHORTCUT_LEN
-        || notifications.len() > ALLOWED_SHORTCUT_LEN
+    let normalized = DesktopShortcutConfig {
+        show: normalize_shortcut(&shortcuts.show),
+        later: normalize_shortcut(&shortcuts.later),
+        notifications: normalize_shortcut(&shortcuts.notifications),
+    };
+    if shortcut_strings_for_config(&normalized)
+        .iter()
+        .any(|shortcut| shortcut.len() > ALLOWED_SHORTCUT_LEN)
     {
         return Err("Shortcut values are too long".to_string());
     }
 
-    let parsed_show = parse_shortcut(&show)?;
-    let parsed_later = parse_shortcut(&later)?;
-    let parsed_notifications = parse_shortcut(&notifications)?;
-    if parsed_show == parsed_later
-        || parsed_show == parsed_notifications
-        || parsed_later == parsed_notifications
+    let parsed = parse_enabled_shortcuts(&normalized)?;
+    let mut seen = HashSet::new();
+    if !parsed
+        .iter()
+        .all(|(shortcut, _)| seen.insert(shortcut.id()))
     {
         return Err("Shortcut values must be unique".to_string());
     }
 
-    Ok(DesktopShortcutConfig {
-        show,
-        later,
-        notifications,
-    })
+    Ok(normalized)
+}
+
+/// Each enabled slot with its parsed shortcut and route, in slot order.
+fn parse_enabled_shortcuts(
+    config: &DesktopShortcutConfig,
+) -> Result<Vec<(Shortcut, &'static str)>, String> {
+    [
+        (config.show.as_str(), ROUTE_HOME),
+        (config.later.as_str(), ROUTE_LATER),
+        (config.notifications.as_str(), ROUTE_NOTIFICATIONS),
+    ]
+    .into_iter()
+    .filter(|(shortcut, _)| !shortcut.is_empty())
+    .map(|(shortcut, route)| parse_shortcut(shortcut).map(|parsed| (parsed, route)))
+    .collect()
 }
 
 fn last_shortcut_state() -> &'static Mutex<Option<DesktopShortcutApplyState>> {
@@ -124,6 +135,9 @@ fn set_last_active_shortcut_config(config: DesktopShortcutConfig) {
 }
 
 fn shortcut_route_for_slot(config: &DesktopShortcutConfig, shortcut: &str) -> Option<&'static str> {
+    if shortcut.is_empty() {
+        return None;
+    }
     if config.show == shortcut {
         return Some(ROUTE_HOME);
     }
@@ -136,37 +150,30 @@ fn shortcut_route_for_slot(config: &DesktopShortcutConfig, shortcut: &str) -> Op
     None
 }
 
-fn shortcut_strings_for_config(config: &DesktopShortcutConfig) -> [&str; 3] {
+/// The enabled (non-empty) shortcut strings, in slot order.
+fn shortcut_strings_for_config(config: &DesktopShortcutConfig) -> Vec<&str> {
     [
         config.show.as_str(),
         config.later.as_str(),
         config.notifications.as_str(),
     ]
+    .into_iter()
+    .filter(|shortcut| !shortcut.is_empty())
+    .collect()
 }
 
 fn shortcuts_needing_registration(
     previous: Option<&DesktopShortcutConfig>,
     normalized: &DesktopShortcutConfig,
 ) -> Vec<String> {
-    let Some(previous) = previous else {
-        return vec![
-            normalized.show.clone(),
-            normalized.later.clone(),
-            normalized.notifications.clone(),
-        ];
-    };
-
-    let mut shortcuts = Vec::new();
-    if previous.show != normalized.show {
-        shortcuts.push(normalized.show.clone());
-    }
-    if previous.later != normalized.later {
-        shortcuts.push(normalized.later.clone());
-    }
-    if previous.notifications != normalized.notifications {
-        shortcuts.push(normalized.notifications.clone());
-    }
-    shortcuts
+    let previous_strings: HashSet<&str> = previous
+        .map(|previous| shortcut_strings_for_config(previous).into_iter().collect())
+        .unwrap_or_default();
+    shortcut_strings_for_config(normalized)
+        .into_iter()
+        .filter(|shortcut| !previous_strings.contains(shortcut))
+        .map(str::to_owned)
+        .collect()
 }
 
 fn shortcuts_needing_handler_rebind(
@@ -202,17 +209,11 @@ fn retired_shortcut_strings(
         .collect()
 }
 
-fn build_shortcut_route_map(
-    _normalized: &DesktopShortcutConfig,
-    parsed_show: &Shortcut,
-    parsed_later: &Shortcut,
-    parsed_notifications: &Shortcut,
-) -> HashMap<u32, &'static str> {
-    let mut route_by_id = HashMap::new();
-    route_by_id.insert(parsed_show.id(), ROUTE_HOME);
-    route_by_id.insert(parsed_later.id(), ROUTE_LATER);
-    route_by_id.insert(parsed_notifications.id(), ROUTE_NOTIFICATIONS);
-    route_by_id
+fn build_shortcut_route_map(parsed: &[(Shortcut, &'static str)]) -> HashMap<u32, &'static str> {
+    parsed
+        .iter()
+        .map(|(shortcut, route)| (shortcut.id(), *route))
+        .collect()
 }
 
 fn register_desktop_shortcut_batch(
@@ -272,18 +273,11 @@ fn rebind_desktop_shortcut_handlers(
 fn apply_desktop_shortcuts(
     app: &AppHandle,
     normalized: DesktopShortcutConfig,
-    parsed_show: Shortcut,
-    parsed_later: Shortcut,
-    parsed_notifications: Shortcut,
+    parsed: Vec<(Shortcut, &'static str)>,
 ) -> DesktopShortcutApplyResult {
     let previous_config = read_last_active_shortcut_config();
     let global_shortcut = app.global_shortcut();
-    let route_by_id = build_shortcut_route_map(
-        &normalized,
-        &parsed_show,
-        &parsed_later,
-        &parsed_notifications,
-    );
+    let route_by_id = build_shortcut_route_map(&parsed);
 
     let brand_new_shortcuts = shortcuts_needing_registration(previous_config.as_ref(), &normalized);
     if let Err(error) =
@@ -322,9 +316,20 @@ fn apply_desktop_shortcuts(
         unregister_desktop_shortcut_batch(global_shortcut, &retired_shortcuts);
     }
 
+    let all_disabled = parsed.is_empty();
     set_last_active_shortcut_config(normalized);
     set_last_shortcut_apply_state(DesktopShortcutApplyState::Active);
-    shortcut_result(DesktopShortcutApplyState::Active, None, None)
+    shortcut_result(
+        DesktopShortcutApplyState::Active,
+        all_disabled.then(|| SHORTCUTS_TURNED_OFF_MESSAGE.to_owned()),
+        None,
+    )
+}
+
+const SHORTCUTS_TURNED_OFF_MESSAGE: &str = "Desktop shortcuts are turned off.";
+
+fn config_has_enabled_shortcut(config: &DesktopShortcutConfig) -> bool {
+    !shortcut_strings_for_config(config).is_empty()
 }
 
 fn is_kde() -> bool {
@@ -373,8 +378,10 @@ fn shortcut_apply_state_message(state: DesktopShortcutApplyState) -> &'static st
 fn shortcut_permission_help_hint() -> Option<&'static str> {
     #[cfg(target_os = "macos")]
     {
+        // Carbon hot keys need no Input Monitoring permission; a failure
+        // means another app already holds the combination.
         Some(
-            "On macOS, grant Synara Input Monitoring permission in System Settings > Privacy & Security.",
+            "On macOS, another app may already use this shortcut. Choose a different combination or leave it empty to turn it off.",
         )
     }
 
@@ -488,38 +495,26 @@ pub(crate) fn desktop_set_shortcuts(
         }
     };
 
-    let parsed_show = match parse_shortcut(&normalized.show) {
-        Ok(value) => value,
-        Err(message) => {
-            return shortcut_result(DesktopShortcutApplyState::Failed, Some(message), None);
-        }
-    };
-    let parsed_later = match parse_shortcut(&normalized.later) {
-        Ok(value) => value,
-        Err(message) => {
-            return shortcut_result(DesktopShortcutApplyState::Failed, Some(message), None);
-        }
-    };
-    let parsed_notifications = match parse_shortcut(&normalized.notifications) {
-        Ok(value) => value,
+    let parsed = match parse_enabled_shortcuts(&normalized) {
+        Ok(parsed) => parsed,
         Err(message) => {
             return shortcut_result(DesktopShortcutApplyState::Failed, Some(message), None);
         }
     };
 
-    apply_desktop_shortcuts(
-        app,
-        normalized,
-        parsed_show,
-        parsed_later,
-        parsed_notifications,
-    )
+    apply_desktop_shortcuts(app, normalized, parsed)
 }
 
 pub(crate) fn desktop_shortcuts_integration_status() -> DesktopShortcutsIntegrationStatus {
     let shortcut_state =
         read_last_shortcut_apply_state().unwrap_or_else(unresolved_shortcut_apply_state);
     let message = match shortcut_state {
+        DesktopShortcutApplyState::Active
+            if read_last_active_shortcut_config()
+                .is_some_and(|config| !config_has_enabled_shortcut(&config)) =>
+        {
+            "Global shortcuts are turned off.".to_string()
+        }
         DesktopShortcutApplyState::Active => "Global shortcuts are active.".to_string(),
         DesktopShortcutApplyState::PermissionNeeded => {
             let mut parts =
@@ -605,6 +600,91 @@ mod tests {
     }
 
     #[test]
+    fn validate_shortcuts_treats_empty_slots_as_disabled() {
+        let normalized = validate_shortcuts(&DesktopShortcutConfig {
+            show: "CmdOrCtrl+Alt+Shift+M".to_string(),
+            later: "   ".to_string(),
+            notifications: String::new(),
+        })
+        .expect("a cleared slot is valid");
+        assert_eq!(normalized.later, "");
+        assert_eq!(normalized.notifications, "");
+        assert_eq!(
+            shortcut_strings_for_config(&normalized),
+            vec!["CmdOrCtrl+Alt+Shift+M"]
+        );
+        let parsed = parse_enabled_shortcuts(&normalized).expect("enabled slot parses");
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].1, ROUTE_HOME);
+        assert_eq!(build_shortcut_route_map(&parsed).len(), 1);
+
+        let all_off = validate_shortcuts(&DesktopShortcutConfig {
+            show: String::new(),
+            later: String::new(),
+            notifications: String::new(),
+        })
+        .expect("every slot may be turned off");
+        assert!(!config_has_enabled_shortcut(&all_off));
+        assert!(parse_enabled_shortcuts(&all_off)
+            .expect("nothing to parse")
+            .is_empty());
+    }
+
+    #[test]
+    fn empty_slots_never_count_as_duplicates_or_routes() {
+        let config = DesktopShortcutConfig {
+            show: String::new(),
+            later: String::new(),
+            notifications: "CmdOrCtrl+Alt+Shift+N".to_string(),
+        };
+        assert!(validate_shortcuts(&config).is_ok());
+        assert_eq!(shortcut_route_for_slot(&config, ""), None);
+        assert_eq!(
+            shortcut_route_for_slot(&config, "CmdOrCtrl+Alt+Shift+N"),
+            Some(ROUTE_NOTIFICATIONS)
+        );
+        // Two enabled slots with the same key are still rejected.
+        assert!(validate_shortcuts(&DesktopShortcutConfig {
+            show: "CmdOrCtrl+Alt+Shift+N".to_string(),
+            later: String::new(),
+            notifications: "cmdorctrl+alt+shift+n".to_string(),
+        })
+        .is_err());
+    }
+
+    #[test]
+    fn clearing_a_slot_retires_its_key_and_registers_nothing_new() {
+        let previous = DesktopShortcutConfig {
+            show: "CmdOrCtrl+Alt+Shift+M".to_string(),
+            later: "CmdOrCtrl+Alt+Shift+L".to_string(),
+            notifications: "CmdOrCtrl+Alt+Shift+N".to_string(),
+        };
+        let cleared = DesktopShortcutConfig {
+            show: "CmdOrCtrl+Alt+Shift+M".to_string(),
+            later: String::new(),
+            notifications: String::new(),
+        };
+        assert!(shortcuts_needing_registration(Some(&previous), &cleared).is_empty());
+        assert!(shortcuts_needing_handler_rebind(&previous, &cleared).is_empty());
+        assert_eq!(
+            retired_shortcut_strings(&previous, &cleared),
+            vec![
+                "CmdOrCtrl+Alt+Shift+L".to_string(),
+                "CmdOrCtrl+Alt+Shift+N".to_string()
+            ]
+        );
+        // Turning one back on registers only that key.
+        assert_eq!(
+            shortcuts_needing_registration(Some(&cleared), &previous),
+            vec![
+                "CmdOrCtrl+Alt+Shift+L".to_string(),
+                "CmdOrCtrl+Alt+Shift+N".to_string()
+            ]
+        );
+        assert!(retired_shortcut_strings(&cleared, &previous).is_empty());
+    }
+
+    #[test]
     fn shortcut_slot_helpers_detect_rebind_and_retired_shortcuts() {
         let previous = DesktopShortcutConfig {
             show: "CmdOrCtrl+Shift+C".to_string(),
@@ -617,13 +697,8 @@ mod tests {
             notifications: "CmdOrCtrl+Shift+N".to_string(),
         };
 
-        assert_eq!(
-            shortcuts_needing_registration(Some(&previous), &swapped),
-            vec![
-                "CmdOrCtrl+Shift+L".to_string(),
-                "CmdOrCtrl+Shift+C".to_string()
-            ]
-        );
+        // Both keys stay registered; only their handlers move.
+        assert!(shortcuts_needing_registration(Some(&previous), &swapped).is_empty());
         assert_eq!(
             shortcuts_needing_handler_rebind(&previous, &swapped),
             vec![

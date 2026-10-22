@@ -32,6 +32,6 @@ pub use revision::{
     STORE_LAYOUT_VERSION, STORE_RECOVERY_ARCHIVE_SEGMENT, STORE_REVISION_MANIFEST_FILE,
 };
 pub use vault::{
-    get_or_create_store_key, get_or_migrate_store_key, InMemoryStoreKeyVault, StoreKeyVault,
-    StoreKeyVaultError,
+    get_or_create_store_key, get_or_migrate_store_key, store_key_after_confirmed_reset,
+    InMemoryStoreKeyVault, StoreKeyVault, StoreKeyVaultError,
 };

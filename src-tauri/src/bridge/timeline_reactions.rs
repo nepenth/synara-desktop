@@ -82,8 +82,31 @@ pub(crate) async fn agent_approval_decide(
             action_id,
         })
         .await
-        .map_err(map_reaction_core_error)?;
+        .map_err(map_approval_decision_core_error)?;
     Ok(response)
+}
+
+/// Approval decisions keep a distinct error when the outcome is unknown: the
+/// reaction send outlives the 5 s bound (or another click's send is still
+/// running), so the decision may still land. Callers must not report it as
+/// not sent.
+fn map_approval_decision_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(
+            diagnostic @ ("v-send.2-reaction-ensure-timeout"
+            | "agent-approval-decision-in-flight-timeout"),
+        ) => MatrixAuthCommandError::new(
+            "ApprovalDecisionPending",
+            "The decision may still be sent. Check the approval before trying again.",
+            diagnostic,
+        ),
+        Some("agent-approval-expired") => MatrixAuthCommandError::new(
+            "ApprovalExpired",
+            "This approval request has expired.",
+            "agent-approval-expired",
+        ),
+        _ => map_reaction_core_error(error),
+    }
 }
 
 pub(crate) async fn reaction_redact(
@@ -122,5 +145,34 @@ fn map_reaction_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
             "The native Matrix reaction operation could not be completed.",
             "v-send.2-reaction-toggle-failed",
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn forbidden(diagnostic: &str) -> MatrixIpcError {
+        MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden).with_diagnostic(diagnostic)
+    }
+
+    #[test]
+    fn an_approval_send_timeout_is_reported_as_possibly_sent() {
+        for diagnostic in [
+            "v-send.2-reaction-ensure-timeout",
+            "agent-approval-decision-in-flight-timeout",
+        ] {
+            let error = map_approval_decision_core_error(forbidden(diagnostic));
+            assert_eq!(error.code, "ApprovalDecisionPending");
+            assert_eq!(error.diagnostic_id, diagnostic);
+            assert!(error.message.contains("may still be sent"));
+        }
+        let expired = map_approval_decision_core_error(forbidden("agent-approval-expired"));
+        assert_eq!(expired.code, "ApprovalExpired");
+        // A failure before any send stays an ordinary failure.
+        let failed = map_approval_decision_core_error(forbidden("v-send.2-reaction-ensure-failed"));
+        assert_eq!(failed.code, "Forbidden");
+        let failed = map_approval_decision_core_error(forbidden("v-crypto.6-event-open-timeout"));
+        assert_eq!(failed.code, "Forbidden");
     }
 }

@@ -92,7 +92,8 @@ export const synaraLightTheme = createTheme(color, {
   },
 
   Other: {
-    FocusRing: 'rgba(15, 17, 21, 0.45)',
+    // Matches the derived light ramp (utils/themeBase.ts): 3:1 on light surfaces.
+    FocusRing: 'rgba(15, 17, 21, 0.55)',
     Shadow: 'rgba(15, 17, 21, 0.16)',
     Overlay: 'rgba(15, 17, 21, 0.45)',
   },

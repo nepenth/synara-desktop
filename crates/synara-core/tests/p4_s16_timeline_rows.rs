@@ -46,6 +46,18 @@ fn timeline_snapshot_surface_includes_rows_and_not_leftovers() {
     assert!(snapshot.contains("sequence<TimelineViewRowDto> rows"));
     assert!(snapshot.contains("boolean can_redact_own"));
     assert!(snapshot.contains("boolean can_redact_other"));
+    // iOS matches a queued upload's pending row to the SDK local echo by it.
+    let row = udl
+        .split("dictionary TimelineViewRowDto {")
+        .nth(1)
+        .and_then(|rest| rest.split("};").next())
+        .expect("TimelineViewRowDto");
+    assert!(row.contains("string? transaction_id"));
+    // The SDK send state and its cause reach the iOS bubble (Retry/Discard).
+    assert!(row.contains("string? local_echo_state"));
+    assert!(row.contains("string? send_failure"));
+    // Whether Retry can help that cause (D70).
+    assert!(row.contains("boolean? send_failure_retryable"));
 }
 
 #[test]

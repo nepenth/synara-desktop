@@ -13,10 +13,10 @@ import {
   NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS,
   NATIVE_TIMELINE_SAFETY_NET_POLL_MS,
   nativeTimelinePollDelay,
+  shouldPlaceLatestLocally,
   canAcceptNativeTimelineFollowReadback,
   nativeThreadFocusEventId,
   nativeTimelineCommandError,
-  editedFormattedBodyForSubmit,
   nativeForwardEncryptionDecision,
   shouldAttachFormattedBody,
   type NativeTimelineViewRow,
@@ -454,27 +454,13 @@ test('pin and forward pure helpers gate native presenter UX', () => {
   assert.equal(nativeForwardEncryptionDecision('encrypted', undefined), 'unavailable');
 });
 
-test('editing plain text cannot silently reuse stale Matrix HTML', () => {
-  assert.equal(
-    editedFormattedBodyForSubmit('old', 'new', '<strong>old</strong>', false),
-    undefined
-  );
-  assert.equal(
-    editedFormattedBodyForSubmit('old', 'new', '<strong>new</strong>', true),
-    '<strong>new</strong>'
-  );
-  assert.equal(
-    editedFormattedBodyForSubmit('old', 'old', '<strong>old</strong>', false),
-    '<strong>old</strong>'
-  );
-});
-
-test('timeline open is not aborted when event listen is unavailable', () => {
+test('timeline open is not aborted when the delta channel is unavailable', () => {
   const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
-  assert.match(source, /listenTauriEvent/);
+  assert.match(source, /subscribeNativeTimelineDeltas\(nativeRequest\.roomId, applyBatch\)/);
   assert.match(source, /matrix_timeline_open/);
   assert.match(source, /matrix_timeline_snapshot/);
-  assert.doesNotMatch(source, /if \(disposed \|\| !unlisten\)/);
+  assert.doesNotMatch(source, /if \(disposed \|\| !deltas\)/);
+  assert.doesNotMatch(source, /@tauri-apps\/api\/event/);
 });
 
 test('live stream deltas coalesce to one React state update per animation frame', () => {
@@ -532,18 +518,32 @@ test('native timeline open maps a thread root to a distinct Core position', () =
   assert.match(source, /positionKind === 'thread' && threadRootEventId/);
 });
 
-test('setReadState keeps the current snapshot when a successful mark_read readback is stale', () => {
+test('read-state and pagination replies never replace the rows the deltas built', () => {
   const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
   const setReadState = source
     .split('const setReadState = useCallback(')[1]
-    ?.split('const jumpLatest = useCallback')[0];
+    ?.split('const followLive = useCallback')[0];
+  const paginate = source
+    .split('const paginate = useCallback(')[1]
+    ?.split('const setReadState = useCallback(')[0];
   assert.ok(setReadState);
-  assert.match(setReadState, /isNativeTimelineReadbackStale\(snapshotRef\.current, next\)/);
-  assert.match(setReadState, /if \(acceptSnapshot\(next\)\) \{\s*return;/);
-  assert.doesNotMatch(
+  assert.ok(paginate);
+  // Core replies with stream metadata only; rows and state arrive as deltas.
+  assert.match(
     setReadState,
-    /if \(!result\.available \|\| !result\.value \|\| !acceptSnapshot\(result\.value\.snapshot\)\)/
+    /isSameNativeTimelineStream\(snapshotRef\.current, result\.value\.view\)/
   );
+  assert.match(paginate, /isSameNativeTimelineStream\(snapshotRef\.current, result\.value\)/);
+  assert.doesNotMatch(setReadState, /acceptSnapshot\(/);
+  assert.doesNotMatch(paginate, /acceptSnapshot\(/);
+});
+
+test('the safety-net poll probes the revision and a gap resync fetches the snapshot', () => {
+  const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
+  assert.match(source, /void pollSnapshot\(true\)/);
+  assert.match(source, /void pollSnapshot\(false\)/);
+  assert.match(source, /\{ streamId, knownRevision \}/);
+  assert.match(source, /if \(!\('rows' in result\.value\)\)/);
 });
 
 test('identical snapshots are recognised so polling does not re-render rows', () => {
@@ -571,6 +571,19 @@ test('the snapshot poll checks once early, then is a slow safety net while delta
   assert.equal(nativeTimelinePollDelay(false, true), NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS);
   assert.equal(nativeTimelinePollDelay(false, false), NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS);
   const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
-  assert.match(source, /nativeTimelinePollDelay\(Boolean\(unlisten\), firstPoll\)/);
+  assert.match(source, /const deltasLive = Boolean\(deltas\);/);
+  assert.match(source, /nativeTimelinePollDelay\(deltasLive, firstPoll\)/);
+  // D11: the safety-net poll pauses while the window is hidden.
+  assert.match(source, /stopPoll = startVisibleOnlyPoll\(/);
   assert.match(source, /if \(isUnchangedNativeTimelineSnapshot\(current, next\)\)/);
+});
+
+test('D9: after a send only a live-bottom view places its tail without Core', () => {
+  assert.equal(shouldPlaceLatestLocally({ kind: 'live_bottom' }), true);
+  assert.equal(shouldPlaceLatestLocally({ kind: 'restored', anchor_event_id: '$a' }), false);
+  assert.equal(shouldPlaceLatestLocally({ kind: 'focused', target_event_id: '$a' }), false);
+  assert.equal(shouldPlaceLatestLocally({ kind: 'unread', anchor_event_id: '$a' }), false);
+  assert.equal(shouldPlaceLatestLocally(undefined), false);
+  const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');
+  assert.match(presenter, /threadRootId \? showThreadTail : showLatestAfterSend/);
 });

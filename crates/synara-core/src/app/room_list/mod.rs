@@ -21,7 +21,6 @@
 //! - `docs/matrix-rust-sdk/p4.3-membership-unread.md`
 //! - `docs/matrix-rust-sdk/p4.4-room-semantics.md`
 
-mod activity_recovery;
 mod counts;
 mod delta;
 mod dm_avatar;
@@ -33,11 +32,11 @@ mod last_message;
 mod live;
 mod presentation;
 mod projection;
+mod server_highlights;
 mod sort;
 mod summary;
 
 pub use crate::dto::RoomEncryptionStatus;
-pub use activity_recovery::{room_activity_recovery_required, RoomActivityPreviousState};
 pub use counts::{
     client_total_unread_notifications, room_unread_presentation, sdk_joined_notification_checksum,
     synara_joined_unread_presentation_sum, RoomListBadgeCounts, RoomUnreadMembership,
@@ -55,13 +54,15 @@ pub use invites::{
     contains_bad_word, snapshot_invites, NativeInvite, NativeInviteSnapshot, NativeInviteTriage,
 };
 pub use last_message::{
-    last_message_event_is_agent_approval, last_message_event_is_agent_approval_str,
-    last_message_preview_from_event_json, last_message_preview_from_event_json_str,
-    last_message_preview_from_invite, sanitize_last_message_preview,
+    is_own_membership_event, last_message_event_is_agent_approval,
+    last_message_event_is_agent_approval_str, last_message_event_is_agent_workflow,
+    last_message_preview_for_user, last_message_preview_from_event_json,
+    last_message_preview_from_event_json_str, sanitize_last_message_preview,
+    ENCRYPTED_MESSAGE_PREVIEW,
 };
 pub use live::{
-    snapshot_from_sync_owner, NativeRoomListOwner, NativeRoomListSnapshot,
-    NativeRoomListUpdateSignal, RoomListUpdateEmit,
+    snapshot_from_sync_owner, NativeRoomListLoading, NativeRoomListOwner, NativeRoomListSnapshot,
+    NativeRoomListUpdateSignal, RoomListUpdateEmit, ROOM_LIST_RECENT_SUBSCRIPTIONS,
 };
 pub use presentation::{
     is_favorite_room, normalized_room_name, order_room_ids, room_attention, room_list_presentation,
@@ -69,5 +70,9 @@ pub use presentation::{
     RoomBadgeSource, RoomListOrder, RoomListPresentation, RoomOrderInput, RoomUnreadAttention,
 };
 pub use projection::{reconstruct, RoomListProjection};
+pub use server_highlights::{
+    fetch_server_highlights, unread_highlight_count, HighlightRecord, ServerHighlights,
+    HIGHLIGHT_MAX_PAGES, HIGHLIGHT_PAGE_LIMIT, HIGHLIGHT_REFRESH_MIN_INTERVAL,
+};
 pub use sort::{sort_rooms, sort_rooms_in_place, RoomListSort};
 pub use summary::RoomSummaryBuilder;

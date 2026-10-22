@@ -16,8 +16,6 @@ import {
   Text,
   toRem,
 } from 'folds';
-import { Opts as LinkifyOpts } from 'linkifyjs';
-import { HTMLReactParserOptions } from 'html-react-parser';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useRoomPinnedEvents } from '../../../hooks/useRoomPinnedEvents';
 import { type NativePinnedEventItem, useNativePinnedEvents } from '../nativePinnedEvents';
@@ -46,20 +44,12 @@ import type { EventTimelineSetReading, MatrixEventReading } from '../../../utils
 import type { EventedRoomReading } from '../../../utils/roomEvents';
 import { GetContentCallback, MessageEvent, StateEvent } from '../../../../types/matrix/room';
 import { unpinWithNativeTimelineAction } from '../nativeTimelineAction';
-import { useMentionClickHandler } from '../../../hooks/useMentionClickHandler';
-import {
-  factoryRenderLinkifyWithMention,
-  getReactCustomHtmlParser,
-  LINKIFY_OPTS,
-  makeMentionCustomProps,
-  renderMatrixMention,
-} from '../../../plugins/react-custom-html-parser';
 import { RenderMatrixEvent, useMatrixEventRenderer } from '../../../hooks/useMatrixEventRenderer';
 import { RenderMessageContent } from '../../../components/RenderMessageContent';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import * as customHtmlCss from '../../../styles/CustomHtml.css';
-import { NativeEventContent, type NativeEventSource } from '../message';
+import { NativeEventContent, type NativeEventSource } from '../message/NativeEventContent';
 import { Image } from '../../../components/media';
 import { ImageViewer } from '../../../components/image-viewer';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
@@ -158,6 +148,7 @@ function PinnedMessage({
           size="300"
           radii="Pill"
           onClick={unpinState.status === AsyncStatus.Loading ? undefined : handleUnpinClick}
+          aria-label="Unpin message"
           aria-disabled={unpinState.status === AsyncStatus.Loading}
         >
           {unpinState.status === AsyncStatus.Loading ? (
@@ -300,6 +291,7 @@ function NativePinnedMessage({
             evt.stopPropagation();
             unpin();
           }}
+          aria-label="Unpin message"
           aria-disabled={unpinState.status === AsyncStatus.Loading}
         >
           {unpinState.status === AsyncStatus.Loading ? (
@@ -403,7 +395,6 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
     );
     const showNativeLoading =
       nativePinned.available && nativePinned.loading && !nativePinned.snapshot;
-    const useAuthentication = useMediaAuthentication();
     const [mediaAutoLoad] = useSetting(settingsAtom, 'mediaAutoLoad');
 
     const direct = useIsDirectRoom();
@@ -422,27 +413,6 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
       overscan: 4,
     });
 
-    const mentionClickHandler = useMentionClickHandler(room.roomId);
-
-    const linkifyOpts = useMemo<LinkifyOpts>(
-      () => ({
-        ...LINKIFY_OPTS,
-        render: factoryRenderLinkifyWithMention((href) =>
-          renderMatrixMention(room.roomId, href, makeMentionCustomProps(mentionClickHandler))
-        ),
-      }),
-      [room, mentionClickHandler]
-    );
-    const htmlReactParserOptions = useMemo<HTMLReactParserOptions>(
-      () =>
-        getReactCustomHtmlParser(room.roomId, {
-          linkifyOpts,
-          useAuthentication,
-          handleMentionClick: mentionClickHandler,
-        }),
-      [room, linkifyOpts, mentionClickHandler, useAuthentication]
-    );
-
     const renderMatrixEvent = useMatrixEventRenderer<[PinEventReading, string, GetContentCallback]>(
       {
         [MessageEvent.RoomMessage]: (event, displayName, getContent) => {
@@ -460,8 +430,6 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
               getContent={getContent}
               edited={!!event.replacingEvent()}
               mediaAutoLoad={mediaAutoLoad}
-              htmlReactParserOptions={htmlReactParserOptions}
-              linkifyOpts={linkifyOpts}
               outlineAttachment
               agentApprovalTarget={{
                 roomId: room.roomId,
@@ -532,8 +500,6 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
                       edited={!!editedEvent}
                       getContent={getContent}
                       mediaAutoLoad={mediaAutoLoad}
-                      htmlReactParserOptions={htmlReactParserOptions}
-                      linkifyOpts={linkifyOpts}
                       agentApprovalTarget={{
                         roomId: room.roomId,
                         eventId,
@@ -607,7 +573,7 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
               <Text size="H5">Pinned Messages</Text>
             </Box>
             <Box shrink="No">
-              <IconButton size="300" onClick={requestClose} radii="300">
+              <IconButton size="300" onClick={requestClose} radii="300" aria-label="Close">
                 <Icon src={Icons.Cross} size="400" />
               </IconButton>
             </Box>

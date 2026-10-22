@@ -49,10 +49,9 @@ test('modernization opt-in settings default off', () => {
   assert.deepEqual(store.getSettings().agentWidgetEntries, []);
   assert.equal(defaultSettings.indexedMessageSearch, true);
   assert.equal(defaultSettings.gifOnboardingDismissed, false);
-  assert.equal(defaultSettings.timelineVirtualizationEnabled, true);
   assert.equal(store.getSettings().gifSearchEnabled, false);
   assert.equal(store.getSettings().indexedMessageSearch, true);
-  assert.equal(store.getSettings().timelineVirtualizationEnabled, true);
+  assert.equal('timelineVirtualizationEnabled' in store.getSettings(), false);
   assert.equal(defaultSettings.desktopDiagnosticsEnabled, false);
   assert.equal(defaultSettings.desktopDiagnosticsPerformance, false);
   assert.equal(defaultSettings.desktopDiagnosticsSession, false);
@@ -66,6 +65,44 @@ test('shared settings defaults exclude desktop shortcut settings', () => {
     defaultDesktopPlatformSettings.desktopShortcutShow,
     defaultSettings.desktopShortcutShow
   );
+});
+
+test('desktop shortcut defaults use three modifiers and stay on', () => {
+  assert.deepEqual(
+    [
+      defaultSettings.desktopShortcutShow,
+      defaultSettings.desktopShortcutLater,
+      defaultSettings.desktopShortcutNotifications,
+    ],
+    ['CmdOrCtrl+Alt+Shift+M', 'CmdOrCtrl+Alt+Shift+L', 'CmdOrCtrl+Alt+Shift+N']
+  );
+});
+
+test('stored pre-2.3 shortcut defaults move to the new defaults; custom and cleared ones stay', () => {
+  const retired = createLocalStorageSettingsStore(
+    createMemoryStorage({
+      platformSettings: JSON.stringify({
+        desktopShortcutShow: 'CmdOrCtrl+Shift+C',
+        desktopShortcutLater: 'CmdOrCtrl+Shift+L',
+        desktopShortcutNotifications: 'CmdOrCtrl+Shift+N',
+      }),
+    })
+  );
+  assert.equal(retired.getPlatformSettings().desktopShortcutShow, 'CmdOrCtrl+Alt+Shift+M');
+  assert.equal(retired.getPlatformSettings().desktopShortcutNotifications, 'CmdOrCtrl+Alt+Shift+N');
+
+  const customised = createLocalStorageSettingsStore(
+    createMemoryStorage({
+      platformSettings: JSON.stringify({
+        desktopShortcutShow: 'CmdOrCtrl+Shift+C',
+        desktopShortcutLater: '',
+        desktopShortcutNotifications: 'CmdOrCtrl+Shift+N',
+      }),
+    })
+  );
+  assert.equal(customised.getPlatformSettings().desktopShortcutShow, 'CmdOrCtrl+Shift+C');
+  // An empty value is a turned-off shortcut, not a missing one.
+  assert.equal(customised.getPlatformSettings().desktopShortcutLater, '');
 });
 
 test('settings store reads legacy desktop shortcuts from the shared settings blob', () => {
@@ -82,7 +119,8 @@ test('settings store reads legacy desktop shortcuts from the shared settings blo
   );
 
   assert.equal(store.getSharedSettings().themeId, 'aurora');
-  assert.equal(store.getSharedSettings().timelineVirtualizationEnabled, false);
+  // A retired key in the stored blob is ignored, not carried forward.
+  assert.equal('timelineVirtualizationEnabled' in store.getSharedSettings(), false);
   assert.equal('desktopShortcutShow' in store.getSharedSettings(), false);
   assert.deepEqual(store.getPlatformSettings(), {
     desktopShortcutShow: 'CmdOrCtrl+1',

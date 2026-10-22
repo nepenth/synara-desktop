@@ -8,9 +8,9 @@ enum SecureSessionStoreError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .corruptEntry:
-            return "Stored session data is corrupt."
+            return String(localized: "Stored session data is corrupt.")
         case .keychainFailure:
-            return "Could not access secure session storage."
+            return String(localized: "Could not access secure session storage.")
         }
     }
 

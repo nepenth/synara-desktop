@@ -9,6 +9,11 @@ import SynaraCore
 /// preview. Invite preview still prefers sender name / topic / reason
 /// from the invite snapshot. Avatar is an `mxc://` URL. This is not
 /// iOS-on-engine and not P4 acceptance.
+///
+/// Core's room-list snapshot is joined-only; pending invites exist only in
+/// the invite snapshot. `rooms` appends one `.invited` row per invite whose
+/// room is not already a list row, so the Rooms list and the Notifications
+/// invites section can show and act on it.
 enum SharedCoreRoomListRows {
     static func encryptionStatus(_ status: RoomEncryptionStatus) -> SynaraRoomEncryptionStatus {
         switch status {
@@ -39,6 +44,11 @@ enum SharedCoreRoomListRows {
     let activeCallParticipantCount: Int
     let directUserId: String?
     let encryptionStatus: SynaraRoomEncryptionStatus
+    var isSpace: Bool = false
+    var isLowPriority: Bool = false
+    /// Core's agent-room rule (listed agent member, or approval/workflow
+    /// content), shared with desktop.
+    var isAgentRoom: Bool = false
     }
 
     struct InviteRow {
@@ -47,6 +57,9 @@ enum SharedCoreRoomListRows {
         let roomTopic: String?
         let senderName: String
         let reason: String?
+        var isDirect: Bool = false
+        var isEncrypted: Bool = false
+        var inviteTs: UInt64? = nil
     }
 
     struct SpaceParentRow {
@@ -64,7 +77,8 @@ enum SharedCoreRoomListRows {
         )
         let invitesByID = Dictionary(uniqueKeysWithValues: invites.map { ($0.roomId, $0) })
         let parentsByID = Dictionary(uniqueKeysWithValues: spaceParents.map { ($0.roomId, $0.parentIds) })
-        return rooms.map { room in
+        let listedIDs = Set(rooms.map(\.roomId))
+        let joinedRows = rooms.map { room in
             let invite = invitesByID[room.roomId]
             return RoomSummary(
                 id: room.roomId,
@@ -78,7 +92,7 @@ enum SharedCoreRoomListRows {
                 unreadCount: room.unreadCount,
                 hasHighlight: room.highlightCount > 0,
                 isMarkedUnread: room.markedUnread,
-                kind: room.isDirect ? .directMessage : .room,
+                kind: kind(isSpace: room.isSpace, isDirect: room.isDirect),
                 membership: isInvited(room.membership) ? .invited : .joined,
                 lastActivityAt: activityDate(millisecondsSince1970: room.lastActivityTs),
                 parentSpaces: parentSpaces(
@@ -86,7 +100,9 @@ enum SharedCoreRoomListRows {
                     namesByID: namesByID
                 ),
                 avatarURL: room.avatarUrl.flatMap(URL.init(string:)),
+                hasAgentActivity: room.isAgentRoom,
                 isFavorite: room.isFavorite,
+                isLowPriority: room.isLowPriority,
                 isCall: room.isCall,
                 hasActiveCall: room.hasActiveCall,
                 activeCallParticipantCount: room.activeCallParticipantCount,
@@ -94,6 +110,41 @@ enum SharedCoreRoomListRows {
                 encryptionStatus: room.encryptionStatus
             )
         }
+        let inviteRows = invites
+            .filter { listedIDs.contains($0.roomId) == false }
+            .map { invite in
+                RoomSummary(
+                    id: invite.roomId,
+                    name: invite.roomName.isEmpty ? invite.roomId : invite.roomName,
+                    lastMessagePreview: preview(
+                        membership: .invite,
+                        invite: invite,
+                        lastMessagePreview: nil
+                    ),
+                    unreadCount: 0,
+                    hasHighlight: false,
+                    kind: invite.isDirect ? .directMessage : .room,
+                    membership: .invited,
+                    lastActivityAt: activityDate(millisecondsSince1970: invite.inviteTs),
+                    parentSpaces: parentSpaces(
+                        parentIds: parentsByID[invite.roomId] ?? [],
+                        namesByID: namesByID
+                    ),
+                    // Core reports `false` when it could not learn the state
+                    // of a room the user has not joined; keep that unknown.
+                    encryptionStatus: invite.isEncrypted ? .encrypted : .unknown
+                )
+            }
+        return joinedRows + inviteRows
+    }
+
+    /// Core reports `is_space` from the room's create event; a space is never
+    /// a channel row.
+    static func kind(isSpace: Bool, isDirect: Bool) -> RoomSummary.RoomKind {
+        if isSpace {
+            return .space
+        }
+        return isDirect ? .directMessage : .room
     }
 
     private static func activityDate(millisecondsSince1970 timestamp: UInt64?) -> Date {
@@ -115,7 +166,7 @@ enum SharedCoreRoomListRows {
             }
             let sender = invite.senderName.trimmingCharacters(in: .whitespacesAndNewlines)
             if sender.isEmpty == false {
-                return "Invited by \(sender)"
+                return String(localized: "Invited by \(sender)")
             }
             let topic = invite.roomTopic?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if topic.isEmpty == false {
@@ -152,11 +203,11 @@ extension RoomMembershipDto {
     /// User-facing membership text.
     var displayName: String {
         switch self {
-        case .join: return "Joined"
-        case .invite: return "Invited"
-        case .ban: return "Banned"
-        case .leave: return "Left"
-        case .knock: return "Knocking"
+        case .join: return String(localized: "Joined")
+        case .invite: return String(localized: "Invited")
+        case .ban: return String(localized: "Banned")
+        case .leave: return String(localized: "Left")
+        case .knock: return String(localized: "Knocking")
         }
     }
 

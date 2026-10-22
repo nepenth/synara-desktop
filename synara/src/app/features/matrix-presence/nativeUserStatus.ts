@@ -143,7 +143,7 @@ export class UserStatusWriteError extends Error {
         ? 'This homeserver does not support user status.'
         : kind === 'invalid'
           ? 'Status emoji or text is too long.'
-          : 'Native user status is unavailable.'
+          : 'Synara could not update your status. Try again.'
     );
     this.kind = kind;
   }

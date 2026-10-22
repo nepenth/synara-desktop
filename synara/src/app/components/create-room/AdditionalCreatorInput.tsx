@@ -29,7 +29,7 @@ import { useDirectUsers } from '../../hooks/useDirectUsers';
 import { SettingTile } from '../setting-tile';
 import { stopPropagation } from '../../utils/keyboard';
 import { useAsyncSearch, UseAsyncSearchOptions } from '../../hooks/useAsyncSearch';
-import { highlightText, makeHighlightRegex } from '../../plugins/react-custom-html-parser';
+import { highlightText, makeHighlightRegex } from '../../utils/highlightText';
 import { getSafeMyUserId } from '../../state/nativeIdentity';
 
 export const useAdditionalCreators = (defaultCreators?: string[]) => {
@@ -279,6 +279,7 @@ export function AdditionalCreatorInput({
               variant="Secondary"
               radii="Pill"
               onClick={handleOpenMenu}
+              aria-label="Add founder"
               aria-pressed={!!menuCords}
               disabled={disabled}
             >

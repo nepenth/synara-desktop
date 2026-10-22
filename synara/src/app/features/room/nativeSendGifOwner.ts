@@ -31,8 +31,7 @@ export async function sendGifWithNativeOwner(
   }
 
   const { blob, fileName } = await fetchGif(input.gif);
-  const buffer = await blob.arrayBuffer();
-  const bytes = Array.from(new Uint8Array(buffer));
+  const bytes = new Uint8Array(await blob.arrayBuffer());
   const owner = await sendAttachmentWithNativeOwner(
     {
       roomId: input.roomId,

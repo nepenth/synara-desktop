@@ -20,6 +20,7 @@ import {
   Box,
   Scroll,
   Avatar,
+  color,
 } from 'folds';
 import { getMxIdServer } from '../../utils/matrix';
 import { useCloseUserRoomProfile } from '../../state/hooks/userRoomProfile';
@@ -442,36 +443,52 @@ export function IgnoredUserAlert() {
 export function OptionsChip({ userId }: { userId: string }) {
   const [cords, setCords] = useState<RectCords>();
   const [nativeIgnoredIds, setNativeIgnoredIds] = useState<string[] | null>(null);
+  const [ignoredLoadFailed, setIgnoredLoadFailed] = useState(false);
+  const [ignoredLoadAttempt, setIgnoredLoadAttempt] = useState(0);
 
   const open: MouseEventHandler<HTMLButtonElement> = (evt) => {
     setCords(evt.currentTarget.getBoundingClientRect());
+    // Reopening the menu retries a failed ignore-status check.
+    if (ignoredLoadFailed) setIgnoredLoadAttempt((attempt) => attempt + 1);
   };
 
   const close = () => setCords(undefined);
 
   useEffect(() => {
     let disposed = false;
+    setIgnoredLoadFailed(false);
     void nativeIgnoredUsersSnapshot()
       .then((ids) => {
         if (!disposed) setNativeIgnoredIds(ids);
       })
       .catch(() => {
-        if (!disposed) setNativeIgnoredIds([]);
+        // Unknown is not "not ignored": keep the toggle disabled and say why.
+        if (!disposed) setIgnoredLoadFailed(true);
       });
     return () => {
       disposed = true;
     };
-  }, [userId]);
+  }, [userId, ignoredLoadAttempt]);
+  const ignoreKnown = nativeIgnoredIds !== null;
   const ignored = (nativeIgnoredIds ?? []).includes(userId);
 
   const [ignoreState, toggleIgnore] = useAsyncCallback(
     useCallback(async () => {
       if (ignored) await nativeIgnoredUsersUnignore(userId);
       else await nativeIgnoredUsersIgnore(userId);
-      setNativeIgnoredIds(await nativeIgnoredUsersSnapshot());
+      setNativeIgnoredIds((current) => {
+        const ids = (current ?? []).filter((id) => id !== userId);
+        return ignored ? ids : [...ids, userId];
+      });
+      // The toggle already succeeded; a failed refresh keeps the local result.
+      nativeIgnoredUsersSnapshot().then(setNativeIgnoredIds, () => {});
     }, [userId, ignored])
   );
   const ignoring = ignoreState.status === AsyncStatus.Loading;
+  const ignoreError =
+    ignoreState.status === AsyncStatus.Error
+      ? `Couldn't ${ignored ? 'unignore' : 'ignore'} this user. Try again.`
+      : undefined;
 
   return (
     <PopOut
@@ -498,8 +515,8 @@ export function OptionsChip({ userId }: { userId: string }) {
                 size="300"
                 radii="300"
                 onClick={() => {
-                  toggleIgnore();
-                  close();
+                  // Close only on success; a failure stays in the menu below.
+                  toggleIgnore().then(close, () => {});
                 }}
                 before={
                   ignoring ? (
@@ -508,16 +525,32 @@ export function OptionsChip({ userId }: { userId: string }) {
                     <Icon size="50" src={Icons.Prohibited} />
                   )
                 }
-                disabled={ignoring}
+                disabled={ignoring || !ignoreKnown}
               >
                 <Text size="B300">{ignored ? 'Unignore' : 'Ignore'}</Text>
               </MenuItem>
+              {(ignoreError || ignoredLoadFailed) && (
+                <Text
+                  as="p"
+                  size="T200"
+                  role="alert"
+                  style={{ padding: config.space.S200, color: color.Critical.Main }}
+                >
+                  {ignoreError ?? "Couldn't check whether this user is ignored. Reopen to retry."}
+                </Text>
+              )}
             </div>
           </Menu>
         </FocusTrap>
       }
     >
-      <Chip variant="SurfaceVariant" radii="Pill" onClick={open} aria-pressed={!!cords}>
+      <Chip
+        variant="SurfaceVariant"
+        radii="Pill"
+        onClick={open}
+        aria-label="More options"
+        aria-pressed={!!cords}
+      >
         {ignoring ? (
           <Spinner variant="Secondary" size="50" />
         ) : (

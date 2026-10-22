@@ -4,12 +4,15 @@
 //! shared native core can eventually route every OS sink through one trait.
 //! **No behavior change in P1.6**: existing callers keep using `AppHandle`
 //! directly; this adapter exists as the seam P2+ will call.
+//!
+//! There is no notification sink here: the renderer posts through
+//! `desktop_notify`, which carries the dismiss keys, sound policy and OS
+//! receipt that Core's delivery ledger needs.
 
 use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
-use synara_core::dto::NotificationCandidate;
 use synara_core::platform::{
     CrossSigningStatusFuture, CryptoStatusFuture, MediaConfigFuture, Platform,
     PlatformCryptoStatus, PlatformStatus, PlatformSyncStatus, SecretStorageStatusFuture,
@@ -17,7 +20,6 @@ use synara_core::platform::{
 };
 use synara_core::transport::{MatrixIpcEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
 
-use crate::desktop_notifications::{desktop_notify, DesktopNotificationPayload};
 use crate::desktop_tray;
 
 /// Desktop platform sink: a thin, audited facade over `AppHandle`.
@@ -55,7 +57,7 @@ impl<R: Runtime> Platform for TauriPlatform<R> {
 
     /// Use the established desktop product identity for core HTTP probes.
     fn http_user_agent(&self) -> String {
-        crate::matrix::client_builder::default_user_agent()
+        crate::matrix::client_builder::desktop_user_agent()
     }
 
     /// Observe sync through the shell-owned Matrix session. The local snapshot
@@ -128,36 +130,6 @@ impl<R: Runtime> Platform for TauriPlatform<R> {
                 .media_config_projection()
                 .await
         })
-    }
-
-    /// Deliver a native notification through the existing desktop path.
-    ///
-    /// The `Platform` seam is synchronous and has no receipt channel, so the
-    /// post is detached; the OS receipt is consumed on the renderer-driven
-    /// `desktop_notify` command path, which acknowledges Core's ledger.
-    fn notify(&self, candidate: NotificationCandidate) -> Result<(), MatrixIpcError> {
-        let session_generation = candidate
-            .candidate_id
-            .strip_prefix("notif-")
-            .and_then(|id| id.split_once('-'))
-            .and_then(|(generation, _)| generation.parse().ok());
-        let payload = DesktopNotificationPayload {
-            session_generation,
-            sound: None,
-            title: candidate.title,
-            body: Some(candidate.body),
-            route: candidate.route,
-            actions: None,
-            action_context: None,
-            dismiss_keys: None,
-        };
-        let app = self.app.clone();
-        tauri::async_runtime::spawn(async move {
-            if let Err(error) = desktop_notify(app, payload).await {
-                eprintln!("platform notify failed: {error}");
-            }
-        });
-        Ok(())
     }
 
     /// Update the dock/taskbar badge through the existing tray path.

@@ -156,11 +156,15 @@ test('PasswordRegisterForm rehydrates native bootstrap before entering app on co
 
   // The complete branch must rehydrate the native bootstrap before navigating
   // (fail-closed: no navigation if the host-side desktop session envelope is
-  // missing).
-  assert.match(form, /completeNativeLoginBootstrap/);
-  assert.match(form, /void completeNativeLoginBootstrap\(\)\s*\.then/);
+  // missing). The shared handoff does both and reports a failure.
+  assert.match(form, /useNativeSessionHandoff\(accountCreated\)/);
   assert.match(
     form,
-    /navigate\(afterLoginRedirectPath \?\? getHomePath\(\), \{ replace: true \}\)/
+    /registerState\.status === AsyncStatus\.Success && registerState\.data\.status === 'complete'/
   );
+  // A failed handoff is shown with a Retry, and Register cannot be pressed
+  // again for an account that already exists.
+  assert.match(form, /accountCreated && handoffFailed/);
+  assert.match(form, /onClick=\{retryHandoff\}/);
+  assert.match(form, /disabled=\{!serverReady \|\| accountCreated\}/);
 });

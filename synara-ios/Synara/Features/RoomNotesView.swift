@@ -45,10 +45,10 @@ struct RoomNotesView: View {
                     .accessibilityIdentifier("RoomNotesEmptyState")
                 }
             } else {
-                reorderableSection(title: "ToDos", items: activeTodos)
-                reorderableSection(title: "Notes", items: notes)
-                staticSection(title: "Pinned Messages", items: pinnedMessages)
-                reorderableSection(title: "Completed", items: completedTodos)
+                reorderableSection(title: String(localized: "ToDos"), items: activeTodos)
+                reorderableSection(title: String(localized: "Notes"), items: notes)
+                staticSection(title: String(localized: "Pinned Messages"), items: pinnedMessages)
+                reorderableSection(title: String(localized: "Completed"), items: completedTodos)
             }
         }
         .listStyle(.insetGrouped)
@@ -79,7 +79,7 @@ struct RoomNotesView: View {
         .alert("Personal Notes", isPresented: errorBinding) {
             Button("OK", role: .cancel) { errorMessage = nil }
         } message: {
-            Text(errorMessage ?? "Try again.")
+            Text(errorMessage ?? String(localized: "Try again."))
         }
     }
 
@@ -306,7 +306,7 @@ struct RoomNotesView: View {
                 isDraftFocused = false
             }
         case .failure(let error):
-            errorMessage = error.errorDescription ?? "Personal notes could not be synced."
+            errorMessage = error.errorDescription ?? String(localized: "Personal notes could not be synced.")
         }
     }
 
@@ -360,7 +360,7 @@ private struct RoomNoteRow: View {
                         .font(SynaraTypography.supporting.weight(.semibold))
                         .foregroundStyle(item.isCompleted ? SynaraColor.success : SynaraColor.secondaryText)
                     Spacer()
-                    Text(item.updatedAt.formatted(date: .abbreviated, time: .shortened))
+                    Text(SynaraTimeFormatting.dateTime(item.updatedAt))
                         .font(SynaraTypography.messageMeta)
                         .foregroundStyle(SynaraColor.tertiaryText)
                 }

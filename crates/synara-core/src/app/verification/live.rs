@@ -18,7 +18,7 @@ use matrix_sdk::{
         QrVerification, QrVerificationState, SasState, SasVerification, Verification,
         VerificationRequest, VerificationRequestState,
     },
-    event_handler::EventHandlerHandle,
+    event_handler::EventHandlerDropGuard,
     ruma::{
         events::{
             key::verification::{request::ToDeviceKeyVerificationRequestEvent, VerificationMethod},
@@ -83,8 +83,11 @@ pub struct NativeVerificationOwner {
     /// Desktop can render the show-QR SVG. SharedCore / iOS cannot, so that
     /// host advertises SAS only and never calls `generate_qr_code()`.
     show_qr: bool,
-    _request_handler: EventHandlerHandle,
-    _wake_handler: EventHandlerHandle,
+    // Drop guards, not bare handles: an `EventHandlerHandle` is only an id,
+    // so dropping it left both handlers registered on the `Client`, and a
+    // re-attach on the same client fired every callback twice.
+    _request_handler: EventHandlerDropGuard,
+    _wake_handler: EventHandlerDropGuard,
 }
 
 impl NativeVerificationOwner {
@@ -231,8 +234,8 @@ impl NativeVerificationOwner {
             emit,
             session_generation,
             show_qr,
-            _request_handler: request_handler,
-            _wake_handler: wake_handler,
+            _request_handler: client.event_handler_drop_guard(request_handler),
+            _wake_handler: client.event_handler_drop_guard(wake_handler),
         }
     }
 
@@ -1266,6 +1269,58 @@ mod registration_lifecycle_tests {
         assert!(!lifecycle.active);
         assert!(lifecycle.handles.is_empty());
         assert!(dropped.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn dropping_the_owner_removes_its_client_event_handlers() {
+        use std::sync::atomic::AtomicUsize;
+
+        use matrix_sdk::test_utils::mocks::MatrixMockServer;
+
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        let sender = client.user_id().expect("logged-in mock client").to_owned();
+        let cancel = |transaction_id: &str| {
+            serde_json::json!({
+                "type": "m.key.verification.cancel",
+                "sender": sender,
+                "content": {
+                    "transaction_id": transaction_id,
+                    "code": "m.user",
+                    "reason": "test",
+                },
+            })
+        };
+        let wakes = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&wakes);
+        let owner = NativeVerificationOwner::with_emit(
+            &client,
+            Arc::new(move |_| {
+                counter.fetch_add(1, Ordering::SeqCst);
+            }),
+            1,
+        );
+
+        server
+            .mock_sync()
+            .ok_and_run(&client, |builder| {
+                builder.add_to_device_event(cancel("while-attached"));
+            })
+            .await;
+        assert_eq!(wakes.load(Ordering::SeqCst), 1);
+
+        drop(owner);
+        server
+            .mock_sync()
+            .ok_and_run(&client, |builder| {
+                builder.add_to_device_event(cancel("after-drop"));
+            })
+            .await;
+        assert_eq!(
+            wakes.load(Ordering::SeqCst),
+            1,
+            "a dropped owner must not leave its handlers on the client"
+        );
     }
 }
 

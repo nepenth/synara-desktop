@@ -89,7 +89,6 @@ export type NativeLiveReadTargetInput = {
   selectedRoomId: string;
   snapshotRoomId: string;
   documentActive: boolean;
-  hideActivity: boolean;
   atLiveBottom: boolean;
   positionKind: 'live_bottom' | 'unread' | 'focused' | 'restored' | 'thread' | undefined;
   canMarkRead: boolean;
@@ -102,12 +101,15 @@ export type NativeLiveReadTargetInput = {
  * Select the exact remote live-tail event that the native SDK owner may mark.
  * Snapshot revisions are intentionally absent: non-event rebuilds must not
  * emit duplicate receipts, and background windows must not claim visibility.
+ *
+ * "Hide Typing & Read Receipts" does not gate this: Core only ever sends the
+ * fully-read marker and a private read receipt (`exact_read_receipts`), so
+ * reading still clears unread badges without telling anyone else.
  */
 export const nativeLiveReadTarget = ({
   selectedRoomId,
   snapshotRoomId,
   documentActive,
-  hideActivity,
   atLiveBottom,
   positionKind,
   canMarkRead,
@@ -118,7 +120,6 @@ export const nativeLiveReadTarget = ({
   if (
     selectedRoomId !== snapshotRoomId ||
     !documentActive ||
-    hideActivity ||
     !atLiveBottom ||
     (positionKind !== 'live_bottom' && positionKind !== 'thread') ||
     !canMarkRead ||

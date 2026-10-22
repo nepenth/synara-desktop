@@ -26,6 +26,10 @@ import {
   activateApprovalDecisionScope,
   subscribeApprovalDecisions,
 } from './approvalDecisionEvents';
+import { startVisibilityAwarePoll } from '../../utils/visibilityPoll';
+
+const APPROVAL_INBOX_VISIBLE_POLL_MS = 5_000;
+const APPROVAL_INBOX_HIDDEN_POLL_MS = 30_000;
 
 type ApprovalInboxSummary = {
   coverage: ApprovalInboxSnapshot['coverage'];
@@ -139,18 +143,24 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
     let unlistenHistory: (() => void) | undefined;
     void subscribeAgentApprovalHistory(() => {
       void loadHistory();
-    }).then((unlisten) => {
-      if (cancelled) {
-        unlisten();
-        return;
-      }
-      unlistenHistory = unlisten;
-    });
+    })
+      .then((unlisten) => {
+        if (cancelled) {
+          unlisten();
+          return;
+        }
+        unlistenHistory = unlisten;
+      })
+      .catch(() => undefined);
     void load();
     void loadHistory();
-    const poll = window.setInterval(() => {
-      void load();
-    }, 5000);
+    // Hidden (closed to the tray) the inbox refreshes slowly; decisions and
+    // history still arrive through their subscriptions (D11).
+    const stopPoll = startVisibilityAwarePoll(
+      () => void load(),
+      APPROVAL_INBOX_VISIBLE_POLL_MS,
+      APPROVAL_INBOX_HIDDEN_POLL_MS
+    );
     const focus = () => {
       setNow(Date.now());
       void load();
@@ -171,7 +181,7 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
       unsubscribe();
       unlistenHistory?.();
       reload.current = () => undefined;
-      window.clearInterval(poll);
+      stopPoll();
       window.removeEventListener('focus', focus);
       document.removeEventListener('visibilitychange', visibility);
     };
@@ -180,10 +190,11 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
 
   const hasPending = snapshot?.items.some((item) => item.status === 'pending') ?? false;
   useEffect(() => {
-    if (!hasPending) return undefined;
+    // The countdown is only read on screen; a hidden window does not re-render.
+    if (!hasPending || !visible) return undefined;
     const clock = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(clock);
-  }, [hasPending]);
+  }, [hasPending, visible]);
 
   const decided = useCallback(
     (item: ApprovalInboxItem) => {

@@ -226,10 +226,15 @@ pub(super) fn room_notification_write_dto(
     })
 }
 
-/// Privacy-safe HTTP pusher write ack. Status only; never push key or URL.
+/// Privacy-safe HTTP pusher write ack. Status and a closed diagnostic only;
+/// never push key or URL.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PusherWriteDto {
     pub status: WriteAckDto,
+    /// Registration only: the pusher is registered, but Synara's
+    /// edit-suppression push rule could not be installed or confirmed, so
+    /// edits can alert. The policy's closed diagnostic id.
+    pub edit_suppression_diagnostic_id: Option<String>,
 }
 
 /// Account-bound HTTP pusher capability. It retains the exact Core owner—and
@@ -272,6 +277,7 @@ impl HttpPusherOwner {
         })?;
         Ok(PusherWriteDto {
             status: result.status.into(),
+            edit_suppression_diagnostic_id: result.edit_suppression_diagnostic_id,
         })
     }
 
@@ -296,6 +302,7 @@ impl HttpPusherOwner {
         })?;
         Ok(PusherWriteDto {
             status: result.status.into(),
+            edit_suppression_diagnostic_id: result.edit_suppression_diagnostic_id,
         })
     }
 
@@ -323,6 +330,7 @@ impl HttpPusherOwner {
         })?;
         Ok(PusherWriteDto {
             status: result.status.into(),
+            edit_suppression_diagnostic_id: result.edit_suppression_diagnostic_id,
         })
     }
 }
@@ -381,23 +389,21 @@ impl SharedCore {
     /// Not exported through UniFFI.
     #[doc(hidden)]
     pub fn attach_http_pusher_owner_for_test(&self) -> Result<(), PusherCommandError> {
-        let client = {
-            let guard = self.restored_client.lock().map_err(|_| {
-                http_pusher_failed(
-                    BIND_HTTP_PUSHER_NO_SESSION_CODE,
-                    HTTP_PUSHER_OWNER_DESCRIPTION,
-                )
-            })?;
-            match &*guard {
-                RestoredClientSlot::Ready(client, _) => client.clone(),
-                RestoredClientSlot::Empty | RestoredClientSlot::InFlight => {
-                    return Err(http_pusher_failed(
-                        BIND_HTTP_PUSHER_NO_SESSION_CODE,
-                        HTTP_PUSHER_OWNER_DESCRIPTION,
-                    ));
-                }
-            }
+        // Test-only and synchronous: an uncontended slot read.
+        let no_session = || {
+            http_pusher_failed(
+                BIND_HTTP_PUSHER_NO_SESSION_CODE,
+                HTTP_PUSHER_OWNER_DESCRIPTION,
+            )
         };
+        let client = self
+            .lifecycle
+            .session
+            .try_lock()
+            .map_err(|_| no_session())?
+            .as_ref()
+            .map(|active| active.client.clone())
+            .ok_or_else(no_session)?;
         let owner = Arc::new(NativeHttpPusherOwner::new(&client).map_err(|_| {
             http_pusher_failed(
                 BIND_HTTP_PUSHER_NO_SESSION_CODE,
@@ -459,6 +465,7 @@ impl SharedCore {
             })?;
         Ok(PusherWriteDto {
             status: result.status.into(),
+            edit_suppression_diagnostic_id: result.edit_suppression_diagnostic_id,
         })
     }
 
@@ -503,6 +510,7 @@ impl SharedCore {
             })?;
         Ok(PusherWriteDto {
             status: result.status.into(),
+            edit_suppression_diagnostic_id: result.edit_suppression_diagnostic_id,
         })
     }
 
@@ -643,7 +651,7 @@ impl SharedCore {
         mode: String,
     ) -> Result<LeftoverAckDto, LeftoverCommandError> {
         leftover_reject_oversize(room_id.len() + mode.len())?;
-        if !self.has_retained_client() {
+        if !self.has_retained_client().await {
             return Err(leftover_failed(
                 LEFTOVER_NO_SESSION_CODE,
                 LEFTOVER_NO_SESSION_DESCRIPTION,
@@ -672,7 +680,7 @@ impl SharedCore {
                 + device_display_name.len()
                 + lang.len(),
         )?;
-        if !self.has_retained_client() {
+        if !self.has_retained_client().await {
             return Err(leftover_failed(
                 LEFTOVER_NO_SESSION_CODE,
                 LEFTOVER_NO_SESSION_DESCRIPTION,
@@ -690,7 +698,7 @@ impl SharedCore {
         app_id: String,
     ) -> Result<LeftoverAckDto, LeftoverCommandError> {
         leftover_reject_oversize(push_key.len() + app_id.len())?;
-        if !self.has_retained_client() {
+        if !self.has_retained_client().await {
             return Err(leftover_failed(
                 LEFTOVER_NO_SESSION_CODE,
                 LEFTOVER_NO_SESSION_DESCRIPTION,

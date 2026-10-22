@@ -44,6 +44,14 @@ pub(super) fn push_room_list_update(
     session_generation: u64,
 ) {
     if let Ok(mut guard) = queue.lock() {
+        // Every wake-up means "re-read the snapshot"; one pending wake-up per
+        // generation is enough, however many changes arrive before a poll.
+        if guard
+            .iter()
+            .any(|update| update.session_generation == session_generation)
+        {
+            return;
+        }
         if guard.len() >= ROOM_LIST_UPDATE_QUEUE_CAP {
             guard.remove(0);
         }
@@ -52,11 +60,48 @@ pub(super) fn push_room_list_update(
 }
 
 /// Privacy-safe room-list snapshot. Tokens and password never appear here.
+///
+/// Contract: `rooms` holds joined rooms only (the SDK joined filter), so no
+/// row here has `membership: Invite`. Pending invites come only from
+/// [`InviteSnapshotDto`]; a shell that shows invites in its room list appends
+/// one invited row per invite whose `room_id` is not already in `rooms`
+/// (iOS: `SharedCoreRoomListRows.rooms`).
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct RoomListSnapshotDto {
     pub session_generation: u64,
     pub ordered_room_ids: Vec<String>,
     pub rooms: Vec<RoomListRoomDto>,
+    /// Until the list has loaded, empty `rooms` means "not synced yet".
+    pub loading: RoomListLoadingDto,
+    /// Child to parent-space entries (from `m.space.child` and legitimate
+    /// `m.space.parent` events), the same graph Core used for unread rollup.
+    /// Saves a separate `space_parents_snapshot` call per refresh.
+    pub space_parents: Vec<SpaceParentEntryDto>,
+}
+
+/// The SDK room-list loading state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum RoomListLoadingDto {
+    /// No room-list response yet: show loading, not an empty state.
+    NotLoaded,
+    /// A response arrived; `maximum_number_of_rooms` is the server's count
+    /// for the list when known.
+    Loaded {
+        maximum_number_of_rooms: Option<u32>,
+    },
+}
+
+impl From<crate::app::room_list::NativeRoomListLoading> for RoomListLoadingDto {
+    fn from(value: crate::app::room_list::NativeRoomListLoading) -> Self {
+        match value {
+            crate::app::room_list::NativeRoomListLoading::NotLoaded => Self::NotLoaded,
+            crate::app::room_list::NativeRoomListLoading::Loaded {
+                maximum_number_of_rooms,
+            } => Self::Loaded {
+                maximum_number_of_rooms,
+            },
+        }
+    }
 }
 
 super::wire_enum::wire_enum! {
@@ -85,6 +130,11 @@ pub struct RoomListRoomDto {
     pub direct_user_id: Option<String>,
     pub is_space: bool,
     pub is_favorite: bool,
+    /// Tagged `m.lowpriority`. Core's section orders put these rooms last.
+    pub is_low_priority: bool,
+    /// A listed agent (Agent Notifications settings) is a member, or the
+    /// newest event is an approval prompt or agent workflow.
+    pub is_agent_room: bool,
     pub is_call: bool,
     pub has_active_call: bool,
     pub active_call_participant_count: u32,
@@ -145,6 +195,11 @@ pub(super) fn map_room_list_core_error(error: MatrixIpcError) -> RoomListSnapsho
 }
 
 /// Privacy-safe invite snapshot. Tokens and password never appear here.
+///
+/// The only source of pending invites; [`RoomListSnapshotDto`] is
+/// joined-only. One invite that cannot be fully projected (for example no own
+/// member event in its stripped state) appears with an empty `sender_id`
+/// instead of failing the whole snapshot.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct InviteSnapshotDto {
     pub session_generation: u64,
@@ -1245,10 +1300,7 @@ impl SharedCore {
         }
     }
 
-    pub(super) fn spawn_room_surface_owners(&self) {
-        let Ok(client) = self.retained_client() else {
-            return;
-        };
+    pub(super) fn spawn_room_surface_owners(&self, client: &Client) {
         let Ok(Some(snapshot)) = self.core.session_snapshot() else {
             return;
         };
@@ -1257,12 +1309,12 @@ impl SharedCore {
             return;
         }
         let emit: OwnProfileUpdateEmit = Arc::new(|_| {});
-        if let Ok(owner) = NativeOwnProfileOwner::start(&client, emit, generation) {
+        if let Ok(owner) = NativeOwnProfileOwner::start(client, emit, generation) {
             if let Ok(mut guard) = self.own_profile_live.lock() {
                 *guard = Some(owner);
             }
         }
-        if let Ok(owner) = NativeMediaRetentionOwner::start(&client, generation) {
+        if let Ok(owner) = NativeMediaRetentionOwner::start(client, generation) {
             if let Ok(mut guard) = self.media_retention_live.lock() {
                 *guard = Some(owner);
             }
@@ -1369,12 +1421,17 @@ impl SharedCore {
     /// owner yields the handler's empty snapshot. Does not expose a generic
     /// command FFI.
     pub async fn room_list_snapshot(&self) -> Result<RoomListSnapshotDto, RoomListSnapshotError> {
+        self.await_open_stores().await.map_err(|()| {
+            room_list_failed(SESSION_SUSPENDED_CODE, SESSION_SUSPENDED_DESCRIPTION)
+        })?;
         let response = self
             .core
             .room_list_snapshot()
             .await
             .map_err(map_room_list_core_error)?;
         let snapshot: NativeRoomListSnapshot = response;
+        let agent_rooms: std::collections::HashSet<String> =
+            snapshot.agent_room_ids.into_iter().collect();
         Ok(RoomListSnapshotDto {
             session_generation: snapshot.session_generation,
             ordered_room_ids: snapshot.ordered_room_ids,
@@ -1382,6 +1439,7 @@ impl SharedCore {
                 .rooms
                 .into_iter()
                 .map(|room| RoomListRoomDto {
+                    is_agent_room: agent_rooms.contains(&room.room_id),
                     room_id: room.room_id,
                     name: room.name,
                     canonical_alias: room.canonical_alias,
@@ -1391,6 +1449,7 @@ impl SharedCore {
                     direct_user_id: room.direct_user_id,
                     is_space: room.is_space,
                     is_favorite: room.is_favorite,
+                    is_low_priority: room.is_low_priority,
                     is_call: room.is_call,
                     has_active_call: room.has_active_call,
                     active_call_participant_count: room.active_call_participant_count,
@@ -1405,10 +1464,22 @@ impl SharedCore {
                     notification_mode: room.notification_mode.map(|mode| mode.as_str().to_owned()),
                 })
                 .collect(),
+            loading: snapshot.loading.into(),
+            space_parents: snapshot
+                .space_parents
+                .into_iter()
+                .map(|entry| SpaceParentEntryDto {
+                    room_id: entry.room_id,
+                    parent_ids: entry.parent_ids,
+                })
+                .collect(),
         })
     }
 
     pub async fn invites_snapshot(&self) -> Result<InviteSnapshotDto, InviteSnapshotError> {
+        self.await_open_stores()
+            .await
+            .map_err(|()| invites_failed(SESSION_SUSPENDED_CODE, SESSION_SUSPENDED_DESCRIPTION))?;
         let response = self
             .core
             .invites_snapshot()

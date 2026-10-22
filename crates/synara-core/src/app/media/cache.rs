@@ -9,11 +9,17 @@
 //! - The SDK's SQLite media store, which is encrypted with the store
 //!   passphrase and governed by `MediaRetentionPolicy` (see
 //!   `media_cache::policy`). It holds the bytes exactly as the homeserver
-//!   served them under a plain `mxc://` key, so an encrypted attachment stays
-//!   ciphertext at rest and is decrypted with the requesting event's own key.
-//!   The SDK keys encrypted sources by URL alone; caching plaintext there would
-//!   let a second event that reuses the URL with another key read the first
-//!   event's plaintext.
+//!   served them, so an encrypted attachment stays ciphertext at rest and is
+//!   decrypted with the requesting event's own key. The SDK keys encrypted
+//!   sources by URL alone; caching plaintext there would let a second event
+//!   that reuses the URL with another key read the first event's plaintext.
+//!
+//! Ciphertext lives under a Synara-owned synthetic key, never the URL itself:
+//! the SDK send queue stores the *plaintext* of our own uploads under the URL
+//! key, so sharing it made every attachment we sent to an encrypted room fail
+//! its hash check on this device. A stored entry that does not decrypt (an
+//! entry from an older build, or another event's key) is refetched once from
+//! the homeserver and replaced.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Mutex, OnceLock};
@@ -23,14 +29,20 @@ use matrix_sdk::{
     ruma::events::room::MediaSource,
     Client,
 };
+use sha2::{Digest, Sha256};
 
 use super::bounded::{
     decrypt_attachment_bounded, download_network_bytes_bounded, BoundedMediaError,
 };
 use crate::app::media_cache::MEDIA_STORE_MAX_FILE_BYTES;
 
-/// Total in-memory budget for hot media bytes.
+/// Total in-memory budget for hot media bytes. iOS terminates a suspended app
+/// that holds too much memory, so it keeps less; the SQLite media store
+/// still serves everything the hot layer drops.
+#[cfg(not(target_os = "ios"))]
 pub const HOT_MEDIA_CACHE_MAX_BYTES: usize = 64 * 1024 * 1024;
+#[cfg(target_os = "ios")]
+pub const HOT_MEDIA_CACHE_MAX_BYTES: usize = 24 * 1024 * 1024;
 /// Larger items (video, big files) are served from the store or the network
 /// rather than pinned in memory.
 pub const HOT_MEDIA_CACHE_MAX_ITEM_BYTES: usize = 8 * 1024 * 1024;
@@ -107,6 +119,21 @@ impl HotMediaCache {
         self.total_bytes = 0;
     }
 
+    /// Drop every entry whose key starts with `prefix` (one account's scope).
+    pub fn remove_prefix(&mut self, prefix: &str) {
+        let mut removed = 0;
+        self.entries.retain(|key, (_, bytes)| {
+            let keep = !key.starts_with(prefix);
+            if !keep {
+                removed += bytes.len();
+            }
+            keep
+        });
+        self.total_bytes -= removed;
+        let entries = &self.entries;
+        self.order.retain(|(_, key)| entries.contains_key(key));
+    }
+
     pub fn total_bytes(&self) -> usize {
         self.total_bytes
     }
@@ -140,30 +167,83 @@ fn hot_cache() -> &'static Mutex<HotMediaCache> {
     })
 }
 
-/// Forget every hot media entry. Called when a session closes so decrypted
-/// bytes do not outlive the account that could read them.
+/// Forget every hot media entry, for every account in the process. iOS calls
+/// it on a memory warning.
 pub fn clear_hot_media_cache() {
     if let Ok(mut cache) = hot_cache().lock() {
         cache.clear();
     }
 }
 
-/// In-memory key: homeserver, user, complete source and format. The encrypted
+/// Forget one account's hot media entries. Called when its session closes,
+/// so decrypted bytes do not outlive the account that could read them, and
+/// when iOS suspends it. Other accounts' entries (another `Core` in the same
+/// process, or a parallel test) stay.
+pub fn clear_hot_media_cache_for_user(user_id: &str) {
+    if user_id.is_empty() {
+        return;
+    }
+    if let Ok(mut cache) = hot_cache().lock() {
+        cache.remove_prefix(&hot_scope(user_id));
+    }
+}
+
+/// [`clear_hot_media_cache_for_user`] for the account `client` is signed in as.
+pub fn clear_hot_media_cache_for_client(client: &Client) {
+    if let Some(user_id) = client.user_id() {
+        clear_hot_media_cache_for_user(user_id.as_str());
+    }
+}
+
+/// Every key of one account starts with this. The separator cannot occur in
+/// a Matrix user ID, so one account's scope never prefixes another's.
+fn hot_scope(user_id: &str) -> String {
+    format!("{user_id}\u{1f}")
+}
+
+/// In-memory key: user, homeserver, complete source and format. The encrypted
 /// source contributes its key, IV and hashes so plaintext is never shared by
 /// two events that merely reuse one URL.
 fn hot_key(client: &Client, request: &MediaRequestParameters) -> Option<String> {
     let user_id = client.user_id()?;
     let source = serde_json::to_string(&request.source).ok()?;
     Some(format!(
-        "{}\u{1f}{user_id}\u{1f}{source}\u{1f}{}",
+        "{}{}\u{1f}{source}\u{1f}{}",
+        hot_scope(user_id.as_str()),
         client.homeserver(),
         request.format.unique_key()
     ))
 }
 
-/// Store key: the network bytes are what the URL serves, independent of how a
-/// particular event decrypts them.
-fn store_request(request: &MediaRequestParameters) -> MediaRequestParameters {
+#[cfg(test)]
+pub(crate) fn hot_media_cache_insert_for_test(user_id: &str, name: &str, bytes: Vec<u8>) {
+    hot_cache()
+        .lock()
+        .unwrap()
+        .insert(format!("{}{name}", hot_scope(user_id)), bytes);
+}
+
+#[cfg(test)]
+pub(crate) fn hot_media_cache_contains_for_test(user_id: &str, name: &str) -> bool {
+    hot_cache()
+        .lock()
+        .unwrap()
+        .entries
+        .contains_key(&format!("{}{name}", hot_scope(user_id)))
+}
+
+/// Serializes the tests that clear the whole process-wide cache with the
+/// tests that expect another account's entries to survive.
+#[cfg(test)]
+pub(crate) static HOT_MEDIA_CACHE_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+/// Synthetic server name for ciphertext store keys. `.invalid` cannot resolve,
+/// so no real event can name media there.
+const CIPHERTEXT_STORE_SERVER: &str = "synara-ciphertext.invalid";
+
+/// What the homeserver serves for this request, independent of how a
+/// particular event decrypts it.
+fn network_request(request: &MediaRequestParameters) -> MediaRequestParameters {
     MediaRequestParameters {
         source: MediaSource::Plain(request.uri().to_owned()),
         format: match &request.source {
@@ -172,6 +252,34 @@ fn store_request(request: &MediaRequestParameters) -> MediaRequestParameters {
             MediaSource::Plain(_) => request.format.clone(),
         },
     }
+}
+
+/// Store key for the network bytes. Plain media shares the SDK's URL key (the
+/// SDK stores the same bytes there). Encrypted ciphertext goes under
+/// `mxc://synara-ciphertext.invalid/<sha256(url)>`, out of the key space where
+/// the SDK keeps plaintext for encrypted sources.
+pub(super) fn store_request(request: &MediaRequestParameters) -> MediaRequestParameters {
+    let network = network_request(request);
+    let MediaSource::Encrypted(_) = &request.source else {
+        return network;
+    };
+    let digest = Sha256::digest(request.uri().as_str().as_bytes());
+    let mut uri = format!("mxc://{CIPHERTEXT_STORE_SERVER}/");
+    for byte in digest {
+        use std::fmt::Write as _;
+        let _ = write!(&mut uri, "{byte:02x}");
+    }
+    MediaRequestParameters {
+        source: MediaSource::Plain(uri.into()),
+        format: network.format,
+    }
+}
+
+fn is_ciphertext_store_uri(request: &MediaRequestParameters) -> bool {
+    request
+        .uri()
+        .parts()
+        .is_ok_and(|(server_name, _)| server_name.as_str() == CIPHERTEXT_STORE_SERVER)
 }
 
 async fn read_store(client: &Client, request: &MediaRequestParameters) -> Option<Vec<u8>> {
@@ -206,15 +314,40 @@ fn finish(
     }
 }
 
+/// Download the network bytes and store them when the policy would keep them.
+async fn fetch_and_store(
+    client: &Client,
+    request: &MediaRequestParameters,
+    stored_request: &MediaRequestParameters,
+    max_bytes: usize,
+) -> Result<Vec<u8>, BoundedMediaError> {
+    let network_bytes =
+        download_network_bytes_bounded(client, &network_request(request), max_bytes).await?;
+    // Skip the copy for files the retention policy would refuse anyway.
+    if network_bytes.len() as u64 <= MEDIA_STORE_MAX_FILE_BYTES {
+        write_store(client, stored_request, network_bytes.clone()).await;
+    }
+    Ok(network_bytes)
+}
+
+async fn remove_store(client: &Client, request: &MediaRequestParameters) {
+    if let Ok(store) = client.media_store().lock().await {
+        let _ = store.remove_media_content(request).await;
+    }
+}
+
 /// Bounded media read through the in-memory cache, then the SDK media store,
 /// then the network. Every layer enforces `max_bytes`; encrypted sources are
 /// decrypted (and their hash checked) with this request's key on every store
-/// or network read.
+/// or network read. A stored entry that fails to decrypt is refetched once.
 pub async fn fetch_media_cached(
     client: &Client,
     request: &MediaRequestParameters,
     max_bytes: usize,
 ) -> Result<Vec<u8>, BoundedMediaError> {
+    if is_ciphertext_store_uri(request) {
+        return Err(BoundedMediaError::InvalidUri);
+    }
     let key = hot_key(client, request);
     if let Some(key) = &key {
         let hit = hot_cache().lock().ok().and_then(|mut cache| cache.get(key));
@@ -228,14 +361,19 @@ pub async fn fetch_media_cached(
 
     let stored_request = store_request(request);
     let bytes = match read_store(client, &stored_request).await {
-        Some(network_bytes) => finish(request, network_bytes, max_bytes)?,
+        Some(stored_bytes) => match finish(request, stored_bytes, max_bytes) {
+            // The entry is not this event's ciphertext. Trust the homeserver.
+            Err(BoundedMediaError::DecryptionFailed) => {
+                remove_store(client, &stored_request).await;
+                let network_bytes =
+                    fetch_and_store(client, request, &stored_request, max_bytes).await?;
+                finish(request, network_bytes, max_bytes)?
+            }
+            result => result?,
+        },
         None => {
             let network_bytes =
-                download_network_bytes_bounded(client, &stored_request, max_bytes).await?;
-            // Skip the copy for files the retention policy would refuse anyway.
-            if network_bytes.len() as u64 <= MEDIA_STORE_MAX_FILE_BYTES {
-                write_store(client, &stored_request, network_bytes.clone()).await;
-            }
+                fetch_and_store(client, request, &stored_request, max_bytes).await?;
             finish(request, network_bytes, max_bytes)?
         }
     };
@@ -282,6 +420,33 @@ mod tests {
     }
 
     #[test]
+    fn remove_prefix_drops_one_scope_and_keeps_the_budget_exact() {
+        let mut cache = HotMediaCache::new(64, 16);
+        cache.insert(format!("{}a", hot_scope("@alice:x")), vec![1; 4]);
+        cache.insert(format!("{}b", hot_scope("@alice:x")), vec![2; 4]);
+        cache.insert(format!("{}a", hot_scope("@alice:xy")), vec![3; 4]);
+        cache.insert(format!("{}a", hot_scope("@bob:x")), vec![4; 4]);
+        cache.remove_prefix(&hot_scope("@alice:x"));
+        assert_eq!(cache.len(), 2, "@alice:xy is another account");
+        assert_eq!(cache.total_bytes(), 8);
+        assert!(cache.order.len() <= cache.len());
+        assert_eq!(
+            cache.get(&format!("{}a", hot_scope("@alice:xy"))),
+            Some(vec![3; 4])
+        );
+    }
+
+    #[test]
+    fn hot_media_budget_is_smaller_on_ios() {
+        if cfg!(target_os = "ios") {
+            assert_eq!(HOT_MEDIA_CACHE_MAX_BYTES, 24 * 1024 * 1024);
+        } else {
+            assert_eq!(HOT_MEDIA_CACHE_MAX_BYTES, 64 * 1024 * 1024);
+        }
+        const { assert!(HOT_MEDIA_CACHE_MAX_ITEM_BYTES < HOT_MEDIA_CACHE_MAX_BYTES) };
+    }
+
+    #[test]
     fn lru_recency_records_stay_bounded_under_repeated_hits() {
         let mut cache = HotMediaCache::new(64, 8);
         cache.insert("a".into(), vec![1; 1]);
@@ -315,10 +480,165 @@ mod tests {
                 96_u32.into(),
             )),
         };
-        let stored = store_request(&request);
+        // The homeserver is asked for the file at its URL...
+        let network = network_request(&request);
         assert!(
-            matches!(stored.source, MediaSource::Plain(ref uri) if uri.as_str() == "mxc://example.org/cipher")
+            matches!(network.source, MediaSource::Plain(ref uri) if uri.as_str() == "mxc://example.org/cipher")
         );
+        assert!(matches!(network.format, MediaFormat::File));
+
+        // ...but the ciphertext is stored outside the SDK's URL key space.
+        let stored = store_request(&request);
+        let MediaSource::Plain(uri) = &stored.source else {
+            panic!("ciphertext is stored under a plain synthetic key");
+        };
+        let (server_name, media_id) = uri.parts().expect("valid synthetic mxc uri");
+        assert_eq!(server_name.as_str(), CIPHERTEXT_STORE_SERVER);
+        assert_eq!(media_id.len(), 64);
+        assert!(media_id.bytes().all(|byte| byte.is_ascii_hexdigit()));
         assert!(matches!(stored.format, MediaFormat::File));
+        assert_ne!(
+            stored.unique_key(),
+            MediaRequestParameters {
+                source: request.source.clone(),
+                format: MediaFormat::File,
+            }
+            .unique_key()
+        );
+        assert_eq!(stored.unique_key(), store_request(&request).unique_key());
+        assert!(is_ciphertext_store_uri(&stored));
+        assert!(!is_ciphertext_store_uri(&request));
+    }
+
+    #[test]
+    fn plain_media_keeps_the_sdk_url_key() {
+        let request = MediaRequestParameters {
+            source: MediaSource::Plain("mxc://example.org/plain".into()),
+            format: MediaFormat::File,
+        };
+        assert_eq!(store_request(&request).unique_key(), request.unique_key());
+    }
+
+    /// Regression for the send queue's own media cache write: after an upload
+    /// to an encrypted room the SDK stores the *plaintext* under the encrypted
+    /// source's URL key, which Synara used to read as ciphertext.
+    #[tokio::test]
+    async fn own_encrypted_attachment_sent_through_the_send_queue_reads_back() {
+        use std::sync::{Arc, Mutex as StdMutex};
+
+        use matrix_sdk::{
+            attachment::AttachmentConfig, send_queue::RoomSendQueueUpdate,
+            test_utils::mocks::MatrixMockServer,
+        };
+        use matrix_sdk_test::DEFAULT_TEST_ROOM_ID;
+        use wiremock::{Request, ResponseTemplate};
+
+        let plaintext = b"own-encrypted-photo".to_vec();
+        let mock = MatrixMockServer::new().await;
+        mock.mock_authenticated_media_config()
+            .ok_default()
+            .mount()
+            .await;
+        let uploaded = Arc::new(StdMutex::new(Vec::<u8>::new()));
+        let uploaded_by_server = Arc::clone(&uploaded);
+        mock.mock_upload()
+            .respond_with(move |request: &Request| {
+                *uploaded_by_server.lock().unwrap() = request.body.clone();
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({ "content_uri": "mxc://example.org/sent" }))
+            })
+            .mock_once()
+            .mount()
+            .await;
+        mock.mock_get_members().ok(Vec::new()).mount().await;
+        mock.mock_room_send()
+            .ok(matrix_sdk::ruma::event_id!("$sent-photo"))
+            .mock_once()
+            .mount()
+            .await;
+        let served = Arc::clone(&uploaded);
+        mock.mock_authed_media_download()
+            .respond_with(move |_: &Request| {
+                ResponseTemplate::new(200)
+                    .set_body_raw(served.lock().unwrap().clone(), "application/octet-stream")
+            })
+            .mock_once()
+            .mount()
+            .await;
+
+        let client = mock.client_builder().build().await;
+        let room = mock.sync_joined_room(&client, &DEFAULT_TEST_ROOM_ID).await;
+        mock.mock_room_state_encryption().encrypted().mount().await;
+        let (_, mut updates) = room.send_queue().subscribe().await.expect("subscribe");
+
+        crate::app::send::send_attachment_via_room_queue(
+            &room,
+            "photo.png",
+            mime::IMAGE_PNG,
+            plaintext.clone(),
+            AttachmentConfig::new(),
+        )
+        .await
+        .expect("send attachment through RoomSendQueue");
+
+        let mut sent_source = None;
+        while let Ok(update) = updates.try_recv() {
+            if let RoomSendQueueUpdate::MediaUpload {
+                file: Some(source), ..
+            } = update
+            {
+                sent_source = Some(source);
+            }
+        }
+        let source = sent_source.expect("uploaded media source");
+        let MediaSource::Encrypted(file) = &source else {
+            panic!("an encrypted room uploads an encrypted file");
+        };
+        assert_eq!(file.url.as_str(), "mxc://example.org/sent");
+        assert_ne!(
+            *uploaded.lock().unwrap(),
+            plaintext,
+            "the upload is ciphertext"
+        );
+
+        let request = MediaRequestParameters {
+            source: source.clone(),
+            format: MediaFormat::File,
+        };
+        // The SDK's own write: plaintext under the encrypted source's URL key.
+        assert_eq!(
+            read_store(&client, &request).await.as_deref(),
+            Some(plaintext.as_slice())
+        );
+
+        // One network read of the ciphertext, then the store.
+        for _ in 0..2 {
+            assert_eq!(
+                fetch_media_cached(&client, &request, 1024)
+                    .await
+                    .expect("own encrypted attachment"),
+                plaintext
+            );
+        }
+        clear_hot_media_cache_for_test(&client, &request);
+        assert_eq!(
+            fetch_media_cached(&client, &request, 1024)
+                .await
+                .expect("own encrypted attachment from the store"),
+            plaintext
+        );
+        assert_eq!(
+            read_store(&client, &store_request(&request)).await,
+            Some(uploaded.lock().unwrap().clone()),
+            "the store holds the served ciphertext under Synara's key"
+        );
+    }
+
+    fn clear_hot_media_cache_for_test(client: &Client, request: &MediaRequestParameters) {
+        let key = hot_key(client, request).expect("hot key");
+        let mut cache = hot_cache().lock().unwrap();
+        if let Some((_, bytes)) = cache.entries.remove(&key) {
+            cache.total_bytes -= bytes.len();
+        }
     }
 }

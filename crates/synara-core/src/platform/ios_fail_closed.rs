@@ -11,16 +11,19 @@ use super::{
     PlatformCrossSigningStatusError, PlatformCryptoStatusError, PlatformMediaConfigError,
     PlatformStatus, PlatformSyncStatusError, SecretVault, SyncStatusFuture, UnavailableSecretVault,
 };
-use crate::dto::NotificationCandidate;
 use crate::transport::{MatrixIpcEnvelope, MatrixIpcError};
+
+/// Unauthenticated requests before the shell names its app version.
+const IOS_FALLBACK_USER_AGENT: &str = "Synara-iOS-Core/1.0";
 
 /// iOS shell placeholder that permits safe Core construction.
 ///
 /// Calls that need a live client return the existing static unavailable or
-/// no-session errors. The typed IPC envelope sink and OS notification/status
+/// no-session errors. The typed IPC envelope sink and OS badge/status
 /// sinks are intentional no-ops until the corresponding iOS shell work lands.
 pub struct IosFailClosedPlatform {
     vault: Arc<dyn SecretVault + Send + Sync>,
+    user_agent: String,
 }
 
 impl Default for IosFailClosedPlatform {
@@ -33,11 +36,22 @@ impl IosFailClosedPlatform {
     pub fn new() -> Self {
         Self {
             vault: Arc::new(UnavailableSecretVault),
+            user_agent: IOS_FALLBACK_USER_AGENT.to_owned(),
         }
     }
 
     pub fn with_secret_store(vault: Arc<dyn SecretVault + Send + Sync>) -> Self {
-        Self { vault }
+        Self {
+            vault,
+            user_agent: IOS_FALLBACK_USER_AGENT.to_owned(),
+        }
+    }
+
+    /// Name the app and its version in unauthenticated requests (sign-in
+    /// flow probes), as its SDK clients do.
+    pub fn with_user_agent(mut self, user_agent: String) -> Self {
+        self.user_agent = user_agent;
+        self
     }
 }
 
@@ -51,7 +65,7 @@ impl Platform for IosFailClosedPlatform {
     }
 
     fn http_user_agent(&self) -> String {
-        "Synara-iOS-Core/1.0".to_owned()
+        self.user_agent.clone()
     }
 
     fn sync_status(&self) -> SyncStatusFuture<'_> {
@@ -68,10 +82,6 @@ impl Platform for IosFailClosedPlatform {
 
     fn media_config(&self) -> MediaConfigFuture<'_> {
         Box::pin(async { Err(PlatformMediaConfigError::NoSession) })
-    }
-
-    fn notify(&self, _: NotificationCandidate) -> Result<(), MatrixIpcError> {
-        Ok(())
     }
 
     fn set_badge(&self, _: u64) -> Result<(), MatrixIpcError> {

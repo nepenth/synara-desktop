@@ -5,9 +5,18 @@
 //! credentials and deliberately reduces all failures to fixed public values.
 
 use crate::app::auth::{
-    discover_login_flows, probe_register_flows, AuthError, HttpLoginFlowTransport,
-    HttpRegisterFlowTransport, LoginFlow, RegisterFlowsProbe, RegisterUiaFlow,
+    discover_login_flows, probe_register_flows, resolve_homeserver_with_user_agent, AuthError,
+    HttpLoginFlowTransport, HttpRegisterFlowTransport, LoginFlow, RegisterFlowsProbe,
+    RegisterUiaFlow, ResolvedHomeserver,
 };
+use crate::app::client_builder::{product_user_agent, ClientProduct};
+
+/// The User-Agent of the app's own client, `Synara-iOS/<app_version>`. These
+/// free functions run before a session exists, but the homeserver should see
+/// the same product and version as for every later request.
+fn app_user_agent(app_version: &str) -> String {
+    product_user_agent(ClientProduct::Ios, app_version)
+}
 
 /// One Matrix login flow exposed through UniFFI.
 ///
@@ -31,7 +40,8 @@ impl From<LoginFlow> for LoginFlowDto {
     }
 }
 
-/// Fixed, privacy-safe failure returned by [`login_flows`].
+/// Fixed, privacy-safe failure returned by [`login_flows`] and
+/// [`resolve_homeserver`].
 ///
 /// Every field is selected from static source constants. No URL, response
 /// body, header, network-library diagnostic, credential, or token can reach
@@ -87,15 +97,65 @@ fn ffi_error_description(error: &AuthError) -> &'static str {
 /// List homeserver-advertised Matrix login flows through the bounded,
 /// redirect-free shared-core transport.
 ///
-/// This operation is read-only and accepts only a homeserver URL. It submits
-/// no password, token, credential, UIAA payload, session, or platform callback.
+/// This operation is read-only and accepts only a homeserver URL and the
+/// app's short version (for the User-Agent). It submits no password, token,
+/// credential, UIAA payload, session, or platform callback.
 #[uniffi::export(async_runtime = "tokio")]
-pub async fn login_flows(homeserver_url: String) -> Result<Vec<LoginFlowDto>, LoginFlowsError> {
-    let transport = HttpLoginFlowTransport::new().map_err(LoginFlowsError::from)?;
+pub async fn login_flows(
+    homeserver_url: String,
+    app_version: String,
+) -> Result<Vec<LoginFlowDto>, LoginFlowsError> {
+    let transport = HttpLoginFlowTransport::new_with_user_agent(app_user_agent(&app_version))
+        .map_err(LoginFlowsError::from)?;
     let result = discover_login_flows(&homeserver_url, &transport)
         .await
         .map_err(LoginFlowsError::from)?;
     Ok(result.flows.into_iter().map(LoginFlowDto::from).collect())
+}
+
+/// A homeserver resolved for sign-in, exposed through UniFFI.
+///
+/// `homeserver_url` is the client-API base URL to sign in against, which can
+/// differ from what the user typed when the server name delegates through
+/// `.well-known/matrix/client`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ResolvedHomeserverDto {
+    pub homeserver_url: String,
+    pub login_flows: Vec<LoginFlowDto>,
+    /// Native simplified sliding sync (MSC4186), which Synara needs to sync.
+    pub native_sliding_sync: bool,
+}
+
+impl From<ResolvedHomeserver> for ResolvedHomeserverDto {
+    fn from(resolved: ResolvedHomeserver) -> Self {
+        Self {
+            homeserver_url: resolved.homeserver_url,
+            login_flows: resolved
+                .login_flows
+                .into_iter()
+                .map(LoginFlowDto::from)
+                .collect(),
+            native_sliding_sync: resolved.native_sliding_sync,
+        }
+    }
+}
+
+/// Resolve a typed server name or homeserver URL with the SDK: well-known
+/// delegation, else the input itself as a homeserver URL, validated with
+/// `/versions`. Reports login flows and native sliding-sync support.
+///
+/// Read-only and credential-free, on a memory-only client that sends the
+/// app's User-Agent (`app_version` is the bundle's short version). Failures
+/// use the same fixed values as [`login_flows`].
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn resolve_homeserver(
+    server_name_or_url: String,
+    app_version: String,
+) -> Result<ResolvedHomeserverDto, LoginFlowsError> {
+    resolve_homeserver_with_user_agent(&server_name_or_url, &app_user_agent(&app_version))
+        .await
+        .map(ResolvedHomeserverDto::from)
+        .map_err(LoginFlowsError::from)
 }
 
 /// One registration UIAA flow exposed through UniFFI.
@@ -228,12 +288,15 @@ fn register_ffi_error_description(error: &AuthError) -> &'static str {
 /// redirect-free shared-core transport.
 ///
 /// This operation submits only an empty JSON object. It accepts no password,
-/// token, email, credential, UIAA continuation, session, or platform callback.
+/// token, email, credential, UIAA continuation, session, or platform callback;
+/// `app_version` only names the app in the User-Agent.
 #[uniffi::export(async_runtime = "tokio")]
 pub async fn register_flows(
     homeserver_url: String,
+    app_version: String,
 ) -> Result<RegisterFlowsDto, RegisterFlowsError> {
-    let transport = HttpRegisterFlowTransport::new().map_err(RegisterFlowsError::from)?;
+    let transport = HttpRegisterFlowTransport::new_with_user_agent(app_user_agent(&app_version))
+        .map_err(RegisterFlowsError::from)?;
     let result = probe_register_flows(&homeserver_url, &transport)
         .await
         .map_err(RegisterFlowsError::from)?;
@@ -289,7 +352,7 @@ mod tests {
             "https://user:secret@example.invalid",
             "https://example.invalid/%2e%2e/private?token=do-not-expose",
         ] {
-            let error = login_flows(raw.to_owned())
+            let error = login_flows(raw.to_owned(), "2.2.6".to_owned())
                 .await
                 .expect_err("unsafe homeserver URL must fail before a request");
             let LoginFlowsError::ProbeFailed {
@@ -325,6 +388,12 @@ mod tests {
                 request.starts_with("GET /_matrix/client/v3/login HTTP/1.1\r\n"),
                 "the UniFFI facade must use the bounded core login-flow route"
             );
+            assert!(
+                request
+                    .to_ascii_lowercase()
+                    .contains("\r\nuser-agent: synara-ios/2.2.6 (matrix-sdk/"),
+                "the probe names the app and its version, not Synara-Core"
+            );
             let body = r#"{"flows":[{"type":"m.login.password"},{"type":"m.login.token","get_login_token":true},{"type":"m.login.sso"}]}"#;
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
@@ -336,7 +405,7 @@ mod tests {
                 .expect("write login-types response");
         });
 
-        let flows = login_flows(format!("http://{address}"))
+        let flows = login_flows(format!("http://{address}"), "2.2.6".to_owned())
             .await
             .expect("facade must return the core transport response");
         assert_eq!(
@@ -367,7 +436,7 @@ mod tests {
     async fn live_login_flows_facade_discovers_password_login() {
         let homeserver = std::env::var("SYNARA_LIVE_HOMESERVER")
             .expect("SYNARA_LIVE_HOMESERVER must be set for the ignored live test");
-        let flows = login_flows(homeserver)
+        let flows = login_flows(homeserver, String::new())
             .await
             .expect("live homeserver login-flow discovery must succeed");
         assert!(flows.iter().any(|flow| flow.kind == "password"));
@@ -394,7 +463,7 @@ mod tests {
             "https://user:secret@example.invalid",
             "https://example.invalid/%2e%2e/private?token=do-not-expose",
         ] {
-            let error = register_flows(raw.to_owned())
+            let error = register_flows(raw.to_owned(), "2.2.6".to_owned())
                 .await
                 .expect_err("unsafe homeserver URL must fail before a request");
             let RegisterFlowsError::ProbeFailed {
@@ -454,7 +523,7 @@ mod tests {
                 .expect("write registration UIAA response");
         });
 
-        let result = register_flows(format!("http://{address}"))
+        let result = register_flows(format!("http://{address}"), "2.2.6".to_owned())
             .await
             .expect("facade must return the core registration probe response");
         assert_eq!(

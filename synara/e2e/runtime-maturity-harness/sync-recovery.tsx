@@ -8,7 +8,6 @@ import '../../src/index.css';
 import { darkTheme } from '../../src/colors.css';
 import { ClientRoot } from '../../src/app/pages/client/ClientRoot';
 import { SpecVersionsLoader } from '../../src/app/components/SpecVersionsLoader';
-import { useSpecVersions } from '../../src/app/hooks/useSpecVersions';
 import { setSessionBootstrapResult } from '../../src/app/state/sessionBootstrap';
 import type { NativeReadiness } from '../../src/app/native/nativeWire';
 
@@ -95,13 +94,7 @@ export function mountSyncRecovery() {
   document.body.classList.add(configClass, varsClass, darkTheme, 'dark-theme');
 
   function NativeReady() {
-    const versions = useSpecVersions();
-    return (
-      <>
-        <p>Native client ready</p>
-        <output data-testid="server-versions">{versions.versions.join(',')}</output>
-      </>
-    );
+    return <p>Native client ready</p>;
   }
 
   function RecoveryFixture() {

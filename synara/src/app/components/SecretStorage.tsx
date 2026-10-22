@@ -11,6 +11,7 @@ import {
   unlockNativeSecretStorage,
 } from '../features/secret-storage/nativeSecretStorage';
 import { InfoCard } from './info-card';
+import { composerErrorMessage } from '../features/room/composerSendError';
 
 type NativeSecretStorageActionProps = {
   status: NativeSecretStorageStatus;
@@ -131,7 +132,12 @@ export function NativeSecretStorageAction({
       </Box>
       {operationState.status === AsyncStatus.Error && (
         <Text size="T200" style={{ color: color.Critical.Main }}>
-          <b>{operationState.error.message}</b>
+          <b>
+            {composerErrorMessage(
+              operationState.error,
+              'Synara could not update secret storage. Try again.'
+            )}
+          </b>
         </Text>
       )}
       {operationState.status === AsyncStatus.Success && operationState.data.recoveryKey && (
@@ -214,7 +220,7 @@ export function NativeSecretStorageGate({
   if (error || !status) {
     return (
       <Text size="T200" style={{ color: color.Critical.Main }}>
-        Native secret storage is unavailable. Restart Synara and try again.
+        Synara could not reach secret storage. Restart Synara and try again.
       </Text>
     );
   }

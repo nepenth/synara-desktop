@@ -14,13 +14,13 @@ import {
   Icons,
   IconSrc,
   Input,
-  Modal,
   Overlay,
   OverlayBackdrop,
   OverlayCenter,
   Scroll,
   Text,
 } from 'folds';
+import { Modal } from '../modal-dialog';
 import classNames from 'classnames';
 import FocusTrap from '../FocusTrap';
 import { PageHeader, PageNav, PageNavContent, PageNavHeader } from '../page';
@@ -59,7 +59,13 @@ export function SettingsModal({ requestClose, children }: SettingsModalProps) {
             escapeDeactivates: stopPropagation,
           }}
         >
-          <Modal size="500" variant="Background" className={css.SettingsModal}>
+          {/* Named explicitly: its first header is the open page ("General"), not the dialog. */}
+          <Modal
+            size="500"
+            variant="Background"
+            className={css.SettingsModal}
+            aria-label="Settings"
+          >
             {children}
           </Modal>
         </FocusTrap>
@@ -271,12 +277,7 @@ export function SettingsNav<T>({
                     {group.pageName}
                   </Text>
                   {group.results.map((result) => (
-                    <NavItem
-                      key={result.title ?? group.pageName}
-                      variant="Background"
-                      radii="400"
-                      aria-selected={false}
-                    >
+                    <NavItem key={result.title ?? group.pageName} variant="Background" radii="400">
                       <button
                         type="button"
                         className={css.SearchResultButton}
@@ -330,7 +331,7 @@ export function SettingsNav<T>({
                           key={item.name}
                           variant="Background"
                           radii="400"
-                          aria-selected={selected}
+                          selected={selected}
                         >
                           <button
                             type="button"

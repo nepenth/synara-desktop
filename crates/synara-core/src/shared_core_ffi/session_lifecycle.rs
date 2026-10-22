@@ -1,4 +1,36 @@
 //! Typed SharedCore operations and projections for session lifecycle.
+//!
+//! Both shells keep their session in one
+//! `app::lifecycle::session::SessionLifecycleOwner`: desktop's
+//! `MatrixAuthState` holds a `ManagedMatrixSession`, SharedCore an
+//! [`IosSession`]. The slot, transition gate, recover gate, generation
+//! counter and save-retry backoff are the owner's; every policy step
+//! (persistence lease and rotation callbacks, owner wiring, the logout order,
+//! remote-logout gating) is shared through `session_policy`. iOS uses the
+//! owner in three shapes of its own:
+//! - Restore and sign-in take only the transition gate
+//!   (`try_begin_detached_install`), so a concurrent attempt is answered at
+//!   once with "in flight" (`p4-s3b-restore-failed`) or, while a session is
+//!   installed, "already restored" or "identity mismatch". Swift's bootstrap
+//!   relies on those answers, and commands keep failing closed on the empty
+//!   slot instead of waiting out a network sign-in.
+//! - Logout keeps the session installed until the local teardown succeeded
+//!   (`logout_in_place`, iOS `TeardownOrder::RetireAfterClose`).
+//! - Owners attach in a separate export, so the attach claim lives in the
+//!   installed session rather than in the install itself.
+//!
+//! iOS-only adapters stay here: suspension (`stop_sync` closes the stores,
+//! `start_sync` reopens them and store calls wait for it, under
+//! `sync_lifecycle`), timelines' `resumed()` after a suspension, the
+//! unclaimed timeline stream TTL, and store reset
+//! (`reset_local_account_store`; desktop archives and rebuilds instead).
+//!
+//! Process-wide state: the decrypted hot media cache and the room-list
+//! encryption-probe throttle are keyed by account, and closing a `Core`
+//! clears only its own account's media. Still process-wide on purpose: the
+//! encrypted-state account setting (one signed-in account per desktop
+//! process), the directory-search request authority (keyed by session
+//! generation) and the per-process timeline media handle secret.
 
 use super::*;
 use crate::app::lifecycle::session as session_policy;
@@ -7,11 +39,13 @@ use crate::app::lifecycle::session as session_policy;
 /// Swift bound, so its backup wait is shorter than desktop's.
 const IOS_LOGOUT_BACKUP_STEADY_STATE_TIMEOUT: std::time::Duration =
     std::time::Duration::from_secs(3);
+use crate::app::client_builder::{product_user_agent, ClientProduct, StoreFootprint};
 use crate::app::lifecycle::session::{
     RotationDiagnostics, RotationHooks, SessionFault, SessionPersistenceLease,
     SessionPersistenceOwner,
 };
 use crate::app::sync::{CommandGate, SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID};
+use crate::ffi_runtime::{block_in_place_if_worker, run_blocking};
 use crate::MatrixSessionSnapshot;
 
 /// Static fail-closed vault error. Fields are source constants only.
@@ -51,21 +85,16 @@ pub struct SessionRestoreDto {
 /// Static fail-closed restore error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SessionRestoreError {
-    Failed { code: String, description: String },
+    Failed {
+        kind: CoreErrorKind,
+        code: String,
+        description: String,
+    },
 }
-
-impl std::fmt::Display for SessionRestoreError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Failed { description, .. } => formatter.write_str(description),
-        }
-    }
-}
-
-impl std::error::Error for SessionRestoreError {}
 
 pub(super) fn restore_failed(code: &'static str, description: &'static str) -> SessionRestoreError {
     SessionRestoreError::Failed {
+        kind: CoreErrorKind::for_code(code),
         code: code.to_owned(),
         description: description.to_owned(),
     }
@@ -82,24 +111,105 @@ pub struct SessionLoginDto {
 /// Static fail-closed login error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SessionLoginError {
-    Failed { code: String, description: String },
+    Failed {
+        kind: CoreErrorKind,
+        code: String,
+        description: String,
+    },
 }
-
-impl std::fmt::Display for SessionLoginError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Failed { description, .. } => formatter.write_str(description),
-        }
-    }
-}
-
-impl std::error::Error for SessionLoginError {}
 
 pub(super) fn login_failed(code: &'static str, description: &'static str) -> SessionLoginError {
     SessionLoginError::Failed {
+        kind: CoreErrorKind::for_code(code),
         code: code.to_owned(),
         description: description.to_owned(),
     }
+}
+
+/// Sign-in view of a `store_key_for` failure. A store that needs a reset
+/// keeps its own code so Swift can offer the reset instead of reporting
+/// wrong credentials.
+pub(super) fn login_store_key_error(error: SessionRestoreError) -> SessionLoginError {
+    match error {
+        SessionRestoreError::Failed { code, .. } if code == VAULT_UNAVAILABLE_CODE => login_failed(
+            LOGIN_VAULT_UNAVAILABLE_CODE,
+            LOGIN_VAULT_UNAVAILABLE_DESCRIPTION,
+        ),
+        SessionRestoreError::Failed { code, .. } if code == STORE_RESET_REQUIRED_CODE => {
+            login_failed(
+                LOGIN_STORE_RESET_REQUIRED_CODE,
+                STORE_RESET_REQUIRED_DESCRIPTION,
+            )
+        }
+        _ => login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION),
+    }
+}
+
+/// Sign-in view of a Core [`AuthError`] (the `/versions` probe, the crypto
+/// store peek, and the login request). Only a rejection by the homeserver is
+/// reported as wrong credentials; connectivity, outages, rate limits,
+/// deactivation, unsupported steps and local store states keep codes of
+/// their own. Unclassified failures stay `p4-s3c-login-failed`.
+pub(super) fn login_auth_error(error: &AuthError) -> SessionLoginError {
+    match error {
+        AuthError::AuthenticationRejected { .. } => login_failed(
+            LOGIN_CREDENTIALS_REJECTED_CODE,
+            LOGIN_CREDENTIALS_REJECTED_DESCRIPTION,
+        ),
+        AuthError::Connectivity { .. } => login_failed(
+            LOGIN_NETWORK_UNAVAILABLE_CODE,
+            LOGIN_NETWORK_UNAVAILABLE_DESCRIPTION,
+        ),
+        AuthError::HomeserverUnavailable { .. } => login_failed(
+            LOGIN_SERVER_UNAVAILABLE_CODE,
+            LOGIN_SERVER_UNAVAILABLE_DESCRIPTION,
+        ),
+        AuthError::RateLimited { .. } => {
+            login_failed(LOGIN_RATE_LIMITED_CODE, LOGIN_RATE_LIMITED_DESCRIPTION)
+        }
+        AuthError::UserDeactivated { .. } => login_failed(
+            LOGIN_USER_DEACTIVATED_CODE,
+            LOGIN_USER_DEACTIVATED_DESCRIPTION,
+        ),
+        AuthError::UnsupportedCapability { .. }
+        | AuthError::WellKnownNotFound { .. }
+        | AuthError::InteractiveAuthRequired { .. } => {
+            login_failed(LOGIN_UNSUPPORTED_CODE, LOGIN_UNSUPPORTED_DESCRIPTION)
+        }
+        AuthError::SdkInvariant { diagnostic_id }
+            if *diagnostic_id == "p3.2-login-store-reset-required" =>
+        {
+            login_failed(
+                LOGIN_STORE_RESET_REQUIRED_CODE,
+                STORE_RESET_REQUIRED_DESCRIPTION,
+            )
+        }
+        AuthError::SdkInvariant { diagnostic_id }
+            if *diagnostic_id == "p3.2-login-store-locked" =>
+        {
+            login_failed(LOGIN_STORE_LOCKED_CODE, LOGIN_STORE_LOCKED_DESCRIPTION)
+        }
+        AuthError::InvalidInput { .. }
+        | AuthError::SdkInvariant { .. }
+        | AuthError::Unknown { .. } => login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION),
+    }
+}
+
+/// Sign-in view of a client build failure: a store that needs a reset or is
+/// locked keeps its own code.
+pub(super) fn login_client_build_error(
+    error: &crate::app::client_builder::ClientBuilderError,
+) -> SessionLoginError {
+    if store_build_needs_reset(error) {
+        return login_failed(
+            LOGIN_STORE_RESET_REQUIRED_CODE,
+            STORE_RESET_REQUIRED_DESCRIPTION,
+        );
+    }
+    if error.to_factory_error().category == MatrixIpcErrorCategory::StoreLocked {
+        return login_failed(LOGIN_STORE_LOCKED_CODE, LOGIN_STORE_LOCKED_DESCRIPTION);
+    }
+    login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION)
 }
 
 /// Privacy-safe attach outcome. Owner names only; no tokens or password.
@@ -111,21 +221,16 @@ pub struct SessionAttachDto {
 /// Static fail-closed attach error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SessionAttachError {
-    Failed { code: String, description: String },
+    Failed {
+        kind: CoreErrorKind,
+        code: String,
+        description: String,
+    },
 }
-
-impl std::fmt::Display for SessionAttachError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Failed { description, .. } => formatter.write_str(description),
-        }
-    }
-}
-
-impl std::error::Error for SessionAttachError {}
 
 pub(super) fn attach_failed(code: &'static str, description: &'static str) -> SessionAttachError {
     SessionAttachError::Failed {
+        kind: CoreErrorKind::for_code(code),
         code: code.to_owned(),
         description: description.to_owned(),
     }
@@ -212,21 +317,16 @@ pub struct SyncStopDto {
 /// Static fail-closed stop error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SyncStopError {
-    Failed { code: String, description: String },
+    Failed {
+        kind: CoreErrorKind,
+        code: String,
+        description: String,
+    },
 }
-
-impl std::fmt::Display for SyncStopError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Failed { description, .. } => formatter.write_str(description),
-        }
-    }
-}
-
-impl std::error::Error for SyncStopError {}
 
 pub(super) fn sync_stop_failed(code: &'static str, description: &'static str) -> SyncStopError {
     SyncStopError::Failed {
+        kind: CoreErrorKind::for_code(code),
         code: code.to_owned(),
         description: description.to_owned(),
     }
@@ -235,21 +335,16 @@ pub(super) fn sync_stop_failed(code: &'static str, description: &'static str) ->
 /// Static fail-closed start error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SyncStartError {
-    Failed { code: String, description: String },
+    Failed {
+        kind: CoreErrorKind,
+        code: String,
+        description: String,
+    },
 }
-
-impl std::fmt::Display for SyncStartError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Failed { description, .. } => formatter.write_str(description),
-        }
-    }
-}
-
-impl std::error::Error for SyncStartError {}
 
 pub(super) fn sync_start_failed(code: &'static str, description: &'static str) -> SyncStartError {
     SyncStartError::Failed {
+        kind: CoreErrorKind::for_code(code),
         code: code.to_owned(),
         description: description.to_owned(),
     }
@@ -274,23 +369,20 @@ pub struct SyncStatusDto {
     pub failure_diagnostic_id: Option<String>,
     pub sliding_sync_capable: Option<bool>,
     pub command_gate: CommandGateDto,
+    /// `stop_sync` closed the stores and no `start_sync` reopened them yet.
+    /// Readiness alone reads `idle` both here and before the first start.
+    pub suspended: bool,
 }
 
 /// Static fail-closed session/status error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum SessionStatusError {
-    Failed { code: String, description: String },
+    Failed {
+        kind: CoreErrorKind,
+        code: String,
+        description: String,
+    },
 }
-
-impl std::fmt::Display for SessionStatusError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Failed { description, .. } => formatter.write_str(description),
-        }
-    }
-}
-
-impl std::error::Error for SessionStatusError {}
 
 /// Privacy-safe leftover write ack. Status only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -307,21 +399,16 @@ pub struct LeftoverBytesDto {
 /// Static fail-closed leftover error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum LeftoverCommandError {
-    Failed { code: String, description: String },
+    Failed {
+        kind: CoreErrorKind,
+        code: String,
+        description: String,
+    },
 }
-
-impl std::fmt::Display for LeftoverCommandError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Failed { description, .. } => formatter.write_str(description),
-        }
-    }
-}
-
-impl std::error::Error for LeftoverCommandError {}
 
 pub(super) fn leftover_failed(code: &str, description: &'static str) -> LeftoverCommandError {
     LeftoverCommandError::Failed {
+        kind: CoreErrorKind::for_code(code),
         code: code.to_owned(),
         description: description.to_owned(),
     }
@@ -333,19 +420,108 @@ pub struct UserInCallDto {
     pub call_joined_ts: Option<u64>,
 }
 
-pub(super) enum RestoredClientSlot {
-    Empty,
-    InFlight,
-    /// Retained for S3d attach after restore or login, with the persistence
-    /// owner that fences this client's token-rotation saves. Dropping or
-    /// revoking it stops late SDK refreshes from writing the vault.
-    Ready(Client, SessionPersistenceOwner),
+/// The installed iOS session: retained for S3d attach after restore or
+/// login, with the persistence owner that fences this client's
+/// token-rotation saves. Dropping it (logout) or revoking the lease stops
+/// late SDK refreshes from writing the vault.
+pub(super) struct IosSession {
+    pub(super) client: Client,
+    pub(super) persistence: SessionPersistenceOwner,
+    generation: u64,
+    /// Whether this session's owners are attached. Attach is its own export
+    /// and runs without the slot lock, so the claim is shared with it.
+    owners: Arc<Mutex<OwnerAttachSlot>>,
+}
+
+impl IosSession {
+    fn new(client: Client, persistence: SessionPersistenceOwner, generation: u64) -> Self {
+        Self {
+            client,
+            persistence,
+            generation,
+            owners: Arc::new(Mutex::new(OwnerAttachSlot::Empty)),
+        }
+    }
+
+    fn owners_attached(&self) -> bool {
+        self.owners
+            .lock()
+            .map(|guard| matches!(*guard, OwnerAttachSlot::Ready))
+            .unwrap_or(false)
+    }
+}
+
+impl session_policy::InstalledSession for IosSession {
+    fn session_generation(&self) -> u64 {
+        self.generation
+    }
 }
 
 pub(super) enum OwnerAttachSlot {
     Empty,
     InFlight,
     Ready,
+}
+
+/// How long a store-touching export waits for `start_sync` to reopen the
+/// stores before it fails with the retryable `SESSION_SUSPENDED_CODE`. A
+/// foreground resume reopens them in well under a second.
+const SUSPENDED_WAIT_BOUND: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Whether `stop_sync` has closed the retained Client's stores for iOS
+/// suspension.
+///
+/// `Client::pause()` keeps the Client and every owner but fails each store
+/// read or write with `StoreClosed`, which used to surface as a generic open
+/// or send failure. Exports that touch the stores wait here, bounded, for the
+/// next `start_sync`, and fail with the specific retryable code if it does
+/// not come. It is the same "stores open" boundary the send-queue recovery
+/// checks before re-enabling queues.
+pub(super) struct SessionSuspension {
+    stores_open: tokio::sync::watch::Sender<bool>,
+    wait_bound: std::sync::Mutex<std::time::Duration>,
+}
+
+impl SessionSuspension {
+    pub(super) fn new() -> Self {
+        Self {
+            stores_open: tokio::sync::watch::Sender::new(true),
+            wait_bound: std::sync::Mutex::new(SUSPENDED_WAIT_BOUND),
+        }
+    }
+
+    pub(super) fn suspend(&self) {
+        self.stores_open.send_replace(false);
+    }
+
+    pub(super) fn resume(&self) {
+        self.stores_open.send_replace(true);
+    }
+
+    pub(super) fn is_suspended(&self) -> bool {
+        !*self.stores_open.borrow()
+    }
+
+    /// `true` once the stores are open, at once when they never closed.
+    async fn wait_until_open(&self) -> bool {
+        let bound = self
+            .wait_bound
+            .lock()
+            .map(|bound| *bound)
+            .unwrap_or(SUSPENDED_WAIT_BOUND);
+        let mut open = self.stores_open.subscribe();
+        let reopened = tokio::time::timeout(bound, open.wait_for(|open| *open))
+            .await
+            .is_ok_and(|changed| changed.is_ok());
+        reopened
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_wait_bound_for_test(&self, bound: std::time::Duration) {
+        if let Ok(mut guard) = self.wait_bound.lock() {
+            *guard = bound;
+        }
+    }
 }
 
 pub(super) fn closed_creators_event_type(value: &str) -> Option<&'static str> {
@@ -375,18 +551,22 @@ pub(super) fn snapshot_content_json(
 
 pub(super) fn session_status_failed(code: &str, description: &'static str) -> SessionStatusError {
     SessionStatusError::Failed {
+        kind: CoreErrorKind::for_code(code),
         code: code.to_owned(),
         description: description.to_owned(),
     }
 }
 
 pub(super) fn map_session_status_core_error(error: MatrixIpcError) -> SessionStatusError {
-    match error.diagnostic_id.as_deref() {
+    let kind = CoreErrorKind::from_category(error.category);
+    let error = match error.diagnostic_id.as_deref() {
         Some(code)
             if code.starts_with("p2-session-snapshot-")
                 || code.starts_with("p2-sync-status-")
                 || code.starts_with("p2-media-config-")
                 || code.starts_with("p2-secret-storage-status-")
+                || code.starts_with("p2-cross-signing-setup-")
+                || code.starts_with("v-crypto.2-")
                 || code.starts_with("v-crypto.4-") =>
         {
             session_status_failed(code, SESSION_STATUS_OWNER_DESCRIPTION)
@@ -395,7 +575,8 @@ pub(super) fn map_session_status_core_error(error: MatrixIpcError) -> SessionSta
             SESSION_STATUS_FAILED_CODE,
             SESSION_STATUS_FAILED_DESCRIPTION,
         ),
-    }
+    };
+    error.with_kind(kind)
 }
 
 fn session_status_failure() -> SessionStatusError {
@@ -494,6 +675,7 @@ pub(super) fn sync_status_from_owner_snapshot(
         failure_diagnostic_id: snapshot.failure_diagnostic_id.map(str::to_owned),
         sliding_sync_capable: snapshot.sliding_sync_capable,
         command_gate: command_gate.into(),
+        suspended: false,
     })
 }
 
@@ -512,94 +694,90 @@ pub(super) fn sync_status_dto_from_public(
         failure_diagnostic_id: snapshot.failure_diagnostic_id.map(str::to_owned),
         sliding_sync_capable: snapshot.sliding_sync_capable,
         command_gate: snapshot.command_gate.into(),
+        suspended: false,
     })
 }
 
-/// Claims the restore slot for one in-flight attempt. Drop releases it unless
-/// [`RestoreClaim::commit`] stores the Client after a successful Core open.
-pub(super) struct RestoreClaim<'a> {
-    pub(super) slot: &'a Mutex<RestoredClientSlot>,
-    pub(super) committed: bool,
+/// Whether the retained Client is signed in as `identity` on its homeserver.
+/// Product clients are built with `identity`'s homeserver URL and never
+/// follow a login well-known, so both compare exactly after URL parsing.
+fn client_matches_identity(client: &Client, identity: &AccountIdentity) -> bool {
+    let same_user = client
+        .user_id()
+        .is_some_and(|user_id| user_id.as_str() == identity.user_id());
+    let same_homeserver = url::Url::parse(identity.homeserver_url())
+        .is_ok_and(|homeserver| homeserver == client.homeserver());
+    same_user && same_homeserver
 }
 
-impl<'a> RestoreClaim<'a> {
+/// Take the lifecycle owner's transition gate for one restore or sign-in.
+///
+/// The shells treat "already restored" as success, so it is only returned
+/// when the installed session belongs to `identity`. Any other account gets a
+/// mismatch error instead of silently driving the wrong session. With no
+/// session installed, an attempt that finds the gate held (another install,
+/// or a logout) is answered "restore failed" at once instead of queued.
+pub(super) async fn begin_session_install<'a>(
+    lifecycle: &'a session_policy::SessionLifecycleOwner<IosSession>,
+    identity: &AccountIdentity,
+) -> Result<session_policy::DetachedInstallGuard<'a, IosSession>, SessionRestoreError> {
+    let matches = |active: Option<&IosSession>| {
+        active.map(|active| client_matches_identity(&active.client, identity))
+    };
+    let install = lifecycle.try_begin_detached_install();
+    let installed = match &install {
+        Some(install) => install.current(matches).await,
+        None => matches(lifecycle.session.lock().await.as_ref()),
+    };
+    match (install, installed) {
+        (_, Some(true)) => Err(restore_failed(
+            ALREADY_RESTORED_CODE,
+            ALREADY_RESTORED_DESCRIPTION,
+        )),
+        (_, Some(false)) => Err(restore_failed(
+            RESTORED_IDENTITY_MISMATCH_CODE,
+            RESTORED_IDENTITY_MISMATCH_DESCRIPTION,
+        )),
+        (Some(install), None) => Ok(install),
+        (None, None) => Err(restore_failed(
+            RESTORE_FAILED_CODE,
+            RESTORE_FAILED_DESCRIPTION,
+        )),
+    }
+}
+
+/// Claims the installed session's owner attach for one in-flight attempt.
+/// Drop releases it unless [`AttachClaim::commit`] marks the owners attached.
+pub(super) struct AttachClaim {
+    owners: Arc<Mutex<OwnerAttachSlot>>,
+    committed: bool,
+}
+
+impl AttachClaim {
+    /// Claim `session`'s attach and return its retained Client.
     pub(super) fn acquire(
-        slot: &'a Mutex<RestoredClientSlot>,
-    ) -> Result<Self, SessionRestoreError> {
-        let mut guard = slot
-            .lock()
-            .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
-        match *guard {
-            RestoredClientSlot::Empty => {
-                *guard = RestoredClientSlot::InFlight;
-                Ok(Self {
-                    slot,
-                    committed: false,
-                })
-            }
-            RestoredClientSlot::Ready(..) => Err(restore_failed(
-                ALREADY_RESTORED_CODE,
-                ALREADY_RESTORED_DESCRIPTION,
-            )),
-            RestoredClientSlot::InFlight => Err(restore_failed(
-                RESTORE_FAILED_CODE,
-                RESTORE_FAILED_DESCRIPTION,
-            )),
-        }
-    }
-
-    fn commit(
-        mut self,
-        client: Client,
-        persistence: SessionPersistenceOwner,
-    ) -> Result<(), SessionRestoreError> {
-        let mut guard = self
-            .slot
-            .lock()
-            .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
-        if !matches!(*guard, RestoredClientSlot::InFlight) {
-            return Err(restore_failed(
-                RESTORE_FAILED_CODE,
-                RESTORE_FAILED_DESCRIPTION,
+        session: Option<&IosSession>,
+    ) -> Result<(Self, Client), SessionAttachError> {
+        let Some(session) = session else {
+            return Err(attach_failed(
+                ATTACH_SESSION_MISSING_CODE,
+                ATTACH_SESSION_MISSING_DESCRIPTION,
             ));
-        }
-        *guard = RestoredClientSlot::Ready(client, persistence);
-        self.committed = true;
-        Ok(())
-    }
-}
-
-impl Drop for RestoreClaim<'_> {
-    fn drop(&mut self) {
-        if self.committed {
-            return;
-        }
-        if let Ok(mut guard) = self.slot.lock() {
-            if matches!(*guard, RestoredClientSlot::InFlight) {
-                *guard = RestoredClientSlot::Empty;
-            }
-        }
-    }
-}
-
-/// Claims the owner-attach slot for one in-flight attempt.
-pub(super) struct AttachClaim<'a> {
-    pub(super) slot: &'a Mutex<OwnerAttachSlot>,
-    pub(super) committed: bool,
-}
-
-impl<'a> AttachClaim<'a> {
-    pub(super) fn acquire(slot: &'a Mutex<OwnerAttachSlot>) -> Result<Self, SessionAttachError> {
-        let mut guard = slot
+        };
+        let mut guard = session
+            .owners
             .lock()
             .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
         match *guard {
             OwnerAttachSlot::Empty => {
                 *guard = OwnerAttachSlot::InFlight;
-                Ok(Self {
-                    slot,
-                    committed: false,
-                })
+                Ok((
+                    Self {
+                        owners: Arc::clone(&session.owners),
+                        committed: false,
+                    },
+                    session.client.clone(),
+                ))
             }
             OwnerAttachSlot::Ready => Err(attach_failed(
                 ATTACH_ALREADY_CODE,
@@ -611,26 +789,31 @@ impl<'a> AttachClaim<'a> {
         }
     }
 
-    fn commit(mut self) -> Result<(), SessionAttachError> {
+    /// Fails when a logout took the claimed session out of the slot first.
+    fn commit(mut self, installed: Option<&IosSession>) -> Result<(), SessionAttachError> {
+        if !installed.is_some_and(|session| Arc::ptr_eq(&session.owners, &self.owners)) {
+            return Err(attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION));
+        }
         let mut guard = self
-            .slot
+            .owners
             .lock()
             .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
         if !matches!(*guard, OwnerAttachSlot::InFlight) {
             return Err(attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION));
         }
         *guard = OwnerAttachSlot::Ready;
+        drop(guard);
         self.committed = true;
         Ok(())
     }
 }
 
-impl Drop for AttachClaim<'_> {
+impl Drop for AttachClaim {
     fn drop(&mut self) {
         if self.committed {
             return;
         }
-        if let Ok(mut guard) = self.slot.lock() {
+        if let Ok(mut guard) = self.owners.lock() {
             if matches!(*guard, OwnerAttachSlot::InFlight) {
                 *guard = OwnerAttachSlot::Empty;
             }
@@ -656,6 +839,7 @@ pub(super) fn map_leftover_status_core_error(error: MatrixIpcError) -> LeftoverC
                 || code.contains("-session-missing") =>
         {
             leftover_failed(code, LEFTOVER_NO_SESSION_DESCRIPTION)
+                .with_kind(CoreErrorKind::NotReady)
         }
         Some(code)
             if code.starts_with("p2-backup-status-")
@@ -666,8 +850,10 @@ pub(super) fn map_leftover_status_core_error(error: MatrixIpcError) -> LeftoverC
                 || code.starts_with("v-crypto.3-") =>
         {
             leftover_failed(code, LEFTOVER_UNAVAILABLE_DESCRIPTION)
+                .with_kind(CoreErrorKind::from_category(error.category))
         }
-        _ => leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION),
+        _ => leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION)
+            .with_kind(CoreErrorKind::from_category(error.category)),
     }
 }
 
@@ -675,22 +861,21 @@ pub(super) struct CallbackSecretVault {
     pub(super) inner: Box<dyn IosSecretVault>,
 }
 
+/// Each call is a synchronous Keychain round trip in Swift. Exports move
+/// their vault work to the blocking pool; a call that still lands on a
+/// runtime worker (an owner task) hands the worker's other tasks over first.
 impl SecretVault for CallbackSecretVault {
     fn get(&self, key: &str) -> Result<Option<Vec<u8>>, MatrixIpcError> {
-        self.inner
-            .get(key.to_owned())
-            .map_err(|_| vault_unavailable())
+        block_in_place_if_worker(|| self.inner.get(key.to_owned())).map_err(|_| vault_unavailable())
     }
 
     fn put(&self, key: &str, value: &[u8]) -> Result<(), MatrixIpcError> {
-        self.inner
-            .put(key.to_owned(), value.to_vec())
+        block_in_place_if_worker(|| self.inner.put(key.to_owned(), value.to_vec()))
             .map_err(|_| vault_unavailable())
     }
 
     fn delete(&self, key: &str) -> Result<(), MatrixIpcError> {
-        self.inner
-            .delete(key.to_owned())
+        block_in_place_if_worker(|| self.inner.delete(key.to_owned()))
             .map_err(|_| vault_unavailable())
     }
 }
@@ -785,7 +970,63 @@ impl SharedCore {
     /// generation (for example rejected-auth retirement) cannot match the
     /// session that replaced it.
     pub(super) fn allocate_session_generation(&self) -> u64 {
-        self.generations.allocate()
+        self.lifecycle.next_generation()
+    }
+
+    fn with_platform(platform: IosFailClosedPlatform, user_agent: String) -> Self {
+        crate::ffi_runtime::install_app_ffi_runtime();
+        let secret_store = Platform::secret_store(&platform);
+        Self {
+            core: Core::new(Arc::new(platform)),
+            secret_store,
+            user_agent,
+            lifecycle: Arc::new(session_policy::SessionLifecycleOwner::new()),
+            sync_lifecycle: tokio::sync::Mutex::new(()),
+            suspension: SessionSuspension::new(),
+            timeline_view_updates: Arc::new(Mutex::new(Default::default())),
+            owner_updates: Arc::new(Mutex::new(Vec::new())),
+            room_list_updates: Arc::new(Mutex::new(Vec::new())),
+            room_list_live: Arc::new(Mutex::new(None)),
+            own_profile_live: Arc::new(Mutex::new(None)),
+            media_retention_live: Arc::new(Mutex::new(None)),
+            rejected_session: Mutex::new(None),
+        }
+    }
+
+    /// The product client config for this app: its User-Agent and the
+    /// low-memory SQLite profile iOS needs to survive in the background.
+    pub(super) fn client_config(
+        &self,
+        root: &Path,
+        identity: &AccountIdentity,
+        store_key: StoreKeyMaterial,
+    ) -> Result<ClientBuildConfig, crate::app::client_builder::ClientBuilderError> {
+        Ok(
+            ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))?
+                .with_user_agent(self.user_agent.clone())?
+                .with_store_footprint(StoreFootprint::LowMemory),
+        )
+    }
+
+    /// Sign-in's store key and layout migration, off the async threads
+    /// (Keychain reads and writes, directory creation, manifest files).
+    async fn prepare_login_store(
+        &self,
+        root: &Path,
+        identity: &AccountIdentity,
+    ) -> Result<StoreKeyMaterial, SessionLoginError> {
+        let secret_store = Arc::clone(&self.secret_store);
+        let root = root.to_path_buf();
+        let identity = identity.clone();
+        run_blocking(move || {
+            let store_key =
+                store_key_for(&secret_store, &root, &identity).map_err(login_store_key_error)?;
+            prepare_session_store(&root, &identity)
+                .map_err(|()| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+            Ok(store_key)
+        })
+        .await
+        .unwrap_or_else(|| Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION)))
     }
 
     pub(super) async fn restore_persisted_session_with_policy(
@@ -797,30 +1038,52 @@ impl SharedCore {
     ) -> Result<SessionRestoreDto, SessionRestoreError> {
         let identity = AccountIdentity::new(&user_id, &homeserver_url)
             .map_err(|_| restore_failed(IDENTITY_INVALID_CODE, IDENTITY_INVALID_DESCRIPTION))?;
-        let root = validate_store_root(&store_root)?;
-        let claim = RestoreClaim::acquire(&self.restored_client)?;
-        let vault = SecretStoreSessionVault {
-            store: Arc::clone(&self.secret_store),
+        let root = validate_store_root(&store_root)?.to_path_buf();
+        let install = begin_session_install(&self.lifecycle, &identity).await?;
+        // Keychain reads, the store-key policy and the layout migration are
+        // blocking I/O; none of it runs on the thread polling this export.
+        let (material, store_key) = {
+            let secret_store = Arc::clone(&self.secret_store);
+            let root = root.clone();
+            let identity = identity.clone();
+            run_blocking(move || {
+                let vault = SecretStoreSessionVault {
+                    store: Arc::clone(&secret_store),
+                };
+                let material = vault
+                    .get(&SessionMaterialId::from_identity(&identity))
+                    .map_err(|_| {
+                        restore_failed(VAULT_UNAVAILABLE_CODE, VAULT_UNAVAILABLE_DESCRIPTION)
+                    })?
+                    .ok_or_else(|| {
+                        restore_failed(MATERIAL_MISSING_CODE, MATERIAL_MISSING_DESCRIPTION)
+                    })?;
+                let store_key = store_key_for(&secret_store, &root, &identity)?;
+                prepare_session_store(&root, &identity).map_err(|()| {
+                    restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION)
+                })?;
+                Ok((material, store_key))
+            })
+            .await
+            .unwrap_or_else(|| {
+                Err(restore_failed(
+                    RESTORE_FAILED_CODE,
+                    RESTORE_FAILED_DESCRIPTION,
+                ))
+            })?
         };
-        if vault
-            .get(&SessionMaterialId::from_identity(&identity))
-            .map_err(|_| restore_failed(VAULT_UNAVAILABLE_CODE, VAULT_UNAVAILABLE_DESCRIPTION))?
-            .is_none()
-        {
-            return Err(restore_failed(
-                MATERIAL_MISSING_CODE,
-                MATERIAL_MISSING_DESCRIPTION,
-            ));
-        }
-
-        let store_key = store_key_for(&self.secret_store, &identity)?;
-        prepare_session_store(root, &identity)
-            .map_err(|()| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
-        let config = ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))
+        let config = self
+            .client_config(&root, &identity, store_key)
             .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
         let client = build_unauthenticated_client(&config)
             .await
-            .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
+            .map_err(|error| {
+                if store_build_needs_reset(&error) {
+                    store_reset_required()
+                } else {
+                    restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION)
+                }
+            })?;
         let persistence = SessionPersistenceOwner::new();
         install_session_rotation_callbacks(
             &client,
@@ -829,27 +1092,18 @@ impl SharedCore {
             persistence.callback_lease(),
         )
         .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
-        let outcome = if let Some(room_load_settings) = room_load_settings {
-            restore_session_from_vault_with_room_load_settings(
-                &client,
-                &identity,
-                &vault,
-                room_load_settings,
-            )
-            .await
-        } else {
-            restore_session_from_vault(&client, &identity, &vault).await
-        }
-        .map_err(|error| match error {
-            crate::app::lifecycle::LifecycleError::Vault {
-                diagnostic_id: "p3.6-session-material-missing",
-                ..
-            } => restore_failed(MATERIAL_MISSING_CODE, MATERIAL_MISSING_DESCRIPTION),
-            _ => restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION),
-        })?;
+        let outcome = restore_session_onto_client_with_room_load_settings(
+            &client,
+            &identity,
+            &material,
+            room_load_settings.unwrap_or_default(),
+        )
+        .await
+        .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
 
+        let generation = self.allocate_session_generation();
         let snapshot = SessionSnapshot {
-            session_generation: self.allocate_session_generation(),
+            session_generation: generation,
             user_id: outcome.meta.user_id.clone(),
             device_id: outcome.meta.device_id.clone(),
             homeserver_url: outcome.meta.homeserver_url.clone(),
@@ -862,17 +1116,11 @@ impl SharedCore {
             .open(snapshot)
             .await
             .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
-
-        session_policy::finish_session_preparation(
-            claim
-                .commit(client, persistence)
-                .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION)),
-            || async {
-                let _ = self.core.close().await;
-                Ok(())
-            },
-        )
-        .await?;
+        // The transition gate kept every other install and logout out, so
+        // publishing cannot fail.
+        install
+            .publish(IosSession::new(client, persistence, generation))
+            .await;
 
         Ok(SessionRestoreDto {
             user_id: outcome.meta.user_id,
@@ -903,34 +1151,25 @@ impl SharedCore {
         if password.is_empty() {
             return Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION));
         }
-        let claim = RestoreClaim::acquire(&self.restored_client)
+        let install = begin_session_install(&self.lifecycle, &identity)
+            .await
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let vault = SecretStoreSessionVault {
             store: Arc::clone(&self.secret_store),
         };
-        let store_key =
-            store_key_for(&self.secret_store, &identity).map_err(|error| match error {
-                SessionRestoreError::Failed { code, .. } if code == VAULT_UNAVAILABLE_CODE => {
-                    login_failed(
-                        LOGIN_VAULT_UNAVAILABLE_CODE,
-                        LOGIN_VAULT_UNAVAILABLE_DESCRIPTION,
-                    )
-                }
-                _ => login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION),
-            })?;
-        prepare_session_store(root, &identity)
-            .map_err(|()| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
-        let config = ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))
+        let store_key = self.prepare_login_store(root, &identity).await?;
+        let config = self
+            .client_config(root, &identity, store_key)
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let existing_device_id = existing_sqlite_crypto_device_id(
             config.state_store_path(),
             config.store_passphrase_hex().as_deref(),
         )
         .await
-        .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        .map_err(|error| login_auth_error(&error))?;
         let client = build_unauthenticated_client(&config)
             .await
-            .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+            .map_err(|error| login_client_build_error(&error))?;
         let persistence = SessionPersistenceOwner::new();
         install_session_rotation_callbacks(
             &client,
@@ -939,32 +1178,59 @@ impl SharedCore {
             persistence.callback_lease(),
         )
         .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        require_native_sliding_sync(&client)
+            .await
+            .map_err(|error| {
+                if error.diagnostic_id() == LOGIN_SLIDING_SYNC_UNSUPPORTED_DIAGNOSTIC_ID {
+                    login_failed(
+                        LOGIN_SLIDING_SYNC_UNSUPPORTED_CODE,
+                        LOGIN_SLIDING_SYNC_UNSUPPORTED_DESCRIPTION,
+                    )
+                } else {
+                    // The `/versions` probe is the first request: an
+                    // unreachable or failing server shows up here.
+                    login_auth_error(&error)
+                }
+            })?;
         let outcome = core_login_with_password(
             &client,
             identity.user_id(),
             password,
             &LoginOptions {
-                request_refresh_token: true,
+                // The notification extension restores this session read-only
+                // and cannot refresh it, so an expiring access token leaves
+                // pushes without previews once the app has been suspended past
+                // the token lifetime. Sessions saved with a refresh token by
+                // older builds keep refreshing in the app.
+                request_refresh_token: false,
                 device_display_name: Some(DevicePlatform::Ios.device_display_name().to_owned()),
                 device_id: existing_device_id,
             },
         )
         .await
-        .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        .map_err(|error| login_auth_error(&error))?;
         let live_identity = AccountIdentity::new(&outcome.user_id, &outcome.homeserver_url)
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         if live_identity != identity {
             return Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION));
         }
-        self.persist_open_and_retain(
-            client,
-            persistence,
-            &live_identity,
-            &vault,
-            claim,
-            outcome.device_id,
-        )
-        .await
+        // An account's first device gets a cross-signing identity now (same
+        // guarded Core step as desktop). Sign-in never fails because of it;
+        // Security settings still offers setup when it was skipped.
+        let sign_in = crate::app::cross_signing::bootstrap_after_login(&client, password).await;
+        let login = self
+            .persist_open_and_retain(
+                client,
+                persistence,
+                &live_identity,
+                &vault,
+                install,
+                outcome.device_id,
+            )
+            .await?;
+        // "Verify this device" is offered once, after a password sign-in.
+        let _ = self.core.arm_device_verification_prompt(sign_in);
+        Ok(login)
     }
 
     /// Test-only persist+open+retain through the production login path.
@@ -994,24 +1260,15 @@ impl SharedCore {
                 LOGIN_STORE_ROOT_INVALID_DESCRIPTION,
             )
         })?;
-        let claim = RestoreClaim::acquire(&self.restored_client)
+        let install = begin_session_install(&self.lifecycle, &identity)
+            .await
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let vault = SecretStoreSessionVault {
             store: Arc::clone(&self.secret_store),
         };
-        let store_key =
-            store_key_for(&self.secret_store, &identity).map_err(|error| match error {
-                SessionRestoreError::Failed { code, .. } if code == VAULT_UNAVAILABLE_CODE => {
-                    login_failed(
-                        LOGIN_VAULT_UNAVAILABLE_CODE,
-                        LOGIN_VAULT_UNAVAILABLE_DESCRIPTION,
-                    )
-                }
-                _ => login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION),
-            })?;
-        prepare_session_store(root, &identity)
-            .map_err(|()| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
-        let config = ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))
+        let store_key = self.prepare_login_store(root, &identity).await?;
+        let config = self
+            .client_config(root, &identity, store_key)
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let client = build_unauthenticated_client(&config)
             .await
@@ -1034,7 +1291,7 @@ impl SharedCore {
         restore_session_onto_client(&client, &identity, &material)
             .await
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
-        self.persist_open_and_retain(client, persistence, &identity, &vault, claim, device_id)
+        self.persist_open_and_retain(client, persistence, &identity, &vault, install, device_id)
             .await
     }
 
@@ -1044,21 +1301,37 @@ impl SharedCore {
         persistence: SessionPersistenceOwner,
         identity: &AccountIdentity,
         vault: &SecretStoreSessionVault,
-        claim: RestoreClaim<'_>,
+        install: session_policy::DetachedInstallGuard<'_, IosSession>,
         device_id: String,
     ) -> Result<SessionLoginDto, SessionLoginError> {
-        // The login save shares the rotation callbacks' fence.
-        persistence
-            .lease()
-            .save(|| {
-                persist_session_after_login(&client, identity, vault)
-                    .map(|_| ())
-                    .map_err(|_| SessionFault::unavailable(RotationDiagnostics::IOS.persist_failed))
+        // The login save shares the rotation callbacks' fence. It is a
+        // Keychain write, so it runs on the blocking pool.
+        {
+            let lease = persistence.callback_lease();
+            let client = client.clone();
+            let identity = identity.clone();
+            let vault = vault.clone();
+            run_blocking(move || {
+                lease.save(|| {
+                    persist_session_after_login(&client, &identity, &vault)
+                        .map(|_| ())
+                        .map_err(|_| {
+                            SessionFault::unavailable(RotationDiagnostics::IOS.persist_failed)
+                        })
+                })
+            })
+            .await
+            .unwrap_or_else(|| {
+                Err(SessionFault::unavailable(
+                    RotationDiagnostics::IOS.persist_failed,
+                ))
             })
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        }
 
+        let generation = self.allocate_session_generation();
         let snapshot = SessionSnapshot {
-            session_generation: self.allocate_session_generation(),
+            session_generation: generation,
             user_id: identity.user_id().to_owned(),
             device_id: device_id.clone(),
             homeserver_url: identity.homeserver_url().to_owned(),
@@ -1071,17 +1344,9 @@ impl SharedCore {
             .open(snapshot)
             .await
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
-
-        session_policy::finish_session_preparation(
-            claim
-                .commit(client, persistence)
-                .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION)),
-            || async {
-                let _ = self.core.close().await;
-                Ok(())
-            },
-        )
-        .await?;
+        install
+            .publish(IosSession::new(client, persistence, generation))
+            .await;
 
         Ok(SessionLoginDto {
             user_id: identity.user_id().to_owned(),
@@ -1090,11 +1355,8 @@ impl SharedCore {
         })
     }
 
-    /// Re-save the retained client's current in-memory tokens after a failed
-    /// rotation save, at most once per backoff window. It never replays an old
-    /// refresh token, and a revoked lease (logout, forget) makes it a no-op.
-    /// Returns whether a retry ran and succeeded.
-    /// Drop every per-session shell slot and queue after Core closed.
+    /// Drop every per-session shell slot and queue once the lifecycle owner
+    /// has retired the session.
     fn retire_session_slots(&self) {
         if let Ok(mut live) = self.room_list_live.lock() {
             *live = None;
@@ -1114,25 +1376,40 @@ impl SharedCore {
         if let Ok(mut updates) = self.owner_updates.lock() {
             updates.clear();
         }
-        if let Ok(mut guard) = self.restored_client.lock() {
-            *guard = RestoredClientSlot::Empty;
-        }
-        if let Ok(mut attach) = self.owner_attach.lock() {
-            *attach = OwnerAttachSlot::Empty;
+        // No retained Client means no closed stores; the next session starts open.
+        self.suspension.resume();
+    }
+
+    /// Waits, bounded, while `stop_sync` holds the retained stores closed.
+    /// `Err(())` means the session is still suspended; each export maps it
+    /// to its own error with `SESSION_SUSPENDED_CODE`.
+    pub(super) async fn await_open_stores(&self) -> Result<(), ()> {
+        if self.suspension.wait_until_open().await {
+            Ok(())
+        } else {
+            Err(())
         }
     }
 
-    pub(super) fn retry_failed_session_save(&self, now: std::time::Instant) -> Option<bool> {
-        let (client, lease) = match &*self.restored_client.lock().ok()? {
-            RestoredClientSlot::Ready(client, persistence)
-                if persistence.lease().save_failed() && !persistence.lease().is_revoked() =>
-            {
-                (client.clone(), persistence.callback_lease())
-            }
-            _ => return None,
-        };
-        let mut maintenance = self.maintenance.lock().ok()?;
-        if !maintenance.save_retry_due(now) {
+    /// Re-save the retained client's current in-memory tokens after a failed
+    /// rotation save, at most once per backoff window. It never replays an old
+    /// refresh token, and a revoked lease (logout, forget) makes it a no-op.
+    /// Returns whether a retry ran and succeeded.
+    ///
+    /// The Keychain write runs on the blocking pool, so the once-a-second
+    /// status poll that drives it never blocks on the Keychain.
+    pub(super) async fn retry_failed_session_save(&self, now: std::time::Instant) -> Option<bool> {
+        let (client, lease) = self
+            .lifecycle
+            .session
+            .lock()
+            .await
+            .as_ref()
+            .filter(|active| {
+                active.persistence.lease().save_failed() && !active.persistence.lease().is_revoked()
+            })
+            .map(|active| (active.client.clone(), active.persistence.callback_lease()))?;
+        if !self.lifecycle.save_retry_due(now) {
             return None;
         }
         let snapshot = self.core.session_snapshot().ok().flatten()?;
@@ -1140,24 +1417,35 @@ impl SharedCore {
         let vault = SecretStoreSessionVault {
             store: Arc::clone(&self.secret_store),
         };
-        let saved = lease
-            .save(|| {
-                persist_session_after_login(&client, &identity, &vault)
-                    .map(|_| ())
-                    .map_err(|_| SessionFault::unavailable(RotationDiagnostics::IOS.persist_failed))
+        let lifecycle = Arc::clone(&self.lifecycle);
+        run_blocking(move || {
+            // Checked again under the backoff lock: two overlapping polls save once.
+            lifecycle.retry_save_if_due(now, || {
+                lease
+                    .save(|| {
+                        persist_session_after_login(&client, &identity, &vault)
+                            .map(|_| ())
+                            .map_err(|_| {
+                                SessionFault::unavailable(RotationDiagnostics::IOS.persist_failed)
+                            })
+                    })
+                    .is_ok()
             })
-            .is_ok();
-        maintenance.record_save_retry(now, saved);
-        Some(saved)
+        })
+        .await
+        .flatten()
     }
 
-    /// Permanently reject further credential writes from the retained client.
-    pub(super) fn revoke_retained_persistence(&self) {
-        if let Ok(guard) = self.restored_client.lock() {
-            if let RestoredClientSlot::Ready(_, persistence) = &*guard {
-                persistence.lease().revoke();
-            }
-        }
+    /// Forget the account's session material (a Keychain delete) off the
+    /// async threads. The store key and encrypted history stay.
+    async fn delete_session_material(&self, identity: &AccountIdentity) -> Result<(), ()> {
+        let store = Arc::clone(&self.secret_store);
+        let id = SessionMaterialId::from_identity(identity);
+        run_blocking(move || store.delete(id.account()).is_ok())
+            .await
+            .filter(|deleted| *deleted)
+            .map(|_| ())
+            .ok_or(())
     }
 
     /// Remember the current generation when its sync reported a rejected
@@ -1185,27 +1473,29 @@ impl SharedCore {
         Ok(response)
     }
 
-    pub(super) fn has_retained_client(&self) -> bool {
-        self.restored_client
-            .lock()
-            .map(|guard| matches!(*guard, RestoredClientSlot::Ready(..)))
-            .unwrap_or(false)
+    /// Read the installed session under a brief slot lock. Never held across
+    /// an await: an install or logout in flight leaves the slot free.
+    pub(super) async fn with_installed_session<T>(
+        &self,
+        read: impl FnOnce(Option<&IosSession>) -> T,
+    ) -> T {
+        read(self.lifecycle.session.lock().await.as_ref())
     }
 
-    pub(super) fn owners_attached(&self) -> bool {
-        self.owner_attach
-            .lock()
-            .map(|guard| matches!(*guard, OwnerAttachSlot::Ready))
-            .unwrap_or(false)
+    pub(super) async fn has_retained_client(&self) -> bool {
+        self.with_installed_session(|active| active.is_some()).await
+    }
+
+    pub(super) async fn owners_attached(&self) -> bool {
+        self.with_installed_session(|active| active.is_some_and(IosSession::owners_attached))
+            .await
     }
 
     /// The retained SDK client, if a restore or login installed one.
-    pub(super) fn retained_client(&self) -> Result<Client, ()> {
-        let guard = self.restored_client.lock().map_err(|_| ())?;
-        match &*guard {
-            RestoredClientSlot::Ready(client, _) => Ok(client.clone()),
-            RestoredClientSlot::Empty | RestoredClientSlot::InFlight => Err(()),
-        }
+    pub(super) async fn retained_client(&self) -> Result<Client, ()> {
+        self.with_installed_session(|active| active.map(|active| active.client.clone()))
+            .await
+            .ok_or(())
     }
 
     pub(super) async fn session_status_command<T>(
@@ -1222,48 +1512,36 @@ impl SharedCore {
     /// Construct a real Core with the fail-closed iOS Platform.
     #[uniffi::constructor]
     pub fn new() -> Self {
-        let platform = IosFailClosedPlatform::new();
-        let secret_store = Platform::secret_store(&platform);
-        Self {
-            core: Core::new(Arc::new(platform)),
-            secret_store,
-            restored_client: Mutex::new(RestoredClientSlot::Empty),
-            owner_attach: Mutex::new(OwnerAttachSlot::Empty),
-            sync_lifecycle: tokio::sync::Mutex::new(()),
-            timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
-            owner_updates: Arc::new(Mutex::new(Vec::new())),
-            room_list_updates: Arc::new(Mutex::new(Vec::new())),
-            room_list_live: Arc::new(Mutex::new(None)),
-            own_profile_live: Arc::new(Mutex::new(None)),
-            media_retention_live: Arc::new(Mutex::new(None)),
-            generations: crate::app::lifecycle::session::SessionGenerations::new(),
-            maintenance: Mutex::new(Default::default()),
-            rejected_session: Mutex::new(None),
-        }
+        Self::with_platform(
+            IosFailClosedPlatform::new(),
+            crate::app::client_builder::default_user_agent(),
+        )
     }
 
     /// Construct a real Core whose `Platform::secret_store` is the Swift vault.
     #[uniffi::constructor]
     pub fn new_with_secret_store(store: Box<dyn IosSecretVault>) -> Self {
-        let vault: Arc<dyn SecretVault + Send + Sync> =
-            Arc::new(CallbackSecretVault { inner: store });
-        let platform = IosFailClosedPlatform::with_secret_store(Arc::clone(&vault));
-        Self {
-            core: Core::new(Arc::new(platform)),
-            secret_store: vault,
-            restored_client: Mutex::new(RestoredClientSlot::Empty),
-            owner_attach: Mutex::new(OwnerAttachSlot::Empty),
-            sync_lifecycle: tokio::sync::Mutex::new(()),
-            timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
-            owner_updates: Arc::new(Mutex::new(Vec::new())),
-            room_list_updates: Arc::new(Mutex::new(Vec::new())),
-            room_list_live: Arc::new(Mutex::new(None)),
-            own_profile_live: Arc::new(Mutex::new(None)),
-            media_retention_live: Arc::new(Mutex::new(None)),
-            generations: crate::app::lifecycle::session::SessionGenerations::new(),
-            maintenance: Mutex::new(Default::default()),
-            rejected_session: Mutex::new(None),
-        }
+        Self::with_platform(
+            IosFailClosedPlatform::with_secret_store(Arc::new(CallbackSecretVault {
+                inner: store,
+            })),
+            crate::app::client_builder::default_user_agent(),
+        )
+    }
+
+    /// The app's Core: the Swift vault, plus `app_version` (the bundle's
+    /// short version) in the User-Agent of every request, so the
+    /// homeserver's device list reads `Synara-iOS/<version>`.
+    #[uniffi::constructor]
+    pub fn new_for_app(store: Box<dyn IosSecretVault>, app_version: String) -> Self {
+        let user_agent = product_user_agent(ClientProduct::Ios, &app_version);
+        Self::with_platform(
+            IosFailClosedPlatform::with_secret_store(Arc::new(CallbackSecretVault {
+                inner: store,
+            }))
+            .with_user_agent(user_agent.clone()),
+            user_agent,
+        )
     }
 
     /// Restore an already-persisted session from the S3a vault. No password.
@@ -1306,22 +1584,7 @@ impl SharedCore {
     /// P4-S12 `start_sync` starts it. Fail-closed if no Client is
     /// retained or owners are already attached.
     pub async fn attach_session_owners(&self) -> Result<SessionAttachDto, SessionAttachError> {
-        let claim = AttachClaim::acquire(&self.owner_attach)?;
-        let client = {
-            let guard = self
-                .restored_client
-                .lock()
-                .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
-            match &*guard {
-                RestoredClientSlot::Ready(client, _) => client.clone(),
-                RestoredClientSlot::Empty | RestoredClientSlot::InFlight => {
-                    return Err(attach_failed(
-                        ATTACH_SESSION_MISSING_CODE,
-                        ATTACH_SESSION_MISSING_DESCRIPTION,
-                    ));
-                }
-            }
-        };
+        let (claim, client) = self.with_installed_session(AttachClaim::acquire).await?;
         let generation = self
             .core
             .session_snapshot()
@@ -1440,13 +1703,15 @@ impl SharedCore {
         let timeline_updates = Arc::clone(&self.timeline_view_updates);
         let timeline_emit: TimelineViewUpdateEmit = Arc::new(move |batch| {
             if let Ok(mut guard) = timeline_updates.lock() {
-                if guard.len() >= TIMELINE_VIEW_UPDATE_QUEUE_CAP {
-                    guard.remove(0);
-                }
-                guard.push(batch);
+                guard.mark(batch);
             }
         });
-        let timelines = Arc::new(NativeTimelineOwner::new(&client, timeline_emit, generation));
+        // iOS closes a room's stream when its view stops listening; the TTL
+        // also retires any stream whose batches nobody reads anymore.
+        let timelines = Arc::new(
+            NativeTimelineOwner::new(&client, timeline_emit, generation)
+                .with_unclaimed_stream_ttl(crate::app::timeline::UNCLAIMED_VIEW_STREAM_TTL),
+        );
         let sync = Arc::new(
             build_sync_service(&client, generation, SyncServiceConfig::default())
                 .await
@@ -1474,9 +1739,8 @@ impl SharedCore {
         )
         .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
 
-        claim
-            .commit()
-            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        self.with_installed_session(|installed| claim.commit(installed))
+            .await?;
         Ok(SessionAttachDto {
             owners: ATTACHED_OWNER_NAMES
                 .iter()
@@ -1495,18 +1759,30 @@ impl SharedCore {
     /// This is not iOS-on-engine and not P4 acceptance.
     pub async fn start_sync(&self) -> Result<SyncStartDto, SyncStartError> {
         let _lifecycle = self.sync_lifecycle.lock().await;
-        if !self.owners_attached() {
+        if !self.owners_attached().await {
             return Err(sync_start_failed(
                 SYNC_NOT_ATTACHED_CODE,
                 SYNC_NOT_ATTACHED_DESCRIPTION,
             ));
         }
-        let client = self.retained_client().map_err(|_| {
+        let client = self.retained_client().await.map_err(|_| {
             sync_start_failed(CLIENT_RESUME_FAILED_CODE, CLIENT_RESUME_FAILED_DESCRIPTION)
         })?;
+        let was_suspended = self.suspension.is_suspended();
         client.resume().await.map_err(|_| {
             sync_start_failed(CLIENT_RESUME_FAILED_CODE, CLIENT_RESUME_FAILED_DESCRIPTION)
         })?;
+        if was_suspended {
+            // Before any waiting export runs: timelines cached across the
+            // suspension are rebuilt on their next open, and streams do not
+            // expire over batches nobody could read while suspended.
+            if let Some(timelines) = self.core.attached_timeline_owner() {
+                timelines.resumed().await;
+            }
+        }
+        // Stores are open again: release exports waiting out the suspension,
+        // even if SyncService itself fails to start below.
+        self.suspension.resume();
         let snapshot = self.core.start_attached_sync().await.map_err(|code| {
             if code == SYNC_NOT_ATTACHED_CODE {
                 sync_start_failed(SYNC_NOT_ATTACHED_CODE, SYNC_NOT_ATTACHED_DESCRIPTION)
@@ -1515,7 +1791,7 @@ impl SharedCore {
             }
         })?;
         self.spawn_room_list_live();
-        self.spawn_room_surface_owners();
+        self.spawn_room_surface_owners(&client);
         let snapshot = match self.core.attached_sync_owner() {
             Some(owner) => wait_for_started_readiness(owner.as_ref(), snapshot).await,
             None => snapshot,
@@ -1531,14 +1807,18 @@ impl SharedCore {
     /// store operation, and release all SQLite connections and file locks.
     /// Returning `stopped = true` therefore means the complete persistence
     /// boundary is safe for OS suspension, not merely that network sync ended.
+    /// From here until the next `start_sync`, store-touching exports wait for
+    /// the stores to reopen instead of failing on them.
     pub async fn stop_sync(&self) -> Result<SyncStopDto, SyncStopError> {
         let _lifecycle = self.sync_lifecycle.lock().await;
-        if !self.owners_attached() {
+        if !self.owners_attached().await {
             return Err(sync_stop_failed(
                 SYNC_NOT_ATTACHED_CODE,
                 SYNC_NOT_ATTACHED_DESCRIPTION,
             ));
         }
+        // Before any teardown, so no new store work starts while the stores close.
+        self.suspension.suspend();
         if let Ok(mut live) = self.room_list_live.lock() {
             *live = None;
         }
@@ -1549,19 +1829,72 @@ impl SharedCore {
             *live = None;
         }
         let snapshot = self.core.stop_attached_sync().await.map_err(|code| {
+            // The stores were never closed; do not hold callers on them.
+            self.suspension.resume();
             if code == SYNC_NOT_ATTACHED_CODE {
                 sync_stop_failed(SYNC_NOT_ATTACHED_CODE, SYNC_NOT_ATTACHED_DESCRIPTION)
             } else {
                 sync_stop_failed(SYNC_STOP_FAILED_CODE, SYNC_STOP_FAILED_DESCRIPTION)
             }
         })?;
-        let client = self.retained_client().map_err(|_| {
+        let client = self.retained_client().await.map_err(|_| {
             sync_stop_failed(CLIENT_PAUSE_FAILED_CODE, CLIENT_PAUSE_FAILED_DESCRIPTION)
         })?;
         client.pause().await.map_err(|_| {
             sync_stop_failed(CLIENT_PAUSE_FAILED_CODE, CLIENT_PAUSE_FAILED_DESCRIPTION)
         })?;
+        // A suspended app that holds decrypted media in memory is first in
+        // line for termination; the media store refills it after resume.
+        crate::app::media::clear_hot_media_cache_for_client(&client);
         Ok(sync_stop_dto_from_snapshot(snapshot))
+    }
+
+    /// Give back memory Core can rebuild: the decrypted hot media cache, for
+    /// every account. iOS calls this on a memory warning. The encrypted media
+    /// store and the session are untouched.
+    pub fn release_cached_memory(&self) {
+        crate::app::media::clear_hot_media_cache();
+    }
+
+    /// Replace the live sync connection after an OS network change.
+    ///
+    /// iOS calls this when the network path comes back on another interface
+    /// or its cost changes. A long-poll opened on the old path can look live
+    /// until the SDK's poll and network timeouts expire; this replaces it at
+    /// once. It never starts sync while suspended or before `start_sync`,
+    /// and leaves a rejected session alone. Not `Core.command`.
+    ///
+    /// The restart runs through the lifecycle owner's recover gate, the one
+    /// desktop's wake recovery uses: the installed session stays in the slot
+    /// until it finishes, so it cannot interleave with a replacement. iOS
+    /// never applies desktop's renderer cooldown.
+    pub async fn restart_sync(&self) -> Result<SyncStartDto, SyncStartError> {
+        let _lifecycle = self.sync_lifecycle.lock().await;
+        let owner = if self.owners_attached().await {
+            self.core.attached_sync_owner()
+        } else {
+            None
+        }
+        .ok_or_else(|| sync_start_failed(SYNC_NOT_ATTACHED_CODE, SYNC_NOT_ATTACHED_DESCRIPTION))?;
+        if self.suspension.is_suspended() {
+            return Ok(sync_start_dto_from_snapshot(owner.observe()));
+        }
+        self.lifecycle
+            .recover_live(
+                true,
+                |_| Arc::clone(&owner),
+                |_| sync_start_dto_from_snapshot(owner.observe()),
+                |owner| async move {
+                    owner
+                        .restart_live()
+                        .await
+                        .map(sync_start_dto_from_snapshot)
+                        .map_err(|_| {
+                            sync_start_failed(SYNC_START_FAILED_CODE, SYNC_START_FAILED_DESCRIPTION)
+                        })
+                },
+            )
+            .await
     }
 
     pub async fn wipe_persisted_stores(
@@ -1575,10 +1908,58 @@ impl SharedCore {
                 LEFTOVER_STORE_ROOT_INVALID_DESCRIPTION,
             )
         })?;
-        if root.exists() {
-            std::fs::remove_dir_all(root)
-                .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
+        let root = root.to_path_buf();
+        run_blocking(move || {
+            if root.exists() {
+                std::fs::remove_dir_all(&root)?;
+            }
+            Ok::<_, std::io::Error>(())
+        })
+        .await
+        .and_then(Result::ok)
+        .ok_or_else(|| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
+        Ok(LeftoverAckDto {
+            status: LeftoverAckStatusDto::Wiped,
+        })
+    }
+
+    /// Delete one account's local store and its store key, after the user
+    /// confirmed the reset that a `store-reset-required` sign-in or restore
+    /// asked for. Other accounts' stores, the session vault entry and the
+    /// homeserver account are untouched. Refused while any session is
+    /// retained, so a live store is never removed underneath its client.
+    pub async fn reset_local_account_store(
+        &self,
+        user_id: String,
+        homeserver_url: String,
+        store_root: String,
+    ) -> Result<LeftoverAckDto, LeftoverCommandError> {
+        leftover_reject_oversize(store_root.len() + user_id.len() + homeserver_url.len())?;
+        let failed = || leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION);
+        let identity = AccountIdentity::new(&user_id, &homeserver_url).map_err(|_| failed())?;
+        let root = parse_store_root(&store_root).map_err(|_| {
+            leftover_failed(
+                LEFTOVER_STORE_ROOT_INVALID_CODE,
+                LEFTOVER_STORE_ROOT_INVALID_DESCRIPTION,
+            )
+        })?;
+        // Like desktop's store recovery, keep the transition gate through the
+        // wipe so a concurrent restore or sign-in cannot open this store.
+        let _transition = self.lifecycle.lock_transition().await;
+        if self.has_retained_client().await {
+            return Err(failed());
         }
+        let target =
+            crate::app::lifecycle::WipeTarget::resolve(root, identity).map_err(|_| failed())?;
+        let vault = SecretStoreKeyVault {
+            store: Arc::clone(&self.secret_store),
+        };
+        run_blocking(move || {
+            crate::app::lifecycle::wipe_account_store(&target, Some(&vault)).is_ok()
+        })
+        .await
+        .filter(|wiped| *wiped)
+        .ok_or_else(failed)?;
         Ok(LeftoverAckDto {
             status: LeftoverAckStatusDto::Wiped,
         })
@@ -1594,7 +1975,7 @@ impl SharedCore {
     ) -> Result<bool, LeftoverCommandError> {
         let identity = AccountIdentity::new(&user_id, &homeserver_url)
             .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
-        let Ok(client) = self.retained_client() else {
+        let Ok(client) = self.retained_client().await else {
             return Ok(false);
         };
         let matches = client.user_id().map(|id| id.as_str()) == Some(identity.user_id())
@@ -1661,9 +2042,9 @@ impl SharedCore {
             }
         }
         self.logout().await?;
-        self.secret_store
-            .delete(SessionMaterialId::from_identity(&identity).account())
-            .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
+        self.delete_session_material(&identity)
+            .await
+            .map_err(|()| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
         Ok(LeftoverAckDto {
             status: LeftoverAckStatusDto::Forgotten,
         })
@@ -1712,9 +2093,9 @@ impl SharedCore {
         }
         // Forgetting is idempotent, so a repeat call after a partial failure
         // finishes the job. The store key and encrypted history stay.
-        self.secret_store
-            .delete(SessionMaterialId::from_identity(&identity).account())
-            .map_err(|_| failed())?;
+        self.delete_session_material(&identity)
+            .await
+            .map_err(|()| failed())?;
         Ok(retired())
     }
 
@@ -1725,25 +2106,46 @@ impl SharedCore {
         let failed = || leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION);
         // iOS policy: revoke the persistence fence first (a refresh landing
         // while sync stops must not write credentials back), stop sync and
-        // pause the client, close Core, then retire the shell slots. The Swift
-        // host owns forgetting credentials; the first failure stops teardown.
-        session_policy::run_local_logout(
-            session_policy::LogoutPolicy::IOS,
-            || self.revoke_retained_persistence(),
-            || async {
-                if self.owners_attached() {
-                    self.core.stop_attached_sync().await.map_err(|_| failed())?;
-                }
-                if let Ok(client) = self.retained_client() {
-                    client.pause().await.map_err(|_| failed())?;
-                }
-                Ok(())
-            },
-            || Ok(()),
-            || self.retire_session_slots(),
-            || async { self.core.close().await.map(|_| ()).map_err(|_| failed()) },
-        )
-        .await?;
+        // pause the client, close Core, then retire the session and the shell
+        // slots. The Swift host owns forgetting credentials; the first failure
+        // stops teardown and leaves the session installed for a retry.
+        self.lifecycle
+            .logout_in_place(
+                |active| {
+                    (
+                        active.client.clone(),
+                        active.persistence.callback_lease(),
+                        active.owners_attached(),
+                    )
+                },
+                |installed| async move {
+                    let attached = installed.as_ref().is_some_and(|(_, _, attached)| *attached);
+                    session_policy::run_local_logout(
+                        session_policy::LogoutPolicy::IOS,
+                        || {
+                            if let Some((_, lease, _)) = &installed {
+                                lease.revoke();
+                            }
+                        },
+                        || async {
+                            if attached {
+                                self.core.stop_attached_sync().await.map_err(|_| failed())?;
+                            }
+                            if let Some((client, _, _)) = &installed {
+                                client.pause().await.map_err(|_| failed())?;
+                            }
+                            Ok(())
+                        },
+                        || Ok(()),
+                        // The lifecycle owner retires the session after Core closed.
+                        || {},
+                        || async { self.core.close().await.map(|_| ()).map_err(|_| failed()) },
+                    )
+                    .await
+                },
+                |_retired| self.retire_session_slots(),
+            )
+            .await?;
         Ok(LeftoverAckDto {
             status: LeftoverAckStatusDto::LoggedOut,
         })
@@ -1784,7 +2186,8 @@ impl SharedCore {
 
     pub async fn sync_status(&self) -> Result<SyncStatusDto, SessionStatusError> {
         // Swift polls this while the session is live; it is the iOS watchdog.
-        self.retry_failed_session_save(std::time::Instant::now());
+        self.retry_failed_session_save(std::time::Instant::now())
+            .await;
         if let Some(owner) = self.core.attached_sync_owner() {
             let observed = owner.observe();
             // Record the rejected generation before any teardown can drop the owner.
@@ -1792,7 +2195,11 @@ impl SharedCore {
             return sync_status_from_owner_snapshot(
                 observed,
                 self.core.attached_timeline_owner().is_some(),
-            );
+            )
+            .map(|status| SyncStatusDto {
+                suspended: self.suspension.is_suspended(),
+                ..status
+            });
         }
         let snapshot = self
             .core

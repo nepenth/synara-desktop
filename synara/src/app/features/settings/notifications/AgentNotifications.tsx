@@ -10,6 +10,7 @@ import {
   type AgentNotificationPreferences,
 } from './nativeAgentNotificationPreferences';
 import { SettingsSection } from '../../../components/settings-layout';
+import { composerErrorMessage } from '../../room/composerSendError';
 
 const categories = [
   ['notifyToolActivity', 'Notify for tool activity', 'Messages starting with “🛠 Tool activity”.'],
@@ -40,7 +41,10 @@ export function AgentNotifications() {
       setMessage(null);
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : 'Agent notification settings could not be loaded.'
+        composerErrorMessage(
+          error,
+          'Synara could not load your agent notification settings. Try again.'
+        )
       );
     } finally {
       setLoading(false);
@@ -89,7 +93,10 @@ export function AgentNotifications() {
       setMessage('Saved to your account.');
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : 'Agent notification settings were not saved.'
+        composerErrorMessage(
+          error,
+          'Synara could not save your agent notification settings. Try again.'
+        )
       );
     } finally {
       savingRef.current = false;
@@ -107,7 +114,7 @@ export function AgentNotifications() {
       >
         <SettingTile
           title="Agent accounts"
-          description="Add each agent’s full Matrix user ID. These rules apply only to the listed agents and sync with your account across Synara clients."
+          description="Add each agent’s full Matrix user ID. These rules apply only to the listed agents and sync with your account across Synara clients. Once you add an agent, only listed agents can raise urgent approval alerts, even in muted rooms; with no agents listed, approval alerts follow each room’s notification settings."
         >
           {loading && <Spinner size="100" />}
           {draft && (
@@ -191,10 +198,10 @@ export function AgentNotifications() {
             />
           ))}
         <Text size="T200">
-          Approval requests remain eligible for urgent alerts. Turning a category off keeps its
-          messages in the conversation. On iOS, encrypted background alerts may still appear as
-          generic activity unless the installed build supports Apple’s Notification Filtering
-          capability.
+          Approval requests from listed agents remain eligible for urgent alerts. Turning a category
+          off keeps its messages in the conversation. On iOS, encrypted background alerts may still
+          appear as generic activity unless the installed build supports Apple’s Notification
+          Filtering capability.
         </Text>
         <Box gap="200">
           <Button

@@ -80,20 +80,21 @@ const NavItemBase = style({
     [`&:has(.${NavLink}:active)`]: {
       backgroundColor: ContainerActive,
     },
-    '&[aria-selected=true]': {
+    '&[data-selected=true]': {
       backgroundColor: 'var(--synara-selected-surface)',
       borderColor: ContainerLine,
       boxShadow: raisedShadow,
       transform: `translateY(-${toRem(1)})`,
     },
-    '&[aria-selected=true]::before': {
+    '&[data-selected=true]::before': {
       opacity: 1,
     },
+    // Primary, not ContainerLine: the line tone matches the hover fill (~1.2:1).
     [`&:has(.${NavLink}:focus-visible)`]: {
-      outline: `${config.borderWidth.B600} solid ${ContainerLine}`,
+      outline: `${config.borderWidth.B600} solid ${color.Primary.Main}`,
       outlineOffset: `calc(-1 * ${config.borderWidth.B600})`,
     },
-    '&[aria-selected=true]:active': {
+    '&[data-selected=true]:active': {
       transform: 'translateY(0)',
       boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
     },
@@ -103,7 +104,7 @@ const NavItemBase = style({
       transition: 'none',
       transform: 'none',
       selectors: {
-        '&[aria-selected=true], &[aria-selected=true]:active': {
+        '&[data-selected=true], &[data-selected=true]:active': {
           transform: 'none',
         },
       },
@@ -111,7 +112,7 @@ const NavItemBase = style({
     '(prefers-contrast: more)': {
       boxShadow: 'none',
       selectors: {
-        '&[aria-selected=true], &[aria-selected=true]:active': {
+        '&[data-selected=true], &[data-selected=true]:active': {
           boxShadow: 'none',
         },
       },
@@ -120,7 +121,7 @@ const NavItemBase = style({
   '@supports': {
     [`not selector(:has(.${NavLink}:focus-visible))`]: {
       ':focus-within': {
-        outline: `${config.borderWidth.B600} solid ${ContainerLine}`,
+        outline: `${config.borderWidth.B600} solid ${color.Primary.Main}`,
         outlineOffset: `calc(-1 * ${config.borderWidth.B600})`,
       },
     },

@@ -39,6 +39,24 @@ final class NotificationDiagnosticReportTests: XCTestCase {
         XCTAssertEqual(snapshot["showPreviewsSetting"] as? String, "when-authenticated")
     }
 
+    func testReportCountsSessionRejectionsBeyondTheBoundedRecords() throws {
+        let rejected = SynaraNotificationDiagnosticEntry(
+            id: UUID(), runID: UUID(), timestamp: Date(), stage: "core-session-rejected"
+        )
+        let withoutCounter = SynaraNotificationDiagnosticReport.text(context: context, entries: [rejected, rejected])
+        let legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(withoutCounter.utf8)) as? [String: Any])
+        XCTAssertEqual(legacy["extensionSessionRejectedCount"] as? Int, 2)
+
+        let text = SynaraNotificationDiagnosticReport.text(
+            context: context,
+            entries: [rejected],
+            sessionRejectedCount: 7
+        )
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
+        XCTAssertEqual(json["extensionSessionRejectedCount"] as? Int, 7)
+        XCTAssertEqual(json["schemaVersion"] as? Int, 1)
+    }
+
     func testPublicVersionRejectsUnexpectedPrivateText() {
         XCTAssertEqual(SynaraNotificationDiagnosticReport.publicVersion("2.1.43"), "2.1.43")
         XCTAssertNil(SynaraNotificationDiagnosticReport.publicVersion("https://private.example.org"))

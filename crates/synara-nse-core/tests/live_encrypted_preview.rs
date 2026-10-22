@@ -10,7 +10,10 @@ use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use synara_core::{IosSecretVault, IosSecretVaultError, RoomCreateRequestDto, SharedCore};
+use synara_core::{
+    IosSecretVault, IosSecretVaultError, RoomCreateRequestDto, SharedCore, TimelineOpenKindDto,
+    TimelineOpenPositionDto,
+};
 use synara_nse_core::{NseCoreError, NsePreviewRequest, NseSecretVault, NseSecretVaultError};
 
 #[derive(Clone, Default)]
@@ -111,6 +114,48 @@ impl Fixture {
         }
         Err("encrypted joined room not projected")
     }
+    /// The server event id of this device's send `transaction_id`, from the
+    /// timeline row that carries the same transaction id.
+    async fn wait_for_sent_event(
+        &self,
+        room_id: &str,
+        transaction_id: &str,
+    ) -> Result<String, &'static str> {
+        let opened = self
+            .core
+            .timeline_open(
+                room_id.to_owned(),
+                TimelineOpenPositionDto {
+                    kind: TimelineOpenKindDto::LiveBottom,
+                    at_bottom: true,
+                    restored_anchor_event_id: None,
+                    live_tail_event_id: None,
+                    updated_at_ms: None,
+                    event_id: None,
+                },
+            )
+            .await
+            .map_err(|_| "open timeline for sent event failed")?;
+        let until = Instant::now() + Duration::from_secs(40);
+        let mut found = None;
+        while found.is_none() && Instant::now() < until {
+            if let Ok(snapshot) = self.core.timeline_snapshot(opened.stream_id.clone()).await {
+                found = snapshot
+                    .rows
+                    .into_iter()
+                    .find(|row| {
+                        row.transaction_id.as_deref() == Some(transaction_id)
+                            && !row.event_id.is_empty()
+                    })
+                    .map(|row| row.event_id);
+            }
+            if found.is_none() {
+                tokio::time::sleep(Duration::from_millis(250)).await;
+            }
+        }
+        let _ = self.core.timeline_close(opened.stream_id).await;
+        found.ok_or("sent event never reached the timeline")
+    }
     async fn cleanup(self) -> bool {
         let revoked = self
             .core
@@ -179,6 +224,11 @@ async fn prove(
         )
         .await
         .map_err(|_| "encrypted send failed")?;
+    // `send_text` answers once the send queue holds the event; the server
+    // event id arrives on the timeline row with the same transaction id.
+    let sent_event_id = writer
+        .wait_for_sent_event(&created.room_id, &sent.local_txn_id)
+        .await?;
     let before = reader.vault.0.lock().unwrap().clone();
     let request = NsePreviewRequest::new(
         Box::new(reader.vault.clone()),
@@ -186,7 +236,8 @@ async fn prove(
         reader.homeserver.clone(),
         reader.store.clone(),
         created.room_id,
-        sent.event_id,
+        sent_event_id,
+        "2.2.6".to_owned(),
     );
     let start = Instant::now();
     let result = request.resolve().await;

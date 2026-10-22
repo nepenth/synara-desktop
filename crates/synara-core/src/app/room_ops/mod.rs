@@ -11,7 +11,7 @@ mod error;
 mod ipc;
 mod queue;
 
-pub use create::build_room_create_request;
+pub use create::{build_room_create_request, room_create_failure, RoomCreateFailure};
 pub use encrypted_state::{
     encrypted_state_events_setting_enabled, encryption_content_requests_encrypted_state,
     event_is_undecrypted_encrypted_state, is_call_room_type, packed_encrypted_state_type,

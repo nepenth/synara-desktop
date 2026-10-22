@@ -207,6 +207,118 @@ fn send_http_error_diagnostic(error: &matrix_sdk::HttpError) -> &'static str {
     }
 }
 
+/// Whether Retry can help a send that failed with `cause`
+/// ([`send_failure_cause`]). The homeserver refuses the same request again
+/// when it is too large, forbidden, otherwise rejected (4xx), sent to a room
+/// the user left, or has unusable media, so those rows offer Discard only.
+/// Every other cause stays retryable, including the identity and
+/// verification wedges the user resolves first, and network or server
+/// trouble.
+pub fn send_failure_is_retryable(cause: &str) -> bool {
+    !matches!(
+        cause,
+        "too_large" | "forbidden" | "rejected" | "not_joined" | "media"
+    )
+}
+
+/// Closed, privacy-safe cause of a failed send: `too_large`, `forbidden`,
+/// `rate_limited`, `auth`, `network`, `server_error`, `rejected`,
+/// `encryption`, `insecure_devices`, `identity_violation`,
+/// `verification_required`, `media`, `not_joined` or `unknown`.
+///
+/// A live failure carries the SDK error itself. After a relaunch the SDK
+/// only keeps the wedge's `GenericApiError` text, so its `[status` prefix
+/// (ruma's `[413 / M_TOO_LARGE] …` display) is read instead; nothing else
+/// from that text leaves Core.
+pub fn send_failure_cause(error: &matrix_sdk::Error) -> &'static str {
+    match error {
+        matrix_sdk::Error::Http(error) => http_failure_cause(error),
+        matrix_sdk::Error::SendQueueWedgeError(wedge) => wedge_failure_cause(wedge),
+        matrix_sdk::Error::AuthenticationRequired => "auth",
+        matrix_sdk::Error::WrongRoomState(_) => "not_joined",
+        matrix_sdk::Error::ConcurrentRequestFailed => "network",
+        matrix_sdk::Error::BadCryptoStoreState
+        | matrix_sdk::Error::NoOlmMachine
+        | matrix_sdk::Error::CryptoStoreError(_)
+        | matrix_sdk::Error::OlmError(_)
+        | matrix_sdk::Error::MegolmError(_) => "encryption",
+        _ => "unknown",
+    }
+}
+
+fn http_failure_cause(error: &matrix_sdk::HttpError) -> &'static str {
+    use matrix_sdk::ruma::api::error::ErrorKind;
+    use matrix_sdk::HttpError;
+
+    match error {
+        HttpError::Reqwest(_) => "network",
+        HttpError::Cached(error) => http_failure_cause(error),
+        HttpError::Api(_) => match error.client_api_error_kind() {
+            Some(ErrorKind::TooLarge) => "too_large",
+            Some(ErrorKind::Forbidden | ErrorKind::GuestAccessForbidden) => "forbidden",
+            Some(ErrorKind::LimitExceeded(_)) => "rate_limited",
+            Some(ErrorKind::MissingToken | ErrorKind::UnknownToken(_)) => "auth",
+            _ => error.as_client_api_error().map_or("rejected", |api| {
+                status_failure_cause(api.status_code.as_u16())
+            }),
+        },
+        _ => "unknown",
+    }
+}
+
+fn status_failure_cause(status: u16) -> &'static str {
+    match status {
+        413 => "too_large",
+        403 => "forbidden",
+        429 => "rate_limited",
+        401 => "auth",
+        500..=599 => "server_error",
+        _ => "rejected",
+    }
+}
+
+fn wedge_failure_cause(error: &matrix_sdk::QueueWedgeError) -> &'static str {
+    use matrix_sdk::QueueWedgeError;
+
+    match error {
+        QueueWedgeError::InsecureDevices { .. } => "insecure_devices",
+        QueueWedgeError::IdentityViolations { .. } => "identity_violation",
+        QueueWedgeError::CrossVerificationRequired => "verification_required",
+        QueueWedgeError::MissingMediaContent | QueueWedgeError::InvalidMimeType { .. } => "media",
+        QueueWedgeError::GenericApiError { msg } => msg
+            .find('[')
+            .and_then(|start| msg.get(start + 1..start + 4))
+            .and_then(|status| status.parse::<u16>().ok())
+            .map_or("unknown", status_failure_cause),
+    }
+}
+
+/// The wedged-send diagnostic for one cause. Every id keeps the
+/// `d0.4-send-queue-wedged` prefix so callers that only need "wedged" can
+/// match on it.
+pub fn wedged_send_diagnostic(cause: &str) -> &'static str {
+    match cause {
+        "too_large" => "d0.4-send-queue-wedged-too-large",
+        "forbidden" => "d0.4-send-queue-wedged-forbidden",
+        "rejected" => "d0.4-send-queue-wedged-rejected",
+        "encryption" => "d0.4-send-queue-wedged-encryption",
+        "insecure_devices" => "d0.4-send-queue-wedged-insecure-devices",
+        "identity_violation" => "d0.4-send-queue-wedged-identity-violation",
+        "verification_required" => "d0.4-send-queue-wedged-verification-required",
+        "media" => "d0.4-send-queue-wedged-media",
+        "not_joined" => "d0.4-send-queue-wedged-not-joined",
+        _ => WEDGED_SEND_DIAGNOSTIC,
+    }
+}
+
+/// Generic wedged-send diagnostic, and the prefix of every cause-specific one.
+pub const WEDGED_SEND_DIAGNOSTIC: &str = "d0.4-send-queue-wedged";
+
+/// True for [`WEDGED_SEND_DIAGNOSTIC`] and every cause-specific variant.
+pub fn is_wedged_send_diagnostic(diagnostic_id: &str) -> bool {
+    diagnostic_id.starts_with(WEDGED_SEND_DIAGNOSTIC)
+}
+
 pub fn parse_edit_event_id(event_id: &str) -> Result<OwnedEventId, &'static str> {
     validate_matrix_identifier_length(event_id, "v-send.r-edit-invalid-event-id")?;
     event_id

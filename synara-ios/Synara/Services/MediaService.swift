@@ -39,7 +39,7 @@ struct MediaResource: Identifiable, Equatable {
 
     var safeDescription: String {
         let safeName = URL(fileURLWithPath: filename).lastPathComponent
-        return safeName.isEmpty ? "Attachment" : safeName
+        return safeName.isEmpty ? String(localized: "Attachment") : safeName
     }
 
     var resolvedMimeType: String? {
@@ -177,6 +177,154 @@ enum MediaAttachmentSupport {
     #endif
 }
 
+/// Bytes of attachments the user just sent, shown by their own upload row
+/// until the timeline delivers the event. Rows point here with a
+/// `synara-local-upload` URL, which no loader ever sends to the homeserver
+/// (an `mxc://` placeholder did, and failed with 403). Bounded; the oldest
+/// previews go first, and a row without one shows the media placeholder.
+final class LocalUploadPreviewStore: @unchecked Sendable {
+    static let shared = LocalUploadPreviewStore()
+    static let urlScheme = "synara-local-upload"
+
+    private let lock = NSLock()
+    private let maxEntries: Int
+    private let maxBytes: Int
+    private var entries: [String: Data] = [:]
+    private var order: [String] = []
+    private var totalBytes = 0
+    private var memoryWarningObserver: NSObjectProtocol?
+
+    // Kept small: these are full-size originals held in memory next to Core's
+    // own media cache, and only rows still waiting for their event use them.
+    init(maxEntries: Int = 12, maxBytes: Int = 24 * 1024 * 1024) {
+        self.maxEntries = maxEntries
+        self.maxBytes = maxBytes
+        #if canImport(UIKit)
+        memoryWarningObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            self?.removeAll()
+        }
+        #endif
+    }
+
+    deinit {
+        if let memoryWarningObserver {
+            NotificationCenter.default.removeObserver(memoryWarningObserver)
+        }
+    }
+
+    /// Drops every preview: on sign-out and under memory pressure. Rows that
+    /// still point here fall back to the media placeholder.
+    func removeAll() {
+        lock.lock()
+        defer { lock.unlock() }
+        entries.removeAll()
+        order.removeAll()
+        totalBytes = 0
+    }
+
+    static func url(for key: String) -> URL? {
+        guard key.isEmpty == false else {
+            return nil
+        }
+        var components = URLComponents()
+        components.scheme = urlScheme
+        components.host = "upload"
+        components.path = "/" + key
+        return components.url
+    }
+
+    static func isLocalPreview(_ url: URL?) -> Bool {
+        url?.scheme == urlScheme
+    }
+
+    func store(_ data: Data, key: String) {
+        guard key.isEmpty == false, data.isEmpty == false, data.count <= maxBytes else {
+            return
+        }
+        lock.lock()
+        defer { lock.unlock() }
+        if let previous = entries.removeValue(forKey: key) {
+            totalBytes -= previous.count
+            order.removeAll { $0 == key }
+        }
+        while order.isEmpty == false, order.count >= maxEntries || totalBytes + data.count > maxBytes {
+            let oldest = order.removeFirst()
+            totalBytes -= entries.removeValue(forKey: oldest)?.count ?? 0
+        }
+        entries[key] = data
+        order.append(key)
+        totalBytes += data.count
+    }
+
+    func data(for url: URL?) -> Data? {
+        guard let url, Self.isLocalPreview(url) else {
+            return nil
+        }
+        let key = String(url.path.dropFirst())
+        lock.lock()
+        defer { lock.unlock() }
+        return entries[key]
+    }
+}
+
+/// Builds the timeline row for a finished `MediaUploading` call.
+///
+/// Core reports `queued` with an empty event id when the upload is still in
+/// the SDK send queue (slow link, 5xx, 429). That row is pending, named by
+/// its transaction id, and is replaced when the timeline shows the SDK local
+/// echo or the server event for the same transaction. An empty id must never
+/// become a row identity: two such rows crashed the timeline.
+enum MediaUploadAcknowledgement {
+    static func item(
+        eventID: String,
+        transactionID: String,
+        isQueued: Bool,
+        request: MediaUploadRequest,
+        senderID: String,
+        timestamp: Date = Date(),
+        previews: LocalUploadPreviewStore = .shared
+    ) -> TimelineItem {
+        let transactionID = [transactionID, request.transactionID ?? ""]
+            .first { $0.isEmpty == false }
+            ?? "synara-attachment-\(UUID().uuidString.lowercased())"
+        let isPending = isQueued || eventID.isEmpty
+        let rowID = isPending ? "$pending-\(transactionID)" : eventID
+        if request.mimeType.hasPrefix("image/") {
+            previews.store(request.data, key: transactionID)
+        }
+        let safeName = URL(fileURLWithPath: request.displayName).lastPathComponent
+        let resource = MediaResource(
+            id: rowID,
+            filename: safeName.isEmpty ? "Attachment" : safeName,
+            caption: request.caption,
+            formattedCaption: request.formattedCaption,
+            authenticatedURL: LocalUploadPreviewStore.url(for: transactionID),
+            requiresAuthentication: false,
+            mimeType: request.mimeType,
+            byteSize: UInt64(request.data.count)
+        )
+        var item = TimelineItem(
+            id: rowID,
+            eventID: rowID,
+            serverEventID: isPending ? nil : eventID,
+            senderID: senderID,
+            timestamp: timestamp,
+            kind: .mediaPlaceholder(resource),
+            replyToEventID: request.replyToEventID,
+            threadRootEventID: request.threadRootEventID,
+            isEdited: false,
+            reactions: [:],
+            deliveryStatus: isPending ? .sending : .sent
+        )
+        item.transactionID = transactionID
+        return item
+    }
+}
+
 struct MockMediaLoader: MediaLoading {
     func loadThumbnail(for resource: MediaResource) async -> MediaLoadState {
         guard resource.isEncrypted == false else {
@@ -191,11 +339,11 @@ struct MockMediaLoader: MediaLoading {
     }
 
     func loadThumbnailData(for resource: MediaResource, width: UInt64, height: UInt64) async -> Data? {
-        nil
+        LocalUploadPreviewStore.shared.data(for: resource.authenticatedURL)
     }
 
     func loadMediaData(for resource: MediaResource) async -> Data? {
-        nil
+        LocalUploadPreviewStore.shared.data(for: resource.authenticatedURL)
     }
 }
 
@@ -207,13 +355,17 @@ struct MockMediaUploadService: MediaUploading {
             return .failed("Media could not be uploaded.")
         }
         let safeName = URL(fileURLWithPath: request.displayName).lastPathComponent
+        let uploadID = "$upload-\(UUID().uuidString)"
+        if request.mimeType.hasPrefix("image/") {
+            LocalUploadPreviewStore.shared.store(request.data, key: uploadID)
+        }
         let resource = MediaResource(
-            id: "$upload-\(UUID().uuidString)",
+            id: uploadID,
             filename: safeName.isEmpty ? "Attachment" : safeName,
             caption: request.caption,
             formattedCaption: request.formattedCaption,
-            authenticatedURL: URL(string: "mxc://local/upload"),
-            requiresAuthentication: true,
+            authenticatedURL: LocalUploadPreviewStore.url(for: uploadID),
+            requiresAuthentication: false,
             mimeType: request.mimeType,
             byteSize: UInt64(request.data.count)
         )

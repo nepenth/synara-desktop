@@ -18,9 +18,6 @@
     "src/app/utils/hermes.ts",
     "src/app/utils/polls.ts",
     "src/app/components/message/content/PollContent.tsx",
-    "src/app/utils/__tests__/timelineVirtualization.test.ts",
-    "src/app/utils/__tests__/timelineNavigation.test.ts",
-    "src/app/utils/timelineNavigation.ts",
     "src/app/components/editor/__tests__/richText.test.ts"
   ]
 }

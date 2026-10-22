@@ -12,11 +12,11 @@ enum LocalWipeError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .pusherCleanupFailed:
-            "Could not remove this device's push registration. Try signing out again."
+            String(localized: "Could not remove this device's push registration. Try logging out again.")
         case .sessionDeleteFailed:
-            "Could not clear local session state."
+            String(localized: "Could not clear local session state.")
         case .timedOut:
-            "Signing out is taking too long. Try signing out again."
+            String(localized: "Logging out is taking too long. Try logging out again.")
         }
     }
 
@@ -137,6 +137,7 @@ struct AppLocalWipeService: LocalWiping {
         timeline.clearSessionCaches()
         drafts.clearAll()
         outgoingSends?.queue.clear()
+        LocalUploadPreviewStore.shared.removeAll()
         await MainActor.run {
             router.resetNavigationPathsForAccountChange()
         }

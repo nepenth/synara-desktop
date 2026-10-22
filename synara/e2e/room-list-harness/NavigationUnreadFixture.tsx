@@ -57,7 +57,9 @@ const invoke = async (command: string, args?: Record<string, unknown>) => {
     readCommands.push(roomId);
     document.body.dataset.readRooms = JSON.stringify(readCommands);
     update(roomId, { unreadCount: 0, highlightCount: 0, markedUnread: false });
-    return { status: 'updated' };
+    // The native readback shape: menus now surface a mark-read failure, so the
+    // fixture must report the receipt Core wrote.
+    return { receiptSent: true, acknowledgedEventId: '$latest', unreadFlagCleared: false };
   }
   if (command === 'matrix_session_snapshot') return session;
   if (command === 'matrix_room_list_snapshot') {

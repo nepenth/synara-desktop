@@ -29,6 +29,11 @@ export const RoomViewFollowing = recipe({
           '&:hover, &:focus-visible': {
             color: color.Primary.Main,
           },
+          // A colour change alone is ~1.1:1; keyboard focus needs a ring.
+          '&:focus-visible': {
+            outline: `${config.borderWidth.B600} solid ${color.Primary.Main}`,
+            outlineOffset: `calc(-1 * ${config.borderWidth.B600})`,
+          },
           '&:active': {
             color: color.Primary.Main,
           },

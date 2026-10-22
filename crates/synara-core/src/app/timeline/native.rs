@@ -14,13 +14,15 @@ use super::view::{TimelineViewPosition, TimelineViewSnapshot};
 
 /// Version of the bounded native timeline-open contract.
 pub const NATIVE_TIMELINE_OPEN_SCHEMA_VERSION: u32 = 1;
-pub const NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS: u64 = 10 * 60 * 1000;
 
 /// Requested initial position for one native timeline view.
 ///
 /// `Normal` is the native owner route for an ordinary room open. It resolves
-/// shared unread state before considering the optional, UI-held restore hint;
-/// the hint is neither sync state nor a server-side viewport command.
+/// shared unread state first; the optional, UI-held hint only says whether the
+/// user left the room at the bottom of an unchanged live tail. A restored
+/// history anchor stays the presenter's own concern (it parks rows of the
+/// live window it renders), so Core never opens an event-focused window for
+/// it. The hint is neither sync state nor a server-side viewport command.
 #[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -78,6 +80,37 @@ pub struct NativeTimelineOpenReadback {
     /// a normal open can select unread, restored, or live-bottom placement.
     pub position: TimelineViewPosition,
     pub snapshot: TimelineViewSnapshot,
+    /// How a `Focused` open resolved its target event. Absent for every other
+    /// open. A `thread` or unavailable target never yields a thread-only or
+    /// event-focused stream: the stream is the room's live timeline, and the
+    /// shell routes to the thread UI or says why the message is not shown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub focus_route: Option<NativeTimelineEventRoute>,
+}
+
+/// Where a routed event (notification, permalink, search hit, reply jump)
+/// lives, resolved from the event itself without building a timeline.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum NativeTimelineEventRoute {
+    /// A main-timeline event, including a thread root.
+    Room,
+    /// An in-thread reply. The room timeline never shows it; shells open the
+    /// thread for `root_event_id` scrolled to the reply, with the room behind.
+    Thread { root_event_id: String },
+    /// The homeserver reports no such event for this account: it was deleted
+    /// with its room history, or the account cannot see it.
+    Missing,
+    /// The event could not be loaded right now (offline or timed out).
+    Unreachable,
+}
+
+/// The joined room that holds a routed event, for routes (sparse pushes)
+/// that carry only the event id.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeTimelineEventLocation {
+    pub room_id: String,
+    pub route: NativeTimelineEventRoute,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -153,6 +186,11 @@ pub struct NativeTimelineReadStateRequest {
     /// the SDK-authoritative live tail and no-ops when they differ.
     #[serde(default)]
     pub observed_live_tail_event_id: Option<String>,
+    /// The user's receipt privacy mode for MarkRead: `true` sends public
+    /// `m.read`, `false` (the default, and what an older shell sends)
+    /// `m.read.private`. Shells pass "read receipts not hidden".
+    #[serde(default)]
+    pub public_receipt: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -160,7 +198,7 @@ pub struct NativeTimelineReadStateRequest {
 pub struct NativeTimelineReadStateReadback {
     pub action: NativeTimelineReadAction,
     /// `None` for MarkUnread. For MarkRead, `Some(true)` means a receipt-capable
-    /// remote target was resolved and the exact private + fully-read SDK
+    /// remote target was resolved and the exact receipt + fully-read SDK
     /// operation completed (the SDK may deduplicate network I/O); `Some(false)`
     /// means no receipt advanced. For an explicit action that can mean only the
     /// SDK unread flag was cleared; for an automatic action it can also mean the
@@ -169,6 +207,8 @@ pub struct NativeTimelineReadStateReadback {
     pub receipt_sent: Option<bool>,
     /// Exact remote event acknowledged by this operation. `None` means no
     /// receipt was advanced (including a superseded automatic observation).
+    /// For an automatic read this is the observed tail, even when the receipt
+    /// also covers newer thread replies that the tail's thread summaries show.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub acknowledged_event_id: Option<String>,
     pub snapshot: TimelineViewSnapshot,
@@ -259,6 +299,17 @@ pub struct NativeAgentApprovalDecisionResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "ts-export", ts(optional))]
     pub reaction: Option<NativeReactionMutationResult>,
+    /// For `already_decided`: the decision this account already recorded
+    /// (its own terminal reaction, else its approval history), which may
+    /// differ from the requested action. Absent when Core cannot tell.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
+    pub decision: Option<crate::app::account_data::SynaraAgentApprovalHistoryDecision>,
+    /// When `decision` was made, in milliseconds since the epoch; absent
+    /// while the reaction is a local echo or the time is unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
+    pub decided_at: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -535,6 +586,7 @@ mod tests {
                     can_redact_other: false,
                 },
             },
+            focus_route: None,
         };
         let json = serde_json::to_value(readback).unwrap();
         let snapshot = &json["snapshot"];
@@ -545,5 +597,22 @@ mod tests {
         assert_eq!(snapshot["readState"]["isMarkedUnread"], false);
         assert_eq!(snapshot["pinnedEventIds"][0], "$pinned:example.org");
         assert_eq!(json["position"]["kind"], "live_bottom");
+        assert!(json.get("focusRoute").is_none());
+    }
+
+    #[test]
+    fn focus_route_serializes_as_a_tagged_thread_target() {
+        let json = serde_json::to_value(NativeTimelineEventRoute::Thread {
+            root_event_id: "$root:example.org".into(),
+        })
+        .unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({ "kind": "thread", "root_event_id": "$root:example.org" })
+        );
+        assert_eq!(
+            serde_json::to_value(NativeTimelineEventRoute::Missing).unwrap(),
+            serde_json::json!({ "kind": "missing" })
+        );
     }
 }

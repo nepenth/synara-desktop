@@ -34,6 +34,8 @@ export function PageRoot({ nav, children }: PageRootProps) {
 
 type ClientDrawerLayoutProps = {
   children: ReactNode;
+  /** Names the pane as a navigation landmark (e.g. "Rooms"). */
+  label?: string;
 };
 
 const PAGE_NAV_WIDTH_KEY = 'synara.navigationPaneWidth';
@@ -60,7 +62,7 @@ const writePageNavWidth = (width: number): void => {
   }
 };
 
-export function PageNav({ size, children }: ClientDrawerLayoutProps & css.PageNavVariants) {
+export function PageNav({ size, label, children }: ClientDrawerLayoutProps & css.PageNavVariants) {
   const screenSize = useScreenSizeContext();
   const isMobile = screenSize === ScreenSize.Mobile;
   const defaultWidth = size === '300' ? 222 : 256;
@@ -105,6 +107,8 @@ export function PageNav({ size, children }: ClientDrawerLayoutProps & css.PageNa
 
   return (
     <Box
+      as={label ? 'nav' : 'div'}
+      aria-label={label}
       grow={isMobile ? 'Yes' : undefined}
       className={css.PageNav({ size, resizable: !isMobile })}
       shrink={isMobile ? 'Yes' : 'No'}

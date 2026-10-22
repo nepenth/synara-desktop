@@ -53,6 +53,36 @@ pub struct GlobalImagePacksSnapshotDto {
     pub packs: Vec<ImagePackDto>,
 }
 
+/// One `io.element.recent_emoji` entry: the emoji and how often it was used.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct RecentEmojiEntryDto {
+    pub emoji: String,
+    pub count: u64,
+}
+
+/// The recent-emoji list, most recently used first (callers sort by count).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct RecentEmojiSnapshotDto {
+    pub session_generation: u64,
+    pub entries: Vec<RecentEmojiEntryDto>,
+}
+
+fn recent_emoji_dto(
+    snapshot: crate::app::account_data::NativeRecentEmoji,
+) -> RecentEmojiSnapshotDto {
+    RecentEmojiSnapshotDto {
+        session_generation: snapshot.session_generation,
+        entries: snapshot
+            .entries
+            .into_iter()
+            .map(|entry| RecentEmojiEntryDto {
+                emoji: entry.emoji,
+                count: entry.count,
+            })
+            .collect(),
+    }
+}
+
 /// Privacy-safe pack write ack. Status only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ImagePackWriteDto {
@@ -757,6 +787,34 @@ impl SharedCore {
                 .map(image_pack_dto)
                 .collect::<Result<Vec<_>, _>>()?,
         })
+    }
+
+    /// The `io.element.recent_emoji` list shared with desktop (iOS quick
+    /// reactions). Typed: no generic account-data access.
+    pub async fn recent_emoji_snapshot(
+        &self,
+    ) -> Result<RecentEmojiSnapshotDto, ImagePackCommandError> {
+        let snapshot = self
+            .image_pack_null_command(
+                RECENT_EMOJI_NO_SESSION_CODE,
+                self.core.recent_emoji_snapshot(),
+            )
+            .await?;
+        Ok(recent_emoji_dto(snapshot))
+    }
+
+    /// Records one use of `emoji` the way desktop does and returns the list.
+    pub async fn recent_emoji_record(
+        &self,
+        emoji: String,
+    ) -> Result<RecentEmojiSnapshotDto, ImagePackCommandError> {
+        let snapshot = self
+            .image_pack_null_command(
+                RECENT_EMOJI_NO_SESSION_CODE,
+                self.core.recent_emoji_record(&emoji),
+            )
+            .await?;
+        Ok(recent_emoji_dto(snapshot))
     }
 
     pub async fn set_user_image_pack(

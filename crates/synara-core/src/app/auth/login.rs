@@ -127,6 +127,31 @@ pub async fn login_with_password(
     })
 }
 
+/// Static diagnostic for a homeserver without native simplified sliding sync.
+pub const LOGIN_SLIDING_SYNC_UNSUPPORTED_DIAGNOSTIC_ID: &str =
+    "p3.2-login-sliding-sync-unsupported";
+
+/// Refuse sign-in, before any device is created, on a homeserver that does
+/// not advertise native simplified sliding sync (MSC4186).
+///
+/// Synara syncs only through the SDK `SyncService`, which needs it; without
+/// this check the login succeeds and the new device then never syncs. Shells
+/// call this on the unauthenticated client right before
+/// [`login_with_password`]. A `/versions` failure maps like a login error.
+pub async fn require_native_sliding_sync(client: &Client) -> Result<(), AuthError> {
+    let supported = client
+        .supported_versions()
+        .await
+        .map_err(|error| map_login_sdk_error(error.into()))?;
+    if crate::app::sync::supports_native_sliding_sync(&supported) {
+        Ok(())
+    } else {
+        Err(AuthError::UnsupportedCapability {
+            diagnostic_id: LOGIN_SLIDING_SYNC_UNSUPPORTED_DIAGNOSTIC_ID,
+        })
+    }
+}
+
 fn validate_user_id_or_localpart(raw: &str) -> Result<String, AuthError> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -208,6 +233,14 @@ fn validate_device_display_name(name: &str) -> Result<(), AuthError> {
 /// redacted structural scan of the error Display text. Never embeds password,
 /// token, or raw homeserver error bodies into Display/diagnostic fields.
 pub(crate) fn map_login_sdk_error(err: MatrixSdkError) -> AuthError {
+    // The `/versions` probe returns its failure wrapped for the SDK's cache;
+    // classify the original error rather than an opaque `Cached`.
+    if let MatrixSdkError::Http(http) = &err {
+        if let HttpError::Cached(inner) = http.as_ref() {
+            return map_login_http_error(inner.as_ref());
+        }
+    }
+
     if err.as_uiaa_response().is_some() {
         return AuthError::InteractiveAuthRequired {
             diagnostic_id: "p3.2-login-uiaa-required",
@@ -235,22 +268,52 @@ pub(crate) fn map_login_sdk_error(err: MatrixSdkError) -> AuthError {
     classify_login_message_fallback(&raw)
 }
 
+/// [`map_login_sdk_error`] for an HTTP error the SDK handed back from its
+/// request cache.
+fn map_login_http_error(error: &HttpError) -> AuthError {
+    if let HttpError::Cached(inner) = error {
+        return map_login_http_error(inner.as_ref());
+    }
+    if error.as_uiaa_response().is_some() {
+        return AuthError::InteractiveAuthRequired {
+            diagnostic_id: "p3.2-login-uiaa-required",
+        };
+    }
+    if let Some(kind) = error.client_api_error_kind() {
+        return classify_error_kind_debug(&format!("{kind:?}"));
+    }
+    auth_error_for_shape(http_error_shape(error))
+}
+
+/// Static shape id of an HTTP error without a Matrix errcode.
+fn http_error_shape(error: &HttpError) -> &'static str {
+    match error {
+        HttpError::Reqwest(error) if error.is_timeout() => "p3.2-login-http-timeout",
+        HttpError::Reqwest(error) if error.is_connect() => "p3.2-login-http-connect",
+        HttpError::Reqwest(_) => "p3.2-login-http-request",
+        // A 5xx without a Matrix errcode (proxy or server outage).
+        HttpError::Api(_)
+            if error
+                .as_client_api_error()
+                .is_some_and(|api| api.status_code.is_server_error()) =>
+        {
+            "p3.2-login-http-server-error"
+        }
+        // Matrix API errors with a recognized errcode return above. This
+        // branch therefore means an unexpected/non-Matrix API response or
+        // response decoder failure, not a server message we may disclose.
+        HttpError::Api(_) => "p3.2-login-http-api-response",
+        HttpError::IntoHttp(_) => "p3.2-login-http-request-build",
+        HttpError::RefreshToken(_) => "p3.2-login-refresh-token",
+        HttpError::Cached(inner) => http_error_shape(inner.as_ref()),
+        #[cfg(target_os = "android")]
+        HttpError::VerifierBuilder(_) => "p3.2-login-http-verifier",
+    }
+}
+
 fn classify_login_sdk_error_shape(err: &MatrixSdkError) -> Option<AuthError> {
     let diagnostic_id = match err {
-        MatrixSdkError::Http(error) => match error.as_ref() {
-            HttpError::Reqwest(error) if error.is_timeout() => "p3.2-login-http-timeout",
-            HttpError::Reqwest(error) if error.is_connect() => "p3.2-login-http-connect",
-            HttpError::Reqwest(_) => "p3.2-login-http-request",
-            // Matrix API errors with a recognized errcode return above. This
-            // branch therefore means an unexpected/non-Matrix API response or
-            // response decoder failure, not a server message we may disclose.
-            HttpError::Api(_) => "p3.2-login-http-api-response",
-            HttpError::IntoHttp(_) => "p3.2-login-http-request-build",
-            HttpError::RefreshToken(_) => "p3.2-login-refresh-token",
-            HttpError::Cached(_) => "p3.2-login-http-cached",
-            #[cfg(target_os = "android")]
-            HttpError::VerifierBuilder(_) => "p3.2-login-http-verifier",
-        },
+        MatrixSdkError::Http(error) => http_error_shape(error.as_ref()),
         MatrixSdkError::SerdeJson(_) => "p3.2-login-response-decode",
         MatrixSdkError::Io(_) => "p3.2-login-local-io",
         MatrixSdkError::Url(_) => "p3.2-login-url-parse",
@@ -287,12 +350,16 @@ fn classify_login_sdk_error_shape(err: &MatrixSdkError) -> Option<AuthError> {
         | MatrixSdkError::MegolmError(_) => "p3.2-login-olm-unavailable",
         _ => return None,
     };
+    Some(auth_error_for_shape(diagnostic_id))
+}
 
-    let error = match diagnostic_id {
+fn auth_error_for_shape(diagnostic_id: &'static str) -> AuthError {
+    match diagnostic_id {
         "p3.2-login-http-timeout"
         | "p3.2-login-http-connect"
         | "p3.2-login-http-request"
         | "p3.2-login-sdk-timeout" => AuthError::Connectivity { diagnostic_id },
+        "p3.2-login-http-server-error" => AuthError::HomeserverUnavailable { diagnostic_id },
         "p3.2-login-http-request-build" | "p3.2-login-url-parse" => AuthError::InvalidInput {
             diagnostic_id,
             reason: "SDK could not construct the login request",
@@ -303,8 +370,7 @@ fn classify_login_sdk_error_shape(err: &MatrixSdkError) -> Option<AuthError> {
         | "p3.2-login-olm-unavailable"
         | "p3.2-login-local-io" => AuthError::SdkInvariant { diagnostic_id },
         _ => AuthError::Unknown { diagnostic_id },
-    };
-    Some(error)
+    }
 }
 
 fn classify_error_kind_debug(kind_debug: &str) -> AuthError {

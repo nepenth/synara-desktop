@@ -1,6 +1,97 @@
 import Foundation
 import SynaraCore
 
+/// A Core error that says what the caller can do (`coreErrorKind`) before
+/// which exact condition it was (`coreErrorCode`). Switch on the kind; match
+/// a code only for one specific condition. Converted so far: session
+/// lifecycle, sign-in, session status, leftovers and send text. Converting
+/// another error in Rust (see `shared_core_ffi/error_kind.rs`) adds its
+/// conformance here.
+protocol SharedCoreTypedError: Error {
+    var coreErrorKind: CoreErrorKind { get }
+    var coreErrorCode: String { get }
+}
+
+extension SessionRestoreError: SharedCoreTypedError {
+    var coreErrorKind: CoreErrorKind {
+        switch self { case let .Failed(kind, _, _): return kind }
+    }
+
+    var coreErrorCode: String {
+        switch self { case let .Failed(_, code, _): return code }
+    }
+}
+
+extension SessionLoginError: SharedCoreTypedError {
+    var coreErrorKind: CoreErrorKind {
+        switch self { case let .Failed(kind, _, _): return kind }
+    }
+
+    var coreErrorCode: String {
+        switch self { case let .Failed(_, code, _): return code }
+    }
+}
+
+extension SessionAttachError: SharedCoreTypedError {
+    var coreErrorKind: CoreErrorKind {
+        switch self { case let .Failed(kind, _, _): return kind }
+    }
+
+    var coreErrorCode: String {
+        switch self { case let .Failed(_, code, _): return code }
+    }
+}
+
+extension SyncStartError: SharedCoreTypedError {
+    var coreErrorKind: CoreErrorKind {
+        switch self { case let .Failed(kind, _, _): return kind }
+    }
+
+    var coreErrorCode: String {
+        switch self { case let .Failed(_, code, _): return code }
+    }
+}
+
+extension SyncStopError: SharedCoreTypedError {
+    var coreErrorKind: CoreErrorKind {
+        switch self { case let .Failed(kind, _, _): return kind }
+    }
+
+    var coreErrorCode: String {
+        switch self { case let .Failed(_, code, _): return code }
+    }
+}
+
+extension SessionStatusError: SharedCoreTypedError {
+    var coreErrorKind: CoreErrorKind {
+        switch self { case let .Failed(kind, _, _): return kind }
+    }
+
+    var coreErrorCode: String {
+        switch self { case let .Failed(_, code, _): return code }
+    }
+}
+
+extension LeftoverCommandError: SharedCoreTypedError {
+    var coreErrorKind: CoreErrorKind {
+        switch self { case let .Failed(kind, _, _): return kind }
+    }
+
+    var coreErrorCode: String {
+        switch self { case let .Failed(_, code, _): return code }
+    }
+}
+
+extension SendTextError: SharedCoreTypedError {
+    var coreErrorKind: CoreErrorKind {
+        switch self { case let .Failed(kind, _, _): return kind }
+    }
+
+    var coreErrorCode: String {
+        switch self { case let .Failed(_, code, _): return code }
+    }
+}
+
 /// Cold-start and foreground bootstrap: restore → attach → start.
 ///
 /// Login retains a Client first, so restore is skipped only on the dedicated
@@ -157,16 +248,7 @@ enum SharedCoreSessionBootstrap {
         if case let StepError.failed(code) = error {
             return code
         }
-        if case let SessionRestoreError.Failed(code, _) = error {
-            return code
-        }
-        if case let SessionAttachError.Failed(code, _) = error {
-            return code
-        }
-        if case let SyncStartError.Failed(code, _) = error {
-            return code
-        }
-        return nil
+        return (error as? SharedCoreTypedError)?.coreErrorCode
     }
 
     static func isProductLiveReadiness(_ readiness: SyncReadinessDto?) -> Bool {

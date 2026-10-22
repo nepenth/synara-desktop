@@ -19,6 +19,8 @@ enum TimelineSearchFilter {
             return "Deleted message"
         case .encryptedPlaceholder:
             return "Encrypted message"
+        case let .systemNotice(text):
+            return text
         case let .unknown(type):
             return type
         }
@@ -30,8 +32,8 @@ enum TimelineSearchFilter {
             return true
         }
 
-        return searchableText(for: item).localizedCaseInsensitiveContains(trimmed)
-            || item.senderID.localizedCaseInsensitiveContains(trimmed)
+        return searchableText(for: item).localizedStandardContains(trimmed)
+            || item.senderID.localizedStandardContains(trimmed)
     }
 
     static func applySearchQuery(_ query: String, to items: [TimelineItem]) -> [TimelineItem] {
@@ -49,6 +51,58 @@ enum TimelineDeliveryStatus: Equatable {
     case queued
     case sent
     case failed
+}
+
+/// SDK send state of an SDK local echo row, projected by Core. The SDK's
+/// persisted send queue owns the message; Retry and Discard go through Core
+/// by the row's transaction id.
+enum TimelineLocalEchoState: Equatable {
+    case sending
+    /// Recoverable: the SDK keeps the request and retries it on its own.
+    /// `retryable` is Core's verdict on the cause (`send_failure_retryable`).
+    case failed(cause: String?, retryable: Bool? = nil)
+    /// Unrecoverable: later sends in the room wait until Retry or Discard.
+    case wedged(cause: String?, retryable: Bool? = nil)
+
+    /// Core's `local_echo_state` / `send_failure` / `send_failure_retryable`
+    /// triple. `sent` and unknown states are not unsent, so they map to nil.
+    init?(coreState: String?, cause: String?, retryable: Bool? = nil) {
+        switch coreState {
+        case "sending":
+            self = .sending
+        case "failed":
+            self = .failed(cause: cause, retryable: retryable)
+        case "wedged":
+            self = .wedged(cause: cause, retryable: retryable)
+        default:
+            return nil
+        }
+    }
+
+    var deliveryStatus: TimelineDeliveryStatus {
+        switch self {
+        case .sending:
+            return .sending
+        case .failed, .wedged:
+            return .failed
+        }
+    }
+
+    /// Retry cannot succeed when the homeserver would refuse the same request
+    /// again; the row offers Discard only. Core decides per cause; the local
+    /// list mirrors `send_failure_is_retryable` for a row without the verdict.
+    var canRetry: Bool {
+        switch self {
+        case .sending:
+            return false
+        case let .failed(cause, retryable), let .wedged(cause, retryable):
+            return retryable ?? Self.isRetryableCause(cause)
+        }
+    }
+
+    static func isRetryableCause(_ cause: String?) -> Bool {
+        ["too_large", "forbidden", "rejected", "media", "not_joined"].contains(cause ?? "") == false
+    }
 }
 
 /// Active-account ownership for aggregate reactions. `unknown` is distinct
@@ -176,10 +230,76 @@ enum TimelineMessageGroupingPolicy {
         guard let previous, previous.senderID == current.senderID else {
             return false
         }
+        // A system line ("Ada joined the room") is not a message: the next
+        // message from the same person still shows who sent it.
+        if previous.isSystemNotice || current.isSystemNotice {
+            return false
+        }
         let elapsed = current.timestamp.timeIntervalSince(previous.timestamp)
         return elapsed >= 0
             && elapsed < maximumInterval
             && Calendar.current.isDate(previous.timestamp, inSameDayAs: current.timestamp)
+    }
+}
+
+/// Day headers between timeline rows. Core's date-separator rows are not
+/// mapped: every list that shows rows (room, thread, pending sends merged in)
+/// derives them from the rows it actually shows, in the device's calendar.
+enum TimelineDayHeaderPolicy {
+    /// Event ids of the rows that start a new day, keyed to the day label.
+    /// The first row always starts one.
+    static func headers(
+        for items: [TimelineItem],
+        calendar: Calendar = .current
+    ) -> [String: Date] {
+        var headers: [String: Date] = [:]
+        var previousDay: Date?
+        for item in items {
+            let day = calendar.startOfDay(for: item.timestamp)
+            if day != previousDay {
+                headers[item.eventID] = day
+                previousDay = day
+            }
+        }
+        return headers
+    }
+
+    /// A stable row identity for the day.
+    static func key(for day: Date) -> String {
+        String(Int(day.timeIntervalSince1970))
+    }
+
+    /// "Today", "Yesterday", the weekday within the last week, else the date
+    /// (with the year only when it is not this year).
+    static func label(
+        for day: Date,
+        now: Date = Date(),
+        calendar: Calendar = .current,
+        locale: Locale = .current
+    ) -> String {
+        let formatters = SynaraTimeFormatting.formatters(
+            for: SynaraTimeFormatting.Configuration(
+                uses24HourClock: SynaraSharedConstants.boolSetting(SynaraSharedConstants.hour24ClockKey),
+                locale: locale,
+                timeZone: calendar.timeZone
+            )
+        )
+        if calendar.isDate(day, inSameDayAs: now) {
+            return formatters.relativeDayName(offset: 0)
+        }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
+           calendar.isDate(day, inSameDayAs: yesterday) {
+            return formatters.relativeDayName(offset: -1)
+        }
+        let startOfToday = calendar.startOfDay(for: now)
+        if let lastWeek = calendar.date(byAdding: .day, value: -6, to: startOfToday),
+           day >= lastWeek, day < startOfToday {
+            return formatters.weekdayWide.format(day)
+        } else if calendar.component(.year, from: day) == calendar.component(.year, from: now) {
+            return formatters.weekdayMonthDay.format(day)
+        } else {
+            return formatters.weekdayMonthDayYear.format(day)
+        }
     }
 }
 
@@ -191,7 +311,17 @@ struct TimelineItem: Identifiable, Equatable {
         case redacted
         case encryptedPlaceholder
         case agentCard(SynaraAgentCard)
+        /// A membership or room-state change, shown as a compact system line
+        /// rather than a message from its sender. Core writes the sentence.
+        case systemNotice(String)
         case unknown(type: String)
+    }
+
+    var isSystemNotice: Bool {
+        if case .systemNotice = kind {
+            return true
+        }
+        return false
     }
 
     let id: String
@@ -199,11 +329,22 @@ struct TimelineItem: Identifiable, Equatable {
     /// The homeserver event identifier that may safely be used for receipts and
     /// read markers. Local echoes and transaction identifiers intentionally leave
     /// this nil while continuing to use `eventID` as their stable presentation ID.
-    let serverEventID: String?
+    /// SDK local echo rows set this to nil after init: they have no server
+    /// event yet, so receipt and tail code must not treat them as one.
+    var serverEventID: String?
     /// Core's receipt frontier paired with this displayed remote tail.
     var readReceiptEventID: String? = nil
+    /// Matrix transaction id of an own send. Core sets it on SDK local echo
+    /// rows and on this device's remote echoes; a pending row carries the id
+    /// Core enqueued it under, so the two are matched by transaction id and
+    /// never by content.
+    var transactionID: String? = nil
+    /// SDK send state while this row is an SDK local echo; nil otherwise.
+    var localEcho: TimelineLocalEchoState? = nil
     /// SDK authenticity shield for a message in an encrypted room; nil when trusted.
     var encryptionShield: TimelineEncryptionShield? = nil
+    /// Core-projected decision this account already made on an approval prompt.
+    var agentApprovalDecision: SynaraAgentApprovalCardDecision? = nil
     let senderID: String
     /// Core-resolved profile display name. Mock/local items leave this nil and
     /// continue through the deterministic sender-ID fallback.
@@ -287,8 +428,29 @@ struct TimelineItem: Identifiable, Equatable {
         deliveryStatus != nil
     }
 
+    /// The state the bubble shows: a pending row's own status, else the SDK
+    /// local echo's send state.
+    var presentedDeliveryStatus: TimelineDeliveryStatus? {
+        deliveryStatus ?? localEcho?.deliveryStatus
+    }
+
+    /// Copies the send identity a fresh `init` cannot express: an SDK local
+    /// echo keeps a nil server event id.
+    private func carryingSendIdentity(into copy: TimelineItem) -> TimelineItem {
+        var copy = copy
+        copy.readReceiptEventID = readReceiptEventID
+        copy.encryptionShield = encryptionShield
+        copy.transactionID = transactionID
+        copy.localEcho = localEcho
+        copy.agentApprovalDecision = agentApprovalDecision
+        if localEcho != nil {
+            copy.serverEventID = serverEventID
+        }
+        return copy
+    }
+
     func withDeliveryStatus(_ deliveryStatus: TimelineDeliveryStatus?) -> TimelineItem {
-        var item = TimelineItem(
+        let item = TimelineItem(
             id: id,
             eventID: eventID,
             serverEventID: serverEventID,
@@ -312,13 +474,11 @@ struct TimelineItem: Identifiable, Equatable {
             deliveryStatus: deliveryStatus,
             hasCurrentUserReadReceipt: hasCurrentUserReadReceipt
         )
-        item.readReceiptEventID = readReceiptEventID
-        item.encryptionShield = encryptionShield
-        return item
+        return carryingSendIdentity(into: item)
     }
 
     func withSenderAvatarURL(_ senderAvatarURL: URL?) -> TimelineItem {
-        var item = TimelineItem(
+        let item = TimelineItem(
             id: id,
             eventID: eventID,
             serverEventID: serverEventID,
@@ -342,9 +502,7 @@ struct TimelineItem: Identifiable, Equatable {
             deliveryStatus: deliveryStatus,
             hasCurrentUserReadReceipt: hasCurrentUserReadReceipt
         )
-        item.readReceiptEventID = readReceiptEventID
-        item.encryptionShield = encryptionShield
-        return item
+        return carryingSendIdentity(into: item)
     }
 
     static func pendingMessage(
@@ -444,32 +602,24 @@ enum TimelinePendingReconciler {
         return combined
     }
 
+    /// A pending row is matched only by the identity Core gave its send: the
+    /// transaction id (on the SDK local echo and on this device's remote
+    /// echo) or the acknowledged server event id. Never by content: an
+    /// earlier identical "ok" must not resolve a new, still in-flight "ok".
     static func matchesPending(_ pending: TimelineItem, serverItem: TimelineItem) -> Bool {
-        guard pending.deliveryStatus == .sending || pending.deliveryStatus == .sent else {
+        guard serverItem.isLocalPending == false else {
             return false
+        }
+        if let transactionID = pending.transactionID, serverItem.transactionID == transactionID {
+            return true
         }
         // A send acknowledgement identifies the event, but does not guarantee
         // that the timeline has observed it yet. Its eventual echo must match
         // that identity, including attachments and server-normalized content.
         if let serverEventID = pending.serverEventID {
-            return serverItem.isLocalPending == false && serverItem.serverEventID == serverEventID
+            return serverItem.serverEventID == serverEventID
         }
-        guard pending.senderID == serverItem.senderID else {
-            return false
-        }
-        guard pending.replyToEventID == serverItem.replyToEventID else {
-            return false
-        }
-        guard pending.threadRootEventID == serverItem.threadRootEventID else {
-            return false
-        }
-        guard let pendingBody = messageBody(for: pending),
-              let serverBody = messageBody(for: serverItem),
-              pendingBody == serverBody
-        else {
-            return false
-        }
-        return abs(serverItem.timestamp.timeIntervalSince(pending.timestamp)) < 5 * 60
+        return false
     }
 
     static func merge(
@@ -487,8 +637,7 @@ enum TimelinePendingReconciler {
         var unmatchedPending = pendingItems
         for serverItem in streamItems {
             if let index = unmatchedPending.firstIndex(where: {
-                ($0.serverEventID != nil || serverItem.senderID == currentUserID)
-                    && matchesPending($0, serverItem: serverItem)
+                matchesPending($0, serverItem: serverItem)
             }) {
                 unmatchedPending.remove(at: index)
             }
@@ -525,22 +674,67 @@ enum TimelineWindowPolicy {
         return Array(stableItems.suffix(limit))
     }
 
-    static func prependingHistory(
-        _ olderItems: [TimelineItem],
-        to currentItems: [TimelineItem],
+    /// The rows a provider presents. Following the live tail, that is the
+    /// newest `limit` rows. Once the user has paged back, it is every row from
+    /// that history floor to the newest: live updates keep arriving without
+    /// trimming the rows being read. A floor the provider no longer holds (the
+    /// SDK reset the room after a gappy sync) keeps the provider's whole window.
+    static func window(
+        _ items: [TimelineItem],
+        historyFloorKey: String?,
         limit: Int = stableEventLimit
     ) -> [TimelineItem] {
-        guard limit > 0 else {
-            return []
+        guard let historyFloorKey else {
+            return replacingServerWindow(items, limit: limit)
         }
-        return Array(deduplicated(olderItems + currentItems).prefix(limit))
+        let stableItems = deduplicated(items.filter { $0.isLocalPending == false })
+        guard let floorIndex = stableItems.firstIndex(where: { key(for: $0) == historyFloorKey }) else {
+            return stableItems
+        }
+        return Array(stableItems[floorIndex...])
+    }
+
+    enum PageDirection {
+        case older
+        case newer
+    }
+
+    /// Core answers a page with the provider's whole window, which holds the
+    /// current rows' edges and is authoritative (rows can also disappear).
+    /// A service that returns only the new page is joined on the side it
+    /// extends. Never capped: the user is reading these rows.
+    static func mergingPage(
+        _ page: [TimelineItem],
+        into currentItems: [TimelineItem],
+        direction: PageDirection
+    ) -> [TimelineItem] {
+        let stablePage = page.filter { $0.isLocalPending == false }
+        let pageKeys = Set(stablePage.map(key(for:)))
+        let currentKeys = Set(currentItems.map(key(for:)))
+        guard pageKeys.isSubset(of: currentKeys) == false else {
+            // An update already delivered these rows.
+            return currentItems
+        }
+        let currentEdges = [currentItems.first, currentItems.last].compactMap { $0.map(key(for:)) }
+        if currentEdges.isEmpty == false, currentEdges.allSatisfy(pageKeys.contains) {
+            return deduplicated(stablePage)
+        }
+        switch direction {
+        case .older:
+            return deduplicated(stablePage + currentItems)
+        case .newer:
+            return deduplicated(currentItems + stablePage)
+        }
+    }
+
+    static func key(for item: TimelineItem) -> String {
+        item.eventID.isEmpty ? item.id : item.eventID
     }
 
     private static func deduplicated(_ items: [TimelineItem]) -> [TimelineItem] {
         var seen = Set<String>()
         return items.filter { item in
-            let key = item.eventID.isEmpty ? item.id : item.eventID
-            return seen.insert(key).inserted
+            seen.insert(key(for: item)).inserted
         }
     }
 }
@@ -558,11 +752,11 @@ enum LaterInboxError: Error, LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .noSession:
-            return "Sign in to load your Later items."
+            return String(localized: "Sign in to load your Later items.")
         case .malformedPayload:
-            return "Later account data was not readable."
+            return String(localized: "Later account data was not readable.")
         case .networkFailure:
-            return "Could not load Later account data."
+            return String(localized: "Could not load Later account data.")
         }
     }
 }
@@ -580,26 +774,26 @@ struct SynaraLaterListItem: Identifiable, Equatable {
     var label: String {
         switch kind {
         case .saved:
-            return "Saved"
+            return String(localized: "Saved")
         case .reminder:
-            return "Reminder"
+            return String(localized: "Reminder")
         }
     }
 
     var detail: String {
         if completedAt != nil {
-            return "Completed"
+            return String(localized: "Completed")
         }
 
         if let dueTs {
             if dueTs < Int(Date().timeIntervalSince1970 * 1000) {
-                return "Due"
+                return String(localized: "Due")
             }
 
-            return "Due soon"
+            return String(localized: "Due soon")
         }
 
-        return "No due date"
+        return String(localized: "No due date")
     }
 }
 
@@ -685,6 +879,10 @@ struct RawTimelineEvent: Equatable {
     let agentCard: SynaraAgentCard?
     let isAgentApproval: Bool
     let reactions: [String: Int]
+    /// Reaction keys the signed-in user sent. A fixture states this for
+    /// every reaction, as Core's rows do (`own` per reaction), so the mock
+    /// timeline offers the same reaction toggles as a live one.
+    let ownReactions: Set<String>
 
     init(
         eventID: String,
@@ -702,7 +900,8 @@ struct RawTimelineEvent: Equatable {
         isEncrypted: Bool = false,
         agentCard: SynaraAgentCard? = nil,
         isAgentApproval: Bool = false,
-        reactions: [String: Int] = [:]
+        reactions: [String: Int] = [:],
+        ownReactions: Set<String> = []
     ) {
         self.eventID = eventID
         self.senderID = senderID
@@ -720,6 +919,7 @@ struct RawTimelineEvent: Equatable {
         self.agentCard = agentCard
         self.isAgentApproval = isAgentApproval
         self.reactions = reactions
+        self.ownReactions = ownReactions
     }
 }
 
@@ -729,6 +929,9 @@ struct TimelineLoadFailure: Equatable {
         case roomUnavailable
         case viewUnavailable
         case temporarilyUnavailable
+        /// Core suspended the session's stores (the app went to the
+        /// background). Loads again once the connection is back.
+        case waitingToReconnect
     }
 
     let kind: Kind
@@ -759,11 +962,13 @@ struct TimelineLoadFailure: Equatable {
     var userMessage: String {
         switch kind {
         case .sessionUnavailable:
-            return "Sign in again to load this timeline."
+            return String(localized: "Sign in again to load this timeline.")
         case .roomUnavailable:
-            return "This room is not available."
+            return String(localized: "This room is not available.")
         case .viewUnavailable, .temporarilyUnavailable:
-            return "Messages are temporarily unavailable. Try again."
+            return String(localized: "Messages are temporarily unavailable. Try again.")
+        case .waitingToReconnect:
+            return String(localized: "Waiting to reconnect. Messages load when the connection is back.")
         }
     }
 }
@@ -788,31 +993,93 @@ struct RoomTimelineAvailabilityState: Equatable {
     }
 }
 
+/// Where a routed event (notification, link) lives, resolved by Core from the
+/// event itself before the room opens. Mirrors `TimelineEventRouteKindDto`.
+enum TimelineEventRoute: Equatable {
+    /// A room-timeline event, including a thread root.
+    case room
+    /// An in-thread reply. The room timeline never shows it.
+    case thread(rootEventID: String)
+    /// The homeserver has no such event for this account: deleted, or no access.
+    case missing
+    /// The event could not be loaded right now.
+    case unreachable
+}
+
+/// Says why a routed message is not on screen, in place of the generic
+/// "temporarily unavailable" failure. The room stays open at its latest
+/// messages.
+enum TimelineEventRouteNotice {
+    static let missing = String(localized: "That message isn't available. It may have been deleted, or you may not have access to it.")
+    static let notShown = String(localized: "That message couldn't be shown. Showing the latest messages instead.")
+    static let lastReadUnavailable = String(localized: "Your last read message couldn't be loaded. Showing the latest messages instead.")
+}
+
+/// Core's backward pagination state for a room provider. Only `exhausted`
+/// proves the start of the room; `unknown` covers loading and services
+/// without Core.
+enum TimelineBackwardPagination: Equatable {
+    case available
+    case exhausted
+    case unknown
+}
+
 protocol TimelineServicing: AnyObject {
     func loadInitialTimeline(roomID: String) async -> TimelineLoadOutcome
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome
     func loadLatestTimeline(roomID: String) async -> TimelineLoadOutcome
     func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome
     func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome
+    /// Older history for the provider `focusedEventID` opened (nil: the live
+    /// room). `.empty` means Core reached the start of the room.
+    func loadOlderTimeline(roomID: String, before eventID: String, focusedEventID: String?) async -> TimelineLoadOutcome
+    /// Newer events for an event-focused provider. `.empty` means its window
+    /// already reaches the present.
+    func loadNewerTimeline(roomID: String, focusedEventID: String) async -> TimelineLoadOutcome
+    /// The last backward pagination state Core reported for that provider.
+    func backwardPagination(roomID: String, focusedEventID: String?) -> TimelineBackwardPagination
     func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome>
     func typingUsers(roomID: String) -> AsyncStream<[String]>
     func threadTimelineUpdates(roomID: String, rootEventID: String) -> AsyncStream<TimelineLoadOutcome>
     /// Older replies for an open thread stream. `.empty` means the thread's
     /// start (its root) is already loaded.
     func loadOlderThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome
+    /// Releases an event-focused window opened beside the live room.
+    func closeFocusedTimeline(roomID: String)
     /// Releases a thread stream opened by `loadThreadTimeline`.
     func closeThreadTimeline(roomID: String, rootEventID: String)
+    /// Where a routed event lives, without opening a timeline for it.
+    func resolveEventRoute(roomID: String, eventID: String) async -> TimelineEventRoute
     func clearSessionCaches()
 }
 
 extension TimelineServicing {
     func clearSessionCaches() {}
 
+    /// Services without a Core route lookup keep the room placement.
+    func resolveEventRoute(roomID _: String, eventID _: String) async -> TimelineEventRoute {
+        .room
+    }
+
     func loadOlderThreadTimeline(roomID _: String, rootEventID _: String) async -> TimelineLoadOutcome {
         .empty
     }
 
+    func loadOlderTimeline(roomID: String, before eventID: String, focusedEventID _: String?) async -> TimelineLoadOutcome {
+        await loadOlderTimeline(roomID: roomID, before: eventID)
+    }
+
+    func loadNewerTimeline(roomID _: String, focusedEventID _: String) async -> TimelineLoadOutcome {
+        .empty
+    }
+
+    func backwardPagination(roomID _: String, focusedEventID _: String?) -> TimelineBackwardPagination {
+        .unknown
+    }
+
     func closeThreadTimeline(roomID _: String, rootEventID _: String) {}
+
+    func closeFocusedTimeline(roomID _: String) {}
 
     func loadInitialTimeline(roomID: String) async -> TimelineLoadOutcome {
         await loadInitialTimeline(roomID: roomID, focusedEventID: nil)
@@ -913,6 +1180,16 @@ enum RoomTimelineLiveTransition {
     case superseded
 }
 
+/// The result of opening a second provider beside the current one. Only
+/// `switched` replaces the current provider; otherwise it keeps running.
+enum RoomTimelineProviderSwitch {
+    case switched(RoomTimelineSessionFeed)
+    /// The provider opened but its window does not hold the requested event.
+    case missing
+    case failed(TimelineLoadFailure)
+    case superseded
+}
+
 actor RoomTimelineSession {
     private enum UpdateAcceptance {
         case accepted(TimelineLoadOutcome)
@@ -926,6 +1203,9 @@ actor RoomTimelineSession {
     private var mode: RoomTimelineMode = .live
     private var serverItems: [TimelineItem] = []
     private var updateFailureOutstanding = false
+    /// The oldest row the user paged back to. While set, updates keep every
+    /// row from it to the newest instead of only the newest window.
+    private var historyFloorKey: String?
 
     init(roomID: String, service: TimelineServicing) {
         self.roomID = roomID
@@ -937,6 +1217,7 @@ actor RoomTimelineSession {
         let requestedGeneration = generation
         self.mode = mode
         serverItems = []
+        historyFloorKey = nil
         updateFailureOutstanding = false
 
         let outcome = await service.loadInitialTimeline(
@@ -968,6 +1249,7 @@ actor RoomTimelineSession {
         case let .loaded(items) where items.isEmpty == false:
             generation &+= 1
             mode = .live
+            historyFloorKey = nil
             serverItems = TimelineWindowPolicy.replacingServerWindow(items)
             updateFailureOutstanding = false
             let nextGeneration = generation
@@ -989,28 +1271,69 @@ actor RoomTimelineSession {
         }
     }
 
+    /// Opens `mode` on its own provider while the current one keeps running,
+    /// and switches only when the new window holds `eventID`. A miss or a
+    /// failure leaves the current provider and its updates untouched.
+    func switchProvider(to mode: RoomTimelineMode, holding eventID: String) async -> RoomTimelineProviderSwitch {
+        let originGeneration = generation
+        let outcome = await service.loadInitialTimeline(roomID: roomID, focusedEventID: mode.focusedEventID)
+        guard originGeneration == generation else {
+            return .superseded
+        }
+        switch outcome {
+        case let .loaded(items) where items.contains(where: { $0.serverEventID == eventID }):
+            generation &+= 1
+            self.mode = mode
+            historyFloorKey = nil
+            serverItems = TimelineWindowPolicy.replacingServerWindow(items)
+            updateFailureOutstanding = false
+            let nextGeneration = generation
+            return .switched(
+                RoomTimelineSessionFeed(
+                    generation: nextGeneration,
+                    mode: mode,
+                    providerIsLive: mode.isLive,
+                    initialOutcome: .loaded(serverItems),
+                    updates: makeUpdateStream(mode: mode, generation: nextGeneration)
+                )
+            )
+        case .loaded, .empty:
+            if mode.isLive == false {
+                service.closeFocusedTimeline(roomID: roomID)
+            }
+            return .missing
+        case let .failed(failure):
+            return .failed(failure)
+        }
+    }
+
+    /// Pages back on the current provider. The provider, its generation and
+    /// its update stream stay as they are: a page is the same SDK timeline
+    /// growing older. `.empty` only when the service reports the start of
+    /// the room; a page whose rows a concurrent update already delivered is
+    /// still `.loaded`.
     func loadOlder(before eventID: String) async -> TimelineLoadOutcome? {
         let originGeneration = generation
-        let outcome = await service.loadOlderTimeline(roomID: roomID, before: eventID)
+        // Pin the rows being read before awaiting: an update that lands
+        // during the page must not trim them back to the newest window.
+        if historyFloorKey == nil {
+            historyFloorKey = serverItems.first.map(TimelineWindowPolicy.key(for:))
+        }
+        let outcome = await service.loadOlderTimeline(
+            roomID: roomID,
+            before: eventID,
+            focusedEventID: mode.focusedEventID
+        )
         guard originGeneration == generation else {
             return nil
         }
 
         switch outcome {
-        case let .loaded(olderItems) where olderItems.isEmpty == false:
-            let existingIDs = Set(serverItems.map { $0.eventID.isEmpty ? $0.id : $0.eventID })
-            let hasNewStableItem = olderItems.contains { item in
-                let key = item.eventID.isEmpty ? item.id : item.eventID
-                return item.isLocalPending == false && existingIDs.contains(key) == false
-            }
-            guard hasNewStableItem else {
-                return .empty
-            }
-            generation &+= 1
-            mode = .focused(eventID: eventID)
-            serverItems = TimelineWindowPolicy.prependingHistory(olderItems, to: serverItems)
+        case let .loaded(page) where page.isEmpty == false:
+            serverItems = TimelineWindowPolicy.mergingPage(page, into: serverItems, direction: .older)
+            historyFloorKey = serverItems.first.map(TimelineWindowPolicy.key(for:))
             updateFailureOutstanding = false
-            return .loaded(serverItems)
+            return serverItems.isEmpty ? .empty : .loaded(serverItems)
         case .loaded, .empty:
             updateFailureOutstanding = false
             return .empty
@@ -1020,9 +1343,50 @@ actor RoomTimelineSession {
         }
     }
 
+    /// Pages an event-focused provider toward the present. `.empty` means its
+    /// window already reaches the live tail; the live provider never pages
+    /// forward.
+    func loadNewer() async -> TimelineLoadOutcome? {
+        guard mode.isLive == false, let focusedEventID = mode.focusedEventID else {
+            return .empty
+        }
+        let originGeneration = generation
+        let outcome = await service.loadNewerTimeline(roomID: roomID, focusedEventID: focusedEventID)
+        guard originGeneration == generation else {
+            return nil
+        }
+
+        switch outcome {
+        case let .loaded(page) where page.isEmpty == false:
+            // Keep the rows above while the user reads down.
+            if historyFloorKey == nil {
+                historyFloorKey = serverItems.first.map(TimelineWindowPolicy.key(for:))
+            }
+            serverItems = TimelineWindowPolicy.mergingPage(page, into: serverItems, direction: .newer)
+            updateFailureOutstanding = false
+            return serverItems.isEmpty ? .empty : .loaded(serverItems)
+        case .loaded, .empty:
+            updateFailureOutstanding = false
+            return .empty
+        case let .failed(failure):
+            updateFailureOutstanding = true
+            return .failed(failure)
+        }
+    }
+
+    /// The user is back on the live tail: later updates may trim the window
+    /// to the newest rows again.
+    func followLiveTail() {
+        guard mode.isLive else {
+            return
+        }
+        historyFloorKey = nil
+    }
+
     func invalidate() {
         generation &+= 1
         serverItems = []
+        historyFloorKey = nil
         updateFailureOutstanding = false
     }
 
@@ -1054,7 +1418,7 @@ actor RoomTimelineSession {
         }
         switch outcome {
         case let .loaded(items):
-            let nextItems = TimelineWindowPolicy.replacingServerWindow(items)
+            let nextItems = TimelineWindowPolicy.window(items, historyFloorKey: historyFloorKey)
             let isRecoveryHeartbeat = updateFailureOutstanding
             updateFailureOutstanding = false
             guard nextItems != serverItems else {
@@ -1161,6 +1525,7 @@ enum TimelineMapper {
             isEdited: event.isEdited,
             isAgentApproval: event.isAgentApproval,
             reactions: event.reactions,
+            reactionOwnership: .known(event.ownReactions),
             isEncrypted: event.type == "m.room.encrypted" || event.isEncrypted
         )
     }
@@ -1343,6 +1708,11 @@ final class MockTimelineService: TimelineServicing {
     var typingUserUpdates: [[String]] = []
     var latestOutcome: TimelineLoadOutcome?
     var olderOutcome: TimelineLoadOutcome?
+    var newerOutcome: TimelineLoadOutcome?
+    var backwardPaginationState: TimelineBackwardPagination = .unknown
+    /// Initial loads by focused event id (nil: live), for provider-key tests.
+    private(set) var initialLoadFocusedEventIDs: [String?] = []
+    private(set) var olderLoadFocusedEventIDs: [String?] = []
     var loadDelayNanoseconds: UInt64 = 0
     var updateDelayNanoseconds: UInt64 = 0
     var updateIntervalNanoseconds: UInt64 = 0
@@ -1376,6 +1746,7 @@ final class MockTimelineService: TimelineServicing {
     }
 
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
+        initialLoadFocusedEventIDs.append(focusedEventID)
         if loadDelayNanoseconds > 0 {
             try? await Task.sleep(nanoseconds: loadDelayNanoseconds)
         }
@@ -1402,6 +1773,19 @@ final class MockTimelineService: TimelineServicing {
         }
         let older = timelineItems(roomID: roomID).filter { $0.eventID != eventID }
         return older.isEmpty ? .empty : .loaded(older)
+    }
+
+    func loadOlderTimeline(roomID: String, before eventID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
+        olderLoadFocusedEventIDs.append(focusedEventID)
+        return await loadOlderTimeline(roomID: roomID, before: eventID)
+    }
+
+    func loadNewerTimeline(roomID _: String, focusedEventID _: String) async -> TimelineLoadOutcome {
+        newerOutcome ?? .empty
+    }
+
+    func backwardPagination(roomID _: String, focusedEventID _: String?) -> TimelineBackwardPagination {
+        backwardPaginationState
     }
 
     func loadLatestTimeline(roomID: String) async -> TimelineLoadOutcome {
@@ -4091,13 +4475,13 @@ struct TimelineEncryptionShield: Equatable {
     var label: String {
         switch code {
         case .authenticityNotGuaranteed:
-            "The authenticity of this encrypted message can't be guaranteed on this device."
-        case .unknownDevice: "Encrypted by an unknown or deleted device."
-        case .unsignedDevice: "Encrypted by a device not verified by its owner."
-        case .unverifiedIdentity: "Encrypted by an unverified user."
-        case .verificationViolation: "The sender's verified identity has changed."
-        case .mismatchedSender: "The sender of this message does not match the device that encrypted it."
-        case .sentInClear: "Not encrypted."
+            String(localized: "The authenticity of this encrypted message can't be guaranteed on this device.")
+        case .unknownDevice: String(localized: "Encrypted by an unknown or deleted device.")
+        case .unsignedDevice: String(localized: "Encrypted by a device not verified by its owner.")
+        case .unverifiedIdentity: String(localized: "Encrypted by an unverified user.")
+        case .verificationViolation: String(localized: "The sender's verified identity has changed.")
+        case .mismatchedSender: String(localized: "The sender of this message does not match the device that encrypted it.")
+        case .sentInClear: String(localized: "Not encrypted.")
         }
     }
 }

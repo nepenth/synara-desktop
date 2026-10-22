@@ -43,15 +43,23 @@ pub(super) fn push_owner_update(
     session_generation: u64,
     room_id: Option<String>,
 ) {
+    let update = OwnerUpdateDto {
+        family: family.into(),
+        session_generation,
+        room_id,
+    };
     if let Ok(mut guard) = queue.lock() {
+        // A summary only says "re-read this family (for this room)". One
+        // pending copy per key is enough, and keeping duplicates out means a
+        // burst in one family (typing, devices) can no longer push the only
+        // pending summary of another family out of the bounded queue.
+        if guard.contains(&update) {
+            return;
+        }
         if guard.len() >= OWNER_UPDATE_QUEUE_CAP {
             guard.remove(0);
         }
-        guard.push(OwnerUpdateDto {
-            family: family.into(),
-            session_generation,
-            room_id,
-        });
+        guard.push(update);
     }
 }
 
@@ -651,5 +659,41 @@ impl SharedCore {
         Ok(UserStatusWriteDto {
             status: result.status.into(),
         })
+    }
+}
+
+#[cfg(test)]
+mod queue_tests {
+    use super::*;
+
+    #[test]
+    fn duplicate_summaries_coalesce_so_a_burst_cannot_evict_another_family() {
+        let queue = Mutex::new(Vec::new());
+        push_owner_update(&queue, "verification", 2, None);
+        for _ in 0..(OWNER_UPDATE_QUEUE_CAP * 2) {
+            push_owner_update(&queue, "typing", 2, Some("!busy:example.org".to_owned()));
+        }
+        push_owner_update(&queue, "typing", 2, Some("!other:example.org".to_owned()));
+        let queued = queue.lock().unwrap().clone();
+        assert_eq!(queued.len(), 3);
+        assert_eq!(queued[0].family, "verification");
+        assert_eq!(queued[1].room_id.as_deref(), Some("!busy:example.org"));
+        assert_eq!(queued[2].room_id.as_deref(), Some("!other:example.org"));
+    }
+
+    #[test]
+    fn room_list_wake_ups_coalesce_per_generation() {
+        let queue = Mutex::new(Vec::new());
+        for _ in 0..(ROOM_LIST_UPDATE_QUEUE_CAP * 2) {
+            push_room_list_update(&queue, 5);
+        }
+        push_room_list_update(&queue, 6);
+        let generations: Vec<u64> = queue
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|update| update.session_generation)
+            .collect();
+        assert_eq!(generations, [5, 6]);
     }
 }

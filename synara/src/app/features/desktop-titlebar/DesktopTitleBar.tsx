@@ -9,6 +9,7 @@ import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desk
 import { isLinuxOS } from '../../utils/user-agent';
 import * as css from './DesktopTitleBar.css';
 import { observeNativeMaximizedState } from './nativeMaximizedState';
+import { appShortcutAction } from '../desktop-keyboard/appShortcuts';
 
 /** A persistent drag strip and window controls for the borderless Linux shell.
  * macOS and Windows use their native titlebars.
@@ -49,6 +50,19 @@ export function DesktopTitleBar() {
       current.dispose();
       observation.current = undefined;
     };
+  }, [visible]);
+  // Linux has no app menu, and a panel without a tray host hides the tray's
+  // Quit item; Ctrl+Q is the standard way out. The strip is mounted on every
+  // screen (sign-in too), so it owns this shortcut.
+  useEffect(() => {
+    if (!visible) return undefined;
+    const onKeyDown = (evt: KeyboardEvent) => {
+      if (appShortcutAction(evt, { macOS: false, linux: true }) !== 'quit') return;
+      evt.preventDefault();
+      void invokeDesktopWithAvailability('desktop_quit');
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, [visible]);
   const toggleMaximize = useCallback(() => {
     const current = observation.current;

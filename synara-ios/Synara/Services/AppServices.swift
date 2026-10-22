@@ -56,16 +56,34 @@ enum OwnProfileWriteStatus: Equatable {
     case rateLimited
     case failed
 
-    func message(for field: String) -> String {
-        switch self {
-        case .updated: return "\(field) updated."
-        case .rateLimited: return "The homeserver is limiting profile changes. Please try again shortly."
-        case .failed: return "Could not update \(field.lowercased())."
+    /// The profile field a write changed; each has whole-sentence copy.
+    enum Field {
+        case avatar
+        case displayName
+    }
+
+    func message(for field: Field) -> String {
+        switch (self, field) {
+        case (.updated, .avatar): return String(localized: "Avatar updated.")
+        case (.updated, .displayName): return String(localized: "Display name updated.")
+        case (.rateLimited, _):
+            return String(localized: "The homeserver is limiting profile changes. Please try again shortly.")
+        case (.failed, .avatar): return String(localized: "Could not update avatar.")
+        case (.failed, .displayName): return String(localized: "Could not update display name.")
         }
     }
 }
 
-protocol MatrixClientServicing: AnyObject {
+/// The account push rules behind Settings → Notifications.
+protocol PushRuleSettingsServicing: AnyObject {
+    func pushRulesSnapshot() async -> SynaraPushRulesSnapshot?
+    func setPushRuleDefault(encrypted: Bool, oneToOne: Bool, mode: String) async -> Bool
+    func setPushRuleMention(ruleID: String, enabled: Bool) async -> Bool
+    func addPushKeyword(_ keyword: String) async -> Bool
+    func removePushKeyword(_ keyword: String) async -> Bool
+}
+
+protocol MatrixClientServicing: PushRuleSettingsServicing {
     var syncStatusDescription: String { get }
     var syncStatus: MatrixSyncStatus { get }
 
@@ -106,18 +124,17 @@ protocol MatrixClientServicing: AnyObject {
     func uploadOwnAvatar(payload: Data, mimeType: String) async -> Bool
     func uploadOwnAvatarStatus(payload: Data, mimeType: String) async -> OwnProfileWriteStatus
     func setOutgoingTyping(roomID: String, typing: Bool) async
+    /// The `io.element.recent_emoji` list shared with desktop; nil on failure.
+    func recentEmoji() async -> [SharedCoreRecentEmojiEntry]?
+    /// Records one use the way desktop does; the list as written, nil on failure.
+    func recordRecentEmoji(_ emoji: String) async -> [SharedCoreRecentEmojiEntry]?
     func ignoredUserIDs() async -> [String]
     func ignoreUser(_ userID: String) async -> Bool
     func unignoreUser(_ userID: String) async -> Bool
-    func pushRulesSnapshot() async -> SynaraPushRulesSnapshot?
     func agentNotificationPreferences() async throws -> SynaraAgentNotificationPreferences
     func agentNotificationEventAllowed(roomID: String, eventID: String, session: AuthenticatedSession) async -> Bool
     func agentNotificationPreferenceUpdates() -> AsyncStream<Void>
     func setAgentNotificationPreferences(_ preferences: SynaraAgentNotificationPreferences) async throws -> SynaraAgentNotificationPreferences
-    func setPushRuleDefault(encrypted: Bool, oneToOne: Bool, mode: String) async -> Bool
-    func setPushRuleMention(ruleID: String, enabled: Bool) async -> Bool
-    func addPushKeyword(_ keyword: String) async -> Bool
-    func removePushKeyword(_ keyword: String) async -> Bool
     func threepidEmails() async -> [String]
     func deleteThreepidEmail(_ address: String) async -> Bool
     func requestThreepidEmailToken(_ email: String) async -> Bool
@@ -125,7 +142,7 @@ protocol MatrixClientServicing: AnyObject {
     func addThreepidEmailPassword(_ password: String) async -> ThreepidAddStatusDto?
 }
 
-struct SynaraPushRuleMentions {
+struct SynaraPushRuleMentions: Equatable {
     var userMention: Bool
     var displayName: Bool
     var userName: Bool
@@ -133,7 +150,7 @@ struct SynaraPushRuleMentions {
     var atRoom: Bool
 }
 
-struct SynaraPushRulesSnapshot {
+struct SynaraPushRulesSnapshot: Equatable {
     var dm: String
     var dmEncrypted: String
     var group: String
@@ -210,6 +227,15 @@ extension MatrixClientServicing {
     func setOutgoingTyping(roomID: String, typing: Bool) async {
         _ = roomID
         _ = typing
+    }
+
+    func recentEmoji() async -> [SharedCoreRecentEmojiEntry]? {
+        nil
+    }
+
+    func recordRecentEmoji(_ emoji: String) async -> [SharedCoreRecentEmojiEntry]? {
+        _ = emoji
+        return nil
     }
 
     func ignoredUserIDs() async -> [String] { [] }
@@ -291,17 +317,17 @@ enum NotificationPermissionStatus: Equatable {
     var displayName: String {
         switch self {
         case .notDetermined:
-            return "Not Requested"
+            return String(localized: "Not Requested")
         case .denied:
-            return "Denied"
+            return String(localized: "Denied")
         case .authorized:
-            return "Authorized"
+            return String(localized: "Authorized")
         case .provisional:
-            return "Provisional"
+            return String(localized: "Provisional")
         case .ephemeral:
-            return "Ephemeral"
+            return String(localized: "Ephemeral")
         case .unavailable:
-            return "Unavailable"
+            return String(localized: "Unavailable")
         }
     }
 
@@ -317,17 +343,17 @@ enum NotificationPermissionStatus: Equatable {
     var detail: String {
         switch self {
         case .notDetermined:
-            return "Notifications can be enabled for room and agent alerts."
+            return String(localized: "Notifications can be enabled for room and agent alerts.")
         case .denied:
-            return "Enable notifications in iOS Settings to receive alerts."
+            return String(localized: "Enable notifications in iOS Settings to receive alerts.")
         case .authorized:
-            return "Notifications are enabled."
+            return String(localized: "Notifications are enabled.")
         case .provisional:
-            return "Notifications can be delivered quietly."
+            return String(localized: "Notifications can be delivered quietly.")
         case .ephemeral:
-            return "Notifications are temporarily available for this session."
+            return String(localized: "Notifications are temporarily available for this session.")
         case .unavailable:
-            return "Notifications are unavailable on this device."
+            return String(localized: "Notifications are unavailable on this device.")
         }
     }
 
@@ -363,13 +389,13 @@ enum SynaraRoomEncryptionStatus: Equatable {
     var roomDetailsLabel: String {
         switch self {
         case .encrypted:
-            return "Encrypted"
+            return String(localized: "Encrypted")
         case .notEncrypted:
-            return "Not encrypted"
+            return String(localized: "Not encrypted")
         case .unknown:
-            return "Unknown"
+            return String(localized: "Unknown")
         case .unavailable:
-            return "Unavailable"
+            return String(localized: "Unavailable")
         }
     }
 }
@@ -392,6 +418,20 @@ enum SynaraCryptoBackupStatus: Equatable {
     case enabled
     case unavailable
     case syncing
+}
+
+/// The account's cross-signing identity as this device sees it (Core's
+/// `cross_signing_status` readiness).
+enum SynaraCryptoCrossSigningStatus: Equatable {
+    case unknown
+    /// Published, and this device holds and trusts it.
+    case ready
+    /// The account has no identity yet.
+    case notSetUp
+    /// Published, but this device is not verified against it yet.
+    case needsVerification
+    /// Published, but this device lacks some private keys.
+    case needsRecovery
 }
 
 struct RoomCryptoStatus: Equatable {
@@ -438,41 +478,50 @@ struct RoomCryptoStatus: Equatable {
     }
 
     var cryptoBannerTitle: String {
-        if unableToDecryptCount > 0 { return "Encrypted history needs attention" }
-        if recovery == .incomplete { return "Key recovery needs attention" }
-        return "Verify this device"
+        if unableToDecryptCount > 0 { return String(localized: "Encrypted history needs attention") }
+        if recovery == .incomplete { return String(localized: "Key recovery needs attention") }
+        return String(localized: "Verify this device")
     }
 
     var cryptoBannerDetail: String {
         if unableToDecryptCount > 0 {
-            return "Some messages could not be decrypted. Retry after keys arrive, or review verification and key recovery in Settings."
+            return String(localized: "Some messages could not be decrypted. Retry after keys arrive, or review verification and key recovery in Settings.")
         }
         if recovery == .incomplete {
-            return "Key recovery is incomplete. Review Security to protect access to encrypted history."
+            return String(localized: "Key recovery is incomplete. Review Security to protect access to encrypted history.")
         }
-        return "This device is not verified. Compare emoji or number codes with another verified session in Settings. This does not mean messages failed to decrypt."
+        return String(localized: "This device is not verified. Compare emoji or number codes with another verified session in Settings. This does not mean messages failed to decrypt.")
     }
 
     var roomHeaderLabel: String? {
         guard isEncrypted else {
-            return encryption == .unavailable ? "Encryption Unavailable" : nil
+            return encryption == .unavailable ? String(localized: "Encryption Unavailable") : nil
         }
         if unableToDecryptCount > 0 || recovery == .incomplete || recovery == .disabled {
-            return "Recovery Needed"
+            return String(localized: "Recovery Needed")
         }
         if backup == .unavailable {
-            return "No Key Backup"
+            return String(localized: "No Key Backup")
         }
         if verification == .unverified {
-            return "Unverified"
+            return String(localized: "Unverified")
         }
-        return "Encrypted"
+        return String(localized: "Encrypted")
     }
 
     var roomHeaderSystemImage: String {
         needsCryptoActionBanner || needsRecoveryAttention
             ? "lock.trianglebadge.exclamationmark"
             : "lock.fill"
+    }
+}
+
+/// When an open room needs session crypto updates. They exist to retry
+/// decryption once this device is verified and to refresh the crypto banner,
+/// so a verified session without undecryptable rows needs none.
+enum RoomCryptoObservationPolicy {
+    static func needsSessionUpdates(_ status: RoomCryptoStatus) -> Bool {
+        status.unableToDecryptCount > 0 || status.verification != .verified
     }
 }
 
@@ -483,12 +532,16 @@ struct SessionCryptoStatus: Equatable {
     let hasDevicesToVerifyAgainst: Bool?
     let isLastDevice: Bool?
     let unableToDecryptCount: Int?
+    var crossSigning: SynaraCryptoCrossSigningStatus = .unknown
+    /// True when the account has no recovery yet, so Security offers
+    /// "Set Up Recovery". Nil until secret storage has been read.
+    var recoverySetupAvailable: Bool? = nil
 
     // Session crypto metadata does not scan message history. A missing count
     // must never be presented as proof that every encrypted event decrypted.
     var decryptionIssuesLabel: String {
-        guard let count = unableToDecryptCount else { return "Check room history" }
-        return count == 0 ? "None observed" : "\(count) observed"
+        guard let count = unableToDecryptCount else { return String(localized: "Check room history") }
+        return count == 0 ? String(localized: "None observed") : String(localized: "\(count) observed")
     }
 
     static let unknown = SessionCryptoStatus(
@@ -599,8 +652,98 @@ enum CryptoActionResult: Equatable {
     }
 }
 
+/// One cross-signing setup step (Security → Set Up Recovery).
+enum CrossSigningSetupResult: Equatable {
+    /// The account's identity is published (now, or already).
+    case ready
+    /// The homeserver wants the account password to publish it.
+    case passwordRequired
+    /// The password was not accepted; it can be entered again.
+    case passwordRejected
+    case failed(String)
+}
+
+/// Recovery enrolment after cross-signing is ready.
+enum RecoveryEnrollmentResult: Equatable {
+    /// Recovery was set up now. The key is shown once and never stored.
+    case enabled(recoveryKey: String)
+    /// Recovery was already set up; no new key was made.
+    case alreadyEnabled
+    case failed(String)
+}
+
+enum RecoverySetupCopy {
+    static let setupFailed = String(localized: "Synara could not set up cross-signing. Try again.")
+    static let enrollmentFailed = String(localized: "Synara could not update secret storage. Try again.")
+    static let passwordRejected =
+        String(localized: "Cross-signing setup authentication failed. Check your password and try again.")
+    static let unavailable = String(localized: "Recovery setup is unavailable.")
+}
+
+/// One Reset Identity step (Security, or the "Verify This Device" prompt).
+enum IdentityResetResult: Equatable {
+    /// The new identity is published; recovery setup comes next.
+    case complete
+    /// The homeserver wants the account password.
+    case passwordRequired
+    /// Approve the reset on the account page, then continue.
+    case approvalRequired(URL)
+    /// The password was not accepted; it can be entered again.
+    case passwordRejected
+    /// Continue came before the approval; approve, then continue again.
+    case approvalPending
+    case failed(String)
+}
+
+/// Desktop's wording, word for word
+/// (`synara/src/app/features/cross-signing/nativeIdentityReset.ts`).
+enum IdentityResetCopy {
+    static let title = String(localized: "Reset Identity")
+    static let settingsDescription =
+        String(localized: "If you have lost your recovery key and all your other devices, start over with a new identity.")
+    static let warningIntro =
+        String(localized: "Only reset your identity if you have lost your recovery key and are not signed in on any other device you can verify with.")
+    static let warnings = [
+        String(localized: "People you talk to will see that your identity changed."),
+        String(localized: "You will need to verify your other devices and contacts again."),
+        String(localized: "Messages that only your old keys can read may be lost, unless another device still has them."),
+        String(localized: "Starting the reset removes your key backup and recovery key right away, even if you cancel before it finishes."),
+    ]
+    static let password = String(localized: "Enter your account password to confirm the reset.")
+    static let approval =
+        String(localized: "Your homeserver asks you to approve the reset on your account page. Approve it in your browser, then select Continue.")
+    static let openAccountPage = String(localized: "Open Account Page")
+    static let recovery = String(localized: "Your identity was reset. Set up recovery now to get a new recovery key.")
+    static let configured = String(localized: "Device verification and account recovery are configured for this session.")
+    static let cancelled =
+        String(localized: "Reset cancelled. Your key backup and recovery key were removed when it started. Set up recovery in Settings once this device is verified, or reset your identity to finish.")
+    static let recoveryMayBeOff =
+        String(localized: "Your key backup and recovery key may already be removed. Set up recovery in Settings once this device is verified, or reset your identity to finish.")
+    static let failed = String(localized: "Synara could not reset your identity. Try again.")
+    static let passwordRejected = String(localized: "Identity reset authentication failed. Check your password and try again.")
+    static let approvalPending =
+        String(localized: "Synara has not seen your approval yet. Approve the reset in your browser, then select Continue.")
+    static let network = String(localized: "Synara could not reach your homeserver. Check your connection and try again.")
+    static let authUnsupported =
+        String(localized: "This homeserver asks for a sign-in step Synara cannot complete for an identity reset.")
+}
+
+/// Desktop's "Verify This Device" prompt wording.
+enum VerifyDevicePromptCopy {
+    static let title = String(localized: "Verify This Device")
+    static let description =
+        String(localized: "Your account already has a cross-signing identity. Verify this device to read your encrypted messages and so others can trust it.")
+    static let verifyWithDevice = String(localized: "Verify from Another Device")
+    static let recoveryKey = String(localized: "Use Recovery Key")
+    static let cantVerify = String(localized: "Lost your recovery key and all your other devices?")
+    static let later = String(localized: "Later")
+}
+
 protocol CryptoStatusServicing {
     func roomStatus(roomID: String) async -> RoomCryptoStatus
+    /// Room status over a session status the caller already has (from
+    /// `SessionCryptoStore`), so a room read does not repeat the session read.
+    func roomStatus(roomID: String, session: SessionCryptoStatus) async -> RoomCryptoStatus
     func sessionStatus() async -> SessionCryptoStatus
     func verificationUpdates() -> AsyncStream<CryptoVerificationSnapshot?>
     func retryDecryption(roomID: String) async -> CryptoActionResult
@@ -611,6 +754,22 @@ protocol CryptoStatusServicing {
     func declineVerification() async -> CryptoActionResult
     func cancelVerification() async -> CryptoActionResult
     func recover(recoveryKey: String) async -> CryptoActionResult
+    /// Create and publish the account's cross-signing identity when it has none.
+    func startCrossSigningSetup() async -> CrossSigningSetupResult
+    /// Answer the password stage of a setup that returned `.passwordRequired`.
+    func authenticateCrossSigningSetup(password: String) async -> CrossSigningSetupResult
+    /// Enrol secret storage and key backup with a recovery passphrase.
+    func enableRecovery(passphrase: String) async -> RecoveryEnrollmentResult
+    /// Whether to show "Verify This Device" now; Core arms it once per sign-in.
+    func deviceVerificationPromptVisible() async -> Bool
+    /// "Later" (or any choice): hide the prompt for this session.
+    func dismissDeviceVerificationPrompt() async
+    /// Reset Identity. The SDK deletes key backup and disables recovery first.
+    func startIdentityReset() async -> IdentityResetResult
+    func authenticateIdentityReset(password: String) async -> IdentityResetResult
+    /// Continue after the user approved the reset in the browser.
+    func continueIdentityReset() async -> IdentityResetResult
+    func cancelIdentityReset() async
     func sessionDevices() async -> [SharedCoreSessionDevice]
     func sessionDeviceUpdates() -> AsyncStream<Void>
     func signOutSession(deviceId: String, password: String) async -> CryptoActionResult
@@ -664,14 +823,14 @@ struct RoomIdentityWarning: Equatable, Identifiable {
     }
 
     var actionTitle: String {
-        kind == .verificationViolation ? "Withdraw verification" : "Dismiss"
+        kind == .verificationViolation ? String(localized: "Withdraw verification") : String(localized: "Dismiss")
     }
 
     var message: String {
         let name = displayName ?? userID
         return kind == .verificationViolation
-            ? "\(name)'s verified identity changed."
-            : "\(name)'s identity changed."
+            ? String(localized: "\(name)'s verified identity changed.")
+            : String(localized: "\(name)'s identity changed.")
     }
 
     /// The most serious warning first: verification violations outrank pin violations.
@@ -681,6 +840,11 @@ struct RoomIdentityWarning: Equatable, Identifiable {
 }
 
 extension CryptoStatusServicing {
+    func roomStatus(roomID: String, session: SessionCryptoStatus) async -> RoomCryptoStatus {
+        _ = session
+        return await roomStatus(roomID: roomID)
+    }
+
     func roomIdentityWarnings(roomID: String) async -> [RoomIdentityWarning] {
         _ = roomID
         return []
@@ -699,6 +863,41 @@ extension CryptoStatusServicing {
         await requestDeviceVerification(deviceId: nil)
     }
 
+    func startCrossSigningSetup() async -> CrossSigningSetupResult {
+        .failed(RecoverySetupCopy.unavailable)
+    }
+
+    func authenticateCrossSigningSetup(password: String) async -> CrossSigningSetupResult {
+        _ = password
+        return .failed(RecoverySetupCopy.unavailable)
+    }
+
+    func enableRecovery(passphrase: String) async -> RecoveryEnrollmentResult {
+        _ = passphrase
+        return .failed(RecoverySetupCopy.unavailable)
+    }
+
+    func deviceVerificationPromptVisible() async -> Bool {
+        false
+    }
+
+    func dismissDeviceVerificationPrompt() async {}
+
+    func startIdentityReset() async -> IdentityResetResult {
+        .failed(IdentityResetCopy.failed)
+    }
+
+    func authenticateIdentityReset(password: String) async -> IdentityResetResult {
+        _ = password
+        return .failed(IdentityResetCopy.failed)
+    }
+
+    func continueIdentityReset() async -> IdentityResetResult {
+        .failed(IdentityResetCopy.failed)
+    }
+
+    func cancelIdentityReset() async {}
+
     func sessionDevices() async -> [SharedCoreSessionDevice] {
         []
     }
@@ -712,11 +911,11 @@ extension CryptoStatusServicing {
     func signOutSession(deviceId: String, password: String) async -> CryptoActionResult {
         _ = deviceId
         _ = password
-        return .unavailable("Session sign-out is unavailable.")
+        return .unavailable(String(localized: "Session logout is unavailable."))
     }
 
     func dismissVerification(flowID: String) async -> CryptoActionResult {
-        .completed("Verification closed.")
+        .completed(String(localized: "Verification closed."))
     }
 
 }
@@ -906,21 +1105,21 @@ enum RoomManagementError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .signedOut:
-            return "Sign in before managing rooms."
+            return String(localized: "Sign in before managing rooms.")
         case .missingRoomName:
-            return "Enter a room name."
+            return String(localized: "Enter a room name.")
         case .missingUserID:
-            return "Enter a valid Matrix ID."
+            return String(localized: "Enter a valid Matrix ID.")
         case .missingRoomReference:
-            return "Enter a room ID or alias."
+            return String(localized: "Enter a room ID or alias.")
         case .invalidMatrixID:
-            return "Matrix IDs must look like @name:server."
+            return String(localized: "Matrix IDs must look like @name:server.")
         case .invalidRoomAlias:
-            return "Room aliases must look like #room:server."
+            return String(localized: "Room aliases must look like #room:server.")
         case .noProfileChanges:
-            return "Change the room name or topic before saving."
+            return String(localized: "Change the room name or topic before saving.")
         case .failed:
-            return "Room action failed. Try again."
+            return String(localized: "Room action failed. Try again.")
         case .directoryFailed(let description):
             return description
         }
@@ -1096,7 +1295,7 @@ final class PlaceholderPushService: PushServicing {
     let isRegistrationAvailable = false
     let isRegistered = false
     let tokenSnippet: String? = nil
-    let registrationStateDescription = "Push unavailable"
+    let registrationStateDescription = String(localized: "Push unavailable")
     let pushGatewayURL: String? = nil
 
     func beginRegistration() {}
@@ -1134,13 +1333,29 @@ final class PlaceholderPushService: PushServicing {
 struct MockCryptoStatusService: CryptoStatusServicing {
     var roomCryptoStatus: RoomCryptoStatus
     var sessionCryptoStatus: SessionCryptoStatus
+    /// UI tests: show "Verify This Device" as after a new sign-in.
+    var verifyDevicePrompt: Bool
 
     init(
         roomCryptoStatus: RoomCryptoStatus = .unknown,
-        sessionCryptoStatus: SessionCryptoStatus = .unknown
+        sessionCryptoStatus: SessionCryptoStatus = .unknown,
+        verifyDevicePrompt: Bool = false
     ) {
         self.roomCryptoStatus = roomCryptoStatus
         self.sessionCryptoStatus = sessionCryptoStatus
+        self.verifyDevicePrompt = verifyDevicePrompt
+    }
+
+    func deviceVerificationPromptVisible() async -> Bool {
+        verifyDevicePrompt
+    }
+
+    func startIdentityReset() async -> IdentityResetResult {
+        .passwordRequired
+    }
+
+    func authenticateIdentityReset(password: String) async -> IdentityResetResult {
+        password.isEmpty ? .passwordRejected : .complete
     }
 
     func roomStatus(roomID: String) async -> RoomCryptoStatus {
@@ -1630,9 +1845,13 @@ final class MockMatrixClientService: MatrixClientServicing {
         self.syncStatus = syncStatus
     }
 
+    /// What `start` leaves the session in; UI tests use it to show the
+    /// connection banner's error states.
+    var statusAfterStart: MatrixSyncStatus = .syncing
+
     func start(session: AuthenticatedSession) async {
         startedSessions.append(session)
-        syncStatus = .syncing
+        syncStatus = statusAfterStart
     }
 
     func warmSync(session: AuthenticatedSession) async {
@@ -1678,7 +1897,7 @@ final class MockMatrixClientService: MatrixClientServicing {
         onOperation?("matrix-resume")
         resumeCallCount += 1
         resumedSessions.append(session)
-        syncStatus = .syncing
+        syncStatus = statusAfterStart
     }
 
     func syncForBackgroundNotification(session: AuthenticatedSession) async -> Bool {

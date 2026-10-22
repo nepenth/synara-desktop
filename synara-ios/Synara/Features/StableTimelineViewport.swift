@@ -6,11 +6,12 @@ import SwiftUI
         static let environmentKey = "SYNARA_STABLE_SCROLL_ANCHORING"
         static let userDefaultsKey = "stableScrollAnchoring"
 
-        static var isEnabled: Bool {
-            let environmentValue = ProcessInfo.processInfo.environment[environmentKey]
-            let persistedValue = UserDefaults.standard.object(forKey: userDefaultsKey) as? Bool
-            return resolve(environmentValue: environmentValue, persistedValue: persistedValue)
-        }
+        /// Resolved once per launch: it is read on every timeline body pass,
+        /// and the render path must not switch under an open room.
+        static let isEnabled: Bool = resolve(
+            environmentValue: ProcessInfo.processInfo.environment[environmentKey],
+            persistedValue: UserDefaults.standard.object(forKey: userDefaultsKey) as? Bool
+        )
 
         static func resolve(environmentValue: String?, persistedValue: Bool?) -> Bool {
             if let environmentValue {
@@ -35,8 +36,18 @@ import SwiftUI
             case timeout
         }
 
+        enum PaginationRequest: Equatable {
+            /// The user scrolled within the threshold of the oldest row.
+            case nearOldest
+            /// The rows do not fill the viewport plus the threshold, so no
+            /// scroll can reach the threshold: page without waiting for one.
+            case fillShortContent
+        }
+
         static let maximumMissingTargetAttempts = 3
         static let maximumReadMarkerSettlementAttempts = 6
+        /// Pages requested to fill short content, per generation and per drag.
+        static let maximumShortContentPaginationRequests = 4
 
         static func shouldDeferSnapshot(isDragging: Bool, isDecelerating: Bool) -> Bool {
             isDragging || isDecelerating
@@ -65,17 +76,60 @@ import SwiftUI
             thresholdScreens: CGFloat = 1.5,
             hasUserInteracted: Bool,
             isPaginating: Bool,
-            requestInFlight: Bool
+            requestInFlight: Bool,
+            shortContentRequestCount: Int = 0
         ) -> Bool {
-            guard hasUserInteracted,
-                  isPaginating == false,
+            paginationRequest(
+                contentOffset: contentOffset,
+                contentHeight: contentHeight,
+                viewportHeight: viewportHeight,
+                thresholdScreens: thresholdScreens,
+                hasUserInteracted: hasUserInteracted,
+                isPaginating: isPaginating,
+                requestInFlight: requestInFlight,
+                shortContentRequestCount: shortContentRequestCount
+            ) != nil
+        }
+
+        static func paginationRequest(
+            contentOffset: CGFloat,
+            contentHeight: CGFloat,
+            viewportHeight: CGFloat,
+            thresholdScreens: CGFloat = 1.5,
+            hasUserInteracted: Bool,
+            isPaginating: Bool,
+            requestInFlight: Bool,
+            shortContentRequestCount: Int
+        ) -> PaginationRequest? {
+            guard isPaginating == false,
                   requestInFlight == false,
-                  contentHeight > viewportHeight
+                  viewportHeight > 0
             else {
-                return false
+                return nil
             }
             let threshold = max(viewportHeight, viewportHeight * thresholdScreens)
-            return contentOffset + viewportHeight >= contentHeight - threshold
+            if contentHeight <= viewportHeight + threshold {
+                // Bounded: a window of hidden events can take several pages
+                // to produce rows, and Core may keep reporting more history.
+                return shortContentRequestCount < maximumShortContentPaginationRequests
+                    ? .fillShortContent
+                    : nil
+            }
+            guard hasUserInteracted else {
+                return nil
+            }
+            return contentOffset + viewportHeight >= contentHeight - threshold ? .nearOldest : nil
+        }
+
+        /// A read marker is placed when the first unread row reaches the top,
+        /// or when it is on screen and the newer rows are too short to scroll
+        /// it there: the inverted table is clamped at its newest edge.
+        static func readMarkerPlaced(
+            isTargetAtVisualTop: Bool,
+            isTargetVisible: Bool,
+            isClampedAtNewestEdge: Bool
+        ) -> Bool {
+            isTargetAtVisualTop || (isTargetVisible && isClampedAtNewestEdge)
         }
 
         static func boundedVisibleCellUpperBound(
@@ -146,6 +200,17 @@ import SwiftUI
             isConfirmedPinned: Bool
         ) -> Bool {
             targetsLatest ? isConfirmedPinned : isTargetVisible
+        }
+
+        /// Keeps the first row for each identifier. The diffable snapshot and
+        /// the row lookup both trap on a duplicate identifier, so a duplicate
+        /// from upstream (two queued uploads once shared an empty event id)
+        /// must cost one hidden row, not the app.
+        static func uniqueRows<Row: Identifiable>(_ rows: [Row]) -> (rows: [Row], duplicateCount: Int) {
+            var seen = Set<Row.ID>()
+            seen.reserveCapacity(rows.count)
+            let unique = rows.filter { seen.insert($0.id).inserted }
+            return (unique, rows.count - unique.count)
         }
 
         static func changedIdentifiers<ID: Hashable, Value: Equatable>(
@@ -371,6 +436,9 @@ import SwiftUI
 
     enum StableTimelineViewportItemID: Hashable {
         case event(String)
+        /// Keyed by the day, so paging in more of the same day moves the
+        /// header instead of replacing it.
+        case dayHeader(String)
         case unreadDivider(String)
         case cryptoBanner
         case pagination
@@ -388,11 +456,15 @@ import SwiftUI
         /// reconfigures the cell; cells only redraw when their row changes.
         var isInlineThreadMode: Bool = false
         var isThreadExpanded: Bool = false
+        /// The clock time, formatted once by the row builder. Part of the row
+        /// value so a 24-hour clock change reconfigures the cell.
+        var timeText: String = ""
     }
 
     struct StableTimelineViewportRow: Equatable, Identifiable {
         enum Content: Equatable {
             case event(StableTimelineViewportEventRow)
+            case dayHeader(Date)
             case unreadDivider
             case cryptoBanner(RoomCryptoStatus)
             case pagination
@@ -451,9 +523,15 @@ import SwiftUI
         let rowContent: (StableTimelineViewportRow) -> AnyView
         let onBottomPinnedChanged: (String, UInt64, Bool, String?) -> Void
         let onUserInteractionChanged: (String, UInt64, Bool) -> Void
-        let onPaginationThresholdReached: (String, UInt64, String?) -> Bool
+        /// Route, generation, anchor event, and whether the request only fills
+        /// short content (no user scroll asked for it).
+        let onPaginationThresholdReached: (String, UInt64, String?, Bool) -> Bool
         let onTimestampRevealRequested: (String, UInt64, String) -> Void
         let onCommandCompleted: (String, UInt64, StableTimelineViewportCommand, Bool, String?) -> Void
+        var lastReadMarkerEventID: String?
+        var paginationCompletions: UInt64 = 0
+        /// Whether the last-read row or the unread divider is on screen.
+        var onLastReadMarkerVisibilityChanged: (String, UInt64, Bool) -> Void = { _, _, _ in }
 
         func makeCoordinator() -> Coordinator {
             Coordinator(parent: self)
@@ -465,6 +543,12 @@ import SwiftUI
 
         func updateUIViewController(_ uiViewController: StableTimelineViewController, context: Context) {
             context.coordinator.update(parent: self)
+            // Rows are hosted by UIKit cells: carry a scoped color scheme
+            // (agent rooms are dark) into their trait collection.
+            let style: UIUserInterfaceStyle = context.environment.colorScheme == .dark ? .dark : .light
+            if uiViewController.overrideUserInterfaceStyle != style {
+                uiViewController.overrideUserInterfaceStyle = style
+            }
             uiViewController.update(
                 configuration: .init(
                     routeID: routeID,
@@ -473,7 +557,9 @@ import SwiftUI
                     command: command,
                     isLive: isLive,
                     isPaginating: isPaginating,
-                    backgroundColor: backgroundColor
+                    backgroundColor: backgroundColor,
+                    lastReadMarkerEventID: lastReadMarkerEventID,
+                    paginationCompletions: paginationCompletions
                 )
             )
         }
@@ -505,8 +591,19 @@ import SwiftUI
                 }
             }
 
-            func paginationThresholdReached(routeID: String, generation: UInt64, anchorEventID: String?) -> Bool {
-                parent.onPaginationThresholdReached(routeID, generation, anchorEventID)
+            func paginationThresholdReached(
+                routeID: String,
+                generation: UInt64,
+                anchorEventID: String?,
+                fillsShortContent: Bool
+            ) -> Bool {
+                parent.onPaginationThresholdReached(routeID, generation, anchorEventID, fillsShortContent)
+            }
+
+            func lastReadMarkerVisibilityChanged(routeID: String, generation: UInt64, isVisible: Bool) {
+                DispatchQueue.main.async { [weak self] in
+                    self?.parent.onLastReadMarkerVisibilityChanged(routeID, generation, isVisible)
+                }
             }
 
             func timestampRevealRequested(routeID: String, generation: UInt64, eventID: String) {
@@ -529,6 +626,116 @@ import SwiftUI
         }
     }
 
+    /// The flipped timeline table, read by VoiceOver in chronological order.
+    ///
+    /// Row 0 is the newest message drawn at the bottom, so UIKit's own
+    /// index-path order would read newest to oldest, bottom to top. This
+    /// table lists its on-screen cells top to bottom (oldest first) instead.
+    /// Because only on-screen cells are listed, a focused cell at either edge
+    /// is scrolled toward the middle so the next one comes on screen.
+    final class StableTimelineTableView: UITableView {
+        private var focusObserver: NSObjectProtocol?
+
+        override init(frame: CGRect, style: UITableView.Style) {
+            super.init(frame: frame, style: style)
+            focusObserver = NotificationCenter.default.addObserver(
+                forName: UIAccessibility.elementFocusedNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                self?.accessibilityFocusChanged(notification)
+            }
+        }
+
+        @available(*, unavailable)
+        required init?(coder _: NSCoder) {
+            fatalError("init(coder:) is unavailable")
+        }
+
+        deinit {
+            if let focusObserver {
+                NotificationCenter.default.removeObserver(focusObserver)
+            }
+        }
+
+        override var accessibilityElements: [Any]? {
+            get { chronologicalCells }
+            set {}
+        }
+
+        override func accessibilityElementCount() -> Int {
+            chronologicalCells.count
+        }
+
+        override func accessibilityElement(at index: Int) -> Any? {
+            let cells = chronologicalCells
+            return cells.indices.contains(index) ? cells[index] : nil
+        }
+
+        override func index(ofAccessibilityElement element: Any) -> Int {
+            guard let cell = element as? UITableViewCell else {
+                return NSNotFound
+            }
+            return chronologicalCells.firstIndex(of: cell) ?? NSNotFound
+        }
+
+        /// On-screen cells, top to bottom.
+        var chronologicalCells: [UITableViewCell] {
+            StableTimelineAccessibilityOrder.topToBottom(
+                visibleCells.map { ($0, $0.convert($0.bounds, to: nil).minY) }
+            )
+        }
+
+        private func accessibilityFocusChanged(_ notification: Notification) {
+            guard UIAccessibility.isVoiceOverRunning,
+                  let element = notification.userInfo?[UIAccessibility.focusedElementUserInfoKey],
+                  let cell = Self.containingCell(of: element),
+                  cell.superview != nil,
+                  cell.isDescendant(of: self),
+                  let indexPath = indexPath(for: cell)
+            else {
+                return
+            }
+            let cells = chronologicalCells
+            guard cell === cells.first || cell === cells.last else {
+                return
+            }
+            scrollToRow(at: indexPath, at: .middle, animated: false)
+        }
+
+        private static let containerSelector = NSSelectorFromString("accessibilityContainer")
+
+        private static func containingCell(of element: Any) -> UITableViewCell? {
+            var current: Any? = element
+            while let candidate = current {
+                if let cell = candidate as? UITableViewCell {
+                    return cell
+                }
+                if let view = candidate as? UIView {
+                    current = view.superview
+                } else if let element = candidate as? UIAccessibilityElement {
+                    current = element.accessibilityContainer
+                } else if let object = candidate as? NSObject,
+                          object.responds(to: containerSelector)
+                {
+                    // SwiftUI's accessibility nodes are not UIAccessibilityElements.
+                    current = object.perform(containerSelector)?.takeUnretainedValue()
+                } else {
+                    current = nil
+                }
+            }
+            return nil
+        }
+    }
+
+    enum StableTimelineAccessibilityOrder {
+        /// Elements sorted by their on-screen top edge (window coordinates,
+        /// so the table's flip is already applied).
+        static func topToBottom<Element>(_ elements: [(Element, CGFloat)]) -> [Element] {
+            elements.sorted { $0.1 < $1.1 }.map(\.0)
+        }
+    }
+
     final class StableTimelineViewController: UIViewController, UITableViewDelegate, UIGestureRecognizerDelegate {
         struct Configuration {
             let routeID: String
@@ -538,6 +745,26 @@ import SwiftUI
             let isLive: Bool
             let isPaginating: Bool
             let backgroundColor: UIColor
+            /// The last-read event a "Jump to Last Read" action points at.
+            var lastReadMarkerEventID: String?
+            /// Counts finished older-history requests. A fast page can finish
+            /// before SwiftUI publishes `isPaginating`, so this, not that flag,
+            /// releases the in-flight request.
+            var paginationCompletions: UInt64 = 0
+
+            func withRows(_ rows: [StableTimelineViewportRow]) -> Configuration {
+                Configuration(
+                    routeID: routeID,
+                    sessionGeneration: sessionGeneration,
+                    rows: rows,
+                    command: command,
+                    isLive: isLive,
+                    isPaginating: isPaginating,
+                    backgroundColor: backgroundColor,
+                    lastReadMarkerEventID: lastReadMarkerEventID,
+                    paginationCompletions: paginationCompletions
+                )
+            }
         }
 
         private enum Section {
@@ -575,7 +802,7 @@ import SwiftUI
         }
 
         private let coordinator: StableTimelineViewport.Coordinator
-        private let tableView = UITableView(frame: .zero, style: .plain)
+        private let tableView = StableTimelineTableView(frame: .zero, style: .plain)
         private lazy var timestampRevealGesture: TimelineTimestampRevealGestureRecognizer = {
             let recognizer = TimelineTimestampRevealGestureRecognizer(
                 target: self,
@@ -594,6 +821,7 @@ import SwiftUI
         private var timestampRevealAppliedGeneration: UInt64?
         private var timestampRevealAppliedSnapshotRevision: UInt64?
         private var dataSource: UITableViewDiffableDataSource<Section, StableTimelineViewportItemID>!
+        private let logger = AppLogger()
         private var rowsByID: [StableTimelineViewportItemID: StableTimelineViewportRow] = [:]
         private var visualRows: [StableTimelineViewportRow] = []
         private var configuration: Configuration?
@@ -612,7 +840,12 @@ import SwiftUI
         private var isDecelerating = false
         private var hasUserInteracted = false
         private var paginationRequestInFlight = false
+        private var shortContentPaginationRequests = 0
         private var lastReportedPinned: Bool?
+        private var lastReportedMarkerVisible: Bool?
+        /// UI-test diagnostics: the events the latest content-only change
+        /// redrew in place (an edit, a variable-height replacement).
+        private var lastReconfiguredEventIDs: [String] = []
 
         init(coordinator: StableTimelineViewport.Coordinator) {
             self.coordinator = coordinator
@@ -642,7 +875,18 @@ import SwiftUI
             updateDiagnostics()
         }
 
-        func update(configuration newConfiguration: Configuration) {
+        func update(configuration proposedConfiguration: Configuration) {
+            let unique = StableTimelineViewportPolicy.uniqueRows(proposedConfiguration.rows)
+            let newConfiguration: Configuration
+            if unique.duplicateCount > 0 {
+                logger.error(
+                    "stable-viewport dropped duplicate row ids count=\(unique.duplicateCount)",
+                    category: .timeline
+                )
+                newConfiguration = proposedConfiguration.withRows(unique.rows)
+            } else {
+                newConfiguration = proposedConfiguration
+            }
             if let configuration,
                configuration.routeID == newConfiguration.routeID,
                newConfiguration.sessionGeneration < configuration.sessionGeneration
@@ -673,11 +917,17 @@ import SwiftUI
                 missingTargetAttempts.removeAll()
                 lastExecutedCommandID = nil
                 paginationRequestInFlight = false
+                shortContentPaginationRequests = 0
                 hasUserInteracted = false
                 lastReportedPinned = nil
+                lastReportedMarkerVisible = nil
+                lastReconfiguredEventIDs = []
             }
 
             if configuration?.isPaginating == true, newConfiguration.isPaginating == false {
+                paginationRequestInFlight = false
+            }
+            if let configuration, configuration.paginationCompletions != newConfiguration.paginationCompletions {
                 paginationRequestInFlight = false
             }
 
@@ -709,7 +959,7 @@ import SwiftUI
             tableView.delegate = self
             tableView.transform = CGAffineTransform(scaleX: 1, y: -1)
             tableView.accessibilityIdentifier = "TimelineList"
-            tableView.accessibilityLabel = "Room timeline"
+            tableView.accessibilityLabel = String(localized: "Room timeline")
             timestampRevealGesture.delegate = self
             timestampRevealGesture.cancelsTouchesInView = false
             timestampRevealGesture.delaysTouchesBegan = false
@@ -845,6 +1095,7 @@ import SwiftUI
                     reportBottomPinnedIfChanged()
                     requestPaginationIfNeeded()
                 }
+                reportLastReadMarkerVisibilityIfChanged()
                 updateDiagnostics()
                 return
             }
@@ -881,7 +1132,8 @@ import SwiftUI
             timestampRevealAppliedSnapshotRevision = nil
 
             visualRows = configuration.rows
-            rowsByID = Dictionary(uniqueKeysWithValues: configuration.rows.map { ($0.id, $0) })
+            // Rows arrive deduplicated; keep the lookup total regardless.
+            rowsByID = Dictionary(configuration.rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
             var snapshot = NSDiffableDataSourceSnapshot<Section, StableTimelineViewportItemID>()
             snapshot.appendSections([.main])
@@ -896,6 +1148,12 @@ import SwiftUI
             if changedIDs.isEmpty == false {
                 snapshot.reconfigureItems(changedIDs)
             }
+            let reconfiguredEventIDs = SynaraLaunchEnvironment.isUITest
+                ? changedIDs.compactMap { id -> String? in
+                    guard case let .event(eventID) = id else { return nil }
+                    return eventID
+                }
+                : []
 
             updateSerial &+= 1
             let serial = updateSerial
@@ -934,6 +1192,12 @@ import SwiftUI
                         reportBottomPinnedIfChanged(force: true)
                         requestPaginationIfNeeded()
                     }
+                    if reconfiguredEventIDs.isEmpty == false {
+                        // Published only after the anchor is restored, so a
+                        // UI test reading it sees the settled position.
+                        lastReconfiguredEventIDs = reconfiguredEventIDs
+                    }
+                    reportLastReadMarkerVisibilityIfChanged()
                     updateDiagnostics()
                 }
 
@@ -1018,7 +1282,7 @@ import SwiftUI
             let firedRetryCount = missingTargetAttempts[command.id] ?? 0
             if targetsReadMarker,
                firedRetryCount > 0,
-               isRowAtVisualTop(target.0)
+               isReadMarkerPlaced(target.0)
             {
                 completeCommand(command, success: true, targetEventID: target.1)
                 reportBottomPinnedIfChanged(force: true)
@@ -1060,7 +1324,7 @@ import SwiftUI
                 }
                 let succeeded = StableTimelineViewportPolicy.commandSucceeded(
                     targetsLatest: targetsLatest,
-                    isTargetVisible: targetsReadMarker ? isRowAtVisualTop(target.0) : isRowVisible(target.0),
+                    isTargetVisible: targetsReadMarker ? isReadMarkerPlaced(target.0) : isRowVisible(target.0),
                     isConfirmedPinned: isConfirmedPinned()
                 )
                 if succeeded,
@@ -1370,14 +1634,55 @@ import SwiftUI
             return abs(rowFrame.minY - viewportTop) <= 4
         }
 
+        private func isReadMarkerPlaced(_ id: StableTimelineViewportItemID) -> Bool {
+            StableTimelineViewportPolicy.readMarkerPlaced(
+                isTargetAtVisualTop: isRowAtVisualTop(id),
+                isTargetVisible: isRowVisible(id),
+                isClampedAtNewestEdge: isClampedAtNewestEdge()
+            )
+        }
+
+        private func isClampedAtNewestEdge() -> Bool {
+            let bottomTolerance: CGFloat = 2
+            return tableView.contentOffset.y <= -tableView.adjustedContentInset.top + bottomTolerance
+        }
+
         private func isConfirmedPinned() -> Bool {
             guard let newest = newestEventRow(),
                   isRowVisible(newest.id)
             else {
                 return false
             }
-            let bottomTolerance: CGFloat = 2
-            return tableView.contentOffset.y <= -tableView.adjustedContentInset.top + bottomTolerance
+            return isClampedAtNewestEdge()
+        }
+
+        private func reportLastReadMarkerVisibilityIfChanged() {
+            guard let configuration, let markerEventID = configuration.lastReadMarkerEventID else {
+                lastReportedMarkerVisible = nil
+                return
+            }
+            let isVisible = tableView.visibleCells.contains { cell in
+                guard let cell = cell as? Cell, let stableID = cell.stableID else {
+                    return false
+                }
+                switch stableID {
+                case let .event(eventID):
+                    return eventID == markerEventID
+                case .unreadDivider:
+                    return true
+                case .dayHeader, .cryptoBanner, .pagination:
+                    return false
+                }
+            }
+            guard lastReportedMarkerVisible != isVisible else {
+                return
+            }
+            lastReportedMarkerVisible = isVisible
+            coordinator.lastReadMarkerVisibilityChanged(
+                routeID: configuration.routeID,
+                generation: configuration.sessionGeneration,
+                isVisible: isVisible
+            )
         }
 
         private func reportBottomPinnedIfChanged(force: Bool = false) {
@@ -1399,13 +1704,14 @@ import SwiftUI
 
         private func requestPaginationIfNeeded() {
             guard let configuration,
-                  StableTimelineViewportPolicy.shouldRequestPagination(
+                  let request = StableTimelineViewportPolicy.paginationRequest(
                       contentOffset: tableView.contentOffset.y,
                       contentHeight: tableView.contentSize.height,
                       viewportHeight: tableView.bounds.height,
                       hasUserInteracted: hasUserInteracted,
                       isPaginating: configuration.isPaginating,
-                      requestInFlight: paginationRequestInFlight
+                      requestInFlight: paginationRequestInFlight,
+                      shortContentRequestCount: shortContentPaginationRequests
                   )
             else {
                 return
@@ -1415,8 +1721,12 @@ import SwiftUI
             paginationRequestInFlight = coordinator.paginationThresholdReached(
                 routeID: configuration.routeID,
                 generation: configuration.sessionGeneration,
-                anchorEventID: anchorEventID
+                anchorEventID: anchorEventID,
+                fillsShortContent: request == .fillShortContent
             )
+            if paginationRequestInFlight, request == .fillShortContent {
+                shortContentPaginationRequests += 1
+            }
         }
 
         private func visuallyTopmostVisibleEventID() -> String? {
@@ -1432,7 +1742,7 @@ import SwiftUI
         }
 
         private func updateDiagnostics() {
-            guard ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1",
+            guard SynaraLaunchEnvironment.isUITest,
                   let configuration
             else {
                 return
@@ -1447,12 +1757,16 @@ import SwiftUI
                 }
                 return eventRow.item.eventID
             }.first ?? "none"
-            tableView.accessibilityValue = "routeID=\(configuration.routeID);generation=\(configuration.sessionGeneration);renderedEvents=\(renderedEvents);visibleCells=\(tableView.visibleCells.count);topEvent=\(topEventID);newestEvent=\(newestEventRow()?.eventID ?? "none");pinned=\(isConfirmedPinned());revealedTimestamp=\(revealedTimestampEventID)"
+            let reconfiguredEvents = lastReconfiguredEventIDs.isEmpty
+                ? "none"
+                : lastReconfiguredEventIDs.sorted().joined(separator: ",")
+            tableView.accessibilityValue = "routeID=\(configuration.routeID);generation=\(configuration.sessionGeneration);renderedEvents=\(renderedEvents);visibleCells=\(tableView.visibleCells.count);topEvent=\(topEventID);newestEvent=\(newestEventRow()?.eventID ?? "none");pinned=\(isConfirmedPinned());revealedTimestamp=\(revealedTimestampEventID);reconfiguredEvents=\(reconfiguredEvents)"
         }
 
         func scrollViewDidScroll(_: UIScrollView) {
             reportBottomPinnedIfChanged()
             requestPaginationIfNeeded()
+            reportLastReadMarkerVisibilityIfChanged()
             updateDiagnostics()
         }
 
@@ -1467,6 +1781,8 @@ import SwiftUI
             isDragging = true
             isDecelerating = false
             hasUserInteracted = true
+            // A pull on short content asks for history again.
+            shortContentPaginationRequests = 0
             if let configuration {
                 coordinator.userInteractionChanged(
                     routeID: configuration.routeID,

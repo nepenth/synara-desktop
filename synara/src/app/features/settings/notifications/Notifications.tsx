@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Box, Text, IconButton, Icon, Icons, Button, Input, Spinner } from 'folds';
+import { Box, Text, IconButton, Icon, Icons, Button, Input, Spinner, color } from 'folds';
 import { SystemNotification } from './SystemNotification';
 import { AgentNotifications } from './AgentNotifications';
 import { SequenceCard } from '../../../components/sequence-card';
@@ -62,34 +62,64 @@ function NativeModePicker({
   );
 }
 
+type PushRuleSection = 'defaults' | 'mentions' | 'keywords';
+
+function SectionError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <Text size="T200" role="alert" style={{ color: color.Critical.Main }}>
+      {message}
+    </Text>
+  );
+}
+
 function NativePushRulesEditor() {
   const [snapshot, setSnapshot] = useState<NativePushRulesSnapshot | null>(null);
   const [keyword, setKeyword] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [writeError, setWriteError] = useState<{ section: PushRuleSection; message: string }>();
 
   const refresh = useCallback(async () => {
     setSnapshot(await nativePushRulesSnapshot());
+    setLoadFailed(false);
   }, []);
 
-  useEffect(() => {
-    refresh().catch(() => {
-      setMessage('Push rules could not be loaded.');
-    });
+  const load = useCallback(() => {
+    refresh().catch(() => setLoadFailed(true));
   }, [refresh]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const [writeState, write] = useAsyncCallback(
     useCallback(
       async (task: () => Promise<void>) => {
         await task();
-        await refresh();
+        // The write succeeded; a failed readback is a load error, not a save error.
+        await refresh().catch(() => setLoadFailed(true));
       },
       [refresh]
     )
   );
   const busy = writeState.status === AsyncStatus.Loading;
 
+  /**
+   * Save one change and show a failure in the section it came from. The
+   * controls keep showing the last loaded state, so a failed write never
+   * looks saved.
+   */
+  const save = (section: PushRuleSection, failure: string, task: () => Promise<void>) => {
+    setWriteError(undefined);
+    write(task).catch(() => setWriteError({ section, message: failure }));
+  };
+  const sectionError = (section: PushRuleSection) =>
+    writeError?.section === section ? writeError.message : undefined;
+
   const setDefault = (encrypted: boolean, oneToOne: boolean, mode: NativePushRuleMode) => {
-    write(() => nativePushRulesSetDefault(encrypted, oneToOne, mode));
+    save('defaults', "Couldn't change this notification setting. Try again.", () =>
+      nativePushRulesSetDefault(encrypted, oneToOne, mode)
+    );
   };
 
   return (
@@ -171,6 +201,7 @@ function NativePushRulesEditor() {
             }
           />
         </SequenceCard>
+        <SectionError message={sectionError('defaults')} />
       </SettingsSection>
 
       <SettingsSection title="Mentions">
@@ -210,7 +241,9 @@ function NativePushRulesEditor() {
                     }
                     disabled={busy}
                     onClick={() =>
-                      write(() => nativePushRulesSetMention(ruleId, !snapshot.mentions[ruleId]))
+                      save('mentions', `Couldn't change "${title}". Try again.`, () =>
+                        nativePushRulesSetMention(ruleId, !snapshot.mentions[ruleId])
+                      )
                     }
                   >
                     <Text size="T300">{snapshot.mentions[ruleId] ? 'On' : 'Off'}</Text>
@@ -220,6 +253,7 @@ function NativePushRulesEditor() {
             />
           </SequenceCard>
         ))}
+        <SectionError message={sectionError('mentions')} />
       </SettingsSection>
 
       <SettingsSection title="Keyword Messages">
@@ -240,7 +274,8 @@ function NativePushRulesEditor() {
                 evt.preventDefault();
                 const next = keyword.trim();
                 if (!next) return;
-                write(async () => {
+                // The keyword stays in the field when saving fails.
+                save('keywords', `Couldn't save the keyword "${next}". Try again.`, async () => {
                   await nativePushRulesAddKeyword(next);
                   setKeyword('');
                 });
@@ -248,6 +283,7 @@ function NativePushRulesEditor() {
             >
               <Box grow="Yes" direction="Column">
                 <Input
+                  aria-label="New keyword"
                   value={keyword}
                   onChange={(evt) => setKeyword(evt.currentTarget.value)}
                   variant="Secondary"
@@ -284,7 +320,12 @@ function NativePushRulesEditor() {
               before={
                 <IconButton
                   className={SettingsQuietControl}
-                  onClick={() => write(() => nativePushRulesRemoveKeyword(item))}
+                  onClick={() =>
+                    save('keywords', `Couldn't remove the keyword "${item}". Try again.`, () =>
+                      nativePushRulesRemoveKeyword(item)
+                    )
+                  }
+                  aria-label={`Remove keyword ${item}`}
                   size="300"
                   radii="Pill"
                   variant="Secondary"
@@ -297,8 +338,26 @@ function NativePushRulesEditor() {
             />
           </SequenceCard>
         ))}
+        <SectionError message={sectionError('keywords')} />
       </SettingsSection>
-      {message && <Text size="T200">{message}</Text>}
+      {loadFailed && (
+        <Box alignItems="Center" gap="200">
+          <Box grow="Yes">
+            <SectionError message="Couldn't load your notification rules. Retry to see the current settings." />
+          </Box>
+          <Button
+            className={SettingsQuietControl}
+            size="300"
+            variant="Secondary"
+            fill="Soft"
+            outlined
+            radii="300"
+            onClick={load}
+          >
+            <Text size="B300">Retry</Text>
+          </Button>
+        </Box>
+      )}
     </Box>
   );
 }

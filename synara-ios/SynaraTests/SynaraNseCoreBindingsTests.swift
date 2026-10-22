@@ -11,7 +11,8 @@ final class SynaraNseCoreBindingsTests: XCTestCase {
             homeserverUrl: "https://matrix.example.org",
             storeRoot: "/tmp/synara-nse-cancelled-binding-test",
             roomId: "!room:example.org",
-            eventId: "$event:example.org"
+            eventId: "$event:example.org",
+            appVersion: "2.2.6"
         )
 
         request.cancel()
@@ -40,7 +41,8 @@ final class SynaraNseCoreBindingsTests: XCTestCase {
             homeserverUrl: "https://matrix.example.org",
             storeRoot: "/tmp/synara-nse-concurrent-cancel-binding-test",
             roomId: "!room:example.org",
-            eventId: "$event:example.org"
+            eventId: "$event:example.org",
+            appVersion: "2.2.6"
         )
 
         let resolution = Task { try await request.resolve() }

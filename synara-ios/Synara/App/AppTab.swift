@@ -5,6 +5,7 @@ private struct NotificationsTabView: View {
     @State private var state: RoomListState = .idle
     @State private var isUnreadRoomsExpanded = false
     @State private var roomUpdatesTask: Task<Void, Never>?
+    @State private var membershipError: String?
 
     var body: some View {
         Group {
@@ -22,7 +23,7 @@ private struct NotificationsTabView: View {
             case .empty:
                 caughtUpEmptyState
             case .failed(let message):
-                SynaraErrorState(title: "Could Not Load Notifications", message: message) {
+                SynaraErrorState(title: String(localized: "Could Not Load Notifications"), message: message) {
                     loadInbox()
                 }
             case .loaded(let rooms):
@@ -31,6 +32,17 @@ private struct NotificationsTabView: View {
         }
         .refreshable {
             await reloadInbox()
+        }
+        .safeAreaInset(edge: .bottom) {
+            if let membershipError {
+                Text(membershipError)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.criticalText)
+                    .padding(SynaraSpacing.medium)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(SynaraColor.secondarySurface)
+                    .accessibilityIdentifier("NotificationsMembershipErrorText")
+            }
         }
         .navigationTitle("Notifications")
         .toolbar {
@@ -70,17 +82,17 @@ private struct NotificationsTabView: View {
                             notificationsRow(room)
                         }
                     } header: {
-                        notificationsSectionHeader("Mentions", count: sections.mentions.count)
+                        notificationsSectionHeader(String(localized: "Mentions"), count: sections.mentions.count)
                     }
                 }
 
                 if sections.invites.isEmpty == false {
                     Section {
                         ForEach(sections.invites) { room in
-                            notificationsRow(room)
+                            inviteRow(room)
                         }
                     } header: {
-                        notificationsSectionHeader("Invites", count: sections.invites.count)
+                        notificationsSectionHeader(String(localized: "Invites"), count: sections.invites.count)
                     }
                 }
 
@@ -90,7 +102,7 @@ private struct NotificationsTabView: View {
                             agentPendingRow(item)
                         }
                     } header: {
-                        notificationsSectionHeader("Agent actions", count: agentPendingApprovals.count)
+                        notificationsSectionHeader(String(localized: "Agent actions"), count: agentPendingApprovals.count)
                     }
                 }
 
@@ -125,7 +137,7 @@ private struct NotificationsTabView: View {
                             }
                         }
                     } header: {
-                        notificationsSectionHeader("Messages", count: sections.unreadRooms.count)
+                        notificationsSectionHeader(String(localized: "Messages"), count: sections.unreadRooms.count)
                     }
                 }
             }
@@ -136,9 +148,9 @@ private struct NotificationsTabView: View {
 
     private var caughtUpEmptyState: some View {
         SynaraEmptyState(
-            title: "You're Caught Up",
+            title: String(localized: "You're Caught Up"),
             systemImage: "bell.slash",
-            message: "Unread rooms and mentions will appear here. Push alerts still open the relevant room directly."
+            message: String(localized: "Unread rooms and mentions will appear here. Push alerts still open the relevant room directly.")
         )
     }
 
@@ -160,6 +172,41 @@ private struct NotificationsTabView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityIdentifier("NotificationsRow-\(room.id)")
+    }
+
+    /// An invited room has no timeline to open yet, so the invites section
+    /// acts on the invite in place, like the Rooms list.
+    private func inviteRow(_ room: RoomSummary) -> some View {
+        InviteRoomListRow(
+            room: room,
+            onAccept: { updateInvite(roomID: room.id, accept: true) },
+            onReject: { updateInvite(roomID: room.id, accept: false) }
+        )
+        .listRowSeparator(.hidden)
+    }
+
+    private func updateInvite(roomID: String, accept: Bool) {
+        membershipError = nil
+
+        Task {
+            do {
+                if accept {
+                    try await environment.roomMembership.acceptInvite(roomID: roomID)
+                } else {
+                    try await environment.roomMembership.rejectInvite(roomID: roomID)
+                }
+                if accept {
+                    await MainActor.run {
+                        SynaraHaptics.trigger(.success)
+                    }
+                }
+                await reloadInbox()
+            } catch {
+                await MainActor.run {
+                    membershipError = RoomMembershipError.failed.localizedDescription
+                }
+            }
+        }
     }
 
     private func agentPendingRow(_ item: AgentPendingApprovalItem) -> some View {
@@ -209,6 +256,48 @@ private struct NotificationsTabView: View {
     }
 }
 
+/// Why a room is in the Notifications inbox. An agent approval prompt is
+/// labeled as one even when the push rules also highlighted it.
+enum NotificationsInboxReason: Equatable {
+    case approval
+    case mention
+    case invite
+
+    init?(room: RoomSummary) {
+        if room.lastMessageIsAgentApproval {
+            self = .approval
+        } else if room.hasHighlight {
+            self = .mention
+        } else if room.membership == .invited {
+            self = .invite
+        } else {
+            return nil
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .approval:
+            return String(localized: "Approval")
+        case .mention:
+            return String(localized: "Mention")
+        case .invite:
+            return String(localized: "Invite")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .approval:
+            return "checkmark.shield"
+        case .mention:
+            return "at"
+        case .invite:
+            return "envelope"
+        }
+    }
+}
+
 private struct NotificationsInboxRow: View {
     let room: RoomSummary
 
@@ -232,10 +321,8 @@ private struct NotificationsInboxRow: View {
                     .lineLimit(2)
 
                 HStack(spacing: SynaraSpacing.small) {
-                    if room.hasHighlight {
-                        Label("Mention", systemImage: "at")
-                    } else if room.membership == .invited {
-                        Label("Invite", systemImage: "envelope")
+                    if let reason = NotificationsInboxReason(room: room) {
+                        Label(reason.title, systemImage: reason.systemImage)
                     }
                     if room.lastActivityAt.timeIntervalSince1970 > 0 {
                         Text(room.lastActivityAt, style: .relative)
@@ -333,13 +420,13 @@ enum AppTab: String, CaseIterable, Identifiable {
     var emptyConversationTitle: String {
         switch self {
         case .rooms:
-            return "Select a Room"
+            return String(localized: "Select a Room")
         case .notifications:
-            return "Select a Notification"
+            return String(localized: "Select a Notification")
         case .later:
-            return "Select an Item"
+            return String(localized: "Select an Item")
         case .settings:
-            return "Select a Setting"
+            return String(localized: "Select a Setting")
         }
     }
 
@@ -359,13 +446,13 @@ enum AppTab: String, CaseIterable, Identifiable {
     var emptyConversationMessage: String {
         switch self {
         case .rooms:
-            return "Pick a conversation. The room list stays open beside it."
+            return String(localized: "Pick a conversation. The room list stays open beside it.")
         case .notifications:
-            return "Open a mention, invite, or unread room. The inbox stays visible."
+            return String(localized: "Open a mention, invite, or unread room. The inbox stays visible.")
         case .later:
-            return "Open a saved message. Your Later list stays visible."
+            return String(localized: "Open a saved message. Your Later list stays visible.")
         case .settings:
-            return "Choose a settings page to open beside the list."
+            return String(localized: "Choose a settings page to open beside the list.")
         }
     }
 

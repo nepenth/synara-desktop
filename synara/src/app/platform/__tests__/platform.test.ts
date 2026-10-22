@@ -124,6 +124,7 @@ test('platform diagnostics reads desktop integration status when supported', asy
       supportsIntegrationStatus: true,
       invoke: async (command: string, args?: Record<string, unknown>) => {
         calls.push({ command, args });
+        if (command === 'desktop_get_notification_permission') return 'granted';
         return {
           platform: 'linux',
           desktopEnvironment: 'kde',
@@ -157,6 +158,7 @@ test('platform diagnostics reads desktop integration status when supported', asy
       distroVersion: 'rolling',
       buildIdentity: 'debug',
       tray: { name: 'Tray', ready: true, supported: true, message: 'Ready' },
+      // The shell reads the OS permission itself; no renderer overlay.
       notifications: { name: 'Notifications', ready: true, supported: true, message: 'Ready' },
       globalShortcuts: {
         name: 'Global Shortcuts',

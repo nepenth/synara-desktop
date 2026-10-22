@@ -84,7 +84,7 @@ export function PollContent({ roomId, eventId, poll }: PollContentProps) {
         setError(
           t(
             'modernization.poll.native_required',
-            'Native Matrix session is required to vote on desktop.'
+            'Sign in to your Matrix account in Synara to vote.'
           )
         );
         return;

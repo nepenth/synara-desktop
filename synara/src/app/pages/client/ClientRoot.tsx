@@ -40,14 +40,12 @@ import { SplashScreen } from '../../components/splash-screen';
 import { ServerConfigsLoader } from '../../components/ServerConfigsLoader';
 import { CapabilitiesProvider } from '../../hooks/useCapabilities';
 import { MediaConfigProvider } from '../../hooks/useMediaConfig';
-import { SpecVersions } from './SpecVersions';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { useSyncState } from '../../hooks/useSyncState';
 import { stopPropagation } from '../../utils/keyboard';
 import { SyncStatus } from './SyncStatus';
 import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
 import { getActiveSession, getSessionBootstrapResult } from '../../state/sessionBootstrap';
-import { AutoDiscovery } from './AutoDiscovery';
 import {
   consumeHiddenDurationMs,
   shouldRecoverSyncOnWake,
@@ -65,6 +63,7 @@ import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desk
 import { getSettings } from '../../state/settings';
 
 import { nativeSession } from '../../native/nativeSession';
+import { composerErrorMessage } from '../../features/room/composerSendError';
 function ClientRootLoading({ status }: { status: string }) {
   return (
     <SplashScreen>
@@ -112,6 +111,7 @@ function ClientRootOptions({
       variant="Background"
       fill="None"
       onClick={handleToggle}
+      aria-label="More options"
     >
       <Icon size="200" src={Icons.VerticalDots} />
       <PopOut
@@ -123,7 +123,6 @@ function ClientRootOptions({
           <FocusTrap
             focusTrapOptions={{
               initialFocus: false,
-              returnFocusOnDeactivate: false,
               onDeactivate: () => setMenuAnchor(undefined),
               clickOutsideDeactivates: true,
               isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
@@ -149,7 +148,7 @@ function ClientRootOptions({
                   fill="None"
                 >
                   <Text as="span" size="T300" truncate>
-                    Logout
+                    Log Out
                   </Text>
                 </MenuItem>
                 {logoutError && (
@@ -267,7 +266,6 @@ export function ClientRoot({ children }: ClientRootProps) {
   const syncRetryInFlightRef = useRef(false);
   const [syncRetryPending, setSyncRetryPending] = useState(false);
   const [syncRecoveryError, setSyncRecoveryError] = useState<string>();
-  const { baseUrl, userId } = getActiveSession() ?? {};
 
   const [loadState, loadMatrix] = useAsyncCallback<ClientMatrix, Error, []>(
     useCallback(() => {
@@ -300,7 +298,7 @@ export function ClientRoot({ children }: ClientRootProps) {
     try {
       await performLogout(loadedSession);
     } catch {
-      setLogoutError('Local sign out did not complete. Retry to finish local cleanup.');
+      setLogoutError('Local log out did not complete. Retry to finish local cleanup.');
     } finally {
       setLoggingOut(false);
     }
@@ -474,151 +472,145 @@ export function ClientRoot({ children }: ClientRootProps) {
     undefined;
 
   return (
-    <AutoDiscovery userId={userId!} baseUrl={baseUrl!}>
-      <SpecVersions baseUrl={baseUrl!}>
-        {loadedSession && <SyncStatus session={loadedSession} />}
-        {sessionSaveFailed && (
-          <Text role="alert">
-            Your refreshed session could not be saved. Check free disk space and unlock your system
-            keychain. Keep Synara open until this warning clears.
-          </Text>
-        )}
-        {loading && (
-          <ClientRootOptions
-            loadedSession={loadedSession}
-            logout={logout}
-            logoutError={logoutError}
-            loggingOut={loggingOut}
-          />
-        )}
-        {splashView === 'error' && (
-          <SplashScreen>
-            <Box
-              direction="Column"
-              grow="Yes"
-              alignItems="Center"
-              justifyContent="Center"
-              gap="400"
-            >
-              <Dialog>
-                <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
-                  {loadState.status === AsyncStatus.Error && (
-                    <Text>{`Failed to load. ${loadState.error.message}`}</Text>
-                  )}
-                  {startState.status === AsyncStatus.Error && (
-                    <Text>{`Failed to start. ${startState.error.message}`}</Text>
-                  )}
-                  {logoutError && <Text role="alert">{logoutError}</Text>}
-                  {continuityError ? (
-                    <>
-                      <Text size="T300" priority="400">
-                        Synara stopped before changing any encryption keys. Your local crypto store
-                        is still intact.
-                      </Text>
-                      <Text size="T300" priority="400">
-                        Before signing out, confirm that another verified client can decrypt your
-                        history or that you have tested your recovery key/key backup. Signing out
-                        ends this session; local encryption data stays on this device.
-                      </Text>
-                      {canRetryCryptoStoreContinuityFailure(continuityError) && (
-                        <Button variant="Primary" onClick={retryLoadMatrix}>
-                          <Text as="span" size="B400">
-                            Retry Safety Check
-                          </Text>
-                        </Button>
-                      )}
-                      <Button
-                        variant="Critical"
-                        onClick={() => void logout()}
-                        disabled={loggingOut}
-                      >
-                        <Text as="span" size="B400">
-                          Sign Out and Delete Local Encryption Data
-                        </Text>
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      {syncRecoveryError && <Text role="alert">{syncRecoveryError}</Text>}
-                      <Button
-                        variant="Critical"
-                        disabled={syncRetryPending}
-                        onClick={
-                          loadedSession ? () => void handleSyncRecoveryRetry() : retryLoadMatrix
-                        }
-                      >
-                        <Text as="span" size="B400">
-                          Retry
-                        </Text>
-                      </Button>
-                    </>
-                  )}
-                </Box>
-              </Dialog>
-            </Box>
-          </SplashScreen>
-        )}
-        {splashView === 'recovery' && (
-          <SplashScreen>
-            <Box
-              direction="Column"
-              grow="Yes"
-              alignItems="Center"
-              justifyContent="Center"
-              gap="400"
-            >
-              <Dialog>
-                <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
-                  <Text>Sync is taking longer than expected.</Text>
-                  {logoutError && <Text role="alert">{logoutError}</Text>}
-                  {syncRecoveryError && <Text role="alert">{syncRecoveryError}</Text>}
-                  <Text size="T300" priority="400">
-                    {splashStatus}
+    // Core owns server discovery and capabilities after login; the renderer
+    // fetches neither /.well-known nor /versions itself (D83).
+    <>
+      {loadedSession && <SyncStatus session={loadedSession} />}
+      {sessionSaveFailed && (
+        <Text role="alert">
+          Your refreshed session could not be saved. Check free disk space and unlock your system
+          keychain. Keep Synara open until this warning clears.
+        </Text>
+      )}
+      {loading && (
+        <ClientRootOptions
+          loadedSession={loadedSession}
+          logout={logout}
+          logoutError={logoutError}
+          loggingOut={loggingOut}
+        />
+      )}
+      {splashView === 'error' && (
+        <SplashScreen>
+          <Box direction="Column" grow="Yes" alignItems="Center" justifyContent="Center" gap="400">
+            <Dialog>
+              <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
+                {loadState.status === AsyncStatus.Error && (
+                  <Text>
+                    {composerErrorMessage(
+                      loadState.error,
+                      'Synara could not load your account. Try again.'
+                    )}
                   </Text>
-                  <Text size="T300" priority="400">
-                    You can retry, reload the application, or sign out.
+                )}
+                {startState.status === AsyncStatus.Error && (
+                  <Text>
+                    {composerErrorMessage(
+                      startState.error,
+                      'Synara could not start your session. Try again.'
+                    )}
                   </Text>
-                  <Button
-                    variant="Primary"
-                    disabled={syncRetryPending}
-                    onClick={() => void handleSyncRecoveryRetry()}
-                  >
-                    <Text as="span" size="B400">
-                      Retry
+                )}
+                {logoutError && <Text role="alert">{logoutError}</Text>}
+                {continuityError ? (
+                  <>
+                    <Text size="T300" priority="400">
+                      Synara stopped before changing any encryption keys. Your local crypto store is
+                      still intact.
                     </Text>
-                  </Button>
-                  {loadedSession && (
-                    <Button variant="Secondary" onClick={() => void reloadApplication()}>
+                    <Text size="T300" priority="400">
+                      Before logging out, confirm that another verified client can decrypt your
+                      history or that you have tested your recovery key/key backup. Logging out ends
+                      this session; local encryption data stays on this device.
+                    </Text>
+                    {canRetryCryptoStoreContinuityFailure(continuityError) && (
+                      <Button variant="Primary" onClick={retryLoadMatrix}>
+                        <Text as="span" size="B400">
+                          Retry Safety Check
+                        </Text>
+                      </Button>
+                    )}
+                    <Button variant="Critical" onClick={() => void logout()} disabled={loggingOut}>
                       <Text as="span" size="B400">
-                        Reload Application
+                        Log Out and Delete Local Encryption Data
                       </Text>
                     </Button>
-                  )}
-                  <Button variant="Critical" onClick={() => void logout()} disabled={loggingOut}>
+                  </>
+                ) : (
+                  <>
+                    {syncRecoveryError && <Text role="alert">{syncRecoveryError}</Text>}
+                    <Button
+                      variant="Critical"
+                      disabled={syncRetryPending}
+                      onClick={
+                        loadedSession ? () => void handleSyncRecoveryRetry() : retryLoadMatrix
+                      }
+                    >
+                      <Text as="span" size="B400">
+                        Retry
+                      </Text>
+                    </Button>
+                  </>
+                )}
+              </Box>
+            </Dialog>
+          </Box>
+        </SplashScreen>
+      )}
+      {splashView === 'recovery' && (
+        <SplashScreen>
+          <Box direction="Column" grow="Yes" alignItems="Center" justifyContent="Center" gap="400">
+            <Dialog>
+              <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
+                <Text>Sync is taking longer than expected.</Text>
+                {logoutError && <Text role="alert">{logoutError}</Text>}
+                {syncRecoveryError && <Text role="alert">{syncRecoveryError}</Text>}
+                <Text size="T300" priority="400">
+                  {splashStatus}
+                </Text>
+                <Text size="T300" priority="400">
+                  You can retry, reload the application, or log out.
+                </Text>
+                <Button
+                  variant="Primary"
+                  disabled={syncRetryPending}
+                  onClick={() => void handleSyncRecoveryRetry()}
+                >
+                  <Text as="span" size="B400">
+                    Retry
+                  </Text>
+                </Button>
+                {loadedSession && (
+                  <Button variant="Secondary" onClick={() => void reloadApplication()}>
                     <Text as="span" size="B400">
-                      Logout
+                      Reload Application
                     </Text>
                   </Button>
-                </Box>
-              </Dialog>
-            </Box>
-          </SplashScreen>
-        )}
-        {splashView === 'loading' && <ClientRootLoading status={splashStatus} />}
-        {splashView === 'client' && loadedSession && (
-          <ServerConfigsLoader>
-            {(serverConfigs) => (
-              <CapabilitiesProvider value={serverConfigs.capabilities ?? {}}>
-                <MediaConfigProvider value={serverConfigs.mediaConfig ?? {}}>
-                  <AuthMetadataProvider value={serverConfigs.authMetadata}>
-                    {children}
-                  </AuthMetadataProvider>
-                </MediaConfigProvider>
-              </CapabilitiesProvider>
-            )}
-          </ServerConfigsLoader>
-        )}
-      </SpecVersions>
-    </AutoDiscovery>
+                )}
+                <Button variant="Critical" onClick={() => void logout()} disabled={loggingOut}>
+                  <Text as="span" size="B400">
+                    Log Out
+                  </Text>
+                </Button>
+              </Box>
+            </Dialog>
+          </Box>
+        </SplashScreen>
+      )}
+      {splashView === 'loading' && <ClientRootLoading status={splashStatus} />}
+      {splashView === 'client' && loadedSession && (
+        <ServerConfigsLoader>
+          {(serverConfigs) => (
+            <CapabilitiesProvider value={serverConfigs.capabilities ?? {}}>
+              <MediaConfigProvider value={serverConfigs.mediaConfig ?? {}}>
+                <AuthMetadataProvider value={serverConfigs.authMetadata}>
+                  {children}
+                </AuthMetadataProvider>
+              </MediaConfigProvider>
+            </CapabilitiesProvider>
+          )}
+        </ServerConfigsLoader>
+      )}
+    </>
   );
 }

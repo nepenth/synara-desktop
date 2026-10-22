@@ -17,6 +17,7 @@ mod later_live;
 mod mdirect;
 mod mdirect_live;
 mod raw;
+mod recent_emoji;
 mod room_notes;
 mod room_notes_live;
 
@@ -74,6 +75,10 @@ pub use raw::{
     AccountDataTypeRegistry, NativeAccountDataContent, NativeAccountDataGetRequest,
     NativeAccountDataSetRequest, NativeAccountDataTypes, NativeAccountDataTypesRequest,
     RawAccountDataError, MAX_RAW_ACCOUNT_DATA_BYTES,
+};
+pub use recent_emoji::{
+    recent_emoji_entries, record_recent_emoji, NativeRecentEmoji, NativeRecentEmojiEntry,
+    MAX_RECENT_EMOJI, MAX_RECENT_EMOJI_KEY_BYTES, RECENT_EMOJI_EVENT_TYPE,
 };
 pub use room_notes::{
     complete_room_todo_item, limit_text, move_room_todo_item, normalize_room_note_item,

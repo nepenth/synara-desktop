@@ -140,6 +140,41 @@ wire_enum_from!(MatrixCrossSigningReadinessResponse => CrossSigningReadinessDto 
     Unavailable, SetupRequired, RecoveryRequired, VerificationRequired, Ready
 });
 
+impl From<crate::app::cross_signing::NativeCrossSigningReadiness> for CrossSigningReadinessDto {
+    fn from(readiness: crate::app::cross_signing::NativeCrossSigningReadiness) -> Self {
+        use crate::app::cross_signing::NativeCrossSigningReadiness as Readiness;
+        match readiness {
+            Readiness::Unavailable => Self::Unavailable,
+            Readiness::SetupRequired => Self::SetupRequired,
+            Readiness::RecoveryRequired => Self::RecoveryRequired,
+            Readiness::VerificationRequired => Self::VerificationRequired,
+            Readiness::Ready => Self::Ready,
+        }
+    }
+}
+
+wire_enum! {
+    pub enum CrossSigningSetupOutcomeDto {
+        Complete => "complete",
+        AlreadyConfigured => "already_configured",
+        AuthenticationRequired => "authentication_required",
+    }
+}
+wire_enum_from!(crate::app::cross_signing::NativeCrossSigningSetupOutcome => CrossSigningSetupOutcomeDto {
+    Complete, AlreadyConfigured, AuthenticationRequired
+});
+
+wire_enum! {
+    pub enum IdentityResetStepDto {
+        Complete => "complete",
+        PasswordRequired => "password_required",
+        ApprovalRequired => "approval_required",
+    }
+}
+wire_enum_from!(crate::app::cross_signing::NativeIdentityResetStep => IdentityResetStepDto {
+    Complete, PasswordRequired, ApprovalRequired
+});
+
 wire_enum! {
     pub enum RoomKeyTransferPhaseDto {
         Idle => "idle",
@@ -199,6 +234,62 @@ pub struct CryptoStatusDto {
 pub struct CrossSigningStatusDto {
     pub session_generation: u64,
     pub readiness: CrossSigningReadinessDto,
+}
+
+/// Cross-signing setup step result. `AuthenticationRequired` means the
+/// homeserver asked for the account password; no keys or UIA session here.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CrossSigningSetupDto {
+    pub session_generation: u64,
+    pub outcome: CrossSigningSetupOutcomeDto,
+    pub readiness: CrossSigningReadinessDto,
+}
+
+impl From<crate::app::cross_signing::NativeCrossSigningSetupResult> for CrossSigningSetupDto {
+    fn from(result: crate::app::cross_signing::NativeCrossSigningSetupResult) -> Self {
+        Self {
+            session_generation: result.status.session_generation,
+            outcome: result.outcome.into(),
+            readiness: result.status.readiness.into(),
+        }
+    }
+}
+
+/// Identity reset step. The account-page URL (for `ApprovalRequired`) is
+/// the only homeserver value; no password, UIA session or key.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct IdentityResetStateDto {
+    pub session_generation: u64,
+    pub step: IdentityResetStepDto,
+    pub approval_url: Option<String>,
+}
+
+impl From<crate::app::cross_signing::NativeIdentityResetState> for IdentityResetStateDto {
+    fn from(state: crate::app::cross_signing::NativeIdentityResetState) -> Self {
+        Self {
+            session_generation: state.session_generation,
+            step: state.step.into(),
+            approval_url: state.approval_url,
+        }
+    }
+}
+
+/// Whether to show "Verify This Device" after this session's sign-in.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct DeviceVerificationPromptDto {
+    pub session_generation: u64,
+    pub show: bool,
+}
+
+impl From<crate::app::cross_signing::NativeDeviceVerificationPrompt>
+    for DeviceVerificationPromptDto
+{
+    fn from(prompt: crate::app::cross_signing::NativeDeviceVerificationPrompt) -> Self {
+        Self {
+            session_generation: prompt.session_generation,
+            show: prompt.show,
+        }
+    }
 }
 
 /// Privacy-safe leftover room-key transfer status. No passphrase or path.
@@ -286,8 +377,9 @@ pub(super) fn secret_storage_status_dto(
     })
 }
 
-pub(super) fn map_recovery_backup_core_error(_error: MatrixIpcError) -> LeftoverCommandError {
+pub(super) fn map_recovery_backup_core_error(error: MatrixIpcError) -> LeftoverCommandError {
     LeftoverCommandError::Failed {
+        kind: CoreErrorKind::from_category(error.category),
         code: "recovery-backup-failed".to_owned(),
         description: "Encryption backup recovery could not be completed.".to_owned(),
     }
@@ -364,6 +456,95 @@ impl SharedCore {
             .session_status_command(self.core.secret_storage_status())
             .await?;
         secret_storage_status_dto(payload)
+    }
+
+    /// Start cross-signing setup for this account (Security → Set Up
+    /// Recovery). Creates and publishes an identity only when the account has
+    /// none; `AuthenticationRequired` asks Swift for the account password.
+    pub async fn cross_signing_setup(&self) -> Result<CrossSigningSetupDto, SessionStatusError> {
+        self.core
+            .cross_signing_setup()
+            .await
+            .map(CrossSigningSetupDto::from)
+            .map_err(map_session_status_core_error)
+    }
+
+    /// Answer the password stage of a pending setup. The password is a
+    /// dedicated zeroizing argument and never leaves this call.
+    pub async fn cross_signing_setup_password(
+        &self,
+        password: String,
+    ) -> Result<CrossSigningSetupDto, SessionStatusError> {
+        let secret = Zeroizing::new(password);
+        self.core
+            .cross_signing_setup_password(secret.as_str())
+            .await
+            .map(CrossSigningSetupDto::from)
+            .map_err(map_session_status_core_error)
+    }
+
+    /// Reset identity (Security, or the "Verify This Device" prompt) for an
+    /// account that lost its recovery key and every other device. Returns
+    /// the next step; recovery setup follows `Complete`.
+    pub async fn identity_reset_start(&self) -> Result<IdentityResetStateDto, SessionStatusError> {
+        self.core
+            .identity_reset_start()
+            .await
+            .map(IdentityResetStateDto::from)
+            .map_err(map_session_status_core_error)
+    }
+
+    /// Answer the password step of the pending reset. The password is a
+    /// dedicated zeroizing argument and never leaves this call.
+    pub async fn identity_reset_password(
+        &self,
+        password: String,
+    ) -> Result<IdentityResetStateDto, SessionStatusError> {
+        let secret = Zeroizing::new(password);
+        self.core
+            .identity_reset_password(secret.as_str())
+            .await
+            .map(IdentityResetStateDto::from)
+            .map_err(map_session_status_core_error)
+    }
+
+    /// Continue after the user approved the reset on the account page.
+    pub async fn identity_reset_continue(
+        &self,
+    ) -> Result<IdentityResetStateDto, SessionStatusError> {
+        self.core
+            .identity_reset_continue()
+            .await
+            .map(IdentityResetStateDto::from)
+            .map_err(map_session_status_core_error)
+    }
+
+    pub async fn identity_reset_cancel(&self) -> Result<(), SessionStatusError> {
+        self.core
+            .identity_reset_cancel()
+            .await
+            .map_err(map_session_status_core_error)
+    }
+
+    /// Whether to show "Verify This Device" now (once after sign-in).
+    pub async fn device_verification_prompt(
+        &self,
+    ) -> Result<DeviceVerificationPromptDto, SessionStatusError> {
+        self.core
+            .device_verification_prompt()
+            .await
+            .map(DeviceVerificationPromptDto::from)
+            .map_err(map_session_status_core_error)
+    }
+
+    /// "Later": hide the prompt for this session.
+    pub fn dismiss_device_verification_prompt(
+        &self,
+    ) -> Result<DeviceVerificationPromptDto, SessionStatusError> {
+        self.core
+            .dismiss_device_verification_prompt()
+            .map(DeviceVerificationPromptDto::from)
+            .map_err(map_session_status_core_error)
     }
 
     /// Typed recovery arguments bypass generic command envelopes. Returned keys

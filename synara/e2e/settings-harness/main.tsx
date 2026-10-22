@@ -113,6 +113,15 @@ const fixtures: Record<string, Fixture> = {
   matrix_notification_focus_set: true,
   'plugin:window|is_maximized': false,
   matrix_get_own_profile: { displayName: 'Reviewer', avatarUrl: null },
+  // "Verify This Device" after sign-in (`?verifyPrompt`) and Reset Identity.
+  matrix_device_verification_prompt: { sessionGeneration: 1, show: query.has('verifyPrompt') },
+  matrix_device_verification_prompt_dismiss: { sessionGeneration: 1, show: false },
+  matrix_identity_reset_start: {
+    sessionGeneration: 1,
+    step: 'password_required',
+    approvalUrl: null,
+  },
+  matrix_identity_reset_cancel: true,
 };
 const unknown = new Set<string>();
 let callbackId = 0;

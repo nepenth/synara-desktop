@@ -110,7 +110,6 @@ async fn approval_history_cancelled_open_releases_unpublished_view_ownership() {
         "cancelled open must drop its local lease"
     );
     assert!(registry.view_streams.is_empty());
-    assert!(registry.view_revisions.is_empty());
     assert!(registry.view_update_tasks.is_empty());
 }
 
@@ -120,16 +119,106 @@ fn approval_history_stream_publication_has_no_cancellation_point_before_readback
     // external test latch. Enforce the critical final publication invariant
     // alongside the real cancellation test above.
     let source = include_str!("../live.rs");
+    let publish = source
+        .split_once("    fn publish_view(")
+        .expect("views are published in one place")
+        .1
+        .split("\n    }\n")
+        .next()
+        .unwrap();
+    assert!(publish.contains("self.view_streams.insert("));
+    assert!(
+        !publish.contains(".await"),
+        "publication must stay synchronous"
+    );
     let open = source
-        .split("    pub async fn open_at(")
-        .nth(2)
-        .expect("registry open_at")
-        .split("    pub async fn snapshot(")
+        .split_once("\nasync fn open_view(")
+        .expect("view open")
+        .1
+        .split("\n}\n")
         .next()
         .unwrap();
     let (_, published) = open
-        .split_once("self.view_streams.insert(")
-        .expect("the ready view is published");
-    assert!(!published.contains(".await"));
-    assert!(published.contains("Ok(NativeTimelineOpenReadback"));
+        .rsplit_once("registry.publish_view(")
+        .expect("the ready view is published last");
+    // The only await left takes the registry lock; the closure that
+    // publishes runs synchronously once it is held.
+    assert_eq!(published.matches(".await").count(), 1);
+}
+
+fn history_row(
+    event_id: &str,
+    decision: SynaraAgentApprovalHistoryDecision,
+    decided_at: f64,
+) -> SynaraAgentApprovalHistoryItem {
+    SynaraAgentApprovalHistoryItem {
+        room_id: "!agents:example.org".to_owned(),
+        event_id: event_id.to_owned(),
+        sender: "@agent:example.org".to_owned(),
+        decision,
+        decided_at,
+        origin_server_ts: 1_000.0,
+        expires_at: 301_000.0,
+        summary: "rm -rf build".to_owned(),
+    }
+}
+
+#[test]
+fn already_decided_reports_the_recorded_decision_not_the_clicked_one() {
+    let items = vec![
+        history_row(
+            "$other",
+            SynaraAgentApprovalHistoryDecision::ApproveOnce,
+            5.0,
+        ),
+        history_row(
+            "$prompt",
+            SynaraAgentApprovalHistoryDecision::ApproveOnce,
+            10.0,
+        ),
+        history_row("$prompt", SynaraAgentApprovalHistoryDecision::Deny, 20.0),
+    ];
+    let recorded = recorded_history_decision(&items, "!agents:example.org", "$prompt");
+    assert_eq!(
+        recorded,
+        Some(TimelineAgentApprovalDecision {
+            decision: SynaraAgentApprovalHistoryDecision::Deny,
+            decided_at: Some(20),
+        })
+    );
+    let result = already_decided_result(
+        "!agents:example.org".to_owned(),
+        "$prompt".to_owned(),
+        recorded,
+    );
+    let json = serde_json::to_value(&result).unwrap();
+    assert_eq!(json["status"], "already_decided");
+    assert_eq!(json["decision"], "deny");
+    assert_eq!(json["decidedAt"], 20);
+    assert!(json.get("reaction").is_none());
+
+    assert_eq!(
+        recorded_history_decision(&items, "!agents:example.org", "$missing"),
+        None
+    );
+    let unknown = already_decided_result("!r:x".to_owned(), "$e".to_owned(), None);
+    let json = serde_json::to_value(&unknown).unwrap();
+    assert!(json.get("decision").is_none());
+    assert!(json.get("decidedAt").is_none());
+}
+
+#[test]
+fn history_decision_without_a_valid_time_reports_no_time() {
+    let items = vec![history_row(
+        "$prompt",
+        SynaraAgentApprovalHistoryDecision::ApproveOnce,
+        f64::NAN,
+    )];
+    assert_eq!(
+        recorded_history_decision(&items, "!agents:example.org", "$prompt"),
+        Some(TimelineAgentApprovalDecision {
+            decision: SynaraAgentApprovalHistoryDecision::ApproveOnce,
+            decided_at: None,
+        })
+    );
 }

@@ -18,12 +18,11 @@ import {
   Overlay,
   OverlayBackdrop,
   OverlayCenter,
-  Modal,
-  Dialog,
   Header,
   config,
   Spinner,
 } from 'folds';
+import { Modal, Dialog } from '../../../components/modal-dialog';
 import FocusTrap from '../../../components/FocusTrap';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
@@ -288,6 +287,7 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
                   size="300"
                   onClick={() => setAlertRemove(false)}
                   radii="300"
+                  aria-label="Close"
                 >
                   <Icon src={Icons.Cross} />
                 </IconButton>
@@ -397,6 +397,7 @@ function ProfileDisplayName({ profile, userId }: ProfileProps) {
                     radii="300"
                     variant="Secondary"
                     fill="None"
+                    aria-label="Reset display name"
                   >
                     <Icon src={Icons.Cross} size="100" />
                   </IconButton>
@@ -514,7 +515,7 @@ function ProfilePresence({ userId }: { userId: string }) {
         </Box>
         {failed && (
           <Text size="T300" style={{ color: 'var(--folds-color-Critical-Main)' }}>
-            Native Matrix presence is unavailable.
+            Synara could not load your presence. Try again.
           </Text>
         )}
       </Box>
@@ -574,7 +575,7 @@ function ProfileStatus({ userId }: { userId: string }) {
     if (thrown instanceof UserStatusWriteError) {
       setFailure(thrown.message);
     } else {
-      setFailure('Native user status is unavailable.');
+      setFailure('Synara could not update your status. Try again.');
     }
   }, [changeState, clearState]);
 
@@ -643,7 +644,7 @@ function ProfileStatus({ userId }: { userId: string }) {
         </Box>
         {(unavailable || failure) && (
           <Text size="T300" style={{ color: 'var(--folds-color-Critical-Main)' }}>
-            {failure ?? 'Native user status is unavailable.'}
+            {failure ?? 'Synara could not load your status. Try again.'}
           </Text>
         )}
       </Box>
@@ -690,7 +691,7 @@ function ProfileRtcTransports() {
       <Box direction="Column" gap="100">
         <Text size="T300" data-testid="matrix-rtc-transport-diagnostic">
           {unavailable || !snapshot
-            ? 'Native MatrixRTC transports are unavailable.'
+            ? 'Synara could not read the call transports for your homeserver.'
             : rtcTransportsDiagnosticCopy(snapshot)}
         </Text>
         <Button

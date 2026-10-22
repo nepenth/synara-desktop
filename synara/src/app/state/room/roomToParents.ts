@@ -5,6 +5,10 @@ import { RoomToParents } from '../../../types/matrix/room';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { mapParentWithChildren } from '../../utils/room';
 import { startRoomListUpdateDrivenPoll } from '../../utils/nativeRoomListUpdates';
+import {
+  createCoalescedRefresh,
+  readNativeSessionSnapshotShared,
+} from '../../utils/nativeListRefresh';
 
 export type RoomToParentsAction =
   | {
@@ -32,10 +36,23 @@ type NativeSpaceParentsSnapshot = {
 };
 
 const baseRoomToParents = atom<RoomToParents>(new Map());
+const sameRoomToParents = (left: RoomToParents, right: RoomToParents): boolean => {
+  if (left.size !== right.size) return false;
+  for (const [roomId, parents] of left) {
+    const other = right.get(roomId);
+    if (!other || other.size !== parents.size) return false;
+    for (const parentId of parents) if (!other.has(parentId)) return false;
+  }
+  return true;
+};
+
 export const roomToParentsAtom = atom<RoomToParents, [RoomToParentsAction], undefined>(
   (get) => get(baseRoomToParents),
   (get, set, action) => {
     if (action.type === 'INITIALIZE') {
+      // An unchanged map keeps its identity, so space and room-list consumers
+      // do not re-render on every room-list wake.
+      if (sameRoomToParents(get(baseRoomToParents), action.roomToParents)) return;
       set(baseRoomToParents, action.roomToParents);
       return;
     }
@@ -88,39 +105,37 @@ export const useBindRoomToParentsAtom = (
 
   useEffect(() => {
     let disposed = false;
-    let inFlight = false;
 
     const clear = () => {
       setRoomToParents({ type: 'INITIALIZE', roomToParents: new Map() });
     };
 
-    const refresh = async () => {
-      if (inFlight) return;
-      inFlight = true;
-      try {
-        const session = await invokeDesktopWithAvailability<{
-          status: 'logged_out' | 'logged_in';
-        }>('matrix_session_snapshot');
-        if (disposed) return;
-        if (!session.available || session.value?.status !== 'logged_in') {
-          clear();
-          return;
+    const refresh = createCoalescedRefresh(
+      async () => {
+        try {
+          const session = await readNativeSessionSnapshotShared<{
+            status: 'logged_out' | 'logged_in';
+          }>();
+          if (disposed) return;
+          if (!session.available || session.value?.status !== 'logged_in') {
+            clear();
+            return;
+          }
+          const result = await invokeDesktopWithAvailability<NativeSpaceParentsSnapshot>(
+            'matrix_space_parents_snapshot'
+          );
+          if (!disposed && result.available && result.value) {
+            setRoomToParents({
+              type: 'INITIALIZE',
+              roomToParents: roomToParentsFromNativeSnapshot(result.value.entries),
+            });
+          }
+        } catch {
+          // Preserve the last known parent map during transient failures.
         }
-        const result = await invokeDesktopWithAvailability<NativeSpaceParentsSnapshot>(
-          'matrix_space_parents_snapshot'
-        );
-        if (!disposed && result.available && result.value) {
-          setRoomToParents({
-            type: 'INITIALIZE',
-            roomToParents: roomToParentsFromNativeSnapshot(result.value.entries),
-          });
-        }
-      } catch {
-        // Preserve the last known parent map during transient failures.
-      } finally {
-        inFlight = false;
-      }
-    };
+      },
+      () => disposed
+    );
 
     if (!isSynaraDesktop()) {
       clear();

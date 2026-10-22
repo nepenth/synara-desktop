@@ -44,6 +44,16 @@ store or deploy-host-only path.
   Encrypted events can be decrypted when the device already has the required
   keys. Missing sessions or keys, timeouts, unsupported events, and agent
   approval notifications retain the generic gateway-provided text.
+- The extension reads the app's session from the shared vault but cannot write
+  it, so it cannot refresh an access token. iOS password sign-in therefore
+  requests no refresh token and the access token does not expire. Sessions
+  signed in with 2.2.6 or earlier carry a refresh token; the app keeps
+  refreshing and saving them, but once the app has been suspended longer than
+  the server's `refreshable_access_token_lifetime` (Synapse default 5 minutes)
+  the extension gets `M_UNKNOWN_TOKEN` and records `core-session-rejected`.
+  Signing out and in again moves such a session to a non-expiring token.
+  Settings → Notifications → Local Delivery Diagnostics reports these as
+  `extensionSessionRejectedCount`, kept across record rollover until cleared.
 
 Run focused iOS push tests:
 

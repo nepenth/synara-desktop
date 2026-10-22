@@ -3,9 +3,9 @@ use std::env;
 use std::fs;
 use std::path::Path;
 use tauri::{AppHandle, Runtime};
-use tauri_plugin_notification::NotificationExt;
 
 use crate::build_info;
+use crate::desktop_notifications::notification_permission;
 use crate::desktop_shortcuts::desktop_shortcuts_integration_status;
 use crate::desktop_tray;
 
@@ -147,8 +147,41 @@ fn has_file_portal_backend() -> bool {
         || dir_has_fragment("/usr/share/dbus-1/services", "filechooser")
 }
 
+fn notification_integration_check(permission: Result<&str, &String>) -> DesktopIntegrationCheck {
+    let check = |ready: bool, message: &str| DesktopIntegrationCheck {
+        name: "Notifications".to_string(),
+        supported: true,
+        ready,
+        message: message.to_string(),
+    };
+    match permission.map(|permission| permission.trim().to_ascii_lowercase()) {
+        Ok(permission) if permission == "granted" => {
+            check(true, "Notification permission is active.")
+        }
+        Ok(permission) if permission == "denied" => {
+            check(false, "Notifications are blocked by platform permission.")
+        }
+        Ok(permission)
+            if matches!(
+                permission.as_str(),
+                "default" | "prompt" | "prompt-with-rationale"
+            ) =>
+        {
+            check(false, "Notification permission has not been requested yet.")
+        }
+        _ => DesktopIntegrationCheck {
+            name: "Notifications".to_string(),
+            ready: false,
+            supported: false,
+            message: "Notification state could not be read.".to_string(),
+        },
+    }
+}
+
 #[tauri::command]
-pub fn desktop_get_integration_status<R: Runtime>(app: AppHandle<R>) -> DesktopIntegrationStatus {
+pub async fn desktop_get_integration_status<R: Runtime>(
+    app: AppHandle<R>,
+) -> DesktopIntegrationStatus {
     let (distro_id, distro_name, distro_version) = detect_os_release();
     let desktop_environment = desktop_environment_label();
     let session_type = detect_session_type();
@@ -159,6 +192,13 @@ pub fn desktop_get_integration_status<R: Runtime>(app: AppHandle<R>) -> DesktopI
             supported: true,
             message: "Tray is available.".to_string(),
         }
+    } else if desktop_tray::tray_host_state() == desktop_tray::TrayHostState::Absent {
+        DesktopIntegrationCheck {
+            name: "Tray".to_string(),
+            ready: false,
+            supported: false,
+            message: "No tray host is running, so the tray icon is hidden. Closing the window quits Synara; Ctrl+Q also quits.".to_string(),
+        }
     } else {
         DesktopIntegrationCheck {
             name: "Tray".to_string(),
@@ -168,31 +208,10 @@ pub fn desktop_get_integration_status<R: Runtime>(app: AppHandle<R>) -> DesktopI
         }
     };
 
-    let notifications = app
-        .notification()
-        .permission_state()
-        .map(|permission| permission.to_string().to_ascii_lowercase())
-        .map(|permission| {
-            let supported = !permission.is_empty();
-            let ready = permission != "denied";
-            let message = if ready {
-                "Notification permission is active."
-            } else {
-                "Notifications are blocked by platform permission."
-            };
-            DesktopIntegrationCheck {
-                name: "Notifications".to_string(),
-                supported,
-                ready,
-                message: message.to_string(),
-            }
-        })
-        .unwrap_or_else(|_| DesktopIntegrationCheck {
-            name: "Notifications".to_string(),
-            ready: false,
-            supported: false,
-            message: "Notification state could not be read.".to_string(),
-        });
+    // The same source as `desktop_get_notification_permission`: on a bundled
+    // macOS build the plugin always says granted, UserNotifications does not.
+    let notifications =
+        notification_integration_check(notification_permission(&app).await.as_deref());
 
     let shortcut_status = desktop_shortcuts_integration_status();
     let global_shortcuts = DesktopIntegrationCheck {
@@ -249,6 +268,34 @@ mod tests {
     use std::sync::Mutex;
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn notification_check_reads_the_permission_the_os_reports() {
+        let granted = notification_integration_check(Ok("granted"));
+        assert!(granted.ready && granted.supported);
+        let denied = notification_integration_check(Ok("denied"));
+        assert!(!denied.ready && denied.supported);
+        assert!(denied.message.contains("blocked"));
+        for not_asked in ["default", "prompt", "prompt-with-rationale"] {
+            let check = notification_integration_check(Ok(not_asked));
+            assert!(!check.ready && check.supported, "{not_asked}");
+            assert!(check.message.contains("not been requested"));
+        }
+        let unreadable = notification_integration_check(Err(&"lookup timed out".to_owned()));
+        assert!(!unreadable.ready && !unreadable.supported);
+        // One permission source for the panel and for Settings.
+        let source = include_str!("desktop_integration.rs")
+            .split("#[cfg(test)]\nmod tests")
+            .next()
+            .expect("production source");
+        assert!(source.contains(
+            "notification_integration_check(notification_permission(&app).await.as_deref())"
+        ));
+        let notifications = include_str!("desktop_notifications.rs");
+        assert!(notifications.contains(
+            "pub async fn desktop_get_notification_permission<R: Runtime>(\n    app: AppHandle<R>,\n) -> Result<String, String> {\n    notification_permission(&app).await\n}"
+        ));
+    }
 
     #[test]
     fn parse_os_release_detects_cachyos_metadata() {

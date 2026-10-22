@@ -10,7 +10,7 @@ import SwiftUI
 struct SelectableMessageTextView: UIViewRepresentable {
     let attributedText: NSAttributedString
     var accessibilityLabel: String
-    var accessibilityHint: String = "Select and copy any part of this message"
+    var accessibilityHint: String = String(localized: "Select and copy any part of this message")
 
     func makeUIView(context: Context) -> UITextView {
         let textView = UITextView()

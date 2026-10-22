@@ -50,7 +50,6 @@ struct TrayMenuItems<R: Runtime> {
     notifications: MenuItem<R>,
     #[cfg(target_os = "linux")]
     unread_summary: MenuItem<R>,
-    #[cfg(target_os = "linux")]
     dnd: MenuItem<R>,
 }
 
@@ -179,7 +178,7 @@ fn tray_route_labels(state: &DesktopTrayState) -> [String; 5] {
     let later_label = format!("Later ({later})");
     let notifications_label = format!("Notifications ({notifications})");
     let dnd_label = if do_not_disturb {
-        "Do Not Disturb: On"
+        "Do Not Disturb: On (Approvals Still Alert)"
     } else {
         "Do Not Disturb: Off"
     };
@@ -200,11 +199,9 @@ fn apply_tray_menu_labels<R: Runtime>(
     let route_labels = tray_route_labels(state);
     items.later.set_text(route_labels[1].as_str())?;
     items.notifications.set_text(route_labels[2].as_str())?;
+    items.dnd.set_text(route_labels[3].as_str())?;
     #[cfg(target_os = "linux")]
-    {
-        items.unread_summary.set_text(route_labels[0].as_str())?;
-        items.dnd.set_text(route_labels[3].as_str())?;
-    }
+    items.unread_summary.set_text(route_labels[0].as_str())?;
     Ok(())
 }
 
@@ -300,7 +297,10 @@ fn schedule_tray_state_flush<R: Runtime>(app: AppHandle<R>) {
         let coalescer = app.state::<TrayStateCoalescer>();
         coalescer.flush_scheduled.store(false, Ordering::Release);
         if let Err(error) = apply_pending_tray_state(&app) {
-            eprintln!("failed to apply coalesced tray state: {error}");
+            log_tray_error(
+                &app,
+                &format!("failed to apply coalesced tray state: {error}"),
+            );
         }
     });
 }
@@ -341,26 +341,31 @@ fn build_tray_menu<R: Runtime>(
 ) -> tauri::Result<(Menu<R>, TrayMenuItems<R>)> {
     let route_labels = tray_route_labels(state);
 
-    let show = MenuItem::with_id(
-        app,
-        MENU_SHOW,
-        "Show Synara",
-        true,
-        Some("CmdOrCtrl+Shift+C"),
-    )?;
+    // No accelerators: the global shortcuts are user-set (or off), so a
+    // fixed hint here would be wrong.
+    let show = MenuItem::with_id(app, MENU_SHOW, "Show Synara", true, None::<&str>)?;
     let later = MenuItem::with_id(
         app,
         MENU_LATER,
         route_labels[1].as_str(),
         true,
-        Some("CmdOrCtrl+Shift+L"),
+        None::<&str>,
     )?;
     let notifications = MenuItem::with_id(
         app,
         MENU_NOTIFICATIONS,
         route_labels[2].as_str(),
         true,
-        Some("CmdOrCtrl+Shift+N"),
+        None::<&str>,
+    )?;
+    // Every platform's tray can turn Synara's notifications off and on; the
+    // menu bar icon is the quickest place to reach it on macOS too.
+    let dnd = MenuItem::with_id(
+        app,
+        MENU_DND_TOGGLE,
+        route_labels[3].as_str(),
+        true,
+        None::<&str>,
     )?;
     let separator = PredefinedMenuItem::separator(app)?;
     let build_item = MenuItem::with_id(
@@ -379,6 +384,7 @@ fn build_tray_menu<R: Runtime>(
             &show,
             &later,
             &notifications,
+            &dnd,
             &separator,
             &build_item,
             &quit,
@@ -388,6 +394,7 @@ fn build_tray_menu<R: Runtime>(
     let items = TrayMenuItems {
         later,
         notifications,
+        dnd,
     };
 
     #[cfg(target_os = "linux")]
@@ -403,14 +410,6 @@ fn build_tray_menu<R: Runtime>(
         app,
         MENU_DESKTOP_INTEGRATION,
         route_labels[4].as_str(),
-        true,
-        None::<&str>,
-    )?;
-    #[cfg(target_os = "linux")]
-    let dnd = MenuItem::with_id(
-        app,
-        MENU_DND_TOGGLE,
-        route_labels[3].as_str(),
         true,
         None::<&str>,
     )?;
@@ -515,7 +514,10 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                 }
             ) {
                 if let Err(error) = show_main_window(tray.app_handle()) {
-                    eprintln!("failed to show Synara from the tray: {error}");
+                    log_tray_error(
+                        tray.app_handle(),
+                        &format!("failed to show Synara from the tray: {error}"),
+                    );
                 }
             }
         });
@@ -553,24 +555,140 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
     };
 
     if let Err(error) = result {
-        eprintln!("failed to handle desktop menu event: {error}");
+        log_tray_error(
+            app,
+            &format!("failed to handle desktop menu event: {error}"),
+        );
     }
 }
 
-pub(crate) fn tray_is_available<R: Runtime>(app: &AppHandle<R>) -> bool {
-    app.tray_by_id(TRAY_ICON_ID).is_some()
+/// Tray failures go to the app log as well as stderr.
+fn log_tray_error<R: Runtime>(app: &AppHandle<R>, message: &str) {
+    eprintln!("[synara] {message}");
+    crate::desktop_logging::append_app_log(app, "tray", message);
 }
+
+pub(crate) fn tray_is_available<R: Runtime>(app: &AppHandle<R>) -> bool {
+    app.tray_by_id(TRAY_ICON_ID).is_some() && tray_host_state() != TrayHostState::Absent
+}
+
+/// Whether the desktop shows tray icons. Linux panels show one only through
+/// a StatusNotifier host (KDE, or GNOME with the AppIndicator extension); a
+/// stock GNOME session has none, so the icon and its Quit item are invisible.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TrayHostState {
+    /// Not probed yet, or not Linux: treated as present.
+    Unknown,
+    Present,
+    Absent,
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+static TRAY_HOST_STATE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+pub(crate) fn tray_host_state() -> TrayHostState {
+    match TRAY_HOST_STATE.load(Ordering::Acquire) {
+        1 => TrayHostState::Present,
+        2 => TrayHostState::Absent,
+        _ => TrayHostState::Unknown,
+    }
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn set_tray_host_state(present: bool) {
+    TRAY_HOST_STATE.store(if present { 1 } else { 2 }, Ordering::Release);
+}
+
+/// What closing the main window does: hide to the tray, or quit when there
+/// is no tray to come back from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MainWindowCloseAction {
+    Hide,
+    Quit,
+}
+
+pub(crate) fn main_window_close_action(host: TrayHostState) -> MainWindowCloseAction {
+    if host == TrayHostState::Absent {
+        MainWindowCloseAction::Quit
+    } else {
+        MainWindowCloseAction::Hide
+    }
+}
+
+/// How often the Linux tray host is re-checked; a host can start after
+/// Synara (session autostart) or go away (extension turned off).
+#[cfg(target_os = "linux")]
+const TRAY_HOST_PROBE_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Probe the StatusNotifier host now and then every
+/// [`TRAY_HOST_PROBE_INTERVAL`], off the main thread.
+#[cfg(target_os = "linux")]
+pub(crate) fn start_tray_host_watch() {
+    let spawned = std::thread::Builder::new()
+        .name("synara-tray-host-probe".to_owned())
+        .spawn(|| loop {
+            set_tray_host_state(status_notifier_host_registered());
+            std::thread::sleep(TRAY_HOST_PROBE_INTERVAL);
+        });
+    if spawned.is_err() {
+        eprintln!("[synara] Unable to start the tray host probe thread.");
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub(crate) fn start_tray_host_watch() {}
+
+/// `org.kde.StatusNotifierWatcher.IsStatusNotifierHostRegistered`. No session
+/// bus or no watcher means no host.
+#[cfg(target_os = "linux")]
+fn status_notifier_host_registered() -> bool {
+    let Ok(connection) = zbus::blocking::Connection::session() else {
+        return false;
+    };
+    let Ok(proxy) = zbus::blocking::Proxy::new(
+        &connection,
+        "org.kde.StatusNotifierWatcher",
+        "/StatusNotifierWatcher",
+        "org.kde.StatusNotifierWatcher",
+    ) else {
+        return false;
+    };
+    proxy
+        .get_property::<bool>("IsStatusNotifierHostRegistered")
+        .unwrap_or(false)
+}
+
+/// The renderer's last Do Not Disturb state, kept so a reset after sign-out
+/// clears the counts without flipping the toggle's label.
+static TRAY_DO_NOT_DISTURB: AtomicBool = AtomicBool::new(false);
 
 pub(crate) fn update_tray_state<R: Runtime>(
     app: AppHandle<R>,
     state: DesktopTrayState,
 ) -> Result<bool, String> {
+    TRAY_DO_NOT_DISTURB.store(state.do_not_disturb, Ordering::Relaxed);
     if tray_is_available(&app) {
         queue_tray_state_update(app, state)?;
         return Ok(true);
     }
 
     Ok(false)
+}
+
+/// Signed out: zero every tray count. The signed-out shell sends no tray
+/// state, so without this the old account's counts would stay.
+pub(crate) fn reset_tray_counts<R: Runtime>(app: &AppHandle<R>) -> Result<bool, String> {
+    update_tray_state(app.clone(), signed_out_tray_state())
+}
+
+fn signed_out_tray_state() -> DesktopTrayState {
+    DesktopTrayState {
+        unread_count: 0,
+        highlight_count: 0,
+        later_count: 0,
+        notification_inbox_count: 0,
+        do_not_disturb: TRAY_DO_NOT_DISTURB.load(Ordering::Relaxed),
+    }
 }
 
 #[cfg(test)]
@@ -651,7 +769,7 @@ mod tests {
             do_not_disturb: false,
         });
 
-        assert_eq!(on[3], "Do Not Disturb: On");
+        assert_eq!(on[3], "Do Not Disturb: On (Approvals Still Alert)");
         assert_eq!(off[3], "Do Not Disturb: Off");
     }
 
@@ -706,11 +824,105 @@ mod tests {
     }
 
     #[test]
-    fn linux_tray_left_click_restores_instead_of_opening_the_menu() {
+    fn close_quits_only_when_no_tray_host_can_show_the_icon() {
+        assert_eq!(
+            main_window_close_action(TrayHostState::Absent),
+            MainWindowCloseAction::Quit
+        );
+        assert_eq!(
+            main_window_close_action(TrayHostState::Present),
+            MainWindowCloseAction::Hide
+        );
+        // Before the first probe (and on macOS/Windows) the tray is assumed.
+        assert_eq!(
+            main_window_close_action(TrayHostState::Unknown),
+            MainWindowCloseAction::Hide
+        );
+    }
+
+    #[test]
+    fn linux_quit_stays_reachable_without_a_tray_host() {
+        // Close quits without a host, Ctrl+Q quits from the in-app strip, and
+        // the integration panel reports the tray as unavailable.
+        let desktop = include_str!("desktop.rs");
+        let close_fn = desktop
+            .split("pub fn close_main_window")
+            .nth(1)
+            .and_then(|rest| rest.split("pub fn ").next())
+            .expect("close_main_window");
+        assert!(close_fn.contains("main_window_close_action(desktop_tray::tray_host_state())"));
+        assert!(close_fn.contains("app.exit(0)"));
+        assert!(desktop.contains("pub fn desktop_quit"));
+        let lib = include_str!("lib.rs");
+        assert!(lib.contains("desktop::close_main_window(window.app_handle())"));
+        assert!(lib.contains("desktop_tray::start_tray_host_watch()"));
         let source = include_str!("desktop_tray.rs");
+        assert!(source.contains("\"IsStatusNotifierHostRegistered\""));
+        assert!(source.contains("tray_host_state() != TrayHostState::Absent"));
+        let titlebar =
+            include_str!("../../synara/src/app/features/desktop-titlebar/DesktopTitleBar.tsx");
+        assert!(titlebar.contains("'desktop_quit'"));
+    }
+
+    #[test]
+    fn sign_out_zeroes_tray_counts_but_keeps_do_not_disturb() {
+        TRAY_DO_NOT_DISTURB.store(true, Ordering::Relaxed);
+        let state = signed_out_tray_state();
+        assert_eq!(state.unread_count, 0);
+        assert_eq!(state.highlight_count, 0);
+        assert_eq!(state.later_count, 0);
+        assert_eq!(state.notification_inbox_count, 0);
+        assert!(state.do_not_disturb);
+        TRAY_DO_NOT_DISTURB.store(false, Ordering::Relaxed);
+        assert!(!signed_out_tray_state().do_not_disturb);
+        // matrix_logout resets the tray, badge and banners itself, so forced
+        // and expired sign-outs are covered without the renderer.
+        let logout = include_str!("matrix/auth/product_commands.rs")
+            .split("pub async fn matrix_logout")
+            .nth(1)
+            .and_then(|rest| rest.split("pub(super) struct LogoutPlan").next())
+            .expect("logout body");
+        assert!(logout.contains("desktop_notifications::clear_signed_out_surfaces(&app)"));
+    }
+
+    #[test]
+    fn every_tray_menu_offers_do_not_disturb() {
+        let build = include_str!("desktop_tray.rs")
+            .split("fn build_tray_menu")
+            .nth(1)
+            .and_then(|rest| rest.split("fn tray_tooltip").next())
+            .expect("build_tray_menu");
+        let (mac, linux) = build
+            .split_once("#[cfg(target_os = \"linux\")]\n    let unread_summary")
+            .expect("platform menus");
+        // The non-Linux (macOS) menu and items include the toggle.
+        assert!(mac.contains("&notifications,\n            &dnd,"));
+        assert!(mac.contains("notifications,\n        dnd,\n    };"));
+        assert!(linux.contains("&dnd,"));
+        assert!(!build.contains("#[cfg(target_os = \"linux\")]\n    let dnd"));
+    }
+
+    #[test]
+    fn tray_menu_items_carry_no_fixed_global_shortcut_hints() {
+        let source = include_str!("desktop_tray.rs");
+        let build = source
+            .split("fn build_tray_menu")
+            .nth(1)
+            .and_then(|rest| rest.split("fn tray_tooltip").next())
+            .expect("build_tray_menu");
+        assert!(!build.contains("Shift+"));
+    }
+
+    #[test]
+    fn linux_tray_left_click_restores_instead_of_opening_the_menu() {
+        // Only the production half: a needle in this test would match itself.
+        let source = include_str!("desktop_tray.rs")
+            .split("#[cfg(test)]\nmod tests")
+            .next()
+            .expect("production source");
         assert!(source.contains("show_menu_on_left_click(cfg!(not(target_os = \"linux\")))"));
         assert!(source.contains("MouseButton::Left"));
-        assert!(source.contains("overlay_unread_badge"));
-        assert!(source.contains("emit_unity_launcher_badge"));
+        assert!(source.contains("desktop_unread_badge::overlay_unread_dot("));
+        assert!(source.contains("desktop_unread_badge::emit_unity_launcher_badge("));
     }
 }

@@ -15,7 +15,7 @@ import { useHomeSelected } from '../../../hooks/router/useHomeSelected';
 import { UnreadBadge } from '../../../components/unread-badge';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { useNavToActivePathAtom } from '../../../state/hooks/navToActivePath';
-import { markAsReadFromExplicitUserActionInBackground } from '../../../utils/notifications';
+import { useMarkRoomsAsRead } from '../../../hooks/useMarkRoomsAsRead';
 import { stopPropagation } from '../../../utils/keyboard';
 
 type HomeMenuProps = {
@@ -24,10 +24,11 @@ type HomeMenuProps = {
 const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, ref) => {
   const { roomIds, unread } = useNativeNavigationScope('home');
 
-  const handleMarkAsRead = () => {
-    if (!unread) return;
-    roomIds.forEach((rId) => markAsReadFromExplicitUserActionInBackground(rId));
-    requestClose();
+  const { markRead, markingRead, markReadError } = useMarkRoomsAsRead();
+
+  const handleMarkAsRead = async () => {
+    if (!unread || markingRead) return;
+    if (await markRead(roomIds)) requestClose();
   };
 
   return (
@@ -44,6 +45,11 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
             Mark as Read
           </Text>
         </MenuItem>
+        {markReadError && (
+          <Text as="p" size="T200" role="alert" style={{ paddingInline: config.space.S200 }}>
+            {markReadError}
+          </Text>
+        )}
       </Box>
     </Menu>
   );
@@ -107,7 +113,6 @@ export function HomeTab() {
             <FocusTrap
               focusTrapOptions={{
                 initialFocus: false,
-                returnFocusOnDeactivate: false,
                 onDeactivate: () => setMenuAnchor(undefined),
                 clickOutsideDeactivates: true,
                 isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',

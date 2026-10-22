@@ -35,7 +35,9 @@ function useNativeImagePackRefreshToken(nativeActive: boolean): number {
         return;
       }
       unlisten = handle;
-    })();
+    })().catch(() => {
+      // No listener: packs still refresh when the room is reopened.
+    });
 
     return () => {
       cancelled = true;

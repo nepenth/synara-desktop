@@ -5,10 +5,8 @@ import {
   type TUploadContent,
   type UploadProgress,
   type UploadResponse,
-  uploadContent,
 } from '../utils/matrix';
 import { useCallback } from 'react';
-import { useThrottle } from '../hooks/useThrottle';
 
 export enum UploadStatus {
   Idle = 'idle',
@@ -47,6 +45,16 @@ export function makeUploadError(message: string): MatrixError {
 }
 
 export type Upload = UploadIdle | UploadLoading | UploadSuccess | UploadError;
+
+/**
+ * Placeholder for a composer file that Core uploads only when it is sent.
+ * The file is ready to send but nothing has been uploaded, so it must never
+ * be shown as an uploaded file or used as a real content URI.
+ */
+export const NATIVE_STAGED_MXC = 'mxc://synara.native/staged';
+
+export const isNativeStagedUpload = (upload: Upload): boolean =>
+  upload.status === UploadStatus.Success && upload.mxc === NATIVE_STAGED_MXC;
 
 export type UploadAtomAction =
   | {
@@ -107,38 +115,24 @@ export const createUploadAtom = (file: TUploadContent) => {
 };
 export type TUploadAtom = ReturnType<typeof createUploadAtom>;
 
-export const useBindUploadAtom = (uploadAtom: TUploadAtom, hideFilename?: boolean) => {
+/**
+ * Bind one file's upload state. Core uploads every file (composer files when
+ * they are sent, other files through `matrix_upload_media`); the renderer has
+ * no upload path of its own (D85).
+ */
+export const useBindUploadAtom = (uploadAtom: TUploadAtom) => {
   const [upload, setUpload] = useAtom(uploadAtom);
-  const { file } = upload;
-
-  const handleProgress = useThrottle(
-    useCallback((progress: UploadProgress) => setUpload({ progress }), [setUpload]),
-    { immediate: true, wait: 200 }
-  );
-
-  const startUpload = useCallback(
-    () =>
-      uploadContent(file, {
-        hideFilename,
-        onPromise: (promise: Promise<UploadResponse>) => setUpload({ promise }),
-        onProgress: handleProgress,
-        onSuccess: (mxc) => setUpload({ mxc }),
-        onError: (error) => setUpload({ error }),
-      }),
-    [file, hideFilename, setUpload, handleProgress]
-  );
 
   // Native uploads run to completion in Core; there is no renderer-side cancel.
   const cancelUpload = useCallback(async () => undefined, []);
 
   /** Mark a composer file staged for native Rust upload+send (no JS upload). */
   const markNativeStaged = useCallback(() => {
-    setUpload({ mxc: 'mxc://synara.native/staged' });
+    setUpload({ mxc: NATIVE_STAGED_MXC });
   }, [setUpload]);
 
   return {
     upload,
-    startUpload,
     cancelUpload,
     markNativeStaged,
     setUpload,

@@ -35,4 +35,34 @@ enum SharedCoreSendText {
             txnId: txnId
         )
     }
+
+    /// Retry one unsent SDK local echo under its transaction id.
+    static func retryLocalEcho(core: SharedCore, roomId: String, transactionId: String) async throws {
+        try await core.localEchoRetry(roomId: roomId, transactionId: transactionId)
+    }
+
+    /// Discard one unsent SDK local echo; false when it was already sent.
+    static func discardLocalEcho(
+        core: SharedCore,
+        roomId: String,
+        transactionId: String
+    ) async throws -> Bool {
+        try await core.localEchoDiscard(roomId: roomId, transactionId: transactionId)
+    }
+
+    /// Core could not take the message yet: no session, the room is not
+    /// known while the session restores (`notReady`), or the stores are still
+    /// closed for background or the network failed (`retryable`). Anything
+    /// else is a rejection.
+    static func isNotReady(_ error: Error) -> Bool {
+        guard let error = error as? SendTextError else {
+            return false
+        }
+        switch error.coreErrorKind {
+        case .notReady, .retryable:
+            return true
+        case .actionRequired, .terminal:
+            return false
+        }
+    }
 }

@@ -13,6 +13,7 @@ use std::sync::{
 use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
+use matrix_sdk::ruma::api::error::ErrorKind;
 use matrix_sdk::Client;
 use matrix_sdk_ui::room_list_service::State as RoomListState;
 use matrix_sdk_ui::sync_service::{State as SdkSyncState, SyncService};
@@ -23,6 +24,7 @@ use super::capability::probe_sliding_sync;
 use super::error::SyncError;
 use super::readiness::{snapshot_from_sdk_state, SyncReadiness, SyncReadinessSnapshot};
 use super::reconnect::{decide_reconnect, ReconnectAction, SyncIntent};
+use super::supervisor::{spawn_supervised, RestartPolicy, SupervisedTask};
 
 /// Configuration for building the product SyncService.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,6 +58,13 @@ const TERMINATED_RESTART_INITIAL: Duration = Duration::from_secs(5);
 const TERMINATED_RESTART_MAX: Duration = Duration::from_secs(60);
 /// Minimum spacing between classifier probes after `UnknownToken` broadcasts.
 const SESSION_CHANGE_PROBE_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Events per room in the room-list sliding-sync window (the SDK default is
+/// one). Automatic back-pagination is off (`apply_event_cache_policy`), so
+/// this window is what the SDK has for a room's latest-event preview and its
+/// client-side unread count until the room is subscribed or opened. One event
+/// was often a reaction, edit or state event with nothing to preview.
+pub const ROOM_LIST_TIMELINE_LIMIT: u32 = 5;
 
 /// Heartbeat thresholds; production uses the constants above.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -131,7 +140,7 @@ pub struct SyncServiceOwner {
     sliding_sync_capable: Arc<std::sync::OnceLock<bool>>,
     sliding_sync_probe: tokio::task::JoinHandle<()>,
     room_subscriptions: Arc<Mutex<RoomSubscriptions>>,
-    recovery_task: Option<tokio::task::JoinHandle<()>>,
+    recovery_task: Option<SupervisedTask>,
     /// Re-enables send queues after recoverable send errors; aborted with
     /// this owner so it never outlives the session generation.
     send_queue_recovery: tokio::task::JoinHandle<()>,
@@ -141,9 +150,12 @@ pub struct SyncServiceOwner {
     heartbeat: Arc<SyncHeartbeat>,
     heartbeat_policy: HeartbeatPolicy,
     /// Records successful room-list responses; aborted with this owner.
-    heartbeat_task: tokio::task::JoinHandle<()>,
+    heartbeat_task: SupervisedTask,
     /// Re-checks credentials after an SDK `UnknownToken` broadcast.
-    session_change_task: tokio::task::JoinHandle<()>,
+    session_change_task: SupervisedTask,
+    /// Highlight notifications read from the server for mention badges;
+    /// refreshed by the room-list owner, read by room-list snapshots.
+    server_highlights: Arc<crate::app::room_list::ServerHighlights>,
 }
 
 #[derive(Default)]
@@ -181,6 +193,12 @@ impl SyncServiceOwner {
             snapshot.readiness = SyncReadiness::Failed;
             snapshot.failure_diagnostic_id =
                 Some(super::readiness::SYNC_AUTHENTICATION_FAILURE_DIAGNOSTIC_ID);
+        } else if matches!(&current, SdkSyncState::Error(error) if is_sliding_sync_unsupported_error(error.as_ref()))
+        {
+            // The server has no MSC4186 endpoint. Recovery does not restart
+            // it, so report the failed service with the verdict the shells'
+            // capability banners read instead of an offline blip.
+            snapshot.sliding_sync_capable = Some(false);
         } else if self.offline_mode_enabled
             && snapshot.failure_diagnostic_id
                 == Some(super::readiness::SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID)
@@ -251,6 +269,35 @@ impl SyncServiceOwner {
         Ok(self.observe())
     }
 
+    /// Replace the live connection now, for an OS network change.
+    ///
+    /// `start()` keeps a `Running` service until its heartbeat goes stale,
+    /// which takes the SDK's poll plus network timeouts. A long-poll opened on
+    /// the previous interface is dead long before that, so stop it first.
+    /// Unlike `apply_intent(SyncIntent::Resume)` this never starts sync the
+    /// shell stopped (suspension, or not started yet), and leaves a rejected
+    /// session and a server without sliding sync alone.
+    pub async fn restart_live(&self) -> Result<SyncReadinessSnapshot, SyncError> {
+        let _gate = self.lifecycle_gate.lock().await;
+        if !self.sync_requested.load(Ordering::Acquire)
+            || self.authentication_rejected.load(Ordering::Acquire)
+        {
+            return Ok(self.observe());
+        }
+        let state = self.service.state().get();
+        if matches!(&state, SdkSyncState::Error(error) if is_sliding_sync_unsupported_error(error.as_ref()))
+        {
+            return Ok(self.observe());
+        }
+        if matches!(state, SdkSyncState::Running) {
+            self.service.stop().await;
+        }
+        self.heartbeat.record_start(Instant::now());
+        self.service.start().await;
+        reapply_room_subscriptions(&self.service, &self.room_subscriptions).await;
+        Ok(self.observe())
+    }
+
     /// Apply a reconnect decision for the given intent.
     pub async fn apply_intent(
         &self,
@@ -271,6 +318,11 @@ impl SyncServiceOwner {
     /// Room list service accessor for later P4.2 — not projected here.
     pub fn room_list_service(&self) -> Arc<matrix_sdk_ui::RoomListService> {
         self.service.room_list_service()
+    }
+
+    /// Server highlight notifications for this session's mention badges.
+    pub fn server_highlights(&self) -> &Arc<crate::app::room_list::ServerHighlights> {
+        &self.server_highlights
     }
 
     /// Keep the SDK's latest-event calculation active for the current room-list
@@ -386,6 +438,7 @@ pub(crate) async fn build_sync_service_with_heartbeat(
     // the native owner recovers only non-terminal failures with bounded delay.
     let service = Arc::new(
         SyncService::builder(client.clone())
+            .with_room_list_timeline_limit(ROOM_LIST_TIMELINE_LIMIT)
             .build()
             .await
             .map_err(map_build_error)?,
@@ -449,6 +502,7 @@ pub(crate) async fn build_sync_service_with_heartbeat(
         heartbeat_policy,
         heartbeat_task,
         session_change_task,
+        server_highlights: Arc::default(),
     })
 }
 
@@ -573,38 +627,49 @@ pub(crate) fn is_terminal_auth_error(error: &(dyn std::error::Error + 'static)) 
 /// expired the session (and cleared room subscriptions) before reporting it,
 /// so a restart can begin immediately instead of waiting out a network delay.
 pub(crate) fn is_expired_sync_session_error(error: &(dyn std::error::Error + 'static)) -> bool {
-    use matrix_sdk::ruma::api::error::ErrorKind;
+    sliding_sync_error_kind(error) == Some(&ErrorKind::UnknownPos)
+}
+
+/// True for a typed `M_UNRECOGNIZED` from the sliding-sync endpoint: the server
+/// has no MSC4186 endpoint, so restarting would only repeat the 404.
+pub(crate) fn is_sliding_sync_unsupported_error(error: &(dyn std::error::Error + 'static)) -> bool {
+    sliding_sync_error_kind(error) == Some(&ErrorKind::Unrecognized)
+}
+
+/// The typed Matrix error kind of a sliding-sync request failure, seen through
+/// the SDK's sync-service, room-list and encryption-sync wrappers.
+fn sliding_sync_error_kind<'a>(
+    error: &'a (dyn std::error::Error + 'static),
+) -> Option<&'a ErrorKind> {
     if let Some(error) = error.downcast_ref::<matrix_sdk_ui::sync_service::Error>() {
         return match error {
-            matrix_sdk_ui::sync_service::Error::RoomList(inner) => {
-                is_expired_sync_session_error(inner)
-            }
+            matrix_sdk_ui::sync_service::Error::RoomList(inner) => sliding_sync_error_kind(inner),
             matrix_sdk_ui::sync_service::Error::EncryptionSync(inner) => {
-                is_expired_sync_session_error(inner)
+                sliding_sync_error_kind(inner)
             }
-            _ => false,
+            _ => None,
         };
     }
     if let Some(error) = error.downcast_ref::<matrix_sdk_ui::room_list_service::Error>() {
         return match error {
             matrix_sdk_ui::room_list_service::Error::SlidingSync(inner) => {
-                is_expired_sync_session_error(inner)
+                sliding_sync_error_kind(inner)
             }
-            _ => false,
+            _ => None,
         };
     }
     if let Some(error) = error.downcast_ref::<matrix_sdk_ui::encryption_sync_service::Error>() {
         return match error {
             matrix_sdk_ui::encryption_sync_service::Error::SlidingSync(inner) => {
-                is_expired_sync_session_error(inner)
+                sliding_sync_error_kind(inner)
             }
-            _ => false,
+            _ => None,
         };
     }
     if let Some(error) = error.downcast_ref::<matrix_sdk::Error>() {
-        return error.client_api_error_kind() == Some(&ErrorKind::UnknownPos);
+        return error.client_api_error_kind();
     }
-    error.source().is_some_and(is_expired_sync_session_error)
+    error.source().and_then(sliding_sync_error_kind)
 }
 
 /// Delay before restarting after a non-terminal sync error.
@@ -644,14 +709,23 @@ impl TerminatedBackoff {
 /// sets its state after each successful sync (even `Running` → `Running`), and
 /// sets an `Error`/`Terminated` state instead when a sync fails.
 fn spawn_sync_heartbeat(
-    service: &SyncService,
+    service: &Arc<SyncService>,
     heartbeat: Arc<SyncHeartbeat>,
-) -> tokio::task::JoinHandle<()> {
-    let mut states = service.room_list_service().state();
-    tokio::spawn(async move {
-        while let Some(state) = states.next().await {
-            if is_successful_room_list_state(&state) {
-                heartbeat.record_success(Instant::now());
+) -> SupervisedTask {
+    let service = Arc::clone(service);
+    // The first run uses a subscription taken before spawning; a restarted
+    // run subscribes again and at worst misses one heartbeat.
+    let mut first = Some(service.room_list_service().state());
+    spawn_supervised(RestartPolicy::default(), move || {
+        let mut states = first
+            .take()
+            .unwrap_or_else(|| service.room_list_service().state());
+        let heartbeat = Arc::clone(&heartbeat);
+        async move {
+            while let Some(state) = states.next().await {
+                if is_successful_room_list_state(&state) {
+                    heartbeat.record_success(Instant::now());
+                }
             }
         }
     })
@@ -674,33 +748,46 @@ fn is_successful_room_list_state(state: &RoomListState) -> bool {
 fn spawn_session_change_classifier(
     client: Client,
     authentication_rejected: Arc<AtomicBool>,
-) -> tokio::task::JoinHandle<()> {
-    let mut changes = client.subscribe_to_session_changes();
-    tokio::spawn(async move {
-        let mut last_probe: Option<Instant> = None;
-        loop {
-            let change = match changes.recv().await {
-                Ok(change) => change,
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-            };
-            if !matches!(change, matrix_sdk::SessionChange::UnknownToken(_))
-                || authentication_rejected.load(Ordering::Acquire)
-            {
-                continue;
-            }
-            let now = Instant::now();
-            if last_probe.is_some_and(|probe| {
-                now.saturating_duration_since(probe) < SESSION_CHANGE_PROBE_INTERVAL
-            }) {
-                continue;
-            }
-            last_probe = Some(now);
-            if refresh_confirms_rejection(&client).await {
-                authentication_rejected.store(true, Ordering::Release);
-            }
-        }
+) -> SupervisedTask {
+    let mut first = Some(client.subscribe_to_session_changes());
+    spawn_supervised(RestartPolicy::default(), move || {
+        let changes = first
+            .take()
+            .unwrap_or_else(|| client.subscribe_to_session_changes());
+        let client = client.clone();
+        let authentication_rejected = Arc::clone(&authentication_rejected);
+        session_change_classifier_run(client, authentication_rejected, changes)
     })
+}
+
+async fn session_change_classifier_run(
+    client: Client,
+    authentication_rejected: Arc<AtomicBool>,
+    mut changes: tokio::sync::broadcast::Receiver<matrix_sdk::SessionChange>,
+) {
+    let mut last_probe: Option<Instant> = None;
+    loop {
+        let change = match changes.recv().await {
+            Ok(change) => change,
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+        };
+        if !matches!(change, matrix_sdk::SessionChange::UnknownToken(_))
+            || authentication_rejected.load(Ordering::Acquire)
+        {
+            continue;
+        }
+        let now = Instant::now();
+        if last_probe.is_some_and(|probe| {
+            now.saturating_duration_since(probe) < SESSION_CHANGE_PROBE_INTERVAL
+        }) {
+            continue;
+        }
+        last_probe = Some(now);
+        if refresh_confirms_rejection(&client).await {
+            authentication_rejected.store(true, Ordering::Release);
+        }
+    }
 }
 
 /// One explicit refresh, classified by type, never by text.
@@ -711,6 +798,7 @@ async fn refresh_confirms_rejection(client: &Client) -> bool {
     }
 }
 
+#[derive(Clone)]
 struct RecoveryContext {
     service: Arc<SyncService>,
     authentication_rejected: Arc<AtomicBool>,
@@ -742,76 +830,90 @@ impl RecoveryContext {
     }
 }
 
-fn spawn_network_recovery(
+fn spawn_network_recovery(context: RecoveryContext, policy: HeartbeatPolicy) -> SupervisedTask {
+    // Subscribe before spawning so a fast first sync failure cannot be missed.
+    // A restarted run starts from the current state, so it misses nothing.
+    let mut first = Some(context.service.state());
+    spawn_supervised(RestartPolicy::default(), move || {
+        let states = first.take().unwrap_or_else(|| context.service.state());
+        let initial = states.get();
+        network_recovery_run(context.clone(), policy, initial, states)
+    })
+}
+
+async fn network_recovery_run(
     context: RecoveryContext,
     policy: HeartbeatPolicy,
-) -> tokio::task::JoinHandle<()> {
-    // Subscribe before spawning so a fast first sync failure cannot be missed.
-    let mut states = context.service.state();
-    tokio::spawn(async move {
-        let mut pending = Some(states.get());
-        let mut terminated_backoff = TerminatedBackoff::default();
-        loop {
-            let state = match pending.take() {
-                Some(state) => state,
-                None => {
-                    tokio::select! {
-                        next = states.next() => match next {
-                            Some(state) => state,
-                            None => break,
-                        },
-                        _ = tokio::time::sleep(policy.check_interval) => {
-                            // A long-poll left dead by sleep keeps the SDK in
-                            // Running with no error; replace it.
-                            if context.may_restart()
-                                && context.heartbeat.is_stale(Instant::now(), policy)
-                            {
-                                context
-                                    .restart_if(true, |state| matches!(state, SdkSyncState::Running))
-                                    .await;
-                            }
-                            continue;
-                        }
-                    }
-                }
-            };
-            match state {
-                SdkSyncState::Error(error) if is_terminal_auth_error(error.as_ref()) => {
-                    context
-                        .authentication_rejected
-                        .store(true, Ordering::Release);
-                }
-                SdkSyncState::Error(error) if context.may_restart() => {
-                    let delay = restart_delay_for_error(error.as_ref());
-                    tokio::select! {
-                        next = states.next() => { pending = next; if pending.is_none() { break; } }
-                        _ = tokio::time::sleep(delay) => {
+    initial: SdkSyncState,
+    mut states: impl futures_util::Stream<Item = SdkSyncState> + Unpin,
+) {
+    let mut pending = Some(initial);
+    let mut terminated_backoff = TerminatedBackoff::default();
+    loop {
+        let state = match pending.take() {
+            Some(state) => state,
+            None => {
+                tokio::select! {
+                    next = states.next() => match next {
+                        Some(state) => state,
+                        None => break,
+                    },
+                    _ = tokio::time::sleep(policy.check_interval) => {
+                        // A long-poll left dead by sleep keeps the SDK in
+                        // Running with no error; replace it.
+                        if context.may_restart()
+                            && context.heartbeat.is_stale(Instant::now(), policy)
+                        {
                             context
-                                .restart_if(false, |state| {
-                                    matches!(state, SdkSyncState::Error(error) if !is_terminal_auth_error(error.as_ref()))
-                                })
+                                .restart_if(true, |state| matches!(state, SdkSyncState::Running))
                                 .await;
                         }
+                        continue;
                     }
                 }
-                SdkSyncState::Terminated if context.may_restart() => {
-                    // The SDK supervisor ended without our stop() while a
-                    // session is installed; bring it back with growing delays.
-                    let delay = terminated_backoff.next_delay();
-                    tokio::select! {
-                        next = states.next() => { pending = next; if pending.is_none() { break; } }
-                        _ = tokio::time::sleep(delay) => {
-                            context
-                                .restart_if(false, |state| matches!(state, SdkSyncState::Terminated))
-                                .await;
-                        }
-                    }
-                }
-                SdkSyncState::Running => terminated_backoff.reset(),
-                _ => {}
             }
+        };
+        match state {
+            SdkSyncState::Error(error) if is_terminal_auth_error(error.as_ref()) => {
+                context
+                    .authentication_rejected
+                    .store(true, Ordering::Release);
+            }
+            SdkSyncState::Error(error) if is_sliding_sync_unsupported_error(error.as_ref()) => {
+                // Terminal until an explicit start: retrying a server without
+                // MSC4186 repeats the same 404 every few seconds forever.
+            }
+            SdkSyncState::Error(error) if context.may_restart() => {
+                let delay = restart_delay_for_error(error.as_ref());
+                tokio::select! {
+                    next = states.next() => { pending = next; if pending.is_none() { break; } }
+                    _ = tokio::time::sleep(delay) => {
+                        context
+                            .restart_if(false, |state| {
+                                matches!(state, SdkSyncState::Error(error) if !is_terminal_auth_error(error.as_ref())
+                                    && !is_sliding_sync_unsupported_error(error.as_ref()))
+                            })
+                            .await;
+                    }
+                }
+            }
+            SdkSyncState::Terminated if context.may_restart() => {
+                // The SDK supervisor ended without our stop() while a
+                // session is installed; bring it back with growing delays.
+                let delay = terminated_backoff.next_delay();
+                tokio::select! {
+                    next = states.next() => { pending = next; if pending.is_none() { break; } }
+                    _ = tokio::time::sleep(delay) => {
+                        context
+                            .restart_if(false, |state| matches!(state, SdkSyncState::Terminated))
+                            .await;
+                    }
+                }
+            }
+            SdkSyncState::Running => terminated_backoff.reset(),
+            _ => {}
         }
-    })
+    }
 }
 
 #[cfg(test)]
@@ -1014,6 +1116,25 @@ mod auth_recovery_tests {
         );
     }
 
+    /// The key upload and its refresh attempt can still be in flight when the
+    /// owner reports the auth failure, so wait for the request count to settle.
+    async fn settled_request_count(server: &MatrixMockServer) -> usize {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        let mut count = server.server().received_requests().await.unwrap().len();
+        let mut stable_since = tokio::time::Instant::now();
+        while tokio::time::Instant::now() < deadline
+            && stable_since.elapsed() < Duration::from_millis(500)
+        {
+            tokio::time::sleep(Duration::from_millis(25)).await;
+            let next = server.server().received_requests().await.unwrap().len();
+            if next != count {
+                count = next;
+                stable_since = tokio::time::Instant::now();
+            }
+        }
+        count
+    }
+
     #[tokio::test]
     async fn rejected_sync_stays_terminal_after_delay_stop_and_wake() {
         let server = MatrixMockServer::new().await;
@@ -1047,16 +1168,22 @@ mod auth_recovery_tests {
         })
         .await
         .expect("typed rejected refresh must reach the owner");
-        let count = server.server().received_requests().await.unwrap().len();
+        let count = settled_request_count(&server).await;
         tokio::time::sleep(Duration::from_millis(5200)).await;
         owner.apply_intent(SyncIntent::Resume).await.unwrap();
         owner.stop().await.unwrap();
         owner.start().await.unwrap();
         tokio::time::sleep(Duration::from_millis(100)).await;
+        let after = server.server().received_requests().await.unwrap();
         assert_eq!(
-            server.server().received_requests().await.unwrap().len(),
+            after.len(),
             count,
-            "no offline probes or automatic/manual restart of rejected credentials"
+            "no offline probes or automatic/manual restart of rejected credentials; late: {:?}",
+            after
+                .iter()
+                .skip(count)
+                .map(|r| format!("{} {}", r.method, r.url.path()))
+                .collect::<Vec<_>>()
         );
         assert_eq!(
             owner.observe().failure_diagnostic_id,
@@ -1070,6 +1197,122 @@ mod auth_recovery_tests {
                 .count()
                 <= 2
         );
+    }
+
+    #[tokio::test]
+    async fn unrecognized_sync_endpoint_is_terminal_and_reports_no_sliding_sync() {
+        let server = MatrixMockServer::new().await;
+        let client = refreshing_client(&server).await;
+        let unrecognized = || {
+            ResponseTemplate::new(404).set_body_json(
+                serde_json::json!({"errcode":"M_UNRECOGNIZED","error":"Unrecognized request"}),
+            )
+        };
+        server
+            .mock_sliding_sync()
+            .respond_with(unrecognized())
+            .mount()
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/_matrix/client/versions"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"versions":["v1.12"]})),
+            )
+            .mount(server.server())
+            .await;
+        let sync_requests = || async {
+            server
+                .server()
+                .received_requests()
+                .await
+                .unwrap()
+                .iter()
+                .filter(|request| request.url.path().ends_with("/sync"))
+                .count()
+        };
+        let owner = build_sync_service(&client, 11, SyncServiceConfig::default())
+            .await
+            .unwrap();
+        owner.start().await.unwrap();
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while owner.observe().sliding_sync_capable != Some(false) {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("typed M_UNRECOGNIZED must reach the owner");
+        let snapshot = owner.observe();
+        assert_eq!(snapshot.readiness, SyncReadiness::Failed);
+        assert_eq!(
+            snapshot.failure_diagnostic_id,
+            Some(super::super::SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID),
+            "not the offline mapping, and not an authentication failure"
+        );
+        assert!(snapshot.is_valid_public_sync_status());
+        let count = sync_requests().await;
+        tokio::time::sleep(TRANSIENT_ERROR_RESTART_DELAY + Duration::from_millis(300)).await;
+        assert_eq!(
+            sync_requests().await,
+            count,
+            "no automatic restart against a server without MSC4186"
+        );
+        assert_eq!(owner.observe().sliding_sync_capable, Some(false));
+
+        // An explicit start tries once more, then settles on the same verdict.
+        owner.start().await.unwrap();
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while sync_requests().await == count
+                || owner.observe().sliding_sync_capable != Some(false)
+            {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("explicit start probes the endpoint again");
+    }
+
+    #[tokio::test]
+    async fn sliding_sync_error_kinds_are_read_through_every_sdk_wrapper() {
+        let server = MatrixMockServer::new().await;
+        let client = refreshing_client(&server).await;
+        for (errcode, unsupported, expired) in [
+            ("M_UNRECOGNIZED", true, false),
+            ("M_UNKNOWN_POS", false, true),
+            ("M_UNKNOWN", false, false),
+        ] {
+            server.server().reset().await;
+            Mock::given(method("GET"))
+                .and(path("/_matrix/client/versions"))
+                .respond_with(
+                    ResponseTemplate::new(if errcode == "M_UNKNOWN_POS" { 400 } else { 404 })
+                        .set_body_json(serde_json::json!({"errcode":errcode,"error":"fixture"})),
+                )
+                .mount(server.server())
+                .await;
+            let http = client
+                .fetch_server_versions(Some(matrix_sdk::config::RequestConfig::new().skip_auth()))
+                .await
+                .unwrap_err();
+            let room_list = matrix_sdk_ui::sync_service::Error::RoomList(
+                matrix_sdk_ui::room_list_service::Error::SlidingSync(matrix_sdk::Error::Http(
+                    Box::new(http),
+                )),
+            );
+            assert_eq!(is_sliding_sync_unsupported_error(&room_list), unsupported);
+            assert_eq!(is_expired_sync_session_error(&room_list), expired);
+            assert!(!is_terminal_auth_error(&room_list));
+            let http = client
+                .fetch_server_versions(Some(matrix_sdk::config::RequestConfig::new().skip_auth()))
+                .await
+                .unwrap_err();
+            let encryption = matrix_sdk_ui::sync_service::Error::EncryptionSync(
+                matrix_sdk_ui::encryption_sync_service::Error::SlidingSync(
+                    matrix_sdk::Error::Http(Box::new(http)),
+                ),
+            );
+            assert_eq!(is_sliding_sync_unsupported_error(&encryption), unsupported);
+            assert_eq!(is_expired_sync_session_error(&encryption), expired);
+        }
     }
 
     #[tokio::test]
@@ -1449,6 +1692,96 @@ mod liveness_tests {
         .expect("the recovery task must replace a dead long-poll");
         owner.stop().await.unwrap();
         assert_eq!(owner.observe().readiness, SyncReadiness::Idle);
+    }
+
+    /// Generous: a loaded test machine can take seconds to send the first
+    /// request. Only the upper bound grows; every count check is unchanged.
+    const SLIDING_SYNC_WAIT: Duration = Duration::from_secs(20);
+
+    async fn wait_for_sliding_syncs(server: &MatrixMockServer, what: &str, more_than: usize) {
+        tokio::time::timeout(SLIDING_SYNC_WAIT, async {
+            while sliding_sync_requests(&server.server().received_requests().await.unwrap())
+                <= more_than
+            {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| panic!("timed out waiting for {what}"));
+    }
+
+    /// The sliding-sync request count once it has stopped moving for
+    /// `quiet`. `SyncService` runs two loops (room list and encryption), and
+    /// the second one's long-poll, or one already sent when `stop()`
+    /// returned, can reach the server after the first is counted.
+    async fn settled_sliding_syncs(server: &MatrixMockServer, quiet: Duration) -> usize {
+        tokio::time::timeout(SLIDING_SYNC_WAIT, async {
+            let mut count =
+                sliding_sync_requests(&server.server().received_requests().await.unwrap());
+            loop {
+                tokio::time::sleep(quiet).await;
+                let now =
+                    sliding_sync_requests(&server.server().received_requests().await.unwrap());
+                if now == count {
+                    return count;
+                }
+                count = now;
+            }
+        })
+        .await
+        .expect("sliding-sync requests settle")
+    }
+
+    #[tokio::test]
+    async fn network_change_restart_replaces_a_fresh_long_poll_but_never_starts_sync() {
+        let server = MatrixMockServer::new().await;
+        let client = refreshing_client(&server).await;
+        mount_versions(&server).await;
+        server.mock_upload_keys().ok().mount().await;
+        // A long-poll that never answers, inside the startup grace: neither
+        // `start()` nor the recovery task would replace it yet.
+        Mock::given(method("POST"))
+            .and(path(SLIDING_SYNC))
+            .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(60)))
+            .mount(server.server())
+            .await;
+        let owner = build_sync_service(&client, 8, SyncServiceConfig::default())
+            .await
+            .unwrap();
+        let sliding_syncs =
+            || async { sliding_sync_requests(&server.server().received_requests().await.unwrap()) };
+
+        // Never started: a network change must not start sync on its own.
+        owner.restart_live().await.unwrap();
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert_eq!(sliding_syncs().await, 0);
+        assert_eq!(owner.observe().readiness, SyncReadiness::Idle);
+
+        owner.start().await.unwrap();
+        // Both loops' (room list, encryption) long-polls are open before the
+        // baseline is taken.
+        wait_for_sliding_syncs(&server, "both first long-polls", 1).await;
+        let before = settled_sliding_syncs(&server, Duration::from_millis(500)).await;
+        owner.start().await.unwrap();
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert_eq!(
+            sliding_syncs().await,
+            before,
+            "start() keeps a Running service with a fresh heartbeat"
+        );
+
+        let restarted = owner.restart_live().await.unwrap();
+        assert_eq!(restarted.readiness, SyncReadiness::Running);
+        wait_for_sliding_syncs(&server, "a replacement long-poll", before).await;
+
+        // Stopped by the shell (iOS suspension): it stays stopped. Requests
+        // sent before stop() returned are counted before the restart.
+        owner.stop().await.unwrap();
+        let stopped = settled_sliding_syncs(&server, Duration::from_millis(300)).await;
+        owner.restart_live().await.unwrap();
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert_eq!(owner.observe().readiness, SyncReadiness::Idle);
+        assert_eq!(sliding_syncs().await, stopped);
     }
 
     #[tokio::test]

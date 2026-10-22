@@ -8,7 +8,7 @@ import {
 } from '../agents/agentActions';
 
 type TauriInternals = {
-  invoke?: <T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>;
+  invoke?: <T = unknown>(command: string, args?: DesktopInvokeArgs) => Promise<T>;
   convertFileSrc?: (filePath: string, protocol?: string) => string;
   transformCallback?: <T>(callback: (response: T) => void, once?: boolean) => number;
 };
@@ -27,7 +27,7 @@ type SynaraDesktopBridge = {
   supportsMediaPermissions?: boolean;
   supportsSecureSecretStore?: boolean;
   supportsSpellcheck?: boolean;
-  invoke?: <T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>;
+  invoke?: <T = unknown>(command: string, args?: DesktopInvokeArgs) => Promise<T>;
   routes?: {
     later?: string;
     notifications?: string;
@@ -257,11 +257,24 @@ export type DesktopNativeFileDropPayload = {
 export const DESKTOP_FILE_IPC_INLINE_THRESHOLD = 8 * 1024 * 1024;
 export const DESKTOP_FILE_IPC_CHUNK_SIZE = 1024 * 1024;
 
+/** Rust's description of one dropped file; bytes are read through `transferId`. */
 type DesktopDroppedFilePayload = {
   name: string;
-  bytes?: number[];
   transferId?: string;
   size?: number;
+  /** Over the caller's `maxFileBytes`: nothing was opened or read. */
+  tooLarge?: boolean;
+};
+
+/** Dropped-file chunks are raw IPC bodies, so they can be larger than save chunks. */
+export const DESKTOP_DROPPED_FILE_READ_CHUNK_SIZE = 8 * 1024 * 1024;
+
+export type DesktopDroppedFileRejection = { name: string; size: number };
+
+export type DesktopDroppedFiles = {
+  files: File[];
+  /** Files over the limit, reported from their size before any read. */
+  tooLarge: DesktopDroppedFileRejection[];
 };
 
 type DesktopSaveFileBeginResult = {
@@ -311,8 +324,11 @@ const normalizeActionField = (
 
 const getBridge = (): SynaraDesktopBridge | undefined => window.__SYNARA_DESKTOP__;
 
+/** A `Uint8Array` as `args` is sent as the raw request body (Tauri 2 binary IPC). */
+export type DesktopInvokeArgs = Record<string, unknown> | Uint8Array;
+
 const getDesktopInvoke = ():
-  (<T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>) | undefined =>
+  (<T = unknown>(command: string, args?: DesktopInvokeArgs) => Promise<T>) | undefined =>
   window.__SYNARA_DESKTOP__?.invoke ?? window.__TAURI_INTERNALS__?.invoke;
 
 export const isDesktopBridgeAvailable = (): boolean => typeof getDesktopInvoke() === 'function';
@@ -335,7 +351,7 @@ export const sanitizeDesktopNotificationRoute = (value: unknown): string | undef
 };
 
 const MAX_DESKTOP_DISMISS_KEY_CHARS = 255;
-const DESKTOP_DISMISS_KEY_PREFIXES = ['room:', 'event:'] as const;
+const DESKTOP_DISMISS_KEY_PREFIXES = ['room:', 'event:', 'invite:'] as const;
 
 export const sanitizeDesktopDismissKey = (value: unknown): string | undefined => {
   if (typeof value !== 'string') return undefined;
@@ -538,10 +554,10 @@ export const formatDesktopInvokeError = (error: unknown): string => {
   return 'native command rejected';
 };
 
-export const invokeDesktopWithAvailability = async <T = unknown>(
+const invokeDesktopArgsWithAvailability = async <T = unknown>(
   command: string,
-  args?: Record<string, unknown>,
-  options: DesktopInvokeOptions = {}
+  args: DesktopInvokeArgs | undefined,
+  options: DesktopInvokeOptions
 ): Promise<DesktopInvokeResult<T>> => {
   const invoke = getDesktopInvoke();
   if (!invoke) {
@@ -557,6 +573,23 @@ export const invokeDesktopWithAvailability = async <T = unknown>(
     throw error;
   }
 };
+
+export const invokeDesktopWithAvailability = async <T = unknown>(
+  command: string,
+  args?: Record<string, unknown>,
+  options: DesktopInvokeOptions = {}
+): Promise<DesktopInvokeResult<T>> => invokeDesktopArgsWithAvailability<T>(command, args, options);
+
+/**
+ * Invoke with `body` as the raw request body (Tauri 2 binary IPC), for bytes
+ * that must not become a JSON number array. The Rust command reads it from
+ * `tauri::ipc::Request::body()`.
+ */
+export const invokeDesktopBodyWithAvailability = async <T = unknown>(
+  command: string,
+  body: Uint8Array,
+  options: DesktopInvokeOptions = {}
+): Promise<DesktopInvokeResult<T>> => invokeDesktopArgsWithAvailability<T>(command, body, options);
 
 export const invokeDesktop = async <T = unknown>(
   command: string,
@@ -633,13 +666,27 @@ export const playDesktopNotificationSound = async (
   }
 };
 
+/**
+ * What the shell did with an agent action: ran it itself (clipboard or
+ * browser), handed it to the renderer's agent-action listener, or could not
+ * run it, so the caller's fallback should.
+ */
+export type DesktopAgentActionOutcome = 'ran_locally' | 'handed_to_renderer' | 'unsupported';
+
+export const normalizeDesktopAgentActionOutcome = (value: unknown): DesktopAgentActionOutcome => {
+  if (value === 'ran_locally' || value === 'handed_to_renderer') return value;
+  // An older shell answered `true` once it had run or forwarded the action.
+  if (value === true) return 'handed_to_renderer';
+  return 'unsupported';
+};
+
 export const sendDesktopAgentAction = async (
   action: DesktopAgentActionPayload
-): Promise<boolean> => {
+): Promise<DesktopAgentActionOutcome> => {
   const safeAction: NormalizedAgentActionPayload | undefined = normalizeAgentActionPayload(action);
-  if (!safeAction) return false;
-  const result = await invokeDesktop<boolean>('desktop_agent_action', { action: safeAction });
-  return result === true;
+  if (!safeAction) return 'unsupported';
+  const result = await invokeDesktop<unknown>('desktop_agent_action', { action: safeAction });
+  return normalizeDesktopAgentActionOutcome(result);
 };
 
 const isSafeDesktopExternalUrl = (url: string): boolean => {
@@ -774,18 +821,22 @@ const readDesktopDroppedFileStreamed = async (
   const chunks: BlobPart[] = [];
   let offset = 0;
   while (offset < size) {
-    const length = Math.min(DESKTOP_FILE_IPC_CHUNK_SIZE, size - offset);
-    const chunk = await invokeDesktop<number[]>('desktop_read_dropped_file_chunk', {
+    const length = Math.min(DESKTOP_DROPPED_FILE_READ_CHUNK_SIZE, size - offset);
+    // A raw `ipc::Response`: an ArrayBuffer (a number array only from mocks).
+    const chunk = await invokeDesktop<ArrayBuffer | number[]>('desktop_read_dropped_file_chunk', {
       transferId,
       offset,
       length,
     });
-    if (!chunk || chunk.length === 0) {
+    let bytes: Uint8Array<ArrayBuffer> | undefined;
+    if (chunk instanceof ArrayBuffer) bytes = new Uint8Array(chunk);
+    else if (Array.isArray(chunk)) bytes = new Uint8Array(chunk);
+    if (!bytes || bytes.length === 0) {
       await invokeDesktop('desktop_read_dropped_file_end', { transferId });
       return undefined;
     }
-    chunks.push(new Uint8Array(chunk));
-    offset += chunk.length;
+    chunks.push(bytes);
+    offset += bytes.length;
   }
 
   if (offset !== size) {
@@ -799,32 +850,41 @@ const readDesktopDroppedFileStreamed = async (
   });
 };
 
-export const readDesktopDroppedFiles = async (paths: string[]): Promise<File[]> => {
-  if (!isSynaraDesktop() || paths.length === 0) return [];
+/**
+ * Read the files of a native drop. Rust checks each size against
+ * `maxFileBytes` (the upload limit) first, so a file that cannot be sent is
+ * never copied into the webview.
+ */
+export const readDesktopDroppedFiles = async (
+  paths: string[],
+  maxFileBytes?: number
+): Promise<DesktopDroppedFiles> => {
+  const result: DesktopDroppedFiles = { files: [], tooLarge: [] };
+  if (!isSynaraDesktop() || paths.length === 0) return result;
   const droppedFiles = await invokeDesktop<DesktopDroppedFilePayload[]>(
     'desktop_read_dropped_files',
-    { paths }
+    {
+      paths,
+      maxFileBytes:
+        typeof maxFileBytes === 'number' && Number.isFinite(maxFileBytes) && maxFileBytes > 0
+          ? Math.floor(maxFileBytes)
+          : undefined,
+    }
   );
-  if (!droppedFiles) return [];
+  if (!droppedFiles) return result;
 
-  const files: File[] = [];
   for (const file of droppedFiles) {
-    if (Array.isArray(file.bytes) && file.bytes.length > 0) {
-      files.push(
-        new File([new Uint8Array(file.bytes)], file.name, {
-          type: inferFileMime(file.name),
-        })
-      );
+    if (file.tooLarge) {
+      result.tooLarge.push({ name: file.name, size: file.size ?? 0 });
       continue;
     }
-
     const streamed = await readDesktopDroppedFileStreamed(file);
     if (streamed) {
-      files.push(streamed);
+      result.files.push(streamed);
     }
   }
 
-  return files;
+  return result;
 };
 
 const isDesktopImageResourceSize = (value: unknown): value is DesktopImageResourceSize => {
@@ -993,6 +1053,11 @@ export const setDesktopTrayState = async (state: DesktopTrayState): Promise<bool
 export const flushPendingDesktopTrayStateUpdate = (): Promise<boolean | undefined> =>
   debouncedSetDesktopTrayState.flush();
 
+/**
+ * The shell's report reads notification permission from the same source as
+ * `desktop_get_notification_permission` (UserNotifications on a bundled
+ * macOS build), so it is used as is.
+ */
 export const getDesktopIntegrationStatus = async (): Promise<DesktopIntegrationStatus> => {
   if (!getBridge()?.supportsIntegrationStatus) {
     return normalizeDesktopIntegrationStatus(undefined);
@@ -1018,7 +1083,11 @@ export const getDesktopPerformanceCapabilities =
     }
   };
 
-const normalizeDesktopPermission = (permission: unknown): DesktopNotificationPermission => {
+/**
+ * macOS reports `default` until the user has been asked; that is a prompt,
+ * not a block, so Settings offers Enable instead of "blocked".
+ */
+export const normalizeDesktopPermission = (permission: unknown): DesktopNotificationPermission => {
   if (
     permission === 'granted' ||
     permission === 'denied' ||
@@ -1027,6 +1096,7 @@ const normalizeDesktopPermission = (permission: unknown): DesktopNotificationPer
   ) {
     return permission;
   }
+  if (permission === 'default') return 'prompt';
   return 'denied';
 };
 
@@ -1084,8 +1154,26 @@ export const showDesktopNotification = async (
   const result = await invokeDesktop<boolean>('desktop_notify', {
     notification: payload,
   });
+  if (result === true) payload.dismissKeys?.forEach(rememberPostedDismissKey);
   return result === true;
 };
+
+// Dismiss keys of banners this renderer posted, so sign-out can withdraw them.
+// The shell's dismiss index lives in the same process, so this covers every
+// banner the shell can still withdraw by key.
+const MAX_POSTED_DISMISS_KEYS = 1_024;
+const postedDismissKeys = new Set<string>();
+
+const rememberPostedDismissKey = (key: string) => {
+  postedDismissKeys.delete(key);
+  postedDismissKeys.add(key);
+  if (postedDismissKeys.size > MAX_POSTED_DISMISS_KEYS) {
+    const oldest = postedDismissKeys.values().next().value;
+    if (oldest !== undefined) postedDismissKeys.delete(oldest);
+  }
+};
+
+export const getPostedDesktopDismissKeys = (): string[] => [...postedDismissKeys];
 
 export async function dismissDesktopNotifications(keys: string[]): Promise<void> {
   if (!isSynaraDesktop() || keys.length === 0) return;
@@ -1094,7 +1182,97 @@ export async function dismissDesktopNotifications(keys: string[]): Promise<void>
     .filter((key): key is string => key !== undefined);
   if (sanitized.length === 0) return;
   await invokeDesktopWithAvailability('desktop_dismiss_notifications', { keys: sanitized });
+  sanitized.forEach((key) => postedDismissKeys.delete(key));
 }
+
+/**
+ * Withdraw every banner this app posted, including an earlier launch's on
+ * macOS. Falls back to the keys this renderer posted when the shell lacks
+ * the command.
+ */
+export async function dismissAllDesktopNotifications(): Promise<void> {
+  if (!isSynaraDesktop()) return;
+  try {
+    const result = await invokeDesktopWithAvailability(
+      'desktop_dismiss_all_notifications',
+      undefined,
+      // A missing command is expected from an older shell; it is handled below.
+      { suppressErrorDiagnostic: true }
+    );
+    if (result.available) {
+      postedDismissKeys.clear();
+      return;
+    }
+  } catch {
+    // An older shell has no such command; withdraw what this renderer posted.
+  }
+  await dismissDesktopNotifications(getPostedDesktopDismissKeys());
+}
+
+/**
+ * Clicks and approval actions that reached the shell before this renderer
+ * was listening for `sessionGeneration` (cold launch, before restore, after
+ * re-login). The shell opens queued routes itself and returns the actions.
+ */
+export const takeDesktopNotificationResponses = async (
+  sessionGeneration: number
+): Promise<DesktopNotificationActionEventPayload[]> => {
+  if (!isSynaraDesktop() || !Number.isSafeInteger(sessionGeneration) || sessionGeneration < 0) {
+    return [];
+  }
+  const result = await invokeDesktopWithAvailability<unknown>(
+    'desktop_take_notification_responses',
+    { sessionGeneration }
+  );
+  if (!result.available || !Array.isArray(result.value)) return [];
+  return result.value.filter(
+    (entry): entry is DesktopNotificationActionEventPayload =>
+      !!entry &&
+      typeof entry === 'object' &&
+      typeof (entry as DesktopNotificationActionEventPayload).actionId === 'string'
+  );
+};
+
+/** Bring the main window forward (it may be hidden in the tray). */
+export const showDesktopWindow = async (): Promise<void> => {
+  await invokeDesktopWithAvailability('desktop_show');
+};
+
+/**
+ * Sign-out cleanup: withdraw the banners this app posted, zero the app
+ * badge and clear the tray counts. The signed-out shell mounts no badge or
+ * tray updater, so without this the old account's counts would stay. The
+ * shell repeats this inside `matrix_logout` for forced and expired sign-outs.
+ */
+export const clearDesktopNotificationSurfaces = async ({
+  doNotDisturb,
+}: {
+  doNotDisturb: boolean;
+}): Promise<void> => {
+  if (!isSynaraDesktop()) return;
+  const steps: Array<() => Promise<unknown>> = [
+    () => dismissAllDesktopNotifications(),
+    () => setDesktopBadgeCount(0),
+    async () => {
+      const trayUpdate = setDesktopTrayState({
+        unreadCount: 0,
+        highlightCount: 0,
+        laterCount: 0,
+        notificationInboxCount: 0,
+        doNotDisturb,
+      });
+      await flushPendingDesktopTrayStateUpdate();
+      await trayUpdate;
+    },
+  ];
+  for (const step of steps) {
+    try {
+      await step();
+    } catch {
+      // Each surface is independent; a failed step must not keep the others.
+    }
+  }
+};
 
 export const getDesktopNotificationCount = (input: NotificationSummaryInput): number =>
   getBadgeCount(input);

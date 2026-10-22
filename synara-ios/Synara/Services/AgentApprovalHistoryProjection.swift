@@ -41,7 +41,7 @@ struct AgentApprovalInboxRecord: Equatable {
 }
 
 enum AgentApprovalHistoryProjection {
-    static let emptySummary = "Command not recorded"
+    static let emptySummary = String(localized: "Command not recorded")
 
     static func identity(roomId: String, eventId: String) -> String {
         "\(roomId)\u{0000}\(eventId)"
@@ -52,17 +52,17 @@ enum AgentApprovalHistoryProjection {
         status: AgentApprovalInboxStatus
     ) -> String {
         if status == .expired {
-            return "Expired"
+            return String(localized: "Expired")
         }
         switch decision {
         case .approveOnce:
-            return "Approved once"
+            return String(localized: "Approved once")
         case .approveAlways:
-            return "Approved always"
+            return String(localized: "Approved always")
         case .deny:
-            return "Denied"
+            return String(localized: "Denied")
         case nil:
-            return status == .decided ? "Decided" : "Expired"
+            return status == .decided ? String(localized: "Decided") : String(localized: "Expired")
         }
     }
 

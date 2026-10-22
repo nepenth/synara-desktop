@@ -221,7 +221,6 @@ fn secret_storage_status_response_error() -> MatrixAuthCommandError {
 mod tests {
     use std::sync::Arc;
 
-    use synara_core::dto::NotificationCandidate;
     use synara_core::platform::{
         Platform, PlatformCryptoCrossSigningState, PlatformCryptoStatus, PlatformMediaConfig,
         PlatformSecretStorageStatusError, PlatformStatus, PlatformSyncStatus, SecretVault,
@@ -285,10 +284,6 @@ mod tests {
                 Ok(PlatformMediaConfig::new(0)
                     .expect("zero is a valid closed media-config projection"))
             })
-        }
-
-        fn notify(&self, _candidate: NotificationCandidate) -> Result<(), MatrixIpcError> {
-            Ok(())
         }
 
         fn set_badge(&self, _count: u64) -> Result<(), MatrixIpcError> {

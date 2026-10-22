@@ -63,6 +63,9 @@ enum SynaraNotificationDiagnosticReport {
         let generatedAt: Date
         let context: Context
         let extensionReceiptCount: Int
+        /// Pushes whose preview fell back because the homeserver rejected the
+        /// shared session (`core-session-rejected`), since the last clear.
+        let extensionSessionRejectedCount: Int
         let records: [Record]
     }
 
@@ -75,6 +78,7 @@ enum SynaraNotificationDiagnosticReport {
     static func text(
         context: Context,
         entries: [SynaraNotificationDiagnosticEntry],
+        sessionRejectedCount: Int = 0,
         now: Date = Date()
     ) -> String {
         let bounded = entries.suffix(SynaraNotificationDiagnostics.maximumEntries)
@@ -87,6 +91,11 @@ enum SynaraNotificationDiagnosticReport {
             generatedAt: now,
             context: context,
             extensionReceiptCount: records.filter { $0.stage == "received" }.count,
+            // Records from builds before the durable counter still count.
+            extensionSessionRejectedCount: max(
+                sessionRejectedCount,
+                records.filter { $0.stage == SynaraNotificationDiagnostics.Stage.coreSessionRejected.rawValue }.count
+            ),
             records: records
         )
         let encoder = JSONEncoder()

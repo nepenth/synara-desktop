@@ -25,6 +25,12 @@ pub struct OutboundTextMessage {
     pub state: LocalEchoState,
     /// Privacy-safe diagnostic when `state == Failed` (never tokens / HS bodies).
     pub failure_diagnostic_id: Option<&'static str>,
+    /// Caller-chosen transaction id this send was requested with. The SDK
+    /// picks its own id for events, so a repeat request with the same caller
+    /// id resolves to this entry instead of creating a second event.
+    pub client_txn_id: Option<String>,
+    /// Server event id once the homeserver accepted the event.
+    pub event_id: Option<String>,
 }
 
 impl OutboundTextMessage {
@@ -111,6 +117,8 @@ impl SendQueue {
             body,
             state: LocalEchoState::Sending,
             failure_diagnostic_id: None,
+            client_txn_id: None,
+            event_id: None,
         };
         self.order.push(local_txn_id.clone());
         self.items.insert(local_txn_id.clone(), item);
@@ -157,6 +165,8 @@ impl SendQueue {
             body,
             state: LocalEchoState::Sending,
             failure_diagnostic_id: None,
+            client_txn_id: None,
+            event_id: None,
         };
         self.order.push(local_txn_id.clone());
         self.items.insert(local_txn_id.clone(), item);
@@ -165,6 +175,50 @@ impl SendQueue {
 
     pub fn get(&self, local_txn_id: &str) -> Option<&OutboundTextMessage> {
         self.items.get(local_txn_id)
+    }
+
+    /// Record the caller transaction id a send was requested with.
+    pub fn set_client_txn_id(
+        &mut self,
+        local_txn_id: &str,
+        client_txn_id: impl Into<String>,
+    ) -> Result<&OutboundTextMessage, SendError> {
+        let item = self.get_mut_checked(local_txn_id)?;
+        item.client_txn_id = Some(client_txn_id.into());
+        Ok(item)
+    }
+
+    /// The send this session already made for `client_txn_id` in `room_id`.
+    pub fn find_by_client_txn(
+        &self,
+        room_id: &str,
+        client_txn_id: &str,
+    ) -> Option<&OutboundTextMessage> {
+        self.items.values().find(|item| {
+            item.room_id == room_id
+                && item.session_generation == self.session_generation
+                && item.client_txn_id.as_deref() == Some(client_txn_id)
+        })
+    }
+
+    /// Record the SDK's `SentEvent` and keep the server event id for repeat
+    /// requests. The SDK is authoritative here: a request retried from the
+    /// timeline row (unwedge, re-enable) can land from Failed or Wedged.
+    pub fn mark_sent_with_event(
+        &mut self,
+        local_txn_id: &str,
+        event_id: impl Into<String>,
+    ) -> Result<&OutboundTextMessage, SendError> {
+        let item = self.get_mut_checked(local_txn_id)?;
+        if matches!(item.state, LocalEchoState::Sent | LocalEchoState::Cancelled) {
+            return Err(SendError::Invalid {
+                diagnostic_id: "p6.1-mark-sent-invalid-state",
+            });
+        }
+        item.state = LocalEchoState::Sent;
+        item.failure_diagnostic_id = None;
+        item.event_id = Some(event_id.into());
+        Ok(item)
     }
 
     fn get_mut_checked(

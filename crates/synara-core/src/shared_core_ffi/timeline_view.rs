@@ -39,6 +39,57 @@ pub(super) fn timeline_view_poll_failed(
     }
 }
 
+/// The newest unread update summary of each view stream, in the order the
+/// streams first changed since the last poll.
+///
+/// Swift reads an update only as "this stream moved past revision N" and then
+/// fetches the stream's snapshot, so one summary per stream is all it needs.
+/// Unlike a bounded batch queue, a busy stream cannot push another stream's
+/// invalidation out, and no row payload is held until the next poll.
+#[derive(Default)]
+pub(super) struct TimelineViewDirtyStreams {
+    order: Vec<String>,
+    latest: std::collections::HashMap<String, TimelineViewUpdateDto>,
+}
+
+impl TimelineViewDirtyStreams {
+    /// Record one emitted batch. Its ops count toward the stream's summary.
+    pub(super) fn mark(&mut self, batch: TimelineViewDeltaBatch) {
+        let update = timeline_view_update_dto(batch);
+        match self.latest.get_mut(&update.stream_id) {
+            Some(current) => {
+                let op_count = current.op_count.saturating_add(update.op_count);
+                if update.revision >= current.revision {
+                    *current = update;
+                }
+                current.op_count = op_count;
+            }
+            None => {
+                if self.order.len() >= TIMELINE_VIEW_DIRTY_STREAM_CAP {
+                    // Only reached when nobody polls: drop the stalest stream.
+                    let stalest = self.order.remove(0);
+                    self.latest.remove(&stalest);
+                }
+                self.order.push(update.stream_id.clone());
+                self.latest.insert(update.stream_id.clone(), update);
+            }
+        }
+    }
+
+    pub(super) fn drain(&mut self) -> Vec<TimelineViewUpdateDto> {
+        let mut latest = std::mem::take(&mut self.latest);
+        std::mem::take(&mut self.order)
+            .into_iter()
+            .filter_map(|stream_id| latest.remove(&stream_id))
+            .collect()
+    }
+
+    pub(super) fn clear(&mut self) {
+        self.order.clear();
+        self.latest.clear();
+    }
+}
+
 pub(super) fn timeline_view_update_dto(batch: TimelineViewDeltaBatch) -> TimelineViewUpdateDto {
     TimelineViewUpdateDto {
         schema_version: batch.schema_version,
@@ -200,6 +251,11 @@ pub struct TimelineViewRowDto {
     pub formatted_body: Option<String>,
     pub agent_card_json: Option<String>,
     pub is_agent_approval: bool,
+    /// This account's own decision on an approval prompt: `approve_once`,
+    /// `approve_always` or `deny`. Absent while undecided.
+    pub agent_approval_decision: Option<String>,
+    /// Milliseconds since the epoch of that decision's reaction, when known.
+    pub agent_approval_decided_at: Option<u64>,
     pub media_filename: Option<String>,
     pub media_caption: Option<String>,
     pub reactions: Vec<TimelineViewReactionDto>,
@@ -211,6 +267,39 @@ pub struct TimelineViewRowDto {
     /// SDK authenticity shield for an event in an encrypted room. Absent when
     /// the event is trusted or no shield applies.
     pub encryption_shield: Option<TimelineViewEncryptionShieldDto>,
+    /// Transaction id of this account's own send: the SDK id while the row is
+    /// a local echo (Retry and Discard address it), then the remote event's
+    /// `unsigned.transaction_id`. A shell that shows its own pending row for
+    /// a queued send matches it to this row by transaction id, also when the
+    /// remote echo arrives first. Not a server event id.
+    pub transaction_id: Option<String>,
+    /// SDK send state of a local echo: `sending`, `sent`, `failed`
+    /// (recoverable; the SDK retries) or `wedged` (unrecoverable; needs Retry
+    /// or Discard). Absent on remote rows.
+    pub local_echo_state: Option<String>,
+    /// Closed cause of a `failed` or `wedged` echo when known: `too_large`,
+    /// `forbidden`, `rate_limited`, `auth`, `network`, `server_error`,
+    /// `rejected`, `encryption`, `insecure_devices`, `identity_violation`,
+    /// `verification_required`, `media`, `not_joined` or `unknown`.
+    pub send_failure: Option<String>,
+    /// Set with `send_failure`: whether Retry can help. `false` (too large,
+    /// forbidden, rejected, not joined, unusable media) leaves only Discard.
+    pub send_failure_retryable: Option<bool>,
+}
+
+fn view_local_echo_state(state: Option<crate::dto::LocalEchoState>) -> Option<String> {
+    use crate::dto::LocalEchoState;
+
+    state.map(|state| {
+        match state {
+            LocalEchoState::Sending => "sending",
+            LocalEchoState::Sent => "sent",
+            LocalEchoState::Failed => "failed",
+            LocalEchoState::Wedged => "wedged",
+            LocalEchoState::Cancelled => "cancelled",
+        }
+        .to_owned()
+    })
 }
 
 /// Closed authenticity shield. `tone` is `red` or `grey`; `code` is one of
@@ -288,6 +377,55 @@ pub struct TimelineOpenDto {
     pub stream_id: String,
     pub position: TimelineViewPositionDto,
     pub snapshot: TimelineSnapshotDto,
+}
+
+super::wire_enum::wire_enum! {
+    /// Where a routed event lives.
+    pub enum TimelineEventRouteKindDto {
+        Room => "room",
+        Thread => "thread",
+        Missing => "missing",
+        Unreachable => "unreachable",
+    }
+}
+
+/// Where a notification, link or search hit should open. `thread` carries
+/// the root the shell opens, scrolled to the routed reply. `missing` means
+/// the homeserver has no such event for this account (deleted or no access);
+/// `unreachable` means it could not be loaded right now.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct TimelineEventRouteDto {
+    pub kind: TimelineEventRouteKindDto,
+    pub thread_root_event_id: Option<String>,
+}
+
+/// The joined room that holds a routed event, for a sparse push that
+/// carries only the event id.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct TimelineEventLocationDto {
+    pub room_id: String,
+    pub route: TimelineEventRouteDto,
+}
+
+pub(super) fn event_route_dto(route: NativeTimelineEventRoute) -> TimelineEventRouteDto {
+    match route {
+        NativeTimelineEventRoute::Room => TimelineEventRouteDto {
+            kind: TimelineEventRouteKindDto::Room,
+            thread_root_event_id: None,
+        },
+        NativeTimelineEventRoute::Thread { root_event_id } => TimelineEventRouteDto {
+            kind: TimelineEventRouteKindDto::Thread,
+            thread_root_event_id: Some(root_event_id),
+        },
+        NativeTimelineEventRoute::Missing => TimelineEventRouteDto {
+            kind: TimelineEventRouteKindDto::Missing,
+            thread_root_event_id: None,
+        },
+        NativeTimelineEventRoute::Unreachable => TimelineEventRouteDto {
+            kind: TimelineEventRouteKindDto::Unreachable,
+            thread_root_event_id: None,
+        },
+    }
 }
 
 /// Privacy-safe single-event item. No tokens or password.
@@ -381,9 +519,18 @@ pub(super) fn map_timeline_open_core_error(error: MatrixIpcError) -> TimelineErr
             TIMELINE_VIEW_NOT_OPEN_CODE,
             TIMELINE_VIEW_NOT_OPEN_DESCRIPTION,
         ),
+        // Retryable: the room has not arrived by sync yet.
+        Some(TIMELINE_ROOM_NOT_YET_SYNCED_CODE) => timeline_failed(
+            TIMELINE_ROOM_NOT_YET_SYNCED_CODE,
+            TIMELINE_ROOM_NOT_YET_SYNCED_DESCRIPTION,
+        ),
         _ => timeline_failed(TIMELINE_OPEN_FAILED_CODE, TIMELINE_OPEN_FAILED_DESCRIPTION),
     }
 }
+
+const TIMELINE_ROOM_NOT_YET_SYNCED_CODE: &str = "v-timeline-room-not-yet-synced";
+const TIMELINE_ROOM_NOT_YET_SYNCED_DESCRIPTION: &str =
+    "This room is still syncing. Try again shortly.";
 
 pub(super) fn map_timeline_close_core_error(error: MatrixIpcError) -> TimelineError {
     match error.diagnostic_id.as_deref() {
@@ -619,6 +766,12 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 formatted_body: message.formatted_body,
                 agent_card_json: message.agent_card_json,
                 is_agent_approval: message.is_agent_approval,
+                agent_approval_decision: message
+                    .agent_approval_decision
+                    .map(|decided| decided.decision.as_str().to_owned()),
+                agent_approval_decided_at: message
+                    .agent_approval_decision
+                    .and_then(|decided| decided.decided_at),
                 media_filename: message.media_filename,
                 media_caption: message.media_caption,
                 reactions: view_reaction_dtos(message.reactions),
@@ -631,6 +784,10 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                     .event
                     .encryption_shield
                     .map(view_encryption_shield_dto),
+                transaction_id: message.event.transaction_id,
+                local_echo_state: view_local_echo_state(message.event.local_echo_state),
+                send_failure: message.event.send_failure,
+                send_failure_retryable: message.event.send_failure_retryable,
             }
         }
         TimelineViewRow::Sticker {
@@ -671,6 +828,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 formatted_body: None,
                 agent_card_json: None,
                 is_agent_approval: false,
+                agent_approval_decision: None,
+                agent_approval_decided_at: None,
                 media_filename: None,
                 media_caption: None,
                 reactions: view_reaction_dtos(reactions),
@@ -680,6 +839,10 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 media_height,
                 media_duration_ms,
                 encryption_shield: event.encryption_shield.map(view_encryption_shield_dto),
+                transaction_id: event.transaction_id,
+                local_echo_state: view_local_echo_state(event.local_echo_state),
+                send_failure: event.send_failure,
+                send_failure_retryable: event.send_failure_retryable,
             }
         }
         TimelineViewRow::Poll(poll) => {
@@ -711,6 +874,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 formatted_body: None,
                 agent_card_json: None,
                 is_agent_approval: false,
+                agent_approval_decision: None,
+                agent_approval_decided_at: None,
                 media_filename: None,
                 media_caption: None,
                 reactions: view_reaction_dtos(poll.reactions),
@@ -720,6 +885,10 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 media_height: None,
                 media_duration_ms: None,
                 encryption_shield: poll.event.encryption_shield.map(view_encryption_shield_dto),
+                transaction_id: poll.event.transaction_id,
+                local_echo_state: view_local_echo_state(poll.event.local_echo_state),
+                send_failure: poll.event.send_failure,
+                send_failure_retryable: poll.event.send_failure_retryable,
             }
         }
         TimelineViewRow::Membership(membership) => TimelineViewRowDto {
@@ -744,6 +913,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             formatted_body: None,
             agent_card_json: None,
             is_agent_approval: false,
+            agent_approval_decision: None,
+            agent_approval_decided_at: None,
             media_filename: None,
             media_caption: None,
             reactions: Vec::new(),
@@ -753,6 +924,10 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_height: None,
             media_duration_ms: None,
             encryption_shield: None,
+            transaction_id: membership.event.transaction_id,
+            local_echo_state: view_local_echo_state(membership.event.local_echo_state),
+            send_failure: membership.event.send_failure,
+            send_failure_retryable: membership.event.send_failure_retryable,
         },
         TimelineViewRow::State(state) => TimelineViewRowDto {
             kind: TimelineRowKindDto::State,
@@ -776,6 +951,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             formatted_body: None,
             agent_card_json: None,
             is_agent_approval: false,
+            agent_approval_decision: None,
+            agent_approval_decided_at: None,
             media_filename: None,
             media_caption: None,
             reactions: Vec::new(),
@@ -785,6 +962,10 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_height: None,
             media_duration_ms: None,
             encryption_shield: None,
+            transaction_id: state.event.transaction_id,
+            local_echo_state: view_local_echo_state(state.event.local_echo_state),
+            send_failure: state.event.send_failure,
+            send_failure_retryable: state.event.send_failure_retryable,
         },
         TimelineViewRow::Call(call) => TimelineViewRowDto {
             kind: TimelineRowKindDto::Call,
@@ -808,6 +989,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             formatted_body: None,
             agent_card_json: None,
             is_agent_approval: false,
+            agent_approval_decision: None,
+            agent_approval_decided_at: None,
             media_filename: None,
             media_caption: None,
             reactions: Vec::new(),
@@ -817,6 +1000,10 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_height: None,
             media_duration_ms: None,
             encryption_shield: None,
+            transaction_id: call.event.transaction_id,
+            local_echo_state: view_local_echo_state(call.event.local_echo_state),
+            send_failure: call.event.send_failure,
+            send_failure_retryable: call.event.send_failure_retryable,
         },
         TimelineViewRow::Redacted(redacted) => TimelineViewRowDto {
             kind: TimelineRowKindDto::Redacted,
@@ -840,6 +1027,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             formatted_body: None,
             agent_card_json: None,
             is_agent_approval: false,
+            agent_approval_decision: None,
+            agent_approval_decided_at: None,
             media_filename: None,
             media_caption: None,
             reactions: Vec::new(),
@@ -849,6 +1038,10 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_height: None,
             media_duration_ms: None,
             encryption_shield: None,
+            transaction_id: redacted.event.transaction_id,
+            local_echo_state: view_local_echo_state(redacted.event.local_echo_state),
+            send_failure: redacted.event.send_failure,
+            send_failure_retryable: redacted.event.send_failure_retryable,
         },
         TimelineViewRow::EncryptedUnavailable(encrypted) => TimelineViewRowDto {
             kind: TimelineRowKindDto::Encrypted,
@@ -872,6 +1065,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             formatted_body: None,
             agent_card_json: None,
             is_agent_approval: false,
+            agent_approval_decision: None,
+            agent_approval_decided_at: None,
             media_filename: None,
             media_caption: None,
             reactions: Vec::new(),
@@ -881,9 +1076,23 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_height: None,
             media_duration_ms: None,
             encryption_shield: None,
+            transaction_id: encrypted.event.transaction_id,
+            local_echo_state: view_local_echo_state(encrypted.event.local_echo_state),
+            send_failure: encrypted.event.send_failure,
+            send_failure_retryable: encrypted.event.send_failure_retryable,
         },
         TimelineViewRow::Other(other) => {
-            let (sender, sender_name, sender_avatar_url, origin_server_ts, capabilities) = other
+            let (
+                sender,
+                sender_name,
+                sender_avatar_url,
+                origin_server_ts,
+                capabilities,
+                transaction_id,
+                local_echo_state,
+                send_failure,
+                send_failure_retryable,
+            ) = other
                 .event
                 .map(|event| {
                     (
@@ -892,9 +1101,25 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                         event.sender_avatar_url,
                         event.origin_server_ts,
                         Some(view_row_capabilities_dto(event.capabilities)),
+                        event.transaction_id,
+                        view_local_echo_state(event.local_echo_state),
+                        event.send_failure,
+                        event.send_failure_retryable,
                     )
                 })
-                .unwrap_or_else(|| (String::new(), String::new(), None, 0, None));
+                .unwrap_or_else(|| {
+                    (
+                        String::new(),
+                        String::new(),
+                        None,
+                        0,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
+                });
             TimelineViewRowDto {
                 kind: TimelineRowKindDto::Other,
                 item_id: other.item_id,
@@ -919,6 +1144,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 formatted_body: None,
                 agent_card_json: None,
                 is_agent_approval: false,
+                agent_approval_decision: None,
+                agent_approval_decided_at: None,
                 media_filename: None,
                 media_caption: None,
                 reactions: Vec::new(),
@@ -928,6 +1155,10 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 media_height: None,
                 media_duration_ms: None,
                 encryption_shield: None,
+                transaction_id,
+                local_echo_state,
+                send_failure,
+                send_failure_retryable,
             }
         }
         TimelineViewRow::DateSeparator {
@@ -955,6 +1186,8 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             formatted_body: None,
             agent_card_json: None,
             is_agent_approval: false,
+            agent_approval_decision: None,
+            agent_approval_decided_at: None,
             media_filename: None,
             media_caption: None,
             reactions: Vec::new(),
@@ -964,6 +1197,10 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             media_height: None,
             media_duration_ms: None,
             encryption_shield: None,
+            transaction_id: None,
+            local_echo_state: None,
+            send_failure: None,
+            send_failure_retryable: None,
         },
         TimelineViewRow::ReadMarker { item_id } => {
             virtual_row_dto(TimelineRowKindDto::ReadMarker, item_id)
@@ -1003,6 +1240,8 @@ pub(super) fn virtual_row_dto(kind: TimelineRowKindDto, item_id: String) -> Time
         formatted_body: None,
         agent_card_json: None,
         is_agent_approval: false,
+        agent_approval_decision: None,
+        agent_approval_decided_at: None,
         media_filename: None,
         media_caption: None,
         reactions: Vec::new(),
@@ -1012,6 +1251,10 @@ pub(super) fn virtual_row_dto(kind: TimelineRowKindDto, item_id: String) -> Time
         media_height: None,
         media_duration_ms: None,
         encryption_shield: None,
+        transaction_id: None,
+        local_echo_state: None,
+        send_failure: None,
+        send_failure_retryable: None,
     }
 }
 
@@ -1140,10 +1383,7 @@ impl SharedCore {
             pinned_event_ids: None,
         };
         if let Ok(mut guard) = self.timeline_view_updates.lock() {
-            if guard.len() >= TIMELINE_VIEW_UPDATE_QUEUE_CAP {
-                guard.remove(0);
-            }
-            guard.push(batch);
+            guard.mark(batch);
         }
     }
 
@@ -1152,6 +1392,9 @@ impl SharedCore {
         no_session: &'static str,
         request: impl std::future::Future<Output = Result<T, MatrixIpcError>>,
     ) -> Result<T, TimelineReadStateError> {
+        self.await_open_stores().await.map_err(|()| {
+            timeline_read_state_failed(SESSION_SUSPENDED_CODE, SESSION_SUSPENDED_DESCRIPTION)
+        })?;
         let response = request
             .await
             .map_err(|error| map_timeline_read_state_core_error(no_session, error))?;
@@ -1161,7 +1404,8 @@ impl SharedCore {
 
 #[uniffi::export(async_runtime = "tokio")]
 impl SharedCore {
-    /// Drain queued timeline view-delta summaries. Not `Core.command`.
+    /// Drain the newest update summary of every stream that changed since
+    /// the last poll. Not `Core.command`.
     ///
     /// NSE forbids this. An empty queue returns an empty list. This is
     /// not Platform::emit. Failed errors stay static.
@@ -1174,7 +1418,7 @@ impl SharedCore {
                 TIMELINE_VIEW_POLL_FAILED_DESCRIPTION,
             )
         })?;
-        Ok(guard.drain(..).map(timeline_view_update_dto).collect())
+        Ok(guard.drain())
     }
 
     pub async fn timeline_open(
@@ -1183,6 +1427,9 @@ impl SharedCore {
         position: TimelineOpenPositionDto,
     ) -> Result<TimelineOpenDto, TimelineError> {
         let position = open_position_from_dto(position)?;
+        self.await_open_stores()
+            .await
+            .map_err(|()| timeline_failed(SESSION_SUSPENDED_CODE, SESSION_SUSPENDED_DESCRIPTION))?;
         let response = self
             .core
             .timeline_open(crate::core_api::MatrixTimelineOpenRequest { room_id, position })
@@ -1195,6 +1442,73 @@ impl SharedCore {
             position: view_position_dto(readback.position),
             snapshot: timeline_snapshot_dto(readback.snapshot),
         })
+    }
+
+    /// Resolve where a routed event lives before choosing how to open it.
+    ///
+    /// Dedicated UniFFI read, not a `Core.command` envelope. It reads the
+    /// event cache or fetches the single event and never builds a timeline.
+    /// Errors stay static and never echo the room or event id.
+    pub async fn timeline_event_route(
+        &self,
+        room_id: String,
+        event_id: String,
+    ) -> Result<TimelineEventRouteDto, TimelineError> {
+        let Some(owner) = self.core.attached_timeline_owner() else {
+            return Err(timeline_failed(
+                TIMELINE_OPEN_NO_SESSION_CODE,
+                TIMELINE_NO_SESSION_DESCRIPTION,
+            ));
+        };
+        self.await_open_stores()
+            .await
+            .map_err(|()| timeline_failed(SESSION_SUSPENDED_CODE, SESSION_SUSPENDED_DESCRIPTION))?;
+        match owner.event_route(&room_id, &event_id).await {
+            Ok(route) => Ok(event_route_dto(route)),
+            Err("d0.3-timeline-invalid-room-id") => Err(timeline_failed(
+                TIMELINE_INVALID_ROOM_CODE,
+                TIMELINE_INVALID_ROOM_DESCRIPTION,
+            )),
+            Err("d0.3-timeline-room-not-found") => Err(timeline_failed(
+                "d0.3-timeline-room-not-found",
+                TIMELINE_ROOM_NOT_FOUND_DESCRIPTION,
+            )),
+            Err(_) => Err(timeline_failed(
+                TIMELINE_EVENT_ROUTE_INVALID_EVENT_CODE,
+                TIMELINE_EVENT_ROUTE_INVALID_EVENT_DESCRIPTION,
+            )),
+        }
+    }
+
+    /// Find the joined room whose local event cache holds `event_id`, and
+    /// where in it the event lives. `None` when no room's cache holds it.
+    ///
+    /// Dedicated UniFFI read for sparse push routes (event id, no room id).
+    /// It never fetches from the homeserver, which has no lookup by event id
+    /// alone. Errors stay static and never echo the event id.
+    pub async fn timeline_event_location(
+        &self,
+        event_id: String,
+    ) -> Result<Option<TimelineEventLocationDto>, TimelineError> {
+        let Some(owner) = self.core.attached_timeline_owner() else {
+            return Err(timeline_failed(
+                TIMELINE_OPEN_NO_SESSION_CODE,
+                TIMELINE_NO_SESSION_DESCRIPTION,
+            ));
+        };
+        self.await_open_stores()
+            .await
+            .map_err(|()| timeline_failed(SESSION_SUSPENDED_CODE, SESSION_SUSPENDED_DESCRIPTION))?;
+        match owner.event_location(&event_id).await {
+            Ok(location) => Ok(location.map(|location| TimelineEventLocationDto {
+                room_id: location.room_id,
+                route: event_route_dto(location.route),
+            })),
+            Err(_) => Err(timeline_failed(
+                TIMELINE_EVENT_ROUTE_INVALID_EVENT_CODE,
+                TIMELINE_EVENT_ROUTE_INVALID_EVENT_DESCRIPTION,
+            )),
+        }
     }
 
     pub async fn timeline_close(&self, stream_id: String) -> Result<bool, TimelineError> {
@@ -1250,6 +1564,9 @@ impl SharedCore {
         direction: TimelineDirectionDto,
     ) -> Result<TimelineSnapshotDto, TimelineError> {
         let direction = paginate_direction(direction);
+        self.await_open_stores()
+            .await
+            .map_err(|()| timeline_failed(SESSION_SUSPENDED_CODE, SESSION_SUSPENDED_DESCRIPTION))?;
         let response = self
             .core
             .timeline_paginate(crate::core_api::MatrixTimelinePaginateRequest {
@@ -1294,6 +1611,7 @@ impl SharedCore {
         action: TimelineReadActionDto,
         intent: TimelineReadIntentDto,
         observed_live_tail_event_id: Option<String>,
+        public_receipt: bool,
     ) -> Result<TimelineReadStateDto, TimelineReadStateError> {
         let action = NativeTimelineReadAction::from(action);
         let intent = NativeTimelineReadIntent::from(intent);
@@ -1302,6 +1620,7 @@ impl SharedCore {
             "action": read_action_as_str(action),
             "intent": read_intent_as_str(intent),
             "observedLiveTailEventId": observed_live_tail_event_id,
+            "publicReceipt": public_receipt,
         }))?;
         let response = self
             .timeline_read_state_command(
@@ -1312,6 +1631,7 @@ impl SharedCore {
                         action,
                         intent,
                         observed_live_tail_event_id,
+                        public_receipt,
                     },
                 ),
             )
@@ -1348,5 +1668,55 @@ impl SharedCore {
             position: view_position_dto(readback.position),
             snapshot: timeline_snapshot_dto(readback.snapshot),
         })
+    }
+}
+
+#[cfg(test)]
+mod dirty_stream_tests {
+    use super::*;
+
+    fn batch(stream_id: &str, revision: u64, ops: usize) -> TimelineViewDeltaBatch {
+        TimelineViewDeltaBatch {
+            schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+            session_generation: 1,
+            stream_id: stream_id.to_owned(),
+            room_id: "!room:example.org".to_owned(),
+            revision,
+            ops: (0..ops)
+                .map(|_| crate::app::timeline::TimelineViewDeltaOp::Clear)
+                .collect(),
+            read_state: None,
+            pagination: None,
+            pinned_event_ids: None,
+        }
+    }
+
+    #[test]
+    fn a_busy_stream_never_pushes_out_another_streams_update() {
+        let mut dirty = TimelineViewDirtyStreams::default();
+        dirty.mark(batch("quiet", 4, 1));
+        // Far more batches than the old 32-entry queue held.
+        for revision in 1..=100 {
+            dirty.mark(batch("busy", revision, 2));
+        }
+        let drained = dirty.drain();
+        assert_eq!(drained.len(), 2);
+        assert_eq!(drained[0].stream_id, "quiet");
+        assert_eq!(drained[0].revision, 4);
+        assert_eq!(drained[1].stream_id, "busy");
+        assert_eq!(drained[1].revision, 100);
+        assert_eq!(drained[1].op_count, 200);
+        assert!(dirty.drain().is_empty());
+    }
+
+    #[test]
+    fn the_dirty_map_is_bounded_when_nobody_polls() {
+        let mut dirty = TimelineViewDirtyStreams::default();
+        for index in 0..=TIMELINE_VIEW_DIRTY_STREAM_CAP {
+            dirty.mark(batch(&format!("stream-{index}"), 1, 0));
+        }
+        let drained = dirty.drain();
+        assert_eq!(drained.len(), TIMELINE_VIEW_DIRTY_STREAM_CAP);
+        assert_eq!(drained[0].stream_id, "stream-1");
     }
 }

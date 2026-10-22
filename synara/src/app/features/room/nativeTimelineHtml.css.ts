@@ -97,6 +97,145 @@ export const MessageActionMenu = style([
   },
 ]);
 
+/**
+ * A notice above the timeline: an action that failed (`error`, same surface
+ * as the composer's send error) or why a routed message is not shown (`info`).
+ */
+export const TimelineNotice = recipe({
+  base: {
+    flexShrink: 0,
+    margin: `${config.space.S200} ${config.space.S300} 0`,
+    padding: `${config.space.S200} ${config.space.S300}`,
+    border: `${config.borderWidth.B300} solid`,
+    borderRadius: config.radii.R300,
+  },
+  variants: {
+    tone: {
+      error: {
+        borderColor: color.Critical.Main,
+        background: color.Critical.Container,
+        color: color.Critical.OnContainer,
+      },
+      info: {
+        borderColor: color.SurfaceVariant.ContainerLine,
+        background: color.SurfaceVariant.Container,
+        color: color.SurfaceVariant.OnContainer,
+      },
+    },
+  },
+  defaultVariants: { tone: 'error' },
+});
+
+// The rail clips its children (`overflow: hidden`), which hid the folds
+// outline on its buttons. An inset ring in Primary stays inside the clip and
+// reaches 3:1 on both themes.
+globalStyle(`${MessageActionRail} button:focus-visible`, {
+  outline: `${config.borderWidth.B500} solid ${color.Primary.Main}`,
+  outlineOffset: `calc(-1 * ${config.borderWidth.B500})`,
+});
+
+// The row itself takes focus so keyboard users can reach its actions.
+globalStyle(`${MessageActionSurface}:focus-visible`, {
+  outline: `${config.borderWidth.B500} solid ${color.Primary.Main}`,
+  outlineOffset: `calc(-1 * ${config.borderWidth.B500})`,
+  borderRadius: config.radii.R400,
+});
+
+/** Image or video that waits for a click while "Load Media Automatically" is off. */
+export const MediaLoadPlaceholder = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: config.space.S200,
+  maxWidth: '100%',
+  boxSizing: 'border-box',
+  border: `${config.borderWidth.B300} dashed ${color.SurfaceVariant.ContainerLine}`,
+  borderRadius: config.radii.R400,
+  background: color.SurfaceVariant.Container,
+  color: color.SurfaceVariant.OnContainer,
+  cursor: 'pointer',
+  selectors: {
+    '&:hover': { background: color.SurfaceVariant.ContainerHover },
+    '&:focus-visible': {
+      outline: `${config.borderWidth.B500} solid ${color.Primary.Main}`,
+      outlineOffset: config.borderWidth.B300,
+    },
+  },
+});
+
+/** An inline image or video that opens the media viewer; it keeps the media's own box. */
+export const MediaOpenButton = style({
+  display: 'block',
+  alignSelf: 'flex-start',
+  maxWidth: '100%',
+  lineHeight: 0,
+  padding: 0,
+  margin: 0,
+  border: 'none',
+  borderRadius: config.radii.R400,
+  background: 'none',
+  overflow: 'hidden',
+  cursor: 'zoom-in',
+  selectors: {
+    '&:focus-visible': {
+      outline: `${config.borderWidth.B500} solid ${color.Primary.Main}`,
+      outlineOffset: config.borderWidth.B300,
+    },
+  },
+});
+
+/** Inline video keeps its own controls; the viewer opens from this corner button. */
+export const MediaVideoFrame = style({
+  position: 'relative',
+  alignSelf: 'flex-start',
+  maxWidth: '100%',
+  lineHeight: 0,
+});
+
+export const MediaExpandButton = style({
+  position: 'absolute',
+  top: config.space.S200,
+  right: config.space.S200,
+});
+
+export const MediaViewerModal = style({
+  width: 'min(72rem, 94vw)',
+  maxHeight: '92vh',
+  display: 'flex',
+  flexDirection: 'column',
+  backgroundColor: color.Surface.Container,
+  color: color.Surface.OnContainer,
+});
+
+export const MediaViewerBody = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minHeight: toRem(160),
+  padding: config.space.S300,
+  overflow: 'auto',
+});
+
+export const MediaViewerMedia = style({
+  display: 'block',
+  maxWidth: '100%',
+  maxHeight: 'calc(92vh - 5rem)',
+  objectFit: 'contain',
+});
+
+/** Read by screen readers, not drawn. */
+export const VisuallyHidden = style({
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+  border: 0,
+});
+
 export const MessageActionDivider = style({
   margin: `${config.space.S100} ${config.space.S200}`,
   flexShrink: 0,
@@ -171,6 +310,12 @@ export const MessageRow = recipe({
   },
 });
 
+/** A message that mentions the signed-in user: an accent edge and a light tint. */
+export const MentionsMeRow = style({
+  boxShadow: `inset ${toRem(3)} 0 0 ${color.Primary.Main}`,
+  backgroundColor: `color-mix(in srgb, ${color.Primary.Container} 45%, transparent)`,
+});
+
 export const UnsentDelivery = style({
   display: 'flex',
   flexWrap: 'wrap',
@@ -233,7 +378,8 @@ export const SpoilerButton = style({
   border: `1px solid var(--synara-rich-text-spoiler-border)`,
   borderRadius: config.radii.R300,
   background: 'var(--synara-rich-text-spoiler-background)',
-  color: 'var(--synara-content-secondary)',
+  // Primary, not secondary: secondary was 3.8:1 on the spoiler fill.
+  color: 'var(--synara-content-primary)',
   font: 'inherit',
   lineHeight: 'inherit',
   cursor: 'pointer',
@@ -263,6 +409,30 @@ export const SpoilerContent = style({
       borderColor: 'var(--synara-rich-text-contrast-border)',
     },
   },
+});
+
+/** Custom emoji sit on the text line, capped to about one line high. */
+export const CustomEmoji = style({
+  display: 'inline-block',
+  height: '1.5em',
+  width: 'auto',
+  maxWidth: '4.5em',
+  verticalAlign: 'middle',
+  objectFit: 'contain',
+});
+
+/** The address of a link Synara cannot open (ftp, magnet), shown for copying. */
+export const LinkAddress = style({
+  color: 'var(--synara-content-secondary)',
+  wordBreak: 'break-all',
+});
+
+/** Where a link really goes when its text shows a different address. */
+export const LinkHostWarning = style({
+  // Critical text passes AA on both chat backgrounds; Warning does not in light.
+  color: color.Critical.Main,
+  fontWeight: config.fontWeight.W500,
+  whiteSpace: 'nowrap',
 });
 
 export const InlineImageFallback = style({
@@ -781,6 +951,13 @@ export const UnfurlLink = style({
   flex: 1,
   color: 'inherit',
   textDecoration: 'none',
+});
+
+// Links in plain bodies are underlined like formatted ones: colour alone is
+// 1.75:1 against dark body text. Unfurl cards are whole-card links.
+globalStyle(`${MessageBody} a:not(.${UnfurlLink})`, {
+  textDecoration: 'underline',
+  textUnderlineOffset: toRem(2),
 });
 
 export const UnfurlThumb = style({

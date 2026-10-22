@@ -66,7 +66,10 @@ test('settings left nav stacks categories with a gap on the reading plane', () =
     'utf8'
   );
   assert.match(layout, /<NavItem\s+key=\{item\.name\}\s+variant="Background"/);
-  assert.match(layout, /aria-selected=\{selected\}/);
+  // `selected` styles the row; the button inside carries aria-current (D58).
+  assert.match(layout, /selected=\{selected\}/);
+  assert.doesNotMatch(layout, /aria-selected/);
+  assert.match(layout, /aria-current=\{selected \? 'page' : undefined\}/);
   assert.match(layout, /data-settings-nav/);
 });
 

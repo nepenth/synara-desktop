@@ -19,7 +19,7 @@ final class StableTimelineViewportTests: XCTestCase {
             rowContent: { row in AnyView(Text(row.eventID ?? "").frame(height: 70)) },
             onBottomPinnedChanged: { _, _, _, _ in },
             onUserInteractionChanged: { _, _, _ in },
-            onPaginationThresholdReached: { _, _, _ in false },
+            onPaginationThresholdReached: { _, _, _, _ in false },
             onTimestampRevealRequested: { _, _, _ in },
             onCommandCompleted: { _, _, _, _, _ in }
         )
@@ -47,6 +47,61 @@ final class StableTimelineViewportTests: XCTestCase {
         try await Task.sleep(nanoseconds: 100_000_000)
         XCTAssertEqual(offsetWrites, 0, "Unchanged rows must not run anchor restoration")
         XCTAssertEqual(table.contentOffset.y, initialOffset.y, accuracy: 0.5)
+    }
+
+    func testDuplicateRowIdentifiersKeepTheFirstRow() {
+        let unique = StableTimelineViewportPolicy.uniqueRows(duplicateEmptyIdentityRows())
+        XCTAssertEqual(unique.duplicateCount, 1)
+        XCTAssertEqual(unique.rows.map(\.id), [.event("$first"), .event("")])
+        XCTAssertEqual(unique.rows.last?.eventID, "")
+    }
+
+    @MainActor
+    func testDuplicateRowIdentifiersDoNotTrapTheSnapshot() async throws {
+        // Two queued uploads once both produced `.event("")`; the row lookup
+        // and the diffable snapshot trapped on the duplicate.
+        let rows = duplicateEmptyIdentityRows()
+        let viewport = StableTimelineViewport(
+            routeID: "duplicates", sessionGeneration: 1, rows: rows, command: nil,
+            isLive: true, isPaginating: false, backgroundColor: .black,
+            rowContent: { row in AnyView(Text(row.eventID ?? "").frame(height: 70)) },
+            onBottomPinnedChanged: { _, _, _, _ in },
+            onUserInteractionChanged: { _, _, _ in },
+            onPaginationThresholdReached: { _, _, _, _ in false },
+            onTimestampRevealRequested: { _, _, _ in },
+            onCommandCompleted: { _, _, _, _, _ in }
+        )
+        let controller = StableTimelineViewController(coordinator: viewport.makeCoordinator())
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        controller.update(configuration: StableTimelineViewController.Configuration(
+            routeID: "duplicates", sessionGeneration: 1, rows: rows, command: nil,
+            isLive: true, isPaginating: false, backgroundColor: .black
+        ))
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        let table = try XCTUnwrap(controller.view.subviews.first { $0 is UITableView } as? UITableView)
+        XCTAssertEqual(table.numberOfRows(inSection: 0), 2)
+    }
+
+    private func duplicateEmptyIdentityRows() -> [StableTimelineViewportRow] {
+        let items = TimelineFixtures.largeTimeline(count: 3)
+        let ids: [StableTimelineViewportItemID] = [.event("$first"), .event(""), .event("")]
+        return zip(items, ids).map { item, id in
+            let blank = TimelineItem(
+                id: id == .event("$first") ? item.id : "", eventID: id == .event("$first") ? item.eventID : "",
+                senderID: item.senderID, timestamp: item.timestamp, kind: item.kind,
+                replyToEventID: nil, isEdited: false, reactions: [:]
+            )
+            return StableTimelineViewportRow(id: id, content: .event(.init(
+                item: blank, isGroupedWithPrevious: false, isTimestampRevealed: false,
+                animateSend: false, replyPreview: nil, replyCount: 0,
+                availability: .init(canReply: false, canEdit: false, canRedact: false, canReact: false)
+            )))
+        }
     }
 
     func testTimestampRevealGestureWaitsUntilDirectionIsKnown() {
@@ -380,6 +435,48 @@ final class StableTimelineViewportTests: XCTestCase {
         XCTAssertTrue(StableTimelineViewportPolicy.shouldFollowNewest(isLive: true, wasConfirmedPinned: true))
         XCTAssertFalse(StableTimelineViewportPolicy.shouldFollowNewest(isLive: true, wasConfirmedPinned: false))
         XCTAssertFalse(StableTimelineViewportPolicy.shouldFollowNewest(isLive: false, wasConfirmedPinned: true))
+    }
+
+    func testShortContentRequestsPagesWithoutInteractionButBounded() {
+        // I13: content shorter than the viewport never reached the threshold.
+        XCTAssertEqual(
+            StableTimelineViewportPolicy.paginationRequest(
+                contentOffset: 0, contentHeight: 300, viewportHeight: 1000,
+                hasUserInteracted: false, isPaginating: false, requestInFlight: false,
+                shortContentRequestCount: 0
+            ),
+            .fillShortContent
+        )
+        XCTAssertNil(
+            StableTimelineViewportPolicy.paginationRequest(
+                contentOffset: 0, contentHeight: 300, viewportHeight: 1000,
+                hasUserInteracted: true, isPaginating: false, requestInFlight: false,
+                shortContentRequestCount: StableTimelineViewportPolicy.maximumShortContentPaginationRequests
+            )
+        )
+        XCTAssertNil(
+            StableTimelineViewportPolicy.paginationRequest(
+                contentOffset: 0, contentHeight: 300, viewportHeight: 1000,
+                hasUserInteracted: false, isPaginating: true, requestInFlight: false,
+                shortContentRequestCount: 0
+            )
+        )
+        XCTAssertNil(
+            StableTimelineViewportPolicy.paginationRequest(
+                contentOffset: 0, contentHeight: 10000, viewportHeight: 1000,
+                hasUserInteracted: false, isPaginating: false, requestInFlight: false,
+                shortContentRequestCount: 0
+            ),
+            "Tall content still waits for the user"
+        )
+        XCTAssertEqual(
+            StableTimelineViewportPolicy.paginationRequest(
+                contentOffset: 8000, contentHeight: 10000, viewportHeight: 1000,
+                hasUserInteracted: true, isPaginating: false, requestInFlight: false,
+                shortContentRequestCount: 0
+            ),
+            .nearOldest
+        )
     }
 
     func testPaginationThresholdHonorsInteractionAndOneInFlightRequest() {
@@ -764,6 +861,39 @@ final class StableTimelineViewportTests: XCTestCase {
         )
     }
 
+    func testJumpToLastReadHidesWhileTheMarkerOrDividerIsOnScreen() {
+        XCTAssertFalse(RoomTimelineJumpLastReadPolicy.shouldShow(
+            pendingMarkerEventID: "$older:matrix.org",
+            isMarkerVisible: true
+        ))
+        XCTAssertTrue(RoomTimelineJumpLastReadPolicy.shouldShow(
+            pendingMarkerEventID: "$older:matrix.org",
+            isMarkerVisible: false
+        ))
+    }
+
+    func testJumpToLastReadScrollsInTheLiveWindowOrOpensAFocusedWindow() {
+        let loaded = ["$a:matrix.org", "$b:matrix.org"]
+        XCTAssertEqual(
+            RoomTimelineJumpLastReadPolicy.route(
+                markerEventID: "$a:matrix.org", providerIsLive: true, loadedServerEventIDs: loaded
+            ),
+            .scrollLiveWindow
+        )
+        XCTAssertEqual(
+            RoomTimelineJumpLastReadPolicy.route(
+                markerEventID: "$far:matrix.org", providerIsLive: true, loadedServerEventIDs: loaded
+            ),
+            .openFocusedWindow
+        )
+        XCTAssertEqual(
+            RoomTimelineJumpLastReadPolicy.route(
+                markerEventID: "$a:matrix.org", providerIsLive: false, loadedServerEventIDs: loaded
+            ),
+            .openFocusedWindow
+        )
+    }
+
     func testJumpToLastReadVisibilityIsOwnedByThePendingMarkerAlone() {
         // Visibility must not be re-derived from live unread counts: the
         // timeline auto-advances m.fully_read shortly after the tail is visible,
@@ -815,10 +945,108 @@ final class StableTimelineViewportTests: XCTestCase {
                 isConfirmedPinned: true
             )
         )
-        XCTAssertFalse(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(position: .readingHistory))
-        XCTAssertFalse(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(position: .focusedEvent))
-        XCTAssertTrue(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(position: .placingInitial))
-        XCTAssertTrue(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(position: .followingLive))
+        XCTAssertFalse(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(
+            position: .readingHistory, hasPendingPlacement: true, isUserDragging: false
+        ), "An unread placement pins briefly before it scrolls to the marker")
+        XCTAssertFalse(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(
+            position: .focusedEvent, hasPendingPlacement: true, isUserDragging: false
+        ))
+        XCTAssertTrue(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(
+            position: .placingInitial, hasPendingPlacement: true, isUserDragging: false
+        ))
+        XCTAssertTrue(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(
+            position: .followingLive, hasPendingPlacement: false, isUserDragging: false
+        ))
+    }
+
+    func testPlacedUnreadThatFitsOnScreenFollowsLiveAndAcknowledges() {
+        // I4: after an unread open whose messages fit on screen, the pinned
+        // table never scheduled a receipt unless the user dragged.
+        XCTAssertTrue(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(
+            position: .readingHistory, hasPendingPlacement: false, isUserDragging: false
+        ))
+        XCTAssertTrue(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(
+            position: .focusedEvent, hasPendingPlacement: false, isUserDragging: false
+        ))
+        XCTAssertFalse(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(
+            position: .readingHistory, hasPendingPlacement: false, isUserDragging: true
+        ), "A drag owns the position until it ends")
+    }
+
+    func testReadMarkerPlacementSucceedsWhenClampedAtTheLiveEdge() {
+        XCTAssertTrue(StableTimelineViewportPolicy.readMarkerPlaced(
+            isTargetAtVisualTop: true, isTargetVisible: true, isClampedAtNewestEdge: false
+        ))
+        XCTAssertTrue(StableTimelineViewportPolicy.readMarkerPlaced(
+            isTargetAtVisualTop: false, isTargetVisible: true, isClampedAtNewestEdge: true
+        ), "Newer rows shorter than the viewport cannot scroll the marker to the top")
+        XCTAssertFalse(StableTimelineViewportPolicy.readMarkerPlaced(
+            isTargetAtVisualTop: false, isTargetVisible: true, isClampedAtNewestEdge: false
+        ))
+        XCTAssertFalse(StableTimelineViewportPolicy.readMarkerPlaced(
+            isTargetAtVisualTop: false, isTargetVisible: false, isClampedAtNewestEdge: true
+        ))
+    }
+
+    @MainActor
+    func testShortUnreadPlacementCompletesAndReportsPinned() async throws {
+        let rows = TimelineFixtures.largeTimeline(count: 4).map { item in
+            StableTimelineViewportRow(id: .event(item.id), content: .event(.init(
+                item: item, isGroupedWithPrevious: false, isTimestampRevealed: false,
+                animateSend: false, replyPreview: nil, replyCount: 0,
+                availability: .init(canReply: false, canEdit: false, canRedact: false, canReact: false)
+            )))
+        }
+        var completions: [Bool] = []
+        var pinnedReports: [Bool] = []
+        var fillRequests: [Bool] = []
+        let command = StableTimelineViewportCommand(
+            id: 1, routeID: "short", sessionGeneration: 1,
+            kind: .readMarker(eventID: rows[1].eventID ?? "")
+        )
+        let viewport = StableTimelineViewport(
+            routeID: "short", sessionGeneration: 1, rows: rows, command: command,
+            isLive: true, isPaginating: false, backgroundColor: .black,
+            rowContent: { row in AnyView(Text(row.eventID ?? "").frame(height: 70)) },
+            onBottomPinnedChanged: { _, _, isPinned, _ in pinnedReports.append(isPinned) },
+            onUserInteractionChanged: { _, _, _ in },
+            onPaginationThresholdReached: { _, _, _, fillsShortContent in
+                fillRequests.append(fillsShortContent)
+                return true
+            },
+            onTimestampRevealRequested: { _, _, _ in },
+            onCommandCompleted: { _, _, _, success, _ in completions.append(success) }
+        )
+        let controller = StableTimelineViewController(coordinator: viewport.makeCoordinator())
+        // A window outside a scene never lays out; the table needs real bounds
+        // before it executes a placement command.
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        let window = scene.map { UIWindow(windowScene: $0) } ?? UIWindow()
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        window.rootViewController = controller
+        window.isHidden = false
+        defer { window.isHidden = true }
+        controller.view.frame = window.bounds
+        controller.view.layoutIfNeeded()
+
+        let configuration = StableTimelineViewController.Configuration(
+            routeID: "short", sessionGeneration: 1, rows: rows, command: command,
+            isLive: true, isPaginating: false, backgroundColor: .black
+        )
+        controller.update(configuration: configuration)
+        for _ in 0 ..< 30 where completions.isEmpty {
+            controller.view.setNeedsLayout()
+            controller.view.layoutIfNeeded()
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        // A later SwiftUI update with the command settled lets short content
+        // ask for older history without a scroll.
+        controller.update(configuration: configuration)
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(completions, [true])
+        XCTAssertEqual(pinnedReports.last, true)
+        XCTAssertEqual(fillRequests, [true])
     }
 
     func testFiveThousandEventInputAndVisibleCellsRemainBounded() {
@@ -850,5 +1078,223 @@ final class StableTimelineViewportTests: XCTestCase {
 
         cache.removeAll()
         XCTAssertEqual(cache.count, 0)
+    }
+
+    // MARK: - B3a timeline correctness
+
+    private func b3aItem(
+        _ eventID: String,
+        sender: String = "@bob:matrix.org",
+        at date: Date = TimelineFixtures.baseDate,
+        kind: TimelineItem.Kind? = nil,
+        deliveryStatus: TimelineDeliveryStatus? = nil
+    ) -> TimelineItem {
+        TimelineItem(
+            id: eventID,
+            eventID: eventID,
+            senderID: sender,
+            timestamp: date,
+            kind: kind ?? .text(eventID),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:],
+            deliveryStatus: deliveryStatus
+        )
+    }
+
+    func testUnreadDividerSitsAboveTheFirstMessageSomeoneElseSent() {
+        let me = "@ada:matrix.org"
+        let items = [
+            b3aItem("$read"),
+            b3aItem("$mine", sender: me),
+            b3aItem("$pending", sender: me, deliveryStatus: .sending),
+            b3aItem("$theirs"),
+            b3aItem("$later"),
+        ]
+        XCTAssertEqual(
+            RoomTimelineUnreadDividerPolicy.dividerEventID(markerEventID: "$read", items: items, currentUserID: me),
+            "$theirs",
+            "own messages, sent or pending, are never marked unread"
+        )
+        XCTAssertNil(
+            RoomTimelineUnreadDividerPolicy.dividerEventID(
+                markerEventID: "$read",
+                items: [b3aItem("$read"), b3aItem("$mine", sender: me)],
+                currentUserID: me
+            ),
+            "only the user's own message after the marker: no divider"
+        )
+        XCTAssertNil(
+            RoomTimelineUnreadDividerPolicy.dividerEventID(markerEventID: "$gone", items: items, currentUserID: me)
+        )
+        XCTAssertNil(
+            RoomTimelineUnreadDividerPolicy.dividerEventID(markerEventID: nil, items: items, currentUserID: me)
+        )
+    }
+
+    func testUnreadDividerStaysUntilTheRoomIsLeft() throws {
+        // The divider is placed once, from the marker, and nothing that runs
+        // while the room stays open (the read receipt, following the live
+        // tail, jump to latest) moves or clears it.
+        let root = Self.b3aRepositoryRoot()
+        let source = try String(
+            contentsOfFile: "\(root)/synara-ios/Synara/Features/RoomTimelineView.swift",
+            encoding: .utf8
+        )
+        XCTAssertFalse(source.contains("initialReadMarkerEventID"))
+        XCTAssertEqual(source.components(separatedBy: "unreadDividerEventID = nil").count - 1, 2,
+                       "cleared only by a room reset or a fresh (non-preserving) load")
+        XCTAssertEqual(source.components(separatedBy: "placeUnreadDivider(markerEventID:").count - 1, 3,
+                       "placed by the unread-marker provider and Jump to Last Read only")
+    }
+
+    func testRoomReappearResumesOnlyTheSameLoadedRouteWithALiveStream() {
+        XCTAssertTrue(RoomTimelineReappearPolicy.canResume(
+            loadedTaskID: "!room", taskID: "!room", isStreamActive: true, hasPresentedTimeline: true
+        ))
+        XCTAssertFalse(RoomTimelineReappearPolicy.canResume(
+            loadedTaskID: "!room", taskID: "!room$event", isStreamActive: true, hasPresentedTimeline: true
+        ), "a routed event in the same room opens fresh")
+        XCTAssertFalse(RoomTimelineReappearPolicy.canResume(
+            loadedTaskID: nil, taskID: "!room", isStreamActive: true, hasPresentedTimeline: true
+        ), "a load that never finished starts over")
+        XCTAssertFalse(RoomTimelineReappearPolicy.canResume(
+            loadedTaskID: "!room", taskID: "!room", isStreamActive: false, hasPresentedTimeline: true
+        ))
+        XCTAssertFalse(RoomTimelineReappearPolicy.canResume(
+            loadedTaskID: "!room", taskID: "!room", isStreamActive: true, hasPresentedTimeline: false
+        ), "a failed timeline reloads")
+    }
+
+    func testCoveredRoomKeepsItsStreamAndALeftRoomEndsIt() {
+        let router = AppRouter()
+        router.roomsPath = [.room(id: "!room:matrix.org")]
+        XCTAssertTrue(router.holdsRoom(id: "!room:matrix.org", eventID: nil, in: .rooms))
+
+        // A full-screen thread pushed on top covers the room.
+        router.route(to: .thread(roomID: "!room:matrix.org", rootEventID: "$root"))
+        XCTAssertTrue(router.holdsRoom(id: "!room:matrix.org", eventID: nil, in: .rooms))
+
+        // Another tab covers it too.
+        router.selectedTab = .settings
+        XCTAssertTrue(router.holdsRoom(id: "!room:matrix.org", eventID: nil, in: .rooms))
+
+        // Back to the list: the room is left.
+        router.roomsPath = []
+        XCTAssertFalse(router.holdsRoom(id: "!room:matrix.org", eventID: nil, in: .rooms))
+        XCTAssertFalse(router.holdsRoom(id: "!room:matrix.org", eventID: nil, in: nil))
+
+        router.roomsPath = [.room(id: "!room:matrix.org", eventID: "$event")]
+        XCTAssertFalse(router.holdsRoom(id: "!room:matrix.org", eventID: nil, in: .rooms))
+        XCTAssertTrue(router.holdsRoom(id: "!room:matrix.org", eventID: "$event", in: .rooms))
+    }
+
+    func testFailedTimelineRetriesWhenTheConnectionOrTheRoomComesBack() {
+        XCTAssertTrue(RoomTimelineAutoRetryPolicy.shouldRetry(
+            afterConnection: .reconnecting, current: .syncing, hasFailedLoad: true
+        ))
+        XCTAssertFalse(RoomTimelineAutoRetryPolicy.shouldRetry(
+            afterConnection: .reconnecting, current: .syncing, hasFailedLoad: false
+        ))
+        XCTAssertFalse(RoomTimelineAutoRetryPolicy.shouldRetry(
+            afterConnection: .syncing, current: .connected, hasFailedLoad: true
+        ), "only the edge to live retries")
+        XCTAssertFalse(RoomTimelineAutoRetryPolicy.shouldRetry(
+            afterConnection: nil, current: .connected, hasFailedLoad: true
+        ))
+        XCTAssertTrue(RoomTimelineAutoRetryPolicy.shouldRetry(
+            afterRoomListed: false, isListed: true, hasFailedLoad: true
+        ))
+        XCTAssertFalse(RoomTimelineAutoRetryPolicy.shouldRetry(
+            afterRoomListed: true, isListed: true, hasFailedLoad: true
+        ))
+        XCTAssertFalse(RoomTimelineAutoRetryPolicy.shouldRetry(
+            afterRoomListed: false, isListed: false, hasFailedLoad: true
+        ))
+    }
+
+    func testDayHeadersStartEachDayInTheShownRows() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "UTC"))
+        let day = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 19, hour: 22)))
+        let items = [
+            b3aItem("$a", at: day),
+            b3aItem("$b", at: day.addingTimeInterval(60 * 60)),
+            b3aItem("$c", at: day.addingTimeInterval(3 * 60 * 60)),
+            b3aItem("$d", at: day.addingTimeInterval(3 * 24 * 60 * 60)),
+        ]
+        let headers = TimelineDayHeaderPolicy.headers(for: items, calendar: calendar)
+        XCTAssertEqual(Set(headers.keys), ["$a", "$c", "$d"])
+        XCTAssertEqual(headers["$c"], calendar.startOfDay(for: items[2].timestamp))
+        XCTAssertTrue(TimelineDayHeaderPolicy.headers(for: [], calendar: calendar).isEmpty)
+
+        let now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 21, hour: 9)))
+        let locale = Locale(identifier: "en_US")
+        XCTAssertEqual(TimelineDayHeaderPolicy.label(for: now, now: now, calendar: calendar, locale: locale), "Today")
+        XCTAssertEqual(
+            TimelineDayHeaderPolicy.label(
+                for: now.addingTimeInterval(-24 * 60 * 60), now: now, calendar: calendar, locale: locale
+            ),
+            "Yesterday"
+        )
+        XCTAssertEqual(
+            TimelineDayHeaderPolicy.label(
+                for: now.addingTimeInterval(-3 * 24 * 60 * 60), now: now, calendar: calendar, locale: locale
+            ),
+            "Sunday"
+        )
+        XCTAssertEqual(
+            TimelineDayHeaderPolicy.label(
+                for: now.addingTimeInterval(-30 * 24 * 60 * 60), now: now, calendar: calendar, locale: locale
+            ),
+            "Monday, September 21"
+        )
+        XCTAssertEqual(
+            TimelineDayHeaderPolicy.label(
+                for: now.addingTimeInterval(-400 * 24 * 60 * 60), now: now, calendar: calendar, locale: locale
+            ),
+            "Tuesday, September 16, 2025"
+        )
+    }
+
+    func testDayHeaderRowsUseStableDayIdentity() throws {
+        let day = Date(timeIntervalSince1970: 1_760_000_000)
+        XCTAssertEqual(TimelineDayHeaderPolicy.key(for: day), TimelineDayHeaderPolicy.key(for: day))
+        XCTAssertNotEqual(
+            StableTimelineViewportItemID.dayHeader(TimelineDayHeaderPolicy.key(for: day)),
+            StableTimelineViewportItemID.event(TimelineDayHeaderPolicy.key(for: day))
+        )
+    }
+
+    func testSystemLinesAreNeverGroupedWithTheirSendersMessages() {
+        let joined = b3aItem("$join", sender: "@ada:matrix.org", kind: .systemNotice("Ada joined the room"))
+        let message = b3aItem("$hi", sender: "@ada:matrix.org", at: TimelineFixtures.baseDate.addingTimeInterval(5))
+        XCTAssertFalse(TimelineMessageGroupingPolicy.shouldGroup(previous: joined, current: message))
+        XCTAssertFalse(TimelineMessageGroupingPolicy.shouldGroup(previous: message, current: joined))
+        XCTAssertTrue(joined.isSystemNotice)
+        XCTAssertEqual(TimelineSearchFilter.searchableText(for: joined), "Ada joined the room")
+    }
+
+    func testUserSurfacesCarryNoDeveloperCopy() throws {
+        let root = Self.b3aRepositoryRoot()
+        let source = try String(
+            contentsOfFile: "\(root)/synara-ios/Synara/Features/RoomTimelineView.swift",
+            encoding: .utf8
+        )
+        XCTAssertFalse(source.contains("Unsupported event"))
+        XCTAssertFalse(source.contains("does not define a session-approval reaction"))
+        XCTAssertFalse(source.contains(".preferredColorScheme("), "agent rooms must not force the window dark")
+        XCTAssertTrue(source.contains(".environment(\\.colorScheme, conversationColorScheme)"))
+    }
+
+    private static func b3aRepositoryRoot() -> String {
+        var url = URL(fileURLWithPath: #filePath)
+        while url.pathComponents.count > 1 {
+            url.deleteLastPathComponent()
+            if FileManager.default.fileExists(atPath: url.appendingPathComponent("synara-ios").path) {
+                return url.path
+            }
+        }
+        return url.path
     }
 }

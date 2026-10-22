@@ -16,6 +16,7 @@ use crate::app::lifecycle::{
     LifecycleError, SessionMaterialVault,
 };
 use crate::app::store::AccountIdentity;
+use crate::ffi_runtime::block_in_place_if_worker;
 
 /// Platform-specific static ids returned to the SDK when a callback fails.
 /// Desktop and iOS keep the ids they shipped with.
@@ -110,39 +111,48 @@ where
     let reload_vault = Arc::clone(&vault);
     let save_identity = identity;
     client
+        // The SDK calls both from inside its token refresh, on a runtime
+        // worker. The vault is synchronous Keychain or keyring I/O (desktop
+        // adds journal and locator files), so the worker hands its other
+        // tasks over before blocking.
         .set_session_callbacks(
             Box::new(move |_| {
-                let material = load_session_material(reload_vault.as_ref(), &reload_identity)
-                    .map_err(|_| SessionRotationCallbackError(diagnostics.reload_read_failed))?
-                    .ok_or(SessionRotationCallbackError(
-                        diagnostics.reload_material_missing,
-                    ))?;
-                let secrets = material
-                    .decode_host_secrets()
-                    .map_err(|_| SessionRotationCallbackError(diagnostics.reload_decode_failed))?;
-                let session = matrix_session_from_host_secrets(&reload_identity, &secrets)
-                    .map_err(|_| SessionRotationCallbackError(diagnostics.reload_invalid))?;
-                Ok(session.tokens)
+                block_in_place_if_worker(|| {
+                    let material = load_session_material(reload_vault.as_ref(), &reload_identity)
+                        .map_err(|_| SessionRotationCallbackError(diagnostics.reload_read_failed))?
+                        .ok_or(SessionRotationCallbackError(
+                            diagnostics.reload_material_missing,
+                        ))?;
+                    let secrets = material.decode_host_secrets().map_err(|_| {
+                        SessionRotationCallbackError(diagnostics.reload_decode_failed)
+                    })?;
+                    let session = matrix_session_from_host_secrets(&reload_identity, &secrets)
+                        .map_err(|_| SessionRotationCallbackError(diagnostics.reload_invalid))?;
+                    Ok(session.tokens)
+                })
             }),
             Box::new(move |client| {
-                let locator =
-                    (hooks.check_identity)(&client).map_err(SessionRotationCallbackError)?;
-                // SDK rotation can run before the explicit login save. Every
-                // callback establishes the same durable cleanup target first.
-                let persisted = lease.save_credentials(
-                    || match &locator {
-                        Some(locator) => (hooks.preflight)(locator),
-                        None => Ok(()),
-                    },
-                    || {
-                        persist_session_after_login(&client, &save_identity, vault.as_ref())
-                            .map(|_| ())
-                            .map_err(hooks.map_persist_error)
-                    },
-                );
-                (hooks.record_outcome)(&persisted);
-                persisted.map_err(|_| SessionRotationCallbackError(diagnostics.persist_failed))?;
-                Ok(())
+                block_in_place_if_worker(|| {
+                    let locator =
+                        (hooks.check_identity)(&client).map_err(SessionRotationCallbackError)?;
+                    // SDK rotation can run before the explicit login save. Every
+                    // callback establishes the same durable cleanup target first.
+                    let persisted = lease.save_credentials(
+                        || match &locator {
+                            Some(locator) => (hooks.preflight)(locator),
+                            None => Ok(()),
+                        },
+                        || {
+                            persist_session_after_login(&client, &save_identity, vault.as_ref())
+                                .map(|_| ())
+                                .map_err(hooks.map_persist_error)
+                        },
+                    );
+                    (hooks.record_outcome)(&persisted);
+                    persisted
+                        .map_err(|_| SessionRotationCallbackError(diagnostics.persist_failed))?;
+                    Ok(())
+                })
             }),
         )
         .map_err(|_| SessionFault::unavailable(diagnostics.install_failed))

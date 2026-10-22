@@ -2,6 +2,12 @@ import { atom, useAtomValue, useSetAtom } from 'jotai';
 import { useCallback, useEffect } from 'react';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { startRoomListUpdateDrivenPoll } from '../../utils/nativeRoomListUpdates';
+import {
+  createCoalescedRefresh,
+  keepIfSameJson,
+  readNativeSessionSnapshotShared,
+  readNativeSyncStatusShared,
+} from '../../utils/nativeListRefresh';
 import type {
   NativeInvite,
   NativeInviteSnapshot,
@@ -30,35 +36,35 @@ export const useBindAllInvitesAtom = () => {
 
   useEffect(() => {
     let disposed = false;
-    let inFlight = false;
+    // Unchanged readbacks keep the atom value, so invite consumers do not
+    // re-render on every room-list wake.
+    const publish = (snapshot: NativeInviteSnapshot) =>
+      setSnapshot((current) => keepIfSameJson(current, snapshot));
 
-    const refresh = async () => {
-      if (inFlight) return;
-      inFlight = true;
-      try {
-        const session =
-          await invokeDesktopWithAvailability<NativeSessionSnapshot>('matrix_session_snapshot');
-        if (disposed || !session.available) return;
-        if (session.value?.status !== 'logged_in') {
-          setSnapshot(emptyInviteSnapshot);
-          setSyncing(false);
-          return;
+    const refresh = createCoalescedRefresh(
+      async () => {
+        try {
+          const session = await readNativeSessionSnapshotShared<NativeSessionSnapshot>();
+          if (disposed || !session.available) return;
+          if (session.value?.status !== 'logged_in') {
+            publish(emptyInviteSnapshot);
+            setSyncing(false);
+            return;
+          }
+          const syncStatus = await readNativeSyncStatusShared<NativeSyncReadiness>();
+          if (!disposed && syncStatus.available && syncStatus.value) {
+            setSyncing(syncStatus.value.readiness === 'running');
+          }
+          const result =
+            await invokeDesktopWithAvailability<NativeInviteSnapshot>('matrix_invites_snapshot');
+          if (!disposed && result.available && result.value) publish(result.value);
+        } catch {
+          // The native command records a privacy-safe diagnostic. Preserve the last
+          // known snapshot during a transient sync or protocol failure.
         }
-        const syncStatus =
-          await invokeDesktopWithAvailability<NativeSyncReadiness>('matrix_sync_status');
-        if (!disposed && syncStatus.available && syncStatus.value) {
-          setSyncing(syncStatus.value.readiness === 'running');
-        }
-        const result =
-          await invokeDesktopWithAvailability<NativeInviteSnapshot>('matrix_invites_snapshot');
-        if (!disposed && result.available && result.value) setSnapshot(result.value);
-      } catch {
-        // The native command records a privacy-safe diagnostic. Preserve the last
-        // known snapshot during a transient sync or protocol failure.
-      } finally {
-        inFlight = false;
-      }
-    };
+      },
+      () => disposed
+    );
 
     if (!isSynaraDesktop()) {
       setSnapshot(emptyInviteSnapshot);

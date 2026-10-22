@@ -64,7 +64,7 @@ use crate::matrix::backup::live::{
 };
 
 use crate::matrix::client_builder::{
-    build_unauthenticated_client, ClientBuildConfig, ClientBuilderError,
+    build_unauthenticated_client, desktop_client_config, ClientBuilderError,
 };
 
 use crate::matrix::cross_signing::live::{NativeCrossSigningSetupResult, NativeCrossSigningStatus};
@@ -111,8 +111,9 @@ use crate::matrix::spaces::{
 };
 
 use crate::matrix::store::{
-    get_or_migrate_store_key, migrate_store_to_current, reset_store_for_recovery, AccountIdentity,
-    KeyringStoreKeyVault, StoreKeyMaterial, StoreKeyVaultError, StoreMigrationError, StorePaths,
+    get_or_migrate_store_key, migrate_store_to_current, reset_store_for_recovery,
+    store_key_after_confirmed_reset, AccountIdentity, KeyringStoreKeyVault, StoreKeyMaterial,
+    StoreKeyVault, StoreKeyVaultError, StoreMigrationError, StorePaths,
 };
 
 use crate::matrix::sync::{
@@ -128,9 +129,9 @@ use crate::matrix::timeline::{
     NativeTimelineEventReadback, NativeTimelineForwardMediaRequest,
     NativeTimelineForwardTextRequest, NativeTimelineJumpLatestRequest, NativeTimelineOpenReadback,
     NativeTimelineOpenRequest, NativeTimelineOwner, NativeTimelinePinRequest,
-    NativeTimelinePollVoteRequest, NativeTimelineReadAction, NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest, NativeTimelineRedactRequest, NativeTimelineReportRequest,
-    NativeTimelineViewPaginationRequest, PinnedEventsSnapshot, TimelineMediaSource,
+    NativeTimelinePollVoteRequest, NativeTimelineReadAction, NativeTimelineReadStateRequest,
+    NativeTimelineRedactRequest, NativeTimelineReportRequest, NativeTimelineViewPaginationRequest,
+    PinnedEventsSnapshot, TimelineMediaSource,
 };
 
 use crate::matrix::typing::{NativeTypingOwner, NativeTypingSnapshot};
@@ -161,6 +162,12 @@ pub struct MatrixAuthCommandError {
     pub code: &'static str,
     pub message: &'static str,
     pub diagnostic_id: String,
+    /// Send-queue transaction id of a wedged send; absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction_id: Option<String>,
+    /// The server's retry hint for a rate-limited request; absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retry_after_ms: Option<u64>,
 }
 
 pub use synara_core::app::media::{
@@ -206,7 +213,23 @@ impl MatrixAuthCommandError {
             code,
             message,
             diagnostic_id: diagnostic_id.into(),
+            transaction_id: None,
+            retry_after_ms: None,
         }
+    }
+
+    /// Carries the homeserver's `retry_after_ms` so the renderer can say how
+    /// long to wait.
+    pub(crate) fn with_retry_after_ms(mut self, retry_after_ms: Option<u64>) -> Self {
+        self.retry_after_ms = retry_after_ms;
+        self
+    }
+
+    /// Names the send-queue request a rejection belongs to, so the shell can
+    /// find its failed timeline row (Retry / Discard).
+    pub(crate) fn with_transaction_id(mut self, transaction_id: impl Into<String>) -> Self {
+        self.transaction_id = Some(transaction_id.into());
+        self
     }
 
     fn invalid_input(diagnostic_id: &'static str) -> Self {
@@ -310,6 +333,17 @@ impl MatrixAuthState {
 
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The installed session's generation and account. The session lock is
+    /// held only to copy them, never across a caller's await.
+    pub async fn active_session_binding(&self) -> Option<(u64, String)> {
+        self.session.lock().await.as_ref().map(|active| {
+            (
+                active.sync.session_generation(),
+                active.identity.user_id.clone(),
+            )
+        })
     }
 
     /// Retry a failed save of the current in-memory tokens.
@@ -455,16 +489,23 @@ impl MatrixAuthState {
     /// (`/keys/query`) stalled Settings → Devices on a spinner because sync
     /// could not progress. Prefer the local crypto-store identity so the page
     /// can render without a network round trip; bound the homeserver fetch.
+    /// That fetch shares the device owner's once-per-generation own-user
+    /// query gate: its answer re-sets the SDK verification state, and this
+    /// projection runs on every device/security wakeup.
     pub(crate) async fn cross_signing_status_projection(
         &self,
     ) -> Result<PlatformCrossSigningStatus, synara_core::platform::PlatformCrossSigningStatusError>
     {
-        let (client, session_generation) = {
+        let (client, devices, session_generation) = {
             let session = self.session.lock().await;
             let active = session
                 .as_ref()
                 .ok_or(synara_core::platform::PlatformCrossSigningStatusError::NoSession)?;
-            (active.client.clone(), active.sync.session_generation())
+            (
+                active.client.clone(),
+                Arc::clone(&active.devices),
+                active.sync.session_generation(),
+            )
         };
 
         let encryption = client.encryption();
@@ -477,20 +518,28 @@ impl MatrixAuthState {
         })?;
         let own_identity = match local_identity {
             Some(identity) => Some(identity),
-            None => match tokio::time::timeout(
-                Duration::from_secs(8),
-                encryption.request_user_identity(user_id),
-            )
-            .await
-            {
-                Ok(Ok(identity)) => identity,
-                Ok(Err(_)) => {
-                    return Err(
-                        synara_core::platform::PlatformCrossSigningStatusError::IdentityQueryFailed,
-                    );
+            // Once the own-user query has run this generation, the SDK keeps
+            // the local identity current from sync; a missing one is missing.
+            None if !devices.own_keys_query().try_begin() => None,
+            None => {
+                let fetched = tokio::time::timeout(
+                    Duration::from_secs(8),
+                    encryption.request_user_identity(user_id),
+                )
+                .await;
+                devices
+                    .own_keys_query()
+                    .finish(matches!(fetched, Ok(Ok(_))));
+                match fetched {
+                    Ok(Ok(identity)) => identity,
+                    Ok(Err(_)) => {
+                        return Err(
+                            synara_core::platform::PlatformCrossSigningStatusError::IdentityQueryFailed,
+                        );
+                    }
+                    Err(_) => None,
                 }
-                Err(_) => None,
-            },
+            }
         };
 
         let private_state = match private_status.as_ref() {
@@ -585,15 +634,15 @@ impl MatrixAuthState {
         &self,
         handle: &str,
     ) -> Option<(Client, TimelineMediaSource)> {
-        // Clone the owners and release the session mutex before awaiting the
-        // timeline registry. A registry operation can be on the network, and
-        // holding the session here would stall every status poll behind it.
+        // Clone the owners and release the session mutex before resolving.
+        // Handles resolve without the timeline registry lock, so a room that
+        // is opening or paging on a slow network does not stall media.
         let (client, timelines) = {
             let session = self.session.lock().await;
             let active = session.as_ref()?;
             (active.client.clone(), Arc::clone(&active.timelines))
         };
-        let source = timelines.lock().await.resolve_media(handle).await?;
+        let source = timelines.resolve_media(handle).await?;
         Some((client, source))
     }
 

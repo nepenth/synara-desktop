@@ -9,6 +9,10 @@
 mod agent_preferences;
 pub use agent_preferences::*;
 #[cfg(feature = "full-app")]
+mod approval_alert_limit;
+#[cfg(feature = "full-app")]
+pub use approval_alert_limit::{APPROVAL_ALERTS_PER_ROOM_PER_WINDOW, APPROVAL_ALERT_WINDOW_MS};
+#[cfg(feature = "full-app")]
 mod decision;
 #[cfg(feature = "full-app")]
 mod edit_policy;

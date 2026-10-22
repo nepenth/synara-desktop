@@ -1,7 +1,6 @@
 import React, { MouseEventHandler, useCallback, useMemo, useState } from 'react';
 import FocusTrap from '../../../components/FocusTrap';
 import {
-  Dialog,
   Overlay,
   OverlayCenter,
   OverlayBackdrop,
@@ -19,6 +18,7 @@ import {
   PopOut,
   RectCords,
 } from 'folds';
+import { Dialog } from '../../../components/modal-dialog';
 import type { MatrixError } from '../../../utils/matrix';
 import { timestampToEventWithNativeOwner } from '../nativeTimelineTimestampToEvent';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
@@ -31,6 +31,7 @@ import { getToday, getYesterday, timeDayMonthYear, timeHourMinute } from '../../
 import { DatePicker, TimePicker } from '../../../components/time-date';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
+import { composerErrorMessage } from '../composerSendError';
 
 type JumpToTimeProps = {
   onCancel: () => void;
@@ -107,7 +108,7 @@ export function JumpToTime({ onCancel, onSubmit }: JumpToTimeProps) {
               <Box grow="Yes">
                 <Text size="H4">Jump to Time</Text>
               </Box>
-              <IconButton size="300" onClick={onCancel} radii="300">
+              <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
                 <Icon src={Icons.Cross} />
               </IconButton>
             </Header>
@@ -231,7 +232,10 @@ export function JumpToTime({ onCancel, onSubmit }: JumpToTimeProps) {
               </Box>
               {timestampState.status === AsyncStatus.Error && (
                 <Text style={{ color: color.Critical.Main }} size="T300">
-                  {timestampState.error.message}
+                  {composerErrorMessage(
+                    timestampState.error,
+                    'Synara could not find a message at that time. Try again.'
+                  )}
                 </Text>
               )}
               <Button

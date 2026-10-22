@@ -910,3 +910,247 @@ async fn snapshot_refetches_when_sync_overlaps_an_older_server_response() {
     assert_eq!(fetch.await.unwrap().unwrap(), expected);
     assert_eq!(requests.load(Ordering::SeqCst), 2);
 }
+
+fn approval_request(event_id: &str) -> NativeNotificationDecideRequest {
+    NativeNotificationDecideRequest {
+        room_id: ROOM_ID.to_owned(),
+        event_id: Some(event_id.to_owned()),
+        kind: "agent_approval".to_owned(),
+        title: "Approval Required: Dangerous Command".to_owned(),
+        body: "Reason: renderer text with a command".to_owned(),
+        route: None,
+        suppress_if_focused_room: false,
+    }
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
+}
+
+fn muted_room_rules(own_user_id: &OwnedUserId) -> Ruleset {
+    let mut muted = Ruleset::server_default(own_user_id);
+    muted
+        .insert(
+            NewPushRule::Override(NewConditionalPushRule::new(
+                ROOM_ID.to_owned(),
+                vec![PushCondition::EventMatch(EventMatchConditionData::new(
+                    "room_id".to_owned(),
+                    ROOM_ID.to_owned(),
+                ))],
+                vec![],
+            )),
+            None,
+            None,
+        )
+        .unwrap();
+    muted
+}
+
+#[tokio::test]
+async fn approvals_without_an_agent_list_follow_push_rules_and_name_the_room() {
+    let (server, client, f, own_user_id) = synced_group_room().await;
+    let owner = NativeNotificationDecisionOwner::new(&client, 7).unwrap();
+    let now = now_ms();
+    server
+        .mock_sync()
+        .ok_and_run(&client, |builder| {
+            builder.add_joined_room(
+                JoinedRoomBuilder::new(room_id!("!push-rules:example.org")).add_timeline_event(
+                    f.text_msg("Approval Required: Dangerous Command\necho hello")
+                        .sender(*CAROL)
+                        .server_ts(now)
+                        .event_id(event_id!("$approval-loud")),
+                ),
+            );
+        })
+        .await;
+    let loud = owner
+        .decide_observed(approval_request("$approval-loud"))
+        .await
+        .unwrap();
+    assert_eq!(loud.decision, "show");
+    let candidate = loud.candidate.unwrap();
+    assert_eq!(
+        candidate.kind,
+        synara_core::dto::NotificationKind::AgentApproval
+    );
+    assert_eq!(candidate.title, "Approval Required: Dangerous Command");
+    assert!(
+        candidate.body.starts_with("Review a request in ")
+            && candidate.body != "Review a request in Synara.",
+        "the urgent alert names the room: {}",
+        candidate.body
+    );
+
+    // A muted room never raises an approval alert from an unlisted sender.
+    server
+        .mock_sync()
+        .ok_and_run(&client, |builder| {
+            builder.add_custom_global_account_data(push_rules_account_data(&muted_room_rules(
+                &own_user_id,
+            )));
+            builder.add_joined_room(
+                JoinedRoomBuilder::new(room_id!("!push-rules:example.org")).add_timeline_event(
+                    f.text_msg("Approval Required: Dangerous Command\necho hello")
+                        .sender(*CAROL)
+                        .server_ts(now)
+                        .event_id(event_id!("$approval-muted")),
+                ),
+            );
+        })
+        .await;
+    let muted = owner
+        .decide_observed(approval_request("$approval-muted"))
+        .await
+        .unwrap();
+    assert_eq!(muted.decision, "suppress");
+    assert_eq!(muted.reason.as_deref(), Some("push-rules-no-notify"));
+}
+
+#[tokio::test]
+async fn a_configured_agent_list_gates_approval_senders_and_may_bypass_mute() {
+    use synara_core::app::notifications::{
+        AgentNotificationPreferences, AGENT_NOTIFICATION_PREFERENCES_EVENT_TYPE,
+    };
+    let (server, client, f, own_user_id) = synced_group_room().await;
+    let owner = NativeNotificationDecisionOwner::new(&client, 7).unwrap();
+    let now = now_ms();
+    let preferences = AgentNotificationPreferences {
+        agent_user_ids: vec![BOB.to_string()],
+        ..Default::default()
+    };
+    server.mock_sync().ok_and_run(&client, |builder| {
+        builder.add_custom_global_account_data(serde_json::json!({"type":AGENT_NOTIFICATION_PREFERENCES_EVENT_TYPE,"content":preferences}));
+        builder.add_joined_room(JoinedRoomBuilder::new(room_id!("!push-rules:example.org"))
+            .add_timeline_event(f.text_msg("Approval Required: Dangerous Command\nrm -rf /").sender(*CAROL).server_ts(now).event_id(event_id!("$impostor")))
+            .add_timeline_event(f.text_msg("Approval Required: Dangerous Command\necho ok").sender(*BOB).server_ts(now).event_id(event_id!("$agent"))));
+    }).await;
+
+    // Someone off the list gets an ordinary, push-rule-governed message with
+    // none of the renderer's approval text.
+    let impostor = owner
+        .decide_observed(approval_request("$impostor"))
+        .await
+        .unwrap();
+    assert_eq!(impostor.decision, "show");
+    let candidate = impostor.candidate.unwrap();
+    assert_eq!(candidate.kind, synara_core::dto::NotificationKind::Message);
+    assert_eq!(candidate.body, "New message");
+    assert!(!candidate.title.contains("Approval"));
+
+    let agent = owner
+        .decide_observed(approval_request("$agent"))
+        .await
+        .unwrap();
+    assert_eq!(
+        agent.candidate.unwrap().kind,
+        synara_core::dto::NotificationKind::AgentApproval
+    );
+
+    // In a muted room the listed agent still alerts; anyone else is silent.
+    server
+        .mock_sync()
+        .ok_and_run(&client, |builder| {
+            builder.add_custom_global_account_data(push_rules_account_data(&muted_room_rules(
+                &own_user_id,
+            )));
+            builder.add_joined_room(
+                JoinedRoomBuilder::new(room_id!("!push-rules:example.org"))
+                    .add_timeline_event(
+                        f.text_msg("Approval Required: Dangerous Command\nrm -rf /")
+                            .sender(*CAROL)
+                            .server_ts(now)
+                            .event_id(event_id!("$impostor-muted")),
+                    )
+                    .add_timeline_event(
+                        f.text_msg("Approval Required: Dangerous Command\necho ok")
+                            .sender(*BOB)
+                            .server_ts(now)
+                            .event_id(event_id!("$agent-muted")),
+                    ),
+            );
+        })
+        .await;
+    let impostor_muted = owner
+        .decide_observed(approval_request("$impostor-muted"))
+        .await
+        .unwrap();
+    assert_eq!(impostor_muted.decision, "suppress");
+    assert_eq!(
+        impostor_muted.reason.as_deref(),
+        Some("push-rules-no-notify")
+    );
+    let agent_muted = owner
+        .decide_observed(approval_request("$agent-muted"))
+        .await
+        .unwrap();
+    assert_eq!(agent_muted.decision, "show");
+    assert_eq!(
+        agent_muted.candidate.unwrap().kind,
+        synara_core::dto::NotificationKind::AgentApproval
+    );
+}
+
+#[tokio::test]
+async fn urgent_approval_alerts_are_rate_limited_per_room() {
+    use synara_core::app::notifications::APPROVAL_ALERTS_PER_ROOM_PER_WINDOW;
+    let (server, client, f, _) = synced_group_room().await;
+    let owner = NativeNotificationDecisionOwner::new(&client, 7).unwrap();
+    let now = now_ms();
+    let ids: Vec<ruma::OwnedEventId> = (0..=APPROVAL_ALERTS_PER_ROOM_PER_WINDOW)
+        .map(|index| ruma::EventId::parse(format!("$flood-{index}")).unwrap())
+        .collect();
+    server
+        .mock_sync()
+        .ok_and_run(&client, |builder| {
+            let mut room = JoinedRoomBuilder::new(room_id!("!push-rules:example.org"));
+            for id in &ids {
+                room = room.add_timeline_event(
+                    f.text_msg("Approval Required: Dangerous Command\necho hello")
+                        .sender(*CAROL)
+                        .server_ts(now)
+                        .event_id(id),
+                );
+            }
+            builder.add_joined_room(room);
+        })
+        .await;
+
+    // A retried decision for an already shown prompt does not spend budget.
+    let first = owner
+        .decide_observed(approval_request(ids[0].as_str()))
+        .await
+        .unwrap();
+    assert_eq!(
+        first.candidate.unwrap().kind,
+        synara_core::dto::NotificationKind::AgentApproval
+    );
+    let retry = owner
+        .decide_observed(approval_request(ids[0].as_str()))
+        .await
+        .unwrap();
+    assert_eq!(retry.reason.as_deref(), Some("duplicate-event"));
+
+    let mut kinds = Vec::new();
+    for id in &ids[1..] {
+        let readback = owner
+            .decide_observed(approval_request(id.as_str()))
+            .await
+            .unwrap();
+        assert_eq!(readback.decision, "show");
+        kinds.push(readback.candidate.unwrap().kind);
+    }
+    let urgent = kinds
+        .iter()
+        .filter(|kind| **kind == synara_core::dto::NotificationKind::AgentApproval)
+        .count();
+    assert_eq!(urgent + 1, APPROVAL_ALERTS_PER_ROOM_PER_WINDOW);
+    assert_eq!(
+        kinds.last(),
+        Some(&synara_core::dto::NotificationKind::Message),
+        "the prompt over budget is delivered as an ordinary message"
+    );
+}

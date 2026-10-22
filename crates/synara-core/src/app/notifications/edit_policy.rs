@@ -1,4 +1,6 @@
-//! Account-level replacement suppression, established before APNs registration.
+//! Account-level replacement suppression, attempted before APNs registration.
+//! Best-effort: when it cannot be installed or confirmed the pusher is still
+//! registered and the result names the failure (review S17).
 //!
 //! The Matrix default suppress-edits rule follows mention overrides. Synara's
 //! product policy is stricter: edits must not alert even when they mention the

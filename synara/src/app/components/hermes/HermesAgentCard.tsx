@@ -4,7 +4,6 @@ import {
   Box,
   Button,
   Chip,
-  Dialog,
   Header,
   Icon,
   IconButton,
@@ -17,6 +16,7 @@ import {
   config,
   toRem,
 } from 'folds';
+import { Dialog } from '../modal-dialog';
 import { useTranslation } from 'react-i18next';
 import { HermesAgentPayload, HermesCodeBlock, hermesPayloadToMarkdown } from '../../utils/hermes';
 import { copyToClipboard } from '../../utils/dom';
@@ -107,6 +107,8 @@ export const HermesAgentCard = memo(({ payload }: HermesAgentCardProps) => {
   const markdown = hermesPayloadToMarkdown(payload);
   const [busyActionId, setBusyActionId] = useState<string>();
   const [actionErrorId, setActionErrorId] = useState<string>();
+  const [actionDoneId, setActionDoneId] = useState<string>();
+  const [actionDoneOutcome, setActionDoneOutcome] = useState<'copied' | 'done'>('copied');
   const [pendingUrlAction, setPendingUrlAction] = useState<ActionEntry>();
 
   const pendingActionTitle = pendingUrlAction?.title ?? '';
@@ -143,15 +145,18 @@ export const HermesAgentCard = memo(({ payload }: HermesAgentCardProps) => {
     async (action: ActionEntry) => {
       setBusyActionId(action.id);
       setActionErrorId(undefined);
+      setActionDoneId(undefined);
       try {
-        const handled = await sendPlatformAgentAction({
+        const outcome = await sendPlatformAgentAction({
           ...action,
           markdown,
         });
-        if (!handled) {
-          copyToClipboard(action.prompt ?? action.title);
-          setActionErrorId(undefined);
-        }
+        // Nothing could run it: copy its text here instead.
+        if (outcome === 'unsupported') copyToClipboard(action.prompt ?? action.title);
+        // Say what happened, so a click never looks ignored: copied by the
+        // shell or the fallback above, or handed on to Synara to run.
+        setActionDoneOutcome(outcome === 'handed_to_renderer' ? 'done' : 'copied');
+        setActionDoneId(action.id);
       } catch {
         setActionErrorId(action.id);
       } finally {
@@ -283,7 +288,12 @@ export const HermesAgentCard = memo(({ payload }: HermesAgentCardProps) => {
                   <Box grow="Yes">
                     <Text size="H4">{t('modernization.hermes.confirm_action', 'Open link')}</Text>
                   </Box>
-                  <IconButton size="300" onClick={handleActionOpenCancel} radii="300">
+                  <IconButton
+                    size="300"
+                    onClick={handleActionOpenCancel}
+                    radii="300"
+                    aria-label="Close"
+                  >
                     <Icon src={Icons.Cross} />
                   </IconButton>
                 </Header>
@@ -368,6 +378,13 @@ export const HermesAgentCard = memo(({ payload }: HermesAgentCardProps) => {
           {actionErrorId && (
             <Text size="T200" style={{ color: color.Critical.Main }}>
               {t('modernization.hermes.action_failed', 'Action failed')}
+            </Text>
+          )}
+          {!actionErrorId && actionDoneId && (
+            <Text size="T200" priority="300" role="status">
+              {actionDoneOutcome === 'done'
+                ? t('modernization.hermes.action_done', 'Done')
+                : t('modernization.hermes.action_copied', 'Copied')}
             </Text>
           )}
           <Box gap="100" wrap="Wrap">

@@ -110,6 +110,7 @@ use crate::transport::{MatrixIpcError, MatrixIpcErrorCategory, MAX_WIRE_COUNTER}
 // and owner error mapping together. Only the parent registry imports them.
 mod account_data;
 use account_data::*;
+mod identity_reset;
 mod messaging;
 use messaging::*;
 mod native_extras;
@@ -154,6 +155,8 @@ pub struct CoreState {
     user_status: Mutex<Option<Arc<NativeUserStatusOwner>>>,
     verification: Mutex<Option<Arc<NativeVerificationOwner>>>,
     devices: Mutex<Option<Arc<NativeDeviceOwner>>>,
+    /// The post-sign-in "Verify this device" prompt for the open session.
+    verification_prompt: Mutex<Option<crate::app::cross_signing::DeviceVerificationPromptArm>>,
     dehydrated_devices: Mutex<Option<Arc<NativeDehydratedDevicesOwner>>>,
     join_rules: Mutex<Option<Arc<NativeRoomJoinRuleOwner>>>,
     image_packs: Mutex<Option<Arc<NativeImagePackOwner>>>,
@@ -322,6 +325,7 @@ impl Core {
                 user_status: Mutex::new(None),
                 verification: Mutex::new(None),
                 devices: Mutex::new(None),
+                verification_prompt: Mutex::new(None),
                 dehydrated_devices: Mutex::new(None),
                 join_rules: Mutex::new(None),
                 image_packs: Mutex::new(None),
@@ -370,14 +374,31 @@ impl Core {
     /// Close the in-memory core projection. P2 deliberately does not erase
     /// platform persistence; lifecycle/destructive policies remain explicit.
     pub async fn close(&self) -> Result<(), MatrixIpcError> {
-        // Decrypted display bytes must not outlive the session that read them.
-        crate::app::media::clear_hot_media_cache();
+        let closed_user = self.close_projection().await?;
+        // Decrypted display bytes must not outlive the session that read
+        // them. Only that account's: the hot cache is process-wide, and
+        // another Core (a second account, a parallel test) keeps its own.
+        if let Some(user_id) = closed_user {
+            crate::app::media::clear_hot_media_cache_for_user(&user_id);
+        }
+        Ok(())
+    }
+
+    /// [`Self::close`] without touching the media cache, for a projection
+    /// mirror that never read media and shares its account with the live
+    /// session. Returns the user whose projection closed.
+    pub(crate) async fn close_projection(&self) -> Result<Option<String>, MatrixIpcError> {
+        // Sign-out ends a pending identity reset even while a shell still
+        // holds the device owner; the SDK handle stops polling the homeserver.
+        if let Some(devices) = self.state.device_owner()? {
+            devices.identity_reset_abandon().await;
+        }
         let mut guard = self
             .state
             .session
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
-        *guard = None;
+        let closed_user = guard.take().map(|session| session.user_id);
         drop(guard);
         let mut typing = self
             .state
@@ -421,6 +442,13 @@ impl Core {
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *devices = None;
         drop(devices);
+        let mut verification_prompt = self
+            .state
+            .verification_prompt
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *verification_prompt = None;
+        drop(verification_prompt);
         let mut dehydrated_devices = self
             .state
             .dehydrated_devices
@@ -476,7 +504,7 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *widgets = None;
-        Ok(())
+        Ok(closed_user)
     }
 
     /// Install the live typing owner created by the shell after login/restore.
@@ -674,6 +702,33 @@ impl Core {
             .map_err(|diagnostic| {
                 MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure)
                     .with_diagnostic(diagnostic)
+            })
+    }
+
+    /// Finish a cross-signing setup that asked for the account password.
+    /// The password is a method argument only, never a command field.
+    pub async fn cross_signing_setup_password(
+        &self,
+        password: &str,
+    ) -> Result<crate::app::cross_signing::NativeCrossSigningSetupResult, MatrixIpcError> {
+        if password.is_empty() || password.len() > 100_000 {
+            return Err(MatrixIpcError::new(MatrixIpcErrorCategory::Unknown)
+                .with_diagnostic("v-crypto.2-cross-signing-password-empty"));
+        }
+        let owner = self.state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-cross-signing-setup-no-session")
+        })?;
+        owner
+            .authenticate_cross_signing_password(password)
+            .await
+            .map_err(|diagnostic| {
+                let category = match diagnostic {
+                    "v-crypto.2-cross-signing-password-rejected"
+                    | "v-crypto.2-cross-signing-user-missing" => MatrixIpcErrorCategory::Forbidden,
+                    _ => MatrixIpcErrorCategory::Unknown,
+                };
+                MatrixIpcError::new(category).with_diagnostic(diagnostic)
             })
     }
 

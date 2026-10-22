@@ -6,13 +6,13 @@ import SynaraCore
 /// meaning (connected / syncing / disconnected / restore failed) without
 /// tokens, homeserver admin URLs, or raw SDK text.
 enum ConnectionStatusCopy {
-    static let connected = "Connected"
-    static let syncing = "Syncing history…"
-    static let starting = "Connecting…"
-    static let reconnecting = "Connection Lost! Reconnecting..."
-    static let disconnected = "Connection Lost!"
-    static let restoreFailed = "Couldn't restore this session. Sign out and sign in again."
-    static let stopped = "Not connected"
+    static let connected = String(localized: "Connected")
+    static let syncing = String(localized: "Syncing history…")
+    static let starting = String(localized: "Connecting…")
+    static let reconnecting = String(localized: "Connection Lost! Reconnecting...")
+    static let disconnected = String(localized: "Connection Lost!")
+    static let restoreFailed = String(localized: "Couldn't restore this session. Log out and sign in again.")
+    static let stopped = String(localized: "Not connected")
 
     static func banner(_ status: MatrixSyncStatus) -> String {
         switch status {
@@ -70,11 +70,14 @@ enum ConnectionStatusCopy {
         }
     }
 
+    /// Only where signing out is the remedy. A lost connection offers Retry
+    /// alone, so a mis-tap during a network blip cannot end the session;
+    /// Log Out stays in Settings.
     static func showsSignOutAction(_ status: MatrixSyncStatus) -> Bool {
         switch status {
-        case .restoreFailed, .disconnected, .failed:
+        case .restoreFailed:
             return true
-        case .connected, .syncing, .starting, .reconnecting, .stopped:
+        case .disconnected, .failed, .connected, .syncing, .starting, .reconnecting, .stopped:
             return false
         }
     }
@@ -166,6 +169,10 @@ enum ConnectionStatusCopy {
 final class ConnectionStatusStore: ObservableObject {
     @Published private(set) var status: MatrixSyncStatus = .stopped
     @Published private(set) var isBannerVisible = false
+    /// Core's verdict that the homeserver lacks simplified sliding sync
+    /// (MSC4186), so sync cannot start. Same meaning as desktop's capability
+    /// banner; it replaces the connection copy rather than adding a screen.
+    @Published private(set) var slidingSyncUnsupported = false
 
     /// Native SyncService reports Offline/idle/failed during short sliding-sync
     /// gaps. Hold Lost-equivalent chrome until that state lasts.
@@ -191,7 +198,36 @@ final class ConnectionStatusStore: ObservableObject {
 
     /// Empty-state / placeholder copy follows held chrome, not the live SDK blip.
     var emptyStateMessage: String {
-        ConnectionStatusCopy.banner(status)
+        bannerText
+    }
+
+    var presentsBanner: Bool {
+        isBannerVisible || slidingSyncUnsupported
+    }
+
+    var bannerText: String {
+        slidingSyncUnsupported
+            ? ServerCompatibilityCopy.slidingSyncUnsupported
+            : ConnectionStatusCopy.banner(status)
+    }
+
+    var bannerVariant: ConnectionStatusCopy.Variant {
+        slidingSyncUnsupported ? .critical : ConnectionStatusCopy.variant(status)
+    }
+
+    var bannerSystemImage: String {
+        slidingSyncUnsupported
+            ? "exclamationmark.triangle.fill"
+            : ConnectionStatusCopy.systemImage(status)
+    }
+
+    /// Retrying cannot help until the server changes; signing out can.
+    var showsRetryAction: Bool {
+        !slidingSyncUnsupported && ConnectionStatusCopy.showsRetryAction(status)
+    }
+
+    var showsSignOutAction: Bool {
+        slidingSyncUnsupported || ConnectionStatusCopy.showsSignOutAction(status)
     }
 
     func update(_ status: MatrixSyncStatus) {
@@ -204,7 +240,30 @@ final class ConnectionStatusStore: ObservableObject {
         }
     }
 
+    /// `capable` is the sync status' `slidingSyncCapable`; only an explicit
+    /// `false` (probe or a terminal `M_UNRECOGNIZED`) shows the verdict.
+    func updateSlidingSyncCapability(_ capable: Bool?) {
+        let unsupported = capable == false
+        if Thread.isMainThread {
+            applySlidingSyncUnsupported(unsupported)
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.applySlidingSyncUnsupported(unsupported)
+            }
+        }
+    }
+
+    private func applySlidingSyncUnsupported(_ unsupported: Bool) {
+        if slidingSyncUnsupported != unsupported {
+            slidingSyncUnsupported = unsupported
+        }
+    }
+
     private func apply(_ status: MatrixSyncStatus) {
+        // A stopped session (sign-out, background) no longer has a server verdict.
+        if status == .stopped {
+            applySlidingSyncUnsupported(false)
+        }
         if shouldDelay(status) {
             if ConnectionStatusCopy.holdsBeforeBanner(self.status) {
                 present(status)

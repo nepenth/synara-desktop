@@ -5,7 +5,7 @@ final class LocalWipeServiceTests: XCTestCase {
     func testLogoutFailurePresentationPreservesActionableKindsAndRedactsUnknownErrors() {
         XCTAssertEqual(
             LocalWipeError.displayMessage(for: LocalWipeError.pusherCleanupFailed),
-            "Could not remove this device's push registration. Try signing out again."
+            "Could not remove this device's push registration. Try logging out again."
         )
         XCTAssertEqual(
             LocalWipeError.displayMessage(for: LocalWipeError.sessionDeleteFailed),
@@ -21,7 +21,7 @@ final class LocalWipeServiceTests: XCTestCase {
     func testTimedOutSignOutHasRetryCopy() {
         XCTAssertEqual(
             LocalWipeError.displayMessage(for: LocalWipeError.timedOut),
-            "Signing out is taking too long. Try signing out again."
+            "Logging out is taking too long. Try logging out again."
         )
     }
 
@@ -110,6 +110,9 @@ final class LocalWipeServiceTests: XCTestCase {
             senderID: "@alice:matrix.org",
             timestamp: Date()
         )
+        let previewURL = try XCTUnwrap(LocalUploadPreviewStore.url(for: "synara-attachment-wipe"))
+        LocalUploadPreviewStore.shared.store(Data("photo".utf8), key: "synara-attachment-wipe")
+        XCTAssertNotNil(LocalUploadPreviewStore.shared.data(for: previewURL))
         let wipe = AppLocalWipeService(
             session: session,
             matrix: matrix,
@@ -136,7 +139,11 @@ final class LocalWipeServiceTests: XCTestCase {
         XCTAssertEqual(push.completeRegistrationTeardownCallCount, 1)
         XCTAssertEqual(secureStore.deleteCallCount, 1)
         XCTAssertEqual(drafts.draft(roomID: "!room:matrix.org"), "")
-        XCTAssertTrue(outgoingSends.queue.items.isEmpty)
+        XCTAssertTrue(outgoingSends.queue.currentItems.isEmpty)
+        XCTAssertNil(
+            LocalUploadPreviewStore.shared.data(for: previewURL),
+            "picked attachment bytes must not outlive the account"
+        )
         XCTAssertEqual(router.selectedTab, .rooms)
         XCTAssertTrue(router.settingsPath.isEmpty)
         XCTAssertNil(router.sheetDestination)

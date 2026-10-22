@@ -3,6 +3,10 @@
 use super::*;
 use crate::dto::LocalEchoRetryStatus;
 
+/// How long a timeline open waits for sync to bring in a room the client
+/// does not know yet before it fails as retryable.
+const TIMELINE_ROOM_SYNC_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
 /// Exact React/Tauri envelope payload for `matrix_timeline_close`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -65,6 +69,9 @@ pub struct MatrixTimelineSetReadStateRequest {
     pub intent: NativeTimelineReadIntent,
     #[serde(default)]
     pub observed_live_tail_event_id: Option<String>,
+    /// Send public `m.read` rather than `m.read.private` (receipt privacy).
+    #[serde(default)]
+    pub public_receipt: bool,
 }
 
 /// Exact React/Tauri envelope payload for `matrix_timeline_follow_live`.
@@ -166,6 +173,9 @@ pub struct MatrixPollRespondRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixEditMessageRequest {
     pub room_id: String,
+    /// The replaced event. May be empty when `target_transaction_id` names a
+    /// message still in the send queue.
+    #[serde(default)]
     pub event_id: String,
     pub body: String,
     #[serde(default)]
@@ -178,6 +188,10 @@ pub struct MatrixEditMessageRequest {
     pub mention_room: Option<bool>,
     #[serde(default)]
     pub txn_id: Option<String>,
+    /// Transaction id of the edited message while it is a local echo; Core
+    /// edits it in place through `Timeline::edit` (review S16).
+    #[serde(default)]
+    pub target_transaction_id: Option<String>,
 }
 
 /// Exact React/Tauri envelope payload for `matrix_timeline_edit_text`.
@@ -341,13 +355,30 @@ pub(super) async fn timeline_open(
         MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
             .with_diagnostic("d0.3-timeline-invalid-room-id")
     })?;
-    if let Some(sync_owner) = state.sync_owner()? {
+    let sync_owner = state.sync_owner()?;
+    if let Some(sync_owner) = &sync_owner {
         sync_owner.subscribe_to_room(&room_id).await;
     }
     let owner = state.timeline_owner()?.ok_or_else(|| {
         MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
             .with_diagnostic("p2-timeline-open-no-session")
     })?;
+    // A room the client does not know yet (joined elsewhere, or a push that
+    // outran sync) arrives with the next sync response. Without a running
+    // (or recovering) sync there is nothing to wait for, and the open fails
+    // as not found.
+    let sync_may_deliver = sync_owner.as_ref().is_some_and(|owner| {
+        matches!(
+            owner.observe().readiness,
+            crate::app::sync::SyncReadiness::Running | crate::app::sync::SyncReadiness::Offline
+        )
+    });
+    if sync_may_deliver {
+        owner
+            .await_room(&payload.room_id, TIMELINE_ROOM_SYNC_WAIT)
+            .await
+            .map_err(timeline_open_owner_error)?;
+    }
     let readback: NativeTimelineOpenReadback = owner
         .open_at(NativeTimelineOpenRequest {
             room_id: payload.room_id,
@@ -418,6 +449,23 @@ pub(super) async fn timeline_snapshot(
         .await
         .map_err(timeline_open_owner_error)?;
     Ok(snapshot)
+}
+
+/// Typed safety-net probe: `matrix_timeline_snapshot`, or `None` while the
+/// stream is still at `known_revision`.
+pub(super) async fn timeline_snapshot_after(
+    state: &Arc<CoreState>,
+    payload: MatrixTimelineSnapshotRequest,
+    known_revision: u64,
+) -> Result<Option<TimelineViewSnapshot>, MatrixIpcError> {
+    let owner = state.timeline_owner()?.ok_or_else(|| {
+        MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+            .with_diagnostic("p2-timeline-snapshot-no-session")
+    })?;
+    owner
+        .snapshot_after(&payload.stream_id, known_revision)
+        .await
+        .map_err(timeline_open_owner_error)
 }
 
 #[cfg(test)]
@@ -633,6 +681,7 @@ pub(super) async fn timeline_set_read_state(
             action: payload.action,
             intent: payload.intent,
             observed_live_tail_event_id: payload.observed_live_tail_event_id,
+            public_receipt: payload.public_receipt,
         })
         .await
         .map_err(timeline_view_owner_error)?;
@@ -1026,6 +1075,9 @@ pub(super) fn send_text_owner_error(diagnostic_id: &'static str) -> MatrixIpcErr
         | "v-send.5-invalid-thread-root-event-id"
         | "v-send.r-edit-invalid-event-id"
         | "v-send.r-edit-room-not-found"
+        | "v-send.r-edit-not-own-event"
+        | "v-send.r-edit-incompatible-target"
+        | "v-send.r-edit-target-not-found"
         | "v-send-sticker-invalid-body"
         | "v-send-sticker-invalid-mxc"
         | "v-send-sticker-invalid-mimetype"
@@ -1126,6 +1178,7 @@ pub(super) async fn edit_message(
             payload.mention_user_ids,
             payload.mention_room,
             payload.txn_id,
+            payload.target_transaction_id,
         )
         .await
         .map_err(send_text_owner_error)?;

@@ -7,7 +7,6 @@ import {
   Icon,
   IconButton,
   Icons,
-  Modal,
   Overlay,
   OverlayBackdrop,
   OverlayCenter,
@@ -16,11 +15,16 @@ import {
   Text,
   config,
 } from 'folds';
+import { Modal } from '../../components/modal-dialog';
 import { copyToClipboard } from '../../utils/dom';
 import { useTimeoutToggle } from '../../hooks/useTimeoutToggle';
 import { previewMatrixMediaText } from '../../matrix/media';
 import { stopPropagation } from '../../utils/keyboard';
 import { NativeFormattedBody } from './nativeTimelineFormattedBody';
+import {
+  nativeTimelineActionErrorMessage,
+  TIMELINE_ACTION_FAILED,
+} from './nativeTimelineErrorCopy';
 import {
   nativeTimelineFileDownloadName,
   saveNativeTimelineFileAttachment,
@@ -66,7 +70,10 @@ export function NativeTimelineMarkdownPreview({
         if (cancelled) return;
         setStatus({
           kind: 'error',
-          message: error instanceof Error ? error.message : 'Could not open file.',
+          message: nativeTimelineActionErrorMessage(
+            error,
+            'Synara could not open this file. Try again.'
+          ),
         });
       }
     })();
@@ -98,7 +105,7 @@ export function NativeTimelineMarkdownPreview({
       mimeType: target.mimeType,
     })
       .catch((error) => {
-        onActionError?.(error instanceof Error ? error.message : 'Could not download file.');
+        onActionError?.(nativeTimelineActionErrorMessage(error, TIMELINE_ACTION_FAILED.download));
       })
       .finally(() => setBusySave(false));
   };

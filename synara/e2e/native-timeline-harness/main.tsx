@@ -22,6 +22,15 @@ const params = new URLSearchParams(location.search);
 const scenario = params.get('scenario') ?? 'live';
 const polish = params.has('polish');
 const jank = params.has('jank');
+// `editable`: Core lets the user edit every message (the in-place editor).
+const editable = params.has('editable');
+// `failOpen`: the first room open fails the way Core rejects a command.
+let failOpen = params.has('failOpen');
+const coreOpenFailure = (diagnosticId: string) => ({
+  code: 'Unknown',
+  message: 'The native Matrix timeline is unavailable.',
+  diagnosticId,
+});
 const FILE_MD_HANDLE = `timeline-media-${'ab'.repeat(32)}`;
 const FILE_ZIP_HANDLE = `timeline-media-${'cd'.repeat(32)}`;
 const FILE_MD_BYTES = `# Agent notes
@@ -59,9 +68,24 @@ let sequence = polish
     ? 1
     : scenario === 'short'
       ? 2
-      : jank
-        ? 180
-        : 60;
+      : scenario === 'media'
+        ? 3
+        : jank
+          ? 180
+          : 60;
+// `scenario=media`: an image, a video and an image the webview cannot load.
+const MEDIA_IMAGE_HANDLE = `timeline-media-${'1a'.repeat(32)}`;
+const MEDIA_VIDEO_HANDLE = `timeline-media-${'2b'.repeat(32)}`;
+const MEDIA_BROKEN_HANDLE = `timeline-media-${'3c'.repeat(32)}`;
+// `eventWindow` serves an unread position from an event-focused window: it
+// cannot follow live, and its first forward page reaches the newest event.
+// Thread fixtures: `failThreadOpen` rejects the first thread open,
+// `failThreadPaginate` the first thread pagination, `threadMore` leaves older
+// replies on the server and `holdThreadReopen` holds every later thread open.
+let failThreadOpen = params.has('failThreadOpen');
+let failThreadPaginate = params.has('failThreadPaginate');
+let threadOpenCount = 0;
+let releaseThreadOpen: (() => void) | undefined;
 let historyIndex = 0;
 let stream = 0;
 let releaseJump: (() => void) | undefined;
@@ -70,10 +94,20 @@ let failLastRead = params.has('failLastRead');
 let lastCandidateStreamId: string | undefined;
 let releaseOperation: (() => void) | undefined;
 let operationDeferred = false;
-const eventCallbacks = new Map<number, (event: unknown) => void>();
-const eventListeners = new Map<number, { event: string; handler: number }>();
+// `nativeEvents`: the views' delta channels, as `desktop_timeline_subscribe`
+// and the Rust registry deliver them (room-wide until an open claims a stream).
+const channelCallbacks = new Map<number, (message: unknown) => void>();
+const deltaSubscriptions = new Map<
+  number,
+  { roomId: string; channelId: number; nextIndex: number }
+>();
+const streamOwners = new Map<string, number>();
 let callbackSequence = 0;
-let eventSequence = 0;
+let subscriptionSequence = 0;
+const claimStream = (subscriptionId: unknown, streamId: string | undefined) => {
+  if (typeof subscriptionId !== 'number' || !streamId) return;
+  if (deltaSubscriptions.has(subscriptionId)) streamOwners.set(streamId, subscriptionId);
+};
 const commands: { command: string; args?: Record<string, unknown> }[] = [];
 const makeRow = (index: number) => ({
   kind: 'message' as const,
@@ -117,7 +151,7 @@ const makeRow = (index: number) => ({
   capabilities: {
     react: polish,
     reply: polish,
-    edit: false,
+    edit: editable,
     redact: polish,
     report: polish,
     pin: polish,
@@ -144,6 +178,29 @@ if (scenario === 'threads') {
       : row
   );
 }
+if (scenario === 'media') {
+  const media = [
+    {
+      messageType: 'image' as const,
+      mediaFilename: 'sunrise.png',
+      media: { handleId: MEDIA_IMAGE_HANDLE, mimeType: 'image/png', width: 64, height: 48 },
+    },
+    {
+      messageType: 'video' as const,
+      mediaFilename: 'clip.mp4',
+      media: { handleId: MEDIA_VIDEO_HANDLE, mimeType: 'video/mp4', width: 64, height: 48 },
+    },
+    {
+      messageType: 'image' as const,
+      mediaFilename: 'broken.png',
+      media: { handleId: MEDIA_BROKEN_HANDLE, mimeType: 'image/png', width: 64, height: 48 },
+    },
+  ];
+  rows = rows.map(
+    (row, index) =>
+      ({ ...row, body: media[index].mediaFilename, ...media[index] }) as (typeof rows)[number]
+  );
+}
 const threadRows = () => [
   rows.find((row) => row.eventId === THREAD_ROOT) ?? makeRow(1),
   ...Array.from({ length: THREAD_REPLY_COUNT }, (_, index) => ({
@@ -151,6 +208,13 @@ const threadRows = () => [
     itemId: `$t${index + 1}`,
     eventId: `$t${index + 1}`,
     body: `Thread reply ${index + 1}`,
+    // One reply carries Matrix HTML, as Hermes and Element send it.
+    ...(index === 5
+      ? {
+          formattedBody:
+            '<p>Thread reply 6 is <strong>formatted</strong> with <code>code</code></p><script>bad()</script>',
+        }
+      : {}),
     threadRoot: THREAD_ROOT,
   })),
 ];
@@ -182,10 +246,16 @@ const emitCandidateUpdate = (body: string, skipRevision = false, remove = false)
     revision: batch.revision,
     rows: remove ? current.rows.slice(1) : [row, ...current.rows.slice(1)],
   });
-  for (const [id, listener] of eventListeners) {
-    if (listener.event === 'matrix-timeline-view-updated') {
-      eventCallbacks.get(listener.handler)?.({ event: listener.event, id, payload: batch });
-    }
+  emitBatch(batch);
+};
+const emitBatch = (batch: NativeTimelineViewDeltaBatch) => {
+  const owner = streamOwners.get(batch.streamId);
+  for (const [id, subscription] of deltaSubscriptions) {
+    if (subscription.roomId !== batch.roomId || (owner !== undefined && owner !== id)) continue;
+    channelCallbacks.get(subscription.channelId)?.({
+      message: batch,
+      index: subscription.nextIndex++,
+    });
   }
 };
 const update = () => {
@@ -245,6 +315,11 @@ const openSnapshot = (selectedPosition: NativeTimelinePosition, includeLastRead 
   return { schemaVersion: 1, streamId, position: selectedPosition, snapshot: result };
 };
 update();
+// Pagination and read-state replies carry stream metadata only, as in Core.
+const withoutRows = <S extends { rows: unknown }>(snapshot: S): Omit<S, 'rows'> => {
+  const { rows: _rows, ...metadata } = snapshot;
+  return metadata;
+};
 window.__SYNARA_DESKTOP__ = {
   platform: 'tauri',
   invoke: async <T,>(command: string, args?: Record<string, unknown>): Promise<T> => {
@@ -280,11 +355,32 @@ window.__SYNARA_DESKTOP__ = {
       if (params.get('operationResult') === 'reject')
         throw new Error('Superseded operation rejected');
       if (params.get('operationResult') === 'unavailable') return undefined as T;
-      return (
-        command === 'matrix_timeline_set_read_state'
-          ? { snapshot: oldSnapshot, receiptSent: true }
-          : oldSnapshot
-      ) as T;
+      if (command === 'matrix_timeline_set_read_state')
+        return { view: withoutRows(oldSnapshot), receiptSent: true } as T;
+      if (command === 'matrix_timeline_paginate') return withoutRows(oldSnapshot) as T;
+      return oldSnapshot as T;
+    }
+    if (command === 'matrix_session_snapshot') return { status: 'logged_in' } as T;
+    if (command === 'matrix_edit_message') {
+      return {
+        roomId: room,
+        eventId: args?.eventId,
+        localTxnId: 'edit-txn',
+        status: 'sent',
+      } as T;
+    }
+    if (
+      command === 'matrix_timeline_open' &&
+      request?.position?.kind === 'focused' &&
+      request.position.event_id === '$broken'
+    ) {
+      // Core could not open the routed event at all (the bridge reports it
+      // as an invalid request).
+      throw coreOpenFailure('d0.3-timeline-invalid-room-id');
+    }
+    if (command === 'matrix_timeline_open' && failOpen && request?.position?.kind !== 'focused') {
+      failOpen = false;
+      throw coreOpenFailure('d0.3-timeline-open-failed');
     }
     if (command === 'matrix_timeline_timestamp_to_event') {
       return {
@@ -294,6 +390,16 @@ window.__SYNARA_DESKTOP__ = {
       } as T;
     }
     if (command === 'matrix_timeline_open' && request?.position?.kind === 'thread') {
+      threadOpenCount += 1;
+      if (failThreadOpen) {
+        failThreadOpen = false;
+        throw coreOpenFailure('v-timeline-thread-open-failed');
+      }
+      if (params.has('holdThreadReopen') && threadOpenCount > 1) {
+        await new Promise<void>((resolve) => {
+          releaseThreadOpen = resolve;
+        });
+      }
       const threadPosition = {
         kind: 'thread',
         root_event_id: (request.position as { root_event_id?: string }).root_event_id ?? '',
@@ -302,11 +408,31 @@ window.__SYNARA_DESKTOP__ = {
       const threadSnapshot = {
         ...opened.snapshot,
         rows: threadRows(),
-        pagination: { backward: 'exhausted', forward: 'exhausted' } as const,
+        pagination: {
+          backward: params.has('threadMore') ? 'available' : 'exhausted',
+          forward: 'exhausted',
+        } as const,
       };
       snapshots.set(opened.streamId, threadSnapshot);
       openThreadStreams.add(opened.streamId);
       return { ...opened, snapshot: threadSnapshot } as T;
+    }
+    if (
+      command === 'matrix_timeline_open' &&
+      request?.position?.kind === 'focused' &&
+      (request.position.event_id === '$gone' ||
+        (scenario === 'threads' && request.position.event_id?.startsWith('$t')))
+    ) {
+      // Core resolves a routed event before choosing a provider: a thread
+      // reply opens the live room at its root, a deleted one the live bottom.
+      const reply = request.position.event_id !== '$gone';
+      const opened = openSnapshot(
+        reply ? { kind: 'focused', target_event_id: THREAD_ROOT } : { kind: 'live_bottom' }
+      );
+      return {
+        ...opened,
+        focusRoute: reply ? { kind: 'thread', root_event_id: THREAD_ROOT } : { kind: 'missing' },
+      } as T;
     }
     if (command === 'matrix_timeline_open') {
       let selectedPosition = position;
@@ -364,6 +490,8 @@ window.__SYNARA_DESKTOP__ = {
       ) as T;
     }
     if (command === 'matrix_timeline_follow_live') {
+      // An event-focused window cannot be promoted in place.
+      if (params.has('eventWindow')) throw new Error('v-timeline-follow-live-tail-not-loaded');
       if (args?.observedLiveTailEventId !== rows.at(-1)?.eventId) throw new Error('Unseen tail');
       const current = snapshots.get(args?.streamId as string);
       if (!current) throw new Error('Unknown stream');
@@ -378,13 +506,27 @@ window.__SYNARA_DESKTOP__ = {
     if (command === 'matrix_timeline_set_read_state') {
       const current = snapshots.get(request?.streamId ?? '');
       if (!current) throw new Error('Unknown stream');
+      // Core publishes the new read state as a delta before it replies; the
+      // reply carries metadata only. Without a delta channel the fixture
+      // leaves the stream as it was, as a dropped batch would.
+      if (deltaSubscriptions.size === 0)
+        return { view: withoutRows(current), receiptSent: true } as T;
       const next = {
         ...current,
         revision: current.revision + 1,
         readState: { ...current.readState, ownReadEventId: request?.observedLiveTailEventId },
       };
       snapshots.set(request?.streamId ?? '', next);
-      return { snapshot: next, receiptSent: true } as T;
+      emitBatch({
+        schemaVersion: 1,
+        sessionGeneration: next.sessionGeneration,
+        roomId: next.roomId,
+        streamId: request?.streamId ?? '',
+        revision: next.revision,
+        ops: [],
+        readState: next.readState,
+      });
+      return { view: withoutRows(next), receiptSent: true } as T;
     }
     if (command === 'matrix_timeline_jump_latest') {
       const opened = openSnapshot({ kind: 'live_bottom' });
@@ -404,7 +546,35 @@ window.__SYNARA_DESKTOP__ = {
       openThreadStreams.delete(request?.streamId ?? '');
       return undefined as T;
     }
-    if (command === 'matrix_timeline_paginate') return snapshots.get(request?.streamId ?? '') as T;
+    if (command === 'matrix_timeline_paginate') {
+      if (failThreadPaginate && openThreadStreams.has(request?.streamId ?? '')) {
+        failThreadPaginate = false;
+        throw new Error('Thread history is temporarily unavailable');
+      }
+      const current = snapshots.get(request?.streamId ?? '');
+      const direction = (args?.request as { direction?: string } | undefined)?.direction;
+      if (current && params.has('eventWindow') && direction === 'forwards') {
+        // The event-focused window reached the room's newest event; Core
+        // publishes the page state as its own batch before replying.
+        const next = {
+          ...current,
+          revision: current.revision + 1,
+          pagination: { ...current.pagination, forward: 'exhausted' as const },
+        };
+        snapshots.set(request?.streamId ?? '', next);
+        emitBatch({
+          schemaVersion: 1,
+          sessionGeneration: next.sessionGeneration,
+          roomId: next.roomId,
+          streamId: request?.streamId ?? '',
+          revision: next.revision,
+          ops: [],
+          pagination: next.pagination,
+        });
+        return withoutRows(next) as T;
+      }
+      return (current ? withoutRows(current) : undefined) as T;
+    }
     if (command === 'matrix_media_text_preview') {
       return { text: FILE_MD_BYTES } as T;
     }
@@ -417,48 +587,98 @@ window.__SYNARA_DESKTOP__ = {
       const filename = typeof args?.filename === 'string' ? args.filename : 'download';
       return { filename } as T;
     }
+    if (command === 'matrix_timeline_redact') {
+      // Core's readback for a completed redaction of the requested event.
+      const redact = args?.request as { roomId: string; eventId: string };
+      return {
+        schemaVersion: 1,
+        action: 'redact',
+        roomId: redact.roomId,
+        eventId: redact.eventId,
+        status: 'redacted',
+      } as T;
+    }
     return undefined as T;
   },
 };
 
 if (params.has('nativeEvents')) {
+  // The real `@tauri-apps/api` Channel runs on these internals: it orders
+  // messages by index and unregisters itself on the end message.
+  const desktop = window.__SYNARA_DESKTOP__;
+  const desktopInvoke = desktop?.invoke;
+  if (!desktop || !desktopInvoke) throw new Error('The harness bridge is missing');
+  desktop.invoke = async <T,>(command: string, args?: Record<string, unknown>): Promise<T> => {
+    if (command === 'desktop_timeline_subscribe') {
+      commands.push({ command, args });
+      const id = ++subscriptionSequence;
+      deltaSubscriptions.set(id, {
+        roomId: args?.roomId as string,
+        channelId: (args?.channel as { id: number }).id,
+        nextIndex: 0,
+      });
+      return id as T;
+    }
+    if (command === 'desktop_timeline_unsubscribe') {
+      commands.push({ command, args });
+      const id = args?.subscriptionId as number;
+      const subscription = deltaSubscriptions.get(id);
+      deltaSubscriptions.delete(id);
+      for (const [streamId, owner] of streamOwners) {
+        if (owner === id) streamOwners.delete(streamId);
+      }
+      // Rust drops the channel, which tells the webview no more will come.
+      if (subscription) {
+        channelCallbacks.get(subscription.channelId)?.({
+          end: true,
+          index: subscription.nextIndex,
+        });
+      }
+      return (subscription !== undefined) as T;
+    }
+    const result = await desktopInvoke<T>(command, args);
+    const request = args?.request as { streamId?: string } | undefined;
+    if (command === 'matrix_timeline_open' || command === 'matrix_timeline_jump_latest') {
+      claimStream(args?.subscriptionId, (result as { streamId?: string } | undefined)?.streamId);
+    }
+    if (command === 'matrix_timeline_close' && request?.streamId) {
+      streamOwners.delete(request.streamId);
+    }
+    return result;
+  };
   Object.assign(window, {
     __TAURI_INTERNALS__: {
-      transformCallback: (handler: (event: unknown) => void) => {
+      transformCallback: (handler: (message: unknown) => void) => {
         const id = ++callbackSequence;
-        eventCallbacks.set(id, handler);
+        channelCallbacks.set(id, handler);
         return id;
       },
+      unregisterCallback: (id: number) => {
+        channelCallbacks.delete(id);
+      },
       invoke: async (command: string, args: Record<string, unknown>) => {
-        if (command === 'plugin:event|listen') {
-          const id = ++eventSequence;
-          eventListeners.set(id, { event: args.event as string, handler: args.handler as number });
-          return id;
-        }
-        if (command === 'plugin:event|unlisten') {
-          eventListeners.delete(args.eventId as number);
-          return undefined;
-        }
+        // Other views still listen to small Tauri events; none fire here.
+        if (command === 'plugin:event|listen') return ++callbackSequence;
+        if (command === 'plugin:event|unlisten') return undefined;
         return window.__SYNARA_DESKTOP__?.invoke?.(command, args);
       },
     },
-    __TAURI_EVENT_PLUGIN_INTERNALS__: {
-      unregisterListener: (_event: string, id: number) => {
-        const listener = eventListeners.get(id);
-        if (listener) eventCallbacks.delete(listener.handler);
-        eventListeners.delete(id);
-      },
+    __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => undefined },
+  });
+}
+
+if (scenario === 'media' || params.has('surface')) {
+  // Core serves media on its own protocol; tests route this origin path instead.
+  Object.assign(window, {
+    __TAURI_INTERNALS__: {
+      ...(window as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__,
+      convertFileSrc: (handle: string) =>
+        `${location.origin}/__synara-media/${encodeURIComponent(handle)}`,
     },
   });
 }
 
-const dispatchBatch = (batch: NativeTimelineViewDeltaBatch) => {
-  for (const [id, listener] of eventListeners) {
-    if (listener.event === 'matrix-timeline-view-updated') {
-      eventCallbacks.get(listener.handler)?.({ event: listener.event, id, payload: batch });
-    }
-  }
-};
+const dispatchBatch = emitBatch;
 
 const emitActiveBatch = (
   build: (current: NativeTimelineViewSnapshot, streamId: string) => NativeTimelineViewDeltaBatch
@@ -580,7 +800,7 @@ const api = {
     }
   },
   emitRevisionGap() {
-    if (eventListeners.size === 0 || snapshots.size === 0) {
+    if (deltaSubscriptions.size === 0 || snapshots.size === 0) {
       throw new Error('emitRevisionGap requires an open native timeline stream');
     }
     const row = makeRow(++sequence);
@@ -817,11 +1037,30 @@ const api = {
   releaseJump() {
     releaseJump?.();
   },
-  send(roomId = room) {
-    requestRoomLatestAfterSend(roomId);
+  /** A composer send into the room, or into one of its threads. */
+  send(roomId = room, threadRootId?: string) {
+    requestRoomLatestAfterSend(roomId, threadRootId);
   },
+  /** Root of the `scenario=threads` thread. */
+  threadRoot: THREAD_ROOT,
   openThreadStreams() {
     return openThreadStreams.size;
+  },
+  /** Open delta channels, and which channel each open stream is claimed by. */
+  deltaChannels() {
+    return {
+      subscriptions: [...deltaSubscriptions.keys()],
+      threadOwners: [...openThreadStreams].map((streamId) => streamOwners.get(streamId)),
+      roomOwners: [...snapshots.keys()]
+        .filter((streamId) => !openThreadStreams.has(streamId))
+        .map((streamId) => streamOwners.get(streamId)),
+    };
+  },
+  threadOpenCount() {
+    return threadOpenCount;
+  },
+  releaseThreadOpen() {
+    releaseThreadOpen?.();
   },
 };
 Object.assign(window, { nativeTimelineFixture: api });
@@ -838,11 +1077,15 @@ function App() {
   const [mounted, setMounted] = useState(true);
   const [focusedEventId, setFocusedEventId] = useState<string>();
   const [paneRoot, setPaneRoot] = useState<string>();
+  const [paneFocus, setPaneFocus] = useState<string>();
   const [paneWidth, setPaneWidth] = useState(360);
   return (
     <>
       <button onClick={() => setMounted((value) => !value)}>Toggle room</button>
       <button onClick={() => setFocusedEventId('$30')}>Focus middle</button>
+      <button onClick={() => setFocusedEventId('$t3')}>Focus thread reply</button>
+      <button onClick={() => setFocusedEventId('$gone')}>Focus deleted</button>
+      <button onClick={() => setFocusedEventId('$broken')}>Focus broken</button>
       <div style={{ display: 'flex', alignItems: 'stretch' }}>
         <div
           id="native-timeline"
@@ -860,7 +1103,12 @@ function App() {
               eventId={focusedEventId}
               threadDisplay={threadDisplay}
               onOpenThreadPane={
-                threadDisplay === 'full' ? undefined : (rootEventId) => setPaneRoot(rootEventId)
+                threadDisplay === 'full'
+                  ? undefined
+                  : (rootEventId, _latestEventId, focusEventId) => {
+                      setPaneRoot(rootEventId);
+                      setPaneFocus(focusEventId);
+                    }
               }
             />
           )}
@@ -870,6 +1118,7 @@ function App() {
             <ThreadSidePanel
               roomId={room}
               rootEventId={paneRoot}
+              focusEventId={paneFocus}
               width={paneWidth}
               availableWidth={1600}
               onWidthChange={setPaneWidth}
@@ -894,6 +1143,12 @@ async function bootHarness() {
       document.body.style.backgroundColor = '#161719';
       document.body.style.color = '#ededed';
     }
+  }
+  if (params.has('surface')) {
+    // Message text outside the timeline (inbox, pins, search, topics).
+    const { mountRichTextSurfaces } = await import('./surfaces');
+    mountRichTextSurfaces(document.getElementById('root')!);
+    return;
   }
   createRoot(document.getElementById('root')!).render(<App />);
 }

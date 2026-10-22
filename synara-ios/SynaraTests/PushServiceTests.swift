@@ -5,29 +5,128 @@ import SynaraCore
 
 @MainActor
 final class PushServiceTests: XCTestCase {
-    func testAgentApprovalDecisionsRunInBackgroundForWatchAndLockScreen() throws {
-        let actions = SynaraNotificationActionContract.agentApprovalActions()
-        let approve = try XCTUnwrap(
-            actions.first { $0.identifier == SynaraNotificationActionContract.approveOnceIdentifier }
+    private struct ApprovalActions {
+        let approve: UNNotificationAction
+        let deny: UNNotificationAction
+        let review: UNNotificationAction
+        let all: [UNNotificationAction]
+    }
+
+    private func approvalActions(approveOnceWithoutUnlock: Bool) throws -> ApprovalActions {
+        let actions = SynaraNotificationActionContract.agentApprovalActions(
+            approveOnceWithoutUnlock: approveOnceWithoutUnlock
         )
-        let deny = try XCTUnwrap(
-            actions.first { $0.identifier == SynaraNotificationActionContract.denyIdentifier }
+        return ApprovalActions(
+            approve: try XCTUnwrap(
+                actions.first { $0.identifier == SynaraNotificationActionContract.approveOnceIdentifier }
+            ),
+            deny: try XCTUnwrap(
+                actions.first { $0.identifier == SynaraNotificationActionContract.denyIdentifier }
+            ),
+            review: try XCTUnwrap(
+                actions.first { $0.identifier == SynaraNotificationActionContract.reviewIdentifier }
+            ),
+            all: actions
         )
-        let review = try XCTUnwrap(
-            actions.first { $0.identifier == SynaraNotificationActionContract.reviewIdentifier }
+    }
+
+    func testApproveOnceRequiresUnlockByDefault() throws {
+        XCTAssertFalse(SynaraSharedConstants.defaultApproveOnceWithoutUnlock)
+        let actions = try approvalActions(approveOnceWithoutUnlock: false)
+
+        // Approving runs an agent's command: a locked iPhone must be unlocked
+        // first. The action still runs in the background after unlock.
+        XCTAssertTrue(actions.approve.options.contains(.authenticationRequired))
+        XCTAssertFalse(actions.approve.options.contains(.foreground))
+        // Deny cannot run anything and stays available without an unlock.
+        XCTAssertFalse(actions.deny.options.contains(.authenticationRequired))
+        XCTAssertFalse(actions.deny.options.contains(.foreground))
+        XCTAssertTrue(actions.deny.options.contains(.destructive))
+        XCTAssertTrue(actions.review.options.contains(.foreground))
+        XCTAssertFalse(
+            actions.all.contains { $0.identifier == SynaraAgentApprovalNotificationActionID.approveAlways.rawValue }
         )
+    }
+
+    func testOptInLetsApproveOnceRunFromLockScreenAndWatch() throws {
+        let actions = try approvalActions(approveOnceWithoutUnlock: true)
 
         // Foreground or authentication-required actions cannot complete from
         // a mirrored Apple Watch alert while the iPhone is locked.
-        XCTAssertFalse(approve.options.contains(.foreground))
-        XCTAssertFalse(approve.options.contains(.authenticationRequired))
-        XCTAssertFalse(deny.options.contains(.foreground))
-        XCTAssertFalse(deny.options.contains(.authenticationRequired))
-        XCTAssertTrue(deny.options.contains(.destructive))
-        XCTAssertTrue(review.options.contains(.foreground))
+        XCTAssertFalse(actions.approve.options.contains(.authenticationRequired))
+        XCTAssertFalse(actions.approve.options.contains(.foreground))
+        XCTAssertFalse(actions.deny.options.contains(.authenticationRequired))
+        XCTAssertFalse(actions.deny.options.contains(.foreground))
+        XCTAssertTrue(actions.deny.options.contains(.destructive))
+        XCTAssertTrue(actions.review.options.contains(.foreground))
         XCTAssertFalse(
-            actions.contains { $0.identifier == SynaraAgentApprovalNotificationActionID.approveAlways.rawValue }
+            actions.all.contains { $0.identifier == SynaraAgentApprovalNotificationActionID.approveAlways.rawValue }
         )
+    }
+
+    func testRegisteredCategoryFollowsTheStoredUnlockPreference() throws {
+        let suite = "PushServiceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        func approveOptions() -> UNNotificationActionOptions? {
+            SynaraNotificationActionContract.agentApprovalCategory(
+                approveOnceWithoutUnlock: SynaraApproveOnceWithoutUnlockPreference.isEnabled(defaults: defaults)
+            )
+            .actions
+            .first { $0.identifier == SynaraNotificationActionContract.approveOnceIdentifier }?
+            .options
+        }
+
+        XCTAssertFalse(SynaraApproveOnceWithoutUnlockPreference.isEnabled(defaults: defaults))
+        XCTAssertEqual(approveOptions()?.contains(.authenticationRequired), true)
+
+        defaults.set(true, forKey: SynaraSharedConstants.approveOnceWithoutUnlockKey)
+        XCTAssertTrue(SynaraApproveOnceWithoutUnlockPreference.isEnabled(defaults: defaults))
+        XCTAssertEqual(approveOptions()?.contains(.authenticationRequired), false)
+
+        defaults.set(false, forKey: SynaraSharedConstants.approveOnceWithoutUnlockKey)
+        XCTAssertEqual(approveOptions()?.contains(.authenticationRequired), true)
+    }
+
+    func testSettingsFooterDescribesTheRegisteredActionsInBothStates() {
+        let locked = SynaraApprovalNotificationSettingsCopy.footer(approveOnceWithoutUnlock: false)
+        XCTAssertTrue(locked.contains("Approve once requires unlocking your iPhone first."))
+        XCTAssertTrue(locked.contains("Deny works without unlocking."))
+        XCTAssertFalse(locked.contains("require authentication"))
+        XCTAssertFalse(locked.contains("Apple Watch without unlocking"))
+
+        let unlocked = SynaraApprovalNotificationSettingsCopy.footer(approveOnceWithoutUnlock: true)
+        XCTAssertTrue(
+            unlocked.contains("Approve once and Deny work from the Lock Screen and Apple Watch without unlocking your iPhone.")
+        )
+        XCTAssertFalse(unlocked.contains("requires unlocking"))
+        for footer in [locked, unlocked] {
+            XCTAssertTrue(footer.hasSuffix("Always approval remains in-app only."))
+        }
+    }
+
+    func testNotificationsInboxLabelsApprovalPromptsAsApproval() {
+        func room(approval: Bool, highlight: Bool, membership: RoomSummary.Membership = .joined) -> RoomSummary {
+            RoomSummary(
+                id: "!agent-ops:example.org",
+                name: "Agent Ops",
+                lastMessagePreview: "Dangerous command requires approval",
+                lastMessageIsAgentApproval: approval,
+                unreadCount: 1,
+                hasHighlight: highlight,
+                kind: .room,
+                membership: membership,
+                lastActivityAt: Date()
+            )
+        }
+        XCTAssertEqual(NotificationsInboxReason(room: room(approval: true, highlight: true)), .approval)
+        XCTAssertEqual(NotificationsInboxReason(room: room(approval: true, highlight: false))?.title, "Approval")
+        XCTAssertEqual(NotificationsInboxReason(room: room(approval: false, highlight: true))?.title, "Mention")
+        XCTAssertEqual(
+            NotificationsInboxReason(room: room(approval: false, highlight: false, membership: .invited)),
+            .invite
+        )
+        XCTAssertNil(NotificationsInboxReason(room: room(approval: false, highlight: false)))
     }
 
     func testOnlyOneShotDecisionsRunAsBackgroundActions() {
@@ -469,6 +568,28 @@ final class PushServiceTests: XCTestCase {
         XCTAssertEqual(pusher.lastPushKey, "7ab13c")
     }
 
+    func testPushServiceRegistersWhenTheEditPolicyIsDegradedAndSaysSo() async {
+        let pusher = StubPusherService()
+        pusher.editSuppressionDiagnostic = "v-pusher.edit-policy-failed"
+
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: pusher,
+            isRegistrationAvailable: true
+        )
+        service.configure(with: makeSession())
+        service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
+
+        await waitUntil {
+            service.isRegistered && pusher.registerCount >= 1
+        }
+        XCTAssertTrue(service.isRegistered)
+        XCTAssertEqual(
+            service.registrationStateDescription,
+            SynaraPushService.registeredWithoutEditSuppressionDescription
+        )
+    }
+
     func testPushServiceCoalescesRepeatedRegistrationTriggers() async {
         let pusher = StubPusherService()
         let session = makeSession()
@@ -623,7 +744,7 @@ final class PushServiceTests: XCTestCase {
         XCTAssertFalse(cleanupSucceeded)
         XCTAssertEqual(
             service.registrationStateDescription,
-            "Push cleanup unavailable; finishing local sign out"
+            "Push cleanup unavailable; finishing local logout"
         )
     }
 
@@ -1056,6 +1177,69 @@ final class PushServiceTests: XCTestCase {
         XCTAssertEqual(resolver.resolveCallCount, 1)
     }
 
+    func testSparseRouteResolverOpensTheRoomCoreFindsForTheEvent() async {
+        // I29: an event-only push resolves through Core's cached-event
+        // lookup, waiting a little for sync to store the event.
+        let calls = LockedCounter()
+        let paused = LockedCounter()
+        let resolver = SharedCoreSparsePushRouteResolver(
+            lookup: { eventID in
+                XCTAssertEqual(eventID, "$sparse:matrix.org")
+                switch calls.increment() {
+                case 1:
+                    throw TimelineError.Failed(code: "p4-session-suspended", description: "suspended")
+                case 2:
+                    return nil
+                default:
+                    return TimelineEventLocationDto(
+                        roomId: "!resolved:matrix.org",
+                        route: TimelineEventRouteDto(kind: .thread, threadRootEventId: "$root:matrix.org")
+                    )
+                }
+            },
+            pause: { _ in paused.increment() },
+            attempts: 4
+        )
+
+        let route = await resolver.resolveRoute(eventID: "$sparse:matrix.org")
+
+        assertRoute(route, matchesRoom: "!resolved:matrix.org", eventID: "$sparse:matrix.org")
+        XCTAssertEqual(calls.value, 3)
+        XCTAssertEqual(paused.value, 2)
+    }
+
+    func testSparseRouteResolverGivesUpWithoutGuessing() async {
+        let calls = LockedCounter()
+        let resolver = SharedCoreSparsePushRouteResolver(
+            lookup: { _ in
+                calls.increment()
+                return nil
+            },
+            pause: { _ in },
+            attempts: 3
+        )
+        let missing = await resolver.resolveRoute(eventID: "$unknown:matrix.org")
+        XCTAssertNil(missing)
+        XCTAssertEqual(calls.value, 3)
+
+        let notReady = SharedCoreSparsePushRouteResolver(
+            lookup: { _ in
+                XCTFail("no lookup before the session is ready")
+                return nil
+            },
+            isReady: { false }
+        )
+        let unready = await notReady.resolveRoute(eventID: "$sparse:matrix.org")
+        XCTAssertNil(unready)
+        XCTAssertNil(SharedCoreSparsePushRouteResolver.route(
+            eventID: "$sparse:matrix.org",
+            location: TimelineEventLocationDto(
+                roomId: "",
+                route: TimelineEventRouteDto(kind: .room, threadRootEventId: nil)
+            )
+        ))
+    }
+
     func testPushServiceDoesNotRegisterWithoutGateway() async {
         let pusher = StubPusherService(isGatewayConfigured: false)
 
@@ -1133,6 +1317,25 @@ final class PushServiceTests: XCTestCase {
     }
 }
 
+private final class LockedCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+
+    @discardableResult
+    func increment() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        count += 1
+        return count
+    }
+}
+
 private final class StubSparsePushRouteResolver: SparsePushRouteResolving {
     let route: AppRoute?
     private(set) var resolveCallCount = 0
@@ -1168,6 +1371,7 @@ private final class StubPusherService: MatrixPusherServicing {
         var bindFailuresRemaining = 0
         var onRegister: () -> Void = {}
         var onUnregister: () -> Void = {}
+        var editSuppressionDiagnostic: String?
 
         init(
             isGatewayConfigured: Bool = true,
@@ -1188,7 +1392,7 @@ private final class StubPusherService: MatrixPusherServicing {
         return StubPusherAccountService(service: self, session: session)
     }
 
-    fileprivate func registerPusher(session: AuthenticatedSession, pushKey: String) async throws {
+    fileprivate func registerPusher(session: AuthenticatedSession, pushKey: String) async throws -> String? {
         registerCount += 1
         lastPushKey = pushKey
         registeredSessions.append(session)
@@ -1196,6 +1400,7 @@ private final class StubPusherService: MatrixPusherServicing {
         if registerDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: registerDelayNanoseconds)
         }
+        return editSuppressionDiagnostic
     }
 
     fileprivate func unregisterPusher(session: AuthenticatedSession, pushKey: String) async throws {
@@ -1238,7 +1443,7 @@ private final class StubPusherAccountService: MatrixPusherAccountServicing {
         self.session = session
     }
 
-    func registerPusher(pushKey: String) async throws {
+    func registerPusher(pushKey: String) async throws -> String? {
         try await service.registerPusher(session: session, pushKey: pushKey)
     }
 
@@ -1298,13 +1503,13 @@ private final class RecordingSharedCoreHttpPusherOwner: SharedCoreHttpPusherOwni
         _ = appDisplayName
         _ = lang
         registeredPushKeys.append(pushKey)
-        return PusherWriteDto(status: .ok)
+        return PusherWriteDto(status: .ok, editSuppressionDiagnosticId: nil)
     }
 
     func deleteHttpPusher(pushKey: String, appId: String) async throws -> PusherWriteDto {
         _ = appId
         deletedPushKeys.append(pushKey)
-        return PusherWriteDto(status: .ok)
+        return PusherWriteDto(status: .ok, editSuppressionDiagnosticId: nil)
     }
 
     func deleteHttpPushersForDevice(
@@ -1314,6 +1519,6 @@ private final class RecordingSharedCoreHttpPusherOwner: SharedCoreHttpPusherOwni
         _ = appId
         _ = lastPushKey
         deleteForDeviceCount += 1
-        return PusherWriteDto(status: .ok)
+        return PusherWriteDto(status: .ok, editSuppressionDiagnosticId: nil)
     }
 }

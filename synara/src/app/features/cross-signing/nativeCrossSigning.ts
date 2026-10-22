@@ -11,7 +11,7 @@ import type {
 export const NATIVE_CROSS_SIGNING_CHANGED = 'synara-native-cross-signing-changed';
 
 export const nativeCrossSigningErrorMessage = (): string =>
-  'Native cross-signing is unavailable. Restart Synara and try again.';
+  'Synara could not reach cross-signing. Restart Synara and try again.';
 
 const invokeNativeCrossSigning = async <T>(
   command: string,

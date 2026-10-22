@@ -1,11 +1,7 @@
-import { useSpecVersions } from './useSpecVersions';
-
-export const useMediaAuthentication = (): boolean => {
-  const { versions, unstable_features: unstableFeatures } = useSpecVersions();
-
-  // Media authentication is introduced in spec version 1.11
-  const authenticatedMedia =
-    unstableFeatures?.['org.matrix.msc3916.stable'] || versions.includes('v1.11');
-
-  return authenticatedMedia;
-};
+/**
+ * Whether media URLs should use authenticated media. Core fetches every
+ * `mxc://` through the `synara-media` protocol with the session's own
+ * authentication, and `mxcUrlToHttp` ignores this flag, so the renderer no
+ * longer asks the homeserver's /versions for it (D83).
+ */
+export const useMediaAuthentication = (): boolean => true;

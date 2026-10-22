@@ -1,8 +1,14 @@
-import React, { FormEventHandler, MouseEventHandler, useCallback, useState } from 'react';
+import React, {
+  FormEventHandler,
+  MouseEventHandler,
+  useCallback,
+  useId,
+  useRef,
+  useState,
+} from 'react';
 import {
   Box,
   Button,
-  Dialog,
   Header,
   Icon,
   IconButton,
@@ -18,6 +24,7 @@ import {
   Text,
   config,
 } from 'folds';
+import { Dialog } from '../../../components/modal-dialog';
 import FocusTrap from '../../../components/FocusTrap';
 import { Link } from 'react-router-dom';
 import { getMxIdLocalPart, getMxIdServer, isUserId } from '../../../utils/matrix';
@@ -37,6 +44,7 @@ import {
   factoryGetBaseUrl,
   loginPassword,
   useLoginComplete,
+  NATIVE_SESSION_HANDOFF_FAILED_COPY,
 } from './loginUtil';
 import { PasswordInput } from '../../../components/password-input';
 import { FieldError } from '../FiledError';
@@ -105,6 +113,7 @@ function UsernameHint({ server }: { server: string }) {
         variant="Background"
         size="300"
         radii="300"
+        aria-label="Username hint"
         aria-pressed={!!anchor}
       >
         <Icon style={{ opacity: config.opacity.P300 }} size="100" src={Icons.Info} />
@@ -132,13 +141,21 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
     Parameters<typeof loginPassword>
   >(useCallback(loginPassword, []));
 
-  useLoginComplete(loginState.status === AsyncStatus.Success ? loginState.data : undefined);
+  const { handoffFailed, retryHandoff } = useLoginComplete(
+    loginState.status === AsyncStatus.Success ? loginState.data : undefined
+  );
+  const usernameInputId = useId();
+  const passwordInputId = useId();
 
   const [storeRecoveryOpen, setStoreRecoveryOpen] = useState(false);
   const [storeRecoveryConfirmation, setStoreRecoveryConfirmation] = useState('');
   const [storeRecoveryBusy, setStoreRecoveryBusy] = useState(false);
   const [storeRecoveryDiagnostic, setStoreRecoveryDiagnostic] = useState<string>();
   const [storeRecoveryCompleted, setStoreRecoveryCompleted] = useState(false);
+  const storeRecoveryBusyRef = useRef(false);
+  storeRecoveryBusyRef.current = storeRecoveryBusy;
+  const storeRecoveryTitleId = useId();
+  const storeRecoveryDescriptionId = useId();
 
   const openStoreRecovery = () => {
     // Opening this UI has no native side effect. The only archive request is
@@ -251,13 +268,15 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
   return (
     <Box as="form" onSubmit={handleSubmit} direction="Inherit" gap="400">
       <Box direction="Column" gap="100">
-        <Text as="label" size="L400" priority="300">
+        <Text as="label" htmlFor={usernameInputId} size="L400" priority="300">
           Username
         </Text>
         <Input
+          id={usernameInputId}
           defaultValue={defaultUsername ?? defaultEmail}
           style={{ paddingRight: config.space.S300 }}
           name="usernameInput"
+          autoComplete="username"
           variant="Background"
           size="500"
           required
@@ -272,14 +291,25 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
             {loginState.error.errcode === LoginError.InvalidServer && (
               <FieldError message="Failed to find your Matrix ID server." />
             )}
+            {loginState.error.errcode === LoginError.SlidingSyncUnsupported && (
+              <FieldError message="This server doesn't support the sync protocol Synara needs (simplified sliding sync, MSC4186). Ask the server's admin." />
+            )}
           </>
         )}
       </Box>
       <Box direction="Column" gap="100">
-        <Text as="label" size="L400" priority="300">
+        <Text as="label" htmlFor={passwordInputId} size="L400" priority="300">
           Password
         </Text>
-        <PasswordInput name="passwordInput" variant="Background" size="500" outlined required />
+        <PasswordInput
+          id={passwordInputId}
+          name="passwordInput"
+          autoComplete="current-password"
+          variant="Background"
+          size="500"
+          outlined
+          required
+        />
         <Box alignItems="Start" justifyContent="SpaceBetween" gap="200">
           {loginState.status === AsyncStatus.Error && (
             <>
@@ -333,6 +363,16 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
           </Box>
         </Box>
       </Box>
+      {loginState.status === AsyncStatus.Success && handoffFailed && (
+        <Box role="alert" direction="Column" gap="200">
+          <FieldError message={NATIVE_SESSION_HANDOFF_FAILED_COPY} />
+          <Button type="button" variant="Secondary" fill="Soft" onClick={retryHandoff}>
+            <Text as="span" size="B400">
+              Retry
+            </Text>
+          </Button>
+        </Box>
+      )}
       <Button type="submit" variant="Primary" size="500" disabled={!serverReady}>
         <Text as="span" size="B500">
           {serverPending ? 'Connecting…' : 'Sign in'}
@@ -341,77 +381,102 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
 
       <Overlay open={storeRecoveryOpen} backdrop={<OverlayBackdrop />}>
         <OverlayCenter>
-          <Dialog variant="Surface">
-            <Box style={{ padding: config.space.S400, maxWidth: 520 }} direction="Column" gap="400">
-              <Text size="H4">Archive and Rebuild Local Store?</Text>
-              <Text size="T300" priority="400">
-                Synara will archive this account&apos;s local state, crypto, cache, and media before
-                rebuilding an empty local layout. It does not delete the archive, change any
-                Keychain store key, send your password, or start another login automatically.
-              </Text>
-              <Text size="T300" priority="400">
-                If the original Keychain store key is missing or corrupt, recovery remains blocked;
-                this action does not replace it.
-              </Text>
-              <Box direction="Column" gap="100">
-                <Text as="label" size="L400" priority="300">
-                  Type {STORE_RECOVERY_CONFIRMATION_TEXT} to enable this action
+          <FocusTrap
+            focusTrapOptions={{
+              initialFocus: false,
+              onDeactivate: closeStoreRecovery,
+              // Escape cancels, even from the confirmation field, unless recovery is running.
+              escapeDeactivates: (evt) => {
+                if (storeRecoveryBusyRef.current) return false;
+                evt.stopPropagation();
+                return true;
+              },
+            }}
+          >
+            <Dialog
+              variant="Surface"
+              role="alertdialog"
+              aria-labelledby={storeRecoveryTitleId}
+              aria-describedby={storeRecoveryDescriptionId}
+            >
+              <Box
+                style={{ padding: config.space.S400, maxWidth: 520 }}
+                direction="Column"
+                gap="400"
+              >
+                <Text size="H4" id={storeRecoveryTitleId}>
+                  Archive and Rebuild Local Store?
                 </Text>
-                <Input
-                  aria-label="Confirm archive and rebuild local Matrix store"
-                  value={storeRecoveryConfirmation}
-                  onChange={(evt) => setStoreRecoveryConfirmation(evt.currentTarget.value)}
-                  variant="Background"
-                  size="500"
-                  outlined
-                  disabled={storeRecoveryBusy}
-                />
+                <Text size="T300" priority="400" id={storeRecoveryDescriptionId}>
+                  Synara will archive this account&apos;s local state, crypto, cache, and media
+                  before rebuilding an empty local layout. It does not delete the archive, change
+                  any Keychain store key, send your password, or start another login automatically.
+                </Text>
+                <Text size="T300" priority="400">
+                  If the original Keychain store key is missing or corrupt, recovery remains
+                  blocked; this action does not replace it.
+                </Text>
+                <Box direction="Column" gap="100">
+                  <Text as="label" size="L400" priority="300">
+                    Type {STORE_RECOVERY_CONFIRMATION_TEXT} to enable this action
+                  </Text>
+                  <Input
+                    aria-label="Confirm archive and rebuild local Matrix store"
+                    value={storeRecoveryConfirmation}
+                    onChange={(evt) => setStoreRecoveryConfirmation(evt.currentTarget.value)}
+                    variant="Background"
+                    size="500"
+                    outlined
+                    disabled={storeRecoveryBusy}
+                  />
+                </Box>
+                {storeRecoveryDiagnostic && (
+                  <>
+                    <FieldError message="Local store recovery could not be completed." />
+                    <Text as="span" size="T200" priority="400">
+                      Diagnostic code: {storeRecoveryDiagnostic}
+                    </Text>
+                  </>
+                )}
+                <Box direction="Column" gap="200">
+                  <Button
+                    type="button"
+                    variant="Critical"
+                    onClick={() => void confirmStoreRecovery()}
+                    disabled={
+                      storeRecoveryBusy ||
+                      storeRecoveryConfirmation !== STORE_RECOVERY_CONFIRMATION_TEXT
+                    }
+                    before={
+                      storeRecoveryBusy && <Spinner variant="Critical" fill="Solid" size="200" />
+                    }
+                  >
+                    <Text as="span" size="B400">
+                      Archive and Rebuild
+                    </Text>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="Secondary"
+                    fill="Soft"
+                    onClick={closeStoreRecovery}
+                    disabled={storeRecoveryBusy}
+                  >
+                    <Text as="span" size="B400">
+                      Cancel
+                    </Text>
+                  </Button>
+                </Box>
               </Box>
-              {storeRecoveryDiagnostic && (
-                <>
-                  <FieldError message="Local store recovery could not be completed." />
-                  <Text as="span" size="T200" priority="400">
-                    Diagnostic code: {storeRecoveryDiagnostic}
-                  </Text>
-                </>
-              )}
-              <Box direction="Column" gap="200">
-                <Button
-                  type="button"
-                  variant="Critical"
-                  onClick={() => void confirmStoreRecovery()}
-                  disabled={
-                    storeRecoveryBusy ||
-                    storeRecoveryConfirmation !== STORE_RECOVERY_CONFIRMATION_TEXT
-                  }
-                  before={
-                    storeRecoveryBusy && <Spinner variant="Critical" fill="Solid" size="200" />
-                  }
-                >
-                  <Text as="span" size="B400">
-                    Archive and Rebuild
-                  </Text>
-                </Button>
-                <Button
-                  type="button"
-                  variant="Secondary"
-                  fill="Soft"
-                  onClick={closeStoreRecovery}
-                  disabled={storeRecoveryBusy}
-                >
-                  <Text as="span" size="B400">
-                    Cancel
-                  </Text>
-                </Button>
-              </Box>
-            </Box>
-          </Dialog>
+            </Dialog>
+          </FocusTrap>
         </OverlayCenter>
       </Overlay>
 
       <Overlay
         open={
-          loginState.status === AsyncStatus.Loading || loginState.status === AsyncStatus.Success
+          loginState.status === AsyncStatus.Loading ||
+          (loginState.status === AsyncStatus.Success && !handoffFailed)
         }
         backdrop={<OverlayBackdrop />}
       >

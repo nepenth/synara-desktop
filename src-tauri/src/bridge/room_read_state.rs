@@ -10,11 +10,13 @@ pub(crate) async fn room_set_read_state(
     core: &Core,
     room_id: String,
     action: NativeTimelineReadAction,
+    public_receipt: bool,
 ) -> Result<NativeRoomReadStateReadback, MatrixAuthCommandError> {
     let response = core
         .room_set_read_state(synara_core::core_api::MatrixRoomSetReadStateRequest {
             room_id,
             action,
+            public_receipt,
         })
         .await
         .map_err(map_room_set_read_state_core_error)?;

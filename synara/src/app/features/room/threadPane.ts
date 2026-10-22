@@ -1,6 +1,11 @@
 import type { ThreadDisplayMode } from '../../utils/threadDisplay';
 
-export type ThreadPaneTarget = { rootEventId: string; latestEventId?: string };
+export type ThreadPaneTarget = {
+  rootEventId: string;
+  latestEventId?: string;
+  /** A routed reply (notification or link) the pane scrolls to. */
+  focusEventId?: string;
+};
 
 /**
  * The thread shown in the room's side pane, if any.

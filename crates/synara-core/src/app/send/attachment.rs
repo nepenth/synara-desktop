@@ -166,7 +166,8 @@ pub async fn send_room_attachment(
     )
     .map_err(|error| {
         if error.wedged {
-            "d0.4-send-queue-wedged"
+            // Cause-specific: `d0.4-send-queue-wedged-too-large`, …
+            error.diagnostic_id
         } else {
             "v-send.1-attachment-sdk-failed"
         }
@@ -175,6 +176,7 @@ pub async fn send_room_attachment(
     // made the user attach it again and post a duplicate.
     Ok(MatrixSendRoomAttachmentResult {
         event_id: outcome.event_id(),
+        local_txn_id: outcome.transaction_id(),
         status: outcome.send_status(),
     })
 }

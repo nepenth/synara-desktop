@@ -163,15 +163,15 @@ enum ComposerAttachmentDraftList {
     static func userMessage(for rejection: ComposerAttachmentDraftRejection) -> String {
         switch rejection {
         case .empty:
-            return "Attachment is empty."
+            return String(localized: "Attachment is empty.")
         case .tooLarge:
-            return "Attachment is too large."
+            return String(localized: "Attachment is too large.")
         case .unsupportedType:
-            return "This file type cannot be attached."
+            return String(localized: "This file type cannot be attached.")
         case .limitReached:
-            return "You can attach up to \(maxCount) attachments."
+            return String(localized: "You can attach up to \(maxCount) attachments.")
         case .couldNotLoad:
-            return "Attachment could not be loaded. Try again."
+            return String(localized: "Attachment could not be loaded. Try again.")
         }
     }
 }
@@ -368,7 +368,7 @@ enum ComposerAttachmentSend {
                 await onState(.failed(message))
                 return false
             case .idle, .uploading:
-                await onState(.failed("Media could not be uploaded."))
+                await onState(.failed(String(localized: "Media could not be uploaded.")))
                 return false
             }
         }

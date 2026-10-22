@@ -19,9 +19,24 @@ export const RoomGlyph = style({
   textAlign: 'center',
 });
 
+/** A DM's peer in the `#` slot, at the glyph's size so rows keep their height. */
+export const RoomPersonGlyph = style({
+  width: toRem(18),
+  height: toRem(18),
+  fontSize: toRem(11),
+});
+
 export const RoomName = style({
   color: 'var(--synara-content-primary)',
   letterSpacing: '-0.005em',
+});
+
+/**
+ * Read rooms recede through an opaque secondary colour, not opacity: primary at
+ * 0.75 fell to 3.8:1 on a selected light row. Unread rooms add weight instead.
+ */
+export const RoomNameRead = style({
+  color: 'var(--synara-content-secondary)',
 });
 
 /** Resting rows remain on the reading plane; interaction supplies elevation. */

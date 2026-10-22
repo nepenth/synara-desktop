@@ -19,7 +19,9 @@ use crate::dto::{Membership, NotificationMode, RoomSummary};
 #[cfg_attr(feature = "full-uniffi", derive(uniffi::Enum))]
 #[serde(rename_all = "snake_case")]
 pub enum RoomListOrder {
-    /// Newest latest-event timestamp first; rooms without one sort last, then by name.
+    /// Newest latest-event timestamp first. Rooms without one sort after
+    /// those with one and keep their input order, which in a snapshot is the
+    /// SDK's recency order (server bump stamp).
     Recent,
     /// Display name, ignoring case and `#`; unnamed rooms sort last.
     Name,
@@ -33,6 +35,8 @@ pub struct RoomOrderInput {
     pub name: Option<String>,
     /// Latest-event timestamp in milliseconds; `None` when the SDK has none.
     pub last_activity_ms: Option<u64>,
+    /// `m.lowpriority` rooms sort after every other room in either order.
+    pub is_low_priority: bool,
 }
 
 /// Lower-case name with `#` removed and surrounding whitespace trimmed, or
@@ -63,8 +67,18 @@ fn compare_recent(left: &RoomOrderInput, right: &RoomOrderInput) -> Ordering {
         (Some(l), Some(r)) if l != r => r.cmp(&l),
         (Some(_), None) => Ordering::Less,
         (None, Some(_)) => Ordering::Greater,
-        _ => compare_names(left, right),
+        (Some(_), Some(_)) => compare_names(left, right),
+        // Neither has a latest event (nothing displayable in the synced
+        // window). The stable sort keeps the caller's order, which the SDK
+        // list sorted by the server's recency stamp; names would put a room
+        // that is busy with, say, reactions below idle ones.
+        (None, None) => Ordering::Equal,
     }
+}
+
+/// Low-priority rooms after the rest, then the chosen order.
+fn compare_priority(left: &RoomOrderInput, right: &RoomOrderInput) -> Ordering {
+    left.is_low_priority.cmp(&right.is_low_priority)
 }
 
 /// Room ids in display order for one section.
@@ -72,8 +86,12 @@ fn compare_recent(left: &RoomOrderInput, right: &RoomOrderInput) -> Ordering {
 pub fn order_room_ids(rooms: Vec<RoomOrderInput>, order: RoomListOrder) -> Vec<String> {
     let mut rooms = rooms;
     match order {
-        RoomListOrder::Recent => rooms.sort_by(compare_recent),
-        RoomListOrder::Name => rooms.sort_by(compare_names),
+        RoomListOrder::Recent => rooms.sort_by(|left, right| {
+            compare_priority(left, right).then_with(|| compare_recent(left, right))
+        }),
+        RoomListOrder::Name => rooms.sort_by(|left, right| {
+            compare_priority(left, right).then_with(|| compare_names(left, right))
+        }),
     }
     rooms.into_iter().map(|room| room.room_id).collect()
 }
@@ -83,6 +101,7 @@ fn order_input(room: &RoomSummary) -> RoomOrderInput {
         room_id: room.room_id.clone(),
         name: room.name.clone(),
         last_activity_ms: room.last_activity_ts,
+        is_low_priority: room.is_low_priority,
     }
 }
 
@@ -303,7 +322,41 @@ mod tests {
             room_id: id.to_owned(),
             name: name.map(str::to_owned),
             last_activity_ms: ts,
+            is_low_priority: false,
         }
+    }
+
+    #[test]
+    fn low_priority_rooms_sort_last_in_both_orders() {
+        let mut quiet = input("!quiet", Some("Aardvark"), Some(99));
+        quiet.is_low_priority = true;
+        let rooms = vec![
+            quiet,
+            input("!busy", Some("Zulu"), Some(50)),
+            input("!idle", Some("Mike"), Some(10)),
+        ];
+        assert_eq!(
+            order_room_ids(rooms.clone(), RoomListOrder::Recent),
+            ["!busy", "!idle", "!quiet"]
+        );
+        assert_eq!(
+            order_room_ids(rooms, RoomListOrder::Name),
+            ["!idle", "!busy", "!quiet"]
+        );
+    }
+
+    #[test]
+    fn rooms_without_a_latest_event_keep_the_sdk_recency_order() {
+        // Input order is the SDK list order (server recency stamp).
+        let ids = order_room_ids(
+            vec![
+                input("!recent-bump", Some("Zulu"), None),
+                input("!dated", Some("Mike"), Some(5)),
+                input("!older-bump", Some("Alpha"), None),
+            ],
+            RoomListOrder::Recent,
+        );
+        assert_eq!(ids, ["!dated", "!recent-bump", "!older-bump"]);
     }
 
     #[test]

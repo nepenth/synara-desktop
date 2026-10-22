@@ -14,22 +14,39 @@ protocol SignedInSessionReadinessServicing: Sendable {
     /// prepared, skipping `matrix.start` and leaving the room list without a
     /// live Core session until the process is relaunched.
     func resetForSignOut() async
+    /// The Matrix stores are closing for background suspension. A prepared
+    /// session stops counting as prepared, so a room or timeline opened
+    /// meanwhile waits for the foreground resume instead of failing on
+    /// closed stores.
+    func suspend() async
+    /// A foreground (or background-mutation) start for `session` finished.
+    /// Releases everything parked since `suspend()`.
+    func resume(for session: AuthenticatedSession) async
 }
 
 /// Gates room-list loading until `SessionCoordinator` finishes preparing the Matrix client.
 actor SignedInSessionReadiness: SignedInSessionReadinessServicing {
     private var preparingToken: String?
     private var preparedToken: String?
+    /// Prepared before (or while) the stores closed for suspension; it becomes
+    /// prepared again on `resume(for:)`.
+    private var suspendedToken: String?
+    private var isSuspended = false
     private var waiters: [String: [CheckedContinuation<Bool, Never>]] = [:]
     private var invalidatedTokens: Set<String> = []
 
     func claimPreparation(for session: AuthenticatedSession) async -> Bool {
         let token = readinessToken(for: session)
-        if preparedToken == token || preparingToken == token {
+        // A suspended session is resumed by the lifecycle path, not prepared again.
+        if preparedToken == token || preparingToken == token || suspendedToken == token {
             return false
         }
         if let preparingToken, preparingToken != token {
             rememberInvalidated(preparingToken)
+        }
+        if let suspendedToken {
+            rememberInvalidated(suspendedToken)
+            self.suspendedToken = nil
         }
         invalidatedTokens.remove(token)
         preparingToken = token
@@ -47,15 +64,42 @@ actor SignedInSessionReadiness: SignedInSessionReadinessServicing {
 
     func markPrepared(for session: AuthenticatedSession) async -> Bool {
         let token = readinessToken(for: session)
-        guard preparingToken == token else { return preparedToken == token }
+        guard preparingToken == token else { return preparedToken == token || suspendedToken == token }
         preparingToken = nil
-        preparedToken = token
         invalidatedTokens.remove(token)
-        let pending = waiters.removeValue(forKey: token) ?? []
-        for waiter in pending {
-            waiter.resume(returning: true)
+        if isSuspended {
+            // `matrix.start` returned without opening the stores (suppressed in
+            // the background, or paused meanwhile). Waiters keep waiting for
+            // the foreground resume instead of opening against closed stores.
+            suspendedToken = token
+            return true
         }
+        preparedToken = token
+        releaseWaiters(for: token, returning: true)
         return true
+    }
+
+    func suspend() async {
+        isSuspended = true
+        if let preparedToken {
+            suspendedToken = preparedToken
+            self.preparedToken = nil
+        }
+    }
+
+    func resume(for session: AuthenticatedSession) async {
+        isSuspended = false
+        guard let suspendedToken else { return }
+        self.suspendedToken = nil
+        let token = readinessToken(for: session)
+        guard suspendedToken == token else {
+            // A different identity resumed; the suspended one is gone.
+            rememberInvalidated(suspendedToken)
+            releaseWaiters(for: suspendedToken, returning: false)
+            return
+        }
+        preparedToken = token
+        releaseWaiters(for: token, returning: true)
     }
 
     func cancelPreparation(for session: AuthenticatedSession) async {
@@ -63,15 +107,14 @@ actor SignedInSessionReadiness: SignedInSessionReadinessServicing {
         guard preparingToken == token else { return }
         preparingToken = nil
         rememberInvalidated(token)
-        let pending = waiters.removeValue(forKey: token) ?? []
-        for waiter in pending {
-            waiter.resume(returning: false)
-        }
+        releaseWaiters(for: token, returning: false)
     }
 
     func resetForSignOut() async {
         preparingToken = nil
         preparedToken = nil
+        suspendedToken = nil
+        isSuspended = false
         invalidatedTokens.removeAll()
         let pending = waiters
         waiters.removeAll()
@@ -113,6 +156,13 @@ actor SignedInSessionReadiness: SignedInSessionReadinessServicing {
     private func rememberInvalidated(_ token: String) {
         invalidatedTokens.insert(token)
     }
+
+    private func releaseWaiters(for token: String, returning prepared: Bool) {
+        let pending = waiters.removeValue(forKey: token) ?? []
+        for waiter in pending {
+            waiter.resume(returning: prepared)
+        }
+    }
 }
 
 struct ImmediateSignedInSessionReadiness: SignedInSessionReadinessServicing {
@@ -136,4 +186,10 @@ struct ImmediateSignedInSessionReadiness: SignedInSessionReadinessServicing {
     }
 
     func resetForSignOut() async {}
+
+    func suspend() async {}
+
+    func resume(for session: AuthenticatedSession) async {
+        _ = session
+    }
 }

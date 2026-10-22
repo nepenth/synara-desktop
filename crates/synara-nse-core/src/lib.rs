@@ -79,6 +79,8 @@ pub struct NsePreviewRequest {
     store_root: String,
     room_id: String,
     event_id: String,
+    /// The app's short version, for the `Synara-iOS-NSE/<version>` User-Agent.
+    app_version: String,
     cancellation: CancellationToken,
     started: AtomicBool,
 }
@@ -95,6 +97,20 @@ impl synara_core::app::nse_preview::NseSecretReader for SecretReaderAdapter {
             )
         })
     }
+}
+
+/// Make async-compat's fallback runtime multi-threaded before `resolve` is
+/// first polled, as the app does (see `synara_core::ffi_runtime`). The
+/// constructor is the extension's only synchronous entry point.
+fn install_nse_ffi_runtime() {
+    static INSTALL: std::sync::Once = std::sync::Once::new();
+    INSTALL.call_once(|| {
+        uniffi::deps::async_compat::set_runtime_builder(Box::new(|| {
+            synara_core::ffi_runtime::ffi_runtime_builder(
+                synara_core::ffi_runtime::NSE_WORKER_THREADS,
+            )
+        }));
+    });
 }
 
 fn map_core_error(error: synara_core::app::nse_preview::NsePreviewError) -> NseCoreError {
@@ -114,7 +130,9 @@ impl NsePreviewRequest {
         store_root: String,
         room_id: String,
         event_id: String,
+        app_version: String,
     ) -> Self {
+        install_nse_ffi_runtime();
         Self {
             store: SecretReaderAdapter { inner: store },
             user_id,
@@ -122,6 +140,7 @@ impl NsePreviewRequest {
             store_root,
             room_id,
             event_id,
+            app_version,
             cancellation: CancellationToken::new(),
             started: AtomicBool::new(false),
         }
@@ -144,6 +163,7 @@ impl NsePreviewRequest {
                 &self.store_root,
                 &self.room_id,
                 &self.event_id,
+                &self.app_version,
             )
             .await
             .map_err(map_core_error)?;

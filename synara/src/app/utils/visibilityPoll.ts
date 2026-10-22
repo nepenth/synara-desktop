@@ -13,15 +13,92 @@ export type VisibilityPollEnvironment = {
   onVisibilityChange: (listener: () => void) => () => void;
 };
 
-const browserEnvironment = (): VisibilityPollEnvironment => ({
-  isHidden: () => document.visibilityState === 'hidden',
-  setTimeout: (callback, ms) => window.setTimeout(callback, ms),
-  clearTimeout: (id) => window.clearTimeout(id),
-  onVisibilityChange: (listener) => {
-    document.addEventListener('visibilitychange', listener);
-    return () => document.removeEventListener('visibilitychange', listener);
+// Without a document (unit tests in Node) the page always counts as visible,
+// and timers do not keep the process alive.
+const documentlessEnvironment: VisibilityPollEnvironment = {
+  isHidden: () => false,
+  setTimeout: (callback, ms) => {
+    const timer = globalThis.setTimeout(callback, ms) as unknown as { unref?: () => void };
+    timer.unref?.();
+    return timer as unknown as number;
   },
-});
+  clearTimeout: (id) => globalThis.clearTimeout(id),
+  onVisibilityChange: () => () => undefined,
+};
+
+const browserEnvironment = (): VisibilityPollEnvironment =>
+  typeof document === 'undefined'
+    ? documentlessEnvironment
+    : {
+        isHidden: () => document.visibilityState === 'hidden',
+        setTimeout: (callback, ms) => window.setTimeout(callback, ms),
+        clearTimeout: (id) => window.clearTimeout(id),
+        onVisibilityChange: (listener) => {
+          document.addEventListener('visibilitychange', listener);
+          return () => document.removeEventListener('visibilitychange', listener);
+        },
+      };
+
+/**
+ * Run `tick` after `delay(true)`, then every `delay(false)`, only while the
+ * document is visible. A hidden window (closed to the tray) costs no IPC;
+ * becoming visible runs one catch-up tick at once and resumes the cadence.
+ * Use it for polls whose result only matters on screen. Returns a stop
+ * function.
+ */
+export const startVisibleOnlyPoll = (
+  tick: () => void,
+  delay: (firstPoll: boolean) => number,
+  environment: VisibilityPollEnvironment = browserEnvironment()
+): (() => void) => {
+  let timer: number | undefined;
+  let stopped = false;
+  let firstPoll = true;
+  let paused = false;
+
+  const clear = () => {
+    if (timer !== undefined) environment.clearTimeout(timer);
+    timer = undefined;
+  };
+
+  const schedule = () => {
+    if (stopped) return;
+    timer = environment.setTimeout(() => {
+      timer = undefined;
+      if (stopped) return;
+      if (environment.isHidden()) {
+        paused = true;
+        return;
+      }
+      firstPoll = false;
+      tick();
+      schedule();
+    }, delay(firstPoll));
+  };
+
+  const stopListening = environment.onVisibilityChange(() => {
+    if (stopped) return;
+    if (environment.isHidden()) {
+      clear();
+      paused = true;
+      return;
+    }
+    if (!paused) return;
+    paused = false;
+    firstPoll = false;
+    tick();
+    clear();
+    schedule();
+  });
+
+  if (environment.isHidden()) paused = true;
+  else schedule();
+  return () => {
+    stopped = true;
+    clear();
+    stopListening();
+  };
+};
 
 /**
  * Run `tick` every `visibleMs` while the document is visible and every

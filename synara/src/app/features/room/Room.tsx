@@ -21,6 +21,8 @@ import { useEditor } from '../../components/editor';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { resolveThreadPane, type ThreadPaneTarget } from './threadPane';
+import { NativePermalinkProvider } from './nativeTimelineFormattedBody';
+import { useNativePermalinkHandler } from './useNativePermalinkHandler';
 
 function ThreadPaneComposer({ rootEventId }: { rootEventId: string }) {
   const room = useRoom();
@@ -53,6 +55,7 @@ export function Room() {
   const roomAreaRef = useRef<HTMLDivElement>(null);
   const screenSize = useScreenSizeContext();
   const powerLevels = usePowerLevels(room);
+  const permalinkHandler = useNativePermalinkHandler(room.roomId);
 
   // A pane belongs to one room.
   useEffect(() => setOpenedPane(undefined), [room.roomId]);
@@ -67,10 +70,13 @@ export function Room() {
   // members drawer returns when it closes without changing its setting.
   const activeSidePanel = pane ? undefined : isDrawer ? 'members' : roomSidePanel;
 
-  const handleOpenThreadPane = useCallback((rootEventId: string, latestEventId?: string) => {
-    setRoomSidePanel(undefined);
-    setOpenedPane({ rootEventId, latestEventId });
-  }, []);
+  const handleOpenThreadPane = useCallback(
+    (rootEventId: string, latestEventId?: string, focusEventId?: string) => {
+      setRoomSidePanel(undefined);
+      setOpenedPane({ rootEventId, latestEventId, focusEventId });
+    },
+    []
+  );
   const handleCloseThreadPane = useCallback(() => {
     setOpenedPane(undefined);
     if (threadRootId) navigateRoom(room.roomId);
@@ -117,55 +123,58 @@ export function Room() {
 
   return (
     <PowerLevelsContextProvider value={powerLevels}>
-      <Box grow="Yes" ref={roomAreaRef}>
-        <Box grow="Yes" direction="Column" style={{ minWidth: 0 }}>
-          <RoomViewHeader
-            activeSidePanel={activeSidePanel}
-            onToggleSidePanel={handleToggleSidePanel}
-            onToggleMembers={handleToggleMembers}
-          />
-          <Box grow="Yes">
-            <RoomView
-              eventId={eventId}
-              threadRootEventId={pane ? undefined : threadRootId}
-              threadDisplay={screenSize === ScreenSize.Desktop ? threadDisplay : 'full'}
-              onOpenThreadPane={
-                screenSize === ScreenSize.Desktop && threadDisplay !== 'full'
-                  ? handleOpenThreadPane
-                  : undefined
-              }
+      <NativePermalinkProvider value={permalinkHandler}>
+        <Box as="main" grow="Yes" ref={roomAreaRef}>
+          <Box grow="Yes" direction="Column" style={{ minWidth: 0 }} data-file-drop-region="room">
+            <RoomViewHeader
+              activeSidePanel={activeSidePanel}
+              onToggleSidePanel={handleToggleSidePanel}
+              onToggleMembers={handleToggleMembers}
             />
-          </Box>
-        </Box>
-
-        {pane && (
-          <ThreadSidePanel
-            roomId={room.roomId}
-            rootEventId={pane.rootEventId}
-            width={threadPaneWidth}
-            availableWidth={roomAreaWidth}
-            onWidthChange={setThreadPaneWidth}
-            onClose={handleCloseThreadPane}
-            composer={<ThreadPaneComposer rootEventId={pane.rootEventId} />}
-          />
-        )}
-
-        {screenSize === ScreenSize.Desktop && activeSidePanel && (
-          <>
-            <Line variant="Background" direction="Vertical" size="300" />
-            {activeSidePanel === 'members' ? (
-              <MembersDrawer key={room.roomId} room={room} />
-            ) : (
-              <RoomSidePanel
-                key={`${room.roomId}-${activeSidePanel}`}
-                room={room}
-                activePanel={activeSidePanel}
-                requestClose={handleCloseSidePanel}
+            <Box grow="Yes">
+              <RoomView
+                eventId={eventId}
+                threadRootEventId={pane ? undefined : threadRootId}
+                threadDisplay={screenSize === ScreenSize.Desktop ? threadDisplay : 'full'}
+                onOpenThreadPane={
+                  screenSize === ScreenSize.Desktop && threadDisplay !== 'full'
+                    ? handleOpenThreadPane
+                    : undefined
+                }
               />
-            )}
-          </>
-        )}
-      </Box>
+            </Box>
+          </Box>
+
+          {pane && (
+            <ThreadSidePanel
+              roomId={room.roomId}
+              rootEventId={pane.rootEventId}
+              focusEventId={pane.focusEventId}
+              width={threadPaneWidth}
+              availableWidth={roomAreaWidth}
+              onWidthChange={setThreadPaneWidth}
+              onClose={handleCloseThreadPane}
+              composer={<ThreadPaneComposer rootEventId={pane.rootEventId} />}
+            />
+          )}
+
+          {screenSize === ScreenSize.Desktop && activeSidePanel && (
+            <>
+              <Line variant="Background" direction="Vertical" size="300" />
+              {activeSidePanel === 'members' ? (
+                <MembersDrawer key={room.roomId} room={room} />
+              ) : (
+                <RoomSidePanel
+                  key={`${room.roomId}-${activeSidePanel}`}
+                  room={room}
+                  activePanel={activeSidePanel}
+                  requestClose={handleCloseSidePanel}
+                />
+              )}
+            </>
+          )}
+        </Box>
+      </NativePermalinkProvider>
     </PowerLevelsContextProvider>
   );
 }

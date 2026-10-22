@@ -1,4 +1,5 @@
 import { Descendant } from 'slate';
+import { ROOM_DRAFT_STORAGE_PREFIX } from '../state/sessions';
 
 const DRAFT_VERSION = 1;
 const MAX_DRAFT_BYTES = 64 * 1024;
@@ -10,7 +11,7 @@ export type StoredRoomDraft = {
 };
 
 export const getRoomDraftStorageKey = (userId: string, roomId: string): string =>
-  `in.synara.room_draft.${encodeURIComponent(userId)}.${encodeURIComponent(roomId)}`;
+  `${ROOM_DRAFT_STORAGE_PREFIX}${encodeURIComponent(userId)}.${encodeURIComponent(roomId)}`;
 
 export const normalizeStoredRoomDraft = (value: unknown): StoredRoomDraft | undefined => {
   if (!value || typeof value !== 'object') return undefined;
@@ -42,7 +43,7 @@ export const loadRoomDraft = (
 };
 
 export const saveRoomDraft = (
-  storage: Pick<Storage, 'setItem'>,
+  storage: Pick<Storage, 'setItem' | 'removeItem'>,
   userId: string,
   roomId: string,
   value: Descendant[],
@@ -53,7 +54,13 @@ export const saveRoomDraft = (
     updatedAt: now,
     value,
   } satisfies StoredRoomDraft);
-  if (payload.length > MAX_DRAFT_BYTES) return false;
+  if (payload.length > MAX_DRAFT_BYTES) {
+    // Too large to persist: drop the older stored draft so a restart can not
+    // bring back text the user has since replaced. The composer keeps the
+    // large draft for this session.
+    storage.removeItem(getRoomDraftStorageKey(userId, roomId));
+    return false;
+  }
   storage.setItem(getRoomDraftStorageKey(userId, roomId), payload);
   return true;
 };

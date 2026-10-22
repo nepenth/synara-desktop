@@ -214,7 +214,7 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
                       before={<Icon src={Icons.Power} size="100" />}
                       onClick={() => setLogout(true)}
                     >
-                      <Text size="B400">Logout</Text>
+                      <Text size="B400">Log Out</Text>
                     </Button>
                     {logout && (
                       <Overlay open backdrop={<OverlayBackdrop />}>

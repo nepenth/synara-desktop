@@ -1,6 +1,7 @@
 import XCTest
 import UIKit
 @testable import Synara
+import SynaraCore
 
 final class MatrixLifecycleTests: XCTestCase {
     func testStartSyncAfterLogin() async throws {
@@ -176,6 +177,218 @@ final class MatrixLifecycleTests: XCTestCase {
         XCTAssertEqual(application.endedIdentifiers, [application.issuedIdentifier])
     }
 
+    func testInactiveScenesKeepStoresOpenAndOnlyBackgroundQuiesces() {
+        // Control Center, Notification Center, system alerts and the
+        // app-switcher peek report inactive while UIKit is still inactive.
+        XCTAssertEqual(
+            SynaraScenePhasePolicy.transition(for: .inactive, applicationState: .inactive),
+            .inactive
+        )
+        XCTAssertEqual(
+            SynaraScenePhasePolicy.transition(for: .inactive, applicationState: .active),
+            .inactive
+        )
+        XCTAssertEqual(
+            SynaraScenePhasePolicy.transition(for: .background, applicationState: .background),
+            .background
+        )
+        XCTAssertEqual(
+            SynaraScenePhasePolicy.transition(for: .active, applicationState: .active),
+            .foreground
+        )
+        // A scene sample never overrules UIKit's process-level state.
+        XCTAssertEqual(
+            SynaraScenePhasePolicy.transition(for: .active, applicationState: .background),
+            .background
+        )
+        XCTAssertEqual(
+            SynaraScenePhasePolicy.transition(for: .active, applicationState: .inactive),
+            .inactive
+        )
+        XCTAssertEqual(
+            SynaraScenePhasePolicy.transition(for: .inactive, applicationState: .background),
+            .background
+        )
+    }
+
+    @MainActor
+    func testInactivePeekDoesNotPauseButBackgroundDoes() async throws {
+        try XCTSkipUnless(
+            UIApplication.shared.applicationState == .active,
+            "the delegate reads UIKit's process state"
+        )
+        let matrix = MockMatrixClientService(syncStatus: .syncing)
+        let delegate = SynaraAppDelegate()
+        delegate.updateScenePhase(.active)
+        delegate.bind(to: AppEnvironment.mock(matrix: matrix))
+        XCTAssertEqual(matrix.foregroundActivity, [true])
+
+        // Control Center down and back up.
+        delegate.updateScenePhase(.inactive)
+        delegate.updateScenePhase(.active)
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(matrix.pauseCallCount, 0)
+        XCTAssertEqual(matrix.resumeCallCount, 0)
+
+        // Home: inactive, then background.
+        delegate.updateScenePhase(.inactive)
+        delegate.updateScenePhase(.background)
+        try await waitUntil { matrix.pauseCallCount == 1 }
+        XCTAssertEqual(matrix.foregroundActivity.last, false)
+    }
+
+    func testPathPolicyRestartsOnlyOnARouteChangeOrAReturn() {
+        let wifi = ConnectionPathSnapshot(isSatisfied: true, primaryInterface: "wifi")
+        let cellular = ConnectionPathSnapshot(isSatisfied: true, primaryInterface: "cellular", isExpensive: true)
+        let lowData = ConnectionPathSnapshot(
+            isSatisfied: true,
+            primaryInterface: "wifi",
+            isConstrained: true
+        )
+        let offline = ConnectionPathSnapshot(isSatisfied: false, primaryInterface: nil)
+
+        // The first sample only describes the route the session started on.
+        XCTAssertEqual(ConnectionPathPolicy.action(previous: nil, current: wifi, status: .connected), .none)
+        XCTAssertEqual(ConnectionPathPolicy.action(previous: wifi, current: wifi, status: .connected), .none)
+        XCTAssertEqual(
+            ConnectionPathPolicy.action(previous: wifi, current: cellular, status: .connected),
+            .restartSync
+        )
+        XCTAssertEqual(
+            ConnectionPathPolicy.action(previous: wifi, current: lowData, status: .connected),
+            .restartSync
+        )
+        XCTAssertEqual(
+            ConnectionPathPolicy.action(previous: wifi, current: offline, status: .connected),
+            .markReconnecting
+        )
+        XCTAssertEqual(
+            ConnectionPathPolicy.action(previous: offline, current: wifi, status: .reconnecting),
+            .restartSync
+        )
+        XCTAssertEqual(
+            ConnectionPathPolicy.action(previous: offline, current: wifi, status: .disconnected),
+            .restartSync
+        )
+        // Background and failed restores have nothing to restart.
+        XCTAssertEqual(ConnectionPathPolicy.action(previous: wifi, current: cellular, status: .stopped), .none)
+        XCTAssertEqual(
+            ConnectionPathPolicy.action(previous: offline, current: wifi, status: .restoreFailed),
+            .none
+        )
+    }
+
+    func testPathUpdatesApplyOneAtATimeInDeliveryOrder() async throws {
+        let recorder = PathRecorder()
+        let sequencer = ConnectionPathSequencer { previous, current in
+            await recorder.begin(previous: previous, current: current)
+            // A slow restart must finish before the next update is judged.
+            try? await Task.sleep(nanoseconds: 20_000_000)
+            await recorder.end()
+        }
+        let updates = [
+            ConnectionPathSnapshot(isSatisfied: true, primaryInterface: "wifi"),
+            ConnectionPathSnapshot(isSatisfied: false, primaryInterface: nil),
+            ConnectionPathSnapshot(isSatisfied: true, primaryInterface: "cellular"),
+            ConnectionPathSnapshot(isSatisfied: true, primaryInterface: "cellular", isExpensive: true),
+        ]
+        for update in updates {
+            sequencer.receive(update)
+        }
+
+        var applied = await recorder.applied
+        var attempts = 0
+        while applied.count < updates.count, attempts < 200 {
+            try await Task.sleep(nanoseconds: 10_000_000)
+            applied = await recorder.applied
+            attempts += 1
+        }
+        sequencer.finish()
+        let maxConcurrent = await recorder.maxConcurrent
+        XCTAssertEqual(applied.map(\.current), updates)
+        XCTAssertEqual(applied.map(\.previous), [nil] + updates.dropLast())
+        XCTAssertEqual(maxConcurrent, 1)
+    }
+
+    func testReconnectRestartsSyncInPlaceAndBootstrapsOnlyWithoutOwners() async {
+        var fullStarts = 0
+        let restarted = await SharedCoreSyncReconnect.run(
+            restartSync: { .running },
+            fullStart: { fullStarts += 1 }
+        )
+        XCTAssertEqual(restarted, .restarted(.running))
+        XCTAssertEqual(fullStarts, 0)
+
+        let bootstrapped = await SharedCoreSyncReconnect.run(
+            restartSync: {
+                throw SyncStartError.Failed(
+                    kind: .notReady,
+                    code: "p4-s12-sync-not-attached",
+                    description: "Session owners are not attached."
+                )
+            },
+            fullStart: { fullStarts += 1 }
+        )
+        XCTAssertEqual(bootstrapped, .fullStart)
+        XCTAssertEqual(fullStarts, 1)
+        XCTAssertEqual(
+            ConnectionStatusCopy.fromReadiness(.running, previous: .reconnecting),
+            .connected
+        )
+    }
+
+    func testRoomListKeepsTheLastGoodListWhenAReadFails() throws {
+        let rooms = RoomListState.loaded([])
+        let suspended = RoomListSnapshotError.Failed(
+            code: SharedCoreSessionSuspension.code,
+            description: "The session is paused while the app is in the background."
+        )
+        let failed = RoomListSnapshotError.Failed(code: "p4-s4-snapshot-failed", description: "failed")
+        let noSession = RoomListSnapshotError.Failed(
+            code: "p2-room-list-snapshot-no-session",
+            description: "none"
+        )
+
+        XCTAssertEqual(SharedCoreRoomListService.state(afterLoadError: suspended, lastGood: rooms), rooms)
+        XCTAssertEqual(SharedCoreRoomListService.state(afterLoadError: failed, lastGood: rooms), rooms)
+        XCTAssertEqual(SharedCoreRoomListService.state(afterLoadError: suspended, lastGood: nil), .loading)
+        XCTAssertEqual(
+            SharedCoreRoomListService.state(afterLoadError: failed, lastGood: nil),
+            .failed(SharedCoreRoomListService.loadFailedMessage)
+        )
+        XCTAssertEqual(SharedCoreRoomListService.state(afterLoadError: noSession, lastGood: nil), .empty)
+    }
+
+    func testSuspendedSendStaysQueuedAsNotReady() {
+        // L22: the decision follows Core's typed kind, not the code text.
+        XCTAssertTrue(SharedCoreSendText.isNotReady(
+            SendTextError.Failed(kind: .retryable, code: SharedCoreSessionSuspension.code, description: "paused")
+        ))
+        XCTAssertTrue(SharedCoreSendText.isNotReady(
+            SendTextError.Failed(kind: .notReady, code: "d0.4-send-room-not-found", description: "later")
+        ))
+        XCTAssertFalse(SharedCoreSendText.isNotReady(
+            SendTextError.Failed(kind: .terminal, code: "p2-send-text-failed", description: "failed")
+        ))
+        XCTAssertFalse(SharedCoreSendText.isNotReady(
+            SendTextError.Failed(kind: .actionRequired, code: "p2-send-text-forbidden", description: "no")
+        ))
+        XCTAssertFalse(SharedCoreSendText.isNotReady(CancellationError()))
+    }
+
+    func testTypedCoreErrorsExposeKindAndCode() {
+        let stop = SyncStopError.Failed(kind: .notReady, code: "p4-s12-sync-not-attached", description: "x")
+        XCTAssertEqual(stop.coreErrorKind, .notReady)
+        XCTAssertEqual(stop.coreErrorCode, "p4-s12-sync-not-attached")
+        XCTAssertEqual(
+            SharedCoreSessionBootstrap.errorCode(
+                from: SessionRestoreError.Failed(kind: .terminal, code: "p4-s3b-session-already-restored", description: "x")
+            ),
+            "p4-s3b-session-already-restored"
+        )
+        XCTAssertNil(SharedCoreSessionBootstrap.errorCode(from: CancellationError()))
+    }
+
     func testBackgroundNotificationSyncReportsResult() async throws {
         let matrix = MockMatrixClientService()
         matrix.backgroundSyncResult = true
@@ -267,7 +480,7 @@ final class MatrixLifecycleTests: XCTestCase {
 
         let crypto = SequencingCryptoStatusService(statuses: [unverified, verified])
         let observer = SessionCryptoStatusObserver()
-        await observer.start(crypto: crypto)
+        await observer.start(store: SessionCryptoStore(crypto: crypto))
         XCTAssertEqual(observer.status.verification, .verified)
         XCTAssertFalse(observer.showsVerifyThisDevice)
     }
@@ -285,7 +498,7 @@ final class MatrixLifecycleTests: XCTestCase {
         let crypto = SequencingCryptoStatusService(statuses: [.unknown, eligible])
         let observer = SessionCryptoStatusObserver()
 
-        await observer.start(crypto: crypto)
+        await observer.start(store: SessionCryptoStore(crypto: crypto))
 
         XCTAssertEqual(observer.status, eligible)
         XCTAssertTrue(observer.enablesVerifyThisDevice)
@@ -303,7 +516,7 @@ final class MatrixLifecycleTests: XCTestCase {
         )
         let crypto = SequencingCryptoStatusService(statuses: [.unknown, eligible], suspendInitialRead: true)
         let observer = SessionCryptoStatusObserver()
-        let observing = Task { await observer.start(crypto: crypto) }
+        let observing = Task { await observer.start(store: SessionCryptoStore(crypto: crypto)) }
         try await waitUntil { crypto.initialReadIsSuspended }
         // Exercise the production forwarding boundary while the initial
         // authority read remains in flight. The inbox is deliberately empty.
@@ -323,6 +536,27 @@ final class MatrixLifecycleTests: XCTestCase {
             homeserverURL: try XCTUnwrap(URL(string: "https://matrix.org")),
             accessToken: "token"
         )
+    }
+}
+
+private actor PathRecorder {
+    struct Applied: Equatable {
+        var previous: ConnectionPathSnapshot?
+        var current: ConnectionPathSnapshot
+    }
+
+    private(set) var applied: [Applied] = []
+    private(set) var maxConcurrent = 0
+    private var running = 0
+
+    func begin(previous: ConnectionPathSnapshot?, current: ConnectionPathSnapshot) {
+        running += 1
+        maxConcurrent = max(maxConcurrent, running)
+        applied.append(Applied(previous: previous, current: current))
+    }
+
+    func end() {
+        running -= 1
     }
 }
 

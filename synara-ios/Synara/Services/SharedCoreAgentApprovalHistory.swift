@@ -23,9 +23,9 @@ enum AgentApprovalHistoryError: Error, LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .noSession:
-            return "Sign in to load approval history."
+            return String(localized: "Sign in to load approval history.")
         case .unavailable:
-            return "Approval history could not be loaded."
+            return String(localized: "Approval history could not be loaded.")
         }
     }
 }

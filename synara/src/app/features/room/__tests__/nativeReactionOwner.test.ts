@@ -6,10 +6,15 @@ import {
   decideAgentApprovalWithNativeOwner,
   ensureReactionWithNativeOwner,
   nativeReactionsForViewer,
+  recordedApprovalDecision,
   redactReactionWithNativeOwner,
   toggleReactionWithNativeOwner,
   type NativeReactionMutationResult,
 } from '../nativeReactionOwner';
+import {
+  subscribeApprovalDecisions,
+  type ApprovalDecisionNotice,
+} from '../../approvals/approvalDecisionEvents';
 
 test('approval decisions route only through the Core authority command', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
@@ -49,6 +54,75 @@ test('approval decisions route only through the Core authority command', async (
       },
     },
   ]);
+});
+
+test('an approval already decided elsewhere is never recorded as the clicked choice', async () => {
+  const notices: ApprovalDecisionNotice[] = [];
+  const unsubscribe = subscribeApprovalDecisions((notice) => notices.push(notice));
+  const decide = (value: Record<string, unknown>) =>
+    decideAgentApprovalWithNativeOwner(
+      {
+        roomId: '!room:example.org',
+        eventId: '$approval:example.org',
+        actionId: 'agent-approval.approve-once',
+      },
+      async () => ({
+        available: true,
+        value: {
+          roomId: '!room:example.org',
+          eventId: '$approval:example.org',
+          ...value,
+        } as never,
+      })
+    );
+  try {
+    // Denied on the phone, then "Approve once" on a lingering Mac banner.
+    const result = await decide({ status: 'already_decided' });
+    assert.equal(result.status, 'already_decided');
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0].decision, undefined, 'the inbox falls back to Core state');
+    assert.equal('decision' in notices[0], false);
+
+    // Once Core reports the recorded decision, that is what the inbox shows.
+    await decide({ status: 'already_decided', decision: 'deny' });
+    assert.equal(notices[1].decision, 'deny');
+    assert.equal('decidedAt' in notices[1], false);
+
+    await decide({ status: 'applied' });
+    assert.equal(notices[2].decision, 'approve_once');
+
+    // Core's recorded time travels with the recorded decision.
+    await decide({ status: 'already_decided', decision: 'deny', decidedAt: 1_700_000_000_000 });
+    assert.equal(notices[3].decision, 'deny');
+    assert.equal(notices[3].decidedAt, 1_700_000_000_000);
+    // A time without a decision, or an invalid time, is not passed on.
+    await decide({ status: 'already_decided', decidedAt: 1_700_000_000_000 });
+    assert.equal('decidedAt' in notices[4], false);
+    await decide({ status: 'already_decided', decision: 'deny', decidedAt: -1 });
+    assert.equal('decidedAt' in notices[5], false);
+  } finally {
+    unsubscribe();
+  }
+
+  assert.equal(recordedApprovalDecision({ status: 'applied' }, 'agent-approval.deny'), 'deny');
+  assert.equal(
+    recordedApprovalDecision({ status: 'already_decided' }, 'agent-approval.deny'),
+    undefined
+  );
+  assert.equal(
+    recordedApprovalDecision(
+      { status: 'already_decided', decision: 'approve_always' },
+      'agent-approval.deny'
+    ),
+    'approve_always'
+  );
+  assert.equal(
+    recordedApprovalDecision(
+      { status: 'already_decided', decision: 'bogus' as never },
+      'agent-approval.deny'
+    ),
+    undefined
+  );
 });
 
 test('approval card cannot bypass Core through a generic reaction write', () => {

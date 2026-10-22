@@ -1,15 +1,5 @@
 #[cfg(test)]
-use super::error::AuthError;
-#[cfg(test)]
-use crate::matrix::client_builder::default_user_agent;
-#[cfg(test)]
-pub use synara_core::app::auth::{parse_well_known_client_json, HttpDiscoveryTransport};
-
-#[cfg(test)]
-/// Product well-known transport (desktop user-agent).
-pub fn product_http_discovery_transport() -> Result<HttpDiscoveryTransport, AuthError> {
-    HttpDiscoveryTransport::new_with_user_agent(default_user_agent())
-}
+pub use synara_core::app::auth::parse_well_known_client_json;
 
 #[cfg(test)]
 mod tests {
@@ -47,11 +37,5 @@ mod tests {
                 diagnostic_id: "r0.7-well-known-missing-homeserver"
             })
         ));
-    }
-
-    #[test]
-    fn discovery_transport_constructor_does_not_panic() {
-        let _ = product_http_discovery_transport();
-        let _ = HttpDiscoveryTransport::new();
     }
 }

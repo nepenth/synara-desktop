@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import type { DesktopInvokeResult } from '../../utils/desktop';
 import { isRoom, isSpace } from '../../utils/room';
-import { createNativeSession } from '../nativeSession';
+import { createNativeSession, SYNC_STATUS_HIDDEN_POLL_MS } from '../nativeSession';
+import type { VisibilityPollEnvironment } from '../../utils/visibilityPoll';
 import {
   readinessToSyncState,
   type NativeInvoke,
@@ -458,6 +459,60 @@ test('watchSync ignores an in-flight result after disposal', async () => {
   assert.equal(client.getSyncState(), null);
 });
 
+test('D11: watchSync slows to the hidden cadence while the window is hidden', async () => {
+  let calls = 0;
+  const invoke: NativeInvoke = async (command) => {
+    if (command !== 'matrix_sync_status') return unavailable;
+    calls += 1;
+    return ok({ readiness: 'running', sessionGeneration: 4, offlineModeEnabled: false });
+  };
+  let hidden = false;
+  const listeners = new Set<() => void>();
+  const timers = new Map<number, { callback: () => void; ms: number }>();
+  let nextId = 1;
+  const environment: VisibilityPollEnvironment = {
+    isHidden: () => hidden,
+    setTimeout: (callback, ms) => {
+      const id = nextId;
+      nextId += 1;
+      timers.set(id, { callback, ms });
+      return id;
+    },
+    clearTimeout: (id) => {
+      timers.delete(id);
+    },
+    onVisibilityChange: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+  const client = createNativeSession(invoke);
+  const unwatch = client.watchSync(1500, SYNC_STATUS_HIDDEN_POLL_MS, environment);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(calls, 1, 'one read when watching starts');
+  assert.deepEqual(
+    [...timers.values()].map((timer) => timer.ms),
+    [1500]
+  );
+
+  hidden = true;
+  listeners.forEach((listener) => listener());
+  assert.deepEqual(
+    [...timers.values()].map((timer) => timer.ms),
+    [SYNC_STATUS_HIDDEN_POLL_MS]
+  );
+  assert.ok(SYNC_STATUS_HIDDEN_POLL_MS >= 10 * 1500);
+
+  hidden = false;
+  listeners.forEach((listener) => listener());
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(calls, 2, 'showing the window reads at once');
+
+  unwatch();
+  assert.equal(timers.size, 0);
+  assert.equal(listeners.size, 0);
+});
+
 test('watchSync never overlaps a slow native status read', async () => {
   let calls = 0;
   let resolveStatus!: (result: DesktopInvokeResult<unknown>) => void;
@@ -811,7 +866,6 @@ test('native rooms satisfy the EventedRoomReading contract', async () => {
   assert.ok(room);
   assert.ok(typeof room?.on === 'function');
   assert.ok(typeof room?.removeListener === 'function');
-  assert.deepEqual(room?.getUsersReadUpTo({} as never), []);
   assert.equal(room?.findEventById('$e'), undefined);
   assert.equal(room?.hasEncryptionStateEvent(), false);
   assert.equal(room?.isDirect, false);

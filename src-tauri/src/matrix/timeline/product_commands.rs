@@ -3,34 +3,95 @@ use synara_core::app::timeline::{
     NativeAgentApprovalDecisionResult, NativeTimelineTimestampToEventReadback,
 };
 
+type TimelineViewChannelsState<'a> = State<'a, Arc<crate::matrix::timeline::TimelineViewChannels>>;
+
+/// Opens one timeline view's delta channel (L20). The view subscribes before
+/// it opens a stream and passes the id to `matrix_timeline_open` and
+/// `matrix_timeline_jump_latest`. Delivery is the shell's, so this is not a
+/// Core Matrix command.
+#[tauri::command]
+pub async fn desktop_timeline_subscribe(
+    webview: tauri::Webview,
+    auth: State<'_, MatrixAuthState>,
+    channels: TimelineViewChannelsState<'_>,
+    room_id: String,
+    channel: tauri::ipc::Channel<tauri::ipc::InvokeResponseBody>,
+) -> Result<u64, MatrixAuthCommandError> {
+    if webview.label() != crate::desktop::MAIN_WINDOW_LABEL {
+        return Err(MatrixAuthCommandError::new(
+            "Forbidden",
+            "The native Matrix timeline is unavailable.",
+            "v-timeline-subscribe-window-rejected",
+        ));
+    }
+    if room_id.parse::<OwnedRoomId>().is_err() {
+        return Err(MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "The native Matrix timeline request is invalid.",
+            "v-timeline-subscribe-invalid-room",
+        ));
+    }
+    let Some((session_generation, _)) = auth.active_session_binding().await else {
+        return Err(MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            "d0.3-timeline-requires-session",
+        ));
+    };
+    Ok(channels.subscribe(webview.label(), room_id, session_generation, channel))
+}
+
+/// Closes a view's delta channel on unmount.
+#[tauri::command]
+pub fn desktop_timeline_unsubscribe(
+    webview: tauri::Webview,
+    channels: TimelineViewChannelsState<'_>,
+    subscription_id: u64,
+) -> bool {
+    channels.unsubscribe(webview.label(), subscription_id)
+}
+
 #[tauri::command]
 pub async fn matrix_timeline_open(
     core: State<'_, Arc<synara_core::Core>>,
+    channels: TimelineViewChannelsState<'_>,
     request: NativeTimelineOpenRequest,
+    subscription_id: Option<u64>,
 ) -> Result<NativeTimelineOpenReadback, MatrixAuthCommandError> {
-    crate::bridge::timeline_open::timeline_open(
+    let opened = crate::bridge::timeline_open::timeline_open(
         core.inner().as_ref(),
         request.room_id,
         request.position,
     )
-    .await
+    .await?;
+    channels.claim_stream(subscription_id, &opened.stream_id);
+    Ok(opened)
 }
 
 #[tauri::command]
 pub async fn matrix_timeline_close(
     core: State<'_, Arc<synara_core::Core>>,
+    channels: TimelineViewChannelsState<'_>,
     request: NativeTimelineCloseRequest,
 ) -> Result<bool, MatrixAuthCommandError> {
+    channels.release_stream(&request.stream_id);
     crate::bridge::timeline_close::timeline_close(core.inner().as_ref(), request.stream_id).await
 }
 
 #[tauri::command]
 pub async fn matrix_timeline_jump_latest(
     core: State<'_, Arc<synara_core::Core>>,
+    channels: TimelineViewChannelsState<'_>,
     request: NativeTimelineJumpLatestRequest,
+    subscription_id: Option<u64>,
 ) -> Result<NativeTimelineOpenReadback, MatrixAuthCommandError> {
-    crate::bridge::timeline_open::timeline_jump_latest(core.inner().as_ref(), request.stream_id)
-        .await
+    let opened = crate::bridge::timeline_open::timeline_jump_latest(
+        core.inner().as_ref(),
+        request.stream_id,
+    )
+    .await?;
+    channels.claim_stream(subscription_id, &opened.stream_id);
+    Ok(opened)
 }
 
 #[tauri::command]
@@ -79,7 +140,7 @@ pub async fn matrix_timeline_timestamp_to_event(
 pub async fn matrix_timeline_paginate(
     core: State<'_, Arc<synara_core::Core>>,
     request: NativeTimelineViewPaginationRequest,
-) -> Result<crate::matrix::timeline::TimelineViewSnapshot, MatrixAuthCommandError> {
+) -> Result<synara_core::app::timeline::TimelineViewMetadata, MatrixAuthCommandError> {
     crate::bridge::timeline_paginate::timeline_paginate(
         core.inner().as_ref(),
         request.stream_id,
@@ -97,25 +158,34 @@ pub async fn matrix_timeline_retry_decryption(
         .await
 }
 
+/// `knownRevision` turns the read into a cheap probe: `{ revision }` while
+/// the stream is still at that revision, else the full snapshot.
 #[tauri::command]
 pub async fn matrix_timeline_snapshot(
     core: State<'_, Arc<synara_core::Core>>,
     stream_id: String,
-) -> Result<crate::matrix::timeline::TimelineViewSnapshot, MatrixAuthCommandError> {
-    crate::bridge::timeline_snapshot::timeline_snapshot(core.inner().as_ref(), stream_id).await
+    known_revision: Option<u64>,
+) -> Result<crate::bridge::timeline_snapshot::TimelineSnapshotReply, MatrixAuthCommandError> {
+    crate::bridge::timeline_snapshot::timeline_snapshot(
+        core.inner().as_ref(),
+        stream_id,
+        known_revision,
+    )
+    .await
 }
 
 #[tauri::command]
 pub async fn matrix_timeline_set_read_state(
     core: State<'_, Arc<synara_core::Core>>,
     request: NativeTimelineReadStateRequest,
-) -> Result<NativeTimelineReadStateReadback, MatrixAuthCommandError> {
+) -> Result<crate::bridge::timeline_set_read_state::TimelineReadStateAck, MatrixAuthCommandError> {
     crate::bridge::timeline_set_read_state::timeline_set_read_state(
         core.inner().as_ref(),
         request.stream_id,
         request.action,
         request.intent,
         request.observed_live_tail_event_id,
+        request.public_receipt,
     )
     .await
 }

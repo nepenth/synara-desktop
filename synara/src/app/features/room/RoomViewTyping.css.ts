@@ -24,6 +24,11 @@ export const RoomViewTyping = style([
     backgroundColor: color.Surface.Container,
     color: color.Surface.OnContainer,
     animation: `${SlideUpAnime} 100ms ease-in-out`,
+    '@media': {
+      '(prefers-reduced-motion: reduce)': {
+        animation: 'none',
+      },
+    },
   },
 ]);
 export const TypingText = style({

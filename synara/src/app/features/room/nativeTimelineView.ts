@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { listen as listenTauriEvent } from '@tauri-apps/api/event';
+import { Channel } from '@tauri-apps/api/core';
 import {
   convertDesktopFileSrc,
   invokeDesktopWithAvailability,
@@ -7,13 +7,17 @@ import {
   type DesktopInvokeResult,
 } from '../../utils/desktop';
 import { parseHermesAgentPayload, type HermesAgentPayload } from '../../utils/hermes';
+import { startVisibleOnlyPoll } from '../../utils/visibilityPoll';
+import { readReceiptsArePublic } from '../../state/settings';
 import type { RoomEncryptionStatus } from '../matrix-dto/room';
 import { devicePixelScale, nativeThumbnailContentUri } from '../../matrix/nativeThumbnail';
 import type { NativeTimelineEncryptionShield } from './nativeTimelineShield';
-import type { NativeTimelineReactionSender } from '../matrix-dto/generated';
+import type {
+  NativeTimelineReactionSender,
+  SynaraAgentApprovalHistoryDecision,
+} from '../matrix-dto/generated';
 export type { NativeTimelineReactionSender } from '../matrix-dto/generated';
 
-const NATIVE_TIMELINE_VIEW_UPDATED_EVENT = 'matrix-timeline-view-updated';
 const TIMELINE_VIEW_SCHEMA_VERSION = 1;
 
 export type NativeTimelinePageState = 'available' | 'exhausted' | 'loading' | 'unavailable';
@@ -50,6 +54,10 @@ type NativeTimelineEventRowBase = {
   localEchoState?: NativeTimelineLocalEchoState;
   /** SDK transaction id for discard and retry. Not a server event id. */
   transactionId?: string;
+  /** Closed cause of a failed or wedged echo (`too_large`, `forbidden`, …). */
+  sendFailure?: string;
+  /** Core's verdict on that cause: `false` means the homeserver refuses a retry again. */
+  sendFailureRetryable?: boolean;
   /** SDK authenticity shield in an encrypted room. Absent when trusted. */
   encryptionShield?: NativeTimelineEncryptionShield;
   capabilities: NativeTimelineRowCapabilities;
@@ -60,6 +68,11 @@ export type NativeTimelineUnsentDelivery = {
   /** Visible, hover-independent name. Sending and failed stay distinct. */
   accessibleName: 'Sending' | 'Failed to send' | 'Not sent';
   wedged: boolean;
+  /**
+   * A failed row offers Retry. Off when Core says the same request is refused
+   * again (too large, forbidden, not joined, …); Discard stays.
+   */
+  retryable: boolean;
   transactionId?: string;
 };
 
@@ -77,6 +90,7 @@ export const nativeTimelineEchoFields = (
   eventId?: string;
   localEchoState?: NativeTimelineLocalEchoState;
   transactionId?: string;
+  sendFailureRetryable?: boolean;
   /** Virtual rows (dates, markers) are not local echoes just because they lack an event id. */
   candidate: boolean;
 } => {
@@ -118,21 +132,48 @@ export const nativeTimelineUnsentDelivery = (row: {
   eventId?: string;
   localEchoState?: string;
   transactionId?: string;
+  sendFailureRetryable?: boolean;
   candidate?: boolean;
 }): NativeTimelineUnsentDelivery | undefined => {
   const state = isNativeTimelineLocalEchoState(row.localEchoState) ? row.localEchoState : undefined;
   const transactionId = row.transactionId;
+  // An unknown cause (older snapshot) keeps Retry, as before.
+  const retryable = row.sendFailureRetryable !== false;
   if (state === 'sending') {
-    return { status: 'sending', accessibleName: 'Sending', wedged: false, transactionId };
+    return {
+      status: 'sending',
+      accessibleName: 'Sending',
+      wedged: false,
+      retryable: false,
+      transactionId,
+    };
   }
   if (state === 'failed') {
-    return { status: 'failed', accessibleName: 'Failed to send', wedged: false, transactionId };
+    return {
+      status: 'failed',
+      accessibleName: 'Failed to send',
+      wedged: false,
+      retryable,
+      transactionId,
+    };
   }
   if (state === 'wedged') {
-    return { status: 'failed', accessibleName: 'Failed to send', wedged: true, transactionId };
+    return {
+      status: 'failed',
+      accessibleName: 'Failed to send',
+      wedged: true,
+      retryable,
+      transactionId,
+    };
   }
   if (state === 'sent' || row.eventId || !row.candidate) return undefined;
-  return { status: 'unsent', accessibleName: 'Not sent', wedged: false, transactionId };
+  return {
+    status: 'unsent',
+    accessibleName: 'Not sent',
+    wedged: false,
+    retryable: false,
+    transactionId,
+  };
 };
 
 /**
@@ -273,6 +314,12 @@ export type NativeTimelineRelationPresentation = {
   reactions?: NativeTimelineReaction[];
 };
 
+/** Earliest own terminal reaction on an approval prompt; `decidedAt` is epoch ms. */
+export type NativeTimelineAgentApprovalDecision = {
+  decision: SynaraAgentApprovalHistoryDecision;
+  decidedAt?: number;
+};
+
 /** Core-owned action route. Presenters must not infer this from media handles. */
 export type NativeTimelineForwardTransport = 'text' | 'media';
 
@@ -284,6 +331,8 @@ type NativeTimelineMessageRow = NativeTimelineEventRowBase &
     agentCardJson?: string;
     /** Core-owned approval eligibility; body parsing below is presentation-only. */
     isAgentApproval?: boolean;
+    /** This account's own decision on the approval prompt, projected by Core. */
+    agentApprovalDecision?: NativeTimelineAgentApprovalDecision;
     messageType?: string;
     forwardTransport?: NativeTimelineForwardTransport;
     mediaFilename?: string;
@@ -445,12 +494,26 @@ export type NativeTimelineViewDeltaBatch = {
   pinnedEventIds?: string[];
 };
 
+/**
+ * Where a routed event lives, as Core resolved it for a `focused` open. A
+ * `thread` reply is never shown in the room stream: Core returns the live room
+ * (at the root when it is in the live window) and the shell opens the thread.
+ * `missing` and `unreachable` also return the live room, so the shell says why.
+ */
+export type NativeTimelineEventRoute =
+  | { kind: 'room' }
+  | { kind: 'thread'; root_event_id: string }
+  | { kind: 'missing' }
+  | { kind: 'unreachable' };
+
 export type NativeTimelineOpenReadback = {
   schemaVersion: number;
   streamId: string;
   /** The placement selected by the native owner for this open. */
   position: NativeTimelinePosition;
   snapshot: NativeTimelineViewSnapshot;
+  /** Present only for `focused` opens. */
+  focusRoute?: NativeTimelineEventRoute;
 };
 
 export type NativeTimelineViewState =
@@ -489,13 +552,47 @@ export type NativeTimelineViewController = {
    * the request was superseded and nothing was adopted.
    */
   restoreLastRead: (eventId: string) => Promise<string | undefined>;
+  /** How the current `focused` open resolved its event, once it is ready. */
+  focusRoute?: { eventId: string; route: NativeTimelineEventRoute };
+  /**
+   * A stream update was missed. The view keeps the rows it has (`resyncing`)
+   * while a snapshot is fetched at once; `failed` means that fetch did not
+   * come back, so the caller should offer `reload`.
+   */
+  streamGap: NativeTimelineStreamGap;
+  /** Close the current stream and open the same position again. */
+  reload: () => void;
 };
+
+export type NativeTimelineStreamGap = 'none' | 'resyncing' | 'failed';
+
+/**
+ * Stream metadata without rows. Pagination and read-state replies carry only
+ * this: the rows (and the page or read state itself) reach the presenter as
+ * delta batches, so a reply never ships the window across IPC again.
+ */
+export type NativeTimelineViewMetadata = Omit<NativeTimelineViewSnapshot, 'rows'>;
 
 type NativeTimelineReadStateReadback = {
   receiptSent?: boolean;
   acknowledgedEventId?: string;
-  snapshot: NativeTimelineViewSnapshot;
+  view: NativeTimelineViewMetadata;
 };
+
+/** A safety-net probe that found the stream still at the revision it named. */
+type NativeTimelineSnapshotUnchanged = { revision: number };
+
+/** Whether a reply's metadata belongs to the stream the presenter shows. */
+const isSameNativeTimelineStream = (
+  current: NativeTimelineViewSnapshot | undefined,
+  metadata: NativeTimelineViewMetadata
+): boolean =>
+  Boolean(
+    current &&
+    metadata.schemaVersion === TIMELINE_VIEW_SCHEMA_VERSION &&
+    metadata.sessionGeneration === current.sessionGeneration &&
+    metadata.roomId === current.roomId
+  );
 
 const isValidIndex = (index: number, length: number, allowEnd = false): boolean =>
   Number.isInteger(index) && index >= 0 && index < length + (allowEnd ? 1 : 0);
@@ -505,7 +602,7 @@ const isValidIndex = (index: number, length: number, allowEnd = false): boolean 
  * confirm stream ownership; equal-or-older snapshots then keep the newer view.
  */
 /**
- * With the delta listener live, the snapshot poll is only a safety net for a
+ * With the delta channel live, the snapshot poll is only a safety net for a
  * dropped batch. Without deltas it is the update path.
  */
 export const NATIVE_TIMELINE_SAFETY_NET_POLL_MS = 10_000;
@@ -522,6 +619,14 @@ export const nativeTimelinePollDelay = (deltasLive: boolean, firstPoll: boolean)
   if (!deltasLive) return NATIVE_TIMELINE_POLL_WITHOUT_DELTAS_MS;
   return firstPoll ? NATIVE_TIMELINE_FIRST_SAFETY_NET_POLL_MS : NATIVE_TIMELINE_SAFETY_NET_POLL_MS;
 };
+
+/**
+ * After a send, a view Core opened at the live bottom already receives the
+ * message as a delta, so only the tail needs placing. Any other placement
+ * (history, a focused event, last read) still asks Core to jump to latest.
+ */
+export const shouldPlaceLatestLocally = (position: NativeTimelinePosition | undefined): boolean =>
+  position?.kind === 'live_bottom';
 
 /**
  * True when `next` carries nothing new. The revision counts SDK timeline
@@ -698,21 +803,6 @@ export const shouldAttachFormattedBody = (body: string, formattedBody?: string |
   return html !== body.trim();
 };
 
-/**
- * Preserve Matrix HTML only when the user deliberately edited it, or when the
- * plain-text fallback is unchanged. Reusing the original HTML after changing
- * only the fallback would send two different messages in one event.
- */
-export const editedFormattedBodyForSubmit = (
-  initialBody: string,
-  nextBody: string,
-  formattedBody: string,
-  formattedBodyWasEdited: boolean
-): string | undefined => {
-  if (!formattedBodyWasEdited && nextBody.trim() !== initialBody.trim()) return undefined;
-  return shouldAttachFormattedBody(nextBody, formattedBody) ? formattedBody.trim() : undefined;
-};
-
 /** Prefer the latest remote thread event when focusing from a thread summary. */
 export const nativeThreadFocusEventId = (
   thread: NativeTimelineThreadSummary | undefined
@@ -865,6 +955,67 @@ export async function requestNativeTimelineFollowLive(
   return result.value;
 }
 
+/** One timeline view's delta channel (L20). */
+export type NativeTimelineDeltaSubscription = {
+  /** Passed to the opens and jumps whose stream this view shows. */
+  id: number;
+  /** Stops delivery and closes the channel on the Rust side. */
+  close: () => void;
+};
+
+export type NativeTimelineDeltaChannelDeps = {
+  createChannel: (onBatch: (batch: NativeTimelineViewDeltaBatch) => void) => unknown;
+  invoke: (
+    command: string,
+    args?: Record<string, unknown>
+  ) => Promise<DesktopInvokeResult<unknown>>;
+};
+
+const defaultDeltaChannelDeps: NativeTimelineDeltaChannelDeps = {
+  createChannel: (onBatch) => new Channel<NativeTimelineViewDeltaBatch>(onBatch),
+  invoke: (command, args) => invokeDesktopWithAvailability(command, args),
+};
+
+/**
+ * Open a view's delta channel before its first stream. Rust sends the
+ * room's batches down it in emit order, and only this view's once its open
+ * claims a stream. Resolves undefined when no channel opens; the view then
+ * polls its snapshot instead.
+ */
+export async function subscribeNativeTimelineDeltas(
+  roomId: string,
+  onBatch: (batch: NativeTimelineViewDeltaBatch) => void,
+  deps: NativeTimelineDeltaChannelDeps = defaultDeltaChannelDeps
+): Promise<NativeTimelineDeltaSubscription | undefined> {
+  let open = true;
+  let channel: unknown;
+  try {
+    channel = deps.createChannel((batch) => {
+      if (open) onBatch(batch);
+    });
+  } catch {
+    return undefined;
+  }
+  const result = await deps
+    .invoke('desktop_timeline_subscribe', { roomId, channel })
+    .catch(() => undefined);
+  const id = result?.available ? result.value : undefined;
+  if (typeof id !== 'number') {
+    open = false;
+    return undefined;
+  }
+  return {
+    id,
+    close: () => {
+      if (!open) return;
+      open = false;
+      void deps
+        .invoke('desktop_timeline_unsubscribe', { subscriptionId: id })
+        .catch(() => undefined);
+    },
+  };
+}
+
 // Core subscribes before returning the open snapshot. Keep the candidate's
 // intervening deltas until its stream ID is known, with a bounded lifetime and
 // size. An incomplete candidate is rejected without replacing the current view.
@@ -955,7 +1106,13 @@ export const useNativeTimelineView = (
     roomId,
   ]);
   const [state, setState] = useState<NativeTimelineViewState>({ status: 'unavailable' });
+  const [focusRoute, setFocusRoute] = useState<NativeTimelineViewController['focusRoute']>();
+  const [streamGap, setStreamGap] = useState<NativeTimelineStreamGap>('none');
+  const [reloadToken, setReloadToken] = useState(0);
+  const reload = useCallback(() => setReloadToken((token) => token + 1), []);
   const streamIdRef = useRef<string | undefined>(undefined);
+  /** This view's delta channel; opens and jumps claim their stream for it. */
+  const deltaSubscriptionIdRef = useRef<number | undefined>(undefined);
   const snapshotRef = useRef<NativeTimelineViewSnapshot | undefined>(undefined);
   const selectedPositionRef = useRef<NativeTimelinePosition | undefined>(undefined);
   const pendingOpenRef = useRef<ReturnType<typeof createNativeTimelineOpenBuffer> | undefined>(
@@ -1000,48 +1157,46 @@ export const useNativeTimelineView = (
     return true;
   }, []);
 
-  const paginate = useCallback(
-    async (direction: 'backwards' | 'forwards') => {
-      const streamId = streamIdRef.current;
-      const snapshot = snapshotRef.current;
-      const permitted =
-        direction === 'backwards'
-          ? snapshot?.capabilities.paginateBackward
-          : snapshot?.capabilities.paginateForward;
-      if (!streamId || !snapshot || !permitted) {
-        throw new Error('Native timeline pagination is unavailable.');
-      }
-      const revision = navigationRevisionRef.current;
-      const navigationRequest = navigationRequestRef.current;
-      const superseded = () =>
-        streamIdRef.current !== streamId ||
-        navigationRevisionRef.current !== revision ||
-        navigationRequestRef.current !== navigationRequest;
-      let result: DesktopInvokeResult<NativeTimelineViewSnapshot>;
-      try {
-        result = await invokeDesktopWithAvailability<NativeTimelineViewSnapshot>(
-          'matrix_timeline_paginate',
-          { request: { streamId, direction } }
-        );
-      } catch (error) {
-        if (superseded()) return;
-        throw error;
-      }
+  const paginate = useCallback(async (direction: 'backwards' | 'forwards') => {
+    const streamId = streamIdRef.current;
+    const snapshot = snapshotRef.current;
+    const permitted =
+      direction === 'backwards'
+        ? snapshot?.capabilities.paginateBackward
+        : snapshot?.capabilities.paginateForward;
+    if (!streamId || !snapshot || !permitted) {
+      throw new Error('Native timeline pagination is unavailable.');
+    }
+    const revision = navigationRevisionRef.current;
+    const navigationRequest = navigationRequestRef.current;
+    const superseded = () =>
+      streamIdRef.current !== streamId ||
+      navigationRevisionRef.current !== revision ||
+      navigationRequestRef.current !== navigationRequest;
+    let result: DesktopInvokeResult<NativeTimelineViewMetadata>;
+    try {
+      result = await invokeDesktopWithAvailability<NativeTimelineViewMetadata>(
+        'matrix_timeline_paginate',
+        { request: { streamId, direction } }
+      );
+    } catch (error) {
       if (superseded()) return;
-      if (!result.available || !result.value) {
-        throw new Error('Native timeline pagination is unavailable.');
-      }
-      if (isNativeTimelineReadbackStale(snapshotRef.current, result.value)) return;
-      if (!acceptSnapshot(result.value)) {
-        setState({
-          status: 'error',
-          error: new Error('Native timeline pagination lost synchronization.'),
-        });
-        throw new Error('Native timeline pagination lost synchronization.');
-      }
-    },
-    [acceptSnapshot]
-  );
+      throw error;
+    }
+    if (superseded()) return;
+    if (!result.available || !result.value) {
+      throw new Error('Native timeline pagination is unavailable.');
+    }
+    // The page's rows and state arrive as delta batches; the reply only
+    // confirms the page ran on this stream.
+    if (!isSameNativeTimelineStream(snapshotRef.current, result.value)) {
+      setState({
+        status: 'error',
+        error: new Error('Native timeline pagination lost synchronization.'),
+      });
+      throw new Error('Native timeline pagination lost synchronization.');
+    }
+  }, []);
 
   const setReadState = useCallback(
     async (request: {
@@ -1068,7 +1223,7 @@ export const useNativeTimelineView = (
       try {
         result = await invokeDesktopWithAvailability<NativeTimelineReadStateReadback>(
           'matrix_timeline_set_read_state',
-          { request: { streamId, ...request } }
+          { request: { streamId, ...request, publicReceipt: readReceiptsArePublic() } }
         );
       } catch (error) {
         if (superseded()) return;
@@ -1078,23 +1233,16 @@ export const useNativeTimelineView = (
       if (!result.available || !result.value) {
         throw new Error('Native timeline read action is unavailable.');
       }
-      const next = result.value.snapshot;
-      if (isNativeTimelineReadbackStale(snapshotRef.current, next)) {
-        return;
-      }
-      if (acceptSnapshot(next)) {
-        return;
-      }
-      if (isNativeTimelineReadbackStale(snapshotRef.current, next)) {
-        return;
-      }
+      // The read state reaches the presenter as a delta batch; the reply only
+      // confirms the action ran on this stream.
+      if (isSameNativeTimelineStream(snapshotRef.current, result.value.view)) return;
       setState({
         status: 'error',
         error: new Error('Native timeline read state lost synchronization.'),
       });
       throw new Error('Native timeline read state lost synchronization.');
     },
-    [acceptSnapshot]
+    []
   );
 
   const followLive = useCallback(
@@ -1155,7 +1303,7 @@ export const useNativeTimelineView = (
     try {
       result = await invokeDesktopWithAvailability<NativeTimelineOpenReadback>(
         'matrix_timeline_jump_latest',
-        { request: { streamId } }
+        { request: { streamId }, subscriptionId: deltaSubscriptionIdRef.current }
       );
     } catch (error) {
       finishOpen(buffer);
@@ -1193,12 +1341,20 @@ export const useNativeTimelineView = (
       });
       throw new Error('Native timeline jump-to-latest lost synchronization.');
     }
+    // Core keeps a stream that already shows the live bottom and answers
+    // with that same stream: its deltas kept flowing to this presenter, so
+    // the readback must not roll back rows newer than its revision.
+    const kept =
+      result.value.streamId === streamId &&
+      snapshotRef.current !== undefined &&
+      snapshotRef.current.revision >= snapshot.revision;
+    const adopted = kept && snapshotRef.current ? snapshotRef.current : snapshot;
     streamIdRef.current = result.value.streamId;
     selectedPositionRef.current = result.value.position;
-    snapshotRef.current = snapshot;
+    snapshotRef.current = adopted;
     setState({
       status: 'ready',
-      snapshot,
+      snapshot: adopted,
       selectedPosition: result.value.position,
     });
     return true;
@@ -1225,6 +1381,7 @@ export const useNativeTimelineView = (
               roomId: current.roomId,
               position: { kind: 'focused', eventId },
             }),
+            subscriptionId: deltaSubscriptionIdRef.current,
           }
         );
       } catch (error) {
@@ -1287,8 +1444,11 @@ export const useNativeTimelineView = (
   useEffect(() => {
     navigationRevisionRef.current += 1;
     streamIdRef.current = undefined;
+    deltaSubscriptionIdRef.current = undefined;
     snapshotRef.current = undefined;
     selectedPositionRef.current = undefined;
+    setFocusRoute(undefined);
+    setStreamGap('none');
     pendingOpenRef.current?.cancel();
     pendingOpenRef.current = undefined;
     if (!nativeRequest || !isSynaraDesktop()) {
@@ -1297,8 +1457,11 @@ export const useNativeTimelineView = (
     }
 
     let disposed = false;
-    let unlisten: (() => void) | undefined;
-    let pollTimer: number | undefined;
+    let deltas: NativeTimelineDeltaSubscription | undefined;
+    let stopPoll: (() => void) | undefined;
+    let resyncInFlight = false;
+    // Assigned below; a gap found while applying deltas asks for a snapshot.
+    let resyncAfterGap: () => void = () => undefined;
     const COALESCE_QUEUE_LIMIT = 128;
     let coalesceQueued: NativeTimelineViewDeltaBatch[] = [];
     let coalesceFrame = 0;
@@ -1319,13 +1482,18 @@ export const useNativeTimelineView = (
       if (!next || active.length === 0) return;
       const applied = applyNativeTimelineViewDeltaBatches(next, active);
       if (applied.gap) {
+        // Keep showing the rows that did apply, and fetch the full snapshot
+        // now rather than at the next safety-net poll. Later batches gap too
+        // until it lands; the snapshot's newer revision then supersedes them.
         if (applied.snapshot !== snapshotRef.current) {
           snapshotRef.current = applied.snapshot;
+          setState({
+            status: 'ready',
+            snapshot: applied.snapshot,
+            selectedPosition: selectedPositionRef.current ?? applied.snapshot.position,
+          });
         }
-        setState({
-          status: 'error',
-          error: new Error('Native timeline stream lost synchronization.'),
-        });
+        resyncAfterGap();
         return;
       }
       if (applied.snapshot === snapshotRef.current) return;
@@ -1354,14 +1522,23 @@ export const useNativeTimelineView = (
       coalesceFrame = window.requestAnimationFrame(flushCoalescedBatches);
     };
 
-    const pollSnapshot = async () => {
+    /**
+     * True when the snapshot was adopted (or already current). The safety-net
+     * poll names the revision it shows, and Core answers `{ revision }` with
+     * no rows while the stream has not moved; a gap resync always asks for
+     * the full snapshot.
+     */
+    const pollSnapshot = async (probe: boolean): Promise<boolean> => {
       const streamId = streamIdRef.current;
-      if (!streamId || disposed) return;
+      if (!streamId || disposed) return false;
       const revision = navigationRevisionRef.current;
       const navigationRequest = navigationRequestRef.current;
-      const result = await invokeDesktopWithAvailability<NativeTimelineViewSnapshot>(
+      const knownRevision = probe ? snapshotRef.current?.revision : undefined;
+      const result = await invokeDesktopWithAvailability<
+        NativeTimelineViewSnapshot | NativeTimelineSnapshotUnchanged
+      >(
         'matrix_timeline_snapshot',
-        { streamId }
+        knownRevision === undefined ? { streamId } : { streamId, knownRevision }
       ).catch(() => undefined);
       if (
         disposed ||
@@ -1371,13 +1548,17 @@ export const useNativeTimelineView = (
         !result?.available ||
         !result.value
       )
-        return;
+        return false;
+      if (!('rows' in result.value)) {
+        // Unchanged: still current only if no batch moved the presenter since.
+        return result.value.revision === snapshotRef.current?.revision;
+      }
       const snapshot = result.value;
       if (
         snapshot.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
         snapshot.roomId !== nativeRequest.roomId
       ) {
-        return;
+        return false;
       }
       if (!snapshotRef.current) {
         snapshotRef.current = snapshot;
@@ -1386,30 +1567,37 @@ export const useNativeTimelineView = (
           snapshot,
           selectedPosition: selectedPositionRef.current ?? snapshot.position,
         });
-        return;
+        return true;
       }
-      acceptSnapshot(snapshot);
+      const accepted = acceptSnapshot(snapshot);
+      if (accepted) setStreamGap('none');
+      return accepted;
+    };
+
+    resyncAfterGap = () => {
+      setStreamGap((current) => (current === 'failed' ? current : 'resyncing'));
+      if (resyncInFlight) return;
+      resyncInFlight = true;
+      const streamId = streamIdRef.current;
+      void pollSnapshot(false).then((adopted) => {
+        resyncInFlight = false;
+        if (!adopted && !disposed && streamIdRef.current === streamId) setStreamGap('failed');
+      });
     };
 
     const open = async () => {
       const buffer = beginOpen(nativeRequest.roomId);
       setState({ status: 'loading' });
       try {
-        try {
-          unlisten = await listenTauriEvent<NativeTimelineViewDeltaBatch>(
-            NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
-            ({ payload }) => applyBatch(payload)
-          );
-        } catch {
-          unlisten = undefined;
-        }
+        deltas = await subscribeNativeTimelineDeltas(nativeRequest.roomId, applyBatch);
         if (disposed) {
-          unlisten?.();
+          deltas?.close();
           return;
         }
+        deltaSubscriptionIdRef.current = deltas?.id;
         const result = await invokeDesktopWithAvailability<NativeTimelineOpenReadback>(
           'matrix_timeline_open',
-          { request: nativeRequest }
+          { request: nativeRequest, subscriptionId: deltas?.id }
         );
         if (disposed) {
           if (result.available && result.value?.streamId) {
@@ -1448,18 +1636,21 @@ export const useNativeTimelineView = (
         snapshotRef.current = snapshot;
         selectedPositionRef.current = readback.position;
         setState({ status: 'ready', snapshot, selectedPosition: readback.position });
+        const requested = nativeRequest.position;
+        setFocusRoute(
+          requested.kind === 'focused' && readback.focusRoute
+            ? { eventId: requested.event_id, route: readback.focusRoute }
+            : undefined
+        );
         if (!disposed) {
-          const schedulePoll = (firstPoll: boolean) => {
-            pollTimer = window.setTimeout(
-              () => {
-                if (disposed) return;
-                void pollSnapshot();
-                schedulePoll(false);
-              },
-              nativeTimelinePollDelay(Boolean(unlisten), firstPoll)
-            );
-          };
-          schedulePoll(true);
+          // Paused while the window is hidden; showing it again polls at once (D11).
+          const deltasLive = Boolean(deltas);
+          stopPoll = startVisibleOnlyPoll(
+            () => {
+              if (!disposed) void pollSnapshot(true);
+            },
+            (firstPoll) => nativeTimelinePollDelay(deltasLive, firstPoll)
+          );
         }
       } catch (error) {
         if (!disposed) {
@@ -1487,12 +1678,23 @@ export const useNativeTimelineView = (
           request: { streamId },
         });
       }
-      if (pollTimer !== undefined) window.clearTimeout(pollTimer);
-      unlisten?.();
+      stopPoll?.();
+      deltas?.close();
     };
-  }, [acceptSnapshot, beginOpen, finishOpen, nativeRequest]);
+    // `reloadToken` reopens the same request on demand (Retry, Reload).
+  }, [acceptSnapshot, beginOpen, finishOpen, nativeRequest, reloadToken]);
 
-  return { state, paginate, setReadState, followLive, jumpLatest, restoreLastRead };
+  return {
+    state,
+    paginate,
+    setReadState,
+    followLive,
+    jumpLatest,
+    restoreLastRead,
+    focusRoute,
+    streamGap,
+    reload,
+  };
 };
 
 export const nativeTimelineMediaSrc = (handle: NativeTimelineMediaHandle): string | undefined =>

@@ -260,9 +260,11 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
           >
             <Box grow="Yes" direction="Column" gap="200">
               <Text size="T200">
-                <b>Logout from selected devices. ({deleted.size} selected)</b>
+                <b>Log out of selected devices. ({deleted.size} selected)</b>
               </Text>
-              {deleteFailed && <Text size="T200">Failed to logout devices. Please try again.</Text>}
+              {deleteFailed && (
+                <Text size="T200">Failed to log out devices. Please try again.</Text>
+              )}
               {challenge?.authenticationFailed && (
                 <Text size="T200">
                   Authentication was not completed. Check your password and try again.
@@ -313,7 +315,7 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
                     before={working && <Spinner variant="Critical" fill="Solid" size="100" />}
                     onClick={() => void startDelete()}
                   >
-                    <Text size="B300">Logout</Text>
+                    <Text size="B300">Log Out</Text>
                   </Button>
                 )
               )}

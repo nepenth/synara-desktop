@@ -26,6 +26,10 @@ const fixture = async (page: Page, action: keyof Fixture, arg?: number | string)
     [action, arg] as const
   );
 
+/** The timeline error view, or a notice that an update could not be loaded. */
+const desyncIndicator = (page: Page) =>
+  page.locator('[data-native-timeline-error="true"], [data-native-timeline-notice="error"]');
+
 const open = async (page: Page, query: string) => {
   await page.goto(`/e2e/native-timeline-harness/index.html?${query}`);
   await expect(page.locator('[data-native-timeline-event-id]').first()).toBeVisible();
@@ -247,17 +251,28 @@ test('out-of-order same-frame revisions apply instead of desyncing', async ({ pa
   await open(page, 'scenario=live&nativeEvents=1');
   await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
   await fixture(page, 'outOfOrderLiveAppends');
-  await expect(page.getByText('Native timeline stream lost synchronization.')).toBeHidden();
+  await expect(desyncIndicator(page)).toBeHidden();
   await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
 });
 
-test('a true revision gap fails closed rather than dropping later rows silently', async ({
+test('a true revision gap keeps the rows and offers a reload instead of dropping them silently', async ({
   page,
 }) => {
+  // `nativeEvents` makes snapshot polls return nothing, so the immediate
+  // resync after the gap fails and the user is told.
   await open(page, 'scenario=live&nativeEvents=1');
   await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
   await fixture(page, 'emitRevisionGap');
-  await expect(page.getByText('Native timeline stream lost synchronization.')).toBeVisible();
+  const notice = page.locator('[data-native-timeline-notice="error"]');
+  await expect(notice).toContainText('Some new messages could not be loaded.');
+  await expect(notice).toHaveAttribute('role', 'alert');
+  // The timeline is not replaced by an error: the rows it had stay.
+  await expect(page.locator('[data-native-timeline-event-id="$60"]')).toBeAttached();
+  await expect(page.locator('[data-native-timeline-error="true"]')).toHaveCount(0);
+  // Reload reopens the stream, which brings the missed message.
+  await notice.getByRole('button', { name: 'Reload' }).click();
+  await expect(page.locator('[data-native-timeline-event-id="$61"]')).toBeAttached();
+  await expect(notice).toHaveCount(0);
 });
 
 test('a metadata flood past the coalesce cap then an ops delta stays recoverable', async ({
@@ -266,9 +281,9 @@ test('a metadata flood past the coalesce cap then an ops delta stays recoverable
   await open(page, 'scenario=live&nativeEvents=1');
   await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
   await fixture(page, 'emitDeltaFlood', 130);
-  await expect(page.getByText('Native timeline stream lost synchronization.')).toBeHidden();
+  await expect(desyncIndicator(page)).toBeHidden();
   await fixture(page, 'metadataThenOps');
-  await expect(page.getByText('Native timeline stream lost synchronization.')).toBeHidden();
+  await expect(desyncIndicator(page)).toBeHidden();
   await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
 });
 

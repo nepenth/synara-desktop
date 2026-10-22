@@ -12,10 +12,9 @@ import {
   TextArea,
   Chip,
 } from 'folds';
-import Linkify from 'linkify-react';
 import { nameInitials } from '../../utils/common';
 import { BreakWord } from '../../styles/Text.css';
-import { LINKIFY_OPTS } from '../../plugins/react-custom-html-parser';
+import { NativeLinkifiedText } from '../../features/room/nativeTimelineFormattedBody';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import { useFilePicker } from '../../hooks/useFilePicker';
 import { useObjectURL } from '../../hooks/useObjectURL';
@@ -63,7 +62,7 @@ export function ImagePackProfile({ meta, canEdit, onEdit }: ImagePackProfileProp
           </Text>
           {meta.attribution && (
             <Text className={BreakWord} size="T200">
-              <Linkify options={LINKIFY_OPTS}>{meta.attribution}</Linkify>
+              <NativeLinkifiedText text={meta.attribution} />
             </Text>
           )}
         </Box>

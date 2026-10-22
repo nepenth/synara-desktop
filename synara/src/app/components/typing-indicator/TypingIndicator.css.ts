@@ -23,6 +23,12 @@ export const TypingDot = recipe({
     animated: {
       true: {
         animation: `${TypingDotAnime} 0.6s infinite alternate`,
+        '@media': {
+          // Three still dots still read as "typing".
+          '(prefers-reduced-motion: reduce)': {
+            animation: 'none',
+          },
+        },
       },
     },
     size: {

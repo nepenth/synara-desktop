@@ -24,6 +24,7 @@ import { CustomElement } from './slate';
 import * as css from './Editor.css';
 import { toggleKeyboardShortcut } from './keyboard';
 import { enableDesktopSpellcheck } from '../../utils/desktop';
+import { useComposingCheck } from '../../hooks/useComposingCheck';
 
 const initialValue: CustomElement[] = [
   {
@@ -62,6 +63,8 @@ export type EditorChangeHandler = (value: Descendant[]) => void;
 type CustomEditorProps = {
   className?: string;
   editableName?: string;
+  /** The textbox's accessible name; defaults to the placeholder. */
+  ariaLabel?: string;
   top?: ReactNode;
   bottom?: ReactNode;
   before?: ReactNode;
@@ -80,6 +83,7 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
     {
       className,
       editableName,
+      ariaLabel,
       top,
       bottom,
       before,
@@ -102,18 +106,28 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
 
     const renderLeaf = useCallback((props: RenderLeafProps) => <RenderLeaf {...props} />, []);
 
+    const isComposing = useComposingCheck();
     const handleKeydown: KeyboardEventHandler = useCallback(
       (evt) => {
+        // While an input method composes, Enter commits, Escape cancels and
+        // Backspace edits the conversion. None of them may send, cancel a
+        // reply or change block formatting.
+        if (isComposing(evt)) return;
         onKeyDown?.(evt);
         const shortcutToggled = toggleKeyboardShortcut(editor, evt);
         if (shortcutToggled) evt.preventDefault();
       },
-      [editor, onKeyDown]
+      [editor, isComposing, onKeyDown]
     );
 
     const renderPlaceholder = useCallback(
       ({ attributes, children }: RenderPlaceholderProps) => (
-        <span {...attributes} className={css.EditorPlaceholderContainer}>
+        // Slate inlines `opacity: 0.333` (2.2:1); the class sets an AA colour instead.
+        <span
+          {...attributes}
+          style={{ ...attributes.style, opacity: 1 }}
+          className={css.EditorPlaceholderContainer}
+        >
           {/* Inner component to style the actual text position and appearance */}
           <Text as="span" className={css.EditorPlaceholderTextVisual} truncate>
             {children}
@@ -147,6 +161,7 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
               >
                 <Editable
                   data-editable-name={editableName}
+                  aria-label={ariaLabel ?? placeholder}
                   className={`${css.EditorTextarea} ${
                     after ? css.EditorTextareaWithFloatingOptions : ''
                   }`}

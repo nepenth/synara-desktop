@@ -119,6 +119,27 @@ test('inbox keeps the in-progress flow instead of always taking requests[0]', ()
   assert.equal(selectNativeVerificationRequest([]), undefined);
 });
 
+test('a flow closed locally after a failed cancel is not reopened by the poll', () => {
+  const stuck = { ...request('outgoing', 'ready'), flowId: 'stuck' };
+  const other = { ...request('incoming', 'requested'), flowId: 'other' };
+  const hidden = new Set(['stuck']);
+  assert.equal(selectNativeVerificationRequest([stuck], undefined, hidden), undefined);
+  assert.equal(selectNativeVerificationRequest([stuck, other], undefined, hidden)?.flowId, 'other');
+  // Without the local close the stuck flow would come straight back.
+  assert.equal(selectNativeVerificationRequest([stuck])?.flowId, 'stuck');
+});
+
+test('the verification dialog can always be closed when cancelling fails', () => {
+  const source = readFileSync(
+    join(process.cwd(), 'src/app/features/verification/NativeDeviceVerification.tsx'),
+    'utf8'
+  );
+  assert.match(source, /setCloseFailed\(true\)/);
+  assert.match(source, /VERIFICATION_CLOSE_FAILED_COPY/);
+  assert.match(source, /Close Anyway/);
+  assert.match(source, /hiddenFlowIds\.current\.add\(flowId\)/);
+});
+
 test('QR parser accepts a bounded SVG data URL and rejects huge payloads', () => {
   const svg = "data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg'/>";
   assert.deepEqual(parseNativeVerificationQr({ imageDataUrl: svg, scanned: false }), {

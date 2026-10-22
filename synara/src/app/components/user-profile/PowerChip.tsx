@@ -3,7 +3,6 @@ import {
   Button,
   Chip,
   config,
-  Dialog,
   Header,
   Icon,
   IconButton,
@@ -20,6 +19,7 @@ import {
   Text,
   toRem,
 } from 'folds';
+import { Dialog } from '../modal-dialog';
 import React, { MouseEventHandler, useCallback, useState } from 'react';
 import FocusTrap from '../FocusTrap';
 import { isKeyHotkey } from 'is-hotkey';
@@ -45,6 +45,7 @@ import { useMemberPowerCompare } from '../../hooks/useMemberPowerCompare';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { setPowerLevelWithNativeOwner } from '../nativeRoomModerationOwner';
 import { getSafeMyUserId } from '../../state/nativeIdentity';
+import { composerErrorMessage } from '../../features/room/composerSendError';
 
 type SelfDemoteAlertProps = {
   power: number;
@@ -72,7 +73,7 @@ function SelfDemoteAlert({ power, onCancel, onChange }: SelfDemoteAlertProps) {
               <Box grow="Yes">
                 <Text size="H4">Self Demotion</Text>
               </Box>
-              <IconButton size="300" onClick={onCancel} radii="300">
+              <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
                 <Icon src={Icons.Cross} />
               </IconButton>
             </Header>
@@ -122,7 +123,7 @@ function SharedPowerAlert({ power, onCancel, onChange }: SharedPowerAlertProps) 
               <Box grow="Yes">
                 <Text size="H4">Shared Power</Text>
               </Box>
-              <IconButton size="300" onClick={onCancel} radii="300">
+              <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
                 <Icon src={Icons.Cross} />
               </IconButton>
             </Header>
@@ -252,7 +253,10 @@ export function PowerChip({ userId }: { userId: string }) {
                   <CutoutCard style={{ padding: config.space.S200 }} variant="Critical">
                     <Text size="L400">Error: {powerState.error.name}</Text>
                     <Text className={BreakWord} size="T200">
-                      {powerState.error.message}
+                      {composerErrorMessage(
+                        powerState.error,
+                        'Synara could not change the power level. Try again.'
+                      )}
                     </Text>
                   </CutoutCard>
                 )}

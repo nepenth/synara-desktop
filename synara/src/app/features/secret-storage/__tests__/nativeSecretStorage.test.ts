@@ -42,7 +42,8 @@ test('native secret storage projection and operation result contain no recovery 
 
 test('native secret storage failure copy is fixed and privacy safe', () => {
   const message = nativeSecretStorageErrorMessage().toLowerCase();
-  assert.equal(message.includes('native secret storage'), true);
+  assert.equal(message.includes('secret storage'), true);
+  assert.equal(message.includes('native'), false);
   for (const forbidden of ['token', 'ciphertext', 'password']) {
     assert.equal(message.includes(forbidden), false);
   }

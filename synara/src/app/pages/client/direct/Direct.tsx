@@ -34,7 +34,9 @@ import {
   NavEmptyLayout,
   NavItem,
   NavItemContent,
+  NavLoading,
 } from '../../../components/nav';
+import { useNativeRoomListLoaded } from '../../../state/room-list/roomList';
 import { getDirectCreatePath, getDirectRoomPath } from '../../pathUtils';
 import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
 import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
@@ -48,7 +50,7 @@ import { useDirectRooms } from './useDirectRooms';
 import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
 import { useClosedNavCategoriesAtom } from '../../../state/hooks/closedNavCategories';
 import { useNativeNavigationScope } from '../../../state/hooks/navigationUnread';
-import { markAsReadFromExplicitUserActionInBackground } from '../../../utils/notifications';
+import { useMarkRoomsAsRead } from '../../../hooks/useMarkRoomsAsRead';
 import { stopPropagation } from '../../../utils/keyboard';
 import {
   getRoomNotificationMode,
@@ -63,10 +65,11 @@ type DirectMenuProps = {
 const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }, ref) => {
   const { roomIds: orphanRooms, unread } = useNativeNavigationScope('direct');
 
-  const handleMarkAsRead = () => {
-    if (!unread) return;
-    orphanRooms.forEach((rId) => markAsReadFromExplicitUserActionInBackground(rId));
-    requestClose();
+  const { markRead, markingRead, markReadError } = useMarkRoomsAsRead();
+
+  const handleMarkAsRead = async () => {
+    if (!unread || markingRead) return;
+    if (await markRead(orphanRooms)) requestClose();
   };
 
   return (
@@ -85,6 +88,11 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
             Mark as Read
           </Text>
         </MenuItem>
+        {markReadError && (
+          <Text as="p" size="T200" role="alert" style={{ paddingInline: config.space.S200 }}>
+            {markReadError}
+          </Text>
+        )}
       </Box>
     </Menu>
   );
@@ -111,7 +119,12 @@ function DirectHeader() {
             </Text>
           </Box>
           <Box>
-            <IconButton aria-pressed={!!menuAnchor} variant="Surface" onClick={handleOpenMenu}>
+            <IconButton
+              aria-label="Direct messages options"
+              aria-pressed={!!menuAnchor}
+              variant="Surface"
+              onClick={handleOpenMenu}
+            >
               <Icon src={Icons.VerticalDots} size="200" />
             </IconButton>
           </Box>
@@ -126,7 +139,6 @@ function DirectHeader() {
           <FocusTrap
             focusTrapOptions={{
               initialFocus: false,
-              returnFocusOnDeactivate: false,
               onDeactivate: () => setMenuAnchor(undefined),
               clickOutsideDeactivates: true,
               isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
@@ -183,6 +195,7 @@ export function Direct() {
   const createDirectSelected = useDirectCreateSelected();
 
   const selectedRoomId = useSelectedRoom();
+  const roomListLoaded = useNativeRoomListLoaded();
   const noRoomToDisplay = directs.length === 0;
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 
@@ -206,16 +219,23 @@ export function Direct() {
   );
 
   return (
-    <PageNav>
+    <PageNav label="Direct messages">
       <DirectHeader />
       {noRoomToDisplay ? (
-        <DirectEmpty />
+        roomListLoaded ? (
+          <DirectEmpty />
+        ) : (
+          <NavLoading label="Loading direct messages…" />
+        )
       ) : (
         <PageNavContent scrollRef={scrollRef}>
           <Box direction="Column" gap="300">
             <NavCategory>
-              <NavItem variant="Surface" radii="400" aria-selected={createDirectSelected}>
-                <NavButton onClick={() => navigate(getDirectCreatePath())}>
+              <NavItem variant="Surface" radii="400" selected={createDirectSelected}>
+                <NavButton
+                  aria-current={createDirectSelected ? 'page' : undefined}
+                  onClick={() => navigate(getDirectCreatePath())}
+                >
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">
                       <Avatar size="200" radii="400">

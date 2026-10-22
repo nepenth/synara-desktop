@@ -4,10 +4,16 @@ use zeroize::Zeroizing;
 
 use matrix_sdk::{
     encryption::recovery::{RecoveryError, RecoveryState},
-    ruma::events::{
-        secret::request::SecretName,
-        secret_storage::{key::SecretStorageKeyEventContent, secret::SecretEventContent},
-        EventContentFromType, GlobalAccountDataEventType,
+    ruma::{
+        events::{
+            secret::request::SecretName,
+            secret_storage::{
+                default_key::SecretStorageDefaultKeyEventContent,
+                key::SecretStorageKeyEventContent, secret::SecretEventContent,
+            },
+            AnyGlobalAccountDataEventContent, EventContentFromType, GlobalAccountDataEventType,
+        },
+        serde::Raw,
     },
     Client,
 };
@@ -24,30 +30,74 @@ pub struct SecretStorageSetup {
     pub recovery_key: Option<Zeroizing<String>>,
 }
 
+/// Where a status read takes account data from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AccountDataSource {
+    /// The synced local store. The homeserver is asked only when the SDK's
+    /// recovery state says a default key exists (or is still unknown) but sync
+    /// has not delivered it yet. Screens and device/security wakeups use this,
+    /// so a status read never sends requests that re-arm those wakeups.
+    LocalFirst,
+    /// Always the homeserver. `set_account_data` does not update the local
+    /// store, so mutation pre- and postconditions cannot wait for a sync echo.
+    Homeserver,
+}
+
+/// Secret-storage status from synced account data, with a homeserver fallback
+/// only until sync delivers the default key.
 pub async fn status(
     client: &Client,
     session_generation: u64,
 ) -> Result<NativeSecretStorageStatus, &'static str> {
-    let secret_storage = client.encryption().secret_storage();
-    let default_key = secret_storage
-        .fetch_default_key_id()
-        .await
-        .map_err(|_| "v-crypto.4-status-default-key-failed")?;
-    let default_key = default_key
-        .map(|raw| {
-            raw.deserialize()
-                .map_err(|_| "v-crypto.4-status-default-key-failed")
-        })
-        .transpose()?;
+    status_from(client, session_generation, AccountDataSource::LocalFirst).await
+}
+
+/// Homeserver readback for setup, unlock and reset completion checks.
+async fn authoritative_status(
+    client: &Client,
+    session_generation: u64,
+) -> Result<NativeSecretStorageStatus, &'static str> {
+    status_from(client, session_generation, AccountDataSource::Homeserver).await
+}
+
+async fn status_from(
+    client: &Client,
+    session_generation: u64,
+    source: AccountDataSource,
+) -> Result<NativeSecretStorageStatus, &'static str> {
+    let recovery_state = client.encryption().recovery().state();
+    let local_default_key = match source {
+        AccountDataSource::LocalFirst => client
+            .account()
+            .account_data::<SecretStorageDefaultKeyEventContent>()
+            .await
+            .map_err(|_| "v-crypto.4-status-default-key-failed")?,
+        AccountDataSource::Homeserver => None,
+    };
+    // Once the default key is in the local store, sync has delivered the
+    // account data, so the key description and secrets are read locally too.
+    let synced = local_default_key.is_some();
+    let default_key = match local_default_key {
+        Some(raw) => Some(raw),
+        None if fetch_default_key(source, recovery_state) => client
+            .encryption()
+            .secret_storage()
+            .fetch_default_key_id()
+            .await
+            .map_err(|_| "v-crypto.4-status-default-key-failed")?,
+        None => None,
+    };
+    // Account data cannot be deleted: disabling recovery and an identity
+    // reset both write an empty default-key event. One that does not parse
+    // means no default key, as in the SDK's `SecretStorage::is_enabled`.
+    let default_key = default_key.and_then(|raw| raw.deserialize().ok());
     let default_key_set = default_key.is_some();
     let default_key_id = default_key.as_ref().map(|content| content.key_id.as_str());
     let (exists, passphrase_configured) = match default_key.as_ref() {
         Some(default_key) => {
             let event_type =
                 GlobalAccountDataEventType::SecretStorageKey(default_key.key_id.to_owned());
-            let key = client
-                .account()
-                .fetch_account_data(event_type.to_owned())
+            let key = read_account_data(client, event_type.to_owned(), synced)
                 .await
                 .map_err(|_| "v-crypto.4-status-key-info-failed")?;
             let key = key
@@ -68,7 +118,7 @@ pub async fn status(
         None => (false, false),
     };
 
-    let missing_secrets = missing_secrets(client, default_key_id).await?;
+    let missing_secrets = missing_secrets(client, default_key_id, synced).await?;
     let bootstrap_ready = client
         .encryption()
         .cross_signing_status()
@@ -76,13 +126,34 @@ pub async fn status(
         .is_some_and(|status| status.is_complete());
     Ok(project_status(
         session_generation,
-        client.encryption().recovery().state(),
+        recovery_state,
         exists,
         default_key_set,
         passphrase_configured,
         bootstrap_ready,
         missing_secrets,
     ))
+}
+
+/// A missing local default key is authoritative only once the SDK has found
+/// recovery disabled. `Unknown` has not been checked yet, and `Enabled` or
+/// `Incomplete` mean the key exists but has not synced to this store.
+fn fetch_default_key(source: AccountDataSource, recovery_state: RecoveryState) -> bool {
+    source == AccountDataSource::Homeserver || recovery_state != RecoveryState::Disabled
+}
+
+/// Synced account data comes from the local store; otherwise ask the
+/// homeserver, as the default key did.
+async fn read_account_data(
+    client: &Client,
+    event_type: GlobalAccountDataEventType,
+    synced: bool,
+) -> matrix_sdk::Result<Option<Raw<AnyGlobalAccountDataEventContent>>> {
+    if synced {
+        client.account().account_data_raw(event_type).await
+    } else {
+        client.account().fetch_account_data(event_type).await
+    }
 }
 
 pub async fn bootstrap(
@@ -93,7 +164,7 @@ pub async fn bootstrap(
     if passphrase.trim().is_empty() || passphrase.len() > 100_000 {
         return Err("recovery-secret-invalid");
     }
-    let before = status(client, session_generation).await?;
+    let before = authoritative_status(client, session_generation).await?;
     if before.exists || before.default_key_set {
         // Existing but incomplete state is not enrollment success. Never enable
         // again automatically after a partial prior setup or lost display key.
@@ -113,7 +184,7 @@ pub async fn bootstrap(
                 .await
                 .map_err(map_bootstrap_error)
         },
-        status(client, session_generation),
+        authoritative_status(client, session_generation),
     )
     .await
 }
@@ -161,7 +232,7 @@ pub async fn unlock(
                 crate::app::dehydrated_devices::start_with_secret(client, recovery_secret).await;
             Ok(())
         },
-        status(client, session_generation),
+        authoritative_status(client, session_generation),
     )
     .await
 }
@@ -174,7 +245,7 @@ pub async fn reset(
     if passphrase.trim().is_empty() || passphrase.len() > 100_000 {
         return Err("recovery-secret-invalid");
     }
-    let before = status(client, session_generation).await?;
+    let before = authoritative_status(client, session_generation).await?;
     if !before.unlocked {
         return Err("v-crypto.4-reset-requires-unlock");
     }
@@ -194,7 +265,7 @@ pub async fn reset(
 
             Ok(recovery_key)
         },
-        status(client, session_generation),
+        authoritative_status(client, session_generation),
     )
     .await
 }
@@ -211,6 +282,7 @@ fn recovery_phase(state: RecoveryState) -> NativeRecoveryPhase {
 async fn missing_secrets(
     client: &Client,
     default_key_id: Option<&str>,
+    synced: bool,
 ) -> Result<Vec<NativeMissingSecret>, &'static str> {
     let known = [
         (
@@ -230,12 +302,18 @@ async fn missing_secrets(
             NativeMissingSecret::EncryptionBackup,
         ),
     ];
+    // A secret counts only when it is encrypted for the default key, so with
+    // no default key every secret is missing and there is nothing to read.
+    let Some(default_key_id) = default_key_id else {
+        return Ok(known
+            .into_iter()
+            .map(|(_, projection)| projection)
+            .collect());
+    };
     let mut missing = Vec::new();
     for (name, projection) in known {
         let event_type = GlobalAccountDataEventType::from(name);
-        let content = client
-            .account()
-            .fetch_account_data(event_type)
+        let content = read_account_data(client, event_type, synced)
             .await
             .map_err(|_| "v-crypto.4-status-secret-check-failed")?;
         let present = content
@@ -244,9 +322,7 @@ async fn missing_secrets(
                     .map_err(|_| "v-crypto.4-status-secret-check-failed")
             })
             .transpose()?
-            .is_some_and(|content| {
-                default_key_id.is_some_and(|key_id| content.encrypted.contains_key(key_id))
-            });
+            .is_some_and(|content| content.encrypted.contains_key(default_key_id));
         if !present {
             missing.push(projection);
         }
@@ -511,12 +587,14 @@ mod tests {
                 mutated.set(true);
                 Ok(Zeroizing::new("test-generated-key".to_owned()))
             },
-            status(&client, 8),
+            authoritative_status(&client, 8),
         )
         .await;
         assert!(mutated.get());
+        // A default key that does not parse reads as none (an empty event is
+        // how recovery is disabled), so the readback is incomplete.
         match result {
-            Err(error) => assert_eq!(error, "v-crypto.4-status-default-key-failed"),
+            Err(error) => assert_eq!(error, "v-crypto.4-operation-incomplete"),
             Ok(_) => panic!("malformed authoritative readback must not return a recovery key"),
         }
     }
@@ -551,6 +629,116 @@ mod tests {
             Err(diagnostic) => assert_eq!(diagnostic, "v-crypto.4-status-default-key-failed"),
             Ok(_) => panic!("SDK failure must not return a key"),
         }
+    }
+
+    #[tokio::test]
+    async fn status_reads_synced_account_data_without_homeserver_requests() {
+        use matrix_sdk::{config::RequestConfig, test_utils::mocks::MatrixMockServer};
+        use wiremock::{
+            matchers::{method, path_regex},
+            Mock, ResponseTemplate,
+        };
+        let server = MatrixMockServer::new().await;
+        let client = server
+            .client_builder()
+            .on_builder(|builder| builder.request_config(RequestConfig::new().disable_retry()))
+            .build()
+            .await;
+        server
+            .mock_sync()
+            .ok_and_run(&client, |builder| {
+                builder
+                    .add_custom_global_account_data(serde_json::json!({
+                        "type": "m.secret_storage.default_key",
+                        "content": {"key": "test-key"},
+                    }))
+                    .add_custom_global_account_data(serde_json::json!({
+                        "type": "m.secret_storage.key.test-key",
+                        "content": {
+                            "algorithm": "m.secret_storage.v1.aes-hmac-sha2",
+                            "passphrase": {
+                                "algorithm": "m.pbkdf2",
+                                "salt": "test-salt",
+                                "iterations": 10,
+                            },
+                        },
+                    }));
+            })
+            .await;
+        // The SDK's own recovery setup and its default-key sync handler fetch
+        // the default key once each; let them finish before counting.
+        client
+            .encryption()
+            .wait_for_e2ee_initialization_tasks()
+            .await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/_matrix/client/.*/user/.*/account_data/.*$"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(server.server())
+            .await;
+        let account_data_reads = || async {
+            server
+                .server()
+                .received_requests()
+                .await
+                .unwrap()
+                .iter()
+                .filter(|request| request.url.path().contains("/account_data/"))
+                .count()
+        };
+        let before = account_data_reads().await;
+
+        for _ in 0..3 {
+            let status = status(&client, 8).await.expect("synced status");
+            assert!(status.default_key_set);
+            assert!(status.exists);
+            assert!(status.passphrase_configured);
+            assert_eq!(status.missing_secrets.len(), 4);
+        }
+        assert_eq!(
+            account_data_reads().await,
+            before,
+            "a status read after sync must not ask the homeserver again"
+        );
+        // The mutation readback still asks, and would see the failure.
+        assert!(authoritative_status(&client, 8).await.is_err());
+        assert!(account_data_reads().await > before);
+    }
+
+    #[test]
+    fn missing_local_default_key_is_fetched_unless_recovery_is_known_disabled() {
+        assert!(!fetch_default_key(
+            AccountDataSource::LocalFirst,
+            RecoveryState::Disabled
+        ));
+        for state in [
+            RecoveryState::Unknown,
+            RecoveryState::Enabled,
+            RecoveryState::Incomplete,
+        ] {
+            assert!(fetch_default_key(AccountDataSource::LocalFirst, state));
+        }
+        assert!(fetch_default_key(
+            AccountDataSource::Homeserver,
+            RecoveryState::Disabled
+        ));
+    }
+
+    #[test]
+    fn mutation_readbacks_ask_the_homeserver() {
+        let source = include_str!("live.rs");
+        let mutations = source
+            .split("pub async fn bootstrap(")
+            .nth(1)
+            .and_then(|rest| rest.split("fn recovery_phase(").next())
+            .expect("mutation bodies");
+        assert!(!mutations.contains(" status(client, session_generation)"));
+        assert_eq!(
+            mutations
+                .matches("authoritative_status(client, session_generation)")
+                .count(),
+            5
+        );
     }
     #[test]
     fn completion_requires_all_authoritative_state() {

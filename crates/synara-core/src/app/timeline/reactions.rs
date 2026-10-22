@@ -48,7 +48,20 @@ pub fn reaction_event_id_from_send_state(send_state: &Option<EventSendState>) ->
 }
 
 /// Parse a timeline/cache event as an `m.reaction` annotation.
+///
+/// Reads only the `type` field before a full deserialize: a cache scan
+/// visits up to 2000 events and almost none of them are reactions.
 pub fn annotation_from_timeline_event(event: &TimelineEvent) -> Option<RecoveredAnnotation> {
+    if event
+        .raw()
+        .get_field::<String>("type")
+        .ok()
+        .flatten()
+        .as_deref()
+        != Some("m.reaction")
+    {
+        return None;
+    }
     let reaction_event_id = event.event_id()?.to_string();
     let AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::Reaction(reaction)) =
         event.raw().deserialize().ok()?
@@ -107,6 +120,78 @@ pub fn fill_native_reactions(
                 &mut sender.reaction_event_id,
                 recovered,
             );
+        }
+    }
+}
+
+/// Annotation ids a view stream already knows, kept across its updates so
+/// a re-projected row (an edit, a receipt move, an authority reset) is
+/// filled without scanning the event cache again.
+#[derive(Debug, Default)]
+pub struct KnownAnnotationIds {
+    ids: AnnotationIdMap,
+}
+
+impl KnownAnnotationIds {
+    /// Bound on remembered ids; past it the map starts over and later rows
+    /// fall back to one cache scan each.
+    const MAX_ENTRIES: usize = 8_192;
+
+    pub fn fill_ops(&self, ops: &mut [TimelineViewDeltaOp]) {
+        fill_view_delta_ops_reaction_ids(ops, &self.ids);
+    }
+
+    pub fn fill_rows(&self, rows: &mut [TimelineViewRow]) {
+        fill_view_rows_reaction_ids(rows, &self.ids);
+    }
+
+    pub fn remember_ops(&mut self, ops: &[TimelineViewDeltaOp]) {
+        for op in ops {
+            match op {
+                TimelineViewDeltaOp::Append { rows } | TimelineViewDeltaOp::Reset { rows } => {
+                    self.remember_rows(rows);
+                }
+                TimelineViewDeltaOp::PushFront { row }
+                | TimelineViewDeltaOp::PushBack { row }
+                | TimelineViewDeltaOp::Insert { row, .. }
+                | TimelineViewDeltaOp::Set { row, .. } => {
+                    self.remember_rows(std::slice::from_ref(row));
+                }
+                _ => {}
+            }
+        }
+    }
+
+    pub fn remember_rows(&mut self, rows: &[TimelineViewRow]) {
+        for row in rows {
+            let (Some(target), reactions) = (match row {
+                TimelineViewRow::Message(row) => (row.event.event_id.as_deref(), &row.reactions),
+                TimelineViewRow::Poll(row) => (row.event.event_id.as_deref(), &row.reactions),
+                TimelineViewRow::Sticker {
+                    event, reactions, ..
+                } => (event.event_id.as_deref(), reactions),
+                _ => continue,
+            }) else {
+                continue;
+            };
+            for reaction in reactions {
+                for sender in &reaction.senders {
+                    let Some(reaction_event_id) = &sender.reaction_event_id else {
+                        continue;
+                    };
+                    if self.ids.len() >= Self::MAX_ENTRIES {
+                        self.ids.clear();
+                    }
+                    self.ids.insert(
+                        (
+                            target.to_owned(),
+                            sender.user_id.clone(),
+                            reaction.key.clone(),
+                        ),
+                        reaction_event_id.clone(),
+                    );
+                }
+            }
         }
     }
 }

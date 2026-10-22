@@ -25,7 +25,9 @@ export type NativeOwnProfile = {
 
 export const profileWriteErrorMessage = (error: unknown): string => {
   if (error && typeof error === 'object' && !Array.isArray(error)) {
-    const diagnostic = (error as Record<string, unknown>).diagnostic_id;
+    // Tauri rejects with the serialized `MatrixAuthCommandError`, whose
+    // fields are camelCase (`{ code, message, diagnosticId }`).
+    const diagnostic = (error as Record<string, unknown>).diagnosticId;
     if (diagnostic === 'v-send.r-avatar-profile-rate-limited') {
       return 'The homeserver is limiting profile changes. Please try again shortly.';
     }

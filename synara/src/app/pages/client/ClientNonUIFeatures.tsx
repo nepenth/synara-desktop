@@ -10,9 +10,12 @@ import InviteSound from '../../../../public/sound/invite.ogg';
 import { notificationPermission, setFavicon } from '../../utils/dom';
 import { useSetting } from '../../state/hooks/settings';
 import { desktopPlatformSettingsAtom, settingsAtom } from '../../state/settings';
-import { allInvitesAtom, useNativeInviteSyncing } from '../../state/room-list/inviteList';
+import {
+  allInvitesAtom,
+  useNativeInvites,
+  useNativeInviteSyncing,
+} from '../../state/room-list/inviteList';
 import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
-import { usePreviousValue } from '../../hooks/usePreviousValue';
 import { getInboxInvitesPath } from '../pathUtils';
 import { getMemberDisplayName, getThreadRootEventId } from '../../utils/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
@@ -20,11 +23,16 @@ import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { getSortedLaterItems } from '../../utils/later';
+import { getTrayNotificationListCount } from '../../notifications/badgeSummary';
 import { laterContentAtom } from '../../state/laterList';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { PerformanceDebugOverlay } from '../../components/performance/PerformanceDebugOverlay';
-import { useApprovalInboxSummary } from '../../features/approvals/ApprovalInboxProvider';
 import {
+  useApprovalInbox,
+  useApprovalInboxSummary,
+} from '../../features/approvals/ApprovalInboxProvider';
+import {
+  getPlatformNotificationPermission,
   getPlatformNotificationSummary,
   registerPlatformAgentActionListener,
   registerPlatformNotificationActionListener,
@@ -33,6 +41,7 @@ import {
   setPlatformTrayState,
   showPlatformNotification,
   playPlatformNotificationSound,
+  requestPlatformNotificationPermission,
   subscribePlatformTrayDndToggle,
   supportsPlatformGlobalShortcuts,
   supportsPlatformSystemNotifications,
@@ -47,13 +56,39 @@ import {
 } from '../../utils/agentApprovals';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import {
-  buildDesktopNotificationRoomRoute,
   dismissDesktopNotifications,
+  showDesktopWindow,
+  takeDesktopNotificationResponses,
 } from '../../utils/desktop';
+import { DesktopAppShortcuts } from '../../features/desktop-keyboard/DesktopAppShortcuts';
+import {
+  approvalBannerActionNotice,
+  createApprovalAlertWithdrawal,
+  createInviteArrivalTracker,
+  createInviteBannerTracker,
+  createRoomReadTracker,
+  inviteNotificationText,
+  isDocumentActive,
+  nativeNotificationSound,
+  shouldDeliverNotificationKind,
+  shouldPlayAppNotificationSound,
+  shouldRequestNotificationPermission,
+  shouldPresentOrdinaryMessage,
+  shouldSubmitApprovalObservation,
+  type ApprovalBannerActionResult,
+} from '../../notifications/notificationDelivery';
+import { useLatestRef } from '../../hooks/useLatestRef';
 import { notifiedEventIdsCache } from '../../notifications/notificationCaches';
 import { DesktopUpdaterProvider } from '../../features/desktop-updater/DesktopUpdaterProvider';
-import { decideAgentApprovalWithNativeOwner } from '../../features/room/nativeReactionOwner';
-import { subscribeApprovalDecisions } from '../../features/approvals/approvalDecisionEvents';
+import {
+  decideAgentApprovalWithNativeOwner,
+  recordedApprovalDecision,
+  type NativeAgentApprovalDecisionResult,
+} from '../../features/room/nativeReactionOwner';
+import {
+  approvalDecisionFromActionId,
+  subscribeApprovalDecisions,
+} from '../../features/approvals/approvalDecisionEvents';
 import {
   decideNotificationWithNativeOwner,
   dismissNotificationWithNativeOwner,
@@ -169,13 +204,13 @@ function PlatformBadgeAndTrayUpdater() {
       agentApprovalCount,
     });
 
-    setPlatformBadgeCount(summary.appBadgeCount);
+    setPlatformBadgeCount(summary.appBadgeCount).catch(() => undefined);
     if (supportsPlatformTrayState()) {
       setPlatformTrayState({
         unreadCount: summary.unreadCount,
         highlightCount: summary.highlightCount,
         laterCount: summary.laterActiveCount,
-        notificationInboxCount: summary.inboxBadgeCount,
+        notificationInboxCount: getTrayNotificationListCount(summary),
         doNotDisturb: !showNotifications,
       }).catch(() => undefined);
     }
@@ -184,37 +219,69 @@ function PlatformBadgeAndTrayUpdater() {
   return null;
 }
 
+/** Withdraws a room's message banners once it is read here or elsewhere, or left. */
+function ReadRoomNotificationCleanup() {
+  const { rooms } = useNativeRoomListSnapshot();
+  const readTracker = useMemo(createRoomReadTracker, []);
+
+  useEffect(() => {
+    const read = readTracker(rooms);
+    if (read.length === 0) return;
+    dismissDesktopNotifications(read.map((roomId) => `room:${roomId}`)).catch(() => undefined);
+  }, [readTracker, rooms]);
+
+  return null;
+}
+
 function InviteNotifications() {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const invites = useAtomValue(allInvitesAtom);
-  const perviousInviteLen = usePreviousValue(invites.length, 0);
+  const inviteSnapshot = useNativeInvites();
   const nativeInviteSyncing = useNativeInviteSyncing();
+  const arrivals = useMemo(createInviteArrivalTracker, []);
+  const banners = useMemo(createInviteBannerTracker, []);
 
   const navigate = useNavigate();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
   const [notificationSound] = useSetting(settingsAtom, 'isNotificationSounds');
 
   const notify = useCallback(
-    (count: number) => {
+    async (
+      count: number,
+      dismissKeys: string[],
+      soundsEnabled: boolean
+    ): Promise<'delivered' | 'failed'> => {
+      const { title, body } = inviteNotificationText(count);
       if (supportsPlatformSystemNotifications()) {
-        showPlatformNotification({
-          title: 'Invitation',
-          body: `You have ${count} new invitation request.`,
-        }).catch(() => undefined);
-        return;
+        try {
+          const shown = await showPlatformNotification({
+            title,
+            body,
+            route: getInboxInvitesPath(),
+            dismissKeys,
+            sound: nativeNotificationSound({ soundsEnabled }),
+          });
+          return shown ? 'delivered' : 'failed';
+        } catch {
+          return 'failed';
+        }
       }
 
-      const noti = new window.Notification('Invitation', {
-        icon: LogoPNG,
-        badge: LogoPNG,
-        body: `You have ${count} new invitation request.`,
-        silent: true,
-      });
+      try {
+        const noti = new window.Notification(title, {
+          icon: LogoPNG,
+          badge: LogoPNG,
+          body,
+          silent: true,
+        });
 
-      noti.onclick = () => {
-        if (!window.closed) navigate(getInboxInvitesPath());
-        noti.close();
-      };
+        noti.onclick = () => {
+          if (!window.closed) navigate(getInboxInvitesPath());
+          noti.close();
+        };
+        return 'delivered';
+      } catch {
+        return 'failed';
+      }
     },
     [navigate]
   );
@@ -227,28 +294,37 @@ function InviteNotifications() {
     });
   }, []);
 
-  useEffect(() => {
-    if (invites.length > perviousInviteLen && nativeInviteSyncing) {
-      if (
-        showNotifications &&
-        (supportsPlatformSystemNotifications() || notificationPermission('granted'))
-      ) {
-        notify(invites.length - perviousInviteLen);
-      }
+  // Settings changes alone never re-announce invites the tracker has seen.
+  const deliveryRef = useLatestRef({ showNotifications, notificationSound, notify, playSound });
 
-      if (notificationSound) {
-        playSound();
-      }
+  useEffect(() => {
+    const roomIds = inviteSnapshot.invites.map((invite) => invite.roomId);
+    const arrived = arrivals(
+      { sessionGeneration: inviteSnapshot.sessionGeneration, roomIds },
+      nativeInviteSyncing
+    );
+    // An accepted, declined or withdrawn invite takes its banner with it.
+    const { bannerKeys, withdrawKeys } = banners(roomIds);
+    if (withdrawKeys.length > 0) dismissDesktopNotifications(withdrawKeys).catch(() => undefined);
+    if (arrived === 0) return;
+    const delivery = deliveryRef.current;
+    if (
+      !delivery.showNotifications ||
+      !(supportsPlatformSystemNotifications() || notificationPermission('granted'))
+    ) {
+      return;
     }
-  }, [
-    invites,
-    perviousInviteLen,
-    nativeInviteSyncing,
-    showNotifications,
-    notificationSound,
-    notify,
-    playSound,
-  ]);
+    void delivery.notify(arrived, bannerKeys, delivery.notificationSound).then((outcome) => {
+      if (
+        shouldPlayAppNotificationSound({
+          nativeDelivery: supportsPlatformSystemNotifications(),
+          soundsEnabled: delivery.notificationSound,
+          outcome,
+        })
+      )
+        delivery.playSound();
+    });
+  }, [arrivals, banners, inviteSnapshot, nativeInviteSyncing, deliveryRef]);
 
   return (
     // eslint-disable-next-line jsx-a11y/media-has-caption
@@ -273,8 +349,9 @@ function MessageNotifications() {
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
   const [notificationSound] = useSetting(settingsAtom, 'isNotificationSounds');
 
-  const { navigateRoom } = useRoomNavigate();
+  const { navigateRoom, roomPath } = useRoomNavigate();
   const notificationSelected = useInboxNotificationsSelected();
+  const notificationSelectedRef = useLatestRef(notificationSelected);
   const selectedRoomId = useSelectedRoom();
 
   // Report the platform focus observation into Core. A selected room only
@@ -284,7 +361,7 @@ function MessageNotifications() {
       const focused = document.hasFocus() ? (selectedRoomId ?? null) : null;
       setNotificationFocusWithNativeOwner(focused).catch(() => undefined);
       if (focused) {
-        void dismissDesktopNotifications([`room:${focused}`]);
+        dismissDesktopNotifications([`room:${focused}`]).catch(() => undefined);
       }
     };
     reportFocus();
@@ -312,12 +389,14 @@ function MessageNotifications() {
       roomId,
       eventId,
       sessionGeneration,
+      sound,
     }: {
       candidate: NativeNotificationCandidate;
       roomAvatar?: string;
       roomId: string;
       eventId: string;
       sessionGeneration: number;
+      sound: 'default' | 'silent';
     }): Promise<NativeNotificationDeliveryOutcome> => {
       let presentation;
       try {
@@ -325,6 +404,7 @@ function MessageNotifications() {
           roomId,
           eventId,
           sessionGeneration,
+          messageSound: sound,
         });
       } catch {
         return 'failed';
@@ -410,7 +490,7 @@ function MessageNotifications() {
             getMxIdLocalPart(sender) ??
             sender
           }`,
-          route: buildDesktopNotificationRoomRoute(roomId, eventId),
+          route: roomPath(roomId, { eventId }),
           suppressIfFocusedRoom: true,
         });
       } catch {
@@ -427,7 +507,12 @@ function MessageNotifications() {
       await deliverNativeObservedNotificationCandidate({
         candidate: shownCandidate,
         observedGeneration: observation.sessionGeneration,
-        presentOrdinaryMessages: !notificationSelected && !!room && !room.isSpaceRoom(),
+        // Decided at delivery time: the window may have been hidden since.
+        presentOrdinaryMessages: shouldPresentOrdinaryMessage({
+          notificationListSelected: notificationSelectedRef.current,
+          windowActive: isDocumentActive(document),
+          isSpaceRoom: room?.isSpaceRoom() ?? false,
+        }),
         currentGeneration: () => nativeSession().getSyncStateData()?.sessionGeneration,
         acknowledge: dismissNotificationWithNativeOwner,
         cancelDelivery: async () => {
@@ -436,8 +521,9 @@ function MessageNotifications() {
         },
         deliver: async (candidate) => {
           let outcome: NativeNotificationDeliveryOutcome | undefined;
+          // A late-promoted approval alerts under Do Not Disturb too.
           if (
-            showNotifications &&
+            shouldDeliverNotificationKind({ kind: candidate.kind, showNotifications }) &&
             (supportsPlatformSystemNotifications() || notificationPermission('granted'))
           ) {
             const avatarMxc =
@@ -450,6 +536,11 @@ function MessageNotifications() {
               roomId,
               eventId,
               sessionGeneration: observation.sessionGeneration,
+              // The OS plays it, under macOS Focus or the desktop's DND.
+              sound: nativeNotificationSound({
+                soundsEnabled: notificationSound,
+                requested: readback.sound === true,
+              }),
             });
           }
           return outcome;
@@ -458,7 +549,14 @@ function MessageNotifications() {
           rememberSubmitted(roomId, eventId);
           if (shownCandidate.kind === 'agent_approval') {
             if (outcome === 'delivered' && !supportsPlatformSystemNotifications()) playSound();
-          } else if (notificationSound && readback.sound === true && outcome !== 'failed') {
+          } else if (
+            shouldPlayAppNotificationSound({
+              nativeDelivery: supportsPlatformSystemNotifications(),
+              soundsEnabled: notificationSound,
+              requested: readback.sound === true,
+              outcome,
+            })
+          ) {
             playSound();
           }
         },
@@ -467,28 +565,32 @@ function MessageNotifications() {
     [
       browserNotifications,
       notificationSound,
-      notificationSelected,
+      notificationSelectedRef,
       showNotifications,
       playSound,
       notify,
       rememberSubmitted,
+      roomPath,
       useAuthentication,
     ]
   );
+  const decideAndNotifyRef = useLatestRef(decideAndNotify);
 
   // Observation pump: Core pushes one observation per live message-like
   // event the SDK sync delivered (`matrix-notification-observed`). The
   // renderer no longer scans timelines, listens for `Room.timeline`, or gates
   // on a sync state; every observation still goes through Core decide.
+  // Registered once: settings and route changes reach the handler through a
+  // ref, so no observation is missed while a listener is being replaced.
   useEffect(() => {
     const dispose = subscribeNativeNotificationObservations(
       () => nativeSession().getSyncStateData()?.sessionGeneration,
       (observation) => {
-        void decideAndNotify(observation);
+        void decideAndNotifyRef.current(observation);
       }
     );
     return dispose;
-  }, [decideAndNotify]);
+  }, [decideAndNotifyRef]);
 
   return (
     // eslint-disable-next-line jsx-a11y/media-has-caption
@@ -514,9 +616,31 @@ function AgentApprovalNotifications() {
   );
   const nativeActionsInFlight = nativeActionState.inFlight;
   const nativeActionDedupe = nativeActionState.completed;
-  const { navigateRoom } = useRoomNavigate();
+  const { navigateRoom, roomPath } = useRoomNavigate();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
   const [showApprovalDetails] = useSetting(settingsAtom, 'showApprovalNotificationDetails');
+
+  /**
+   * A banner action leaves a visible result even with Synara in the tray:
+   * failures bring the window forward at the prompt, and failures or a
+   * prompt decided elsewhere post a local notice, under Do Not Disturb too.
+   */
+  const reportBannerAction = useCallback(
+    (result: ApprovalBannerActionResult, roomId: string, eventId: string) => {
+      if (result.status === 'failed') {
+        showDesktopWindow().catch(() => undefined);
+        navigateRoom(roomId, eventId);
+      }
+      const notice = approvalBannerActionNotice(result);
+      if (!notice || !supportsPlatformSystemNotifications()) return;
+      showPlatformNotification({
+        ...notice,
+        route: roomPath(roomId, { eventId }),
+        sound: 'default',
+      }).catch(() => undefined);
+    },
+    [navigateRoom, roomPath]
+  );
 
   const notify = useCallback(
     async ({
@@ -610,64 +734,132 @@ function AgentApprovalNotifications() {
         return;
       }
       const provisionalDedupeKey = buildAgentApprovalNativeActionDedupeKey(roomId, eventId);
+      let decided: NativeAgentApprovalDecisionResult | undefined;
       try {
         await executeAgentApprovalNativeActionOnce({
           key: provisionalDedupeKey,
           completed: dedupe,
           inFlight: nativeActionsInFlight,
-          execute: () =>
-            decideAgentApprovalWithNativeOwner({
+          execute: async () => {
+            decided = await decideAgentApprovalWithNativeOwner({
               roomId,
               eventId,
               actionId,
               notificationSessionGeneration: sessionGeneration,
-            }),
+            });
+          },
         });
       } catch (error) {
         // Expired, signed-out, stale, or otherwise rejected decisions fail
-        // closed, then open the exact event so the action never appears to
-        // have succeeded silently.
+        // closed, then show the exact event and say so, so the action never
+        // appears to have succeeded silently.
         if (
           isNativeNotificationActionForSession(
             sessionGeneration,
             nativeSession().getSyncStateData()?.sessionGeneration
           )
         )
-          navigateRoom(roomId, eventId);
+          reportBannerAction({ status: 'failed', error }, roomId, eventId);
         if (import.meta.env?.DEV) {
           // eslint-disable-next-line no-console
           console.debug('[synara:agent-approval] native decision failed closed', error);
         }
-      }
-    },
-    [nativeActionDedupe, nativeActionsInFlight, navigateRoom]
-  );
-
-  useEffect(() => {
-    let disposed = false;
-    let unlisten: (() => void | Promise<void>) | undefined;
-
-    registerPlatformNotificationActionListener((payload) => {
-      void handleNativeNotificationAction(payload);
-    }).then((nextUnlisten) => {
-      if (disposed) {
-        void nextUnlisten?.();
         return;
       }
-      unlisten = nextUnlisten;
-    });
+      // Undefined: a repeat of an action that already ran.
+      if (!decided) return;
+      reportBannerAction(
+        decided.status === 'applied'
+          ? { status: 'applied' }
+          : {
+              status: 'already_decided',
+              clicked: approvalDecisionFromActionId(actionId),
+              recorded: recordedApprovalDecision(decided, actionId),
+            },
+        roomId,
+        eventId
+      );
+    },
+    [nativeActionDedupe, nativeActionsInFlight, navigateRoom, reportBannerAction]
+  );
+  const handleNativeNotificationActionRef = useLatestRef(handleNativeNotificationAction);
+
+  // One long-lived action listener; an Approve/Deny click that lands while a
+  // replacement listener is still registering would otherwise be lost. Once
+  // it listens, clicks the shell held back (cold launch, before restore,
+  // after re-login) are drained for each session generation.
+  useEffect(() => {
+    let disposed = false;
+    let listening = false;
+    let drainedGeneration: number | undefined;
+    let unlisten: (() => void | Promise<void>) | undefined;
+
+    const drain = () => {
+      const generation = nativeSession().getSyncStateData()?.sessionGeneration;
+      if (disposed || !listening || generation === undefined) return;
+      if (generation === drainedGeneration) return;
+      drainedGeneration = generation;
+      takeDesktopNotificationResponses(generation)
+        .then((actions) => {
+          if (disposed) return;
+          actions.forEach((payload) => {
+            void handleNativeNotificationActionRef.current(payload);
+          });
+        })
+        .catch(() => {
+          // Try again on the next session update.
+          drainedGeneration = undefined;
+        });
+    };
+
+    registerPlatformNotificationActionListener((payload) => {
+      void handleNativeNotificationActionRef.current(payload);
+    })
+      .then((nextUnlisten) => {
+        if (disposed) {
+          void nextUnlisten?.();
+          return;
+        }
+        unlisten = nextUnlisten;
+        listening = nextUnlisten !== undefined;
+        drain();
+      })
+      .catch(() => undefined);
+    const disposeSync = nativeSession().subscribe('sync', drain);
+    const disposeSession = nativeSession().subscribe('session', drain);
 
     return () => {
       disposed = true;
+      disposeSync();
+      disposeSession();
       void unlisten?.();
     };
-  }, [handleNativeNotificationAction]);
+  }, [handleNativeNotificationActionRef]);
 
   useEffect(() => {
     return subscribeApprovalDecisions((notice) => {
-      void dismissDesktopNotifications([`event:${notice.eventId}`]);
+      dismissDesktopNotifications([`event:${notice.eventId}`]).catch(() => undefined);
     });
   }, []);
+
+  // A delivered approval alert is withdrawn when it expires or Core reports
+  // the prompt decided (on another device, too), so stale buttons never stay.
+  const approvalAlerts = useMemo(
+    () =>
+      createApprovalAlertWithdrawal({
+        withdraw: (eventId) => {
+          dismissDesktopNotifications([`event:${eventId}`]).catch(() => undefined);
+        },
+      }),
+    []
+  );
+  useEffect(() => () => approvalAlerts.clear(), [approvalAlerts]);
+  const { items: approvalItems } = useApprovalInbox();
+  useEffect(() => {
+    approvalItems.forEach((item) => {
+      if (item.status !== 'pending') approvalAlerts.settle(item.eventId);
+    });
+  }, [approvalAlerts, approvalItems]);
 
   const playSound = useCallback(() => {
     void playPlatformNotificationSound('message').then((playedNative) => {
@@ -680,10 +872,15 @@ function AgentApprovalNotifications() {
   const notifyApprovalEvent = useCallback(
     async (observation: NativeNotificationObservation) => {
       const { eventId, agentApproval } = observation;
-      if (!agentApproval || agentApproval.expired) return;
+      if (
+        !agentApproval ||
+        !shouldSubmitApprovalObservation({
+          expired: agentApproval.expired,
+          alreadyNotified: notifiedEventIdsCache.has(eventId),
+        })
+      )
+        return;
       const room = getNativeRoom(observation.roomId);
-
-      if (notifiedEventIdsCache.has(eventId)) return;
 
       let readback;
       try {
@@ -696,7 +893,7 @@ function AgentApprovalNotifications() {
             summary: agentApproval.summary,
             showDetails: showApprovalDetails,
           }),
-          route: buildDesktopNotificationRoomRoute(observation.roomId, eventId),
+          route: roomPath(observation.roomId, { eventId }),
           suppressIfFocusedRoom: false,
         });
       } catch {
@@ -715,8 +912,10 @@ function AgentApprovalNotifications() {
         },
         deliver: async (candidate) => {
           let outcome: NativeNotificationDeliveryOutcome | undefined;
+          // Approvals alert under Do Not Disturb; a room's approvals past
+          // Core's budget arrive as messages and stay behind the switch.
           if (
-            showNotifications &&
+            shouldDeliverNotificationKind({ kind: candidate.kind, showNotifications }) &&
             (supportsPlatformSystemNotifications() || notificationPermission('granted'))
           ) {
             outcome = await notify({
@@ -730,23 +929,33 @@ function AgentApprovalNotifications() {
         },
         commit: (outcome) => {
           notifiedEventIdsCache.add(eventId);
+          if (outcome === 'delivered') approvalAlerts.track(eventId, agentApproval.expiresAt);
           // Native approval delivery already owns its time-sensitive sound.
           if (outcome === 'delivered' && !supportsPlatformSystemNotifications()) playSound();
         },
       });
     },
-    [browserNotifications, notify, playSound, showApprovalDetails, showNotifications]
+    [
+      approvalAlerts,
+      browserNotifications,
+      notify,
+      playSound,
+      roomPath,
+      showApprovalDetails,
+      showNotifications,
+    ]
   );
+  const notifyApprovalEventRef = useLatestRef(notifyApprovalEvent);
 
   // Approval prompts ride the same Core observation stream as messages; the
   // renderer consumes Core classification and Core revalidates before delivery.
   useEffect(() => {
     const dispose = subscribeNativeNotificationObservations(
       () => nativeSession().getSyncStateData()?.sessionGeneration,
-      notifyApprovalEvent
+      (observation) => notifyApprovalEventRef.current(observation)
     );
     return dispose;
-  }, [notifyApprovalEvent]);
+  }, [notifyApprovalEventRef]);
 
   return (
     // eslint-disable-next-line jsx-a11y/media-has-caption
@@ -757,13 +966,14 @@ function AgentApprovalNotifications() {
 }
 
 function LaterReminderNotifications() {
-  const { navigateRoom } = useRoomNavigate();
+  const { navigateRoom, roomPath } = useRoomNavigate();
   const laterContent = useAtomValue(laterContentAtom);
   const reminders = useMemo(
     () => getSortedLaterItems(laterContent).filter((item) => item.kind === 'reminder'),
     [laterContent]
   );
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
+  const [notificationSound] = useSetting(settingsAtom, 'isNotificationSounds');
   const notifiedRef = useRef<Set<string>>(new Set());
 
   const notify = useCallback(
@@ -772,8 +982,9 @@ function LaterReminderNotifications() {
         showPlatformNotification({
           title: 'Reminder',
           body,
-          route: buildDesktopNotificationRoomRoute(roomId, eventId),
+          route: roomPath(roomId, { eventId }),
           dismissKeys: [`room:${roomId}`],
+          sound: nativeNotificationSound({ soundsEnabled: notificationSound }),
         }).catch(() => undefined);
         return;
       }
@@ -790,7 +1001,7 @@ function LaterReminderNotifications() {
         noti.close();
       };
     },
-    [navigateRoom]
+    [navigateRoom, notificationSound, roomPath]
   );
 
   useEffect(() => {
@@ -834,13 +1045,15 @@ function PlatformAgentActionListener() {
     let disposed = false;
     let unlisten: (() => void | Promise<void>) | undefined;
 
-    void registerPlatformAgentActionListener().then((cleanup) => {
-      if (disposed) {
-        void cleanup?.();
-        return;
-      }
-      unlisten = cleanup;
-    });
+    registerPlatformAgentActionListener()
+      .then((cleanup) => {
+        if (disposed) {
+          void cleanup?.();
+          return;
+        }
+        unlisten = cleanup;
+      })
+      .catch(() => undefined);
 
     return () => {
       disposed = true;
@@ -873,13 +1086,52 @@ function DesktopShortcutSync() {
           // Sync completed.
         }
       };
-      sync();
+      sync().catch(() => undefined);
       cleanup = () => {
         cancelled = true;
       };
     }
     return cleanup;
   }, [showShortcut, laterShortcut, notificationsShortcut]);
+
+  return null;
+}
+
+/**
+ * Ask the OS for notification permission once, at a quiet moment after
+ * sign-in, when notifications are on but the OS was never asked (macOS
+ * `default`). Posting never asks: the prompt would appear mid-use when the
+ * first message arrives.
+ */
+function NotificationPermissionRequest() {
+  const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
+  const askedRef = useRef(false);
+
+  useEffect(() => {
+    if (!supportsPlatformSystemNotifications() || !showNotifications || askedRef.current) {
+      return undefined;
+    }
+    let cancelled = false;
+    getPlatformNotificationPermission()
+      .then((permission) => {
+        if (
+          cancelled ||
+          !shouldRequestNotificationPermission({
+            showNotifications,
+            permission,
+            alreadyAsked: askedRef.current,
+          })
+        ) {
+          return undefined;
+        }
+        askedRef.current = true;
+        return requestPlatformNotificationPermission();
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [showNotifications]);
 
   return null;
 }
@@ -895,8 +1147,11 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
       <PageZoomFeature />
       <FaviconUpdater />
       <TrayDoNotDisturbSync />
+      <NotificationPermissionRequest />
       <PlatformBadgeAndTrayUpdater />
+      <ReadRoomNotificationCleanup />
       <DesktopShortcutSync />
+      <DesktopAppShortcuts />
       <PlatformAgentActionListener />
       <InviteNotifications />
       <AgentApprovalNotifications />

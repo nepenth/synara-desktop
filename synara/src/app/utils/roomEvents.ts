@@ -1,4 +1,4 @@
-import type { MatrixEventReading, RoomReading } from './room';
+import type { RoomReading } from './room';
 
 /** SDK-neutral literal event names (mirror of the js-sdk RoomEvent subset used by Synara hooks). */
 export const RoomEvent = {
@@ -66,5 +66,4 @@ export type JsRoomMemberReading = {
 export type EventedRoomReading = RoomReading & {
   on(event: string, listener: Listener): void;
   removeListener(event: string, listener: Listener): void;
-  getUsersReadUpTo(event: MatrixEventReading): string[];
 };

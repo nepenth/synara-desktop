@@ -51,6 +51,18 @@ impl AgentNotificationPreferences {
         }
         Ok(())
     }
+    /// Who may raise an urgent approval alert. An approval prompt is only text,
+    /// so once the user names their agents, a prompt from anyone else is an
+    /// ordinary message. Without a list, push rules decide instead.
+    pub fn approval_alert_trust(&self, sender: &str) -> ApprovalAlertTrust {
+        if self.agent_user_ids.is_empty() {
+            ApprovalAlertTrust::Unconfigured
+        } else if self.agent_user_ids.iter().any(|id| id == sender) {
+            ApprovalAlertTrust::ConfiguredAgent
+        } else {
+            ApprovalAlertTrust::NotAnAgent
+        }
+    }
     /// Approval prompts are exempt even before the caller's action/freshness validation.
     pub fn suppresses(&self, sender: &str, body: &str) -> bool {
         if !self.agent_user_ids.iter().any(|id| id == sender)
@@ -64,6 +76,16 @@ impl AgentNotificationPreferences {
             AgentMessageCategory::FinalResponse => !self.notify_final_responses,
         }
     }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApprovalAlertTrust {
+    /// The sender is on the configured agent list: the alert may bypass push
+    /// rules, because the user named this account as an agent.
+    ConfiguredAgent,
+    /// No agent list: the alert follows push rules, so a muted room is silent.
+    Unconfigured,
+    /// An agent list exists and the sender is not on it: not an approval.
+    NotAnAgent,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentMessageCategory {
@@ -235,6 +257,23 @@ mod tests {
         ] {
             assert!(!p.suppresses("@forge:example.org", body));
         }
+    }
+    #[test]
+    fn approval_alert_trust_requires_a_listed_agent_once_configured() {
+        let mut p = AgentNotificationPreferences::default();
+        assert_eq!(
+            p.approval_alert_trust("@anyone:example.org"),
+            ApprovalAlertTrust::Unconfigured
+        );
+        p.agent_user_ids.push("@forge:example.org".into());
+        assert_eq!(
+            p.approval_alert_trust("@forge:example.org"),
+            ApprovalAlertTrust::ConfiguredAgent
+        );
+        assert_eq!(
+            p.approval_alert_trust("@mallory:example.org"),
+            ApprovalAlertTrust::NotAnAgent
+        );
     }
     #[test]
     fn invalid_or_future_account_data_is_never_silently_rewritten() {

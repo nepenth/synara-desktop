@@ -13,14 +13,14 @@
       },
       "desktop_shortcuts": {
         "title": "Desktop Shortcuts",
-        "description": "Open frequently used screens from anywhere with desktop shortcuts.",
+        "description": "Open frequently used screens from anywhere with desktop shortcuts. These keys stop working in other apps while Synara runs; clear a field to turn that shortcut off.",
         "unavailable": "Desktop shortcuts are only available in the desktop app.",
         "platform": "Desktop only",
         "platform_disabled": "Unavailable",
         "show_label": "Show main window shortcut",
         "later_label": "Open Later shortcut",
         "notifications_label": "Open Notifications shortcut",
-        "empty": "All shortcut values are required.",
+        "off_placeholder": "Off",
         "duplicate": "Shortcuts must be unique.",
         "failed": "Failed to save shortcuts.",
         "saving": "Saving…",
@@ -170,7 +170,9 @@
       "confirm_action_description": "Open \"{{title}}\" in an external browser?",
       "confirm_action_cancel": "Cancel",
       "confirm_action_open": "Open",
-      "action_failed": "Action failed"
+      "action_failed": "Action failed",
+      "action_copied": "Copied",
+      "action_done": "Done"
     }
   }
 }

@@ -31,6 +31,17 @@ export const PENDING_FRESH_LOGIN_IDENTITY_KEY = 'synara_pending_fresh_login_iden
 
 export const NAV_TO_ACTIVE_PATH_PREFIX = 'navToActivePath';
 
+/** Unsent composer drafts: `<prefix><user>.<room>` (see `utils/drafts.ts`). */
+export const ROOM_DRAFT_STORAGE_PREFIX = 'in.synara.room_draft.';
+
+/** Per-user sidebar and lobby layout state, keyed `<prefix><userId>`. */
+export const OPENED_SIDEBAR_FOLDER_PREFIX = 'openedSidebarFolder';
+export const CLOSED_NAV_CATEGORIES_PREFIX = 'closedNavCategories';
+export const CLOSED_LOBBY_CATEGORIES_PREFIX = 'closedLobbyCategories';
+
+/** Room ids found in the signed-in account's space hierarchies (not user-scoped). */
+export const SPACE_ROOMS_STORAGE_KEY = 'spaceRooms';
+
 /** Exact localStorage keys removed on logout. User settings keys are intentionally excluded. */
 export const SESSION_LOCAL_STORAGE_EXACT_KEYS = [
   FALLBACK_SESSION_KEYS.accessToken,
@@ -42,10 +53,20 @@ export const SESSION_LOCAL_STORAGE_EXACT_KEYS = [
   PENDING_FRESH_LOGIN_IDENTITY_KEY,
   'synara_last_bootstrapped_matrix_identity',
   'synara_last_persisted_matrix_identity',
+  SPACE_ROOMS_STORAGE_KEY,
 ] as const;
 
-/** localStorage key prefixes removed on logout (e.g. per-user navigation state). */
-export const SESSION_LOCAL_STORAGE_PREFIXES = [NAV_TO_ACTIVE_PATH_PREFIX] as const;
+/**
+ * localStorage key prefixes removed on logout: per-user navigation and layout
+ * state, and unsent drafts (message text must not outlive the session).
+ */
+export const SESSION_LOCAL_STORAGE_PREFIXES = [
+  NAV_TO_ACTIVE_PATH_PREFIX,
+  ROOM_DRAFT_STORAGE_PREFIX,
+  OPENED_SIDEBAR_FOLDER_PREFIX,
+  CLOSED_NAV_CATEGORIES_PREFIX,
+  CLOSED_LOBBY_CATEGORIES_PREFIX,
+] as const;
 
 export type SessionLocalStorage = SessionStorage & {
   readonly length?: number;

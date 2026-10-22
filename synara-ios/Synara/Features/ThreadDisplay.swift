@@ -16,17 +16,17 @@ enum ThreadDisplayMode: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .inline: "Inline"
-        case .sheet: "Sheet"
-        case .full: "Full Screen"
+        case .inline: String(localized: "Inline")
+        case .sheet: String(localized: "Sheet")
+        case .full: String(localized: "Full Screen")
         }
     }
 
     var detail: String {
         switch self {
-        case .inline: "Replies expand beneath their first message in the room."
-        case .sheet: "Threads open in a sheet over the room."
-        case .full: "Threads open on their own screen."
+        case .inline: String(localized: "Replies expand beneath their first message in the room.")
+        case .sheet: String(localized: "Threads open in a sheet over the room.")
+        case .full: String(localized: "Threads open on their own screen.")
         }
     }
 
@@ -39,8 +39,41 @@ enum ThreadDisplayMode: String, CaseIterable, Identifiable, Sendable {
 struct ThreadSheetTarget: Identifiable, Equatable {
     let rootEventID: String
     let rootTitle: String?
+    /// A routed reply (notification or link) the thread scrolls to.
+    var focusedEventID: String? = nil
 
     var id: String { rootEventID }
+}
+
+/// Scrolls a thread opened from a notification or link to the routed reply.
+/// The thread stream starts with its newest replies, so an older reply needs
+/// a few "Load earlier replies" pages first.
+enum ThreadFocusAnchorPolicy {
+    enum Step: Equatable {
+        case scroll(itemID: String)
+        case loadEarlier
+        /// The reply is not reachable: leave the thread at its newest replies.
+        case settle
+    }
+
+    static let maximumEarlierPages = 5
+
+    static func nextStep(
+        focusedEventID: String,
+        items: [TimelineItem],
+        canLoadEarlier: Bool,
+        earlierPagesLoaded: Int
+    ) -> Step {
+        if let target = items.first(where: {
+            $0.eventID == focusedEventID || $0.serverEventID == focusedEventID
+        }) {
+            return .scroll(itemID: target.id)
+        }
+        if canLoadEarlier, earlierPagesLoaded < maximumEarlierPages {
+            return .loadEarlier
+        }
+        return .settle
+    }
 }
 
 /// "Reply in thread" asks the thread screen to focus its composer when it
@@ -73,11 +106,7 @@ enum ThreadTimelineMerge {
     /// Sent replies stay visible until the thread stream contains them, so a
     /// snapshot taken before the echo arrives cannot make them disappear.
     static func merged(snapshot: [TimelineItem], pending: [TimelineItem]) -> [TimelineItem] {
-        let known = Set(snapshot.flatMap { [$0.eventID, $0.serverEventID].compactMap { $0 } })
-        let stillPending = pending.filter { item in
-            known.contains(item.eventID) == false
-                && (item.serverEventID.map { known.contains($0) } ?? false) == false
-        }
+        let stillPending = unresolved(pending: pending, snapshot: snapshot)
         guard stillPending.isEmpty == false else {
             return snapshot
         }
@@ -85,11 +114,15 @@ enum ThreadTimelineMerge {
     }
 
     /// Pending sends that the snapshot has now delivered can be forgotten.
+    /// A queued attachment has no event id yet; the SDK local echo in the
+    /// snapshot carries its transaction id instead.
     static func unresolved(pending: [TimelineItem], snapshot: [TimelineItem]) -> [TimelineItem] {
         let known = Set(snapshot.flatMap { [$0.eventID, $0.serverEventID].compactMap { $0 } })
+        let knownTransactions = Set(snapshot.compactMap(\.transactionID))
         return pending.filter { item in
             known.contains(item.eventID) == false
                 && (item.serverEventID.map { known.contains($0) } ?? false) == false
+                && (item.transactionID.map { knownTransactions.contains($0) } ?? false) == false
         }
     }
 }

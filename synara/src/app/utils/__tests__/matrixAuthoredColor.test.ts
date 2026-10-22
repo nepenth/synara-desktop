@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   MATRIX_AUTHORED_INCREASED_CONTRAST,
@@ -177,13 +177,9 @@ test('native legacy font normalization matches compatibility strict span semanti
   assert.doesNotMatch(native, /<font|style=|data-mx-color="#abc"/);
 });
 
-test('native and compatibility renderers share the guarded authored-color component', () => {
+test('the native renderer is the only message renderer and uses the guarded authored-color component', () => {
   const nativeRenderer = readFileSync(
     'src/app/features/room/nativeTimelineFormattedBody.tsx',
-    'utf8'
-  );
-  const compatibilityRenderer = readFileSync(
-    'src/app/plugins/react-custom-html-parser.tsx',
     'utf8'
   );
   const sanitizer = readFileSync('src/app/utils/sanitize.ts', 'utf8');
@@ -192,10 +188,10 @@ test('native and compatibility renderers share the guarded authored-color compon
   for (const surface of ['table', 'inlineCode', 'spoiler', 'codeBlock']) {
     assert.match(nativeRenderer, new RegExp(`MatrixColorSurface surface="${surface}"`));
   }
-  assert.match(compatibilityRenderer, /MatrixColorSpan/);
-  for (const surface of ['table', 'inlineCode', 'spoiler', 'codeBlock']) {
-    assert.match(compatibilityRenderer, new RegExp(`MatrixColorSurface surface="${surface}"`));
-  }
+  // The compatibility renderer (D84) is gone; `sanitizeCustomHtml` only
+  // serves the editor's HTML import now.
+  assert.equal(existsSync('src/app/plugins/react-custom-html-parser.tsx'), false);
+  assert.equal(existsSync('src/app/components/message/RenderBody.tsx'), false);
   assert.doesNotMatch(sanitizer, /style: `background-color:/);
   assert.match(sanitizer, /delete next\.style/);
 });
@@ -231,10 +227,6 @@ test('spoilers retain authored colors only through their guarded reveal presenta
     'src/app/features/room/nativeTimelineFormattedBody.tsx',
     'utf8'
   );
-  const compatibilityRenderer = readFileSync(
-    'src/app/plugins/react-custom-html-parser.tsx',
-    'utf8'
-  );
   const compatibilityCss = readFileSync('src/app/styles/CustomHtml.css.ts', 'utf8');
 
   assert.match(
@@ -249,16 +241,8 @@ test('spoilers retain authored colors only through their guarded reveal presenta
     nativeRenderer,
     /<MatrixColorSpan[^>]*>[\s\S]*<span className=\{htmlCss\.SpoilerContent\}>/
   );
-  assert.match(compatibilityRenderer, /role=\{revealed \? undefined : 'button'\}/);
-  assert.match(compatibilityRenderer, /tabIndex=\{revealed \? undefined : 0\}/);
-  assert.match(compatibilityRenderer, /onClick=\{revealed \? undefined : reveal\}/);
-  assert.match(compatibilityRenderer, /aria-pressed=\{revealed \? undefined : true\}/);
-  assert.match(compatibilityRenderer, /revealed \?[\s\S]*MatrixColorSpan[\s\S]*children/);
-  assert.match(compatibilityRenderer, /<span aria-hidden>spoiler<\/span>/);
-  assert.doesNotMatch(
-    compatibilityRenderer,
-    /<span aria-hidden=\{revealed \? undefined : true\}>[\s\S]*children/
-  );
+  // A concealed spoiler is a button with no mounted descendants.
+  assert.match(nativeRenderer, /if \(revealed\)[\s\S]*return \([\s\S]*<button/);
   assert.match(
     compatibilityCss,
     /globalStyle\(`\$\{Spoiler\(\)\}\[aria-pressed=true\] \[aria-hidden=true\]`/

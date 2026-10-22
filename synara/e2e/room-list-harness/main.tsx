@@ -8,6 +8,7 @@ import { useSharedScrollVirtualizer } from '../../src/app/hooks/useSharedScrollV
 import { NotificationsFixture } from './NotificationsFixture';
 import { LiveCallFixture } from './LiveCallFixture';
 import { NavigationUnreadFixture } from './NavigationUnreadFixture';
+import { RoomGlyphFixture } from './RoomGlyphFixture';
 import { VirtualTile } from '../../src/app/components/virtualizer/VirtualTile';
 
 function RoomListFixture() {
@@ -99,6 +100,8 @@ createRoot(document.getElementById('root')!).render(
     <NotificationsFixture />
   ) : new URLSearchParams(window.location.search).has('livecall') ? (
     <LiveCallFixture />
+  ) : new URLSearchParams(window.location.search).has('roomGlyph') ? (
+    <RoomGlyphFixture />
   ) : (
     <RoomListFixture />
   )

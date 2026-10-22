@@ -1,3 +1,4 @@
+import SynaraCore
 import XCTest
 @testable import Synara
 
@@ -43,6 +44,84 @@ final class ThreadDisplayTests: XCTestCase {
         XCTAssertEqual(ThreadDisplayMode.resolve(settings.string(for: ThreadDisplayMode.settingsKey)), .full)
     }
 
+    func testThreadFocusAnchorScrollsToTheRoutedReply() {
+        let items = [item(root, at: 0), item("$r1", at: 1, serverEventID: "$server-r1", threadRoot: root)]
+        XCTAssertEqual(
+            ThreadFocusAnchorPolicy.nextStep(
+                focusedEventID: "$server-r1",
+                items: items,
+                canLoadEarlier: false,
+                earlierPagesLoaded: 0
+            ),
+            .scroll(itemID: "$r1")
+        )
+    }
+
+    func testThreadFocusAnchorLoadsEarlierRepliesWithinItsBudget() {
+        let items = [item("$r9", at: 9, threadRoot: root)]
+        XCTAssertEqual(
+            ThreadFocusAnchorPolicy.nextStep(
+                focusedEventID: "$r2",
+                items: items,
+                canLoadEarlier: true,
+                earlierPagesLoaded: 0
+            ),
+            .loadEarlier
+        )
+        XCTAssertEqual(
+            ThreadFocusAnchorPolicy.nextStep(
+                focusedEventID: "$r2",
+                items: items,
+                canLoadEarlier: true,
+                earlierPagesLoaded: ThreadFocusAnchorPolicy.maximumEarlierPages
+            ),
+            .settle
+        )
+        XCTAssertEqual(
+            ThreadFocusAnchorPolicy.nextStep(
+                focusedEventID: "$r2",
+                items: items,
+                canLoadEarlier: false,
+                earlierPagesLoaded: 0
+            ),
+            .settle
+        )
+    }
+
+    func testCoreEventRouteMapsToTheThreadRoute() {
+        XCTAssertEqual(
+            SharedCoreTimeline.eventRoute(from: TimelineEventRouteDto(kind: .thread, threadRootEventId: root)),
+            .thread(rootEventID: root)
+        )
+        XCTAssertEqual(
+            SharedCoreTimeline.eventRoute(from: TimelineEventRouteDto(kind: .thread, threadRootEventId: nil)),
+            .room
+        )
+        XCTAssertEqual(
+            SharedCoreTimeline.eventRoute(from: TimelineEventRouteDto(kind: .missing, threadRootEventId: nil)),
+            .missing
+        )
+        XCTAssertEqual(
+            SharedCoreTimeline.eventRoute(from: TimelineEventRouteDto(kind: .unreachable, threadRootEventId: nil)),
+            .unreachable
+        )
+        XCTAssertEqual(
+            SharedCoreTimeline.eventRoute(from: TimelineEventRouteDto(kind: .room, threadRootEventId: nil)),
+            .room
+        )
+    }
+
+    func testRoutedThreadCarriesItsReplyThroughEveryPresentation() {
+        XCTAssertEqual(
+            ThreadSheetTarget(rootEventID: root, rootTitle: nil, focusedEventID: "$reply").focusedEventID,
+            "$reply"
+        )
+        let route = AppRoute.thread(roomID: "!room:matrix.org", rootEventID: root, focusedEventID: "$reply")
+        XCTAssertTrue(route.isConversation)
+        XCTAssertEqual(route.conversationRoomID, "!room:matrix.org")
+        XCTAssertNotEqual(route, AppRoute.thread(roomID: "!room:matrix.org", rootEventID: root))
+    }
+
     func testThreadStreamsUseThreadOpenKindAndTheirOwnKey() {
         let roomKey = SharedCoreTimelineStreamKey.room("!room:matrix.org")
         let threadKey = SharedCoreTimelineStreamKey.thread(roomID: "!room:matrix.org", rootEventID: root)
@@ -76,6 +155,23 @@ final class ThreadDisplayTests: XCTestCase {
         let localEcho = item("local-1", at: 11, serverEventID: "$server", threadRoot: root)
         let serverCopy = item("$server", at: 11, threadRoot: root)
         XCTAssertEqual(ThreadTimelineMerge.unresolved(pending: [localEcho], snapshot: [serverCopy]), [])
+    }
+
+    func testQueuedThreadUploadResolvesOnlyByItsTransaction() {
+        let rootItem = item(root, at: 0)
+        var queued = item("$pending-synara-attachment-a", at: 11, threadRoot: root)
+            .withDeliveryStatus(.sending)
+        queued.transactionID = "synara-attachment-a"
+        var otherEcho = item("sdk-other", at: 10, threadRoot: root)
+        otherEcho.transactionID = "synara-attachment-b"
+        XCTAssertEqual(
+            ThreadTimelineMerge.merged(snapshot: [rootItem, otherEcho], pending: [queued]).map(\.eventID),
+            [root, "sdk-other", "$pending-synara-attachment-a"]
+        )
+
+        var sdkEcho = item("sdk-local", at: 10, threadRoot: root)
+        sdkEcho.transactionID = "synara-attachment-a"
+        XCTAssertEqual(ThreadTimelineMerge.unresolved(pending: [queued], snapshot: [rootItem, sdkEcho]), [])
     }
 
     func testInlineWindowShowsNewestRepliesWithoutTheRoot() {

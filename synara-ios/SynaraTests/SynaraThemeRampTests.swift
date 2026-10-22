@@ -128,8 +128,6 @@ final class SynaraThemeRampTests: XCTestCase {
         )
         XCTAssertTrue(SynaraMessageBubbleMetrics.usesLeadingContentColumn(alignment: .own))
         XCTAssertTrue(SynaraMessageBubbleMetrics.usesLeadingContentColumn(alignment: .other))
-        XCTAssertTrue(SynaraMessageBubbleMetrics.usesLeadingStatusOverlay(alignment: .own))
-        XCTAssertTrue(SynaraMessageBubbleMetrics.usesLeadingStatusOverlay(alignment: .other))
     }
 
     func testCoreSurfaceRolesRemainVisiblyDimensional() {
