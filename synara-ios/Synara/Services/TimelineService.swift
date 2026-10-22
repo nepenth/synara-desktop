@@ -879,6 +879,10 @@ struct RawTimelineEvent: Equatable {
     let agentCard: SynaraAgentCard?
     let isAgentApproval: Bool
     let reactions: [String: Int]
+    /// Reaction keys the signed-in user sent. A fixture states this for
+    /// every reaction, as Core's rows do (`own` per reaction), so the mock
+    /// timeline offers the same reaction toggles as a live one.
+    let ownReactions: Set<String>
 
     init(
         eventID: String,
@@ -896,7 +900,8 @@ struct RawTimelineEvent: Equatable {
         isEncrypted: Bool = false,
         agentCard: SynaraAgentCard? = nil,
         isAgentApproval: Bool = false,
-        reactions: [String: Int] = [:]
+        reactions: [String: Int] = [:],
+        ownReactions: Set<String> = []
     ) {
         self.eventID = eventID
         self.senderID = senderID
@@ -914,6 +919,7 @@ struct RawTimelineEvent: Equatable {
         self.agentCard = agentCard
         self.isAgentApproval = isAgentApproval
         self.reactions = reactions
+        self.ownReactions = ownReactions
     }
 }
 
@@ -1519,6 +1525,7 @@ enum TimelineMapper {
             isEdited: event.isEdited,
             isAgentApproval: event.isAgentApproval,
             reactions: event.reactions,
+            reactionOwnership: .known(event.ownReactions),
             isEncrypted: event.type == "m.room.encrypted" || event.isEncrypted
         )
     }

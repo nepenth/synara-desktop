@@ -7591,7 +7591,11 @@ private struct TimelineRow: View {
             Button {
                 onToggleReaction(key)
             } label: {
+                // The palette builds its items from the label: a label set
+                // only on the Button is dropped there, and VoiceOver would
+                // read the bare emoji name instead of the action.
                 Text(key)
+                    .accessibilityLabel(action.title)
             }
             .accessibilityLabel(action.title)
             .accessibilityIdentifier("QuickReaction-\(key)")
