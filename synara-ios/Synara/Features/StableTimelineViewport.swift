@@ -843,6 +843,9 @@ import SwiftUI
         private var shortContentPaginationRequests = 0
         private var lastReportedPinned: Bool?
         private var lastReportedMarkerVisible: Bool?
+        /// UI-test diagnostics: the events the latest content-only change
+        /// redrew in place (an edit, a variable-height replacement).
+        private var lastReconfiguredEventIDs: [String] = []
 
         init(coordinator: StableTimelineViewport.Coordinator) {
             self.coordinator = coordinator
@@ -918,6 +921,7 @@ import SwiftUI
                 hasUserInteracted = false
                 lastReportedPinned = nil
                 lastReportedMarkerVisible = nil
+                lastReconfiguredEventIDs = []
             }
 
             if configuration?.isPaginating == true, newConfiguration.isPaginating == false {
@@ -1144,6 +1148,12 @@ import SwiftUI
             if changedIDs.isEmpty == false {
                 snapshot.reconfigureItems(changedIDs)
             }
+            let reconfiguredEventIDs = SynaraLaunchEnvironment.isUITest
+                ? changedIDs.compactMap { id -> String? in
+                    guard case let .event(eventID) = id else { return nil }
+                    return eventID
+                }
+                : []
 
             updateSerial &+= 1
             let serial = updateSerial
@@ -1181,6 +1191,11 @@ import SwiftUI
 
                         reportBottomPinnedIfChanged(force: true)
                         requestPaginationIfNeeded()
+                    }
+                    if reconfiguredEventIDs.isEmpty == false {
+                        // Published only after the anchor is restored, so a
+                        // UI test reading it sees the settled position.
+                        lastReconfiguredEventIDs = reconfiguredEventIDs
                     }
                     reportLastReadMarkerVisibilityIfChanged()
                     updateDiagnostics()
@@ -1742,7 +1757,10 @@ import SwiftUI
                 }
                 return eventRow.item.eventID
             }.first ?? "none"
-            tableView.accessibilityValue = "routeID=\(configuration.routeID);generation=\(configuration.sessionGeneration);renderedEvents=\(renderedEvents);visibleCells=\(tableView.visibleCells.count);topEvent=\(topEventID);newestEvent=\(newestEventRow()?.eventID ?? "none");pinned=\(isConfirmedPinned());revealedTimestamp=\(revealedTimestampEventID)"
+            let reconfiguredEvents = lastReconfiguredEventIDs.isEmpty
+                ? "none"
+                : lastReconfiguredEventIDs.sorted().joined(separator: ",")
+            tableView.accessibilityValue = "routeID=\(configuration.routeID);generation=\(configuration.sessionGeneration);renderedEvents=\(renderedEvents);visibleCells=\(tableView.visibleCells.count);topEvent=\(topEventID);newestEvent=\(newestEventRow()?.eventID ?? "none");pinned=\(isConfirmedPinned());revealedTimestamp=\(revealedTimestampEventID);reconfiguredEvents=\(reconfiguredEvents)"
         }
 
         func scrollViewDidScroll(_: UIScrollView) {

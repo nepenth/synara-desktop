@@ -200,17 +200,25 @@ final class SynaraUITests: XCTestCase {
         )
         let window = app.windows.firstMatch
 
-        // The approval room is in the initially visible Ops space. Verify its
-        // combined status before moving through the virtualized list to the
-        // Workspace room below it.
+        // The approval room is in the Ops space, listed first. Ops is in
+        // recency order (Security, Security Agent, Agent Workflows) and rows
+        // wrap at accessibility sizes, so the approval room can start below
+        // the materialized rows: reach it as a user would, then verify its
+        // combined status before moving on to the Workspace room below it.
+        let roomList = app.collectionViews["RoomList"]
         let approvalRoom = app.buttons["RoomRow-!agent-workflows:matrix.org"]
-        XCTAssertTrue(approvalRoom.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            revealForDirectHit(approvalRoom, in: roomList, app: app),
+            "The approval room in the Ops space must remain reachable at Accessibility XL"
+        )
+        XCTAssertGreaterThanOrEqual(approvalRoom.frame.minX, window.frame.minX)
+        XCTAssertLessThanOrEqual(approvalRoom.frame.maxX, window.frame.maxX)
         XCTAssertTrue(approvalRoom.label.contains("Agent Workflows"))
         XCTAssertTrue(approvalRoom.label.contains("approval required"))
 
         let mentionedRoom = app.buttons["RoomRow-!project:matrix.org"]
         XCTAssertTrue(
-            revealForDirectHit(mentionedRoom, in: app.collectionViews["RoomList"], app: app),
+            revealForDirectHit(mentionedRoom, in: roomList, app: app),
             "A room below the initially materialized Accessibility XL rows must remain reachable"
         )
         XCTAssertGreaterThanOrEqual(mentionedRoom.frame.minX, window.frame.minX)
@@ -298,8 +306,24 @@ final class SynaraUITests: XCTestCase {
         let app = launchRoomApp()
 
         XCTAssertTrue(app.staticTexts["Project"].waitForExistence(timeout: 5))
-        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Here's the latest spec for the new permissions model."].waitForExistence(timeout: 5))
+        let viewport = timelineViewport(in: app)
+        XCTAssertTrue(viewport.waitForExistence(timeout: 5))
+        // No read marker: the room opens live, at its newest message.
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=true", timeout: 5))
+        XCTAssertTrue(app.staticTexts["Can I take a pass on the reviewer roles?"].waitForExistence(timeout: 5))
+
+        // The oldest message sits above the viewport, and the timeline lists
+        // only on-screen rows to assistive technologies: scroll back to it
+        // as a reader would.
+        let oldest = app.staticTexts["Here's the latest spec for the new permissions model."]
+        func oldestIsOnScreen() -> Bool {
+            oldest.exists && viewport.frame.contains(CGPoint(x: oldest.frame.midX, y: oldest.frame.midY))
+        }
+        for _ in 0..<6 where oldestIsOnScreen() == false {
+            viewport.swipeDown(velocity: .slow)
+        }
+        XCTAssertTrue(oldest.waitForExistence(timeout: 5))
+        XCTAssertTrue(oldestIsOnScreen(), "The first message must be readable in the timeline viewport")
     }
 
     func testIPadRoomCanvasKeepsListAndConversationVisible() throws {
@@ -376,7 +400,26 @@ final class SynaraUITests: XCTestCase {
 
         actions.tap()
         XCTAssertTrue(app.buttons["Reply"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["React"].exists)
+        if #available(iOS 17.0, *) {
+            // The quick-reaction palette: six emoji, each its own button
+            // that says what it does. The fixture user has no recent emoji,
+            // so these are the padding set, in order. UIKit's palette keeps
+            // no accessibility identifiers, so find each by what VoiceOver
+            // speaks; a bare emoji label would fail here.
+            let quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🙏"].map { key in
+                app.buttons["React with \(key)"]
+            }
+            for (index, reaction) in quickReactions.enumerated() {
+                XCTAssertTrue(reaction.exists, "Quick reaction \(index) must be discoverable")
+                XCTAssertTrue(reaction.isHittable, "Quick reaction \(index) must be tappable")
+            }
+            let lefts = quickReactions.map(\.frame.minX)
+            XCTAssertEqual(lefts, lefts.sorted(), "The palette must keep its order: \(lefts)")
+            XCTAssertEqual(Set(quickReactions.map(\.frame.minY)).count, 1, "The quick reactions share one row")
+            XCTAssertFalse(app.buttons["React"].exists, "The palette replaces the old 👍-only React item")
+        } else {
+            XCTAssertTrue(app.buttons["React"].exists)
+        }
         XCTAssertTrue(app.buttons["Pin to Notes"].exists)
         XCTAssertTrue(app.buttons["Select Text"].exists)
 
@@ -785,11 +828,35 @@ final class SynaraUITests: XCTestCase {
         let anchorBefore = viewportDiagnostics(viewport)["topEvent"]
         XCTAssertNotNil(anchorBefore)
 
+        // Message 137 grows by 180 lines below the reading position. The
+        // timeline lists only on-screen rows to assistive technologies, so
+        // the off-screen row's text is not the signal that the replacement
+        // landed: the viewport reports the rows it redrew in place, after
+        // restoring the anchor.
+        let replacementDeadline = Date().addingTimeInterval(12)
+        func replacementLanded() -> Bool {
+            (viewportDiagnostics(viewport)["reconfiguredEvents"] ?? "")
+                .split(separator: ",")
+                .contains("$synthetic-137:matrix.org")
+        }
+        while replacementLanded() == false, Date() < replacementDeadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
+        XCTAssertTrue(
+            replacementLanded(),
+            "The variable-height replacement must redraw message 137. Diagnostics: \(String(describing: viewport.value))"
+        )
+        XCTAssertEqual(viewportDiagnostics(viewport)["topEvent"], anchorBefore)
+
+        // The replaced row really is the expanded message: scroll down to it
+        // as a reader would.
         let expanded = app.staticTexts.matching(
             NSPredicate(format: "label BEGINSWITH %@", "Expanded variable-height message 137")
         ).firstMatch
-        XCTAssertTrue(expanded.waitForExistence(timeout: 12))
-        XCTAssertEqual(viewportDiagnostics(viewport)["topEvent"], anchorBefore)
+        for _ in 0..<6 where expanded.exists == false {
+            viewport.swipeUp(velocity: .slow)
+        }
+        XCTAssertTrue(expanded.waitForExistence(timeout: 5))
     }
 
     func testStableViewportPreservesAnchorAcrossPrependSnapshot() {
