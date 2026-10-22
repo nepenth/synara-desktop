@@ -191,7 +191,7 @@ export const performLogout = async (
 };
 
 /** Fixed dialog copy when native logout rejects or does not report `logged_out`. */
-export const LOGOUT_RETRY_COPY = 'Local sign out did not complete. Retry to finish local cleanup.';
+export const LOGOUT_RETRY_COPY = 'Local log out did not complete. Retry to finish local cleanup.';
 
 export type LogoutAttemptOutcome = 'logged_out' | 'retry';
 

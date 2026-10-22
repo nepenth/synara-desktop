@@ -386,8 +386,5 @@ test('LogoutDialog renders the fixed retry copy from the logout outcome', () => 
   assert.match(dialog, /\{LOGOUT_RETRY_COPY\}/);
   assert.doesNotMatch(dialog, /\.catch\(\(\) => undefined\)/);
   assert.doesNotMatch(dialog, /\(\) => \{\s*\/\/[^\n]*\n[^}]*\}\s*\)/);
-  assert.equal(
-    LOGOUT_RETRY_COPY,
-    'Local sign out did not complete. Retry to finish local cleanup.'
-  );
+  assert.equal(LOGOUT_RETRY_COPY, 'Local log out did not complete. Retry to finish local cleanup.');
 });

@@ -388,7 +388,7 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
     page: SettingsPages.DevicesPage,
     title: 'Others',
     description: 'Your other signed-in devices.',
-    synonyms: ['sessions', 'other devices', 'sign out', 'logout'],
+    synonyms: ['sessions', 'other devices', 'sign out', 'log out', 'logout'],
   },
   {
     page: SettingsPages.DevicesPage,

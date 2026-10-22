@@ -148,7 +148,7 @@ function ClientRootOptions({
                   fill="None"
                 >
                   <Text as="span" size="T300" truncate>
-                    Logout
+                    Log Out
                   </Text>
                 </MenuItem>
                 {logoutError && (
@@ -298,7 +298,7 @@ export function ClientRoot({ children }: ClientRootProps) {
     try {
       await performLogout(loadedSession);
     } catch {
-      setLogoutError('Local sign out did not complete. Retry to finish local cleanup.');
+      setLogoutError('Local log out did not complete. Retry to finish local cleanup.');
     } finally {
       setLoggingOut(false);
     }
@@ -519,8 +519,8 @@ export function ClientRoot({ children }: ClientRootProps) {
                       still intact.
                     </Text>
                     <Text size="T300" priority="400">
-                      Before signing out, confirm that another verified client can decrypt your
-                      history or that you have tested your recovery key/key backup. Signing out ends
+                      Before logging out, confirm that another verified client can decrypt your
+                      history or that you have tested your recovery key/key backup. Logging out ends
                       this session; local encryption data stays on this device.
                     </Text>
                     {canRetryCryptoStoreContinuityFailure(continuityError) && (
@@ -532,7 +532,7 @@ export function ClientRoot({ children }: ClientRootProps) {
                     )}
                     <Button variant="Critical" onClick={() => void logout()} disabled={loggingOut}>
                       <Text as="span" size="B400">
-                        Sign Out and Delete Local Encryption Data
+                        Log Out and Delete Local Encryption Data
                       </Text>
                     </Button>
                   </>
@@ -569,7 +569,7 @@ export function ClientRoot({ children }: ClientRootProps) {
                   {splashStatus}
                 </Text>
                 <Text size="T300" priority="400">
-                  You can retry, reload the application, or sign out.
+                  You can retry, reload the application, or log out.
                 </Text>
                 <Button
                   variant="Primary"
@@ -589,7 +589,7 @@ export function ClientRoot({ children }: ClientRootProps) {
                 )}
                 <Button variant="Critical" onClick={() => void logout()} disabled={loggingOut}>
                   <Text as="span" size="B400">
-                    Logout
+                    Log Out
                   </Text>
                 </Button>
               </Box>
