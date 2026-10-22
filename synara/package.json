@@ -82,7 +82,7 @@
     "react-i18next": "17.0.16",
     "react-range": "1.10.0",
     "react-router-dom": "7.18.4",
-    "sanitize-html": "2.18.0",
+    "sanitize-html": "2.18.1",
     "slate": "0.132.0",
     "slate-dom": "0.132.0",
     "slate-history": "0.128.1",
