@@ -8,6 +8,7 @@ export default defineConfig({
     'room-list-live-call.spec.ts',
     'navigation-unread.spec.ts',
     'room-list-glyph.spec.ts',
+    'room-list-name.spec.ts',
   ],
   fullyParallel: false,
   retries: 0,
