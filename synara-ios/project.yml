@@ -67,6 +67,12 @@ targets:
         SynaraCriticalAlertsEnabled: "$(SYNARA_CRITICAL_ALERTS_ENABLED)"
         SynaraNotificationFilteringEnabled: "$(SYNARA_NOTIFICATION_FILTERING_ENABLED)"
         SynaraKeychainAccessGroup: "$(AppIdentifierPrefix)com.whylandcreative.synara.shared"
+        SynaraKlipyAPIKey: "$(SYNARA_KLIPY_API_KEY)"
+    # SYNARA_KLIPY_API_KEY comes only from this file and its ignored include,
+    # written at build time from the environment (scripts/lib/klipy-api-key.sh).
+    configFiles:
+      Debug: Config/Synara.xcconfig
+      Release: Config/Synara.xcconfig
     settings:
       base:
         CODE_SIGN_ENTITLEMENTS: "$(SYNARA_APP_ENTITLEMENTS)"

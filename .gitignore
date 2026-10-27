@@ -27,6 +27,8 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 synara-ios/.build/
+# Build-time Klipy key for iOS (synara-ios/scripts/lib/klipy-api-key.sh); never commit it.
+synara-ios/Config/KlipyAPIKey.local.xcconfig
 src-tauri/capabilities/release-hardening.json
 src-tauri/gen/schemas/capabilities.json
 # ---------------------------------------------------------------------------

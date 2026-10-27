@@ -3,7 +3,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/xcode-cache.sh"
+source "$SCRIPT_DIR/lib/klipy-api-key.sh"
 synara_configure_xcode_cache "$SCRIPT_DIR/.."
+# Local and CI test builds have no Klipy key, so they do not offer GIF search;
+# exporting SYNARA_KLIPY_API_KEY turns it on for this checkout's builds.
+synara_write_klipy_api_key "$SCRIPT_DIR/.."
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$SYNARA_XCODE_DERIVED_DATA_ROOT/simulator}"
 RESULT_BUNDLE_DIR="${IOS_RESULT_BUNDLE_DIR:-/private/tmp/synara-ios-results}"
 RESULT_STAMP="${IOS_RESULT_STAMP:-$(date +%Y%m%d-%H%M%S)-$$}"

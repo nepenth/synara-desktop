@@ -1,0 +1,9 @@
+// Build settings for the Synara app target.
+//
+// GIF search needs a Klipy API key, which must never be committed (the
+// repository is public). Release builds write it from SYNARA_KLIPY_API_KEY
+// into the ignored include below (scripts/lib/klipy-api-key.sh); Info.plist
+// carries it as SynaraKlipyAPIKey. Without it the app does not offer GIF
+// search; GIF links and X posts still show.
+SYNARA_KLIPY_API_KEY =
+#include? "KlipyAPIKey.local.xcconfig"

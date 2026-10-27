@@ -39,6 +39,8 @@
 	<string>$(SYNARA_CRITICAL_ALERTS_ENABLED)</string>
 	<key>SynaraKeychainAccessGroup</key>
 	<string>$(AppIdentifierPrefix)com.whylandcreative.synara.shared</string>
+	<key>SynaraKlipyAPIKey</key>
+	<string>$(SYNARA_KLIPY_API_KEY)</string>
 	<key>SynaraNotificationFilteringEnabled</key>
 	<string>$(SYNARA_NOTIFICATION_FILTERING_ENABLED)</string>
 	<key>SynaraPushGatewayURL</key>
