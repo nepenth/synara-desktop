@@ -126,6 +126,7 @@ const tests = [
   'src/app/state/__tests__/nativeMediaUploadOwner.test.ts',
   'src/app/state/room-list/__tests__/roomListIdentity.test.ts',
   'src/app/features/settings/account/__tests__/nativeProfileOwner.test.ts',
+  'src/app/features/settings/account/__tests__/nativePassword.test.ts',
   'src/app/features/settings/__tests__/settingsSurfaceGuard.test.ts',
   'src/app/features/common-settings/general/__tests__/nativeRoomProfileOwner.test.ts',
   'src/app/features/message-search/__tests__/useMessageSearch.test.ts',

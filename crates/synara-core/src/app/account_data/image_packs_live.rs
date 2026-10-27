@@ -1055,6 +1055,21 @@ impl NativeImagePackOwner {
         .await
     }
 
+    pub async fn change_own_password(
+        &self,
+        current_password: &str,
+        new_password: &str,
+        logout_devices: bool,
+    ) -> Result<(), &'static str> {
+        crate::app::user_profile::change_own_password(
+            &self.client,
+            current_password,
+            new_password,
+            logout_devices,
+        )
+        .await
+    }
+
     pub async fn upload_avatar(
         &self,
         payload: Vec<u8>,

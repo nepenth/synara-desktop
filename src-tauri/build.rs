@@ -53,6 +53,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_store_recovery_prepare",
     "matrix_threepid_add_email",
     "matrix_threepid_add_email_password",
+    "matrix_change_own_password",
     "matrix_threepid_delete",
     "matrix_threepid_request_email_token",
     "matrix_threepid_snapshot",

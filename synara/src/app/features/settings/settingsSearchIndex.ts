@@ -356,6 +356,17 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
   },
   {
     page: SettingsPages.AccountPage,
+    title: 'Password',
+    synonyms: ['password', 'passphrase', 'credentials', 'security'],
+  },
+  {
+    page: SettingsPages.AccountPage,
+    title: 'Change Password',
+    description: 'Confirm with your current password.',
+    synonyms: ['password', 'reset password', 'new password', 'credentials'],
+  },
+  {
+    page: SettingsPages.AccountPage,
     title: 'Contact Information',
     synonyms: ['email', 'contact', 'threepid'],
   },

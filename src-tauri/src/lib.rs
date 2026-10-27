@@ -859,6 +859,7 @@ pub fn run() {
             matrix::auth::product::matrix_threepid_request_email_token,
             matrix::auth::product::matrix_threepid_add_email,
             matrix::auth::product::matrix_threepid_add_email_password,
+            matrix::auth::product::matrix_change_own_password,
             matrix::auth::product::matrix_set_room_name,
             matrix::auth::product::matrix_set_room_topic,
             matrix::auth::product::matrix_set_room_avatar,

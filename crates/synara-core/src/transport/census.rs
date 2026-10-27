@@ -22,6 +22,7 @@ pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
     "matrix_backup_restore",
     "matrix_backup_setup",
     "matrix_backup_status",
+    "matrix_change_own_password",
     "matrix_composer_clear_reply_draft",
     "matrix_composer_get_reply_draft",
     "matrix_composer_set_reply_draft",

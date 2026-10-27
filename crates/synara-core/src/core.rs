@@ -839,6 +839,24 @@ impl Core {
             .map_err(threepid_owner_error)
     }
 
+    /// Change the signed-in user's password. Both passwords are method
+    /// arguments, never `Core::command` JSON fields.
+    pub async fn change_own_password(
+        &self,
+        current_password: &str,
+        new_password: &str,
+        logout_devices: bool,
+    ) -> Result<(), MatrixIpcError> {
+        let owner = self.state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-change-own-password-no-session")
+        })?;
+        owner
+            .change_own_password(current_password, new_password, logout_devices)
+            .await
+            .map_err(password_owner_error)
+    }
+
     /// Own-avatar bytes upload. Bytes are a method argument, never a
     /// `Core::command` JSON field. Returns an `mxc://` URI only.
     pub async fn upload_avatar(

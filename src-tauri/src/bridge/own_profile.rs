@@ -40,6 +40,46 @@ pub(crate) async fn get_own_profile(
     Ok(payload)
 }
 
+pub(crate) async fn change_own_password(
+    core: &Core,
+    current_password: String,
+    new_password: String,
+    logout_devices: bool,
+) -> Result<(), MatrixAuthCommandError> {
+    core.change_own_password(&current_password, &new_password, logout_devices)
+        .await
+        .map_err(map_password_core_error)
+}
+
+fn map_password_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
+    let diagnostic = error
+        .diagnostic_id
+        .as_deref()
+        .unwrap_or("v-password.change-failed");
+    let message = match diagnostic {
+        "v-password.current-wrong" => "The current password is incorrect.",
+        "v-password.weak" => "The homeserver rejected the new password as too weak.",
+        "v-password.rate-limited" => "Too many attempts. Wait a moment and try again.",
+        "v-password.auth-unsupported" => {
+            "This homeserver changes passwords on its own account page."
+        }
+        "v-password.current-empty" | "v-password.new-empty" => "Enter both passwords.",
+        "v-password.current-too-long" | "v-password.new-too-long" => "The password is too long.",
+        _ => "The password could not be changed.",
+    };
+    match error.category {
+        MatrixIpcErrorCategory::Forbidden => MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            "d0.4-send-requires-session",
+        ),
+        MatrixIpcErrorCategory::SdkInvariant => {
+            MatrixAuthCommandError::new("InvalidRequest", message, diagnostic)
+        }
+        _ => MatrixAuthCommandError::new("Unknown", message, diagnostic),
+    }
+}
+
 fn map_own_profile_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
     let diagnostic = error
         .diagnostic_id

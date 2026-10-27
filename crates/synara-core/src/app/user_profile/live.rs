@@ -2,13 +2,14 @@
 
 use std::sync::Mutex;
 
+use matrix_sdk::ruma::api::client::account::change_password;
 use matrix_sdk::ruma::api::client::uiaa::{
-    AuthData, AuthType, MatrixUserIdentifier, Password, UserIdentifier,
+    AuthData, AuthType, MatrixUserIdentifier, Password, UiaaInfo, UserIdentifier,
 };
 use matrix_sdk::ruma::api::error::ErrorKind;
 use matrix_sdk::ruma::thirdparty::Medium;
-use matrix_sdk::ruma::{ClientSecret, OwnedClientSecret, OwnedMxcUri, OwnedSessionId};
-use matrix_sdk::Client;
+use matrix_sdk::ruma::{assign, ClientSecret, OwnedClientSecret, OwnedMxcUri, OwnedSessionId};
+use matrix_sdk::{Client, HttpError};
 use mime::Mime;
 
 use super::{
@@ -439,6 +440,110 @@ pub async fn add_threepid_email_password(
             pending_state.auth_session = Some(session);
             Err("v-threepid.add-failed")
         }
+    }
+}
+
+const MAX_PASSWORD_BYTES: usize = 1024;
+
+fn validate_password_input(
+    password: &str,
+    empty: &'static str,
+    too_long: &'static str,
+) -> Result<(), &'static str> {
+    if password.is_empty() {
+        return Err(empty);
+    }
+    if password.len() > MAX_PASSWORD_BYTES {
+        return Err(too_long);
+    }
+    Ok(())
+}
+
+fn offers_password_stage(info: &UiaaInfo) -> bool {
+    info.flows
+        .iter()
+        .any(|flow| flow.stages.contains(&AuthType::Password))
+}
+
+fn change_password_error(error: &HttpError) -> &'static str {
+    match error.client_api_error_kind() {
+        Some(ErrorKind::WeakPassword) => "v-password.weak",
+        Some(ErrorKind::LimitExceeded(_)) => "v-password.rate-limited",
+        Some(ErrorKind::Forbidden) => "v-password.current-wrong",
+        _ => "v-password.change-failed",
+    }
+}
+
+async fn send_change_password(
+    client: &Client,
+    new_password: &str,
+    logout_devices: bool,
+    auth: Option<AuthData>,
+) -> Result<(), HttpError> {
+    let request = assign!(change_password::v3::Request::new(new_password.to_owned()), {
+        auth: auth,
+        logout_devices: logout_devices,
+    });
+    client.send(request).await.map(|_| ())
+}
+
+/// Change the signed-in user's password, confirming it with the current
+/// password (`m.login.password`). The first request asks the homeserver for
+/// its interactive-auth session; a server that cannot take the password stage
+/// (single sign-on, or account management delegated to OAuth) answers
+/// `v-password.auth-unsupported`, and the client sends the user to the
+/// server's account page instead. Passwords never appear in errors.
+pub async fn change_own_password(
+    client: &Client,
+    current_password: &str,
+    new_password: &str,
+    logout_devices: bool,
+) -> Result<(), &'static str> {
+    validate_password_input(
+        current_password,
+        "v-password.current-empty",
+        "v-password.current-too-long",
+    )?;
+    validate_password_input(
+        new_password,
+        "v-password.new-empty",
+        "v-password.new-too-long",
+    )?;
+    let user_id = client.user_id().ok_or("v-password.no-session")?;
+
+    let info = match send_change_password(client, new_password, logout_devices, None).await {
+        Ok(()) => return Ok(()),
+        Err(error) => match error.as_uiaa_response() {
+            Some(info) => info.clone(),
+            None => return Err(change_password_error(&error)),
+        },
+    };
+    if !offers_password_stage(&info) {
+        return Err("v-password.auth-unsupported");
+    }
+
+    let mut auth = Password::new(
+        UserIdentifier::Matrix(MatrixUserIdentifier::new(user_id.to_string())),
+        current_password.to_owned(),
+    );
+    auth.session = info.session.clone();
+    match send_change_password(
+        client,
+        new_password,
+        logout_devices,
+        Some(AuthData::Password(auth)),
+    )
+    .await
+    {
+        Ok(()) => Ok(()),
+        Err(error) => match error.as_uiaa_response() {
+            // The password stage came back unfinished: the current password was wrong.
+            Some(info) if !info.completed.contains(&AuthType::Password) => {
+                Err("v-password.current-wrong")
+            }
+            Some(_) => Err("v-password.auth-unsupported"),
+            None => Err(change_password_error(&error)),
+        },
     }
 }
 
