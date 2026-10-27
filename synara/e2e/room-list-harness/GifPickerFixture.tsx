@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { configClass, varsClass, PopOut } from 'folds';
+import { darkTheme } from '../../src/colors.css';
 import { GifPicker } from '../../src/app/features/room/gif/GifPicker';
 import type { GifPickerConfig, GifResult } from '../../src/app/utils/gifProvider';
 
@@ -26,14 +28,30 @@ window.fetch = async (input, init) => {
   return new Response(JSON.stringify({ result: true, data: { data, has_next: page < 3 } }));
 };
 
+// The composer's popout portals to <body>, so the theme goes there as in the app.
+document.body.classList.add(configClass, varsClass, darkTheme);
+
 const config: GifPickerConfig = { enabled: true, provider: 'klipy', apiKey: 'fixture-key' };
 
 export function GifPickerFixture() {
   const query = new URLSearchParams(window.location.search).get('q') ?? '';
   const [sent, setSent] = useState<GifResult>();
   return (
-    <main style={{ fontFamily: 'sans-serif', padding: 16 }}>
-      <GifPicker config={config} initialQuery={query} onSelect={setSent} />
+    <main style={{ padding: 16 }}>
+      {new URLSearchParams(window.location.search).has('popout') ? (
+        <PopOut
+          offset={16}
+          alignOffset={-44}
+          position="Top"
+          align="End"
+          anchor={{ x: 700, y: 560, width: 32, height: 32 }}
+          content={<GifPicker config={config} initialQuery={query} onSelect={setSent} />}
+        >
+          {null}
+        </PopOut>
+      ) : (
+        <GifPicker config={config} initialQuery={query} onSelect={setSent} />
+      )}
       <p data-testid="gif-sent">{sent?.url ?? ''}</p>
     </main>
   );

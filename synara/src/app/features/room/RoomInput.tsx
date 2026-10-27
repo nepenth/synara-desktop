@@ -124,6 +124,7 @@ import { isDesktopPlatform, readPlatformClipboardImage } from '../../platform';
 import { gifPickerEnabled, gifSearchAvailable, gifSendsAsLink } from '../../utils/gifProvider';
 import type { GifResult } from '../../utils/gifProvider';
 import { GifPicker } from './gif/GifPicker';
+import { isTypedGifCommand } from './typedGifCommand';
 import { clearRoomDraft, loadRoomDraft, saveRoomDraft } from '../../utils/drafts';
 import {
   DEFAULT_POLL_SELECTIONS,
@@ -842,8 +843,11 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       (options: { filesOnly?: boolean } = {}) => {
         const { filesOnly = false } = options;
         const content = filesOnly ? [] : cloneComposerContent(editor.children);
-        const commandName = filesOnly ? undefined : getBeginCommand(editor);
         let plainText = filesOnly ? '' : toPlainText(content, isMarkdown).trim();
+        // `/gif` typed out, not picked from the command list, still opens the picker.
+        const commandName = filesOnly
+          ? undefined
+          : (getBeginCommand(editor) ?? (isTypedGifCommand(plainText) ? Command.Gif : undefined));
         let msgType: 'm.text' | 'm.emote' | 'm.notice' = MsgType.Text;
         if (commandName) plainText = trimCommand(commandName, plainText);
 
@@ -1108,12 +1112,17 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           evt.preventDefault();
           // Enter picks the open suggestion, as Tab does; Mod+Enter always
           // sends. Short emoticon queries (":D", ":P") stay plain text.
+          // A fully typed `/gif` opens the picker rather than becoming a chip.
           const pickSuggestion =
             autocompleteQuery &&
             !isKeyHotkey('mod+enter', evt) &&
             !(
               autocompleteQuery.prefix === AutocompletePrefix.Emoticon &&
               autocompleteQuery.text.length < 2
+            ) &&
+            !(
+              autocompleteQuery.prefix === AutocompletePrefix.Command &&
+              autocompleteQuery.text === Command.Gif
             );
           if (pickSuggestion && autocompleteSelectFirst.current?.()) return;
           submit();

@@ -120,6 +120,7 @@ const tests = [
   'src/app/utils/__tests__/keyboard.test.ts',
   'src/app/features/room/__tests__/nativeSendStickerOwner.test.ts',
   'src/app/features/room/__tests__/nativeSendGifOwner.test.ts',
+  'src/app/features/room/__tests__/typedGifCommand.test.ts',
   'src/app/features/room/__tests__/nativeMDirectOwner.test.ts',
   'src/app/features/room/__tests__/nativePollOwner.test.ts',
   'src/app/features/room/__tests__/nativeImagePackOwner.test.ts',
