@@ -1282,6 +1282,26 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.buttons["SupportSettingsLink"].exists)
     }
 
+    func testRichLinkSettingsDefaultOnAndGifSearchNeedsAKey() {
+        let app = launchSignedInSettingsApp()
+
+        tapSettingsElement(app.buttons["RichLinkSettingsLink"], app: app, timeout: 10)
+        let screen = app.collectionViews["RichLinkSettingsScreen"]
+        XCTAssertTrue(screen.waitForExistence(timeout: 5))
+        let inlineGifs = app.switches["RichLinkInlineGifToggle"]
+        let gifSearch = app.switches["RichLinkGifSearchToggle"]
+        let xPosts = app.switches["RichLinkXPostsToggle"]
+        for toggle in [inlineGifs, gifSearch, xPosts] {
+            XCTAssertTrue(revealForDirectHit(toggle, in: screen, app: app))
+        }
+        XCTAssertEqual(inlineGifs.value as? String, "1")
+        XCTAssertEqual(xPosts.value as? String, "1")
+        // Test builds carry no Klipy key, so GIF search is off and cannot be turned on.
+        XCTAssertEqual(gifSearch.value as? String, "0")
+        XCTAssertFalse(gifSearch.isEnabled)
+        XCTAssertTrue(app.staticTexts["GIF search is not set up for this build."].exists)
+    }
+
     func testSettingsShowsEncryptedRecoveryControlsWhenNeeded() {
         let app = launchEncryptedSettingsApp()
 

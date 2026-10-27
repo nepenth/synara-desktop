@@ -60,6 +60,18 @@ struct MediaResource: Identifiable, Equatable {
     var isImageMedia: Bool {
         resolvedMimeType?.hasPrefix("image/") == true
     }
+
+    /// GIFs and WebPs that may animate; the timeline plays them from the
+    /// original file, since a server thumbnail is one still frame.
+    var isAnimatedImageMedia: Bool {
+        guard let type = resolvedMimeType?.lowercased() else {
+            return false
+        }
+        return type == "image/gif" || type == "image/webp"
+    }
+
+    /// Larger GIF attachments show their still thumbnail in the timeline.
+    static let maxAnimatedImageBytes: UInt64 = 15 * 1024 * 1024
 }
 
 enum MediaLoadState: Equatable {

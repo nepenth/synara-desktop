@@ -1780,6 +1780,7 @@ final class UserDefaultsSettingsStore: SettingsStoring {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         defaults.register(defaults: SynaraSharedConstants.registeredUserDefaults)
+        defaults.register(defaults: RichLinkSettings.registeredDefaults)
     }
 
     func bool(for key: String) -> Bool {
@@ -1808,7 +1809,7 @@ final class InMemorySettingsStore: SettingsStoring {
     private var strings: [String: String] = [:]
 
     func bool(for key: String) -> Bool {
-        values[key] ?? false
+        values[key] ?? RichLinkSettings.registeredDefaults[key] ?? false
     }
 
     func set(_ value: Bool, for key: String) {
