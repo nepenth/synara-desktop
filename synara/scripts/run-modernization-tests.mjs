@@ -28,6 +28,8 @@ const tests = [
   'src/app/plugins/__tests__/via-servers.test.ts',
   'src/app/plugins/__tests__/pdfjs-page.test.ts',
   'src/app/utils/__tests__/gifProvider.test.ts',
+  'src/app/utils/__tests__/gifLinks.test.ts',
+  'src/app/utils/__tests__/xEmbed.test.ts',
   'src/app/utils/__tests__/later.test.ts',
   'src/app/utils/__tests__/roomNotes.test.ts',
   'src/app/utils/__tests__/roomIcon.test.ts',

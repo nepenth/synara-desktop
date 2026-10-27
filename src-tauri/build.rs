@@ -24,6 +24,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "desktop_dismiss_all_notifications",
     "desktop_take_notification_responses",
     "desktop_open_external_url",
+    "desktop_x_post",
     "desktop_save_file",
     "desktop_save_file_begin",
     "desktop_save_file_chunk",

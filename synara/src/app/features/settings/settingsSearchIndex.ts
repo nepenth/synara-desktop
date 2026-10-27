@@ -78,7 +78,19 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
     page: SettingsPages.GeneralPage,
     title: 'GIF Search',
     description: 'Search for GIFs from the composer.',
-    synonyms: ['gif', 'giphy', 'tenor', 'animated'],
+    synonyms: ['gif', 'giphy', 'klipy', 'animated'],
+  },
+  {
+    page: SettingsPages.GeneralPage,
+    title: 'Play GIF Links Inline',
+    description: 'Show Klipy and GIPHY links as GIFs.',
+    synonyms: ['gif', 'klipy', 'giphy', 'animated', 'embed'],
+  },
+  {
+    page: SettingsPages.GeneralPage,
+    title: 'Show X Posts',
+    description: 'Show X posts and play their video from x.com links.',
+    synonyms: ['x', 'twitter', 'tweet', 'video', 'embed'],
   },
   {
     page: SettingsPages.GeneralPage,

@@ -121,7 +121,7 @@ import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
 import { useComposingCheck } from '../../hooks/useComposingCheck';
 import { useClientConfig } from '../../hooks/useClientConfig';
 import { isDesktopPlatform, readPlatformClipboardImage } from '../../platform';
-import { gifPickerEnabled, gifSearchAvailable } from '../../utils/gifProvider';
+import { gifPickerEnabled, gifSearchAvailable, gifSendsAsLink } from '../../utils/gifProvider';
 import type { GifResult } from '../../utils/gifProvider';
 import { GifPicker } from './gif/GifPicker';
 import { clearRoomDraft, loadRoomDraft, saveRoomDraft } from '../../utils/drafts';
@@ -371,6 +371,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const [gifPickerAnchor, setGifPickerAnchor] = useState<RectCords>();
     const [gifSending, setGifSending] = useState(false);
     const [gifSendError, setGifSendError] = useState<string>();
+    // Search the picker opens with, from `/gif <query>`; bumping the key
+    // remounts the picker so a new command starts a fresh search.
+    const [gifPickerQuery, setGifPickerQuery] = useState({ query: '', key: 0 });
     const [sendError, setSendError] = useState<string>();
     const [composerPreviewUrl, setComposerPreviewUrl] = useState<string>();
     const [composerPreview, setComposerPreview] = useState<NativeMediaPreview | null>(null);
@@ -844,6 +847,33 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         let msgType: 'm.text' | 'm.emote' | 'm.notice' = MsgType.Text;
         if (commandName) plainText = trimCommand(commandName, plainText);
 
+        if (commandName === Command.Gif) {
+          if (!gifPickerAvailable && !gifOnboardingVisible) {
+            setSendError(
+              gifProviderAvailable
+                ? t(
+                    'modernization.gif.command_disabled',
+                    'Turn on GIF Search in Settings > General to use /gif.'
+                  )
+                : t(
+                    'modernization.gif.command_unconfigured',
+                    'GIF search is not set up for this app.'
+                  )
+            );
+            return;
+          }
+          resetEditor(editor);
+          resetEditorHistory(editor);
+          sendTypingStatus(false);
+          setSendError(undefined);
+          setGifSendError(undefined);
+          setGifPickerQuery((current) => ({ query: plainText, key: current.key + 1 }));
+          setGifPickerAnchor(
+            (composerToolsBtnRef.current ?? dropAnchorRef.current)?.getBoundingClientRect()
+          );
+          return;
+        }
+
         if (commandName && !MESSAGE_COMMANDS.has(commandName)) {
           const commandContent = commands[commandName as Command];
           if (!commandContent) {
@@ -988,6 +1018,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         sendAttachments,
         t,
         threadRootEventId,
+        gifPickerAvailable,
+        gifOnboardingVisible,
+        gifProviderAvailable,
       ]
     );
 
@@ -1140,7 +1173,19 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         threadRootEventId
       );
       try {
-        await sendComposerGifWithNativeOwner(roomId, gif, replyTo, threadRoot);
+        if (gifSendsAsLink(gif.provider)) {
+          const owner = await sendPlainTextWithNativeOwner({
+            roomId,
+            body: gif.url,
+            msgType: MsgType.Text,
+            replyTo,
+            threadRoot,
+          });
+          if (owner === 'legacy') throw new ComposerUserError(COMPOSER_NOT_SIGNED_IN);
+          requestRoomLatestAfterSend(roomId, threadRoot);
+        } else {
+          await sendComposerGifWithNativeOwner(roomId, gif, replyTo, threadRoot);
+        }
         await clearReplyDraftAfterSend(draftRevision, () => {
           setGifSendError(
             t(
@@ -1525,6 +1570,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                     >
                       {gifPickerAvailable ? (
                         <GifPicker
+                          key={gifPickerQuery.key}
+                          initialQuery={gifPickerQuery.query}
                           config={clientConfig.gifPicker}
                           disabled={gifSending}
                           error={gifSendError}
@@ -1545,10 +1592,15 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                             {t('modernization.gif.onboarding.title', 'Enable GIFs?')}
                           </Text>
                           <Text size="T300" priority="300">
-                            {t(
-                              'modernization.gif.onboarding.description',
-                              'GIF search downloads your selected GIF privately, uploads it to Matrix media, then sends an mxc:// attachment.'
-                            )}
+                            {gifSendsAsLink(clientConfig.gifPicker?.provider)
+                              ? t(
+                                  'modernization.gif.onboarding.description_link',
+                                  'GIF search contacts the GIF provider from this device, so it can see your IP address. GIFs you send are links that Synara plays inline.'
+                                )
+                              : t(
+                                  'modernization.gif.onboarding.description',
+                                  'GIF search downloads your selected GIF privately, uploads it to Matrix media, then sends an mxc:// attachment.'
+                                )}
                           </Text>
                           <Box justifyContent="End" gap="200">
                             <Button

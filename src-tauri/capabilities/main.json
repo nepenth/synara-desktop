@@ -37,6 +37,7 @@
     "allow-desktop-dismiss-all-notifications",
     "allow-desktop-take-notification-responses",
     "allow-desktop-open-external-url",
+    "allow-desktop-x-post",
     "allow-desktop-save-file",
     "allow-desktop-save-file-begin",
     "allow-desktop-save-file-chunk",
