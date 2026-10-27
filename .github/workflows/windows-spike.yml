@@ -168,7 +168,6 @@ jobs:
         working-directory: synara
 
       - name: Run renderer unit tests
-        continue-on-error: true
         run: npm run test:modernization
         working-directory: synara
 

@@ -7,30 +7,38 @@ platform-specific code:
 [run 40557791572](https://github.com/nepenth/synara-desktop/actions/runs/40557791572)
 (logs are kept as the `windows-spike-logs` artifact for 14 days).
 
-## Follow-up: unsigned test installer
+## Current state of this branch
 
-After the spike, this branch gained the smallest set of changes that makes
-an unsigned Windows test install that can sign in. The `windows-installer`
-job in `windows-spike.yml` uploads an MSI and an NSIS `.exe` as
-`synara-windows-test-installers`.
+The spike findings below are from the first run. Since then this branch has
+made Windows a working, CI-checked test target. `windows-spike.yml` is green
+on Windows: the workspace compiles with no warnings, all Rust and renderer
+unit tests pass, and the `windows-installer` job uploads an unsigned MSI and
+NSIS `.exe` (`synara-windows-test-installers`). The probe fails on any test
+failure or new Windows-only warning.
 
-- `build-runtime.mjs` resolves the repo root with `fileURLToPath` (§6).
-- On Windows, packaged navigation pins `http://tauri.localhost`, and the CSP
-  allows `http://synara-media.localhost` (§4).
-- The session locator flushes through a write handle and skips directory
-  fsync on Windows (§1a). This fixed 12 of the 13 failures. The remaining one,
-  `password_login_activation_failure_revokes_token_before_metadata_without_clearing_old_vault`,
-  now fails in its cleanup: `remove_dir_all` hits OS error 32 because the
-  test's SQLite files are still open (§5).
-- The secret store uses keyring's `windows-native` backend (Credential Manager)
-  for both vaults, with the roughly 1280-character UTF-16 limit from §3. The
-  keyring round-trip tests pass on the Windows runner.
-- `run-modernization-tests.mjs` spawns `esbuild.cmd` through a shell on
-  Windows. Without one, Node fails with `spawn EINVAL`.
+| Finding | Change |
+| --- | --- |
+| §1a session locator fsync | Flushes through a write handle; directory fsync is a no-op on Windows |
+| §1b CRLF checkout | `.gitattributes` checks out LF everywhere (the index was already LF) |
+| §1c `/tmp` test paths | Fixture roots use `std::env::temp_dir()` |
+| §1d dropped-file test | Uses a real, never-dropped file. One SQLite-backed test cleans up best effort, as the others do. |
+| §1e Windows warnings | Gated with `cfg`, or allowed module-wide for the Linux/macOS notification response code until Windows toasts exist |
+| §2 taskbar badge | Red-dot overlay icon via `set_overlay_icon` (Windows has no badge count) |
+| §3 secret store | keyring `windows-native` (Credential Manager) for both vaults, with the roughly 1280-character UTF-16 limit |
+| §4 origin and CSP | Navigation pins `http://tauri.localhost`; the CSP allows `http://synara-media.localhost` |
+| §6 build entry points | `build-runtime.mjs` uses `fileURLToPath`. `npm run tauri` is `scripts/tauri.mjs`, which calls bash only on macOS and Linux. The renderer test runner uses the esbuild API (the CLI hit `spawn EINVAL` and cmd's 8191-character limit). |
 
-Everything else below is unchanged. Code signing, notifications, tray polish
-and the remaining test portability items are still open. The `push` trigger
-on this branch is temporary and must be removed before merging.
+Still open:
+
+- Windows toasts with actions and routes.
+- Code signing, the updater, and SmartScreen reputation.
+- Single instance and deep links.
+- A manual pass on real hardware.
+
+Also checked and needing no Windows code: the native title bar, Ctrl
+shortcuts, the "Synara Windows" device name, and the renderer's fallback
+sound. The `push` trigger on this branch is temporary and must be removed
+before merging.
 
 ## Summary
 
