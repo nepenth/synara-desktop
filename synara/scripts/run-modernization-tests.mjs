@@ -226,11 +226,12 @@ const tests = [
 const outdir = await mkdtemp(join(tmpdir(), 'synara-modernization-tests-'));
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 
-const run = (command, args) =>
+const run = (command, args, { shell = false } = {}) =>
   new Promise((resolve) => {
     const child = spawn(command, args, {
       cwd: projectRoot,
       stdio: 'inherit',
+      shell,
     });
     child.on('exit', resolve);
   });
@@ -242,14 +243,19 @@ try {
     '.bin',
     process.platform === 'win32' ? 'esbuild.cmd' : 'esbuild'
   );
-  const buildExitCode = await run(esbuildBin, [
-    ...tests,
-    '--bundle',
-    '--platform=node',
-    '--format=cjs',
-    '--log-level=silent',
-    `--outdir=${outdir}`,
-  ]);
+  // Node refuses to spawn a Windows .cmd shim without a shell (EINVAL).
+  const buildExitCode = await run(
+    esbuildBin,
+    [
+      ...tests,
+      '--bundle',
+      '--platform=node',
+      '--format=cjs',
+      '--log-level=silent',
+      `--outdir=${outdir}`,
+    ],
+    { shell: process.platform === 'win32' }
+  );
   if (buildExitCode !== 0) {
     process.exit(buildExitCode ?? 1);
   }
