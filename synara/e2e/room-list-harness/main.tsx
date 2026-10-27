@@ -9,6 +9,8 @@ import { NotificationsFixture } from './NotificationsFixture';
 import { LiveCallFixture } from './LiveCallFixture';
 import { NavigationUnreadFixture } from './NavigationUnreadFixture';
 import { RoomGlyphFixture } from './RoomGlyphFixture';
+import { RoomNameFixture } from './RoomNameFixture';
+import { GifPickerFixture } from './GifPickerFixture';
 import { VirtualTile } from '../../src/app/components/virtualizer/VirtualTile';
 
 function RoomListFixture() {
@@ -102,6 +104,10 @@ createRoot(document.getElementById('root')!).render(
     <LiveCallFixture />
   ) : new URLSearchParams(window.location.search).has('roomGlyph') ? (
     <RoomGlyphFixture />
+  ) : new URLSearchParams(window.location.search).has('gifPicker') ? (
+    <GifPickerFixture />
+  ) : new URLSearchParams(window.location.search).has('roomName') ? (
+    <RoomNameFixture />
   ) : (
     <RoomListFixture />
   )

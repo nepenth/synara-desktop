@@ -207,6 +207,7 @@ export enum Command {
   Delete = 'delete',
   Acl = 'acl',
   Poll = 'poll',
+  Gif = 'gif',
 }
 
 export type CommandContent = {
@@ -236,6 +237,15 @@ export const useCommands = (
       [Command.Notice]: {
         name: Command.Notice,
         description: 'Send notice message',
+        exe: async () => undefined,
+      },
+      // The composer opens the GIF picker for /gif itself (see RoomInput).
+      [Command.Gif]: {
+        name: Command.Gif,
+        description: t(
+          'modernization.gif.command_description',
+          'Search for a GIF to send. Example: /gif high five'
+        ),
         exe: async () => undefined,
       },
       [Command.Shrug]: {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useReducer } from 'react';
 import { StateEvent } from '../../types/matrix/room';
 import type { EventedRoomReading } from '../utils/roomEvents';
 import { RoomEvent } from '../utils/roomEvents';
@@ -21,22 +21,25 @@ export const useRoomAvatar = (room: EventedRoomReading, dm?: boolean): string | 
   return avatarMxc;
 };
 
+/**
+ * Reads the name on every render. Native rooms are an in-place facade over the
+ * latest summary and emit no `RoomEvent.Name`, so their callers re-render from
+ * the summary subscription; caching the name in state would freeze a row at
+ * whatever it first saw (a new room's "Empty Room"). The listener still
+ * re-renders rooms that do emit the event.
+ */
 export const useRoomName = (room: EventedRoomReading): string => {
-  const [name, setName] = useState(room.name ?? '');
+  const [, onNameChange] = useReducer((n: number) => n + 1, 0);
 
   useEffect(() => {
-    setName(room.name ?? '');
-
-    const handleRoomNameChange: (...args: unknown[]) => void = () => {
-      setName(room.name ?? '');
-    };
+    const handleRoomNameChange: (...args: unknown[]) => void = () => onNameChange();
     room.on(RoomEvent.Name, handleRoomNameChange as (...args: any[]) => void);
     return () => {
       room.removeListener(RoomEvent.Name, handleRoomNameChange);
     };
   }, [room]);
 
-  return name;
+  return room.name ?? '';
 };
 
 export const useRoomTopic = (room: EventedRoomReading): string | undefined => {

@@ -26,7 +26,8 @@ fn directive(policy: &str, name: &str) -> Vec<String> {
 fn production_csp_loads_media_only_through_the_app() {
     let policy = csp("csp");
     // Images and media come from the bundle, blobs and synara-media:; the
-    // only remote images are the built-in GIF providers' CDNs.
+    // only remote ones are the built-in GIF providers' CDNs, which forbid
+    // re-hosting, and X's CDNs for opt-in X post cards.
     assert_eq!(
         directive(&policy, "img-src"),
         [
@@ -34,13 +35,22 @@ fn production_csp_loads_media_only_through_the_app() {
             "data:",
             "blob:",
             "synara-media:",
-            "https://media.tenor.com",
-            "https://*.giphy.com"
+            "https://static.klipy.com",
+            "https://static1.klipy.com",
+            "https://static2.klipy.com",
+            "https://*.giphy.com",
+            "https://pbs.twimg.com"
         ]
     );
     assert_eq!(
         directive(&policy, "media-src"),
-        ["'self'", "data:", "blob:", "synara-media:"]
+        [
+            "'self'",
+            "data:",
+            "blob:",
+            "synara-media:",
+            "https://video.twimg.com"
+        ]
     );
     assert_eq!(directive(&policy, "frame-src"), ["'none'"]);
     assert_eq!(directive(&policy, "form-action"), ["'none'"]);

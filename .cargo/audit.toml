@@ -1,0 +1,13 @@
+# One-time exception approved for the 2.4.0 release (2026-10-27). Remove
+# these ignores as soon as Matrix SDK search admits a Tantivy that uses
+# zstd >=0.14.3 / zstd-safe >=8.2.0; see docs/rust-dependency-security.md.
+#
+# zstd 0.13.3 and zstd-safe 7.3.0 reach the desktop only through Matrix SDK
+# search 0.19.1 -> Tantivy 0.26.2, which requires zstd ^0.13. Tantivy calls
+# only zstd::bulk and compress_bound, never the affected functions.
+[advisories]
+ignore = [
+    "RUSTSEC-2026-0391", # zstd stream::raw::{Encoder,Decoder}::with_context
+    "RUSTSEC-2026-0398", # zstd-safe Seekable::decompress (seekable feature is off)
+    "RUSTSEC-2026-0403", # zstd-safe DCtx::decompress_stream
+]

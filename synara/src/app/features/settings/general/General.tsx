@@ -1101,6 +1101,8 @@ function Messages() {
   );
   const [mediaAutoLoad, setMediaAutoLoad] = useSetting(settingsAtom, 'mediaAutoLoad');
   const [gifSearchEnabled, setGifSearchEnabled] = useSetting(settingsAtom, 'gifSearchEnabled');
+  const [inlineGifLinks, setInlineGifLinks] = useSetting(settingsAtom, 'inlineGifLinks');
+  const [xEmbeds, setXEmbeds] = useSetting(settingsAtom, 'xEmbeds');
   const [indexedMessageSearch, setIndexedMessageSearch] = useSetting(
     settingsAtom,
     'indexedMessageSearch'
@@ -1165,6 +1167,26 @@ function Messages() {
               onChange={setGifSearchEnabled}
             />
           }
+        />
+      </SequenceCard>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title={t('modernization.settings.inline_gif_links.title', 'Play GIF Links Inline')}
+          description={t(
+            'modernization.settings.inline_gif_links.description',
+            'Show Klipy and GIPHY links as GIFs. Your device loads them from the provider, which can see your IP address.'
+          )}
+          after={<Switch variant="Primary" value={inlineGifLinks} onChange={setInlineGifLinks} />}
+        />
+      </SequenceCard>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title={t('modernization.settings.x_embeds.title', 'Show X Posts')}
+          description={t(
+            'modernization.settings.x_embeds.description',
+            'Show the post and play its video for x.com links. Your device contacts X, which can see your IP address.'
+          )}
+          after={<Switch variant="Primary" value={xEmbeds} onChange={setXEmbeds} />}
         />
       </SequenceCard>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">

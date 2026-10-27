@@ -78,7 +78,19 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
     page: SettingsPages.GeneralPage,
     title: 'GIF Search',
     description: 'Search for GIFs from the composer.',
-    synonyms: ['gif', 'giphy', 'tenor', 'animated'],
+    synonyms: ['gif', 'giphy', 'klipy', 'animated'],
+  },
+  {
+    page: SettingsPages.GeneralPage,
+    title: 'Play GIF Links Inline',
+    description: 'Show Klipy and GIPHY links as GIFs.',
+    synonyms: ['gif', 'klipy', 'giphy', 'animated', 'embed'],
+  },
+  {
+    page: SettingsPages.GeneralPage,
+    title: 'Show X Posts',
+    description: 'Show X posts and play their video from x.com links.',
+    synonyms: ['x', 'twitter', 'tweet', 'video', 'embed'],
   },
   {
     page: SettingsPages.GeneralPage,
@@ -341,6 +353,17 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
     title: 'Matrix ID',
     description: 'Your full Matrix user ID.',
     synonyms: ['user id', 'mxid', 'username', 'handle'],
+  },
+  {
+    page: SettingsPages.AccountPage,
+    title: 'Password',
+    synonyms: ['password', 'passphrase', 'credentials', 'security'],
+  },
+  {
+    page: SettingsPages.AccountPage,
+    title: 'Change Password',
+    description: 'Confirm with your current password.',
+    synonyms: ['password', 'reset password', 'new password', 'credentials'],
   },
   {
     page: SettingsPages.AccountPage,

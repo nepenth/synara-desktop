@@ -25,5 +25,12 @@
   "hashRouter": {
     "enabled": true,
     "basename": "/"
+  },
+
+  "gifPicker": {
+    "enabled": true,
+    "provider": "klipy",
+    "apiKey": "",
+    "contentRating": "medium"
   }
 }

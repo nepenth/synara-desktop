@@ -68,7 +68,7 @@ let sequence = polish
     ? 1
     : scenario === 'short'
       ? 2
-      : scenario === 'media'
+      : scenario === 'media' || scenario === 'embeds'
         ? 3
         : jank
           ? 180
@@ -161,6 +161,38 @@ const makeRow = (index: number) => ({
   },
 });
 let rows = Array.from({ length: sequence }, (_, index) => makeRow(index + 1));
+// `scenario=embeds`: the last two messages are a GIF link and an X link; the
+// X post comes from the mocked `desktop_x_post` below.
+const EMBED_GIF_URL = 'https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif';
+const EMBED_X_URL = 'https://x.com/example/status/1700000000000000001';
+const EMBED_X_POST = {
+  __typename: 'Tweet',
+  id_str: '1700000000000000001',
+  text: 'Launch day: the full video is below.',
+  user: { name: 'Example Account', screen_name: 'example' },
+  mediaDetails: [
+    {
+      type: 'video',
+      original_info: { width: 1280, height: 720 },
+      video_info: {
+        variants: [
+          {
+            bitrate: 832000,
+            content_type: 'video/mp4',
+            url: 'https://video.twimg.com/fixture.mp4',
+          },
+        ],
+      },
+    },
+  ],
+};
+if (scenario === 'embeds') {
+  rows = rows.map((row, index) => {
+    if (index === rows.length - 2) return { ...row, body: EMBED_GIF_URL };
+    if (index === rows.length - 1) return { ...row, body: `Worth watching ${EMBED_X_URL}` };
+    return row;
+  });
+}
 // `scenario=threads`: the second-to-last message owns a 7-reply thread.
 const THREAD_ROOT = `$${Math.max(1, sequence - 1)}`;
 const THREAD_REPLY_COUNT = 7;
@@ -361,6 +393,7 @@ window.__SYNARA_DESKTOP__ = {
       return oldSnapshot as T;
     }
     if (command === 'matrix_session_snapshot') return { status: 'logged_in' } as T;
+    if (command === 'desktop_x_post') return JSON.stringify(EMBED_X_POST) as T;
     if (command === 'matrix_edit_message') {
       return {
         roomId: room,

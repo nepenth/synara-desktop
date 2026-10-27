@@ -140,6 +140,10 @@ const RUST_ALLOWED_RAW_HTTP_PATHS = new Map([
     "crates/synara-core/src/app/client_builder/open.rs",
     "RUST-RAW-HTTP-002: build_auth_probe_client builds the redirect-free, timeout-bounded reqwest client handed to the SDK for pre-session login/registration probes; it sends nothing itself.",
   ],
+  [
+    "src-tauri/src/desktop_x_embed.rs",
+    "RUST-RAW-HTTP-003: opt-in X post cards fetch public post JSON from X's syndication endpoint, which refuses browser origins; not Matrix traffic, fixed host, redirect-free, time- and size-bounded.",
+  ],
 ]);
 
 const RUST_RAW_HTTP_PATTERNS = [

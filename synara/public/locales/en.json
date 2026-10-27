@@ -31,6 +31,14 @@
         "description": "Buttons, links, and selected items. The window background is Base Color above. Theme default until you pick a custom color.",
         "aria_label": "Custom accent color",
         "reset": "Reset"
+      },
+      "inline_gif_links": {
+        "title": "Play GIF Links Inline",
+        "description": "Show Klipy and GIPHY links as GIFs. Your device loads them from the provider, which can see your IP address."
+      },
+      "x_embeds": {
+        "title": "Show X Posts",
+        "description": "Show the post and play its video for x.com links. Your device contacts X, which can see your IP address."
       }
     },
     "gif": {
@@ -45,8 +53,13 @@
         "title": "Enable GIFs?",
         "description": "GIF search downloads your selected GIF privately, uploads it to Matrix media, then sends an mxc:// attachment.",
         "not_now": "Not now",
-        "enable": "Enable GIFs"
-      }
+        "enable": "Enable GIFs",
+        "description_link": "GIF search contacts the GIF provider from this device, so it can see your IP address. GIFs you send are links that Synara plays inline."
+      },
+      "trending": "Trending",
+      "command_description": "Search for a GIF to send. Example: /gif high five",
+      "command_disabled": "Turn on GIF Search in Settings > General to use /gif.",
+      "command_unconfigured": "GIF search is not set up for this app."
     },
     "later": {
       "title": "Later",

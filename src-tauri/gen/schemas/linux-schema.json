@@ -567,6 +567,12 @@
           "markdownDescription": "Enables the desktop_window_toggle_maximize command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_x_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-x-post",
+          "markdownDescription": "Enables the desktop_x_post command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_account_data_get command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-account-data-get",
@@ -637,6 +643,12 @@
           "type": "string",
           "const": "allow-matrix-backup-status",
           "markdownDescription": "Enables the matrix_backup_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_change_own_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-change-own-password",
+          "markdownDescription": "Enables the matrix_change_own_password command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_composer_clear_reply_draft command without any pre-configured scope.",
@@ -2073,6 +2085,12 @@
           "markdownDescription": "Denies the desktop_window_toggle_maximize command without any pre-configured scope."
         },
         {
+          "description": "Denies the desktop_x_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-x-post",
+          "markdownDescription": "Denies the desktop_x_post command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_account_data_get command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-account-data-get",
@@ -2155,6 +2173,12 @@
           "type": "string",
           "const": "deny-matrix-backup-status",
           "markdownDescription": "Denies the matrix_backup_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_change_own_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-change-own-password",
+          "markdownDescription": "Denies the matrix_change_own_password command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_composer_clear_reply_draft command without any pre-configured scope.",

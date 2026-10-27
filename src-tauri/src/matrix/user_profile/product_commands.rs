@@ -117,6 +117,24 @@ pub async fn matrix_threepid_add_email(
     crate::bridge::threepid::threepid_add_email(core.inner().as_ref()).await
 }
 
+/// Change the signed-in user's password, confirmed with the current one.
+/// Passwords cross the bridge as command arguments only and are never logged.
+#[tauri::command]
+pub async fn matrix_change_own_password(
+    core: State<'_, Arc<synara_core::Core>>,
+    current_password: String,
+    new_password: String,
+    logout_devices: bool,
+) -> Result<(), MatrixAuthCommandError> {
+    crate::bridge::own_profile::change_own_password(
+        core.inner().as_ref(),
+        current_password,
+        new_password,
+        logout_devices,
+    )
+    .await
+}
+
 #[tauri::command]
 pub async fn matrix_threepid_add_email_password(
     core: State<'_, Arc<synara_core::Core>>,

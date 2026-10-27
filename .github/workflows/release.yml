@@ -126,6 +126,7 @@ jobs:
         run: npm run tauri build -- --bundles deb
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
+          SYNARA_KLIPY_API_KEY: ${{ secrets.SYNARA_KLIPY_API_KEY }}
 
       - name: Upload Linux .deb for release
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -347,6 +348,7 @@ jobs:
           exit 1
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
+          SYNARA_KLIPY_API_KEY: ${{ secrets.SYNARA_KLIPY_API_KEY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}

@@ -122,6 +122,13 @@ const fixtures: Record<string, Fixture> = {
     approvalUrl: null,
   },
   matrix_identity_reset_cancel: true,
+  // Account > Password: "wrong" as the current password is rejected.
+  matrix_change_own_password: (args?: Record<string, unknown>) => {
+    if (args?.currentPassword === 'wrong') {
+      throw { code: 'InvalidRequest', diagnosticId: 'v-password.current-wrong' };
+    }
+    return null;
+  },
 };
 const unknown = new Set<string>();
 let callbackId = 0;

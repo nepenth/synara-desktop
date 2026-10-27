@@ -61,6 +61,10 @@ export interface SharedSettings {
   gifSearchEnabled: boolean;
   indexedMessageSearch: boolean;
   gifOnboardingDismissed: boolean;
+  /** Play Klipy and GIPHY links inline; the reader's device loads them from the provider. */
+  inlineGifLinks: boolean;
+  /** Show X posts, with their video, for x.com links; the reader's device contacts X. */
+  xEmbeds: boolean;
   showHiddenEvents: boolean;
   legacyUsernameColor: boolean;
 
@@ -144,6 +148,8 @@ export const defaultSharedSettings: SharedSettings = {
   gifSearchEnabled: false,
   indexedMessageSearch: true,
   gifOnboardingDismissed: false,
+  inlineGifLinks: true,
+  xEmbeds: false,
   showHiddenEvents: false,
   legacyUsernameColor: false,
 

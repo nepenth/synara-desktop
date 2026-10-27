@@ -1,4 +1,12 @@
-import React, { FormEventHandler, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  FormEventHandler,
+  UIEventHandler,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Avatar,
   Box,
@@ -15,8 +23,13 @@ import {
 } from 'folds';
 import { useTranslation } from 'react-i18next';
 import {
+  gifAttribution,
   gifPickerEnabled,
-  searchGifProvider,
+  gifSearchPlaceholder,
+  gifTrendingSupported,
+  searchGifProviderPage,
+  trendingGifProviderPage,
+  type GifPage,
   type GifPickerConfig,
   type GifResult,
 } from '../../../utils/gifProvider';
@@ -28,28 +41,38 @@ type GifPickerProps = {
   onSelect: (gif: GifResult) => void | Promise<void>;
   disabled?: boolean;
   error?: string;
+  /** Search to start with, such as the text after `/gif`. */
+  initialQuery?: string;
 };
+
+const LOAD_MORE_THRESHOLD_PX = 160;
 
 export function GifPicker({
   config: gifConfig,
   onSelect,
   disabled,
   error: selectError,
+  initialQuery = '',
 }: GifPickerProps) {
   const { t } = useTranslation();
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [results, setResults] = useState<GifResult[]>([]);
+  const [nextPage, setNextPage] = useState<number>();
   const searchSeq = useRef(0);
   const enabled = useMemo(() => gifPickerEnabled(gifConfig), [gifConfig]);
+  const trending = useMemo(() => gifTrendingSupported(gifConfig), [gifConfig]);
 
-  const search = useCallback(
-    async (term: string) => {
+  /** Loads page `page` of the feed for `term`: trending when it is empty. */
+  const load = useCallback(
+    async (term: string, page: number) => {
       const normalizedTerm = term.trim();
-      if (!gifConfig || !enabled || normalizedTerm.length < 2) {
+      const showTrending = normalizedTerm.length === 0 && trending;
+      if (!gifConfig || !enabled || (!showTrending && normalizedTerm.length < 2)) {
         searchSeq.current += 1;
         setResults([]);
+        setNextPage(undefined);
         setLoading(false);
         return;
       }
@@ -58,8 +81,12 @@ export function GifPicker({
       setLoading(true);
       setError(undefined);
       try {
-        const nextResults = await searchGifProvider(gifConfig, normalizedTerm);
-        if (searchSeq.current === seq) setResults(nextResults);
+        const next: GifPage = showTrending
+          ? await trendingGifProviderPage(gifConfig, page)
+          : await searchGifProviderPage(gifConfig, normalizedTerm, page);
+        if (searchSeq.current !== seq) return;
+        setResults((current) => (page > 1 ? [...current, ...next.results] : next.results));
+        setNextPage(next.nextPage);
       } catch (err) {
         if (searchSeq.current === seq) {
           setError(composerErrorMessage(err, 'Synara could not search GIFs. Try again.'));
@@ -68,24 +95,39 @@ export function GifPicker({
         if (searchSeq.current === seq) setLoading(false);
       }
     },
-    [gifConfig, enabled]
+    [gifConfig, enabled, trending]
   );
 
   useEffect(() => {
-    if (query.trim().length < 2) {
+    const trimmed = query.trim();
+    if (trimmed.length === 1 || (trimmed.length === 0 && !trending)) {
       searchSeq.current += 1;
       setResults([]);
+      setNextPage(undefined);
       setLoading(false);
       return undefined;
     }
-    const timeout = window.setTimeout(() => search(query), 350);
+    const timeout = window.setTimeout(() => load(query, 1), trimmed.length === 0 ? 0 : 350);
     return () => window.clearTimeout(timeout);
-  }, [query, search]);
+  }, [query, load, trending]);
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = (evt) => {
     evt.preventDefault();
-    search(query);
+    load(query, 1);
   };
+
+  const handleScroll: UIEventHandler<HTMLDivElement> = (evt) => {
+    if (loading || nextPage === undefined) return;
+    const target = evt.currentTarget;
+    if (target.scrollHeight - target.scrollTop - target.clientHeight < LOAD_MORE_THRESHOLD_PX) {
+      load(query, nextPage);
+    }
+  };
+
+  const placeholder =
+    gifSearchPlaceholder(gifConfig) ?? t('modernization.gif.search_placeholder', 'Search GIFs');
+  const attribution = gifAttribution(gifConfig);
+  const showingTrending = query.trim().length === 0 && trending;
 
   if (!enabled) {
     return (
@@ -111,14 +153,14 @@ export function GifPicker({
     <Box
       className={depthCss.floatingSurface}
       direction="Column"
-      style={{ width: toRem(360), maxWidth: '80vw', borderRadius: config.radii.R400 }}
+      style={{ width: toRem(420), maxWidth: '80vw', borderRadius: config.radii.R400 }}
     >
       <Header size="500" style={{ padding: `0 ${config.space.S300}` }}>
         <Box as="form" onSubmit={handleSubmit} grow="Yes" gap="200">
           <Input
             autoFocus
             variant="Background"
-            placeholder={t('modernization.gif.search_placeholder', 'Search GIFs')}
+            placeholder={placeholder}
             aria-label={t('modernization.gif.search_aria_label', 'Search GIFs')}
             value={query}
             onChange={(evt) => setQuery(evt.currentTarget.value)}
@@ -134,7 +176,23 @@ export function GifPicker({
           </Button>
         </Box>
       </Header>
-      <Scroll size="300" hideTrack visibility="Hover">
+      {showingTrending && (
+        <Text
+          size="L400"
+          priority="300"
+          style={{ padding: `${config.space.S200} ${config.space.S400} 0` }}
+        >
+          {t('modernization.gif.trending', 'Trending')}
+        </Text>
+      )}
+      <Scroll
+        size="300"
+        hideTrack
+        visibility="Hover"
+        style={{ maxHeight: toRem(360) }}
+        onScroll={handleScroll}
+        data-testid="gif-picker-results"
+      >
         <Box
           style={{
             padding: config.space.S300,
@@ -162,8 +220,8 @@ export function GifPicker({
             <Avatar
               as="button"
               key={`${gif.provider ?? 'custom'}-${gif.id}`}
-              size="500"
               radii="300"
+              style={{ width: '100%', height: toRem(112) }}
               title={gif.title}
               aria-label={t('modernization.gif.select_aria_label', 'Send {{title}}', {
                 title: gif.title,
@@ -185,6 +243,16 @@ export function GifPicker({
           ))}
         </Box>
       </Scroll>
+      {attribution && (
+        <Text
+          size="T200"
+          priority="300"
+          align="Right"
+          style={{ padding: `${config.space.S100} ${config.space.S300} ${config.space.S200}` }}
+        >
+          {attribution}
+        </Text>
+      )}
     </Box>
   );
 }

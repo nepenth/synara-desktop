@@ -110,6 +110,10 @@ import { stopPropagation } from '../../utils/keyboard';
 import { formatCoreAgentApprovalPrompt } from '../../utils/agentApprovals';
 import { NativeFormattedBody } from './nativeTimelineFormattedBody';
 import { NativePlainMessageBody, NativeTimelineLinkUnfurl } from './nativeLinkUnfurlCard';
+import { NativeInlineGif, NativeXPostEmbed } from './nativeRichLinkEmbeds';
+import { messageInlineGif } from '../../utils/gifLinks';
+import { xStatusId } from '../../utils/xEmbed';
+import { firstTimelinePreviewUrl, shouldSkipMessageUnfurl } from './nativeLinkUnfurl';
 import { copyRichTextToClipboard } from '../../utils/dom';
 import { prepareNativeFormattedBody } from './nativeTimelineRichText';
 import {
@@ -1914,6 +1918,8 @@ const NativeTimelineRowImpl = ({
   const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
   const [dateFormatString] = useSetting(settingsAtom, 'dateFormatString');
   const [legacyUsernameColor] = useSetting(settingsAtom, 'legacyUsernameColor');
+  const [inlineGifLinks] = useSetting(settingsAtom, 'inlineGifLinks');
+  const [xEmbeds] = useSetting(settingsAtom, 'xEmbeds');
   // "Legacy Username Color": per-user palette instead of the heading colour.
   const senderNameStyle = legacyUsernameColor
     ? { color: colorMXID(rowSenderId(row) ?? '') }
@@ -2115,6 +2121,19 @@ const NativeTimelineRowImpl = ({
         ? formatCoreAgentApprovalPrompt(row.body)
         : undefined;
       const mentionsMe = nativeFormattedBodyMentionsUser(row.formattedBody, getMyUserId());
+      const embedsAllowed =
+        !approvalPrompt &&
+        !agentPayload &&
+        !shouldSkipMessageUnfurl({ messageType: row.messageType, hasMedia: Boolean(row.media) });
+      const inlineGif =
+        embedsAllowed && inlineGifLinks && !row.formattedBody && !isEmote
+          ? messageInlineGif(row.body)
+          : undefined;
+      const embedUrl =
+        embedsAllowed && xEmbeds && !inlineGif
+          ? firstTimelinePreviewUrl(row.body, row.formattedBody)
+          : undefined;
+      const xPostUrl = embedUrl && xStatusId(embedUrl) ? embedUrl : undefined;
       const editableInPlace =
         Boolean(eventId) &&
         !row.media &&
@@ -2227,7 +2246,9 @@ const NativeTimelineRowImpl = ({
                     />
                   ) : (
                     <div className={htmlCss.MessageBody}>
-                      {row.formattedBody ? (
+                      {inlineGif ? (
+                        <NativeInlineGif gif={inlineGif} />
+                      ) : row.formattedBody ? (
                         <NativeFormattedBody
                           html={row.formattedBody}
                           fallbackBody={row.body}
@@ -2253,6 +2274,7 @@ const NativeTimelineRowImpl = ({
                       ) : null}
                     </div>
                   )}
+                  {xPostUrl ? <NativeXPostEmbed url={xPostUrl} /> : null}
                   <NativeTimelineLinkUnfurl
                     roomId={roomId}
                     sessionGeneration={sessionGeneration}
@@ -2261,7 +2283,7 @@ const NativeTimelineRowImpl = ({
                     formattedBody={row.formattedBody}
                     messageType={row.messageType}
                     hasMedia={Boolean(row.media)}
-                    skip={Boolean(approvalPrompt || agentPayload)}
+                    skip={Boolean(approvalPrompt || agentPayload || inlineGif || xPostUrl)}
                     originServerTs={originServerTs}
                   />
                   <NativeTimelineThreadSurface

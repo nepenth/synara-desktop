@@ -27,6 +27,7 @@ mod desktop_unread_badge;
 mod desktop_url;
 mod desktop_webview_performance;
 mod desktop_window_drag;
+mod desktop_x_embed;
 // P1.2: compile-only Matrix Rust SDK linkage; no production client session.
 // P1.3: Matrix IPC schema foundation (types/helpers only; no production commands).
 mod matrix;
@@ -634,6 +635,7 @@ pub fn run() {
             desktop_notifications::desktop_dismiss_all_notifications,
             desktop_notifications::desktop_take_notification_responses,
             desktop::desktop_open_external_url,
+            desktop_x_embed::desktop_x_post,
             desktop_file_transfer::desktop_save_file,
             desktop_file_transfer::desktop_save_file_begin,
             desktop_file_transfer::desktop_save_file_chunk,
@@ -857,6 +859,7 @@ pub fn run() {
             matrix::auth::product::matrix_threepid_request_email_token,
             matrix::auth::product::matrix_threepid_add_email,
             matrix::auth::product::matrix_threepid_add_email_password,
+            matrix::auth::product::matrix_change_own_password,
             matrix::auth::product::matrix_set_room_name,
             matrix::auth::product::matrix_set_room_topic,
             matrix::auth::product::matrix_set_room_avatar,

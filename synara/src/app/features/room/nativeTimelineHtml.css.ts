@@ -968,6 +968,59 @@ export const UnfurlThumb = style({
   background: color.Surface.ContainerHover,
 });
 
+/** A GIF link played in place of its text (see `NativeInlineGif`). */
+export const InlineGif = style({
+  display: 'block',
+  maxWidth: `min(100%, ${toRem(320)})`,
+  maxHeight: toRem(280),
+  marginTop: config.space.S100,
+  borderRadius: config.radii.R400,
+  background: color.Surface.ContainerHover,
+});
+
+export const XPostCard = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: config.space.S200,
+  maxWidth: toRem(460),
+  minWidth: 0,
+  marginTop: config.space.S200,
+  padding: config.space.S300,
+  border: `1px solid ${color.Surface.ContainerLine}`,
+  borderRadius: config.radii.R400,
+  background: color.Surface.Container,
+});
+
+export const XPostAvatar = style({
+  width: toRem(32),
+  height: toRem(32),
+  borderRadius: '50%',
+  flexShrink: 0,
+  objectFit: 'cover',
+});
+
+export const XPostMedia = style({
+  display: 'block',
+  width: '100%',
+  maxHeight: toRem(420),
+  objectFit: 'contain',
+  borderRadius: config.radii.R300,
+  background: '#000',
+});
+
+export const XPostMediaGrid = style({
+  display: 'grid',
+  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+  gap: config.space.S100,
+});
+
+export const XPostSource = style({
+  alignSelf: 'flex-start',
+  fontSize: toRem(12),
+  color: 'inherit',
+  opacity: 0.75,
+});
+
 const historyStatusOverlay = {
   position: 'absolute',
   top: 0,

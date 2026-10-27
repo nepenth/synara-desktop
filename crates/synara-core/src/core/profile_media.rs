@@ -286,6 +286,21 @@ pub(super) fn threepid_owner_error(diagnostic_id: &'static str) -> MatrixIpcErro
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
+pub(super) fn password_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-password.current-empty"
+        | "v-password.current-too-long"
+        | "v-password.new-empty"
+        | "v-password.new-too-long"
+        | "v-password.current-wrong"
+        | "v-password.weak"
+        | "v-password.auth-unsupported" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-password.no-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
 /// Typed `matrix_ignored_users_snapshot`.
 pub(super) async fn ignored_users_snapshot(
     state: &Arc<CoreState>,

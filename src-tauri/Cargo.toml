@@ -3,7 +3,7 @@
 [package]
 publish.workspace = true
 name = "synara"
-version = "2.3.0"
+version = "2.4.0"
 description = "A modern Matrix client"
 authors.workspace = true
 license.workspace = true
@@ -16,6 +16,9 @@ rust-version.workspace = true
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+# X post embeds fetch public post JSON natively (desktop_x_embed.rs); the
+# crate is already in the graph through synara-core.
+reqwest = { workspace = true, features = ["rustls", "http2"] }
 serde_json = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 # Desktop shares full-app policy/owners without the Apple UniFFI surface.

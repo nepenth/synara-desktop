@@ -1,0 +1,3 @@
+Synara 2.4.0 matches the desktop 2.4.0 release. The iOS app itself has no visible changes in this build.
+
+Please test: signing in, sending messages and opening rooms from notifications, to confirm nothing regressed.
