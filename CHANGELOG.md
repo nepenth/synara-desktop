@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [2.4.0] - 2026-10-27
+
+- GIFs (desktop): GIF search now uses Klipy, because Tenor's API shut down on 2026-06-30. The picker shows trending GIFs as soon as it opens, loads more as you scroll, and reads "Search KLIPY" and "Powered by KLIPY" as Klipy requires. Typing `/gif` or `/gif high five` opens the picker with that search. Klipy and GIPHY forbid re-hosting their GIFs, so a GIF is sent as its link and Synara plays it inline, loaded straight from the provider; other Matrix apps show the link. Settings → General → "Play GIF Links Inline" (on by default) turns the inline GIFs off. GIF search stays off in builds made without a Klipy key (`SYNARA_KLIPY_API_KEY`).
+- X posts (desktop): with Settings → General → "Show X Posts" turned on (off by default), an x.com or twitter.com post link shows the post's author, text and photos, and its video plays in the conversation. Synara fetches the post from X's public embed endpoint, so X can see your IP address.
+- Password (desktop): Settings → Account has a Password section to change your password, confirmed with your current one, and optionally sign out your other devices. On homeservers that manage accounts on their own site, such as matrix.org, it opens that account page instead.
+- Room list (desktop): a room you create or join no longer stays "Empty Room" in the list after its name arrives or changes.
+
 ## [2.3.0] - 2026-10-21
 
 - Redact (desktop): choosing Redact on a message, in the room or in a thread, now asks "Remove this message? This can't be undone." first. Cancel is the default; Escape and clicking outside also cancel, and focus returns to the message's menu button. Only Remove deletes the message for everyone.
