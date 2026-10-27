@@ -1,5 +1,6 @@
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 use keyring::Entry;
+#[cfg(any(target_os = "macos", target_os = "linux", test))]
 use keyring::Error as KeyringError;
 use serde::Serialize;
 #[cfg(target_os = "linux")]
@@ -48,7 +49,9 @@ pub(crate) const DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_ACCESS_DENIED: &str =
 pub(crate) const DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_UNAVAILABLE: &str =
     "macos-keychain-unavailable";
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 pub(crate) const DESKTOP_SESSION_CREDENTIAL_SERVICE: &str = "com.whylandcreative.synara.desktop";
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 const LEGACY_RENDERER_SESSION_CREDENTIALS: [(&str, &str); 2] = [
     (DESKTOP_SESSION_CREDENTIAL_SERVICE, "matrix-session"),
     ("app.synara.desktop", "matrix-session"),

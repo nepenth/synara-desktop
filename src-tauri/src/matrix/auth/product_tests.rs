@@ -4761,7 +4761,9 @@ async fn password_login_activation_failure_revokes_token_before_metadata_without
         drop(guard);
         drop(owner);
         drop(client);
-        fs::remove_dir_all(root).unwrap();
+        // Best effort: on Windows the SDK's SQLite pool can still hold the
+        // files open here, and open files cannot be deleted.
+        let _ = fs::remove_dir_all(root);
     }
 }
 

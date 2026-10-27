@@ -1,9 +1,9 @@
 name: Windows spike
 
-# What breaks when the desktop app is built for Windows, plus an unsigned
-# test installer. Manual dispatch, so it never runs on pull requests or
-# blocks the Quality gate. Every probe keeps going past failures so one run
-# reports them all; docs/windows-support-spike.md records the findings.
+# Windows compile and test probe, plus an unsigned test installer. Manual
+# dispatch, so it never runs on pull requests or blocks the Quality gate.
+# Every probe keeps going past failures so one run reports them all, then the
+# run fails if any did; docs/windows-support-spike.md records the findings.
 on:
   workflow_dispatch:
   # TEMPORARY: GitHub only dispatches workflows present on the default branch,
@@ -95,32 +95,6 @@ jobs:
           set -o pipefail
           cargo test --locked -p synara-core --features search-index,x509-identity --no-fail-fast --target "$TARGET" 2>&1 | tee "$LOGS/cargo-test-synara-core-desktop.log"
 
-      # The build entry points, run the way a Windows developer would.
-      - name: Setup Node.js
-        if: always()
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-          package-manager-cache: false
-
-      - name: Probe the tauri npm script from cmd
-        id: npm_tauri
-        if: always()
-        continue-on-error: true
-        shell: cmd
-        run: npm run tauri -- --version
-
-      - name: Probe the Tauri beforeBuildCommand
-        id: build_runtime
-        if: always()
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          {
-            npm ci --prefix synara --no-audit --no-fund
-            node scripts/build-runtime.mjs
-          } 2>&1 | tee "$LOGS/build-runtime.log"
-
       - name: Summarize probe outcomes
         if: always()
         run: |
@@ -129,8 +103,6 @@ jobs:
             echo "synara-lib-tests=${{ steps.shell_tests.outcome }}"
             echo "synara-core-tests=${{ steps.core_tests.outcome }}"
             echo "synara-core-desktop-tests=${{ steps.core_desktop_tests.outcome }}"
-            echo "npm-run-tauri=${{ steps.npm_tauri.outcome }}"
-            echo "build-runtime=${{ steps.build_runtime.outcome }}"
           } | tee "$LOGS/outcomes.txt" >> "$GITHUB_STEP_SUMMARY"
           for log in "$LOGS"/cargo-*.log; do
             echo "== $(basename "$log")"
@@ -144,6 +116,19 @@ jobs:
           name: windows-spike-logs
           path: windows-spike-logs
           retention-days: 14
+
+      # Linux CI denies warnings; Windows-only dead code would otherwise drift.
+      - name: Fail if any probe failed or warned
+        if: always()
+        run: |
+          if grep -E '^warning: ' "$LOGS/cargo-check-workspace.log"; then
+            echo "Windows-only compiler warnings; see cargo-check-workspace.log." >&2
+            exit 1
+          fi
+          if grep -qv '=success$' "$LOGS/outcomes.txt"; then
+            echo "A Windows probe failed; see windows-spike-logs." >&2
+            exit 1
+          fi
 
   # An unsigned test installer. Nothing is signed or published; Windows
   # SmartScreen warns on first run ("More info" > "Run anyway").
@@ -187,9 +172,10 @@ jobs:
         run: npm run test:modernization
         working-directory: synara
 
-      # Calls the Tauri CLI directly: `npm run tauri` needs bash on Windows.
+      # From cmd, the way a Windows developer runs it.
       - name: Build MSI and NSIS installers
-        run: npx tauri build --bundles msi,nsis
+        shell: cmd
+        run: npm run tauri build -- --bundles msi,nsis
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
 

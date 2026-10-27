@@ -78,7 +78,7 @@ fn same_user_different_homeserver_isolated() {
 
 #[test]
 fn same_identity_derives_stable_paths_and_key_ids() {
-    let root = PathBuf::from("/tmp/synara-app-data");
+    let root = std::env::temp_dir().join("synara-app-data");
     let p1 = StorePaths::derive(&root, &alice()).unwrap();
     let p2 = StorePaths::derive(&root, &alice()).unwrap();
     assert_eq!(p1, p2);
@@ -129,7 +129,7 @@ fn ensure_dirs_creates_layout_without_wiping_existing() {
 
 #[test]
 fn layout_serializes_without_secrets_or_absolute_paths() {
-    let root = PathBuf::from("/var/app");
+    let root = std::env::temp_dir().join("synara-layout-app");
     let paths = StorePaths::derive(&root, &alice()).unwrap();
     let layout = paths.layout();
     let json = serde_json::to_string(&layout).unwrap();
@@ -139,7 +139,7 @@ fn layout_serializes_without_secrets_or_absolute_paths() {
     assert!(json.contains("confinedUnderMatrixRoot"));
     assert!(!json.contains("access_token"));
     assert!(!json.contains("storeKey"));
-    assert!(!json.contains("/var/app"));
+    assert!(!json.contains("synara-layout-app"));
     assert!(!json.contains(paths.account_root().to_string_lossy().as_ref()));
     assert!(!json.contains(paths.state_dir().to_string_lossy().as_ref()));
     let back: StoreLayout = serde_json::from_str(&json).unwrap();

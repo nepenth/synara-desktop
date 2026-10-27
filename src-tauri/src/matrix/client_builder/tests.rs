@@ -63,7 +63,7 @@ fn desktop_user_agent_names_the_app_version_and_sdk_pin() {
         synara_core::app::store::AccountIdentity::new("@alice:example.org", "https://example.org")
             .unwrap();
     let config = super::desktop_client_config(
-        std::path::Path::new("/tmp/synara-desktop-ua-test"),
+        &std::env::temp_dir().join("synara-desktop-ua-test"),
         identity,
         None,
     )

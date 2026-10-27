@@ -8,8 +8,10 @@
 use url::Url;
 
 /// Packaged macOS and Linux assets.
+#[cfg(any(not(target_os = "windows"), test))]
 pub const CUSTOM_SCHEME_ASSET_ORIGIN: &str = "tauri://localhost";
 /// Packaged Windows assets (Tauri's default, `useHttpsScheme` off).
+#[cfg(any(target_os = "windows", test))]
 pub const WINDOWS_ASSET_ORIGIN: &str = "http://tauri.localhost";
 
 #[cfg(not(target_os = "windows"))]
