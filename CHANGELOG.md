@@ -8,6 +8,7 @@
 - X posts (desktop): with Settings → General → "Show X Posts" turned on (off by default), an x.com or twitter.com post link shows the post's author, text and photos, and its video plays in the conversation. Synara fetches the post from X's public embed endpoint, so X can see your IP address.
 - Password (desktop): Settings → Account has a Password section to change your password, confirmed with your current one, and optionally sign out your other devices. On homeservers that manage accounts on their own site, such as matrix.org, it opens that account page instead.
 - Room list (desktop): a room you create or join no longer stays "Empty Room" in the list after its name arrives or changes.
+- Dependencies: update ctutils to 0.4.6 for RUSTSEC-2026-0385 and zstd-sys to 2.1.2 for RUSTSEC-2026-0410. RUSTSEC-2026-0391, RUSTSEC-2026-0398 and RUSTSEC-2026-0403 in zstd 0.13.3 and zstd-safe 7.3.0 have no compatible fix while Matrix SDK search pins Tantivy to zstd 0.13. Tantivy never calls the affected functions, so the audit ignores them as a one-time exception until that changes (`docs/rust-dependency-security.md`).
 
 ## [2.3.0] - 2026-10-21
 

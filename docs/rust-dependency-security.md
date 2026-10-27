@@ -2,9 +2,44 @@
 
 Reviewed against the consolidated production workspace lockfile on 2026-09-30.
 The dependency owner is the Synara maintainer responsible for Cargo and SDK
-updates. `cargo audit` runs without an advisory ignore list; informational
-warnings remain visible in CI. Reassess the source evidence below whenever
-Matrix SDK, Tantivy, Tauri, GTK/WebKit, or their lockfile entries change.
+updates. `cargo audit` runs without an advisory ignore list, apart from the
+one-time [zstd exception](#one-time-zstd-exception-for-240) in
+`.cargo/audit.toml`; informational warnings remain visible in CI. Reassess the
+source evidence below whenever Matrix SDK, Tantivy, Tauri, GTK/WebKit, or their
+lockfile entries change.
+
+## One-time zstd exception for 2.4.0
+
+Approved by the maintainer on 2026-10-27 for the 2.4.0 release.
+`.cargo/audit.toml` ignores three vulnerability advisories that have no
+semver-compatible fix:
+
+- [RUSTSEC-2026-0391](https://rustsec.org/advisories/RUSTSEC-2026-0391.html),
+  zstd 0.13.3: `stream::raw::Encoder::with_context` and
+  `Decoder::with_context` carry an abandoned stream's data into the next one.
+- [RUSTSEC-2026-0398](https://rustsec.org/advisories/RUSTSEC-2026-0398.html),
+  zstd-safe 7.3.0: `Seekable::decompress` and `AdvancedSeekable::decompress`.
+- [RUSTSEC-2026-0403](https://rustsec.org/advisories/RUSTSEC-2026-0403.html),
+  zstd-safe 7.3.0: `DCtx::decompress_stream` on a failed legacy frame.
+
+The fixes are in zstd 0.14.3 and zstd-safe 8.2.0. Both crates reach the
+workspace only through Matrix SDK search 0.19.1 → Tantivy 0.26.2, and Tantivy
+requires `zstd ^0.13`. Tantivy 0.26.2 (`src/store/compression_zstd_block.rs`)
+and tantivy-sstable 0.7.0 (`src/block_reader.rs`, `src/delta.rs`) call only
+`zstd::bulk` (`compress_to_buffer`, `decompress_to_buffer`, `Compressor`,
+`Decompressor`) and `zstd_safe::compress_bound`, never the affected stream or
+seekable functions, and the `seekable` feature is not enabled. The Apple
+graphs exclude search, so iOS and the NSE do not contain zstd. This is
+specific non-applicability in the pinned use, not a claim that the crates
+are fixed.
+
+The same release updated ctutils to 0.4.6 (RUSTSEC-2026-0385) and zstd-sys
+to 2.1.2 (RUSTSEC-2026-0410), which needed no exception.
+
+Exit condition: remove all three ignores, and `.cargo/audit.toml` with them,
+when Matrix SDK search admits a Tantivy that uses zstd >=0.14.3. Reassess
+immediately if another crate starts depending on zstd or Tantivy's zstd calls
+change. The exception does not carry over to any new advisory.
 
 The [dependency PR disposition record](dependency-update-dispositions.md)
 captures the four dependency update PRs at the recorded open-PR snapshot,
