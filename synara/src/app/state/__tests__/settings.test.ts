@@ -42,14 +42,12 @@ test('encrypted state events setting defaults on and is shared', () => {
 test('modernization opt-in settings default off', () => {
   const store = createLocalStorageSettingsStore(createMemoryStorage());
 
-  assert.equal(defaultSettings.gifSearchEnabled, false);
   assert.equal(defaultSettings.experimentalWidgetsEnabled, false);
   assert.deepEqual(defaultSettings.agentWidgetEntries, []);
   assert.equal(store.getSettings().experimentalWidgetsEnabled, false);
   assert.deepEqual(store.getSettings().agentWidgetEntries, []);
   assert.equal(defaultSettings.indexedMessageSearch, true);
   assert.equal(defaultSettings.gifOnboardingDismissed, false);
-  assert.equal(store.getSettings().gifSearchEnabled, false);
   assert.equal(store.getSettings().indexedMessageSearch, true);
   assert.equal('timelineVirtualizationEnabled' in store.getSettings(), false);
   assert.equal(defaultSettings.desktopDiagnosticsEnabled, false);
@@ -57,6 +55,33 @@ test('modernization opt-in settings default off', () => {
   assert.equal(defaultSettings.desktopDiagnosticsSession, false);
   assert.equal(defaultSettings.desktopDiagnosticsRoomState, false);
   assert.equal(defaultSettings.desktopDiagnosticsOverlay, false);
+});
+
+test('GIF search, inline GIF links and X posts default on', () => {
+  const store = createLocalStorageSettingsStore(createMemoryStorage());
+
+  assert.equal(defaultSettings.gifSearchEnabled, true);
+  assert.equal(defaultSettings.inlineGifLinks, true);
+  assert.equal(defaultSettings.xEmbeds, true);
+  assert.equal(store.getSettings().gifSearchEnabled, true);
+  assert.equal(store.getSettings().xEmbeds, true);
+});
+
+test('settings saved before 2.5 turn GIFs and X posts on once; later choices stay', () => {
+  const storage = createMemoryStorage({
+    settings: JSON.stringify({ gifSearchEnabled: false, inlineGifLinks: false, xEmbeds: false }),
+  });
+  const store = createLocalStorageSettingsStore(storage);
+  const migrated = store.getSharedSettings();
+  assert.equal(migrated.gifSearchEnabled, true);
+  assert.equal(migrated.inlineGifLinks, true);
+  assert.equal(migrated.xEmbeds, true);
+
+  // Turning one off afterwards is a choice and survives the next read.
+  store.setSharedSettings({ ...migrated, xEmbeds: false });
+  assert.equal(storage.getObject('settings')?.previewDefaultsVersion, 2);
+  assert.equal(store.getSharedSettings().xEmbeds, false);
+  assert.equal(store.getSharedSettings().gifSearchEnabled, true);
 });
 
 test('shared settings defaults exclude desktop shortcut settings', () => {

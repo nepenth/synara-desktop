@@ -16,6 +16,8 @@ import {
 
 const SHARED_SETTINGS_STORAGE_KEY = 'settings';
 const PLATFORM_SETTINGS_STORAGE_KEY = 'platformSettings';
+/** 2: GIF search and X posts on by default (2.5). */
+const PREVIEW_DEFAULTS_VERSION = 2;
 export type DateFormat =
   'D MMM YYYY' | 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY/MM/DD' | 'YYYY-MM-DD' | '';
 export type MessageSpacing = '0' | '100' | '200' | '300' | '400' | '500';
@@ -65,6 +67,12 @@ export interface SharedSettings {
   inlineGifLinks: boolean;
   /** Show X posts, with their video, for x.com links; the reader's device contacts X. */
   xEmbeds: boolean;
+  /**
+   * The GIF and X post defaults this snapshot has taken. Every save writes the
+   * whole snapshot, so a stored `false` from before 2.5 was the old default,
+   * not a choice; reading such a snapshot turns them on once.
+   */
+  previewDefaultsVersion: number;
   showHiddenEvents: boolean;
   legacyUsernameColor: boolean;
 
@@ -145,11 +153,12 @@ export const defaultSharedSettings: SharedSettings = {
   hideMembershipEvents: false,
   hideNickAvatarEvents: true,
   mediaAutoLoad: true,
-  gifSearchEnabled: false,
+  gifSearchEnabled: true,
   indexedMessageSearch: true,
   gifOnboardingDismissed: false,
   inlineGifLinks: true,
-  xEmbeds: false,
+  xEmbeds: true,
+  previewDefaultsVersion: PREVIEW_DEFAULTS_VERSION,
   showHiddenEvents: false,
   legacyUsernameColor: false,
 
@@ -215,6 +224,24 @@ const RETIRED_DESKTOP_SHORTCUTS = {
   desktopShortcutLater: 'CmdOrCtrl+Shift+L',
   desktopShortcutNotifications: 'CmdOrCtrl+Shift+N',
 } as const;
+
+/**
+ * Snapshots saved before 2.5 hold GIF search and X posts off, the old
+ * defaults, so they move to the 2.5 defaults once.
+ */
+const migratePreviewDefaults = (
+  settings: SharedSettings,
+  stored: Record<string, unknown> | undefined
+): SharedSettings =>
+  stored && stored.previewDefaultsVersion !== PREVIEW_DEFAULTS_VERSION
+    ? {
+        ...settings,
+        gifSearchEnabled: true,
+        inlineGifLinks: true,
+        xEmbeds: true,
+        previewDefaultsVersion: PREVIEW_DEFAULTS_VERSION,
+      }
+    : settings;
 
 /**
  * A stored set equal to the retired defaults was never customised (it is
@@ -319,7 +346,10 @@ export const createLocalStorageSettingsStore = (storage: SettingsStorage): Setti
 
     return {
       shared: sanitizeSharedSettings(
-        pickKnownSettings(defaultSharedSettings, legacyOrSharedSettings)
+        migratePreviewDefaults(
+          pickKnownSettings(defaultSharedSettings, legacyOrSharedSettings),
+          legacyOrSharedSettings
+        )
       ),
       platform: sanitizePlatformSettings(
         migrateRetiredShortcutDefaults(
