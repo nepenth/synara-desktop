@@ -182,6 +182,11 @@ jobs:
         run: npm ci
         working-directory: synara
 
+      - name: Run renderer unit tests
+        continue-on-error: true
+        run: npm run test:modernization
+        working-directory: synara
+
       # Calls the Tauri CLI directly: `npm run tauri` needs bash on Windows.
       - name: Build MSI and NSIS installers
         run: npx tauri build --bundles msi,nsis

@@ -6,12 +6,6 @@ use crate::build_info;
 use crate::desktop_notification_sound;
 use crate::desktop_sanitize::sanitize_route;
 use crate::desktop_secret_store::DesktopSecretStoreStatus;
-#[cfg(any(target_os = "windows", test))]
-use crate::desktop_secret_store::DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED;
-#[cfg(test)]
-use crate::desktop_secret_store::{
-    unavailable_secret_store_status, DESKTOP_SECRET_STORE_BACKEND_NONE,
-};
 use crate::desktop_shortcuts::{
     desktop_set_shortcuts as apply_desktop_shortcuts_command, DesktopShortcutApplyResult,
     DesktopShortcutConfig,
@@ -265,7 +259,6 @@ pub fn desktop_get_performance_capabilities() -> DesktopPerformanceCapabilities 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::desktop_secret_store::bridge_supports_secure_secret_store;
 
     #[test]
     fn performance_capabilities_reflect_platform_support() {
@@ -302,20 +295,6 @@ mod tests {
         assert!(desktop_url::is_safe_agent_url(
             "https://agent.example.org/run"
         ));
-    }
-
-    #[test]
-    fn windows_secret_store_status_mapping_is_explicit_and_non_persistent() {
-        let status = unavailable_secret_store_status(DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED);
-
-        assert!(!status.available);
-        assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_NONE);
-        assert!(!status.can_persist_session);
-        assert_eq!(
-            status.reason,
-            Some(DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED)
-        );
-        assert!(!bridge_supports_secure_secret_store(&status));
     }
 
     #[test]

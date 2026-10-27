@@ -31,6 +31,9 @@ synara-core = { path = "../crates/synara-core", version = "0.1.0", default-featu
 keyring = { version = "3.6.3", default-features = false, features = [
   "apple-native",
   "linux-native-sync-persistent",
+  # Credential Manager. Blobs cap at 2560 bytes, so a password (stored as
+  # UTF-16) at 1280 characters; see docs/windows-support-spike.md.
+  "windows-native",
   "crypto-rust",
 ] }
 tauri = { version = "~2.12.1", features = ["tray-icon", "image-png"] }

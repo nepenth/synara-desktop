@@ -212,7 +212,11 @@ fn keyring_vault_platform_support_matches_cfg() {
     let supported = KeyringStoreKeyVault::platform_supported();
     assert_eq!(
         supported,
-        cfg!(any(target_os = "macos", target_os = "linux"))
+        cfg!(any(
+            target_os = "macos",
+            target_os = "linux",
+            target_os = "windows"
+        ))
     );
 }
 
