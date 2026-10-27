@@ -88,6 +88,22 @@ pub fn overlay_unread_dot(rgba: &[u8], width: u32, height: u32, count: i64) -> O
     Some(out)
 }
 
+/// Windows taskbar overlay: the shell draws a small icon over the bottom-right
+/// of the taskbar button, so the whole square is the attention dot.
+pub fn unread_dot_icon(size: u32) -> Vec<u8> {
+    let mut out = Vec::with_capacity((size * size * 4) as usize);
+    let radius = size as f32 / 2.0;
+    for y in 0..size {
+        for x in 0..size {
+            let distance = (x as f32 + 0.5 - radius).hypot(y as f32 + 0.5 - radius);
+            let cover = (radius - distance).clamp(0.0, 1.0);
+            out.extend_from_slice(&BADGE_RED[..3]);
+            out.push((cover * 255.0) as u8);
+        }
+    }
+    out
+}
+
 fn blend_px(pixels: &mut [u8], width: u32, height: u32, x: i32, y: i32, color: [u8; 4], alpha: u8) {
     if x < 0 || y < 0 {
         return;
@@ -158,6 +174,16 @@ pub fn emit_unity_launcher_badge(_count: i64) {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn taskbar_dot_icon_is_an_opaque_red_disc_with_clear_corners() {
+        let icon = unread_dot_icon(16);
+        assert_eq!(icon.len(), 16 * 16 * 4);
+        let px = |x: usize, y: usize| &icon[(y * 16 + x) * 4..(y * 16 + x) * 4 + 4];
+        assert_eq!(px(8, 8), [220, 50, 47, 255]);
+        assert_eq!(px(0, 0)[3], 0);
+        assert_eq!(px(15, 15)[3], 0);
+    }
 
     #[test]
     fn panel_dot_is_visible_at_16px_and_does_not_encode_the_count() {
