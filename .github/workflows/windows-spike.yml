@@ -6,6 +6,11 @@ name: Windows spike
 # docs/windows-support-spike.md records the findings.
 on:
   workflow_dispatch:
+  # TEMPORARY: GitHub only dispatches workflows present on the default branch,
+  # so the spike runs from a push to its own branch. Removed after the run.
+  push:
+    branches: [claude/windows-spike-17dfda]
+    paths: [.github/workflows/windows-spike.yml]
 
 concurrency:
   group: windows-spike-${{ github.ref_name }}
