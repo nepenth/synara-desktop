@@ -9,13 +9,13 @@ test('permanent approval requires confirmation; cancel sends nothing, deny updat
     page.getByRole('button', { name: 'Approvals · 2 pending', exact: true })
   ).toBeVisible();
   const first = page.getByRole('region', { name: /Approval from Publishing/ });
-  await first.getByRole('button', { name: '♾️ Approve always', exact: true }).click();
+  await first.getByRole('button', { name: 'Approve always', exact: true }).click();
   await expect(first.getByRole('button', { name: /Confirm approve always/ })).toBeFocused();
   await expect(page.getByTestId('fixture-decisions')).toContainText('0 decisions');
   await first.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(first.getByRole('button', { name: /Confirm approve always/ })).toHaveCount(0);
-  await expect(first.getByRole('button', { name: '♾️ Approve always', exact: true })).toBeFocused();
-  await first.getByRole('button', { name: '❌ Deny', exact: true }).click();
+  await expect(first.getByRole('button', { name: 'Approve always', exact: true })).toBeFocused();
+  await first.getByRole('button', { name: 'Deny', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Approvals · 1 pending', exact: true })
   ).toBeVisible();
@@ -32,7 +32,7 @@ test('permanent approval requires confirmation; cancel sends nothing, deny updat
 test('confirm approve always sends the intended native action once', async ({ page }) => {
   await page.goto(route);
   const first = page.getByRole('region', { name: /Approval from Publishing/ });
-  await first.getByRole('button', { name: '♾️ Approve always', exact: true }).click();
+  await first.getByRole('button', { name: 'Approve always', exact: true }).click();
   await first.getByRole('button', { name: /Confirm approve always/ }).click();
   await expect(page.getByTestId('fixture-decisions')).toContainText(
     '1 decisions · agent-approval.approve-always'
@@ -62,7 +62,7 @@ test('expiry removes pending actions at the deadline without a network refresh',
   await expect(page.getByRole('heading', { name: 'No pending approvals' })).toBeVisible();
   await page.getByRole('button', { name: 'Recent · 1', exact: true }).click();
   await expect(page.getByText('Expired', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '✅ Approve once', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Approve once', exact: true })).toHaveCount(0);
 });
 
 test('remote decisions, partial coverage and network failures are visible with recovery', async ({
@@ -78,14 +78,14 @@ test('remote decisions, partial coverage and network failures are visible with r
   await expect(page.getByRole('alert')).toHaveCount(0);
   await page.getByRole('button', { name: 'Decision on another device' }).click();
   await expect(page.getByTestId('pending-count')).toHaveText('0 pending');
-  await expect(page.getByRole('button', { name: '✅ Approve once', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Approve once', exact: true })).toHaveCount(0);
 });
 
 test('rejected decision leaves request available for review and preserves count', async ({
   page,
 }) => {
   await page.goto(`${route}?decisionError`);
-  await page.getByRole('button', { name: '✅ Approve once', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Approve once', exact: true }).first().click();
   await expect(
     page.getByRole('alert').filter({
       hasText: 'Approval could not be submitted. The request may be invalid or expired.',
@@ -93,7 +93,7 @@ test('rejected decision leaves request available for review and preserves count'
   ).toBeVisible();
   await expect(page.getByTestId('pending-count')).toHaveText('2 pending');
   await expect(
-    page.getByRole('button', { name: '✅ Approve once', exact: true }).first()
+    page.getByRole('button', { name: 'Approve once', exact: true }).first()
   ).toBeEnabled();
 });
 
@@ -117,14 +117,14 @@ test('Core-pending unformatted requests show full source and native approval con
   await expect(
     page.getByText('Unrecognized approval request: inspect the original operation', { exact: true })
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: '✅ Approve once', exact: true })).toHaveCount(2);
+  await expect(page.getByRole('button', { name: 'Approve once', exact: true })).toHaveCount(2);
   await expect(page.getByRole('button', { name: 'Open message', exact: true })).toHaveCount(2);
 });
 
 test('command block stays visible through clock updates and refreshes', async ({ page }) => {
   await page.goto(route);
   const card = page.getByRole('region', { name: /^Approval from / }).first();
-  const command = card.getByText('Command: rm -rf ./build/preview', { exact: true });
+  const command = card.locator('pre code', { hasText: 'rm -rf ./build/preview' });
   await expect(command).toBeVisible();
   await page.getByRole('button', { name: 'Refresh approval requests' }).click();
   await expect(command).toBeVisible();
@@ -136,7 +136,7 @@ test('native session generation resets optimistic decisions on the same client f
   page,
 }) => {
   await page.goto(route);
-  await page.getByRole('button', { name: '✅ Approve once', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Approve once', exact: true }).first().click();
   await expect(page.getByTestId('pending-count')).toHaveText('1 pending');
   await expect(page.getByText(/resolved. Available in Recent/)).toBeVisible();
   await page.getByRole('button', { name: 'Restart native session' }).click();
@@ -148,10 +148,10 @@ test('late decision completion from an old session cannot resolve the new sessio
   page,
 }) => {
   await page.goto(`${route}?delayedDecision`);
-  await page.getByRole('button', { name: '✅ Approve once', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Approve once', exact: true }).first().click();
   await page.getByRole('button', { name: 'Restart native session' }).click();
   await expect(
-    page.getByRole('button', { name: '✅ Approve once', exact: true }).first()
+    page.getByRole('button', { name: 'Approve once', exact: true }).first()
   ).toBeEnabled();
   await page.getByRole('button', { name: 'Complete delayed decision' }).click();
   await page.getByRole('button', { name: 'Refresh approval requests' }).click();
@@ -194,7 +194,7 @@ test('Core permissions disable decisions and truncated previews require the sour
 }) => {
   await page.goto(`${route}?noPermission`);
   await expect(
-    page.getByRole('button', { name: '✅ Approve once', exact: true }).first()
+    page.getByRole('button', { name: 'Approve once', exact: true }).first()
   ).toBeDisabled();
   await expect(
     page.getByText('You do not have permission to react in this room.').first()
@@ -205,7 +205,7 @@ test('Core permissions disable decisions and truncated previews require the sour
       'This is a shortened preview. Open the original message to review the full request.'
     )
   ).toHaveCount(2);
-  await expect(page.getByRole('button', { name: '✅ Approve once', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Approve once', exact: true })).toHaveCount(0);
 });
 
 test('healthy idle latest-event coverage has no alarm badge with zero requests', async ({

@@ -206,7 +206,7 @@ export function ApprovalsView({
           </Text>
         </div>
       ) : (
-        <div role="list">
+        <div className={css.List} role="list">
           {visible.map((item) => {
             const prompt = formatCoreAgentApprovalPrompt(item.body);
             const decidedInstant = formatApprovalInstant(item.decidedAt ?? Number.NaN);

@@ -65,7 +65,8 @@ test('identity, composer popouts, and critical approvals use their intended dept
 
   assert.match(userAvatar, /avatarMedia/);
   assert.match(roomAvatar, /avatarMedia/);
-  assert.match(approval, /criticalSurface/);
+  // Approval cards stay flat: one hairline edge, risk shown by the Critical pill.
+  assert.doesNotMatch(approval, /criticalSurface|boxShadow/);
   assert.match(roomInput, /depthCss\.floatingSurface/);
   assert.match(gifPicker, /depthCss\.floatingSurface/);
   assert.match(emojiBoard, /floatingSurface/);
