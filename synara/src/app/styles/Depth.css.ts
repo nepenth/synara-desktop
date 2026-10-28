@@ -36,45 +36,18 @@ export const floatingShadow = `inset 0 1px 0 ${quietEdgeLightStrong}, inset 0 -1
   3
 )} ${toRem(7)} ${quietShadowNear}, 0 ${toRem(12)} ${toRem(30)} ${quietShadowFar}`;
 
-export const criticalShadow = `inset 0 1px 0 ${quietEdgeLightStrong}, 0 ${toRem(3)} ${toRem(
-  8
-)} ${quietShadowNear}, 0 ${toRem(14)} ${toRem(36)} ${quietShadowFar}`;
-
-const accessibilityFallbacks = {
-  '@media': {
-    '(prefers-reduced-transparency: reduce)': {
-      backdropFilter: 'none',
-    },
-    '(prefers-contrast: more)': {
-      backgroundImage: 'none',
-      boxShadow: 'none',
-      borderColor: 'var(--synara-depth-contrast-strong-edge)',
-    },
-  },
-} as const;
-
 export const floatingSurface = style({
-  backgroundColor: `color-mix(in srgb, ${color.SurfaceVariant.Container} 96%, transparent)`,
+  backgroundColor: color.SurfaceVariant.Container,
   backgroundImage: quietSurfaceFold,
   border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
   boxShadow: floatingShadow,
-  backdropFilter: 'blur(18px) saturate(1.08)',
   '@media': {
-    '(prefers-reduced-transparency: reduce)': {
-      backgroundColor: color.SurfaceVariant.Container,
-      backdropFilter: 'none',
-    },
     '(prefers-contrast: more)': {
       backgroundImage: 'none',
       boxShadow: 'none',
       borderColor: 'var(--synara-depth-contrast-strong-edge)',
     },
   },
-});
-
-export const criticalSurface = style({
-  boxShadow: criticalShadow,
-  ...accessibilityFallbacks,
 });
 
 export const avatarSurface = style({
@@ -131,37 +104,22 @@ export const tactileSurface = style({
  * flat tint changes. Resting controls stay on the reading plane.
  */
 export const quietInteractiveSurface = style({
-  transition:
-    'background-color 140ms ease-out, box-shadow 140ms ease-out, transform 140ms ease-out',
+  transition: 'background-color 140ms ease-out, box-shadow 140ms ease-out',
   selectors: {
     '&:not(:disabled):not([aria-disabled=true]):hover, &:not(:disabled):not([aria-disabled=true]):focus-visible':
-      {
-        boxShadow: raisedShadow,
-        transform: `translateY(-${toRem(1)})`,
-      },
-    '&:not(:disabled):not([aria-disabled=true])[aria-pressed=true], &:not(:disabled):not([aria-disabled=true])[aria-selected=true], &:not(:disabled):not([aria-disabled=true])[data-selected=true], &:not(:disabled):not([aria-disabled=true])[aria-current=page]':
       {
         boxShadow: raisedShadow,
       },
     '&:not(:disabled):not([aria-disabled=true]):active': {
       boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
-      transform: 'translateY(0)',
     },
     '&:disabled, &[aria-disabled=true]': {
       boxShadow: 'none',
-      transform: 'none',
     },
   },
   '@media': {
     '(prefers-reduced-motion: reduce)': {
       transition: 'none',
-      transform: 'none',
-      selectors: {
-        '&:hover, &:focus-visible, &[aria-pressed=true], &[aria-selected=true], &[data-selected=true], &[aria-current=page], &:active':
-          {
-            transform: 'none',
-          },
-      },
     },
     '(prefers-contrast: more)': {
       boxShadow: 'none',
