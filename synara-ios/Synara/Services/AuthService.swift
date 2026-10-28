@@ -8,13 +8,27 @@ struct LoginRequest: Equatable {
     /// the typed server, not the client-API host.
     var accountServerName: String? = nil
 
-    /// Full Matrix ID for `username`, completing a bare localpart.
+    /// What goes to `/login`: the username as typed. The homeserver completes
+    /// a bare localpart with its own server name, which can differ from every
+    /// host the app knows (a proxy in front of the server, say).
+    var loginUser: String {
+        username.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Server chosen at sign-in. Core uses it only to find this account's
+    /// store from an earlier sign-in; it is never added to the username.
+    var serverName: String? {
+        accountServerName ?? homeserverURL.host
+    }
+
+    /// Best guess at the account's Matrix ID, for local-store operations
+    /// before the server has named the account. Matches the guess Core makes
+    /// from `loginUser` and `serverName`; never sent to the server.
     var userID: String {
-        let username = username.trimmingCharacters(in: .whitespacesAndNewlines)
-        if username.hasPrefix("@") {
-            return username
+        if loginUser.hasPrefix("@") {
+            return loginUser
         }
-        return "@\(username):\(accountServerName ?? homeserverURL.host ?? "localhost")"
+        return "@\(loginUser.lowercased()):\(serverName ?? "localhost")"
     }
 }
 

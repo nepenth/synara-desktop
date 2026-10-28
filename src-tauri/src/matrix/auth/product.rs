@@ -45,11 +45,13 @@ use tokio::sync::Mutex;
 use zeroize::Zeroize;
 
 use super::{
-    complete_password_reset, existing_sqlite_crypto_device_id, login_with_password,
+    complete_password_reset, existing_sqlite_crypto_device_id, has_account_store,
+    login_ephemeral_user_id, login_with_password, login_with_password_detached,
     normalize_homeserver_url, password_reset_ephemeral_user_id, register_ephemeral_user_id,
     register_submit, request_password_email_token, request_register_email_token, AuthError,
-    LoginOptions, PasswordEmailTokenResult, PasswordResetOutcome, RegisterAuthStage,
-    RegisterFlowsProbe, RegisterSubmitOutcome, RegisterUiaFlow,
+    LoginMethodKind, LoginOptions, LoginResult, LoginUser, PasswordEmailTokenResult,
+    PasswordResetOutcome, RegisterAuthStage, RegisterFlowsProbe, RegisterSubmitOutcome,
+    RegisterUiaFlow,
 };
 
 use crate::matrix::account_data::{

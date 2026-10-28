@@ -186,7 +186,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
 
         do {
             _ = try await SharedCoreSessionLogin.loginWithPassword(
-                userID: "@alice:example.org",
+                user: "@alice:example.org",
                 homeserverURL: "https://matrix.example.org",
                 storeRoot: storeRoot,
                 password: password,
@@ -211,7 +211,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
 
         do {
             _ = try await SharedCoreSessionLogin.loginWithPassword(
-                userID: "not-a-user",
+                user: "not-a-user",
                 homeserverURL: hostileURL,
                 storeRoot: storeRoot,
                 password: password,

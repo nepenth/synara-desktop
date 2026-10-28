@@ -75,6 +75,29 @@ final class AuthServiceTests: XCTestCase {
         XCTAssertEqual(fullID.userID, "@ada:127.0.0.1")
     }
 
+    func testLoginSendsTheUsernameAsTypedBehindAProxyHost() throws {
+        // matrix-v4.example.org proxies a server named matrix.example.org: the
+        // app cannot know that name, so a bare username goes out unchanged
+        // and the server completes it. The guess only finds a local store.
+        let proxied = LoginRequest(
+            homeserverURL: try XCTUnwrap(URL(string: "https://matrix-v4.example.org")),
+            username: " Pete ",
+            password: "password",
+            accountServerName: "matrix-v4.example.org"
+        )
+        XCTAssertEqual(proxied.loginUser, "Pete")
+        XCTAssertEqual(proxied.serverName, "matrix-v4.example.org")
+        XCTAssertEqual(proxied.userID, "@pete:matrix-v4.example.org")
+
+        let fullID = LoginRequest(
+            homeserverURL: try XCTUnwrap(URL(string: "https://matrix-v4.example.org")),
+            username: "@pete:matrix.example.org",
+            password: "password",
+            accountServerName: "matrix-v4.example.org"
+        )
+        XCTAssertEqual(fullID.loginUser, "@pete:matrix.example.org")
+    }
+
     func testMockAuthRecordsRequestsAndReturnsFixture() async throws {
         let homeserverURL = try XCTUnwrap(URL(string: "https://example.org"))
         let fixture = AuthenticatedSession(

@@ -185,13 +185,13 @@ struct SharedCoreAuthService: AuthServicing {
         guard request.password.isEmpty == false else {
             throw LoginError.missingPassword
         }
-        let userID = request.userID
         do {
             let dto = try await SharedCoreSessionLogin.loginWithPassword(
-                userID: userID,
+                user: request.loginUser,
                 homeserverURL: request.homeserverURL.absoluteString,
                 storeRoot: host.storeRoot,
                 password: request.password,
+                serverName: request.serverName,
                 core: host.core
             )
             return AuthenticatedSession(

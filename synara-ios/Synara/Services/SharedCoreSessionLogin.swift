@@ -9,18 +9,23 @@ import SynaraCore
 /// and not `Core.command`. XCTest construction of `SharedCore` is not
 /// iOS-on-engine.
 enum SharedCoreSessionLogin {
+    /// `user` is sent as typed (a full Matrix ID or a bare localpart);
+    /// `serverName` only locates the account's store from an earlier sign-in.
+    /// The session belongs to the `user_id` the server returns.
     static func loginWithPassword(
-        userID: String,
+        user: String,
         homeserverURL: String,
         storeRoot: URL,
         password: String,
+        serverName: String? = nil,
         core: SharedCore
     ) async throws -> SessionLoginDto {
         try await core.loginWithPassword(
-            userId: userID,
+            user: user,
             homeserverUrl: homeserverURL,
             storeRoot: storeRoot.path,
-            password: password
+            password: password,
+            serverName: serverName
         )
     }
 }

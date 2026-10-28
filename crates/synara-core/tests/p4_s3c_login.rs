@@ -70,6 +70,7 @@ fn login_without_vault_fails_closed_without_echoing_password() {
             "https://matrix.example.org".to_owned(),
             root.to_string_lossy().into_owned(),
             password.to_owned(),
+            None,
         ))
         .expect_err("fail-closed vault cannot login");
     let text = format!("{error:?}{error}");
@@ -93,6 +94,7 @@ fn login_rejects_hostile_identity_without_echoing_password() {
             hostile.to_owned(),
             root.to_string_lossy().into_owned(),
             password.to_owned(),
+            None,
         ))
         .expect_err("invalid identity");
     let text = format!("{error:?}{error}");
@@ -114,6 +116,7 @@ fn login_rejects_empty_password_without_echo() {
             "https://matrix.example.org".to_owned(),
             root.to_string_lossy().into_owned(),
             String::new(),
+            None,
         ))
         .expect_err("empty password");
     let text = format!("{error:?}{error}");
@@ -164,6 +167,7 @@ fn login_persist_path_writes_vault_keys_restorable_by_new_shared_core() {
             identity.homeserver_url().to_owned(),
             writer_root.to_string_lossy().into_owned(),
             "must-not-replace-retained-client".to_owned(),
+            None,
         ))
         .expect_err("already retained after persist");
     let retained_text = format!("{retained_login:?}");
@@ -189,6 +193,7 @@ fn login_persist_path_writes_vault_keys_restorable_by_new_shared_core() {
             identity.homeserver_url().to_owned(),
             reader_root.to_string_lossy().into_owned(),
             "must-not-login-after-restore".to_owned(),
+            None,
         ))
         .expect_err("already restored");
     let after_restore_text = format!("{after_restore_login:?}");
