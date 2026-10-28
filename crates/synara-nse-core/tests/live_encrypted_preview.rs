@@ -80,7 +80,13 @@ impl Fixture {
         let vault = Vault::default();
         let core = SharedCore::new_with_secret_store(Box::new(vault.clone()));
         let login = core
-            .login_with_password(user.clone(), homeserver.clone(), store.clone(), password)
+            .login_with_password(
+                user.clone(),
+                homeserver.clone(),
+                store.clone(),
+                password,
+                None,
+            )
             .await
             .map_err(|_| "product login failed")?;
         Ok(Self {

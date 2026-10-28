@@ -78,6 +78,23 @@ pub fn record_session_rotation_outcome(root: &Path, failure: Option<&str>) {
     }
 }
 
+/// Record that a sign-in's extra session could not be logged out (see
+/// `app::auth::DetachedSignIn`): its device stays listed on the server until
+/// removed from another session. Only the fixed outcome is written.
+pub fn record_detached_sign_in_revoke_failed(root: &Path) {
+    let directory = root.join("logs");
+    if fs::create_dir_all(&directory).is_err() {
+        return;
+    }
+    let path = directory.join("matrix-session-lifecycle.log");
+    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(path) {
+        let timestamp = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map_or(0, |time| time.as_millis());
+        let _ = writeln!(file, "[{timestamp}] native detached-sign-in-revoke-failed");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

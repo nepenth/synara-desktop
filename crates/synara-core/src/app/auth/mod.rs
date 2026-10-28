@@ -10,6 +10,7 @@
 
 mod client_config;
 mod crypto_device;
+mod detached_sign_in;
 mod device_name;
 mod discovery;
 mod error;
@@ -25,6 +26,9 @@ mod uia;
 
 pub use client_config::{homeserver_url_for_client_builder, identity_with_discovered_homeserver};
 pub use crypto_device::{existing_sqlite_crypto_device_id, has_account_store};
+pub use detached_sign_in::{
+    forget_login_account, login_store_identity, remember_login_account, DetachedSignIn,
+};
 pub use device_name::{
     host_device_platform, platform_device_display_name, DevicePlatform,
     DEVICE_DISPLAY_NAME_DESKTOP_FALLBACK, DEVICE_DISPLAY_NAME_IOS, DEVICE_DISPLAY_NAME_LINUX,

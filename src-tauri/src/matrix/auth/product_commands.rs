@@ -54,19 +54,29 @@ pub async fn matrix_login_password(
         .map_err(|_| MatrixAuthCommandError::invalid_input("d0.1-invalid-user-identity"))?;
     let app_data_root = app_data_root(&app)?;
     // The account's store can be picked before signing in only when an
-    // earlier sign-in left one. Otherwise the server names the account: a
-    // localpart is never completed with a guessed domain, which breaks
-    // behind a proxy whose host is not the server name.
-    let lookup_identity = login_user
-        .store_lookup_user_id(server_name.as_deref())
-        .and_then(|user_id| AccountIdentity::new(&user_id, &homeserver_url).ok())
-        .filter(|identity| has_account_store(&app_data_root, identity));
+    // earlier sign-in left one: the account this username signed in to last
+    // time, or the guess from the chosen server. Otherwise the server names
+    // the account; a localpart is never completed with a guessed domain,
+    // which breaks behind a proxy whose host is not the server name.
+    let lookup_identity = login_store_identity(
+        &app_data_root,
+        &homeserver_url,
+        &login_user,
+        server_name.as_deref(),
+    );
     let (requested_identity, detached) = match lookup_identity {
         Some(identity) => (identity, None),
         None => {
-            let detached =
-                sign_in_detached(&homeserver_url, &login_user, password.as_str()).await?;
-            (detached.identity.clone(), Some(detached))
+            // Dropped on any early return below, it logs its session out.
+            let detached = sign_in_detached(
+                &app_data_root,
+                &homeserver_url,
+                &login_user,
+                password.as_str(),
+            )
+            .await?;
+            remember_login_account(&app_data_root, &login_user, detached.identity());
+            (detached.identity().clone(), Some(detached))
         }
     };
     let existing_device_id =
@@ -74,7 +84,7 @@ pub async fn matrix_login_password(
             Ok(device_id) => device_id,
             Err(error) => {
                 if let Some(detached) = detached {
-                    detached.revoke().await;
+                    detached.revoke();
                 }
                 if is_recoverable_store_login_diagnostic(&error.diagnostic_id) {
                     state.arm_store_recovery(requested_identity.clone()).await;
@@ -86,7 +96,7 @@ pub async fn matrix_login_password(
     // drop the new device and sign in again reusing the stored one.
     let detached = match detached {
         Some(detached) if existing_device_id.is_some() => {
-            detached.revoke().await;
+            detached.revoke();
             None
         }
         detached => detached,
@@ -102,7 +112,7 @@ pub async fn matrix_login_password(
         Ok(client) => client,
         Err(error) => {
             if let Some(detached) = detached {
-                detached.revoke().await;
+                detached.revoke();
             }
             // The UI can only request archive-and-rebuild after one of these
             // fail-closed diagnostics. Normal login never calls the reset API.
@@ -114,7 +124,11 @@ pub async fn matrix_login_password(
     };
     let attempt = match detached {
         // Checked for sliding sync before that sign-in.
-        Some(detached) => detached.restore_onto(&client, &requested_identity).await,
+        Some(detached) => {
+            detached
+                .restore_onto(&client, super::super::platform_device_display_name())
+                .await
+        }
         None => {
             // Before any device exists: a server without MSC4186 would accept
             // the login and then never sync.
@@ -151,16 +165,20 @@ pub async fn matrix_login_password(
         }
     };
 
-    let live_identity = accept_authenticated_identity(
-        authenticated_login_identity(&result.user_id, &result.homeserver_url, &requested_identity),
-        || async {
-            let _ = bounded_remote_logout(
-                VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
-                client.matrix_auth().logout(),
-            )
-            .await;
-        },
-    )
+    let checked_identity =
+        authenticated_login_identity(&result.user_id, &result.homeserver_url, &requested_identity);
+    if checked_identity.is_err() {
+        // The store looked up for this username belongs to another account;
+        // look it up afresh next time.
+        forget_login_account(&app_data_root, &homeserver_url, &login_user);
+    }
+    let live_identity = accept_authenticated_identity(checked_identity, || async {
+        let _ = bounded_remote_logout(
+            VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
+            client.matrix_auth().logout(),
+        )
+        .await;
+    })
     .await?;
 
     let identity = MatrixLoginIdentity {
@@ -239,6 +257,7 @@ pub async fn matrix_login_password(
     })
     .await?;
     drop(install);
+    remember_login_account(&app_data_root, &login_user, &live_identity);
     // "Verify this device" is offered once, after a password sign-in.
     if let Some(sign_in) = sign_in {
         let _ = core.arm_device_verification_prompt(sign_in);
@@ -1741,19 +1760,14 @@ pub(super) async fn build_register_ephemeral_client(
         .map_err(|_| MatrixAuthCommandError::unavailable("v-auth.4b-register-client-build-failed"))
 }
 
-/// A password sign-in made before the account's store is known: the server
-/// has named the account, and its session is not applied to any client yet.
-pub(super) struct DetachedSignIn {
-    pub(super) identity: AccountIdentity,
-    secrets: super::super::RegisterCompleteSecrets,
-}
-
 /// Sign in on a memory-only client so the server names the account.
 ///
-/// Used when no local store with a reusable device was found before signing
-/// in. The `/login` identifier is what the user typed; the account identity
-/// is the returned `user_id` with the URL the user signed in through.
+/// Used when no local store from an earlier sign-in matches what was typed.
+/// The `/login` identifier is what the user typed; the account identity is
+/// the returned `user_id` with the URL the user signed in through. A revoke
+/// that fails is recorded in `app_data_root`'s session journal.
 pub(super) async fn sign_in_detached(
+    app_data_root: &Path,
     homeserver_url: &str,
     user: &LoginUser,
     password: &str,
@@ -1771,78 +1785,18 @@ pub(super) async fn sign_in_detached(
     ));
     let config = desktop_client_config(&unused_root, synthetic, None)
         .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-client-build-failed"))?;
-    let client = synara_core::app::client_builder::build_memory_only_client(&config)
-        .await
-        .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-client-build-failed"))?;
-    // Before any device exists: a server without MSC4186 would accept the
-    // login and then never sync.
-    require_native_sliding_sync(&client)
-        .await
-        .map_err(map_auth_error)?;
-    let secrets = login_with_password_detached(
-        &client,
+    DetachedSignIn::sign_in(
+        config,
         user,
         password,
         &LoginOptions {
             request_refresh_token: true,
             ..LoginOptions::default()
         },
+        app_data_root,
     )
     .await
-    .map_err(map_auth_error)?;
-    match AccountIdentity::new(&secrets.user_id, homeserver_url) {
-        Ok(identity) => Ok(DetachedSignIn { identity, secrets }),
-        Err(_) => {
-            let _ = revoke_uninstalled_registration(&secrets).await;
-            Err(MatrixAuthCommandError::invalid_input(
-                "d0.1-login-identity-invalid",
-            ))
-        }
-    }
-}
-
-impl DetachedSignIn {
-    /// Best-effort remote logout of a session that will not be installed.
-    pub(super) async fn revoke(self) {
-        let _ = revoke_uninstalled_registration(&self.secrets).await;
-    }
-
-    /// Apply the session to the account store's unauthenticated `client`.
-    /// If it does not take, the remote session is revoked here; once it
-    /// has, the caller's login rollback owns it.
-    pub(super) async fn restore_onto(
-        self,
-        client: &Client,
-        identity: &AccountIdentity,
-    ) -> Result<LoginResult, AuthError> {
-        // Session install must go through lifecycle (guardrail: no Client::restore_session under matrix/auth/).
-        let restored = match SessionMaterial::from_matrix_tokens(
-            identity,
-            self.secrets.device_id.as_str(),
-            self.secrets.access_token.as_str(),
-            self.secrets.refresh_token.as_ref().map(|t| t.as_str()),
-        ) {
-            Ok(material) => restore_session_onto_client(client, identity, &material)
-                .await
-                .is_ok(),
-            Err(_) => false,
-        };
-        if !restored {
-            if client.session().is_none() {
-                self.revoke().await;
-            }
-            return Err(AuthError::SdkInvariant {
-                diagnostic_id: "p3.2-login-restore-failed",
-            });
-        }
-        Ok(LoginResult {
-            user_id: self.secrets.user_id.clone(),
-            device_id: self.secrets.device_id.clone(),
-            homeserver_url: client.homeserver().to_string(),
-            device_display_name: super::super::platform_device_display_name().to_owned(),
-            method: LoginMethodKind::Password,
-        })
-    }
+    .map_err(map_auth_error)
 }
 
 pub(super) fn map_register_auth_error(error: AuthError) -> MatrixAuthCommandError {
@@ -2088,15 +2042,20 @@ mod tests {
             .unwrap()
             .into_string();
 
+        let root = std::env::temp_dir().join(format!(
+            "synara-desktop-detached-sign-in-{}",
+            std::process::id()
+        ));
         let detached = sign_in_detached(
+            &root,
             &homeserver_url,
             &LoginUser::parse("Pete").unwrap(),
             "fixture-password",
         )
         .await
         .expect("detached sign-in");
-        assert_eq!(detached.identity.user_id(), "@pete:matrix.example.org");
-        assert_eq!(detached.identity.homeserver_url(), homeserver_url);
+        assert_eq!(detached.identity().user_id(), "@pete:matrix.example.org");
+        assert_eq!(detached.identity().homeserver_url(), homeserver_url);
 
         let requests = server.server().received_requests().await.unwrap();
         let login = requests
@@ -2110,7 +2069,23 @@ mod tests {
         );
         assert_eq!(body["refresh_token"], true);
 
-        detached.revoke().await;
+        // Dropped without being installed (an early return, or a cancelled
+        // command): the session is logged out in the background.
+        drop(detached);
+        let mut logged_out = false;
+        for _ in 0..100 {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            let requests = server.server().received_requests().await.unwrap();
+            if requests
+                .iter()
+                .any(|request| request.url.path().ends_with("/client/v3/logout"))
+            {
+                logged_out = true;
+                break;
+            }
+        }
+        assert!(logged_out, "a dropped detached sign-in logs out");
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

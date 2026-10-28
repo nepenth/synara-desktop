@@ -1,8 +1,9 @@
 //! SharedCore facade regression tests.
 
 use super::*;
+use crate::app::auth::has_account_store;
 use crate::app::lifecycle::persist_session_material;
-use crate::app::store::StoreKeyId;
+use crate::app::store::{StoreKeyId, StorePaths};
 use crate::transport::MatrixIpcErrorCategory;
 use std::collections::HashMap;
 use std::fs;
@@ -1973,9 +1974,11 @@ async fn ios_matrix_id_login_behind_a_proxy_host_is_sent_as_typed() {
     let _ = fs::remove_dir_all(root);
 }
 
-/// A returning user behind the proxy: the guess finds no store, the server
-/// names an account that has one, so the new device is dropped and the
-/// sign-in repeats with the stored device.
+/// A returning user behind the proxy whose account was not remembered (it
+/// signed in with an older build): the guess finds no store, the server
+/// names an account that has one, so the new device is revoked in the
+/// background, retried after a failed `/logout`, and the sign-in repeats with
+/// the stored device.
 #[tokio::test]
 async fn ios_localpart_login_reuses_the_device_of_the_returned_account() {
     use matrix_sdk::test_utils::mocks::MatrixMockServer;
@@ -2020,8 +2023,15 @@ async fn ios_localpart_login_reuses_the_device_of_the_returned_account() {
         .await;
     Mock::given(method("POST"))
         .and(path("/_matrix/client/v3/logout"))
+        .respond_with(ResponseTemplate::new(502))
+        .up_to_n_times(1)
+        .with_priority(1)
+        .mount(server.server())
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/_matrix/client/v3/logout"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
-        .expect(1)
+        .with_priority(2)
         .mount(server.server())
         .await;
     let entries = Arc::new(Mutex::new(HashMap::new()));
@@ -2049,7 +2059,9 @@ async fn ios_localpart_login_reuses_the_device_of_the_returned_account() {
     .await
     .expect("first login");
     assert_eq!(first.device_id, "PETEFIRST");
-    // The app quit; the account store and its device stay on disk.
+    // The app quit; the account store and its device stay on disk, but an
+    // older build kept no record of which account `pete` resolved to.
+    fs::remove_file(root.join("matrix").join("login-accounts.json")).unwrap();
     let second = login(SharedCore::new_with_secret_store(Box::new(
         MemoryCallbackVault(entries.clone()),
     )))
@@ -2067,17 +2079,180 @@ async fn ios_localpart_login_reuses_the_device_of_the_returned_account() {
     assert!(bodies
         .iter()
         .all(|body| body["identifier"]["user"] == "pete"));
-    let logout = server
-        .server()
-        .received_requests()
-        .await
+    let logouts = wait_for_requests(&server, "/_matrix/client/v3/logout", 2).await;
+    assert_eq!(logouts.len(), 2, "a failed revoke is retried");
+    assert!(logouts
+        .iter()
+        .all(|logout| logout.headers.get("authorization").unwrap() == "Bearer syt_extra"));
+    let _ = fs::remove_dir_all(root);
+}
+
+/// Requests to `path`, waiting up to 10 s for at least `count` of them (a
+/// detached sign-in revokes in the background).
+async fn wait_for_requests(
+    server: &matrix_sdk::test_utils::mocks::MatrixMockServer,
+    path: &str,
+    count: usize,
+) -> Vec<wiremock::Request> {
+    for _ in 0..200 {
+        let found: Vec<_> = server
+            .server()
+            .received_requests()
+            .await
+            .unwrap()
+            .into_iter()
+            .filter(|request| request.url.path() == path)
+            .collect();
+        if found.len() >= count {
+            return found;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    Vec::new()
+}
+
+/// The proxy user signs in again: the account `pete` resolved to last time
+/// is remembered, so its store opens before signing in and the stored device
+/// is reused. No extra device is created or revoked.
+#[tokio::test]
+async fn ios_proxy_re_login_reuses_the_remembered_account_without_a_throwaway_device() {
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, ResponseTemplate};
+    let server = MatrixMockServer::new().await;
+    server
+        .mock_versions()
+        .with_simplified_sliding_sync()
+        .ok()
+        .mount()
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/_matrix/client/v3/login"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "user_id": "@pete:matrix.example.org",
+            "access_token": "syt_remembered",
+            "device_id": "PETEKEPT",
+        })))
+        .expect(2)
+        .mount(server.server())
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/_matrix/client/v3/logout"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+        .expect(0)
+        .mount(server.server())
+        .await;
+    let entries = Arc::new(Mutex::new(HashMap::new()));
+    let root = temp_root("ios-login-proxy-remembered");
+    let root_path = root.to_string_lossy().into_owned();
+    for attempt in 0..2 {
+        let shared =
+            SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries.clone())));
+        let dto = shared
+            .login_with_password_inner(
+                "Pete",
+                &server.uri(),
+                &root_path,
+                "fixture-password",
+                Some("matrix-v4.example.org"),
+            )
+            .await
+            .unwrap_or_else(|_| panic!("login {attempt}"));
+        assert_eq!(dto.user_id, "@pete:matrix.example.org");
+        drop(shared);
+    }
+    let bodies = login_bodies(&server).await;
+    assert_eq!(bodies.len(), 2);
+    assert!(bodies[0].get("device_id").is_none());
+    assert_eq!(bodies[1]["device_id"], "PETEKEPT");
+    assert_eq!(bodies[1]["identifier"]["user"], "Pete");
+    // Give a background revoke time to show up if one were started.
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    let _ = fs::remove_dir_all(root);
+}
+
+/// A sign-in whose account store exists without its key fails asking for a
+/// reset. "Reset local data" must find that store: the account the server
+/// named, not the guessed `@pete:matrix-v4.example.org`.
+#[tokio::test]
+async fn ios_reset_after_a_proxy_login_failure_targets_the_returned_account() {
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, ResponseTemplate};
+    let server = MatrixMockServer::new().await;
+    server
+        .mock_versions()
+        .with_simplified_sliding_sync()
+        .ok()
+        .mount()
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/_matrix/client/v3/login"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "user_id": "@pete:matrix.example.org",
+            "access_token": "syt_reset_case",
+            "device_id": "PETERESET",
+        })))
+        .mount(server.server())
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/_matrix/client/v3/logout"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+        .mount(server.server())
+        .await;
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(Arc::new(
+        Mutex::new(HashMap::new()),
+    ))));
+    let root = temp_root("ios-login-proxy-reset");
+    let root_path = root.to_string_lossy().into_owned();
+    let real = AccountIdentity::new("@pete:matrix.example.org", &server.uri()).unwrap();
+    StorePaths::derive(&root, &real)
         .unwrap()
-        .into_iter()
-        .find(|request| request.url.path() == "/_matrix/client/v3/logout")
-        .expect("extra device revoked");
+        .ensure_dirs()
+        .unwrap();
     assert_eq!(
-        logout.headers.get("authorization").unwrap(),
-        "Bearer syt_extra"
+        shared.login_account_user_id(
+            "Pete".into(),
+            server.uri(),
+            root_path.clone(),
+            Some("matrix-v4.example.org".into()),
+        ),
+        None,
+        "nothing remembered and no store under the guess yet"
+    );
+
+    let error = shared
+        .login_with_password_inner(
+            "Pete",
+            &server.uri(),
+            &root_path,
+            "fixture-password",
+            Some("matrix-v4.example.org"),
+        )
+        .await
+        .expect_err("the store has no key");
+    match error {
+        SessionLoginError::Failed { code, .. } => {
+            assert_eq!(code, LOGIN_STORE_RESET_REQUIRED_CODE)
+        }
+    }
+    assert_eq!(
+        shared
+            .login_account_user_id(
+                "Pete".into(),
+                format!("{}/", server.uri()),
+                root_path,
+                Some("matrix-v4.example.org".into()),
+            )
+            .as_deref(),
+        Some("@pete:matrix.example.org")
+    );
+    // The session that could not be installed is logged out.
+    assert_eq!(
+        wait_for_requests(&server, "/_matrix/client/v3/logout", 1)
+            .await
+            .len(),
+        1
     );
     let _ = fs::remove_dir_all(root);
 }

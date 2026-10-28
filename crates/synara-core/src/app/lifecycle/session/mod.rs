@@ -35,8 +35,8 @@ pub use install::{
     finish_session_wiring, with_generation_bound_acceptance, SessionInstallOrigin,
 };
 pub use journal::{
-    is_journal_diagnostic, record_session_rotation_outcome, rotation_persist_diagnostic,
-    ROTATION_PERSIST_FAILED_DIAGNOSTIC_ID,
+    is_journal_diagnostic, record_detached_sign_in_revoke_failed, record_session_rotation_outcome,
+    rotation_persist_diagnostic, ROTATION_PERSIST_FAILED_DIAGNOSTIC_ID,
 };
 pub use locator::SessionLocator;
 pub use locator_file::{

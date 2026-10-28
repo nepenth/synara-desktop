@@ -45,12 +45,13 @@ pub use login_flow::{LoginFlowKind, MockLoginFlowTransport};
 pub use product::MatrixAuthState;
 
 pub use synara_core::app::auth::{
-    complete_password_reset, existing_sqlite_crypto_device_id, has_account_store,
-    login_ephemeral_user_id, login_with_password, login_with_password_detached,
+    complete_password_reset, existing_sqlite_crypto_device_id, forget_login_account,
+    login_ephemeral_user_id, login_store_identity, login_with_password,
     password_reset_ephemeral_user_id, platform_device_display_name, register_ephemeral_user_id,
-    register_submit, request_password_email_token, request_register_email_token, LoginMethodKind,
-    LoginOptions, LoginResult, LoginUser, PasswordEmailTokenResult, PasswordResetOutcome,
-    RegisterAuthStage, RegisterCompleteSecrets, RegisterSubmitOutcome,
+    register_submit, remember_login_account, request_password_email_token,
+    request_register_email_token, DetachedSignIn, LoginOptions, LoginUser,
+    PasswordEmailTokenResult, PasswordResetOutcome, RegisterAuthStage, RegisterCompleteSecrets,
+    RegisterSubmitOutcome,
 };
 
 #[cfg(test)]

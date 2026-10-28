@@ -134,82 +134,6 @@ fn login_sliding_sync_error(error: AuthError) -> SessionLoginError {
     }
 }
 
-/// A password sign-in made before the account's store is known: the server
-/// has named the account, and its session is not applied to any client yet.
-pub(super) struct DetachedSignIn {
-    identity: AccountIdentity,
-    secrets: RegisterCompleteSecrets,
-    /// Memory-only client config used to revoke the session.
-    config: ClientBuildConfig,
-}
-
-impl DetachedSignIn {
-    /// Best-effort remote logout of a session that will not be installed.
-    async fn revoke(self) {
-        Self::revoke_secrets(&self.config, &self.secrets).await;
-    }
-
-    async fn revoke_secrets(config: &ClientBuildConfig, secrets: &RegisterCompleteSecrets) {
-        let Ok(identity) = AccountIdentity::new(&secrets.user_id, config.identity.homeserver_url())
-        else {
-            return;
-        };
-        let Ok(client) = build_memory_only_client(config).await else {
-            return;
-        };
-        if Self::restore_secrets(&client, &identity, secrets).await {
-            let _ = crate::app::lifecycle::session::bounded_remote_logout(
-                crate::app::lifecycle::session::VOLUNTARY_REMOTE_LOGOUT_TIMEOUT,
-                client.matrix_auth().logout(),
-            )
-            .await;
-        }
-    }
-
-    async fn restore_secrets(
-        client: &Client,
-        identity: &AccountIdentity,
-        secrets: &RegisterCompleteSecrets,
-    ) -> bool {
-        match SessionMaterial::from_matrix_tokens(
-            identity,
-            secrets.device_id.as_str(),
-            secrets.access_token.as_str(),
-            secrets.refresh_token.as_ref().map(|token| token.as_str()),
-        ) {
-            Ok(material) => restore_session_onto_client(client, identity, &material)
-                .await
-                .is_ok(),
-            Err(_) => false,
-        }
-    }
-
-    /// Apply the session to the account store's unauthenticated `client`.
-    /// If it does not take, the remote session is revoked here; once it
-    /// has, the caller's login rollback owns it.
-    async fn restore_onto(
-        self,
-        client: &Client,
-        identity: &AccountIdentity,
-    ) -> Result<LoginResult, AuthError> {
-        if !Self::restore_secrets(client, identity, &self.secrets).await {
-            if client.session().is_none() {
-                self.revoke().await;
-            }
-            return Err(AuthError::SdkInvariant {
-                diagnostic_id: "p3.2-login-restore-failed",
-            });
-        }
-        Ok(LoginResult {
-            user_id: self.secrets.user_id.clone(),
-            device_id: self.secrets.device_id.clone(),
-            homeserver_url: client.homeserver().to_string(),
-            device_display_name: DevicePlatform::Ios.device_display_name().to_owned(),
-            method: LoginMethodKind::Password,
-        })
-    }
-}
-
 pub(super) fn login_failed(code: &'static str, description: &'static str) -> SessionLoginError {
     SessionLoginError::Failed {
         kind: CoreErrorKind::for_code(code),
@@ -1245,13 +1169,12 @@ impl SharedCore {
             return Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION));
         }
         // The account's store can be picked before signing in only when an
-        // earlier sign-in left one. Otherwise the server names the account:
-        // a localpart is never completed with a guessed domain, which breaks
-        // behind a proxy whose host is not the server name.
-        let lookup_identity = login_user
-            .store_lookup_user_id(server_name)
-            .and_then(|user_id| AccountIdentity::new(&user_id, homeserver_url).ok())
-            .filter(|identity| has_account_store(root, identity));
+        // earlier sign-in left one: the account this username signed in to
+        // last time, or the guess from the chosen server. Otherwise the
+        // server names the account; a localpart is never completed with a
+        // guessed domain, which breaks behind a proxy whose host is not the
+        // server name.
+        let lookup_identity = login_store_identity(root, homeserver_url, &login_user, server_name);
         let (identity, mut detached) = match lookup_identity {
             Some(identity) => (identity, None),
             None => {
@@ -1269,21 +1192,29 @@ impl SharedCore {
                         LOGIN_VAULT_UNAVAILABLE_DESCRIPTION,
                     ));
                 }
-                let detached = self
-                    .sign_in_detached(homeserver_url, &login_user, password)
-                    .await?;
-                (detached.identity.clone(), Some(detached))
+                // A cancelled caller drops this future; the dropped sign-in
+                // then logs its session out on its own.
+                let detached = DetachedSignIn::sign_in(
+                    self.detached_config(homeserver_url)?,
+                    &login_user,
+                    password,
+                    &Self::ios_login_options(None),
+                    root,
+                )
+                .await
+                .map_err(login_sliding_sync_error)?;
+                // Known from here on, so "reset local data" after a store
+                // failure below targets this account's store.
+                remember_login_account(root, &login_user, detached.identity());
+                (detached.identity().clone(), Some(detached))
             }
         };
-        let result = self
+        // On an error the remaining sign-in, if any, is dropped and revoked.
+        let login = self
             .login_into_identity(&identity, &login_user, root, password, &mut detached)
-            .await;
-        if result.is_err() {
-            if let Some(detached) = detached.take() {
-                detached.revoke().await;
-            }
-        }
-        result
+            .await?;
+        remember_login_account(root, &login_user, &identity);
+        Ok(login)
     }
 
     /// Sign in to the known `identity`, or install the session `detached`
@@ -1317,7 +1248,7 @@ impl SharedCore {
             // The server named an account with a device from an earlier
             // sign-in: drop the new device and sign in again reusing it.
             if let Some(detached) = detached.take() {
-                detached.revoke().await;
+                detached.revoke();
             }
         }
         let client = build_unauthenticated_client(&config)
@@ -1333,7 +1264,11 @@ impl SharedCore {
         .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let outcome = match detached.take() {
             // Checked for sliding sync before that sign-in.
-            Some(detached) => detached.restore_onto(&client, identity).await,
+            Some(detached) => {
+                detached
+                    .restore_onto(&client, DevicePlatform::Ios.device_display_name())
+                    .await
+            }
             None => {
                 require_native_sliding_sync(&client)
                     .await
@@ -1351,6 +1286,9 @@ impl SharedCore {
         let live_identity = AccountIdentity::new(&outcome.user_id, &outcome.homeserver_url)
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         if live_identity != *identity {
+            // The store looked up for this username belongs to another
+            // account; look it up afresh next time.
+            forget_login_account(root, identity.homeserver_url(), login_user);
             return Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION));
         }
         // An account's first device gets a cross-signing identity now (same
@@ -1385,35 +1323,6 @@ impl SharedCore {
         }
     }
 
-    /// Sign in on a memory-only client so the server names the account.
-    async fn sign_in_detached(
-        &self,
-        homeserver_url: &str,
-        user: &LoginUser,
-        password: &str,
-    ) -> Result<DetachedSignIn, SessionLoginError> {
-        let client = self.detached_client(homeserver_url).await?;
-        require_native_sliding_sync(&client)
-            .await
-            .map_err(login_sliding_sync_error)?;
-        let secrets =
-            login_with_password_detached(&client, user, password, &Self::ios_login_options(None))
-                .await
-                .map_err(|error| login_auth_error(&error))?;
-        let config = self.detached_config(homeserver_url)?;
-        match AccountIdentity::new(&secrets.user_id, homeserver_url) {
-            Ok(identity) => Ok(DetachedSignIn {
-                identity,
-                secrets,
-                config,
-            }),
-            Err(_) => {
-                DetachedSignIn::revoke_secrets(&config, &secrets).await;
-                Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))
-            }
-        }
-    }
-
     fn detached_config(
         &self,
         homeserver_url: &str,
@@ -1440,12 +1349,6 @@ impl SharedCore {
             .map_err(failed)?
             .with_user_agent(self.user_agent.clone())
             .map_err(failed)
-    }
-
-    async fn detached_client(&self, homeserver_url: &str) -> Result<Client, SessionLoginError> {
-        build_memory_only_client(&self.detached_config(homeserver_url)?)
-            .await
-            .map_err(|error| login_client_build_error(&error))
     }
 
     /// Test-only persist+open+retain through the production login path.
@@ -2148,6 +2051,24 @@ impl SharedCore {
         Ok(LeftoverAckDto {
             status: LeftoverAckStatusDto::Wiped,
         })
+    }
+
+    /// The account whose local store a sign-in with `user` on
+    /// `homeserver_url` opens: the one this username signed in to last time,
+    /// else the guess from `server_name`, if that store exists. "Reset local
+    /// data" after a failed sign-in targets this account, which behind a
+    /// proxy host is not the guessed `@user:<chosen server>`.
+    pub fn login_account_user_id(
+        &self,
+        user: String,
+        homeserver_url: String,
+        store_root: String,
+        server_name: Option<String>,
+    ) -> Option<String> {
+        let user = LoginUser::parse(&user).ok()?;
+        let root = parse_store_root(&store_root).ok()?;
+        login_store_identity(root, &homeserver_url, &user, server_name.as_deref())
+            .map(|identity| identity.user_id().to_owned())
     }
 
     /// Delete one account's local store and its store key, after the user
