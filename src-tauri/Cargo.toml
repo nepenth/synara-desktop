@@ -3,7 +3,7 @@
 [package]
 publish.workspace = true
 name = "synara"
-version = "2.5.0"
+version = "2.6.0"
 description = "A modern Matrix client"
 authors.workspace = true
 license.workspace = true
@@ -31,6 +31,9 @@ synara-core = { path = "../crates/synara-core", version = "0.1.0", default-featu
 keyring = { version = "3.6.3", default-features = false, features = [
   "apple-native",
   "linux-native-sync-persistent",
+  # Credential Manager. Blobs cap at 2560 bytes, so a password (stored as
+  # UTF-16) at 1280 characters; see docs/windows-support-spike.md.
+  "windows-native",
   "crypto-rust",
 ] }
 tauri = { version = "~2.12.1", features = ["tray-icon", "image-png"] }
@@ -88,7 +91,8 @@ devtools = [ "tauri/devtools" ]
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-global-shortcut = "2"
 # The default "zip" feature only adds Windows zip and Linux AppImage extraction.
-# The updater ships for macOS only, which unpacks with tar and flate2 regardless.
+# macOS updates unpack with tar and flate2, and Windows updates run the signed
+# NSIS or MSI installer directly, so neither needs it.
 tauri-plugin-updater = { version = "~2.13.1", default-features = false, features = ["rustls-tls", "system-proxy"] }
 tauri-plugin-process = "2"
 tauri-plugin-single-instance = "2.4.5"
@@ -130,6 +134,7 @@ rusqlite = { workspace = true }
 hmac = "0.13"
 sha1 = "0.11"
 hex = "0.4"
+wiremock = "0.6"
 matrix-sdk = { workspace = true, features = [
   "testing",
   "sqlite",

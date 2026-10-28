@@ -3453,12 +3453,14 @@ version = "3.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eebcc3aff044e5944a8fbaf69eb277d11986064cba30c468730e8b9909fb551c"
 dependencies = [
+ "byteorder",
  "dbus-secret-service",
  "linux-keyutils",
  "log",
  "secret-service",
  "security-framework 2.11.1",
  "security-framework 3.7.0",
+ "windows-sys 0.60.2",
  "zeroize",
 ]
 
@@ -5243,9 +5245,9 @@ dependencies = [
 
 [[package]]
 name = "pulldown-cmark"
-version = "0.13.4"
+version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9f068eba8e7071c5f9511831b44f32c740d5adf574e990f946ddb53db2f314e"
+checksum = "278e9268c93b9e498a2da46c34d90ba93a3255eb99009646398f34bc73ab36eb"
 dependencies = [
  "bitflags 2.13.2",
  "memchr",
@@ -6660,7 +6662,7 @@ dependencies = [
 
 [[package]]
 name = "synara"
-version = "2.5.0"
+version = "2.6.0"
 dependencies = [
  "block2",
  "dirs",
@@ -6699,6 +6701,7 @@ dependencies = [
  "tokio",
  "url",
  "webkit2gtk",
+ "wiremock",
  "zbus 5.19.0",
  "zeroize",
 ]

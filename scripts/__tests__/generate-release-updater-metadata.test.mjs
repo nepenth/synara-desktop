@@ -41,6 +41,7 @@ test("generates static updater metadata for discovered release assets", () =>
       tag: "v1.2.19",
       version: "1.2.19",
       pubDate: "2026-06-29T15:00:00.000Z",
+      requiredPlatforms: ["darwin-x86_64", "darwin-aarch64"],
     });
 
     assert.equal(metadata.version, "1.2.19");
@@ -73,6 +74,7 @@ test("recognizes macos updater artifact download directories", () =>
       tag: "v1.2.21",
       version: "1.2.21",
       pubDate: "2026-07-01T00:56:28.000Z",
+      requiredPlatforms: ["darwin-x86_64", "darwin-aarch64"],
     });
 
     assert.deepEqual(Object.keys(metadata.platforms).sort(), [
@@ -98,6 +100,7 @@ test("recognizes flattened macos app updater archives", () =>
       repo: "nepenth/synara-desktop",
       tag: "v1.2.21",
       version: "1.2.21",
+      requiredPlatforms: ["darwin-x86_64", "darwin-aarch64"],
     });
 
     assert.equal(
@@ -148,5 +151,88 @@ test("requires macos updater platforms by default", () =>
           version: "1.2.19",
         }),
       /Missing updater metadata for darwin-x86_64/
+    );
+  }));
+
+const writeReleaseUpdaterArtifacts = (dir) => {
+  writeArtifact(dir, "macos-updater-artifacts/Synara.app.tar.gz", "macos-signature");
+  writeArtifact(
+    dir,
+    "windows-updater-artifacts/nsis/Synara_2.6.0_x64-setup.exe",
+    "nsis-signature"
+  );
+  writeArtifact(
+    dir,
+    "windows-updater-artifacts/msi/Synara_2.6.0_x64_en-US.msi",
+    "msi-signature"
+  );
+};
+
+test("maps each Windows installer to its own updater platforms", () =>
+  withTempDir((dir) => {
+    writeReleaseUpdaterArtifacts(dir);
+
+    const metadata = generateReleaseUpdaterMetadata({
+      artifactsDir: dir,
+      repo: "nepenth/synara-desktop",
+      tag: "v2.6.0",
+      version: "2.6.0",
+    });
+
+    assert.deepEqual(Object.keys(metadata.platforms).sort(), [
+      "darwin-aarch64",
+      "darwin-x86_64",
+      "windows-x86_64",
+      "windows-x86_64-msi",
+      "windows-x86_64-nsis",
+    ]);
+    const nsisUrl =
+      "https://github.com/nepenth/synara-desktop/releases/download/v2.6.0/Synara_2.6.0_x64-setup.exe";
+    assert.deepEqual(metadata.platforms["windows-x86_64"], {
+      signature: "nsis-signature",
+      url: nsisUrl,
+    });
+    assert.deepEqual(metadata.platforms["windows-x86_64-nsis"], {
+      signature: "nsis-signature",
+      url: nsisUrl,
+    });
+    assert.deepEqual(metadata.platforms["windows-x86_64-msi"], {
+      signature: "msi-signature",
+      url: "https://github.com/nepenth/synara-desktop/releases/download/v2.6.0/Synara_2.6.0_x64_en-US.msi",
+    });
+    // macOS entries are unchanged by the Windows installers.
+    assert.equal(metadata.platforms["darwin-aarch64"].signature, "macos-signature");
+  }));
+
+test("requires the Windows updater platforms by default", () =>
+  withTempDir((dir) => {
+    writeArtifact(dir, "macos-updater-artifacts/Synara.app.tar.gz", "macos-signature");
+
+    assert.throws(
+      () =>
+        generateReleaseUpdaterMetadata({
+          artifactsDir: dir,
+          repo: "nepenth/synara-desktop",
+          tag: "v2.6.0",
+          version: "2.6.0",
+        }),
+      /Missing updater metadata for windows-x86_64/
+    );
+  }));
+
+test("rejects a Windows installer without its signature", () =>
+  withTempDir((dir) => {
+    writeReleaseUpdaterArtifacts(dir);
+    rmSync(path.join(dir, "windows-updater-artifacts/msi/Synara_2.6.0_x64_en-US.msi.sig"));
+
+    assert.throws(
+      () =>
+        generateReleaseUpdaterMetadata({
+          artifactsDir: dir,
+          repo: "nepenth/synara-desktop",
+          tag: "v2.6.0",
+          version: "2.6.0",
+        }),
+      /Missing updater signature sidecar/
     );
   }));

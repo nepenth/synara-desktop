@@ -12,11 +12,11 @@ release workflow behavior.
 | ------------------- | ---------------------------------------------------------------------------------------------------- | -----------------------------: |
 | `main`              | Integration branch. Runs normal CI on push and PR.                                                   |                             No |
 | `release/vX.Y.Z`    | Version and notes PR. Runs the client Quality gate, including iOS simulator unit tests.             |                             No |
-| Pushed tag `vX.Y.Z` | Coordinated macOS, Linux, and internal TestFlight release.                                           | Yes, after every client passes |
+| Pushed tag `vX.Y.Z` | Coordinated macOS, Linux, Windows, and internal TestFlight release.                                  | Yes, after every client passes |
 
 The maintainer merges a green release PR and pushes the matching version tag as
 the single deliberate publication action. The tag workflow builds and checks
-the actual macOS, Linux, and iOS distributables before publishing them. Manual
+the actual macOS, Linux, Windows, and iOS distributables before publishing them. Manual
 device and installed-package smoke is recommended when relevant, but does not
 block routine releases.
 
@@ -465,6 +465,11 @@ manual workflow branch selector is not a safe release-source selector.
      job's binary after checking its shared libraries resolve on Arch, plus
      fixed `pacman-repo` release assets (`synara.db`, `synara.files`, and
      package file).
+   - Windows x64 `.msi` and NSIS `-setup.exe` installers from `windows-latest`.
+     They are not Authenticode-signed yet. Both carry Tauri updater signatures
+     (`.sig`), and `latest.json` lists them as `windows-x86_64-msi`,
+     `windows-x86_64-nsis` and `windows-x86_64` (the NSIS setup), so an install
+     updates through the installer type it came from.
 
    The macOS build retries bundling, signing and notarization up to three
    times (a retry reuses the compiled target, so it costs minutes), and DMG
@@ -482,7 +487,7 @@ the existing release tag and exact uploaded build number. This recovery checks
 that the tag is on `main`, reads the release notes from `main`, and promotes the
 already uploaded build. It does not rebuild or republish desktop assets.
 
-After publication, confirm hosted macOS `latest.json` and verify the fixed
+After publication, confirm hosted `latest.json` lists the macOS and Windows platforms and verify the fixed
 Linux repository URLs:
 
 ```text

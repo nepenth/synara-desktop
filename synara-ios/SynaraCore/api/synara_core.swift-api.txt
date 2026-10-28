@@ -352,7 +352,8 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func laterUpsert(item: LaterItemDto) async throws -> LaterSnapshotDto
   open func localEchoDiscard(roomId: String, transactionId: String) async throws -> Bool
   open func localEchoRetry(roomId: String, transactionId: String) async throws
-  open func loginWithPassword(userId: String, homeserverUrl: String, storeRoot: String, password: String) async throws -> SessionLoginDto
+  open func loginAccountUserId(user: String, homeserverUrl: String, storeRoot: String, serverName: String?) -> String?
+  open func loginWithPassword(user: String, homeserverUrl: String, storeRoot: String, password: String, serverName: String?) async throws -> SessionLoginDto
   open func logout() async throws -> LeftoverAckDto
   open func mdirectAdd(roomId: String, userId: String) async throws -> MDirectMutationDto
   open func mdirectRemove(roomId: String) async throws -> MDirectMutationDto
@@ -1045,7 +1046,8 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func laterUpsert(item: LaterItemDto) async throws -> LaterSnapshotDto
   func localEchoDiscard(roomId: String, transactionId: String) async throws -> Bool
   func localEchoRetry(roomId: String, transactionId: String) async throws
-  func loginWithPassword(userId: String, homeserverUrl: String, storeRoot: String, password: String) async throws -> SessionLoginDto
+  func loginAccountUserId(user: String, homeserverUrl: String, storeRoot: String, serverName: String?) -> String?
+  func loginWithPassword(user: String, homeserverUrl: String, storeRoot: String, password: String, serverName: String?) async throws -> SessionLoginDto
   func logout() async throws -> LeftoverAckDto
   func mdirectAdd(roomId: String, userId: String) async throws -> MDirectMutationDto
   func mdirectRemove(roomId: String) async throws -> MDirectMutationDto

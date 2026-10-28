@@ -4,8 +4,22 @@ import { pathToFileURL } from "node:url";
 
 const LINUX_PLATFORM = "linux-x86_64";
 const MACOS_PLATFORMS = ["darwin-x86_64", "darwin-aarch64"];
-const ALL_PLATFORMS = [LINUX_PLATFORM, ...MACOS_PLATFORMS];
-const DEFAULT_REQUIRED_PLATFORMS = MACOS_PLATFORMS;
+// The updater looks up `<os>-<arch>-<installer>` first, so an app installed
+// from the MSI updates through the MSI and one from the NSIS setup through
+// NSIS. Plain `windows-x86_64` is the NSIS setup, for anything else.
+const WINDOWS_NSIS_PLATFORMS = ["windows-x86_64", "windows-x86_64-nsis"];
+const WINDOWS_MSI_PLATFORMS = ["windows-x86_64-msi"];
+const ALL_PLATFORMS = [
+  LINUX_PLATFORM,
+  ...MACOS_PLATFORMS,
+  ...WINDOWS_NSIS_PLATFORMS,
+  ...WINDOWS_MSI_PLATFORMS,
+];
+const DEFAULT_REQUIRED_PLATFORMS = [
+  ...MACOS_PLATFORMS,
+  ...WINDOWS_NSIS_PLATFORMS,
+  ...WINDOWS_MSI_PLATFORMS,
+];
 
 const parseArgs = (argv) => {
   const args = {};
@@ -41,8 +55,19 @@ const walk = (directory) => {
 const releaseAssetUrl = ({ repo, tag, assetName }) =>
   `https://github.com/${repo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(assetName)}`;
 
+const isUpdaterArtifact = (filePath) =>
+  filePath.endsWith(".tar.gz") ||
+  filePath.endsWith("-setup.exe") ||
+  filePath.endsWith(".msi");
+
 const classifyArtifact = (artifactPath) => {
   const normalized = artifactPath.split(path.sep).join("/");
+  if (normalized.endsWith("-setup.exe")) {
+    return WINDOWS_NSIS_PLATFORMS;
+  }
+  if (normalized.endsWith(".msi")) {
+    return WINDOWS_MSI_PLATFORMS;
+  }
   if (normalized.includes("/appimage/") || normalized.includes("linux")) {
     return [LINUX_PLATFORM];
   }
@@ -94,9 +119,7 @@ export function generateReleaseUpdaterMetadata({
     }
   }
 
-  const updaterArchives = walk(artifactsDir).filter(
-    (filePath) => filePath.endsWith(".tar.gz") && !filePath.endsWith(".sig")
-  );
+  const updaterArchives = walk(artifactsDir).filter(isUpdaterArtifact);
   const platforms = {};
 
   for (const artifactPath of updaterArchives) {

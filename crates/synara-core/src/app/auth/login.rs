@@ -17,7 +17,10 @@
 use matrix_sdk::encryption::{CryptoStoreError, OlmError};
 use matrix_sdk::{Client, Error as MatrixSdkError, HttpError};
 
+use zeroize::Zeroizing;
+
 use super::error::AuthError;
+use super::RegisterCompleteSecrets;
 use super::{platform_device_display_name, DevicePlatform};
 
 /// How the caller authenticated (privacy-safe discriminator; no secrets).
@@ -125,6 +128,122 @@ pub async fn login_with_password(
         device_display_name,
         method: LoginMethodKind::Password,
     })
+}
+
+/// The account a user typed on the sign-in form: a full Matrix ID or a bare
+/// localpart.
+///
+/// The typed text is what goes to `/login`. A localpart is never completed
+/// with a domain here: the homeserver qualifies it with its own server name,
+/// which can differ from every host the client knows (a reverse proxy in
+/// front of `matrix.example.org` served as `matrix-v4.example.org`, say).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LoginUser {
+    MatrixId(String),
+    Localpart(String),
+}
+
+impl LoginUser {
+    pub fn parse(raw: &str) -> Result<Self, AuthError> {
+        let user = validate_user_id_or_localpart(raw)?;
+        Ok(if user.starts_with('@') {
+            Self::MatrixId(user)
+        } else {
+            Self::Localpart(user)
+        })
+    }
+
+    /// `identifier.user` for `/login`: exactly what was typed.
+    pub fn identifier(&self) -> &str {
+        match self {
+            Self::MatrixId(user) | Self::Localpart(user) => user,
+        }
+    }
+
+    /// Best guess at the account's Matrix ID, used only to find a local store
+    /// left by an earlier sign-in so its device can be reused. It is never
+    /// sent, and the server's answer always decides the account.
+    ///
+    /// `server_name` is the server the user chose on the sign-in form. A
+    /// localpart is lowercased, as homeservers store it. Without a server
+    /// name a localpart has no guess.
+    pub fn store_lookup_user_id(&self, server_name: Option<&str>) -> Option<String> {
+        match self {
+            Self::MatrixId(user) => Some(user.clone()),
+            Self::Localpart(localpart) => {
+                let server_name = server_name.map(str::trim).filter(|name| {
+                    !name.is_empty()
+                        && !name.contains(['/', '@'])
+                        && !name.chars().any(|c| c.is_control() || c.is_whitespace())
+                })?;
+                Some(format!("@{}:{server_name}", localpart.to_lowercase()))
+            }
+        }
+    }
+}
+
+/// Password login whose session is not applied to `client`.
+///
+/// For a sign-in that has no local store to reuse yet: the caller cannot
+/// pick the account's store until the server names the account, so it signs
+/// in on a memory-only client, builds the store for the returned `user_id`,
+/// then restores these secrets onto that store's client. The SDK
+/// `login_username` is not used here because it would set up encryption for
+/// the new device on the memory-only client and upload its keys.
+///
+/// The returned secrets are the same host-only shape registration returns,
+/// and never cross IPC.
+pub async fn login_with_password_detached(
+    client: &Client,
+    user: &LoginUser,
+    password: &str,
+    options: &LoginOptions,
+) -> Result<RegisterCompleteSecrets, AuthError> {
+    use matrix_sdk::ruma::api::client::{
+        session::login,
+        uiaa::{MatrixUserIdentifier, UserIdentifier},
+    };
+    use matrix_sdk::ruma::assign;
+
+    validate_password_present(password)?;
+    let device_display_name = options.resolved_device_display_name();
+    validate_device_display_name(&device_display_name)?;
+    let device_id = options
+        .device_id
+        .as_deref()
+        .map(validate_device_id)
+        .transpose()?;
+
+    let identifier =
+        UserIdentifier::Matrix(MatrixUserIdentifier::new(user.identifier().to_owned()));
+    let login_info =
+        login::v3::LoginInfo::Password(login::v3::Password::new(identifier, password.to_owned()));
+    let request = assign!(login::v3::Request::new(login_info), {
+        device_id: device_id.map(Into::into),
+        initial_device_display_name: Some(device_display_name),
+        refresh_token: options.request_refresh_token,
+    });
+    let response = client
+        .send(request)
+        .await
+        .map_err(|error| map_login_sdk_error(error.into()))?;
+    // `response.well_known` is ignored on purpose: Synapse fills it from its
+    // `public_baseurl`, which for a proxied server is the host this client
+    // could not reach. The account keeps the URL it signed in through.
+    Ok(RegisterCompleteSecrets {
+        user_id: response.user_id.to_string(),
+        device_id: response.device_id.to_string(),
+        homeserver_url: client.homeserver().to_string(),
+        access_token: Zeroizing::new(response.access_token),
+        refresh_token: response.refresh_token.map(Zeroizing::new),
+    })
+}
+
+/// Synthetic account identity for the memory-only client of
+/// [`login_with_password_detached`]. It names no store and is never sent.
+pub fn login_ephemeral_user_id(homeserver_url: &str) -> Result<String, AuthError> {
+    let synthetic = super::password_reset_ephemeral_user_id(homeserver_url)?;
+    Ok(synthetic.replacen("__password_reset__", "__login__", 1))
 }
 
 /// Static diagnostic for a homeserver without native simplified sliding sync.
@@ -534,6 +653,48 @@ mod tests {
             "@alice:example.org"
         );
         assert_eq!(validate_user_id_or_localpart("alice").unwrap(), "alice");
+    }
+
+    #[test]
+    fn login_user_sends_what_was_typed_and_never_adds_a_domain() {
+        // matrix-v4.example.org is an IPv4 proxy for a server named
+        // matrix.example.org; nothing the client knows says so.
+        let localpart = LoginUser::parse(" Pete ").unwrap();
+        assert_eq!(localpart, LoginUser::Localpart("Pete".into()));
+        assert_eq!(localpart.identifier(), "Pete");
+
+        let mxid = LoginUser::parse("@pete:matrix.example.org").unwrap();
+        assert_eq!(mxid.identifier(), "@pete:matrix.example.org");
+    }
+
+    #[test]
+    fn login_user_store_lookup_is_only_a_guess_from_the_chosen_server() {
+        let localpart = LoginUser::parse("Pete").unwrap();
+        assert_eq!(
+            localpart
+                .store_lookup_user_id(Some("matrix-v4.example.org"))
+                .as_deref(),
+            Some("@pete:matrix-v4.example.org")
+        );
+        assert_eq!(localpart.store_lookup_user_id(None), None);
+        assert_eq!(localpart.store_lookup_user_id(Some("  ")), None);
+        assert_eq!(localpart.store_lookup_user_id(Some("https://host/x")), None);
+
+        // A typed Matrix ID is its own guess, whatever server was chosen.
+        let mxid = LoginUser::parse("@Pete:matrix.example.org").unwrap();
+        assert_eq!(
+            mxid.store_lookup_user_id(Some("matrix-v4.example.org"))
+                .as_deref(),
+            Some("@Pete:matrix.example.org")
+        );
+    }
+
+    #[test]
+    fn login_ephemeral_user_id_names_no_real_account() {
+        assert_eq!(
+            login_ephemeral_user_id("https://matrix-v4.example.org/").unwrap(),
+            "@__login__:matrix-v4.example.org"
+        );
     }
 
     #[test]

@@ -35,15 +35,15 @@ pub use install::{
     finish_session_wiring, with_generation_bound_acceptance, SessionInstallOrigin,
 };
 pub use journal::{
-    is_journal_diagnostic, record_session_rotation_outcome, rotation_persist_diagnostic,
-    ROTATION_PERSIST_FAILED_DIAGNOSTIC_ID,
+    is_journal_diagnostic, record_detached_sign_in_revoke_failed, record_session_rotation_outcome,
+    rotation_persist_diagnostic, ROTATION_PERSIST_FAILED_DIAGNOSTIC_ID,
 };
 pub use locator::SessionLocator;
 pub use locator_file::{
     active_locator_path, clear_native_logout_material, clear_persisted_logout_material,
     ensure_logout_retry_locator, ensure_logout_retry_locator_with_directory_sync,
-    locator_account_identity, read_active_locator, remove_active_locator, write_active_locator,
-    ACTIVE_SESSION_FILE, MATRIX_DATA_DIR,
+    locator_account_identity, read_active_locator, remove_active_locator, sync_directory,
+    write_active_locator, ACTIVE_SESSION_FILE, MATRIX_DATA_DIR,
 };
 pub use logout::{
     bounded_remote_logout, finish_active_logout, finish_orphan_logout, finish_taken_session_logout,

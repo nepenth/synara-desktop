@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## [2.6.0] - 2026-10-28
+
+- Sign-in (desktop and iOS): signing in with a plain username now works when the server address is a proxy whose name differs from the homeserver's own name, for example an IPv4 proxy `matrix-v4.example.org` in front of `matrix.example.org`. Synara used to turn `pete` into `@pete:matrix-v4.example.org`, which the server rejects. It now sends the username as typed, as Element does, and uses the Matrix ID the server returns. On desktop, a full Matrix ID whose server can't be reached (for example an IPv6-only server reached from an IPv4 network) now signs in through the server chosen on the sign-in screen instead of failing with "Failed to find your Matrix ID server."
+- Windows (desktop): each release now includes x64 Windows installers, an `.msi` and an NSIS `-setup.exe`. The app stores secrets in Windows Credential Manager, shows an unread dot on the taskbar button, and serves its pages and media from Windows' `http://tauri.localhost` origin. Its Rust and renderer tests run on Windows weekly and on demand. The installers aren't code-signed yet, so SmartScreen warns on first run; updates install from inside the app as on macOS, and notifications have no action buttons yet (`docs/windows-support-spike.md`).
+- README: lists the Windows installers and what Windows doesn't do yet.
+- Privacy manifests (iOS): the app's privacy manifest now declares the required-reason APIs Synara uses (UserDefaults, system boot time and file timestamps), and the notification service has its own manifest. Nothing is tracked or collected; this only states why those APIs are read.
+- Dependencies: update pulldown-cmark to 0.13.5 for RUSTSEC-2026-0414.
+- Tests: a Rust runtime test no longer fails at random when Tokio reuses a freed worker thread for blocking work.
+- Repository: stale branches, stashes and worktrees whose work was merged, superseded or abandoned have been removed.
+
 ## [2.5.0] - 2026-10-27
 
 - GIFs (iOS): GIF links from Klipy and GIPHY play in the conversation, and GIF attachments animate (Reduce Motion shows their first frame). The Attach sheet has a GIF option, and typing `/gif` or `/gif high five` opens a Klipy picker with trending GIFs, search and more GIFs as you scroll. As on desktop, a GIF is sent as its link, never re-hosted. Settings → GIFs & Link Previews has "GIF Search", "Play GIF Links Inline" and "Show X Posts". TestFlight builds take the Klipy key from `SYNARA_KLIPY_API_KEY`; builds without it don't offer GIF search.

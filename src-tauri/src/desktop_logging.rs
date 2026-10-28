@@ -1,7 +1,9 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::fs::{create_dir_all, metadata, remove_file, rename, File, OpenOptions, Permissions};
+#[cfg(unix)]
+use std::fs::Permissions;
+use std::fs::{create_dir_all, metadata, remove_file, rename, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};

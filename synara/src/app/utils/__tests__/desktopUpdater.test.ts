@@ -7,7 +7,7 @@ import {
   reduceDownloadProgress,
   shouldPromptForUpdate,
   updateErrorMessage,
-  type MacosUpdateHandle,
+  type InAppUpdateHandle,
 } from '../desktopUpdater';
 
 const jsonFetch =
@@ -26,7 +26,7 @@ test('desktop updater compares semantic version strings', () => {
 });
 
 test('desktop updater reports macos update availability', async () => {
-  const update: MacosUpdateHandle = {
+  const update: InAppUpdateHandle = {
     currentVersion: '1.2.21',
     version: '1.2.22',
     date: '2026-07-02T12:00:00.000Z',
@@ -38,13 +38,13 @@ test('desktop updater reports macos update availability', async () => {
     currentVersion: '1.2.21',
     getPlatform: async () => 'darwin',
     supportsUpdater: () => true,
-    macosCheck: async () => update,
+    inAppCheck: async () => update,
   });
 
   assert.equal(result.status, 'available');
   assert.equal(result.platform, 'macos');
   assert.equal(result.version, '1.2.22');
-  assert.equal(result.macosUpdate, update);
+  assert.equal(result.inAppUpdate, update);
 });
 
 test('desktop updater reports macos no-update result', async () => {
@@ -52,7 +52,7 @@ test('desktop updater reports macos no-update result', async () => {
     currentVersion: '1.2.21',
     getPlatform: async () => 'macos',
     supportsUpdater: () => true,
-    macosCheck: async () => null,
+    inAppCheck: async () => null,
   });
 
   assert.deepEqual(result, {
@@ -62,6 +62,37 @@ test('desktop updater reports macos no-update result', async () => {
     version: '1.2.21',
     releaseUrl: 'https://github.com/nepenth/synara-desktop/releases/tag/v1.2.21',
   });
+});
+
+test('desktop updater installs Windows updates in the app, like macOS', async () => {
+  const update: InAppUpdateHandle = {
+    currentVersion: '2.6.0',
+    version: '2.6.1',
+    downloadAndInstall: async () => undefined,
+  };
+
+  const result = await checkDesktopUpdate({
+    currentVersion: '2.6.0',
+    getPlatform: async () => 'windows',
+    supportsUpdater: () => true,
+    inAppCheck: async () => update,
+  });
+
+  assert.equal(result.status, 'available');
+  assert.equal(result.platform, 'windows');
+  assert.equal(result.inAppUpdate, update);
+});
+
+test('desktop updater on a Windows build without the update channel says so', async () => {
+  const result = await checkDesktopUpdate({
+    currentVersion: '2.6.0',
+    getPlatform: async () => 'windows',
+    supportsUpdater: () => false,
+  });
+
+  assert.equal(result.status, 'unavailable');
+  assert.equal(result.platform, 'windows');
+  assert.match(result.message, /signed release builds/i);
 });
 
 test('desktop updater gracefully reports missing signed updater config', async () => {

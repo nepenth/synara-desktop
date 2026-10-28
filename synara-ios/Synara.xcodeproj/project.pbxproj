@@ -207,6 +207,7 @@
 		E2080809FCE254F98A9C920A /* SharedCoreRoomList.swift in Sources */ = {isa = PBXBuildFile; fileRef = B69B72BA313FA7259ACCB7E4 /* SharedCoreRoomList.swift */; };
 		E41A0F4331E1F46B7474286D /* ComposerMarkdownTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72E9B9C1E874AD8B6B90D9C3 /* ComposerMarkdownTests.swift */; };
 		E57984E086FF8F2FEF3199E3 /* NotificationDeliveryCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23DE089CD7965D0EBC5F3AE9 /* NotificationDeliveryCoordinator.swift */; };
+		E7828BEFC30E2B5BBB654B93 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C863950B7E146DF43FD1ACE8 /* PrivacyInfo.xcprivacy */; };
 		E82485501CBE7D1EFE49E0AA /* AgentNotificationPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01862C9FFDE97C0D83EDB1FD /* AgentNotificationPreferences.swift */; };
 		E871D96BB39525DF67FC5CDB /* SharedCoreRecentEmoji.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86F9C06B005B86F1C39DBB5A /* SharedCoreRecentEmoji.swift */; };
 		E896CD56FB1B8BE599052590 /* SharedCoreSessionBootstrapTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCF5C110E4480E5EF6D833C8 /* SharedCoreSessionBootstrapTests.swift */; };
@@ -444,6 +445,7 @@
 		C52EDC986E0B57231E77F695 /* HomeserverSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeserverSelectionView.swift; sourceTree = "<group>"; };
 		C6111FDE94FF894CB640BD95 /* SessionCryptoStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionCryptoStoreTests.swift; sourceTree = "<group>"; };
 		C830BF9B8F7ED001CA8AC317 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
+		C863950B7E146DF43FD1ACE8 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		C96EA34ED92FCEDC17A0165E /* SharedCoreTimelineRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineRows.swift; sourceTree = "<group>"; };
 		CAB0B1FDD47555E50BE466B2 /* MediaServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaServiceTests.swift; sourceTree = "<group>"; };
 		CB040EB752E246AD052AC7E7 /* AppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
@@ -630,6 +632,7 @@
 		6B0D3F9F0179E938C4CE12DB /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				C863950B7E146DF43FD1ACE8 /* PrivacyInfo.xcprivacy */,
 				6304D522C7CD81922807C269 /* SynaraNotificationService.entitlements */,
 				A8A276BA4A09ACE85B01020A /* SynaraNotificationServiceCriticalAlerts.entitlements */,
 				2768AFB0EFA9B5F722F7AB64 /* SynaraNotificationServiceCriticalAlertsFiltering.entitlements */,
@@ -1024,6 +1027,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E7828BEFC30E2B5BBB654B93 /* PrivacyInfo.xcprivacy in Resources */,
 				824EF01C26ECEFA599D1516D /* SynaraShared.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1389,7 +1393,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMPILATION_CACHE_ENABLE_CACHING = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2.5.0;
+				CURRENT_PROJECT_VERSION = 2.6.0;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -1409,7 +1413,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 2.5.0;
+				MARKETING_VERSION = 2.6.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1498,7 +1502,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMPILATION_CACHE_ENABLE_CACHING = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2.5.0;
+				CURRENT_PROJECT_VERSION = 2.6.0;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -1512,7 +1516,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 2.5.0;
+				MARKETING_VERSION = 2.6.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

@@ -185,13 +185,13 @@ struct SharedCoreAuthService: AuthServicing {
         guard request.password.isEmpty == false else {
             throw LoginError.missingPassword
         }
-        let userID = request.userID
         do {
             let dto = try await SharedCoreSessionLogin.loginWithPassword(
-                userID: userID,
+                user: request.loginUser,
                 homeserverURL: request.homeserverURL.absoluteString,
                 storeRoot: host.storeRoot,
                 password: request.password,
+                serverName: request.serverName,
                 core: host.core
             )
             return AuthenticatedSession(
@@ -206,9 +206,18 @@ struct SharedCoreAuthService: AuthServicing {
     }
 
     func resetLocalData(for request: LoginRequest) async throws {
+        let homeserverURL = request.homeserverURL.absoluteString
+        // The store the failed sign-in opened: behind a proxy host that is
+        // the account the server named, not the guessed `request.userID`.
+        let userID = host.core.loginAccountUserId(
+            user: request.loginUser,
+            homeserverUrl: homeserverURL,
+            storeRoot: host.storeRoot.path,
+            serverName: request.serverName
+        ) ?? request.userID
         _ = try await host.core.resetLocalAccountStore(
-            userId: request.userID,
-            homeserverUrl: request.homeserverURL.absoluteString,
+            userId: userID,
+            homeserverUrl: homeserverURL,
             storeRoot: host.storeRoot.path
         )
     }

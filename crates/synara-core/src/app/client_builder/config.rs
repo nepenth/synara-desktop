@@ -454,7 +454,7 @@ mod tests {
         let identity = AccountIdentity::new("@alice:example.org", "https://example.org")
             .expect("valid test identity");
         ClientBuildConfig::product_default(
-            Path::new("/tmp/synara-client-config-test"),
+            &std::env::temp_dir().join("synara-client-config-test"),
             identity,
             None,
         )
@@ -496,7 +496,7 @@ mod tests {
         assert!(!plan.indexed_message_search);
         assert!(!json.contains("passphrase"));
         assert!(!json.contains("password"));
-        assert!(!json.contains("/tmp/"));
+        assert!(!json.contains("synara-client-config-test"));
         assert!(!json.contains("search/"));
         assert!(plan
             .approved_features

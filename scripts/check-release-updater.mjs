@@ -79,7 +79,7 @@ const workflowConfiguresTauriNotarization = (workflow) => {
 
 const workflowPublishesGeneratedUpdaterMetadata = (workflow) =>
   hasWorkflowPattern(workflow, /updater-metadata:/) &&
-  hasWorkflowPattern(workflow, /needs:\s*\[\s*macos\s*\]/) &&
+  hasWorkflowPattern(workflow, /needs:\s*\[\s*macos\s*,\s*windows\s*\]/) &&
   hasWorkflowPattern(workflow, /actions\/download-artifact/) &&
   hasWorkflowPattern(workflow, /generate-release-updater-metadata\.mjs/) &&
   hasWorkflowPattern(workflow, /--repo\s+["']?\$GITHUB_REPOSITORY["']?/) &&
@@ -133,10 +133,11 @@ const usesPackagedAssetOrigin = (rustLib, navigation = "") => {
   );
 };
 
-const isMacosUpdaterCapability = (capability) =>
+const isDesktopUpdaterCapability = (capability) =>
   Array.isArray(capability?.platforms) &&
-  capability.platforms.length === 1 &&
-  capability.platforms[0] === "macOS" &&
+  capability.platforms.length === 2 &&
+  capability.platforms.includes("macOS") &&
+  capability.platforms.includes("windows") &&
   Array.isArray(capability?.windows) &&
   capability.windows.length === 1 &&
   capability.windows[0] === "main" &&
@@ -233,7 +234,7 @@ export function inspectReleaseUpdaterReadiness({
   for (const permission of MAIN_UPDATER_PERMISSIONS) {
     if (permissions.includes(permission)) {
       errors.push(
-        `src-tauri/capabilities/main.json must not grant ${permission}. macOS update install and relaunch belong in macos-updater.json.`,
+        `src-tauri/capabilities/main.json must not grant ${permission}. macOS and Windows update install and relaunch belong in desktop-updater.json.`,
       );
     }
   }
@@ -246,7 +247,7 @@ export function inspectReleaseUpdaterReadiness({
     )
   ) {
     report(
-      "src-tauri/capabilities/macos-updater.json must grant updater:allow-check or updater:default when the frontend owns update checks.",
+      "src-tauri/capabilities/desktop-updater.json must grant updater:allow-check or updater:default when the frontend owns update checks.",
     );
   }
 
@@ -258,7 +259,7 @@ export function inspectReleaseUpdaterReadiness({
     )
   ) {
     report(
-      "src-tauri/capabilities/macos-updater.json must grant updater:allow-download-and-install or updater:default for macOS install prompts.",
+      "src-tauri/capabilities/desktop-updater.json must grant updater:allow-download-and-install or updater:default for macOS and Windows install prompts.",
     );
   }
 
@@ -270,13 +271,13 @@ export function inspectReleaseUpdaterReadiness({
     )
   ) {
     report(
-      "src-tauri/capabilities/macos-updater.json must grant process:allow-restart or process:default for post-update relaunch.",
+      "src-tauri/capabilities/desktop-updater.json must grant process:allow-restart or process:default for post-update relaunch.",
     );
   }
 
-  if (!isMacosUpdaterCapability(updaterCapability)) {
+  if (!isDesktopUpdaterCapability(updaterCapability)) {
     errors.push(
-      'src-tauri/capabilities/macos-updater.json must apply only to the main window on platforms ["macOS"], with no remote URLs.',
+      'src-tauri/capabilities/desktop-updater.json must apply only to the main window on platforms ["macOS", "windows"], with no remote URLs.',
     );
   }
 
@@ -390,7 +391,7 @@ function main() {
     rustLib: readText("src-tauri/src/lib.rs"),
     navigation: readText("src-tauri/src/desktop_navigation.rs"),
     capabilities: readJson("src-tauri/capabilities/main.json"),
-    updaterCapability: readJson("src-tauri/capabilities/macos-updater.json"),
+    updaterCapability: readJson("src-tauri/capabilities/desktop-updater.json"),
     desktopPackage: readJson("package.json"),
     releaseWorkflow: readText(releaseWorkflowPath),
     requireEnabled,

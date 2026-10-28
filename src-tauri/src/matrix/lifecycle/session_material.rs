@@ -15,6 +15,7 @@ pub use synara_core::app::lifecycle::{SessionMaterial, SessionMaterialId, Sessio
 ///
 /// - macOS: Keychain via `keyring` apple-native backend
 /// - Linux: Secret Service / keyutils via `keyring` linux-native backends
+/// - Windows: Credential Manager via `keyring` windows-native backend
 /// - Other platforms: operations return vault-unavailable
 ///
 /// Service name is [`SESSION_MATERIAL_SERVICE`] — distinct from store-key service.
@@ -30,7 +31,11 @@ impl KeyringSessionMaterialVault {
 
     /// True when this process build targets a supported native secret store.
     pub fn platform_supported() -> bool {
-        cfg!(any(target_os = "macos", target_os = "linux"))
+        cfg!(any(
+            target_os = "macos",
+            target_os = "linux",
+            target_os = "windows"
+        ))
     }
 
     fn entry(id: &SessionMaterialId) -> Result<keyring::Entry, LifecycleError> {

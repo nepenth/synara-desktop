@@ -964,8 +964,9 @@ pub fn run() {
             desktop_tray::start_tray_host_watch();
 
             // WebviewUrl::App follows Tauri's dev cfg: http://localhost:8080 while
-            // `tauri dev` is running, and the private asset origin tauri://localhost
-            // for every packaged build. Navigation is pinned to that same origin.
+            // `tauri dev` is running, and the private asset origin (tauri://localhost,
+            // or http://tauri.localhost on Windows) for every packaged build.
+            // Navigation is pinned to that same origin.
             let window_url = WebviewUrl::App(Default::default());
 
             #[cfg(dev)]

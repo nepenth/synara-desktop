@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
 
 const tests = [
   'src/app/styles/__tests__/quietDepthSourceGuard.test.ts',
@@ -220,6 +221,7 @@ const tests = [
   'src/app/pages/auth/login/__tests__/tokenLoginAbsence.test.ts',
   'src/app/pages/auth/login/__tests__/loginUiaStageAbsence.test.ts',
   'src/app/pages/auth/login/__tests__/desktopPasswordLoginNativeOnly.test.ts',
+  'src/app/pages/auth/login/__tests__/proxyHostLogin.test.ts',
   'src/app/pages/auth/login/__tests__/nativeLoginBootstrap.test.ts',
   'src/app/pages/auth/__tests__/authServerResolution.test.ts',
 ];
@@ -237,22 +239,21 @@ const run = (command, args) =>
   });
 
 try {
-  const esbuildBin = join(
-    projectRoot,
-    'node_modules',
-    '.bin',
-    process.platform === 'win32' ? 'esbuild.cmd' : 'esbuild'
-  );
-  const buildExitCode = await run(esbuildBin, [
-    ...tests,
-    '--bundle',
-    '--platform=node',
-    '--format=cjs',
-    '--log-level=silent',
-    `--outdir=${outdir}`,
-  ]);
-  if (buildExitCode !== 0) {
-    process.exit(buildExitCode ?? 1);
+  // The build API, not the CLI: Windows cannot spawn the .cmd shim without a
+  // shell, and cmd caps a command line at 8191 characters.
+  try {
+    await build({
+      absWorkingDir: projectRoot,
+      entryPoints: tests,
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      logLevel: 'silent',
+      outdir,
+    });
+  } catch (error) {
+    for (const message of error.errors ?? [error]) console.error(message.text ?? message);
+    process.exit(1);
   }
 
   const testFiles = tests.map((testPath) =>

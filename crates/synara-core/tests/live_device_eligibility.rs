@@ -239,7 +239,13 @@ async fn run_live_fixture() -> Result<(), &'static str> {
     let fresh = SharedCore::new_with_secret_store(Box::new(vault.clone()));
     let restored = SharedCore::new_with_secret_store(Box::new(vault.clone()));
     let login = fresh
-        .login_with_password(user_id.clone(), homeserver.clone(), store.clone(), password)
+        .login_with_password(
+            user_id.clone(),
+            homeserver.clone(),
+            store.clone(),
+            password,
+            None,
+        )
         .await;
     // Do not use expect/panic/early return after the login attempt. Every path
     // joins the cleanup below, and keeps both Core handles plus the vault alive.

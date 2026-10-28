@@ -461,6 +461,12 @@ fn emit_tray_dnd_toggle<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 pub fn set_badge_count<R: Runtime>(app: &AppHandle<R>, count: Option<i64>) -> tauri::Result<()> {
     let normalized_count = count.map(clamp_count).filter(|value| *value > 0);
     if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+        // Windows has no taskbar count; it overlays a small icon instead.
+        #[cfg(target_os = "windows")]
+        window.set_overlay_icon(normalized_count.map(|_| {
+            tauri::image::Image::new_owned(desktop_unread_badge::unread_dot_icon(16), 16, 16)
+        }))?;
+        #[cfg(not(target_os = "windows"))]
         window.set_badge_count(normalized_count)?;
 
         #[cfg(target_os = "macos")]

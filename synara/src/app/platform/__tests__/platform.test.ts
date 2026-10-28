@@ -15,6 +15,7 @@ import {
   getPlatformSecretStoreStatus,
   isDesktopSecretStoreOperationError,
   isDesktopPlatform,
+  normalizePlatformSecretStoreStatus,
   platformSessionStore,
   setPlatformBadgeCount,
   showPlatformNotification,
@@ -327,10 +328,19 @@ test('platform secret-store helpers describe persistence behavior', () => {
   );
   assert.equal(
     getPlatformSecretStoreStatusDescription({
-      ...fallbackStatus,
-      reason: 'windows-native-session-store-unsupported',
+      available: true,
+      backend: 'windows-credential-manager',
+      canPersistSession: true,
     }),
-    'Windows builds do not persist sessions to a native credential store.'
+    'Windows Credential Manager is available for session storage.'
+  );
+  assert.equal(
+    normalizePlatformSecretStoreStatus({
+      available: true,
+      backend: 'windows-credential-manager',
+      canPersistSession: true,
+    })?.backend,
+    'windows-credential-manager'
   );
 });
 

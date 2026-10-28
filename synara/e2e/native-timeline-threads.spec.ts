@@ -325,11 +325,14 @@ test('an expanded inline thread shows its replies at once after scrolling back',
   await expect(inline.getByText('Thread reply 7')).toBeVisible();
   await expect(inline.getByText('Loading replies…')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Hide 7 replies/ })).toBeVisible();
+  // At least one reopen is waiting. The wheel polling above can carry the root
+  // out of the window and back more than once on a slow runner, and each pass
+  // opens the stream again, so the exact count varies.
   expect(
     await page.evaluate(() =>
       (window as unknown as ThreadFixture).nativeTimelineFixture.threadOpenCount()
     )
-  ).toBe(2);
+  ).toBeGreaterThanOrEqual(2);
 
   await page.evaluate(() =>
     (window as unknown as ThreadFixture).nativeTimelineFixture.releaseThreadOpen()

@@ -43,9 +43,10 @@ use crate::app::account_data::{
     SynaraRoomNoteItemKind,
 };
 use crate::app::auth::{
-    existing_sqlite_crypto_device_id, login_with_password as core_login_with_password,
-    require_native_sliding_sync, AuthError, DevicePlatform, LoginOptions,
-    LOGIN_SLIDING_SYNC_UNSUPPORTED_DIAGNOSTIC_ID,
+    existing_sqlite_crypto_device_id, forget_login_account, login_ephemeral_user_id,
+    login_store_identity, login_with_password as core_login_with_password, remember_login_account,
+    require_native_sliding_sync, AuthError, DetachedSignIn, DevicePlatform, LoginOptions,
+    LoginUser, LOGIN_SLIDING_SYNC_UNSUPPORTED_DIAGNOSTIC_ID,
 };
 use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig};
 use crate::app::dehydrated_devices::NativeDehydratedDevicesOwner;

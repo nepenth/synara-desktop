@@ -8,7 +8,11 @@
 import to from 'await-to-js';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClientConfig, clientAllowedServer } from '../../../hooks/useClientConfig';
+import {
+  ClientConfig,
+  clientAllowedServer,
+  clientDefaultServer,
+} from '../../../hooks/useClientConfig';
 import { autoDiscovery, specVersions } from '../../../cs-api';
 import {
   deleteAfterLoginRedirectPath,
@@ -31,13 +35,17 @@ export enum GetBaseUrlError {
   NotAllow = 'NotAllow',
   NotFound = 'NotFound',
 }
-export const factoryGetBaseUrl = (clientConfig: ClientConfig, server: string) => {
+export const factoryGetBaseUrl = (
+  clientConfig: ClientConfig,
+  server: string,
+  request: typeof fetch = fetch
+) => {
   const getBaseUrl = async (): Promise<string> => {
     if (!clientAllowedServer(clientConfig, server)) {
       throw new Error(GetBaseUrlError.NotAllow);
     }
 
-    const [, discovery] = await to(autoDiscovery(fetch, server));
+    const discovery = await autoDiscovery(request, server).catch(() => undefined);
 
     let mxIdBaseUrl: string | undefined;
     const [, discoveryInfo] = discovery ?? [];
@@ -49,13 +57,60 @@ export const factoryGetBaseUrl = (clientConfig: ClientConfig, server: string) =>
     if (!mxIdBaseUrl) {
       throw new Error(GetBaseUrlError.NotFound);
     }
-    const [, versions] = await to(specVersions(fetch, mxIdBaseUrl));
+    const versions = await specVersions(request, mxIdBaseUrl).catch(() => undefined);
     if (!versions) {
       throw new Error(GetBaseUrlError.NotFound);
     }
     return mxIdBaseUrl;
   };
   return getBaseUrl;
+};
+
+/** Discovery for a typed Matrix ID's server gives up after this long. */
+export const MXID_DISCOVERY_TIMEOUT_MS = 8000;
+
+const fetchWithTimeout =
+  (request: typeof fetch, timeoutMs: number): typeof fetch =>
+  (input, init) =>
+    request(input, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+
+/**
+ * Where a password login with a typed Matrix ID is sent.
+ *
+ * A Matrix ID on the server chosen on the form uses that server's base URL.
+ * One on another server is discovered from its domain, so typing
+ * `@alice:example.org` still works from any server picker. If that domain
+ * cannot be reached, the chosen server is used instead: a homeserver served
+ * through a proxy whose host is not its server name (an IPv4 proxy in front
+ * of an IPv6-only server, say) is reachable only that way. The server then
+ * decides whether the Matrix ID is its own. The fallback needs a server the
+ * user picked: with the form still on the default server, a slow or down
+ * Matrix ID server would otherwise send its password to the default one.
+ */
+export const mxIdLoginBaseUrl = (
+  clientConfig: ClientConfig,
+  mxIdServer: string,
+  chosenServer: string,
+  chosenBaseUrl: string,
+  request: typeof fetch = fetch
+): string | (() => Promise<string>) => {
+  if (mxIdServer.toLowerCase() === chosenServer.toLowerCase()) return chosenBaseUrl;
+  const discover = factoryGetBaseUrl(
+    clientConfig,
+    mxIdServer,
+    fetchWithTimeout(request, MXID_DISCOVERY_TIMEOUT_MS)
+  );
+  return async () => {
+    try {
+      return await discover();
+    } catch (error) {
+      if (error instanceof Error && error.message === GetBaseUrlError.NotAllow) throw error;
+      if (chosenServer.toLowerCase() === clientDefaultServer(clientConfig).toLowerCase()) {
+        throw error;
+      }
+      return chosenBaseUrl;
+    }
+  };
 };
 
 export enum LoginError {
@@ -116,6 +171,11 @@ export type PasswordLoginInvoke = (
 ) => Promise<{ available: false } | { available: true; value?: unknown }>;
 
 export type LoginPasswordOptions = {
+  /**
+   * Server chosen on the form. The host uses it only to find this account's
+   * local store from an earlier sign-in; it is never added to the username.
+   */
+  serverName?: string;
   isDesktop?: () => boolean;
   invoke?: PasswordLoginInvoke;
 };
@@ -363,6 +423,7 @@ export const loginPassword = async (
       user,
       password,
       indexedMessageSearch: getSettings().indexedMessageSearch,
+      serverName: options.serverName,
     });
     if (!result.available || !result.value) {
       throw new PasswordLoginError(LoginError.Unknown, 'Native password login is unavailable.');

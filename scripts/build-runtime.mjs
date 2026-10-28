@@ -1,9 +1,10 @@
 import { cp, readFile, rm, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { KLIPY_API_KEY_ENV, withGifApiKey } from "./lib/runtime-config.mjs";
 
-const root = resolve(new URL("..", import.meta.url).pathname);
+const root = fileURLToPath(new URL("..", import.meta.url));
 const runtimeDir = join(root, "synara");
 const runtimeDist = join(runtimeDir, "dist");
 const desktopAssets = join(root, "devAssets");

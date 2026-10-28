@@ -1,0 +1,3 @@
+# Check out LF everywhere, including Windows (core.autocrlf would give
+# CRLF): source-text tests include_str! files and match on "\n".
+* text=auto eol=lf

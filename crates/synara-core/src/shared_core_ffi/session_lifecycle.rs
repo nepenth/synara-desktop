@@ -118,6 +118,22 @@ pub enum SessionLoginError {
     },
 }
 
+/// Read-only Keychain probe before a detached sign-in; never written.
+const LOGIN_VAULT_PROBE_KEY: &str = "synara-login-vault-probe";
+
+fn login_sliding_sync_error(error: AuthError) -> SessionLoginError {
+    if error.diagnostic_id() == LOGIN_SLIDING_SYNC_UNSUPPORTED_DIAGNOSTIC_ID {
+        login_failed(
+            LOGIN_SLIDING_SYNC_UNSUPPORTED_CODE,
+            LOGIN_SLIDING_SYNC_UNSUPPORTED_DESCRIPTION,
+        )
+    } else {
+        // The `/versions` probe is the first request: an unreachable or
+        // failing server shows up here.
+        login_auth_error(&error)
+    }
+}
+
 pub(super) fn login_failed(code: &'static str, description: &'static str) -> SessionLoginError {
     SessionLoginError::Failed {
         kind: CoreErrorKind::for_code(code),
@@ -1131,12 +1147,13 @@ impl SharedCore {
 
     pub(super) async fn login_with_password_inner(
         &self,
-        user_id: &str,
+        user: &str,
         homeserver_url: &str,
         store_root: &str,
         password: &str,
+        server_name: Option<&str>,
     ) -> Result<SessionLoginDto, SessionLoginError> {
-        let identity = AccountIdentity::new(user_id, homeserver_url).map_err(|_| {
+        let login_user = LoginUser::parse(user).map_err(|_| {
             login_failed(
                 LOGIN_IDENTITY_INVALID_CODE,
                 LOGIN_IDENTITY_INVALID_DESCRIPTION,
@@ -1151,15 +1168,75 @@ impl SharedCore {
         if password.is_empty() {
             return Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION));
         }
-        let install = begin_session_install(&self.lifecycle, &identity)
+        // The account's store can be picked before signing in only when an
+        // earlier sign-in left one: the account this username signed in to
+        // last time, or the guess from the chosen server. Otherwise the
+        // server names the account; a localpart is never completed with a
+        // guessed domain, which breaks behind a proxy whose host is not the
+        // server name.
+        let lookup_identity = login_store_identity(root, homeserver_url, &login_user, server_name);
+        let (identity, mut detached) = match lookup_identity {
+            Some(identity) => (identity, None),
+            None => {
+                // Refuse before a sign-in creates a device nobody installs:
+                // with a session open or being installed, or with no usable
+                // Keychain to keep the new one.
+                if self.has_retained_client().await
+                    || self.lifecycle.try_begin_detached_install().is_none()
+                {
+                    return Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION));
+                }
+                if self.secret_store.get(LOGIN_VAULT_PROBE_KEY).is_err() {
+                    return Err(login_failed(
+                        LOGIN_VAULT_UNAVAILABLE_CODE,
+                        LOGIN_VAULT_UNAVAILABLE_DESCRIPTION,
+                    ));
+                }
+                // A cancelled caller drops this future; the dropped sign-in
+                // then logs its session out on its own.
+                let detached = DetachedSignIn::sign_in(
+                    self.detached_config(homeserver_url)?,
+                    &login_user,
+                    password,
+                    &Self::ios_login_options(None),
+                    root,
+                )
+                .await
+                .map_err(login_sliding_sync_error)?;
+                // Known from here on, so "reset local data" after a store
+                // failure below targets this account's store.
+                remember_login_account(root, &login_user, detached.identity());
+                (detached.identity().clone(), Some(detached))
+            }
+        };
+        // On an error the remaining sign-in, if any, is dropped and revoked.
+        let login = self
+            .login_into_identity(&identity, &login_user, root, password, &mut detached)
+            .await?;
+        remember_login_account(root, &login_user, &identity);
+        Ok(login)
+    }
+
+    /// Sign in to the known `identity`, or install the session `detached`
+    /// already holds for it. Takes `detached` once it is consumed or revoked;
+    /// on an early error it is left for the caller to revoke.
+    async fn login_into_identity(
+        &self,
+        identity: &AccountIdentity,
+        login_user: &LoginUser,
+        root: &Path,
+        password: &str,
+        detached: &mut Option<DetachedSignIn>,
+    ) -> Result<SessionLoginDto, SessionLoginError> {
+        let install = begin_session_install(&self.lifecycle, identity)
             .await
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let vault = SecretStoreSessionVault {
             store: Arc::clone(&self.secret_store),
         };
-        let store_key = self.prepare_login_store(root, &identity).await?;
+        let store_key = self.prepare_login_store(root, identity).await?;
         let config = self
-            .client_config(root, &identity, store_key)
+            .client_config(root, identity, store_key)
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let existing_device_id = existing_sqlite_crypto_device_id(
             config.state_store_path(),
@@ -1167,6 +1244,13 @@ impl SharedCore {
         )
         .await
         .map_err(|error| login_auth_error(&error))?;
+        if existing_device_id.is_some() {
+            // The server named an account with a device from an earlier
+            // sign-in: drop the new device and sign in again reusing it.
+            if let Some(detached) = detached.take() {
+                detached.revoke();
+            }
+        }
         let client = build_unauthenticated_client(&config)
             .await
             .map_err(|error| login_client_build_error(&error))?;
@@ -1178,40 +1262,33 @@ impl SharedCore {
             persistence.callback_lease(),
         )
         .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
-        require_native_sliding_sync(&client)
-            .await
-            .map_err(|error| {
-                if error.diagnostic_id() == LOGIN_SLIDING_SYNC_UNSUPPORTED_DIAGNOSTIC_ID {
-                    login_failed(
-                        LOGIN_SLIDING_SYNC_UNSUPPORTED_CODE,
-                        LOGIN_SLIDING_SYNC_UNSUPPORTED_DESCRIPTION,
-                    )
-                } else {
-                    // The `/versions` probe is the first request: an
-                    // unreachable or failing server shows up here.
-                    login_auth_error(&error)
-                }
-            })?;
-        let outcome = core_login_with_password(
-            &client,
-            identity.user_id(),
-            password,
-            &LoginOptions {
-                // The notification extension restores this session read-only
-                // and cannot refresh it, so an expiring access token leaves
-                // pushes without previews once the app has been suspended past
-                // the token lifetime. Sessions saved with a refresh token by
-                // older builds keep refreshing in the app.
-                request_refresh_token: false,
-                device_display_name: Some(DevicePlatform::Ios.device_display_name().to_owned()),
-                device_id: existing_device_id,
-            },
-        )
-        .await
+        let outcome = match detached.take() {
+            // Checked for sliding sync before that sign-in.
+            Some(detached) => {
+                detached
+                    .restore_onto(&client, DevicePlatform::Ios.device_display_name())
+                    .await
+            }
+            None => {
+                require_native_sliding_sync(&client)
+                    .await
+                    .map_err(login_sliding_sync_error)?;
+                core_login_with_password(
+                    &client,
+                    login_user.identifier(),
+                    password,
+                    &Self::ios_login_options(existing_device_id),
+                )
+                .await
+            }
+        }
         .map_err(|error| login_auth_error(&error))?;
         let live_identity = AccountIdentity::new(&outcome.user_id, &outcome.homeserver_url)
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
-        if live_identity != identity {
+        if live_identity != *identity {
+            // The store looked up for this username belongs to another
+            // account; look it up afresh next time.
+            forget_login_account(root, identity.homeserver_url(), login_user);
             return Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION));
         }
         // An account's first device gets a cross-signing identity now (same
@@ -1231,6 +1308,47 @@ impl SharedCore {
         // "Verify this device" is offered once, after a password sign-in.
         let _ = self.core.arm_device_verification_prompt(sign_in);
         Ok(login)
+    }
+
+    fn ios_login_options(device_id: Option<String>) -> LoginOptions {
+        LoginOptions {
+            // The notification extension restores this session read-only
+            // and cannot refresh it, so an expiring access token leaves
+            // pushes without previews once the app has been suspended past
+            // the token lifetime. Sessions saved with a refresh token by
+            // older builds keep refreshing in the app.
+            request_refresh_token: false,
+            device_display_name: Some(DevicePlatform::Ios.device_display_name().to_owned()),
+            device_id,
+        }
+    }
+
+    fn detached_config(
+        &self,
+        homeserver_url: &str,
+    ) -> Result<ClientBuildConfig, SessionLoginError> {
+        let failed = |_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION);
+        let synthetic = AccountIdentity::new(
+            &login_ephemeral_user_id(homeserver_url).map_err(|_| {
+                login_failed(
+                    LOGIN_IDENTITY_INVALID_CODE,
+                    LOGIN_IDENTITY_INVALID_DESCRIPTION,
+                )
+            })?,
+            homeserver_url,
+        )
+        .map_err(|_| {
+            login_failed(
+                LOGIN_IDENTITY_INVALID_CODE,
+                LOGIN_IDENTITY_INVALID_DESCRIPTION,
+            )
+        })?;
+        // Path metadata is unused in memory mode; nothing is created there.
+        let unused_root = std::env::temp_dir().join("synara-detached-login-metadata");
+        ClientBuildConfig::product_default(&unused_root, synthetic, None)
+            .map_err(failed)?
+            .with_user_agent(self.user_agent.clone())
+            .map_err(failed)
     }
 
     /// Test-only persist+open+retain through the production login path.
@@ -1564,16 +1682,28 @@ impl SharedCore {
     /// `password` is a dedicated FFI argument. It is never stored, never copied
     /// into the DTO, never echoed, and is zeroized when this frame returns.
     /// This is not `matrix_login_password` and does not attach owners.
+    ///
+    /// `user` is what was typed: a full Matrix ID or a bare localpart, sent
+    /// to `/login` unchanged. `server_name` is the server chosen at sign-in;
+    /// it only locates this account's store from an earlier sign-in. The
+    /// account is the `user_id` the server returns.
     pub async fn login_with_password(
         &self,
-        user_id: String,
+        user: String,
         homeserver_url: String,
         store_root: String,
         password: String,
+        server_name: Option<String>,
     ) -> Result<SessionLoginDto, SessionLoginError> {
         let password = Zeroizing::new(password);
-        self.login_with_password_inner(&user_id, &homeserver_url, &store_root, password.as_str())
-            .await
+        self.login_with_password_inner(
+            &user,
+            &homeserver_url,
+            &store_root,
+            password.as_str(),
+            server_name.as_deref(),
+        )
+        .await
     }
 
     /// Attach the desktop owner set on the retained Client. No Core.command.
@@ -1921,6 +2051,24 @@ impl SharedCore {
         Ok(LeftoverAckDto {
             status: LeftoverAckStatusDto::Wiped,
         })
+    }
+
+    /// The account whose local store a sign-in with `user` on
+    /// `homeserver_url` opens: the one this username signed in to last time,
+    /// else the guess from `server_name`, if that store exists. "Reset local
+    /// data" after a failed sign-in targets this account, which behind a
+    /// proxy host is not the guessed `@user:<chosen server>`.
+    pub fn login_account_user_id(
+        &self,
+        user: String,
+        homeserver_url: String,
+        store_root: String,
+        server_name: Option<String>,
+    ) -> Option<String> {
+        let user = LoginUser::parse(&user).ok()?;
+        let root = parse_store_root(&store_root).ok()?;
+        login_store_identity(root, &homeserver_url, &user, server_name.as_deref())
+            .map(|identity| identity.user_id().to_owned())
     }
 
     /// Delete one account's local store and its store key, after the user

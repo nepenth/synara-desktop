@@ -6,6 +6,7 @@ export type PlatformSecretStoreBackend =
   | 'macos-keychain'
   | 'linux-secret-service'
   | 'linux-keyutils'
+  | 'windows-credential-manager'
   | 'ios-keychain'
   | 'unknown';
 
@@ -39,6 +40,7 @@ const PLATFORM_SECRET_STORE_BACKENDS = new Set<PlatformSecretStoreBackend>([
   'macos-keychain',
   'linux-secret-service',
   'linux-keyutils',
+  'windows-credential-manager',
   'ios-keychain',
   'unknown',
 ]);
@@ -119,6 +121,8 @@ export const getPlatformSecretStoreBackendLabel = (backend: PlatformSecretStoreB
       return 'Linux Secret Service';
     case 'linux-keyutils':
       return 'Linux keyutils';
+    case 'windows-credential-manager':
+      return 'Windows Credential Manager';
     case 'ios-keychain':
       return 'iOS Keychain';
     case 'none':
@@ -163,10 +167,6 @@ export const getPlatformSecretStoreStatusDescription = (
 
   if (status.reason === 'secure-secret-store-unavailable') {
     return `${backendLabel} is unavailable.`;
-  }
-
-  if (status.reason === 'windows-native-session-store-unsupported') {
-    return 'Windows builds do not persist sessions to a native credential store.';
   }
 
   return 'Synara is using the fallback session store.';

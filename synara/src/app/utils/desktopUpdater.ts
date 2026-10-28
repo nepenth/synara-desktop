@@ -6,7 +6,9 @@ export const SYNARA_LATEST_UPDATE_METADATA_URL =
   'https://github.com/nepenth/synara-desktop/releases/latest/download/latest.json';
 export const DISMISSED_UPDATE_VERSION_KEY = 'synara.desktop.dismissedUpdateVersion';
 
-export type DesktopUpdaterPlatform = 'macos' | 'linux' | 'unsupported';
+export type DesktopUpdaterPlatform = 'macos' | 'windows' | 'linux' | 'unsupported';
+/** Platforms that download, install and relaunch through the Tauri updater. */
+export type InAppUpdaterPlatform = 'macos' | 'windows';
 export type DesktopUpdateCheckSource = 'manual' | 'background';
 
 export type DesktopUpdateDownloadEvent =
@@ -20,7 +22,7 @@ export type DesktopUpdateDownloadProgress = {
   finished: boolean;
 };
 
-export type MacosUpdateHandle = {
+export type InAppUpdateHandle = {
   currentVersion: string;
   version: string;
   date?: string;
@@ -32,18 +34,18 @@ export type MacosUpdateHandle = {
 export type DesktopUpdateCheckResult =
   | {
       status: 'available';
-      platform: 'macos' | 'linux';
+      platform: InAppUpdaterPlatform | 'linux';
       currentVersion: string;
       version: string;
       date?: string;
       body?: string;
       releaseUrl: string;
       packageManagerHint?: string;
-      macosUpdate?: MacosUpdateHandle;
+      inAppUpdate?: InAppUpdateHandle;
     }
   | {
       status: 'up-to-date';
-      platform: 'macos' | 'linux';
+      platform: InAppUpdaterPlatform | 'linux';
       currentVersion: string;
       version: string;
       releaseUrl: string;
@@ -59,7 +61,7 @@ export type DesktopUpdateCheckOptions = {
   currentVersion?: string;
   fetchImpl?: typeof fetch;
   getPlatform?: () => Promise<string>;
-  macosCheck?: () => Promise<MacosUpdateHandle | null>;
+  inAppCheck?: () => Promise<InAppUpdateHandle | null>;
   supportsUpdater?: () => boolean;
 };
 
@@ -71,6 +73,7 @@ type LatestJson = {
 export const normalizeDesktopUpdaterPlatform = (platform: string): DesktopUpdaterPlatform => {
   const normalized = platform.toLowerCase();
   if (normalized === 'darwin' || normalized === 'macos') return 'macos';
+  if (normalized === 'windows') return 'windows';
   if (normalized === 'linux') return 'linux';
   return 'unsupported';
 };
@@ -184,9 +187,9 @@ const defaultGetPlatform = async (): Promise<string> => {
   return capabilities.platform;
 };
 
-const defaultMacosCheck = async (): Promise<MacosUpdateHandle | null> => {
+const defaultInAppCheck = async (): Promise<InAppUpdateHandle | null> => {
   const updater = await import('@tauri-apps/plugin-updater');
-  return updater.check() as Promise<MacosUpdateHandle | null>;
+  return updater.check() as Promise<InAppUpdateHandle | null>;
 };
 
 const latestReleaseUrlForVersion = (version: string): string =>
@@ -238,18 +241,20 @@ const checkLinuxUpdate = async ({
   };
 };
 
-const checkMacosUpdate = async ({
+const checkInAppUpdate = async ({
+  platform,
   currentVersion,
-  macosCheck,
+  inAppCheck,
 }: {
+  platform: InAppUpdaterPlatform;
   currentVersion: string;
-  macosCheck: () => Promise<MacosUpdateHandle | null>;
+  inAppCheck: () => Promise<InAppUpdateHandle | null>;
 }): Promise<DesktopUpdateCheckResult> => {
-  const update = await macosCheck();
+  const update = await inAppCheck();
   if (!update) {
     return {
       status: 'up-to-date',
-      platform: 'macos',
+      platform,
       currentVersion,
       version: currentVersion,
       releaseUrl: latestReleaseUrlForVersion(currentVersion),
@@ -258,13 +263,13 @@ const checkMacosUpdate = async ({
 
   return {
     status: 'available',
-    platform: 'macos',
+    platform,
     currentVersion: update.currentVersion || currentVersion,
     version: update.version,
     date: update.date,
     body: update.body,
     releaseUrl: latestReleaseUrlForVersion(update.version),
-    macosUpdate: update,
+    inAppUpdate: update,
   };
 };
 
@@ -272,7 +277,7 @@ export const checkDesktopUpdate = async ({
   currentVersion = APP_VERSION,
   fetchImpl = fetch,
   getPlatform = defaultGetPlatform,
-  macosCheck = defaultMacosCheck,
+  inAppCheck = defaultInAppCheck,
   supportsUpdater = supportsPlatformUpdater,
 }: DesktopUpdateCheckOptions = {}): Promise<DesktopUpdateCheckResult> => {
   const platform = normalizeDesktopUpdaterPlatform(await getPlatform());
@@ -282,7 +287,8 @@ export const checkDesktopUpdate = async ({
       status: 'unavailable',
       platform,
       currentVersion,
-      message: 'Synara desktop updates are only available in macOS and Linux desktop builds.',
+      message:
+        'Synara desktop updates are only available in macOS, Windows and Linux desktop builds.',
     };
   }
 
@@ -300,7 +306,7 @@ export const checkDesktopUpdate = async ({
   }
 
   try {
-    return await checkMacosUpdate({ currentVersion, macosCheck });
+    return await checkInAppUpdate({ platform, currentVersion, inAppCheck });
   } catch (error) {
     if (isUpdaterUnavailableError(error)) {
       return {
@@ -314,8 +320,10 @@ export const checkDesktopUpdate = async ({
   }
 };
 
-export const installMacosUpdateAndRelaunch = async (
-  update: MacosUpdateHandle,
+// On Windows the installer closes the app itself once it starts, so the
+// relaunch below only runs on macOS.
+export const installUpdateAndRelaunch = async (
+  update: InAppUpdateHandle,
   onEvent?: (event: DesktopUpdateDownloadEvent) => void
 ): Promise<void> => {
   await update.downloadAndInstall(onEvent);

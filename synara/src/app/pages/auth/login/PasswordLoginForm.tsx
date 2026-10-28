@@ -36,13 +36,14 @@ import { useClientConfig } from '../../../hooks/useClientConfig';
 import {
   LoginError,
   PasswordLoginError,
+  PasswordLoginRequest,
   PasswordLoginResponse,
   STORE_RECOVERY_CONFIRMATION_TEXT,
   StoreRecoveryError,
   archiveAndRebuildNativeStore,
   canOfferNativeStoreRecovery,
-  factoryGetBaseUrl,
   loginPassword,
+  mxIdLoginBaseUrl,
   useLoginComplete,
   NATIVE_SESSION_HANDOFF_FAILED_COPY,
 } from './loginUtil';
@@ -138,8 +139,14 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
   const [loginState, startLogin] = useAsyncCallback<
     PasswordLoginResponse,
     PasswordLoginError,
-    Parameters<typeof loginPassword>
-  >(useCallback(loginPassword, []));
+    [Parameters<typeof loginPassword>[0], PasswordLoginRequest]
+  >(
+    useCallback(
+      (serverBaseUrl: Parameters<typeof loginPassword>[0], data: PasswordLoginRequest) =>
+        loginPassword(serverBaseUrl, data, { serverName: server }),
+      [server]
+    )
+  );
 
   const { handoffFailed, retryHandoff } = useLoginComplete(
     loginState.status === AsyncStatus.Success ? loginState.data : undefined
@@ -198,7 +205,9 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
       type: 'm.login.password',
       identifier: {
         type: 'm.id.user',
-        user: `@${username}:${server}`,
+        // Sent as typed: the homeserver completes a localpart with its own
+        // server name, which can differ from the host signed in through.
+        user: username,
       },
       password,
       initial_device_display_name: synaraDeviceDisplayName(),
@@ -210,9 +219,7 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
     const mxIdUsername = getMxIdLocalPart(mxId);
     if (!mxIdServer || !mxIdUsername) return;
 
-    const getBaseUrl = factoryGetBaseUrl(clientConfig, mxIdServer);
-
-    startLogin(getBaseUrl, {
+    startLogin(mxIdLoginBaseUrl(clientConfig, mxIdServer, server, baseUrl), {
       type: 'm.login.password',
       identifier: {
         type: 'm.id.user',
