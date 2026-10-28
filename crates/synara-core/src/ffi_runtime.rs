@@ -151,20 +151,32 @@ mod tests {
 
     #[test]
     fn blocking_helpers_run_off_the_async_workers_on_every_runtime_flavor() {
-        // A multi-threaded worker hands its other tasks over first.
-        let multi = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
-            .enable_all()
-            .build()
-            .unwrap();
-        let (inline, pooled) = multi.block_on(async {
+        // A multi-threaded worker hands its other tasks over first. Each check
+        // gets its own runtime: after block_in_place the task can resume on
+        // another worker while the old thread returns to the blocking pool,
+        // where it may then run the run_blocking closure.
+        let multi_thread = || {
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+                .unwrap()
+        };
+        let inline = multi_thread().block_on(async {
             tokio::spawn(async {
                 let worker = thread::current().id();
-                let inline = super::block_in_place_if_worker(|| thread::current().id());
-                let pooled = super::run_blocking(|| thread::current().id())
+                super::block_in_place_if_worker(|| thread::current().id()) == worker
+            })
+            .await
+            .unwrap()
+        });
+        let pooled = multi_thread().block_on(async {
+            tokio::spawn(async {
+                let worker = thread::current().id();
+                super::run_blocking(|| thread::current().id())
                     .await
-                    .unwrap();
-                (inline == worker, pooled != worker)
+                    .unwrap()
+                    != worker
             })
             .await
             .unwrap()
