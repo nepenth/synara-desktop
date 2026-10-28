@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## [2.5.0] - 2026-10-27
+
+- GIFs (iOS): GIF links from Klipy and GIPHY play in the conversation, and GIF attachments animate (Reduce Motion shows their first frame). The Attach sheet has a GIF option, and typing `/gif` or `/gif high five` opens a Klipy picker with trending GIFs, search and more GIFs as you scroll. As on desktop, a GIF is sent as its link, never re-hosted. Settings → GIFs & Link Previews has "GIF Search", "Play GIF Links Inline" and "Show X Posts". TestFlight builds take the Klipy key from `SYNARA_KLIPY_API_KEY`; builds without it don't offer GIF search.
+- X posts (iOS): an x.com or twitter.com post link shows the post's author, text and photos, and its video plays when you tap it.
+- Defaults (desktop and iOS): GIF search, inline GIF links and X posts are now on by default. Desktop turns GIF search and X posts on once for settings saved by an earlier version; turn them off again in Settings → General. Klipy, GIPHY and X can see the IP address of a device that loads their content.
+- GIFs (desktop): typing `/gif` or `/gif <search>` and pressing Enter opens the GIF picker; before, the text was sent as a message or only became a command chip. The picker's search field no longer shrinks to a few pixels.
+- Connection status (desktop and iOS): while the homeserver keeps failing, "Connection Lost! Reconnecting..." now shows and stays until sync gets a response again. Before, each automatic reconnect counted as connected for a few seconds, so the banner never appeared and only a failed send revealed the outage.
+- README: brought up to date with the current release, install options, capabilities and release process.
+
 ## [2.4.0] - 2026-10-27
 
 - GIFs (desktop): GIF search now uses Klipy, because Tenor's API shut down on 2026-06-30. The picker shows trending GIFs as soon as it opens, loads more as you scroll, and reads "Search KLIPY" and "Powered by KLIPY" as Klipy requires. Typing `/gif` or `/gif high five` opens the picker with that search. Klipy and GIPHY forbid re-hosting their GIFs, so a GIF is sent as its link and Synara plays it inline, loaded straight from the provider; other Matrix apps show the link. Settings → General → "Play GIF Links Inline" (on by default) turns the inline GIFs off. GIF search stays off in builds made without a Klipy key (`SYNARA_KLIPY_API_KEY`).

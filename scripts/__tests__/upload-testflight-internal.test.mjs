@@ -19,6 +19,7 @@ async function createHarness({
   exportBehaviors = ["ok:0"],
   exportRetries,
   retrySeconds = 0,
+  klipyKey = "",
 } = {}) {
   const root = await mkdtemp(
     path.join(os.tmpdir(), "synara-testflight-upload-"),
@@ -31,6 +32,8 @@ async function createHarness({
   const exportCountFile = path.join(root, "export-count.txt");
   const outputFile = path.join(root, "github-output.txt");
   const commandLog = path.join(root, "xcode-commands.jsonl");
+  const klipyXcconfig = path.join(root, "KlipyAPIKey.local.xcconfig");
+  const klipyXcconfigSeen = path.join(root, "klipy-seen-by-archive.xcconfig");
   await Promise.all([
     mkdir(binDirectory, { recursive: true }),
     mkdir(distributionLogs, { recursive: true }),
@@ -89,6 +92,9 @@ if [[ " $* " == *" -exportArchive "* ]]; then
 fi
 count="$(cat "$FAKE_ARCHIVE_COUNT_FILE")"
 printf '%s\\n' "$((count + 1))" > "$FAKE_ARCHIVE_COUNT_FILE"
+if [[ -f "$SYNARA_IOS_KLIPY_XCCONFIG" ]]; then
+  cp "$SYNARA_IOS_KLIPY_XCCONFIG" "$FAKE_KLIPY_XCCONFIG_SEEN"
+fi
 printf 'fixture archive\\n'
 `,
     "utf8",
@@ -149,6 +155,9 @@ printf 'checked\\n' > "$SYNARA_ARCHIVE_CHECK_MARKER"
     ),
     SYNARA_ARCHIVE_CHECK_MARKER: archiveCheckMarker,
     SYNARA_TESTFLIGHT_EXPORT_RETRY_SECONDS: String(retrySeconds),
+    SYNARA_KLIPY_API_KEY: klipyKey,
+    SYNARA_IOS_KLIPY_XCCONFIG: klipyXcconfig,
+    FAKE_KLIPY_XCCONFIG_SEEN: klipyXcconfigSeen,
   };
   if (exportRetries !== undefined) {
     env.SYNARA_TESTFLIGHT_EXPORT_RETRIES = String(exportRetries);
@@ -167,6 +176,8 @@ printf 'checked\\n' > "$SYNARA_ARCHIVE_CHECK_MARKER"
     exportCountFile,
     outputFile,
     commandLog,
+    klipyXcconfig,
+    klipyXcconfigSeen,
     result,
   };
 }
@@ -320,4 +331,30 @@ test("exhausts transient export retries and keeps the last Xcode status", async 
     ),
     /Account credentials have expired/,
   );
+});
+
+test("archives with the Klipy key from an ignored xcconfig, never the command line", async () => {
+  const harness = await createHarness({ klipyKey: "  key_ABC-123  " });
+  assert.equal(harness.result.status, 0, harness.result.stderr);
+  assert.match(
+    await readFile(harness.klipyXcconfigSeen, "utf8"),
+    /^SYNARA_KLIPY_API_KEY = key_ABC-123$/m,
+  );
+  const commands = await readFile(harness.commandLog, "utf8");
+  assert.doesNotMatch(commands, /key_ABC-123/);
+  await assert.rejects(readFile(harness.klipyXcconfig, "utf8"), { code: "ENOENT" });
+});
+
+test("rejects a malformed Klipy key before archiving", async () => {
+  const harness = await createHarness({ klipyKey: 'bad key"' });
+  assert.equal(harness.result.status, 1);
+  assert.match(harness.result.stderr, /SYNARA_KLIPY_API_KEY is not a valid API key/);
+  assert.equal(await readFile(harness.archiveCountFile, "utf8"), "0");
+});
+
+test("builds without GIF search when no Klipy key is set", async () => {
+  const harness = await createHarness();
+  assert.equal(harness.result.status, 0, harness.result.stderr);
+  assert.match(harness.result.stdout, /will not offer GIF search/);
+  await assert.rejects(readFile(harness.klipyXcconfigSeen, "utf8"), { code: "ENOENT" });
 });

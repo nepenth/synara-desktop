@@ -147,6 +147,13 @@ struct SettingsView: View {
                     SettingsNavigationRow(title: String(localized: "Security & Recovery"), systemImage: "lock.shield")
                 }
                 .accessibilityIdentifier("SecuritySettingsLink")
+
+                NavigationLink {
+                    RichLinkSettingsView()
+                } label: {
+                    SettingsNavigationRow(title: String(localized: "GIFs & Link Previews"), systemImage: "play.rectangle")
+                }
+                .accessibilityIdentifier("RichLinkSettingsLink")
             }
 
             Section("About") {
@@ -1449,6 +1456,76 @@ private struct NotificationSettingsView: View {
                 if status.allowsPushRegistration {
                     environment.push.beginRegistration()
                 }
+            }
+        }
+    }
+}
+
+/// Desktop's Settings → General rich-link toggles. Each one decides whether
+/// this device contacts a third party, which can then see its IP address.
+private struct RichLinkSettingsView: View {
+    @Environment(\.appEnvironment) private var environment
+    @State private var inlineGifLinks = true
+    @State private var gifSearch = true
+    @State private var xEmbeds = true
+    @State private var didLoad = false
+    /// Builds without a Klipy key (local, dev and CI test builds) cannot search.
+    private let gifSearchConfigured = KlipyGifProvider.configured() != nil
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Play GIF Links Inline", isOn: $inlineGifLinks)
+                    .accessibilityIdentifier("RichLinkInlineGifToggle")
+                    .onChange(of: inlineGifLinks) { value in
+                        guard didLoad else { return }
+                        environment.settings.set(value, for: RichLinkSettings.inlineGifLinksKey)
+                    }
+            } footer: {
+                Text("Show Klipy and GIPHY links as GIFs. Your device loads them from the provider, which can see your IP address.")
+            }
+
+            Section {
+                Toggle("GIF Search", isOn: Binding(
+                    get: { gifSearchConfigured && gifSearch },
+                    set: { gifSearch = $0 }
+                ))
+                .disabled(gifSearchConfigured == false)
+                .accessibilityIdentifier("RichLinkGifSearchToggle")
+                .onChange(of: gifSearch) { value in
+                    guard didLoad else { return }
+                    environment.settings.set(value, for: RichLinkSettings.gifSearchKey)
+                }
+            } footer: {
+                if gifSearchConfigured {
+                    Text("Show GIF search in the composer and for /gif. Your searches go to KLIPY, which can see your IP address. A GIF is sent as its KLIPY link.")
+                } else {
+                    Text("GIF search is not set up for this build.")
+                }
+            }
+
+            Section {
+                Toggle("Show X Posts", isOn: $xEmbeds)
+                    .accessibilityIdentifier("RichLinkXPostsToggle")
+                    .onChange(of: xEmbeds) { value in
+                        guard didLoad else { return }
+                        environment.settings.set(value, for: RichLinkSettings.xEmbedsKey)
+                    }
+            } footer: {
+                Text("Show the post and play its video for x.com links. Your device contacts X, which can see your IP address.")
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(SynaraChrome.settings)
+        .navigationTitle("GIFs & Link Previews")
+        .navigationBarTitleDisplayMode(.inline)
+        .accessibilityIdentifier("RichLinkSettingsScreen")
+        .onAppear {
+            inlineGifLinks = environment.settings.bool(for: RichLinkSettings.inlineGifLinksKey)
+            gifSearch = environment.settings.bool(for: RichLinkSettings.gifSearchKey)
+            xEmbeds = environment.settings.bool(for: RichLinkSettings.xEmbedsKey)
+            DispatchQueue.main.async {
+                didLoad = true
             }
         }
     }

@@ -10,8 +10,8 @@ settings:
     SWIFT_VERSION: "5.0"
     IPHONEOS_DEPLOYMENT_TARGET: "16.0"
     CODE_SIGN_STYLE: Automatic
-    MARKETING_VERSION: "2.4.0"
-    CURRENT_PROJECT_VERSION: "2.4.0"
+    MARKETING_VERSION: "2.5.0"
+    CURRENT_PROJECT_VERSION: "2.5.0"
     SYNARA_CRITICAL_ALERTS_ENABLED: "NO"
     SYNARA_NOTIFICATION_FILTERING_ENABLED: "NO"
     # User-facing copy lives in String Catalogs: Synara/Resources/Localizable.xcstrings
@@ -67,6 +67,12 @@ targets:
         SynaraCriticalAlertsEnabled: "$(SYNARA_CRITICAL_ALERTS_ENABLED)"
         SynaraNotificationFilteringEnabled: "$(SYNARA_NOTIFICATION_FILTERING_ENABLED)"
         SynaraKeychainAccessGroup: "$(AppIdentifierPrefix)com.whylandcreative.synara.shared"
+        SynaraKlipyAPIKey: "$(SYNARA_KLIPY_API_KEY)"
+    # SYNARA_KLIPY_API_KEY comes only from this file and its ignored include,
+    # written at build time from the environment (scripts/lib/klipy-api-key.sh).
+    configFiles:
+      Debug: Config/Synara.xcconfig
+      Release: Config/Synara.xcconfig
     settings:
       base:
         CODE_SIGN_ENTITLEMENTS: "$(SYNARA_APP_ENTITLEMENTS)"

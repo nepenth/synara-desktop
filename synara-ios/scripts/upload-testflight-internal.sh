@@ -15,6 +15,7 @@ PUSH_GATEWAY_URL="${SYNARA_PUSH_GATEWAY_URL:-}"
 ARCHIVE_ROOT="${SYNARA_IOS_ARCHIVE_ROOT:-/tmp}"
 DIAGNOSTICS_DIR="${SYNARA_IOS_DIAGNOSTICS_DIR:-${RUNNER_TEMP:-$ARCHIVE_ROOT}/synara-ios-testflight-diagnostics}"
 source "$SCRIPT_DIR/lib/xcode-cache.sh"
+source "$SCRIPT_DIR/lib/klipy-api-key.sh"
 NOTIFICATION_SERVICE_ARCHIVE_CHECKER="${SYNARA_IOS_NOTIFICATION_ARCHIVE_CHECKER:-$SCRIPT_DIR/check-notification-service-archive.sh}"
 
 require_env() {
@@ -32,6 +33,17 @@ require_env \
   "SYNARA_IOS_NOTIFICATION_SERVICE_PROVISIONING_PROFILE" \
   "$NOTIFICATION_SERVICE_PROVISIONING_PROFILE"
 require_env "SYNARA_PUSH_GATEWAY_URL" "$PUSH_GATEWAY_URL"
+
+# The Klipy key reaches the archive through an ignored xcconfig include, never
+# a command-line build setting, so it stays out of the archive log artifact.
+if ! synara_write_klipy_api_key "$PROJECT_DIR" replace; then
+  echo "Set SYNARA_KLIPY_API_KEY to the Klipy API key, or leave it unset to build without GIF search." >&2
+  exit 1
+fi
+trap 'synara_remove_klipy_api_key "$PROJECT_DIR"' EXIT
+if [[ -z "$(synara_validated_klipy_api_key)" ]]; then
+  echo "::warning::SYNARA_KLIPY_API_KEY is not set; this build will not offer GIF search."
+fi
 
 TESTFLIGHT_INTERNAL_ONLY="${SYNARA_TESTFLIGHT_INTERNAL_ONLY:-true}"
 if [[ "$TESTFLIGHT_INTERNAL_ONLY" != "true" && "$TESTFLIGHT_INTERNAL_ONLY" != "false" ]]; then
@@ -159,6 +171,7 @@ fi
 
 cleanup() {
   rm -f "$export_options"
+  synara_remove_klipy_api_key "$PROJECT_DIR"
 }
 trap cleanup EXIT
 

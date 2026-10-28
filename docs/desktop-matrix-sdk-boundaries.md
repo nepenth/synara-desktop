@@ -195,7 +195,7 @@ sign-in: sync, media and every Matrix request go through Rust commands and the
 | `img-src` | `blob:` | Object URLs for local previews before upload and for decrypted media. |
 | `img-src` `media-src` `connect-src` | `synara-media:` | The Rust media protocol (`src-tauri/src/lib.rs`) serves every Matrix image, video, audio and PDF, decrypted by the SDK. |
 | `img-src` | `https://static.klipy.com` `https://static1.klipy.com` `https://static2.klipy.com` `https://*.giphy.com` | GIF search results, and GIF links played inline in the timeline, from the built-in Klipy and GIPHY providers (search is off unless `config.json` configures `gifPicker`). Both providers require their media to be loaded straight from their CDNs, never re-hosted, so these GIFs are sent as links. A custom GIF endpoint also needs its media host added here. |
-| `img-src` `media-src` | `https://pbs.twimg.com` `https://video.twimg.com` | Opt-in X post cards (Settings > General > Show X Posts): the author avatar, photos and video of an x.com link. The post JSON itself is fetched natively (`desktop_x_post`), because X's endpoint refuses browser origins. |
+| `img-src` `media-src` | `https://pbs.twimg.com` `https://video.twimg.com` | X post cards, on by default (Settings > General > Show X Posts): the author avatar, photos and video of an x.com link. The post JSON itself is fetched natively (`desktop_x_post`), because X's endpoint refuses browser origins. |
 | `font-src` | `data:` | Embedded icon and font data URIs shipped with the bundled frontend assets. |
 | `media-src` | `data:` `blob:` | Local audio/video previews and object-URL playback. |
 | `connect-src` | `blob:` | `fetch` of object URLs (image viewer download, pdf.js). |

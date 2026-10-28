@@ -730,7 +730,8 @@ struct RoomTimelineView: View {
                 isSending: isSendingMessage,
                 onPasteImages: draftPastedImages,
                 isFocusedExternally: $isComposerFocused,
-                sentDraft: sentDraft
+                sentDraft: sentDraft,
+                onSendGif: sendGif
             )
             .padding(.bottom, canvasLayout == .stacked && !isComposerFocused ? SynaraSpacing.large : 0)
             .background { SynaraChrome.composer.ignoresSafeArea(edges: .bottom) }
@@ -3779,6 +3780,41 @@ struct RoomTimelineView: View {
         sendMessage(body: rawBody)
     }
 
+    /// A picked GIF goes out as a plain message whose body is the provider's
+    /// media URL, as desktop sends it: Klipy and GIPHY forbid re-hosting, so
+    /// it is never uploaded. It takes the reply relation and leaves the typed
+    /// draft alone.
+    private func sendGif(_ gif: GifResult) {
+        guard isSendingMessage == false, editSession == nil else {
+            return
+        }
+        let clientTransactionID = OutgoingQueuedMessage.newClientTransactionID()
+        let queued = environment.outgoingSends.enqueue(
+            localID: "$pending-\(clientTransactionID)",
+            clientTransactionID: clientTransactionID,
+            roomID: roomID,
+            body: gif.url,
+            formattedBody: nil,
+            replyToEventID: replyTarget?.eventID,
+            threadRootEventID: replyTarget?.threadRootEventID,
+            senderID: currentUserID,
+            senderAvatarURL: ownAvatarURL,
+            timestamp: Date()
+        )
+        registerSendAnimation(for: queued.id)
+        applyOutgoingQueueToTimeline()
+        if StableScrollAnchoringFeatureFlag.isEnabled {
+            followLatestAfterSend()
+        } else {
+            sendLatestRequest &+= 1
+        }
+        replyTarget = nil
+        sendError = nil
+        Task {
+            await transmitOutgoing(id: queued.id)
+        }
+    }
+
     @MainActor
     private func performSend(_ intent: ComposerSendIntent, sentText: String) async {
         await performSend(
@@ -4565,7 +4601,8 @@ struct ThreadTimelineView: View {
                 isSending: isSendingMessage,
                 onPasteImages: draftThreadPastedImages,
                 isFocusedExternally: $isComposerFocused,
-                sentDraft: sentDraft
+                sentDraft: sentDraft,
+                onSendGif: sendThreadGif
             )
             .padding(.bottom, canvasLayout == .stacked ? SynaraSpacing.large : 0)
         }
@@ -5232,6 +5269,33 @@ struct ThreadTimelineView: View {
         refreshPendingReplies()
         scrollToNewestRequest &+= 1
         await transmitThreadReply(id: queued.id)
+    }
+
+    /// As in the room composer: the GIF's provider URL as a plain thread
+    /// reply, never re-uploaded, keeping the typed draft.
+    private func sendThreadGif(_ gif: GifResult) {
+        guard isSendingMessage == false, editSession == nil else {
+            return
+        }
+        let clientTransactionID = OutgoingQueuedMessage.newClientTransactionID()
+        let queued = environment.outgoingSends.enqueue(
+            localID: "$pending-\(clientTransactionID)",
+            clientTransactionID: clientTransactionID,
+            roomID: roomID,
+            body: gif.url,
+            formattedBody: nil,
+            replyToEventID: replyTarget?.eventID,
+            threadRootEventID: rootEventID,
+            senderID: currentUserID,
+            timestamp: Date()
+        )
+        replyTarget = nil
+        sendError = nil
+        refreshPendingReplies()
+        scrollToNewestRequest &+= 1
+        Task {
+            await transmitThreadReply(id: queued.id)
+        }
     }
 
     private func transmitThreadReply(id: String) async {
@@ -7063,7 +7127,10 @@ private struct TimelineRow: View {
     let onRetryFailedSend: () -> Void
     var onDiscardFailedSend: () -> Void = {}
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.appEnvironment) private var environment
     @State private var isSelectingText = false
+    /// A GIF link that failed to load shows as its link instead.
+    @State private var failedInlineGifURL: String?
     @State private var isDeclinePending = false
 
     var body: some View {
@@ -7316,6 +7383,10 @@ private struct TimelineRow: View {
                     bubbleWrappedBodyContent
                 }
 
+            if let xPostLink {
+                XPostEmbedView(url: xPostLink)
+            }
+
             if item.reactions.isEmpty == false {
                 let canToggleReactions = TimelineReactionTogglePolicy.canToggle(
                     availability: availability,
@@ -7401,16 +7472,26 @@ private struct TimelineRow: View {
         } else {
             switch item.kind {
             case let .text(body):
-                SynaraMessageBubble(
-                    text: body,
-                    alignment: bubbleAlignment,
-                    isGrouped: isGroupedWithPrevious,
-                    deliveryStatus: item.presentedDeliveryStatus,
-                    statusEventID: item.eventID,
-                    onRetryFailedSend: bubbleRetryAction,
-                    onDiscardFailedSend: bubbleDiscardAction,
-                    encryptionShield: item.encryptionShield
-                )
+                if let inlineGif {
+                    SynaraMessageBubble(
+                        alignment: bubbleAlignment,
+                        variant: .standard,
+                        depth: SynaraSurfaceDepthRole.standardMessage,
+                        isGrouped: isGroupedWithPrevious,
+                        showsBackground: false,
+                        deliveryStatus: item.presentedDeliveryStatus,
+                        statusEventID: item.eventID,
+                        onRetryFailedSend: bubbleRetryAction,
+                        onDiscardFailedSend: bubbleDiscardAction,
+                        encryptionShield: item.encryptionShield
+                    ) {
+                        InlineGifView(link: inlineGif) {
+                            failedInlineGifURL = inlineGif.url
+                        }
+                    }
+                } else {
+                    plainTextBubble(body)
+                }
             case let .formattedText(body, html):
                 SynaraMessageBubble(
                     alignment: bubbleAlignment,
@@ -7464,6 +7545,53 @@ private struct TimelineRow: View {
                 bodyContent
             }
         }
+    }
+
+    private func plainTextBubble(_ body: String) -> some View {
+        SynaraMessageBubble(
+            text: body,
+            alignment: bubbleAlignment,
+            isGrouped: isGroupedWithPrevious,
+            deliveryStatus: item.presentedDeliveryStatus,
+            statusEventID: item.eventID,
+            onRetryFailedSend: bubbleRetryAction,
+            onDiscardFailedSend: bubbleDiscardAction,
+            encryptionShield: item.encryptionShield
+        )
+    }
+
+    /// A plain message that is nothing but a Klipy or GIPHY link plays as
+    /// the GIF (Settings → Play GIF Links Inline), as on desktop.
+    private var inlineGif: InlineGifLink? {
+        guard case let .text(body) = item.kind,
+              environment.settings.bool(for: RichLinkSettings.inlineGifLinksKey),
+              let link = GifLinks.messageInlineGif(body),
+              link.url != failedInlineGifURL
+        else {
+            return nil
+        }
+        return link
+    }
+
+    /// The message's first link, when it is an X post (Settings → Show X Posts).
+    private var xPostLink: String? {
+        let body: String
+        switch item.kind {
+        case let .text(text):
+            body = text
+        case let .formattedText(text, _):
+            body = text
+        default:
+            return nil
+        }
+        // Cheap test first: most messages hold no X link at all.
+        guard body.contains("x.com/") || body.contains("twitter.com/"),
+              inlineGif == nil,
+              environment.settings.bool(for: RichLinkSettings.xEmbedsKey)
+        else {
+            return nil
+        }
+        return XPostEmbed.firstStatusLink(in: body)
     }
 
     @ViewBuilder
@@ -7527,7 +7655,8 @@ private struct TimelineRow: View {
         TimelineRowAccessibility.summary(
             sender: senderDisplayName,
             time: timeText,
-            kind: item.kind,
+            // A played GIF link reads as "GIF", not as its URL.
+            kind: inlineGif == nil ? item.kind : .text(String(localized: "GIF")),
             isEdited: item.isEdited,
             reactions: item.reactions,
             ownReactions: item.reactionOwnership,
@@ -7558,6 +7687,8 @@ private struct TimelineRow: View {
             hasApprovalPrompt: approvalPrompt != nil,
             hasInteractivePoll: item.poll != nil
         )
+            // An X card's play and "View on X" buttons must stay reachable.
+            || xPostLink != nil
     }
 
     /// The quick reactions as a row of emoji at the top of the menu (a
@@ -7849,11 +7980,17 @@ private struct MediaAttachmentCard: View {
         if resource.isEncrypted || resource.authenticatedURL == nil {
             unavailableImagePlaceholder
         } else if let thumbnailImage {
-            Image(uiImage: thumbnailImage)
-                .resizable()
-                .scaledToFill()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
+            if thumbnailImage.isAnimated {
+                AnimatedImageView(image: thumbnailImage, contentMode: .scaleAspectFill)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+            } else {
+                Image(uiImage: thumbnailImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+            }
         } else if isLoadingThumbnail {
             ZStack {
                 unavailableImagePlaceholder
@@ -7892,6 +8029,17 @@ private struct MediaAttachmentCard: View {
 
         isLoadingThumbnail = true
         defer { isLoadingThumbnail = false }
+
+        // A server thumbnail of a GIF is one still frame; play the original.
+        if resource.isAnimatedImageMedia,
+           (resource.byteSize ?? 0) <= MediaResource.maxAnimatedImageBytes,
+           let data = await environment.mediaLoader.loadMediaData(for: resource),
+           data.count <= MediaResource.maxAnimatedImageBytes,
+           let image = await AnimatedImageDecoder.decode(data, limits: .inline)
+        {
+            thumbnailImage = image
+            return
+        }
 
         let pixelWidth = UInt64(max(1, Int(UIScreen.main.bounds.width * UIScreen.main.scale)))
         let pixelHeight = UInt64(max(1, Int(imageThumbnailHeight * UIScreen.main.scale)))
@@ -8917,10 +9065,17 @@ private struct ComposerView: View {
     /// The latest finished send; the composer drops what it sent and keeps
     /// what was typed since.
     var sentDraft: ComposerSentDraft?
+    /// Sends a picked GIF as its provider link, with the composer's reply
+    /// or thread relation; the typed draft is kept.
+    var onSendGif: ((GifResult) -> Void)?
     @Environment(\.appEnvironment) private var environment
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var typingNotifier: ComposerTypingNotifier?
     @State private var isAttachmentSheetPresented = false
+    @State private var gifPickerRequest: GifPickerRequest?
+    /// The attachment sheet hands over to the GIF picker once it is gone.
+    @State private var opensGifPickerAfterAttachmentSheet = false
+    @State private var gifCommandError: String?
     @State private var isFileImporterPresented = false
     #if canImport(UIKit)
         @State private var isCameraPresented = false
@@ -8971,6 +9126,13 @@ private struct ComposerView: View {
                     .accessibilityIdentifier("ComposerErrorText")
             }
 
+            if let gifCommandError {
+                Text(gifCommandError)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.criticalText)
+                    .accessibilityIdentifier("ComposerGifCommandError")
+            }
+
             if attachmentDrafts.isEmpty == false {
                 composerAttachmentDrafts
             }
@@ -9014,6 +9176,7 @@ private struct ComposerView: View {
         }
         .onChange(of: currentText) { _ in
             updateOutgoingTyping()
+            gifCommandError = nil
         }
         .onChange(of: text) { value in
             reconcileExternalText(value)
@@ -9042,7 +9205,12 @@ private struct ComposerView: View {
             isFocusedExternally = false
             typingNotifier?.stop()
         }
-        .sheet(isPresented: $isAttachmentSheetPresented) {
+        .sheet(isPresented: $isAttachmentSheetPresented, onDismiss: {
+            if opensGifPickerAfterAttachmentSheet {
+                opensGifPickerAfterAttachmentSheet = false
+                gifPickerRequest = GifPickerRequest()
+            }
+        }) {
             AttachmentOptionsSheet(
                 onMockMediaUpload: { source in
                     isAttachmentSheetPresented = false
@@ -9071,10 +9239,23 @@ private struct ComposerView: View {
                     #endif
                 },
                 selectedPhotos: $selectedPhotos,
-                maxSelectionCount: remainingAttachmentSlots
+                maxSelectionCount: remainingAttachmentSlots,
+                onGif: canOfferGifPicker ? {
+                    opensGifPickerAfterAttachmentSheet = true
+                    isAttachmentSheetPresented = false
+                } : nil
             )
-            .presentationDetents([.height(260)])
+            .presentationDetents([.height(canOfferGifPicker ? 320 : 260)])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $gifPickerRequest) { request in
+            if let provider = gifSearch.provider {
+                GifPickerSheet(provider: provider, initialQuery: request.initialQuery) { gif in
+                    onSendGif?(gif)
+                }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
         }
         .onChange(of: selectedPhotos) { items in
             if items.isEmpty == false {
@@ -9252,6 +9433,39 @@ private struct ComposerView: View {
         max(0, ComposerAttachmentDraftList.maxCount - attachmentDrafts.count)
     }
 
+    private var gifSearch: GifSearchAvailability {
+        GifSearchAvailability.resolve(settings: environment.settings)
+    }
+
+    /// GIFs go out as new messages, so an edit never offers them.
+    private var canOfferGifPicker: Bool {
+        onSendGif != nil && editTarget == nil && gifSearch.provider != nil
+    }
+
+    /// `/gif` or `/gif <search>` as the whole message opens the picker with
+    /// that search instead of sending. Returns whether it handled the text.
+    private func handleGifCommand(_ messageBody: String) -> Bool {
+        guard onSendGif != nil,
+              editTarget == nil,
+              let query = GifCommand.query(in: messageBody)
+        else {
+            return false
+        }
+        let availability = gifSearch
+        guard availability.provider != nil else {
+            gifCommandError = availability.commandUnavailableMessage
+            return true
+        }
+        draftPublishTask?.cancel()
+        liveText = ""
+        composerSelection = .empty
+        formattingRevision += 1
+        text = ""
+        gifCommandError = nil
+        gifPickerRequest = GifPickerRequest(initialQuery: query)
+        return true
+    }
+
     private var composerAttachmentDrafts: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: SynaraSpacing.small) {
@@ -9378,6 +9592,9 @@ private struct ComposerView: View {
         #endif
         typingNotifier?.stop()
         let messageBody = currentText
+        if handleGifCommand(messageBody) {
+            return
+        }
         text = messageBody
         onSend(messageBody)
     }
@@ -9516,8 +9733,23 @@ private struct AttachmentOptionsSheet: View {
     let onCamera: () -> Void
     @Binding var selectedPhotos: [PhotosPickerItem]
     var maxSelectionCount: Int
+    /// Opens GIF search; `nil` when this build or the user's settings do
+    /// not offer it.
+    var onGif: (() -> Void)?
 
-    private let options: [AttachmentOption] = [
+    private var options: [AttachmentOption] {
+        onGif == nil ? Self.mediaOptions : Self.mediaOptions + [Self.gifOption]
+    }
+
+    private static let gifOption = AttachmentOption(
+        identifier: "GIF",
+        title: String(localized: "GIF"),
+        systemImage: "sparkles",
+        tint: SynaraColor.accent,
+        kind: .gif
+    )
+
+    private static let mediaOptions: [AttachmentOption] = [
         AttachmentOption(
             identifier: "Photo or Video",
             title: String(localized: "Photo or Video"),
@@ -9625,6 +9857,18 @@ private struct AttachmentOptionsSheet: View {
             .disabled(maxSelectionCount == 0)
             .opacity(maxSelectionCount == 0 ? 0.45 : 1)
             .accessibilityIdentifier("AttachmentOption-\(option.identifier)")
+        case .gif:
+            // A GIF is a link message, not an attachment, so the attachment
+            // limit does not apply.
+            Button {
+                onGif?()
+            } label: {
+                AttachmentOptionLabel(option: option)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Send a GIF"))
+            .accessibilityHint(Text("Searches KLIPY for a GIF to send"))
+            .accessibilityIdentifier("AttachmentOption-\(option.identifier)")
         }
     }
 }
@@ -9693,6 +9937,7 @@ private struct AttachmentOption: Identifiable {
         case photo
         case file
         case camera
+        case gif
     }
 
     /// Stable English name for the accessibility identifier; `title` is localized.
@@ -9710,8 +9955,7 @@ private struct AttachmentOptionLabel: View {
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
-            Image(systemName: option.systemImage)
-                .font(.system(size: 18, weight: .semibold))
+            icon
                 .frame(width: 30, height: 30)
                 .background(option.tint.opacity(0.14))
                 .foregroundStyle(option.tint)
@@ -9735,6 +9979,19 @@ private struct AttachmentOptionLabel: View {
                 .stroke(SynaraColor.separator.opacity(0.45), lineWidth: 0.5)
                 .allowsHitTesting(false)
         )
+    }
+
+    /// SF Symbols has no GIF glyph; the GIF entry shows the word instead.
+    @ViewBuilder
+    private var icon: some View {
+        if option.kind == .gif {
+            Text(verbatim: "GIF")
+                .font(.system(size: 10, weight: .heavy))
+                .accessibilityHidden(true)
+        } else {
+            Image(systemName: option.systemImage)
+                .font(.system(size: 18, weight: .semibold))
+        }
     }
 }
 
@@ -9877,9 +10134,17 @@ private struct MediaViewer: View {
         isLoading = true
         defer { isLoading = false }
 
-        guard let data = await environment.mediaLoader.loadMediaData(for: resource),
-              let loadedImage = UIImage(data: data)
-        else {
+        guard let data = await environment.mediaLoader.loadMediaData(for: resource) else {
+            errorMessage = String(localized: "Media could not be loaded.")
+            return
+        }
+        let loadedImage: UIImage?
+        if resource.isAnimatedImageMedia {
+            loadedImage = await AnimatedImageDecoder.decode(data, limits: .fullScreen)
+        } else {
+            loadedImage = UIImage(data: data)
+        }
+        guard let loadedImage else {
             errorMessage = String(localized: "Media could not be loaded.")
             return
         }
@@ -9893,12 +10158,21 @@ private struct ZoomableMediaImage: View {
     @Binding var scale: CGFloat
     @Binding var lastScale: CGFloat
 
+    @ViewBuilder
+    private var zoomedImage: some View {
+        if image.isAnimated {
+            AnimatedImageView(image: image, contentMode: .scaleAspectFit)
+        } else {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+        }
+    }
+
     var body: some View {
         GeometryReader { geometry in
             ScrollView([.horizontal, .vertical], showsIndicators: false) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
+                zoomedImage
                     .frame(
                         width: geometry.size.width * max(scale, 1),
                         height: geometry.size.height * max(scale, 1)

@@ -33,8 +33,18 @@ SYNARA_IOS_ARCHIVE_ROOT=/tmp \
 SYNARA_IOS_PACKAGE_CACHE_PATH=/path/to/swift-package-cache \
 SYNARA_TESTFLIGHT_EXPORT_RETRIES=2 \
 SYNARA_TESTFLIGHT_EXPORT_RETRY_SECONDS=15 \
+SYNARA_KLIPY_API_KEY=... \
 synara-ios/scripts/upload-testflight-internal.sh
 ```
+
+`SYNARA_KLIPY_API_KEY` is the Klipy key for GIF search, the same one desktop
+builds use. The script writes it to the ignored
+`Config/KlipyAPIKey.local.xcconfig` for the archive and removes it afterwards;
+it is never a command-line build setting, so it stays out of the archive log.
+A key that is not 8-128 characters of `A-Z a-z 0-9 _ -` fails the upload
+before archiving. Without one the build simply does not offer GIF search;
+GIF links and X posts still show. Exporting it before `scripts/ci-build.sh`
+turns GIF search on for local simulator builds.
 
 Export retries only the App Store Connect `exportArchive` hop (default: 2 extra
 attempts, 15 seconds apart) when Xcode reports a transient API-key JWT failure
@@ -154,7 +164,8 @@ Required `testflight` environment secrets:
 - `SYNARA_ASC_KEY_ID`
 - `SYNARA_ASC_ISSUER_ID`
 
-The job also consumes the repository secret `APPLE_TEAM_ID` and repository
+The job also consumes the repository secrets `APPLE_TEAM_ID` and
+`SYNARA_KLIPY_API_KEY` (shared with the desktop builds) and repository
 variables `SYNARA_PUSH_GATEWAY_URL` and
 `SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS` (a comma-delimited list of App Store
 Connect internal beta-group IDs). Internal-only upload remains the default;
