@@ -16,7 +16,9 @@ const root = path.resolve(import.meta.dirname, "../..");
 
 // Execute the actual scope script over real git diffs. These assertions
 // cover the output gates, not merely the spelling of path filters.
-function scopes(files, extraEnv = {}) {
+// With `reuseExit`, the workflows are committed and the proof lookup is a stub
+// that exits with that code and records the hash it was asked about.
+function scopes(files, extraEnv = {}, { reuseExit } = {}) {
   const cwd = mkdtempSync(path.join(tmpdir(), "synara-ci-scope-"));
   const git = (...args) =>
     execFileSync("git", args, {
@@ -30,6 +32,7 @@ function scopes(files, extraEnv = {}) {
       "ci-icon-only.mjs",
       "ci-metadata-only.mjs",
       "ci-scopes.sh",
+      "ios-test-inputs.mjs",
     ]) {
       copyFileSync(
         path.join(root, "scripts", script),
@@ -38,6 +41,23 @@ function scopes(files, extraEnv = {}) {
     }
     // Version consistency is orthogonal to the scope decision under test.
     writeFileSync(path.join(cwd, "scripts/check-version-consistency.mjs"), "");
+    const lookupLog = path.join(cwd, "lookup.log");
+    if (reuseExit !== undefined) {
+      mkdirSync(path.join(cwd, ".github/workflows"), { recursive: true });
+      for (const workflow of ["ci.yml", "release.yml"]) {
+        copyFileSync(
+          path.join(root, ".github/workflows", workflow),
+          path.join(cwd, ".github/workflows", workflow),
+        );
+      }
+      writeFileSync(
+        path.join(cwd, "scripts/reuse-proven-ios-tests.mjs"),
+        `import { appendFileSync } from "node:fs";\n` +
+          `appendFileSync(${JSON.stringify(lookupLog)}, process.argv[2] + "\\n");\n` +
+          `process.exit(${reuseExit});\n`,
+      );
+      extraEnv = { IOS_PROOF_LOOKUP: "1", ...extraEnv };
+    }
     git("init", "--quiet");
     git("config", "user.email", "test@example.org");
     git("config", "user.name", "CI scope fixture");
@@ -76,12 +96,18 @@ function scopes(files, extraEnv = {}) {
         ...extraEnv,
       },
     });
-    return Object.fromEntries(
+    const result = Object.fromEntries(
       readFileSync(output, "utf8")
         .trim()
         .split("\n")
         .map((line) => line.split("=")),
     );
+    let lookups = [];
+    try {
+      lookups = readFileSync(lookupLog, "utf8").trim().split("\n").filter(Boolean);
+    } catch {}
+    Object.defineProperty(result, "lookups", { value: lookups });
+    return result;
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }
@@ -313,4 +339,56 @@ test("package builds and cache seeding run nightly or on request only", () => {
     scopes([], { EVENT_NAME: "workflow_dispatch", PACKAGES_INPUT: "true" }).packages,
     "true",
   );
+});
+
+test("a release PR skips iOS simulator tests an earlier run proved on the same inputs", () => {
+  const result = scopes(
+    ["docs/releases/v2.1.2.md", "synara-ios/Synara/App.swift"],
+    { GITHUB_HEAD_REF: "release/v2.1.2" },
+    { reuseExit: 0 },
+  );
+  assert.equal(result.ios, "false");
+  assert.equal(result.ios_reused, "true");
+  // The proof built the same inputs, so the compile gate is not added back.
+  assert.equal(result.ios_compile, "false");
+  assert.match(result.ios_inputs_hash, /^[0-9a-f]{64}$/);
+  assert.deepEqual(result.lookups, [result.ios_inputs_hash]);
+});
+test("a release PR without a proof runs iOS simulator tests with the hash to record", () => {
+  const result = scopes(
+    ["docs/releases/v2.1.2.md"],
+    { GITHUB_HEAD_REF: "release/v2.1.2" },
+    { reuseExit: 1 },
+  );
+  assert.equal(result.ios, "true");
+  assert.equal(result.ios_reused, "false");
+  assert.match(result.ios_inputs_hash, /^[0-9a-f]{64}$/);
+});
+test("nightly and main pushes hash the iOS inputs but never reuse a proof", () => {
+  for (const env of [
+    { EVENT_NAME: "schedule" },
+    { EVENT_NAME: "push", GITHUB_BASE_REF: "", GITHUB_HEAD_REF: "" },
+  ]) {
+    const result = scopes(["synara-ios/project.yml"], env, { reuseExit: 0 });
+    assert.equal(result.ios, "true");
+    assert.equal(result.ios_reused, "false");
+    assert.match(result.ios_inputs_hash, /^[0-9a-f]{64}$/);
+    assert.deepEqual(result.lookups, []);
+  }
+});
+test("scopes that do not schedule iOS tests neither hash nor look up a proof", () => {
+  const result = scopes(["synara/src/app/pages/auth/AuthFooter.tsx"], {}, { reuseExit: 0 });
+  assert.equal(result.ios, "false");
+  assert.equal(result.ios_reused, "false");
+  assert.equal(result.ios_inputs_hash, "");
+  assert.deepEqual(result.lookups, []);
+});
+test("hash inputs outside the old hand-kept list still schedule the iOS compile gate", () => {
+  for (const file of [
+    "scripts/check-xcode-local-package-graph.mjs",
+    "scripts/lib/ffi-surface.mjs",
+    "src-tauri/Cargo.toml",
+  ]) {
+    assert.equal(scopes([file]).ios_compile, "true", file);
+  }
 });

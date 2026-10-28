@@ -82,6 +82,24 @@ snapshots. Pull-request label events do not trigger CI; a `needs-ios` or
 native-timeline Playwright suite (`--retries=1`) and the iOS simulator suites
 (`IOS_TEST_RETRY_ON_FAILURE=1`). Retried passes stay visible in the reports.
 
+Release PRs force the iOS simulator unit lane, but a later push to the same
+PR skips it when nothing it reads has changed. `scripts/ios-test-inputs.mjs`
+hashes the committed `synara-ios/`, `crates/`, workspace manifests and
+lockfile, toolchain, Rust and Xcode cache actions, the generator and checker
+scripts the job runs, the `ios-tests` job block of `ci.yml`, and the Apple
+toolchain steps that the NSE isolation check reads. The job ends with a step
+named `Record proven iOS inputs <hash>`, which recomputes that hash on its own
+checkout. On each pull-request run, `scripts/reuse-proven-ios-tests.mjs` looks
+through earlier `ci.yml` runs of the same head branch in this repository, never
+a fork. It skips the job only when one of them has a successful
+`iOS simulator tests` job whose proof step names the same hash. Any API error,
+missing hash or other mismatch runs the job. A reused result counts as skipped,
+so the Quality gate passes and the Release workflow's `--require` still finds
+it. Nightly, dispatch and `main` pushes always run the lane. Adding a file the
+job reads means adding it to `IOS_TEST_INPUT_PATHS`.
+`scripts/__tests__/ios-test-inputs.test.mjs` fails when a script that the job
+reaches is missing from that list.
+
 Workflow hygiene is `npm run check:workflows`: pinned
 [actionlint](https://github.com/rhysd/actionlint) plus
 `scripts/check-workflows.mjs` (SHA-pinned actions, explicit permissions, job
@@ -327,6 +345,26 @@ remarks and build timing summaries to support those measurements.
 
 ## Local Validation Gates
 
+Before pushing, run `npm run check:quick`. It takes a few minutes and catches
+what CI's "Rust format and lint" and "Check repository contracts" steps fail
+on most often. It diffs against `origin/main` (pass `-- --base <ref>` to
+change that), including uncommitted and untracked files, and runs:
+
+- `cargo fmt --all --check`.
+- `cargo clippy -D warnings`, only for the workspace crates the diff touches.
+  A `synara-core` change also lints its desktop-only features. Workspace
+  manifest, lockfile, toolchain or `.cargo` changes lint every crate.
+- `check:matrix-boundaries`, `check:versions`, `check:release-updater` and
+  `check:workflows`. Without `actionlint` on PATH, it runs the policy and
+  documentation checks of `check:workflows` and skips actionlint.
+- For changed files under `synara/`: Prettier, ESLint within the
+  `check:eslint` globs, and `typecheck` when TypeScript changed. These need
+  `npm ci` in `synara/`.
+
+It runs every check, then prints a summary and exits non-zero if any failed.
+Tests, the iOS lanes and the Synapse proofs still run only in CI and in the
+full list below.
+
 Run these before accepting desktop/runtime changes:
 
 ```bash
@@ -422,7 +460,8 @@ full app launch smoke are tracked in
 2. Add the changelog, `docs/releases/vX.Y.Z.md`, and
    `synara-ios/release-notes/vX.Y.Z-en-US.txt`.
 3. Open the release PR into `main`. Require its `CI / Quality gate`, including
-   the iOS simulator unit suite, to pass. Merge when green. XCUITests run
+   the iOS simulator unit suite, to pass. Pushes that change none of the iOS
+   inputs reuse the suite's earlier pass (see CI shape). Merge when green. XCUITests run
    nightly; add `needs-ios-ui` before pushing to include them in the PR.
 4. Push `vX.Y.Z` at the merged `main` commit. That tag starts the Release
    workflow. Do not wait for another full CI run on the merge commit.
