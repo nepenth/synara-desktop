@@ -14,6 +14,7 @@ use synara_core::app::store::{
 ///
 /// - macOS: Keychain via `keyring` apple-native backend
 /// - Linux: Secret Service / keyutils via `keyring` linux-native backends
+/// - Windows: Credential Manager via `keyring` windows-native backend
 /// - Other platforms: operations return [`StoreKeyVaultError::BackendUnavailable`]
 ///
 /// Keys are stored as lowercase hex (64 chars for 32 bytes). Secrets never
@@ -28,7 +29,11 @@ impl KeyringStoreKeyVault {
 
     /// True when this process build targets a supported native secret store.
     pub fn platform_supported() -> bool {
-        cfg!(any(target_os = "macos", target_os = "linux"))
+        cfg!(any(
+            target_os = "macos",
+            target_os = "linux",
+            target_os = "windows"
+        ))
     }
 
     fn entry(id: &StoreKeyId) -> Result<keyring::Entry, StoreKeyVaultError> {

@@ -25,7 +25,8 @@ fn directive(policy: &str, name: &str) -> Vec<String> {
 #[test]
 fn production_csp_loads_media_only_through_the_app() {
     let policy = csp("csp");
-    // Images and media come from the bundle, blobs and synara-media:; the
+    // Images and media come from the bundle, blobs and synara-media: (served
+    // as http://synara-media.localhost on Windows); the
     // only remote ones are the built-in GIF providers' CDNs, which forbid
     // re-hosting, and X's CDNs for opt-in X post cards.
     assert_eq!(
@@ -35,6 +36,7 @@ fn production_csp_loads_media_only_through_the_app() {
             "data:",
             "blob:",
             "synara-media:",
+            "http://synara-media.localhost",
             "https://static.klipy.com",
             "https://static1.klipy.com",
             "https://static2.klipy.com",
@@ -49,6 +51,7 @@ fn production_csp_loads_media_only_through_the_app() {
             "data:",
             "blob:",
             "synara-media:",
+            "http://synara-media.localhost",
             "https://video.twimg.com"
         ]
     );
@@ -74,7 +77,8 @@ fn production_csp_reaches_loopback_only_for_homeserver_discovery() {
         .iter()
         .filter(|source| source.starts_with("http://"))
     {
-        if source == "http://ipc.localhost" {
+        // Windows serves IPC and the media protocol over http on .localhost.
+        if source == "http://ipc.localhost" || source == "http://synara-media.localhost" {
             continue;
         }
         assert!(

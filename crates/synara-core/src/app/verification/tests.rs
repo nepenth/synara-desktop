@@ -861,6 +861,8 @@ fn set_private_file_permissions(path: &std::path::Path) {
         std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
             .expect("restrict verification proof metadata permissions");
     }
+    #[cfg(not(unix))]
+    let _ = path;
 }
 
 fn live_proof_root() -> PathBuf {

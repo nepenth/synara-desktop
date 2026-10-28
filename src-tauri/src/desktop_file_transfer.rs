@@ -978,7 +978,11 @@ mod command_tests {
             .lock()
             .expect("drop allowlist test lock should not be poisoned");
         clear_dropped_file_registry_for_tests();
-        let result = desktop_read_dropped_files(vec!["/etc/passwd".to_owned()], None);
+        // A real file that was never dropped, so only the allowlist refuses it.
+        let (temp_dir, file_path) = write_temp_drop_fixture("never-dropped.txt", b"secret");
+        let result =
+            desktop_read_dropped_files(vec![file_path.to_string_lossy().into_owned()], None);
+        let _ = fs::remove_dir_all(temp_dir);
 
         assert!(result.is_err());
         assert!(result

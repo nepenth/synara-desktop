@@ -80,9 +80,22 @@ pub fn ensure_logout_retry_locator(
     root: &Path,
     locator: &SessionLocator,
 ) -> Result<(), SessionFault> {
-    ensure_logout_retry_locator_with_directory_sync(root, locator, |directory| {
+    ensure_logout_retry_locator_with_directory_sync(root, locator, sync_directory)
+}
+
+/// Persist a directory's entries. Unix syncs the directory itself. Windows has
+/// no directory fsync (a directory handle cannot be flushed, and NTFS journals
+/// directory entries), so the file flush alone is the durability step there.
+pub fn sync_directory(directory: &Path) -> std::io::Result<()> {
+    #[cfg(not(windows))]
+    {
         fs::File::open(directory)?.sync_all()
-    })
+    }
+    #[cfg(windows)]
+    {
+        let _ = directory;
+        Ok(())
+    }
 }
 
 /// Narrow I/O fault seam: production readback and file sync remain mandatory.
@@ -100,7 +113,10 @@ pub fn ensure_logout_retry_locator_with_directory_sync(
     if read_active_locator(root)? != *locator {
         return Err(SessionFault::unavailable("d0.1-session-locator-mismatch"));
     }
-    fs::File::open(&path)
+    // Windows only flushes through a handle with write access.
+    fs::OpenOptions::new()
+        .write(true)
+        .open(&path)
         .and_then(|file| file.sync_all())
         .map_err(|_| SessionFault::unavailable("d0.1-session-locator-sync-failed"))?;
     // File fsync alone does not persist the directory entry on Linux. Sync

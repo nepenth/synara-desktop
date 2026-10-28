@@ -3407,7 +3407,7 @@ async fn logout_directory_sync_failure_preserves_live_and_retry_syncs_created_pa
                 if directory == base {
                     return Err(std::io::Error::other("injected parent-link sync failure"));
                 }
-                fs::File::open(directory)?.sync_all()
+                synara_core::app::lifecycle::session::sync_directory(directory)
             })
         },
         || async {
@@ -3475,12 +3475,13 @@ async fn logout_directory_sync_failure_preserves_live_and_retry_syncs_created_pa
     synced.borrow_mut().clear();
     ensure_logout_retry_locator_with_directory_sync(&root, &identity, |directory| {
         synced.borrow_mut().push(directory.to_path_buf());
-        fs::File::open(directory)?.sync_all()
+        synara_core::app::lifecycle::session::sync_directory(directory)
     })
     .unwrap();
     for directory in required_directories {
         assert!(synced.borrow().contains(&directory));
     }
+    #[cfg(unix)]
     assert!(synced.borrow().contains(&PathBuf::from("/")));
     assert_eq!(read_active_identity(&root).unwrap(), identity);
     ensure_logout_retry_locator(&root, &identity).unwrap();
@@ -4760,7 +4761,9 @@ async fn password_login_activation_failure_revokes_token_before_metadata_without
         drop(guard);
         drop(owner);
         drop(client);
-        fs::remove_dir_all(root).unwrap();
+        // Best effort: on Windows the SDK's SQLite pool can still hold the
+        // files open here, and open files cannot be deleted.
+        let _ = fs::remove_dir_all(root);
     }
 }
 

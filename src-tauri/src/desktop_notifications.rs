@@ -1,3 +1,7 @@
+// Click, action and dismiss-key handling is Linux and macOS only until
+// Windows posts its own toasts; Windows uses the plugin's basic notification.
+#![cfg_attr(target_os = "windows", allow(dead_code, unused_imports))]
+
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_notification::NotificationExt;

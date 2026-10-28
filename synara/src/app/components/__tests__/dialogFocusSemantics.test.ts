@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+// POSIX joins keep paths comparable with the allowlists below on Windows too.
+import { join } from 'node:path/posix';
 import test from 'node:test';
 import { listNavigationIndex } from '../../utils/keyboard';
 

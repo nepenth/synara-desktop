@@ -1,5 +1,6 @@
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 use keyring::Entry;
+#[cfg(any(target_os = "macos", target_os = "linux", test))]
 use keyring::Error as KeyringError;
 use serde::Serialize;
 #[cfg(target_os = "linux")]
@@ -27,14 +28,14 @@ pub(crate) const DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN: &str = "macos-keyc
 pub(crate) const DESKTOP_SECRET_STORE_BACKEND_LINUX_SECRET_SERVICE: &str = "linux-secret-service";
 #[allow(dead_code)]
 pub(crate) const DESKTOP_SECRET_STORE_BACKEND_LINUX_KEYUTILS: &str = "linux-keyutils";
+#[cfg(any(target_os = "windows", test))]
+pub(crate) const DESKTOP_SECRET_STORE_BACKEND_WINDOWS_CREDENTIAL_MANAGER: &str =
+    "windows-credential-manager";
 #[allow(dead_code)]
 pub(crate) const DESKTOP_SECRET_STORE_NOT_CONFIGURED: &str = "secure-secret-store-not-configured";
 #[allow(dead_code)]
 pub(crate) const DESKTOP_SECRET_STORE_UNSUPPORTED_PLATFORM: &str =
     "secure-secret-store-unsupported-platform";
-#[allow(dead_code)]
-pub(crate) const DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED: &str =
-    "windows-native-session-store-unsupported";
 #[allow(dead_code)]
 pub(crate) const DESKTOP_SECRET_STORE_SESSION_SCOPED: &str = "linux-keyutils-session-scoped";
 #[allow(dead_code)]
@@ -48,7 +49,9 @@ pub(crate) const DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_ACCESS_DENIED: &str =
 pub(crate) const DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_UNAVAILABLE: &str =
     "macos-keychain-unavailable";
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 pub(crate) const DESKTOP_SESSION_CREDENTIAL_SERVICE: &str = "com.whylandcreative.synara.desktop";
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 const LEGACY_RENDERER_SESSION_CREDENTIALS: [(&str, &str); 2] = [
     (DESKTOP_SESSION_CREDENTIAL_SERVICE, "matrix-session"),
     ("app.synara.desktop", "matrix-session"),
@@ -287,6 +290,18 @@ pub(crate) fn clear_legacy_renderer_session_credentials() {
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
 pub(crate) fn clear_legacy_renderer_session_credentials() {}
 
+/// Credential Manager is part of every interactive Windows logon session, so
+/// there is no lock or daemon state to probe.
+#[cfg(any(target_os = "windows", test))]
+fn windows_secret_store_status() -> DesktopSecretStoreStatus {
+    DesktopSecretStoreStatus {
+        available: true,
+        backend: DESKTOP_SECRET_STORE_BACKEND_WINDOWS_CREDENTIAL_MANAGER,
+        can_persist_session: true,
+        reason: None,
+    }
+}
+
 pub(crate) fn platform_secret_store_status() -> DesktopSecretStoreStatus {
     #[cfg(target_os = "macos")]
     {
@@ -300,7 +315,7 @@ pub(crate) fn platform_secret_store_status() -> DesktopSecretStoreStatus {
 
     #[cfg(target_os = "windows")]
     {
-        unavailable_secret_store_status(DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED)
+        windows_secret_store_status()
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
@@ -700,19 +715,24 @@ mod tests {
         set_macos_keychain_probe_test_override(None);
     }
 
+    #[test]
+    fn windows_secret_store_status_is_persistent_credential_manager() {
+        let status = windows_secret_store_status();
+
+        assert!(status.available);
+        assert_eq!(
+            status.backend,
+            DESKTOP_SECRET_STORE_BACKEND_WINDOWS_CREDENTIAL_MANAGER
+        );
+        assert!(status.can_persist_session);
+        assert_eq!(status.reason, None);
+        assert!(bridge_supports_secure_secret_store(&status));
+    }
+
     #[cfg(target_os = "windows")]
     #[test]
-    fn platform_secret_store_status_reports_windows_unsupported() {
-        let status = platform_secret_store_status();
-
-        assert_eq!(status.available, false);
-        assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_NONE);
-        assert_eq!(status.can_persist_session, false);
-        assert_eq!(
-            status.reason,
-            Some(DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED)
-        );
-        assert!(!bridge_supports_secure_secret_store(&status));
+    fn platform_secret_store_status_reports_windows_credential_manager() {
+        assert!(platform_secret_store_status() == windows_secret_store_status());
     }
 
     #[test]
