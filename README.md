@@ -16,7 +16,7 @@ Synara does not ship a standalone browser client. The React/Vite package under
 
 ## Install
 
-Current desktop release: [v2.4.0](https://github.com/nepenth/synara-desktop/releases/tag/v2.4.0).
+Current desktop release: [v2.5.0](https://github.com/nepenth/synara-desktop/releases/tag/v2.5.0).
 Every release is listed on the [releases page](https://github.com/nepenth/synara-desktop/releases),
 and [CHANGELOG.md](CHANGELOG.md) describes each one.
 
@@ -35,7 +35,8 @@ available only to internal TestFlight testers.
 | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | End-to-end encrypted messaging, rooms, spaces, threads, reactions, read receipts, and presence on the shared Rust core (`matrix-rust-sdk` 0.19.1) | Voice and video calls                      |
 | Device verification, secret storage and recovery, and identity reset through the Rust core                                                        | Windows, Android, and a standalone web app |
-| Desktop: Klipy GIF search with `/gif`, inline GIF links, optional X post embeds with video, and password change                                   | An ARM Linux package                       |
+| Klipy GIF search with `/gif`, inline GIF links, and X post previews with video, on desktop and iOS                                                | An ARM Linux package                       |
+| Desktop: password change                                                                                                                          |                                            |
 | Agent approval requests with Approve, Deny, and Review actions from notifications, on desktop and iOS                                             | App Store distribution                     |
 | iOS app on the same core, internal TestFlight only                                                                                                |                                            |
 
@@ -182,7 +183,9 @@ by Tauri.
 GIF search needs a Klipy API key, which is never committed. Export
 `SYNARA_KLIPY_API_KEY` before building and `build:runtime` writes it into the
 gitignored `devAssets/config.json`; without it, the GIF picker is turned off.
-Release builds read the key from the repository secret of the same name.
+iOS builds write it into the gitignored
+`synara-ios/Config/KlipyAPIKey.local.xcconfig` instead. Release and TestFlight
+builds read the key from the repository secret of the same name.
 
 ## iOS Development
 
