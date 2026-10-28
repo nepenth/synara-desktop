@@ -1843,7 +1843,9 @@ async fn ios_password_login_ignores_a_login_response_well_known() {
 }
 
 /// `/login` bodies the mock server received, in order.
-async fn login_bodies(server: &matrix_sdk::test_utils::mocks::MatrixMockServer) -> Vec<serde_json::Value> {
+async fn login_bodies(
+    server: &matrix_sdk::test_utils::mocks::MatrixMockServer,
+) -> Vec<serde_json::Value> {
     server
         .server()
         .received_requests()
@@ -1918,7 +1920,10 @@ async fn ios_localpart_login_behind_a_proxy_host_uses_the_returned_user_id() {
         "@pete:matrix.example.org"
     );
     let guessed = AccountIdentity::new("@pete:matrix-v4.example.org", &server.uri()).unwrap();
-    assert!(!has_account_store(&root, &guessed), "no store for a guessed id");
+    assert!(
+        !has_account_store(&root, &guessed),
+        "no store for a guessed id"
+    );
     assert!(has_account_store(&root, &identity));
     drop(shared);
     let _ = fs::remove_dir_all(root);
@@ -1992,7 +1997,9 @@ async fn ios_localpart_login_reuses_the_device_of_the_returned_account() {
     };
     Mock::given(method("POST"))
         .and(path("/_matrix/client/v3/login"))
-        .and(body_partial_json(serde_json::json!({"device_id": "PETEFIRST"})))
+        .and(body_partial_json(
+            serde_json::json!({"device_id": "PETEFIRST"}),
+        ))
         .respond_with(login_response("PETEFIRST", "syt_reused"))
         .with_priority(1)
         .expect(1)
@@ -2053,9 +2060,13 @@ async fn ios_localpart_login_reuses_the_device_of_the_returned_account() {
 
     let bodies = login_bodies(&server).await;
     assert_eq!(bodies.len(), 3, "first, extra (revoked), reused");
-    assert!(bodies[..2].iter().all(|body| body.get("device_id").is_none()));
+    assert!(bodies[..2]
+        .iter()
+        .all(|body| body.get("device_id").is_none()));
     assert_eq!(bodies[2]["device_id"], "PETEFIRST");
-    assert!(bodies.iter().all(|body| body["identifier"]["user"] == "pete"));
+    assert!(bodies
+        .iter()
+        .all(|body| body["identifier"]["user"] == "pete"));
     let logout = server
         .server()
         .received_requests()
