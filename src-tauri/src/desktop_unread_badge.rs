@@ -90,6 +90,7 @@ pub fn overlay_unread_dot(rgba: &[u8], width: u32, height: u32, count: i64) -> O
 
 /// Windows taskbar overlay: the shell draws a small icon over the bottom-right
 /// of the taskbar button, so the whole square is the attention dot.
+#[cfg(any(target_os = "windows", test))]
 pub fn unread_dot_icon(size: u32) -> Vec<u8> {
     let mut out = Vec::with_capacity((size * size * 4) as usize);
     let radius = size as f32 / 2.0;
