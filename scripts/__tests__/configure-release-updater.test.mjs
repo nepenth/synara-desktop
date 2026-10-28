@@ -61,7 +61,7 @@ test("release updater config satisfies strict release readiness inspection", () 
     updaterCapability: {
       local: true,
       windows: ["main"],
-      platforms: ["macOS"],
+      platforms: ["macOS", "windows"],
       permissions: [
         "updater:allow-check",
         "updater:allow-download-and-install",
@@ -98,7 +98,7 @@ test("release updater config satisfies strict release readiness inspection", () 
           tar -xzf "$updater_archive" -C "$extract_dir"
           codesign --verify --all-architectures --deep --strict --verbose=2 "$extract_dir/Synara.app"
       updater-metadata:
-        needs: [macos]
+        needs: [macos, windows]
         steps:
           - uses: actions/download-artifact@v4
           - run: |

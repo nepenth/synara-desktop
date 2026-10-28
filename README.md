@@ -20,20 +20,21 @@ Current desktop release: [v2.6.0](https://github.com/nepenth/synara-desktop/rele
 Every release is listed on the [releases page](https://github.com/nepenth/synara-desktop/releases),
 and [CHANGELOG.md](CHANGELOG.md) describes each one.
 
-| Platform                    | What you get                                                   | Where                                            | Updates                                      |
-| --------------------------- | -------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------- |
-| macOS 13 or later           | Universal (Apple silicon and Intel) signed and notarized `DMG` | The `DMG` asset on that release                  | Built-in updater                             |
-| Debian, Ubuntu, and related | x86_64 `.deb` and an APT repo (`Architectures: amd64`)         | [Linux install](docs/linux.md)                   | `sudo apt upgrade`                           |
-| Arch, CachyOS, and related  | x86_64 `synara-desktop-bin` pacman package and repo            | [Linux install](docs/linux.md)                   | `sudo pacman -Syu` or `paru -Syu`            |
-| Windows 10 or 11 (x64)      | x64 `.msi` installer and NSIS `-setup.exe` installer           | The `.msi` or `-setup.exe` asset on that release | Install the next release's installer over it |
+| Platform                    | What you get                                                   | Where                                            | Updates                           |
+| --------------------------- | -------------------------------------------------------------- | ------------------------------------------------ | --------------------------------- |
+| macOS 13 or later           | Universal (Apple silicon and Intel) signed and notarized `DMG` | The `DMG` asset on that release                  | Built-in updater                  |
+| Debian, Ubuntu, and related | x86_64 `.deb` and an APT repo (`Architectures: amd64`)         | [Linux install](docs/linux.md)                   | `sudo apt upgrade`                |
+| Arch, CachyOS, and related  | x86_64 `synara-desktop-bin` pacman package and repo            | [Linux install](docs/linux.md)                   | `sudo pacman -Syu` or `paru -Syu` |
+| Windows 10 or 11 (x64)      | x64 `.msi` installer and NSIS `-setup.exe` installer           | The `.msi` or `-setup.exe` asset on that release | Built-in updater                  |
 
 Linux packages are x86_64 only. The iOS app needs iOS 16 or later and is
 available only to internal TestFlight testers.
 
 Windows is new in 2.6.0 and less proven than macOS and Linux. The installers
 are not code-signed yet, so Windows SmartScreen warns the first time you run
-one (choose "More info", then "Run anyway"). There is no built-in updater, and
-notifications have no action buttons, such as Approve, on Windows. Secrets are kept in
+one (choose "More info", then "Run anyway"). Updates install from inside the
+app, as on macOS, but notifications have no action buttons, such as Approve,
+on Windows. Secrets are kept in
 Windows Credential Manager. Details are in
 [docs/windows-support-spike.md](docs/windows-support-spike.md).
 
@@ -72,12 +73,12 @@ changed since.
 
 ## Product Channels
 
-| Client  | User interface  | Matrix/application core                           | Distribution                                  |
-| ------- | --------------- | ------------------------------------------------- | --------------------------------------------- |
-| macOS   | Tauri 2 + React | Shared Rust core with native macOS adapters       | Signed/notarized universal DMG, Tauri updater |
-| Linux   | Tauri 2 + React | Shared Rust core with native Linux adapters       | x86_64 `.deb`/APT and Arch-family pacman repo |
-| Windows | Tauri 2 + React | Shared Rust core with native Windows adapters     | Unsigned x64 MSI and NSIS installers          |
-| iOS     | SwiftUI         | Shared Rust core through generated Swift bindings | Internal TestFlight only                      |
+| Client  | User interface  | Matrix/application core                           | Distribution                                        |
+| ------- | --------------- | ------------------------------------------------- | --------------------------------------------------- |
+| macOS   | Tauri 2 + React | Shared Rust core with native macOS adapters       | Signed/notarized universal DMG, Tauri updater       |
+| Linux   | Tauri 2 + React | Shared Rust core with native Linux adapters       | x86_64 `.deb`/APT and Arch-family pacman repo       |
+| Windows | Tauri 2 + React | Shared Rust core with native Windows adapters     | Unsigned x64 MSI and NSIS installers, Tauri updater |
+| iOS     | SwiftUI         | Shared Rust core through generated Swift bindings | Internal TestFlight only                            |
 
 Android and public web distribution are not currently supported.
 

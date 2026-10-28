@@ -25,10 +25,10 @@ const readyInputs = {
     permissions: ["core:default"],
   },
   updaterCapability: {
-    identifier: "macos-updater",
+    identifier: "desktop-updater",
     local: true,
     windows: ["main"],
-    platforms: ["macOS"],
+    platforms: ["macOS", "windows"],
     permissions: [
       "updater:allow-check",
       "updater:allow-download-and-install",
@@ -65,7 +65,7 @@ const readyInputs = {
         tar -xzf "$updater_archive" -C "$extract_dir"
         codesign --verify --all-architectures --deep --strict --verbose=2 "$extract_dir/Synara.app"
     updater-metadata:
-      needs: [macos]
+      needs: [macos, windows]
       steps:
         - uses: actions/download-artifact@v4
         - run: |
@@ -135,13 +135,13 @@ test("release updater gate rejects an updater capability that includes Linux", (
     ...readyInputs,
     updaterCapability: {
       ...readyInputs.updaterCapability,
-      platforms: ["macOS", "linux"],
+      platforms: ["macOS", "windows", "linux"],
     },
     requireEnabled: false,
   });
 
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /platforms \["macOS"\]/);
+  assert.match(result.errors.join("\n"), /platforms \["macOS", "windows"\]/);
 });
 
 test("release updater gate requires the private packaged asset origin", () => {

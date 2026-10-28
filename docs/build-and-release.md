@@ -466,8 +466,10 @@ manual workflow branch selector is not a safe release-source selector.
      fixed `pacman-repo` release assets (`synara.db`, `synara.files`, and
      package file).
    - Windows x64 `.msi` and NSIS `-setup.exe` installers from `windows-latest`.
-     They are not Authenticode-signed yet, and Windows has no updater entry in
-     `latest.json`, as with Linux.
+     They are not Authenticode-signed yet. Both carry Tauri updater signatures
+     (`.sig`), and `latest.json` lists them as `windows-x86_64-msi`,
+     `windows-x86_64-nsis` and `windows-x86_64` (the NSIS setup), so an install
+     updates through the installer type it came from.
 
    The macOS build retries bundling, signing and notarization up to three
    times (a retry reuses the compiled target, so it costs minutes), and DMG
@@ -485,7 +487,7 @@ the existing release tag and exact uploaded build number. This recovery checks
 that the tag is on `main`, reads the release notes from `main`, and promotes the
 already uploaded build. It does not rebuild or republish desktop assets.
 
-After publication, confirm hosted macOS `latest.json` and verify the fixed
+After publication, confirm hosted `latest.json` lists the macOS and Windows platforms and verify the fixed
 Linux repository URLs:
 
 ```text

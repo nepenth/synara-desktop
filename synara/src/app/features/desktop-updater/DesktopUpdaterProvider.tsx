@@ -29,8 +29,8 @@ import {
   DesktopUpdateCheckSource,
   DesktopUpdateDownloadProgress,
   getDismissedUpdateVersion,
-  installMacosUpdateAndRelaunch,
-  MacosUpdateHandle,
+  installUpdateAndRelaunch,
+  InAppUpdateHandle,
   reduceDownloadProgress,
   setDismissedUpdateVersion,
   shouldPromptForUpdate,
@@ -127,7 +127,7 @@ function DesktopUpdaterPrompt({
   if (!open) return null;
 
   const isAvailable = result?.status === 'available';
-  const canInstall = isAvailable && result.platform === 'macos';
+  const canInstall = isAvailable && (result.platform === 'macos' || result.platform === 'windows');
   const canOpenRelease = isAvailable && result.platform === 'linux';
 
   return (
@@ -223,7 +223,7 @@ type DesktopUpdaterProviderProps = {
 };
 
 export function DesktopUpdaterProvider({ children }: DesktopUpdaterProviderProps) {
-  const macosUpdateRef = useRef<MacosUpdateHandle | undefined>(undefined);
+  const inAppUpdateRef = useRef<InAppUpdateHandle | undefined>(undefined);
   const [state, setState] = useState<DesktopUpdaterState>({
     checking: false,
     installing: false,
@@ -259,7 +259,7 @@ export function DesktopUpdaterProvider({ children }: DesktopUpdaterProviderProps
 
     try {
       const result = await checkDesktopUpdate();
-      macosUpdateRef.current = result.status === 'available' ? result.macosUpdate : undefined;
+      inAppUpdateRef.current = result.status === 'available' ? result.inAppUpdate : undefined;
       const checkedAt = Date.now();
       const showPrompt =
         result.status === 'available'
@@ -291,7 +291,7 @@ export function DesktopUpdaterProvider({ children }: DesktopUpdaterProviderProps
   }, []);
 
   const installAvailableUpdate = useCallback(async () => {
-    const update = macosUpdateRef.current;
+    const update = inAppUpdateRef.current;
     if (!update) return;
 
     setState((current) => ({
@@ -304,7 +304,7 @@ export function DesktopUpdaterProvider({ children }: DesktopUpdaterProviderProps
     }));
 
     try {
-      await installMacosUpdateAndRelaunch(update, (event) => {
+      await installUpdateAndRelaunch(update, (event) => {
         setState((current) => ({
           ...current,
           downloadProgress: reduceDownloadProgress(

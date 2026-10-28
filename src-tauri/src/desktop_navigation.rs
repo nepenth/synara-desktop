@@ -166,9 +166,9 @@ mod tests {
     }
 
     #[test]
-    fn updater_install_is_macos_scoped_and_the_main_window_is_not_remote() {
+    fn updater_install_is_macos_and_windows_scoped_and_the_main_window_is_not_remote() {
         let main = include_str!("../capabilities/main.json");
-        let updater = include_str!("../capabilities/macos-updater.json");
+        let updater = include_str!("../capabilities/desktop-updater.json");
         for permission in [
             "updater:allow-check",
             "updater:allow-download-and-install",
@@ -182,7 +182,7 @@ mod tests {
             );
         }
         assert!(!main.contains("http://localhost"));
-        assert!(updater.contains("\"platforms\": [\"macOS\"]"));
+        assert!(updater.contains("\"platforms\": [\"macOS\", \"windows\"]"));
         assert!(updater.contains("\"windows\": [\"main\"]"));
         assert!(updater.contains("updater:allow-check"));
         assert!(updater.contains("updater:allow-download-and-install"));

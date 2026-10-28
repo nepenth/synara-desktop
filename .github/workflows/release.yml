@@ -195,7 +195,8 @@ jobs:
     timeout-minutes: 120
     # Builds produce artifacts only; publication waits for the quality gate.
     # The installers are not Authenticode-signed yet, so SmartScreen warns on
-    # first run, and there is no in-app updater on Windows (as on Linux).
+    # first run. The in-app updater checks them with the Tauri updater key,
+    # which is separate from Authenticode.
     needs: [validate]
     defaults:
       run:
@@ -228,19 +229,45 @@ jobs:
         run: npm ci
         working-directory: synara
 
+      - name: Configure release updater channel
+        run: node scripts/configure-release-updater.mjs
+        env:
+          SYNARA_UPDATER_PUBKEY: ${{ vars.SYNARA_UPDATER_PUBKEY }}
+          SYNARA_UPDATER_ENDPOINT: ${{ vars.SYNARA_UPDATER_ENDPOINT }}
+
+      - name: Require signed updater release channel
+        run: npm run check:release-updater -- --require-enabled
+
       - name: Build MSI and NSIS installers
         shell: cmd
         run: npm run tauri build -- --bundles msi,nsis
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
           SYNARA_KLIPY_API_KEY: ${{ secrets.SYNARA_KLIPY_API_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Require installers for the tagged version
         run: |
           version="${GITHUB_REF_NAME#v}"
           ls target/release/bundle/msi target/release/bundle/nsis
-          test -f "target/release/bundle/msi/Synara_${version}_x64_en-US.msi"
-          test -f "target/release/bundle/nsis/Synara_${version}_x64-setup.exe"
+          for installer in \
+            "target/release/bundle/msi/Synara_${version}_x64_en-US.msi" \
+            "target/release/bundle/nsis/Synara_${version}_x64-setup.exe"; do
+            test -f "$installer"
+            test -s "$installer.sig"
+          done
+
+      - name: Collect Windows updater artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-updater-artifacts
+          if-no-files-found: error
+          path: |
+            target/release/bundle/msi/Synara_*_x64_en-US.msi
+            target/release/bundle/msi/Synara_*_x64_en-US.msi.sig
+            target/release/bundle/nsis/Synara_*_x64-setup.exe
+            target/release/bundle/nsis/Synara_*_x64-setup.exe.sig
 
       - name: Upload Windows installers for release
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -537,11 +564,11 @@ jobs:
             "$RUNNER_TEMP/synara-desktop-signing.entitlements"
 
   updater-metadata:
-    name: Signed macOS updater metadata
+    name: Signed macOS and Windows updater metadata
     if: startsWith(github.ref_name, 'v')
     runs-on: ubuntu-22.04
     timeout-minutes: 10
-    needs: [macos]
+    needs: [macos, windows]
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
