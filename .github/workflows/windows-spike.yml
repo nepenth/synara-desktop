@@ -1,15 +1,14 @@
 name: Windows spike
 
-# Windows compile and test probe, plus an unsigned test installer. Manual
-# dispatch, so it never runs on pull requests or blocks the Quality gate.
+# Windows compile and test probe, plus an unsigned test installer. It runs
+# weekly and on manual dispatch, never on pull requests, so it cannot block the
+# Quality gate; the installer builds only on dispatch.
 # Every probe keeps going past failures so one run reports them all, then the
 # run fails if any did; docs/windows-support-spike.md records the findings.
 on:
   workflow_dispatch:
-  # TEMPORARY: GitHub only dispatches workflows present on the default branch,
-  # so this branch runs from a push. Remove before merging.
-  push:
-    branches: [claude/windows-spike-17dfda]
+  schedule:
+    - cron: "17 7 * * 1"
 
 concurrency:
   group: windows-spike-${{ github.ref_name }}
@@ -134,6 +133,7 @@ jobs:
   # SmartScreen warns on first run ("More info" > "Run anyway").
   windows-installer:
     name: Unsigned Windows test installer
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     timeout-minutes: 120
     defaults:

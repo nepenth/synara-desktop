@@ -1,15 +1,18 @@
 # Windows support spike
 
-Status: fact-finding only (2026-10-27). Nothing here has been ported. The
-findings come from one run of `.github/workflows/windows-spike.yml` on
+Status (2.6.0): Windows is a CI-checked test target, not a released platform.
+The fixes listed under "Current state" are on main; `release.yml` still
+publishes macOS and Linux only, and there are no Windows release artifacts.
+The numbered sections below are the original spike findings (2026-10-27) and
+describe the code before those fixes. They come from one run of `.github/workflows/windows-spike.yml` on
 `windows-latest` against the v2.4.0 code (`eade6d9f`), plus a read of the
 platform-specific code:
 [run 40557791572](https://github.com/nepenth/synara-desktop/actions/runs/40557791572)
 (logs are kept as the `windows-spike-logs` artifact for 14 days).
 
-## Current state of this branch
+## Current state
 
-The spike findings below are from the first run. Since then this branch has
+The spike findings below are from the first run. Since then the spike has
 made Windows a working, CI-checked test target. `windows-spike.yml` is green
 on Windows: the workspace compiles with no warnings, all Rust and renderer
 unit tests pass, and the `windows-installer` job uploads an unsigned MSI and
@@ -34,11 +37,13 @@ Still open:
 - Code signing, the updater, and SmartScreen reputation.
 - Single instance and deep links.
 - A manual pass on real hardware.
+- Lock in the app origin before the first Windows release. The build uses
+  `http://tauri.localhost`, not `useHttpsScheme`; WebView2 keys localStorage
+  and IndexedDB by origin, so it can't change after shipping.
 
 Also checked and needing no Windows code: the native title bar, Ctrl
 shortcuts, the "Synara Windows" device name, and the renderer's fallback
-sound. The `push` trigger on this branch is temporary and must be removed
-before merging.
+sound.
 
 ## Summary
 
@@ -220,7 +225,8 @@ styling. That's outside this spike. **Estimate: 2–3 days.**
 
 ## 3. Secret store: `windows-native-session-store-unsupported`
 
-The current state is deliberate and fails closed:
+Fixed since: both vaults use Credential Manager (see "Current state"). As found
+by the spike, the state is deliberate and fails closed:
 
 - `desktop_secret_store.rs:301` reports
   `DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED` (available: false, cannot persist
@@ -292,6 +298,10 @@ renderer copy for "secure storage unavailable" need a Windows variant.
 **Total: 2–4 days.**
 
 ## 4. App origin: `tauri://localhost` versus `http://tauri.localhost`
+
+Fixed since: navigation pins `http://tauri.localhost` on Windows and the CSP
+allows `http://synara-media.localhost`. The line references below are from
+the v2.4.0 code.
 
 On Windows, WebView2 can't register a custom scheme as a secure origin, so
 Tauri 2 serves packaged assets from `http://tauri.localhost` (or
@@ -444,9 +454,8 @@ packaging and a manual pass: **roughly 8–12 days**.
 
 ## Re-running the probe
 
-`.github/workflows/windows-spike.yml` is `workflow_dispatch` only. GitHub
-can't dispatch a workflow until the file is on the default branch, so to
-re-run it from a branch, either merge the workflow first or temporarily add a
-`push` trigger scoped to that branch (which is how this run was started). The
-run uploads `windows-spike-logs` with each step's log, `outcomes.txt` and a
+`.github/workflows/windows-spike.yml` runs the probe every Monday and on
+manual dispatch (Actions > Windows spike > Run workflow, on any branch). The
+unsigned installer job runs only on dispatch. Neither runs on pull requests.
+The run uploads `windows-spike-logs` with each step's log, `outcomes.txt` and a
 grep summary.
