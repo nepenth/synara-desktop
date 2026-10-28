@@ -169,7 +169,7 @@ pub fn wipe_account_store<K: StoreKeyVault + ?Sized>(
 
     let account_root = target.account_root();
     if account_root.exists() {
-        fs::remove_dir_all(account_root)?;
+        remove_dir_all_once_released(account_root)?;
     }
     if account_root.exists() {
         return Err(LifecycleError::WipeRefused {
@@ -190,6 +190,33 @@ pub fn wipe_account_store<K: StoreKeyVault + ?Sized>(
         store_key_removed,
         wipe_target_kind: WIPE_TARGET_KIND_ACCOUNT_ROOT.to_owned(),
     })
+}
+
+/// Removes `path`, waiting briefly on Windows for SQLite handles to close.
+///
+/// The SDK closes a dropped client's store connections on its runtime a moment
+/// later. Unix unlinks open files, but Windows refuses with a sharing violation
+/// until the last handle is gone, so a wipe right after sign-out would fail.
+fn remove_dir_all_once_released(path: &Path) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        // ERROR_SHARING_VIOLATION and ERROR_LOCK_VIOLATION.
+        const STILL_OPEN: [i32; 2] = [32, 33];
+        const ATTEMPTS: u32 = 50;
+        for _ in 1..ATTEMPTS {
+            match fs::remove_dir_all(path) {
+                Err(error)
+                    if error
+                        .raw_os_error()
+                        .is_some_and(|code| STILL_OPEN.contains(&code)) =>
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+                result => return result,
+            }
+        }
+    }
+    fs::remove_dir_all(path)
 }
 
 fn validate_app_data_root(root: &Path) -> Result<(), LifecycleError> {

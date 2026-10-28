@@ -103,6 +103,17 @@ const main = async () => {
     );
   }
 
+  // The setup starts Synara when it finishes, and a second launch would only
+  // hand off to that instance and exit. Stop it so this launch, with the
+  // debugging port, is the only one.
+  await sleep(5_000);
+  try {
+    execFileSync("taskkill", ["/IM", "Synara.exe", "/F"], { stdio: "inherit" });
+    await sleep(2_000);
+  } catch {
+    // Nothing was running.
+  }
+
   console.log(`[windows-ui-smoke] launching ${exe}`);
   const app = spawn(exe, [], {
     detached: false,
