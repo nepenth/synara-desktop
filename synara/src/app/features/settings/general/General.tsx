@@ -1223,11 +1223,7 @@ type GeneralProps = {
 };
 export function General({ requestClose }: GeneralProps) {
   return (
-    <SettingsPage
-      title="General"
-      description="Widgets, calls, date and time, editor and message display preferences."
-      requestClose={requestClose}
-    >
+    <SettingsPage title="General" requestClose={requestClose}>
       <WidgetsSection />
       <CallsSection />
       <DateAndTime />

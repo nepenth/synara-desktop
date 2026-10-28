@@ -17,11 +17,7 @@ type AboutProps = {
 };
 export function About({ requestClose }: AboutProps) {
   return (
-    <SettingsPage
-      title="About"
-      description="Version, build and project information."
-      requestClose={requestClose}
-    >
+    <SettingsPage title="About" requestClose={requestClose}>
       <Box gap="400">
         <Box shrink="No">
           <img style={{ width: toRem(60), height: toRem(60) }} src={SynaraPNG} alt="Synara logo" />
