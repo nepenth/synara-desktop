@@ -73,6 +73,20 @@ test('a Matrix ID whose server is unreachable signs in through the chosen proxy'
   assert.ok(requested.some((url) => url.startsWith(`https://${SERVER_NAME}/`)));
 });
 
+test('a Matrix ID never falls back to the default server the user did not pick', async () => {
+  const unreachable: typeof fetch = async () => {
+    throw new TypeError('connect ETIMEDOUT');
+  };
+  const resolved = mxIdLoginBaseUrl(
+    openConfig,
+    'myserver.net',
+    'matrix.org',
+    'https://matrix-client.matrix.org',
+    unreachable
+  );
+  await assert.rejects((resolved as () => Promise<string>)(), /NotFound/);
+});
+
 test('a Matrix ID on a reachable other server still signs in there', async () => {
   const reachable: typeof fetch = async (input) => {
     const url = String(input);

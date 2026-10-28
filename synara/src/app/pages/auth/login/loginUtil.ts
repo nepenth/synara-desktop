@@ -8,7 +8,11 @@
 import to from 'await-to-js';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClientConfig, clientAllowedServer } from '../../../hooks/useClientConfig';
+import {
+  ClientConfig,
+  clientAllowedServer,
+  clientDefaultServer,
+} from '../../../hooks/useClientConfig';
 import { autoDiscovery, specVersions } from '../../../cs-api';
 import {
   deleteAfterLoginRedirectPath,
@@ -79,7 +83,9 @@ const fetchWithTimeout =
  * cannot be reached, the chosen server is used instead: a homeserver served
  * through a proxy whose host is not its server name (an IPv4 proxy in front
  * of an IPv6-only server, say) is reachable only that way. The server then
- * decides whether the Matrix ID is its own.
+ * decides whether the Matrix ID is its own. The fallback needs a server the
+ * user picked: with the form still on the default server, a slow or down
+ * Matrix ID server would otherwise send its password to the default one.
  */
 export const mxIdLoginBaseUrl = (
   clientConfig: ClientConfig,
@@ -99,6 +105,9 @@ export const mxIdLoginBaseUrl = (
       return await discover();
     } catch (error) {
       if (error instanceof Error && error.message === GetBaseUrlError.NotAllow) throw error;
+      if (chosenServer.toLowerCase() === clientDefaultServer(clientConfig).toLowerCase()) {
+        throw error;
+      }
       return chosenBaseUrl;
     }
   };
