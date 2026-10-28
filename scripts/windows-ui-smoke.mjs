@@ -44,7 +44,9 @@ export const pickAppTarget = (targets) =>
     (target) =>
       target.type === "page" &&
       typeof target.webSocketDebuggerUrl === "string" &&
-      /^https?:\/\/tauri\.localhost\//.test(target.url || ""),
+      /^(https?:\/\/tauri\.localhost|tauri:\/\/localhost)\//.test(
+        target.url || "",
+      ),
   );
 
 export const renderedSignIn = (text) =>
@@ -88,6 +90,30 @@ const cdp = (webSocketUrl) =>
     );
   });
 
+// Desktop screenshot and WebView2 command lines, so a failed run shows what
+// was on screen and whether the debugging port reached the browser process.
+const captureDiagnostics = (out) => {
+  const desktop = path.join(out, "desktop.png").replace(/'/g, "''");
+  const processes = path.join(out, "processes.txt").replace(/'/g, "''");
+  const script = [
+    "Add-Type -AssemblyName System.Windows.Forms, System.Drawing",
+    "$b = [System.Windows.Forms.SystemInformation]::VirtualScreen",
+    "$bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height",
+    "$g = [System.Drawing.Graphics]::FromImage($bmp)",
+    "$g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size)",
+    `$bmp.Save('${desktop}', [System.Drawing.Imaging.ImageFormat]::Png)`,
+    "Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'Synara|msedgewebview2' } |" +
+      ` ForEach-Object { "$($_.ProcessId) $($_.Name) $($_.CommandLine)" } | Out-File -Encoding utf8 '${processes}'`,
+  ].join("; ");
+  try {
+    execFileSync("powershell", ["-NoProfile", "-Command", script], {
+      stdio: "inherit",
+    });
+  } catch (error) {
+    console.log(`[windows-ui-smoke] diagnostics failed: ${error.message}`);
+  }
+};
+
 const main = async () => {
   const args = parseArgs(process.argv.slice(2));
   mkdirSync(args.out, { recursive: true });
@@ -130,6 +156,7 @@ const main = async () => {
   });
 
   let lastText = "";
+  let lastPoll = "not polled yet";
   let session;
   try {
     const deadline = Date.now() + LAUNCH_TIMEOUT_MS;
@@ -141,9 +168,11 @@ const main = async () => {
           `http://127.0.0.1:${DEBUG_PORT}/json/list`,
         );
         targets = await response.json();
-      } catch {
+      } catch (error) {
+        lastPoll = `DevTools port not answering: ${error.cause?.code ?? error.message}`;
         continue; // WebView2 not listening yet.
       }
+      lastPoll = `targets: ${JSON.stringify(targets.map(({ type, url }) => ({ type, url })))}`;
       const target = pickAppTarget(targets);
       if (!target) continue;
       session ??= await cdp(target.webSocketDebuggerUrl);
@@ -168,6 +197,8 @@ const main = async () => {
       );
     }
     writeFileSync(path.join(args.out, "page-text.txt"), lastText);
+    console.log(`[windows-ui-smoke] last DevTools poll: ${lastPoll}`);
+    captureDiagnostics(args.out);
 
     if (exited)
       throw new Error("Synara exited before the sign-in screen rendered");
