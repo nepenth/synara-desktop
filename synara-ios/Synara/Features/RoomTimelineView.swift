@@ -581,6 +581,7 @@ struct RoomTimelineView: View {
     @State private var redactConfirmation = TimelineRedactConfirmation<TimelineItem>()
     @State private var reportReason = ""
     @State private var forwardTarget: TimelineItem?
+    @State private var reactionsTarget: TimelineReactionsSheetTarget?
     @State private var threadDisplay: ThreadDisplayMode = ThreadDisplayMode.defaultMode
     @State private var expandedThreadRoots: Set<String> = []
     @State private var threadSheet: ThreadSheetTarget?
@@ -780,6 +781,19 @@ struct RoomTimelineView: View {
                     isTimelineSearchPresented = false
                 }
             )
+        }
+        .sheet(item: $reactionsTarget) { target in
+            let items = loadedTimelineItems
+            TimelineReactionsSheet(
+                // The live row, so reactions arriving while it is open show.
+                item: items.first { $0.eventID == target.item.eventID } ?? target.item,
+                initialKey: target.initialKey,
+                currentUserID: currentUserID,
+                roomID: roomID,
+                directory: TimelineReactorDirectory(items: items),
+                onDismiss: { reactionsTarget = nil }
+            )
+            .environment(\.appEnvironment, environment)
         }
         .sheet(item: $forwardTarget) { item in
             TimelineForwardSheet(
@@ -1097,6 +1111,7 @@ struct RoomTimelineView: View {
                                 in: items,
                                 currentUserID: currentUserID
                             )
+                            let reactorDirectory = TimelineReactorDirectory(items: items)
 
                             let dayHeaders = TimelineDayHeaderPolicy.headers(for: items)
                             let userID = currentUserID
@@ -1175,7 +1190,9 @@ struct RoomTimelineView: View {
                                     },
                                     onDiscardFailedSend: {
                                         discardFailedMessage(item)
-                                    }
+                                    },
+                                    reactorNames: reactorDirectory.names(for: item),
+                                    onShowReactions: { key in showReactions(for: item, key: key) }
                                 )
                                 .id(item.eventID)
                                 .onAppear {
@@ -1514,7 +1531,9 @@ struct RoomTimelineView: View {
                     submitAgentApprovalDecision(actionIdentifier: actionIdentifier, sourceEventID: eventRow.item.eventID)
                 },
                 onRetryFailedSend: { retryFailedMessage(eventRow.item) },
-                onDiscardFailedSend: { discardFailedMessage(eventRow.item) }
+                onDiscardFailedSend: { discardFailedMessage(eventRow.item) },
+                reactorNames: eventRow.reactorNames,
+                onShowReactions: { key in showReactions(for: eventRow.item, key: key) }
             )
             .padding(.horizontal, timelineHorizontalPadding)
             .padding(.bottom, SynaraSpacing.xSmall)
@@ -1527,6 +1546,7 @@ struct RoomTimelineView: View {
         let isInlineThreadMode = threadDisplay == .inline
         let replyCounts = TimelineReplyCounter.replyCounts(for: items)
         let previews = TimelineReplyPreview.previewsByEventID(in: items, currentUserID: userID)
+        let reactorDirectory = TimelineReactorDirectory(items: items)
         var rows: [StableTimelineViewportRow] = []
         rows.reserveCapacity(items.count + 3)
 
@@ -1572,7 +1592,8 @@ struct RoomTimelineView: View {
                             ),
                             isInlineThreadMode: isInlineThreadMode,
                             isThreadExpanded: isThreadExpanded(item),
-                            timeText: item.timestamp.timelineTime
+                            timeText: item.timestamp.timelineTime,
+                            reactorNames: reactorDirectory.names(for: item)
                         )
                     )
                 )
@@ -3846,6 +3867,11 @@ struct RoomTimelineView: View {
         sentDraft = ComposerSentDraft(id: sentDraftSerial, sentText: sentText)
     }
 
+    /// Opens the Reactions sheet on `key`, or on the first reaction.
+    private func showReactions(for item: TimelineItem, key: String?) {
+        reactionsTarget = TimelineReactionsSheetTarget(item: item, initialKey: key)
+    }
+
     /// A pill or quick reaction: toggles the user's reaction, and records
     /// an added one in the recent-emoji list desktop shares.
     private func toggleReaction(_ key: String, on item: TimelineItem) {
@@ -4557,6 +4583,7 @@ struct ThreadTimelineView: View {
     @State private var redactConfirmation = TimelineRedactConfirmation<TimelineItem>()
     @State private var reportReason = ""
     @State private var forwardTarget: TimelineItem?
+    @State private var reactionsTarget: TimelineReactionsSheetTarget?
     @State private var inFlightTimelineActionKeys: Set<String> = []
     @State private var cryptoStatus: RoomCryptoStatus = .unknown
     @State private var replyTarget: ComposerRelationTarget?
@@ -4642,6 +4669,21 @@ struct ThreadTimelineView: View {
             Button("OK", role: .cancel) { notesActionMessage = nil }
         } message: {
             Text(notesActionMessage ?? String(localized: "Try again."))
+        }
+        .sheet(item: $reactionsTarget) { target in
+            let items: [TimelineItem] = {
+                guard case let .loaded(items, _) = state else { return [] }
+                return items
+            }()
+            TimelineReactionsSheet(
+                item: items.first { $0.eventID == target.item.eventID } ?? target.item,
+                initialKey: target.initialKey,
+                currentUserID: currentUserID,
+                roomID: roomID,
+                directory: TimelineReactorDirectory(items: items),
+                onDismiss: { reactionsTarget = nil }
+            )
+            .environment(\.appEnvironment, environment)
         }
         .sheet(item: $forwardTarget) { item in
             TimelineForwardSheet(
@@ -4750,6 +4792,7 @@ struct ThreadTimelineView: View {
                             in: visibleItems,
                             currentUserID: currentUserID
                         )
+                        let reactorDirectory = TimelineReactorDirectory(items: visibleItems)
                         ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
                             if let day = dayHeaders[item.eventID] {
                                 TimelineDayHeader(day: day)
@@ -4761,7 +4804,8 @@ struct ThreadTimelineView: View {
                                     previous: index > 0 ? visibleItems[index - 1] : nil,
                                     current: item
                                 ),
-                                replyPreviews: replyPreviews
+                                replyPreviews: replyPreviews,
+                                reactorNames: reactorDirectory.names(for: item)
                             )
                             .id(item.id)
                         }
@@ -4805,7 +4849,8 @@ struct ThreadTimelineView: View {
     private func threadRow(
         _ item: TimelineItem,
         isGroupedWithPrevious: Bool,
-        replyPreviews: [String: TimelineReplyPreview]
+        replyPreviews: [String: TimelineReplyPreview],
+        reactorNames: [String: String]
     ) -> some View {
         TimelineRow(
             item: item,
@@ -4855,7 +4900,9 @@ struct ThreadTimelineView: View {
             onAgentAction: { _ in },
             onAgentApprovalReaction: { _ in },
             onRetryFailedSend: { retryFailedReply(item) },
-            onDiscardFailedSend: { discardFailedReply(item) }
+            onDiscardFailedSend: { discardFailedReply(item) },
+            reactorNames: reactorNames,
+            onShowReactions: { key in reactionsTarget = TimelineReactionsSheetTarget(item: item, initialKey: key) }
         )
     }
 
@@ -7126,6 +7173,11 @@ private struct TimelineRow: View {
     let onAgentApprovalReaction: (String) -> Void
     let onRetryFailedSend: () -> Void
     var onDiscardFailedSend: () -> Void = {}
+    /// Display names for this message's reaction senders, by user id.
+    var reactorNames: [String: String] = [:]
+    /// Opens the Reactions sheet on a reaction key (nil: the first one);
+    /// nil where the sheet is unavailable.
+    var onShowReactions: ((String?) -> Void)?
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.appEnvironment) private var environment
     @State private var isSelectingText = false
@@ -7311,6 +7363,12 @@ private struct TimelineRow: View {
         if TimelineReactionTogglePolicy.canToggle(availability: availability, ownership: item.reactionOwnership) {
             quickReactionMenu
         }
+        if item.reactions.isEmpty == false, let onShowReactions {
+            Button("View Reactions", systemImage: "person.2") {
+                onShowReactions(nil)
+            }
+            .accessibilityIdentifier("TimelineItemViewReactions-\(item.eventID)")
+        }
         if availability.canForward {
             Button("Forward", systemImage: "arrowshape.turn.up.right", action: onForward)
                 .accessibilityIdentifier("TimelineItemForward-\(item.eventID)")
@@ -7398,8 +7456,10 @@ private struct TimelineRow: View {
                             title: reaction,
                             count: item.reactions[reaction] ?? 0,
                             isSelected: item.reactionOwnership.contains(reaction),
+                            accessibilityText: reactionPillAccessibilityLabel(reaction),
                             animationIndex: index,
-                            onToggle: canToggleReactions ? { onToggleReaction(reaction) } : nil
+                            onToggle: canToggleReactions ? { onToggleReaction(reaction) } : nil,
+                            onShowSenders: onShowReactions.map { show in { show(reaction) } }
                         )
                     }
                 }
@@ -7742,7 +7802,8 @@ private struct TimelineRow: View {
             canPinToNotes: TimelinePinActionAvailability.forItem(item).canPinToPrivateNotes,
             reactions: item.reactions,
             ownReactions: item.reactionOwnership,
-            quickReactions: quickReactions.keys
+            quickReactions: quickReactions.keys,
+            canViewReactions: onShowReactions != nil
         )
     }
 
@@ -7760,6 +7821,8 @@ private struct TimelineRow: View {
             }
         case let .toggleReaction(key, _):
             onToggleReaction(key)
+        case .viewReactions:
+            onShowReactions?(nil)
         case .edit:
             onEdit()
         case .copy:
@@ -7873,6 +7936,21 @@ private struct TimelineRow: View {
         }
 
         return item.resolvedSenderDisplayName(currentUserID: currentUserID)
+    }
+
+    /// "👍, 3 reactions: Alice, Bob and you".
+    private func reactionPillAccessibilityLabel(_ key: String) -> String {
+        TimelineRowAccessibility.reactionPillLabel(
+            key: key,
+            count: item.reactions[key] ?? 0,
+            includesYou: TimelineReactionSenders.includesCurrentUser(key: key, in: item, currentUserID: currentUserID),
+            otherNames: TimelineReactionSenders.otherNames(
+                key: key,
+                in: item,
+                currentUserID: currentUserID,
+                names: reactorNames
+            )
+        )
     }
 }
 
@@ -8521,31 +8599,53 @@ private struct ReactionPill: View {
     let title: String
     let count: Int
     var isSelected = false
+    /// "👍, 3 reactions: Alice, Bob and you"; VoiceOver names the emoji.
+    var accessibilityText: String
     var animationIndex = 0
     /// Adds or removes the user's reaction; nil when it cannot change.
     var onToggle: (() -> Void)?
+    /// Opens the Reactions sheet on this emoji; nil when it is unavailable.
+    var onShowSenders: (() -> Void)?
 
     private var reactionAnimationKey: String {
         "\(title)-\(count)"
     }
 
-    /// "👍 3, you reacted"; VoiceOver names the emoji.
-    private var accessibilityLabel: String {
-        TimelineRowAccessibility.reactionLabel(key: title, count: count, isOwn: isSelected)
+    var body: some View {
+        if onToggle == nil, onShowSenders == nil {
+            pill
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(accessibilityText)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+        } else {
+            // Tap toggles (or, when the reaction cannot change, shows who
+            // reacted); a long press shows who reacted. Plain gestures, not a
+            // Button, so finishing a long press never also toggles.
+            pill
+                .contentShape(Capsule())
+                .onTapGesture(perform: activate)
+                .onLongPressGesture(minimumDuration: 0.4) {
+                    onShowSenders?()
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(accessibilityText)
+                .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+                .accessibilityHint(
+                    onToggle == nil
+                        ? TimelineRowAccessibility.showReactorsActionTitle
+                        : TimelineRowAccessibility.reactionToggleHint(isOwn: isSelected)
+                )
+                .accessibilityAction { activate() }
+                .modifier(ShowReactorsAccessibilityAction(onShowSenders: onShowSenders))
+                .accessibilityIdentifier("ReactionPill-\(title)")
+        }
     }
 
-    var body: some View {
+    private func activate() {
         if let onToggle {
-            Button(action: onToggle) {
-                pill
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(accessibilityLabel)
-            .accessibilityAddTraits(isSelected ? .isSelected : [])
-            .accessibilityHint(TimelineRowAccessibility.reactionToggleHint(isOwn: isSelected))
-            .accessibilityIdentifier("ReactionPill-\(title)")
+            onToggle()
         } else {
-            pill
+            onShowSenders?()
         }
     }
 
@@ -8563,10 +8663,147 @@ private struct ReactionPill: View {
         .background(isSelected ? SynaraColor.accent.opacity(0.14) : SynaraColor.elevatedSurface)
         .clipShape(Capsule())
         .synaraDepth(.raised, shape: Capsule())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .synaraReactionPop(animationIndex: animationIndex, animationKey: reactionAnimationKey)
+    }
+}
+
+/// "Show who reacted" as a pill's custom action, where the sheet exists.
+private struct ShowReactorsAccessibilityAction: ViewModifier {
+    let onShowSenders: (() -> Void)?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let onShowSenders {
+            content.accessibilityAction(named: Text(TimelineRowAccessibility.showReactorsActionTitle)) {
+                onShowSenders()
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/// Who reacted to a message: a tab per emoji with its count, and the people
+/// behind it. Names fill in from the room's members once they load.
+private struct TimelineReactionsSheet: View {
+    let item: TimelineItem
+    let initialKey: String?
+    let currentUserID: String
+    let roomID: String
+    let directory: TimelineReactorDirectory
+    let onDismiss: () -> Void
+    @Environment(\.appEnvironment) private var environment
+    @State private var selectedKey: String?
+    @State private var members: [RoomMemberSummary] = []
+
+    private var groups: [TimelineReactionGroup] {
+        var directory = directory
+        directory.merge(members: members)
+        return TimelineReactionSenders.groups(for: item, currentUserID: currentUserID, directory: directory)
+    }
+
+    var body: some View {
+        let groups = self.groups
+        let selectedGroup = groups.first { $0.key == selectedKey } ?? groups.first
+        NavigationStack {
+            VStack(spacing: 0) {
+                if let selectedGroup {
+                    reactionTabs(groups, selectedKey: selectedGroup.key)
+                    reactorList(selectedGroup)
+                } else {
+                    SynaraEmptyState(
+                        title: String(localized: "No Reactions"),
+                        systemImage: "face.smiling",
+                        message: String(localized: "Nobody has reacted to this message.")
+                    )
+                    .frame(maxHeight: .infinity)
+                }
+            }
+            .background(SynaraColor.surface)
+            .navigationTitle("Reactions")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done", action: onDismiss)
+                        .accessibilityIdentifier("TimelineReactionsDoneButton")
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .onAppear {
+            if selectedKey == nil {
+                selectedKey = TimelineReactionsSheetTarget(item: item, initialKey: initialKey).selectedKey(in: groups)
+            }
+        }
+        .task(id: roomID) {
+            members = await environment.roomManagement.roomDetails(roomID: roomID)?.members ?? []
+        }
+    }
+
+    private func reactionTabs(_ groups: [TimelineReactionGroup], selectedKey: String) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: SynaraSpacing.small) {
+                ForEach(groups) { group in
+                    let isSelected = group.key == selectedKey
+                    let countText = String(localized: "\(group.count) reactions")
+                    Button {
+                        self.selectedKey = group.key
+                    } label: {
+                        HStack(spacing: SynaraSpacing.xSmall) {
+                            Text(group.key)
+                            Text("\(group.count)")
+                                .monospacedDigit()
+                        }
+                        .font(SynaraTypography.chipLabel)
+                        .foregroundStyle(isSelected ? SynaraColor.accentText : SynaraColor.primaryText)
+                        .padding(.horizontal, SynaraSpacing.medium)
+                        .frame(minHeight: SynaraHitTarget.minimum)
+                        .background(isSelected ? SynaraColor.accent.opacity(0.14) : SynaraColor.secondarySurface)
+                        .clipShape(Capsule())
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(String(localized: "\(group.key), \(countText)"))
+                    .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+                    .accessibilityIdentifier("TimelineReactionsTab-\(group.key)")
+                }
+            }
+            .padding(.horizontal, SynaraSpacing.large)
+            .padding(.vertical, SynaraSpacing.small)
+        }
+    }
+
+    private func reactorList(_ group: TimelineReactionGroup) -> some View {
+        List {
+            ForEach(group.reactors) { reactor in
+                HStack(spacing: SynaraSpacing.medium) {
+                    TimelineAvatar(senderID: reactor.userID, avatarURL: reactor.avatarURL, size: 36)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(reactor.title)
+                            .font(SynaraTypography.emphasis)
+                            .foregroundStyle(SynaraColor.primaryText)
+                            .lineLimit(1)
+                        Text(reactor.userID)
+                            .font(SynaraTypography.messageMeta)
+                            .foregroundStyle(SynaraColor.secondaryText)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, SynaraSpacing.xSmall)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("TimelineReactor-\(reactor.userID)")
+            }
+            if group.unnamedCount > 0 {
+                Text(String(localized: "\(group.unnamedCount) more people"))
+                    .font(SynaraTypography.messageMeta)
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
+        }
+        .listStyle(.plain)
+        .accessibilityIdentifier("TimelineReactorList")
     }
 }
 

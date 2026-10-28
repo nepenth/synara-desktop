@@ -12,6 +12,8 @@ extension TimelineRowAccessibility {
         /// Adds or removes the user's reaction with an existing key, as
         /// tapping its pill does.
         case toggleReaction(key: String, isOwn: Bool)
+        /// Opens the Reactions sheet: who reacted with what.
+        case viewReactions
         case edit
         case copy
         case selectText
@@ -35,6 +37,8 @@ extension TimelineRowAccessibility {
                 return isOwn
                     ? String(localized: "Remove \(key) reaction")
                     : String(localized: "React with \(key)")
+            case .viewReactions:
+                return String(localized: "View Reactions")
             case .edit:
                 return String(localized: "Edit")
             case .copy:
@@ -64,7 +68,8 @@ extension TimelineRowAccessibility {
         canPinToNotes: Bool,
         reactions: [String: Int] = [:],
         ownReactions: TimelineReactionOwnership = .unknown,
-        quickReactions: [String] = []
+        quickReactions: [String] = [],
+        canViewReactions: Bool = false
     ) -> [Action] {
         var actions: [Action] = []
         if availability.canReply {
@@ -81,6 +86,9 @@ extension TimelineRowAccessibility {
             for key in keys {
                 actions.append(.toggleReaction(key: key, isOwn: ownReactions.contains(key)))
             }
+        }
+        if canViewReactions, reactions.isEmpty == false {
+            actions.append(.viewReactions)
         }
         if availability.canReply {
             actions.append(.replyInThread)
@@ -147,6 +155,60 @@ extension TimelineRowAccessibility {
 
     static func reactionLabel(key: String, count: Int, isOwn: Bool) -> String {
         isOwn ? String(localized: "\(key) \(count), you reacted") : String(localized: "\(key) \(count)")
+    }
+
+    /// A pill's label: "👍, 3 reactions: Alice, Bob and you". Without any
+    /// named sender it falls back to the count and "you reacted".
+    static func reactionPillLabel(key: String, count: Int, includesYou: Bool, otherNames: [String]) -> String {
+        let total = max(count, otherNames.count + (includesYou ? 1 : 0))
+        let countText = String(localized: "\(total) reactions")
+        guard otherNames.isEmpty == false || includesYou,
+              let people = reactorList(otherNames: otherNames, includesYou: includesYou, total: total)
+        else {
+            return String(localized: "\(key), \(countText)")
+        }
+        return String(localized: "\(key), \(countText): \(people)")
+    }
+
+    /// "Alice", "Alice and you", "Alice, Bob and you"; past three people,
+    /// the first two others (and you), then "and 2 others". People Core
+    /// counted without naming join the "others".
+    static func reactorList(otherNames: [String], includesYou: Bool, total: Int) -> String? {
+        let you = String(localized: "you")
+        let everyone = otherNames + (includesYou ? [you] : [])
+        let total = max(total, everyone.count)
+        guard everyone.isEmpty == false else {
+            return nil
+        }
+        if everyone.count == total, total <= 3 {
+            return joinedNames(everyone)
+        }
+        let named = Array(otherNames.prefix(2)) + (includesYou ? [you] : [])
+        let remaining = total - named.count
+        guard remaining > 0 else {
+            return joinedNames(named)
+        }
+        let list = named.joined(separator: String(localized: ", "))
+        return String(localized: "\(list) and \(remaining) others")
+    }
+
+    private static func joinedNames(_ names: [String]) -> String {
+        switch names.count {
+        case 0:
+            return ""
+        case 1:
+            return names[0]
+        case 2:
+            return String(localized: "\(names[0]) and \(names[1])")
+        default:
+            let leading = names.dropLast().joined(separator: String(localized: ", "))
+            return String(localized: "\(leading) and \(names[names.count - 1])")
+        }
+    }
+
+    /// The pill's custom action; tapping it still toggles the reaction.
+    static var showReactorsActionTitle: String {
+        String(localized: "Show who reacted")
     }
 
     static func reactionToggleHint(isOwn: Bool) -> String {

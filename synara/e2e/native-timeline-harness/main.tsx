@@ -393,6 +393,20 @@ window.__SYNARA_DESKTOP__ = {
       return oldSnapshot as T;
     }
     if (command === 'matrix_session_snapshot') return { status: 'logged_in' } as T;
+    if (command === 'matrix_room_members_snapshot') {
+      const memberRoomId = String(args?.roomId ?? '');
+      return {
+        sessionGeneration: 1,
+        roomId: memberRoomId,
+        members: ['@alice:example.org', '@bob:example.org'].map((userId) => ({
+          roomId: memberRoomId,
+          userId,
+          displayName: userId === '@alice:example.org' ? 'Alice Liddell' : 'Bob Builder',
+          membership: 'join',
+          powerLevel: 0,
+        })),
+      } as T;
+    }
     if (command === 'desktop_x_post') return JSON.stringify(EMBED_X_POST) as T;
     if (command === 'matrix_edit_message') {
       return {

@@ -24,6 +24,7 @@ import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { useOpenUserRoomProfile } from '../../../state/hooks/userRoomProfile';
 import { getMouseEventCords } from '../../../utils/dom';
 import { redactReactionWithNativeOwner, type NativeReactionReadback } from '../nativeReactionOwner';
+import { reactionSenderName, useReactionSenderNames } from '../reactionSenders';
 
 type LegacyRoomReference = { roomId: string };
 
@@ -80,6 +81,7 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
 
     const selectedReaction = reactions.find(({ key }) => key === selectedKey);
     const selectedSenders = selectedReaction?.senders ?? [];
+    const senderNames = useReactionSenderNames();
     const selectedShortcode = getShortcodeFor(getHexcodeForEmoji(selectedKey)) ?? selectedKey;
 
     const handleRedactReaction = async (key: string, reactionEventId: string | undefined) => {
@@ -175,7 +177,7 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
                         <Avatar size="200">
                           <UserAvatar
                             userId={senderId}
-                            alt={senderId}
+                            alt={reactionSenderName(senderId, senderNames)}
                             renderFallback={() => <Icon size="50" src={Icons.User} filled />}
                           />
                         </Avatar>
@@ -204,8 +206,11 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
                         ) : undefined
                       }
                     >
-                      <Box grow="Yes">
+                      <Box grow="Yes" direction="Column">
                         <Text size="T400" truncate>
+                          {reactionSenderName(senderId, senderNames, ownUserId)}
+                        </Text>
+                        <Text size="T200" priority="300" truncate>
                           {senderId}
                         </Text>
                       </Box>
