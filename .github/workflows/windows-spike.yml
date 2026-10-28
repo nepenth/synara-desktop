@@ -2,11 +2,18 @@ name: Windows spike
 
 # Windows compile and test probe, plus an unsigned test installer. It runs
 # weekly and on manual dispatch, never on pull requests, so it cannot block the
-# Quality gate; the installer builds only on dispatch.
+# Quality gate; the installer builds only on dispatch. A dispatch with
+# release_tag skips both and only checks that release's published setup
+# launches to the sign-in screen, which takes minutes instead of a build.
 # Every probe keeps going past failures so one run reports them all, then the
 # run fails if any did; docs/windows-support-spike.md records the findings.
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Only check this published release's setup.exe (e.g. v2.6.0)
+        type: string
+        default: ""
   schedule:
     - cron: "17 7 * * 1"
 
@@ -20,6 +27,7 @@ permissions:
 jobs:
   windows-probe:
     name: Windows compile and test probe
+    if: inputs.release_tag == ''
     runs-on: windows-latest
     timeout-minutes: 180
     defaults:
@@ -133,7 +141,7 @@ jobs:
   # SmartScreen warns on first run ("More info" > "Run anyway").
   windows-installer:
     name: Unsigned Windows test installer
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.release_tag == ''
     runs-on: windows-latest
     timeout-minutes: 120
     defaults:
@@ -178,6 +186,20 @@ jobs:
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
 
+      # Installs the setup, launches Synara and requires the renderer to draw
+      # the sign-in screen (scripts/windows-ui-smoke.mjs).
+      - name: Launch the installed app and check its UI
+        run: node scripts/windows-ui-smoke.mjs --setup "$(ls target/release/bundle/nsis/Synara_*_x64-setup.exe)" --out "$RUNNER_TEMP/windows-ui-smoke"
+
+      - name: Upload Windows UI screenshot
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-ui-smoke
+          path: ${{ runner.temp }}/windows-ui-smoke
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload test installers
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -186,4 +208,43 @@ jobs:
             target/release/bundle/msi/*.msi
             target/release/bundle/nsis/*.exe
           if-no-files-found: error
+          retention-days: 14
+
+  # The published setup of a release, installed and launched like a user would.
+  windows-release-ui:
+    name: Published Windows setup UI check
+    if: inputs.release_tag != ''
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Download the release setup
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern 'Synara_*_x64-setup.exe' --dir "$RUNNER_TEMP/release-setup"
+
+      - name: Launch the installed app and check its UI
+        run: node scripts/windows-ui-smoke.mjs --setup "$(ls "$RUNNER_TEMP"/release-setup/Synara_*_x64-setup.exe)" --out "$RUNNER_TEMP/windows-ui-smoke"
+
+      - name: Upload Windows UI screenshot
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-ui-smoke-${{ inputs.release_tag }}
+          path: ${{ runner.temp }}/windows-ui-smoke
+          if-no-files-found: warn
           retention-days: 14

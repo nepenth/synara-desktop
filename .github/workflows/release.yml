@@ -258,6 +258,20 @@ jobs:
             test -s "$installer.sig"
           done
 
+      # Installs the setup, launches Synara and requires the renderer to draw
+      # the sign-in screen (scripts/windows-ui-smoke.mjs).
+      - name: Launch the installed app and check its UI
+        run: node scripts/windows-ui-smoke.mjs --setup "$(ls target/release/bundle/nsis/Synara_*_x64-setup.exe)" --out "$RUNNER_TEMP/windows-ui-smoke"
+
+      - name: Upload Windows UI screenshot
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-ui-smoke-release
+          path: ${{ runner.temp }}/windows-ui-smoke
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Collect Windows updater artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
