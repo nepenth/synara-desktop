@@ -1,0 +1,3 @@
+Synara 2.6.0 is a maintenance release. The app and its notification service now declare the system APIs they use in their privacy manifests. Nothing changes in how the app behaves.
+
+Please test: signing in, notifications (including previews in the notification service), GIFs and the Connection Lost banner, to confirm nothing regressed.

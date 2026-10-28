@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [2.6.0] - 2026-10-28
+
+- Windows (desktop, not released): the desktop app now builds and passes its Rust and renderer tests on Windows, stores secrets in Windows Credential Manager, shows an unread dot on the taskbar button, and serves its packaged pages and media from Windows' `http://tauri.localhost` origin. The Windows workflow runs weekly and on demand and can build an unsigned test installer. Windows isn't a supported or published platform yet: there are no signed builds, updater or toasts (`docs/windows-support-spike.md`).
+- Privacy manifests (iOS): the app's privacy manifest now declares the required-reason APIs Synara uses (UserDefaults, system boot time and file timestamps), and the notification service has its own manifest. Nothing is tracked or collected; this only states why those APIs are read.
+- Tests: a Rust runtime test no longer fails at random when Tokio reuses a freed worker thread for blocking work.
+- Repository: stale branches, stashes and worktrees whose work was merged, superseded or abandoned have been removed.
+
 ## [2.5.0] - 2026-10-27
 
 - GIFs (iOS): GIF links from Klipy and GIPHY play in the conversation, and GIF attachments animate (Reduce Motion shows their first frame). The Attach sheet has a GIF option, and typing `/gif` or `/gif high five` opens a Klipy picker with trending GIFs, search and more GIFs as you scroll. As on desktop, a GIF is sent as its link, never re-hosted. Settings → GIFs & Link Previews has "GIF Search", "Play GIF Links Inline" and "Show X Posts". TestFlight builds take the Klipy key from `SYNARA_KLIPY_API_KEY`; builds without it don't offer GIF search.
