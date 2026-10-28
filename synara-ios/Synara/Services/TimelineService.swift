@@ -370,6 +370,9 @@ struct TimelineItem: Identifiable, Equatable {
     let isAgentApproval: Bool
     let reactions: [String: Int]
     let reactionOwnership: TimelineReactionOwnership
+    /// Who reacted, per reaction key, in Core's order. A key may list fewer
+    /// senders than its count (or none) when Core could not name them.
+    let reactionSenders: [String: [String]]
     let isEncrypted: Bool
     let deliveryStatus: TimelineDeliveryStatus?
     /// True when matrix-rust-sdk attached the signed-in user's durable read
@@ -396,6 +399,7 @@ struct TimelineItem: Identifiable, Equatable {
         isAgentApproval: Bool = false,
         reactions: [String: Int],
         reactionOwnership: TimelineReactionOwnership = .unknown,
+        reactionSenders: [String: [String]] = [:],
         isEncrypted: Bool = false,
         deliveryStatus: TimelineDeliveryStatus? = nil,
         hasCurrentUserReadReceipt: Bool = false
@@ -419,6 +423,7 @@ struct TimelineItem: Identifiable, Equatable {
         self.isAgentApproval = isAgentApproval
         self.reactions = reactions
         self.reactionOwnership = reactionOwnership
+        self.reactionSenders = reactionSenders
         self.isEncrypted = isEncrypted
         self.deliveryStatus = deliveryStatus
         self.hasCurrentUserReadReceipt = hasCurrentUserReadReceipt
@@ -470,6 +475,7 @@ struct TimelineItem: Identifiable, Equatable {
             isAgentApproval: isAgentApproval,
             reactions: reactions,
             reactionOwnership: reactionOwnership,
+            reactionSenders: reactionSenders,
             isEncrypted: isEncrypted,
             deliveryStatus: deliveryStatus,
             hasCurrentUserReadReceipt: hasCurrentUserReadReceipt
@@ -498,6 +504,7 @@ struct TimelineItem: Identifiable, Equatable {
             isAgentApproval: isAgentApproval,
             reactions: reactions,
             reactionOwnership: reactionOwnership,
+            reactionSenders: reactionSenders,
             isEncrypted: isEncrypted,
             deliveryStatus: deliveryStatus,
             hasCurrentUserReadReceipt: hasCurrentUserReadReceipt
@@ -883,6 +890,8 @@ struct RawTimelineEvent: Equatable {
     /// every reaction, as Core's rows do (`own` per reaction), so the mock
     /// timeline offers the same reaction toggles as a live one.
     let ownReactions: Set<String>
+    /// Who reacted, per key, as Core's rows carry it.
+    let reactionSenders: [String: [String]]
 
     init(
         eventID: String,
@@ -901,7 +910,8 @@ struct RawTimelineEvent: Equatable {
         agentCard: SynaraAgentCard? = nil,
         isAgentApproval: Bool = false,
         reactions: [String: Int] = [:],
-        ownReactions: Set<String> = []
+        ownReactions: Set<String> = [],
+        reactionSenders: [String: [String]] = [:]
     ) {
         self.eventID = eventID
         self.senderID = senderID
@@ -920,6 +930,7 @@ struct RawTimelineEvent: Equatable {
         self.isAgentApproval = isAgentApproval
         self.reactions = reactions
         self.ownReactions = ownReactions
+        self.reactionSenders = reactionSenders
     }
 }
 
@@ -1526,6 +1537,7 @@ enum TimelineMapper {
             isAgentApproval: event.isAgentApproval,
             reactions: event.reactions,
             reactionOwnership: .known(event.ownReactions),
+            reactionSenders: event.reactionSenders,
             isEncrypted: event.type == "m.room.encrypted" || event.isEncrypted
         )
     }
@@ -1545,7 +1557,11 @@ enum TimelineFixtures {
                 replyToEventID: nil,
                 isEdited: false,
                 mediaURL: nil,
-                reactions: ["👍": 3, "👏": 2]
+                reactions: ["👍": 3, "👏": 2],
+                reactionSenders: [
+                    "👍": ["@alex:matrix.org", "@ravi:matrix.org", "@sam:matrix.org"],
+                    "👏": ["@alex:matrix.org", "@ravi:matrix.org"],
+                ]
             ),
             RawTimelineEvent(
                 eventID: "$media:\(roomID)",
@@ -1576,7 +1592,8 @@ enum TimelineFixtures {
                 replyToEventID: nil,
                 isEdited: false,
                 mediaURL: nil,
-                reactions: ["👍": 2]
+                reactions: ["👍": 2],
+                reactionSenders: ["👍": ["@mina:matrix.org", "@alex:matrix.org"]]
             ),
             RawTimelineEvent(
                 eventID: "$thread-reply:\(roomID)",
@@ -1587,7 +1604,8 @@ enum TimelineFixtures {
                 replyToEventID: "$security:\(roomID)",
                 isEdited: false,
                 mediaURL: nil,
-                reactions: ["👍": 1]
+                reactions: ["👍": 1],
+                reactionSenders: ["👍": ["@ravi:matrix.org"]]
             ),
             RawTimelineEvent(
                 eventID: "$alex-thread:\(roomID)",

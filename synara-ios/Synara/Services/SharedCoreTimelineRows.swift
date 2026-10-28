@@ -108,6 +108,7 @@ enum SharedCoreTimelineRows {
             isAgentApproval: row.isAgentApproval,
             reactions: reactions(from: row.reactions),
             reactionOwnership: reactionOwnership(from: row.reactions),
+            reactionSenders: reactionSenders(from: row.reactions),
             isEncrypted: row.kind == .encrypted
         )
         item.encryptionShield = encryptionShield(from: row.encryptionShield)
@@ -215,6 +216,20 @@ enum SharedCoreTimelineRows {
 
     static func reactions(from rows: [TimelineViewReactionDto]) -> [String: Int] {
         reactionCounts(rows.map { ($0.key, $0.count) })
+    }
+
+    /// Reaction key to the user ids that sent it, in Core's order. Keys with
+    /// no named sender are left out; a repeated sender is listed once.
+    static func reactionSenders(from rows: [TimelineViewReactionDto]) -> [String: [String]] {
+        var senders: [String: [String]] = [:]
+        for row in rows where row.key.isEmpty == false {
+            var seen = Set<String>()
+            let userIDs = row.senders.map(\.userId).filter { $0.isEmpty == false && seen.insert($0).inserted }
+            if userIDs.isEmpty == false {
+                senders[row.key] = userIDs
+            }
+        }
+        return senders
     }
 
     static func reactionOwnership(from rows: [TimelineViewReactionDto]) -> TimelineReactionOwnership {

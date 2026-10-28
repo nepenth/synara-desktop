@@ -419,6 +419,7 @@ struct MockEventActionService: EventActionServicing {
                 isAgentApproval: item.isAgentApproval,
                 reactions: item.reactions,
                 reactionOwnership: item.reactionOwnership,
+                reactionSenders: item.reactionSenders,
                 isEncrypted: item.isEncrypted,
                 deliveryStatus: item.deliveryStatus,
                 hasCurrentUserReadReceipt: item.hasCurrentUserReadReceipt
@@ -449,6 +450,10 @@ struct MockEventActionService: EventActionServicing {
         case .react(let reaction):
             var reactions = item.reactions
             reactions[reaction, default: 0] += 1
+            var reactionSenders = item.reactionSenders
+            if reactionSenders[reaction, default: []].contains(currentUserID) == false {
+                reactionSenders[reaction, default: []].append(currentUserID)
+            }
             let reactionOwnership: TimelineReactionOwnership
             switch item.reactionOwnership {
             case .unknown:
@@ -477,6 +482,7 @@ struct MockEventActionService: EventActionServicing {
                 isAgentApproval: item.isAgentApproval,
                 reactions: reactions,
                 reactionOwnership: reactionOwnership,
+                reactionSenders: reactionSenders,
                 isEncrypted: item.isEncrypted,
                 deliveryStatus: item.deliveryStatus,
                 hasCurrentUserReadReceipt: item.hasCurrentUserReadReceipt

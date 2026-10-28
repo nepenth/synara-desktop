@@ -459,6 +459,9 @@ import SwiftUI
         /// The clock time, formatted once by the row builder. Part of the row
         /// value so a 24-hour clock change reconfigures the cell.
         var timeText: String = ""
+        /// Display names of this row's reaction senders; part of the row so
+        /// a sender's rename reconfigures the cell.
+        var reactorNames: [String: String] = [:]
     }
 
     struct StableTimelineViewportRow: Equatable, Identifiable {
