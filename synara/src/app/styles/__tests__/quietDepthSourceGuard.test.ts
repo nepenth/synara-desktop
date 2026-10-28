@@ -33,8 +33,9 @@ test('desktop hierarchy uses semantic depth while keeping text itself flat', () 
   // Selection is `data-selected` on the row; `aria-selected` is invalid on it (D58).
   assert.match(nav, /&\[data-selected=true\]/);
   assert.doesNotMatch(nav, /aria-selected/);
-  // Selected rows read by tint and accent bar; they do not lift.
-  assert.doesNotMatch(nav, /raisedShadow|translateY/);
+  // Selected rows rise on quiet depth (tint, accent bar, raised edge) but never move.
+  assert.match(nav, /raisedShadow/);
+  assert.doesNotMatch(nav, /translateY/);
   assert.match(editor, /raisedShadow/);
   assert.match(editor, /EditorFloatingOptions/);
   assert.doesNotMatch(editor, /floatingShadow|quietSurfaceFold|linear-gradient/);

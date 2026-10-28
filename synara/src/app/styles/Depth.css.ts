@@ -110,6 +110,10 @@ export const quietInteractiveSurface = style({
       {
         boxShadow: raisedShadow,
       },
+    '&:not(:disabled):not([aria-disabled=true])[aria-pressed=true], &:not(:disabled):not([aria-disabled=true])[aria-selected=true], &:not(:disabled):not([aria-disabled=true])[data-selected=true], &:not(:disabled):not([aria-disabled=true])[aria-current=page]':
+      {
+        boxShadow: raisedShadow,
+      },
     '&:not(:disabled):not([aria-disabled=true]):active': {
       boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
     },

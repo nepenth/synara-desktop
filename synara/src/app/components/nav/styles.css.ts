@@ -1,7 +1,7 @@
 import { ComplexStyleRule, createVar, style } from '@vanilla-extract/css';
 import { RecipeVariants, recipe } from '@vanilla-extract/recipes';
 import { ContainerColor, DefaultReset, Disabled, RadiiVariant, color, config, toRem } from 'folds';
-import { quietEdgeLight } from '../../styles/Depth.css';
+import { quietEdgeLight, raisedShadow } from '../../styles/Depth.css';
 
 export const NavCategory = style([
   DefaultReset,
@@ -83,6 +83,7 @@ const NavItemBase = style({
     '&[data-selected=true]': {
       backgroundColor: 'var(--synara-selected-surface)',
       borderColor: ContainerLine,
+      boxShadow: raisedShadow,
     },
     '&[data-selected=true]::before': {
       opacity: 1,
