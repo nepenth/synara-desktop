@@ -8,35 +8,43 @@ See [NOTICE](NOTICE).
 Public downloads are desktop builds. iOS is shared with internal TestFlight
 testers and is not on the App Store or attached to GitHub Releases. Windows,
 Android, a standalone web client, and voice or video calling are not supported.
-Call chrome can report MatrixRTC status. It does not start or join a call.
+The room header and voice rooms can show MatrixRTC call status, but Synara
+does not start or join calls.
 
 Synara does not ship a standalone browser client. The React/Vite package under
 `synara/` is the application runtime embedded by the Tauri desktop shell.
 
 ## Install
 
-Current desktop release: [v2.1.41](https://github.com/nepenth/synara-desktop/releases/tag/v2.1.41).
+Current desktop release: [v2.5.0](https://github.com/nepenth/synara-desktop/releases/tag/v2.5.0).
+Every release is listed on the [releases page](https://github.com/nepenth/synara-desktop/releases),
+and [CHANGELOG.md](CHANGELOG.md) describes each one.
 
-| Platform                    | What you get                                           | Where                           |
-| --------------------------- | ------------------------------------------------------ | ------------------------------- |
-| macOS                       | Universal signed and notarized disk image              | The `DMG` asset on that release |
-| Debian, Ubuntu, and related | x86_64 `.deb` and an APT repo (`Architectures: amd64`) | [Linux install](docs/linux.md)  |
-| Arch, CachyOS, and related  | x86_64 pacman package                                  | [Linux install](docs/linux.md)  |
+| Platform                    | What you get                                                   | Where                           | Updates                           |
+| --------------------------- | -------------------------------------------------------------- | ------------------------------- | --------------------------------- |
+| macOS 13 or later           | Universal (Apple silicon and Intel) signed and notarized `DMG` | The `DMG` asset on that release | Built-in updater                  |
+| Debian, Ubuntu, and related | x86_64 `.deb` and an APT repo (`Architectures: amd64`)         | [Linux install](docs/linux.md)  | `sudo apt upgrade`                |
+| Arch, CachyOS, and related  | x86_64 `synara-desktop-bin` pacman package and repo            | [Linux install](docs/linux.md)  | `sudo pacman -Syu` or `paru -Syu` |
 
-Linux packages are x86_64 only. Source builds need Node.js 24.13.1 and Rust 1.96.
+Linux packages are x86_64 only. The iOS app needs iOS 16 or later and is
+available only to internal TestFlight testers.
 
 ## Current capabilities
 
-| In this release                                                                                      | Not in this release                        |
-| ---------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| End-to-end encrypted messaging, rooms, and spaces on the shared Rust core (`matrix-rust-sdk` 0.19.1) | Voice and video calls                      |
-| Desktop client for macOS and x86_64 Linux                                                            | Windows, Android, and a standalone web app |
-| Device verification, secret storage, and encrypted media through the Rust core                       | An ARM Linux package                       |
-| iOS app on the same core, internal TestFlight only                                                   | App Store distribution                     |
+| In this release                                                                                                                                   | Not in this release                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| End-to-end encrypted messaging, rooms, spaces, threads, reactions, read receipts, and presence on the shared Rust core (`matrix-rust-sdk` 0.19.1) | Voice and video calls                      |
+| Device verification, secret storage and recovery, and identity reset through the Rust core                                                        | Windows, Android, and a standalone web app |
+| Klipy GIF search with `/gif`, inline GIF links, and X post previews with video, on desktop and iOS                                                | An ARM Linux package                       |
+| Desktop: password change                                                                                                                          |                                            |
+| Agent approval requests with Approve, Deny, and Review actions from notifications, on desktop and iOS                                             | App Store distribution                     |
+| iOS app on the same core, internal TestFlight only                                                                                                |                                            |
 
 ## Interface
 
-These screenshots show sample rooms on a disposable account.
+These screenshots show sample rooms on a disposable account. They were captured
+in September 2026, so some details, such as direct-message avatars, have
+changed since.
 
 ### macOS
 
@@ -56,11 +64,11 @@ These screenshots show sample rooms on a disposable account.
 
 ## Product Channels
 
-| Client | User interface  | Matrix/application core                           | Distribution                           |
-| ------ | --------------- | ------------------------------------------------- | -------------------------------------- |
-| macOS  | Tauri 2 + React | Shared Rust core with native macOS adapters       | Signed/notarized universal DMG         |
-| Linux  | Tauri 2 + React | Shared Rust core with native Linux adapters       | x86_64 `.deb` and Arch-family packages |
-| iOS    | SwiftUI         | Shared Rust core through generated Swift bindings | Internal TestFlight only               |
+| Client | User interface  | Matrix/application core                           | Distribution                                  |
+| ------ | --------------- | ------------------------------------------------- | --------------------------------------------- |
+| macOS  | Tauri 2 + React | Shared Rust core with native macOS adapters       | Signed/notarized universal DMG, Tauri updater |
+| Linux  | Tauri 2 + React | Shared Rust core with native Linux adapters       | x86_64 `.deb`/APT and Arch-family pacman repo |
+| iOS    | SwiftUI         | Shared Rust core through generated Swift bindings | Internal TestFlight only                      |
 
 Windows, Android, and public web distribution are not currently supported.
 
@@ -100,9 +108,12 @@ migration record, not a statement that the core is unfinished.
 |-- synara/                   Desktop React/Vite application runtime
 |-- synara-ios/               Native SwiftUI application and extension
 |-- devAssets/                Generated desktop runtime consumed by Tauri
+|-- assets/branding/          App icon masters and the icon manifest
+|-- examples/                 Sample widgets, such as the agent status widget
 |-- scripts/                  Build, validation, release, and policy tooling
 |-- integration/synapse/      Disposable local Synapse integration harness
 |-- packaging/                Linux package metadata
+|-- probes/                   Provenance records for retired SDK experiments
 |-- docs/                     Architecture, operations, and historical records
 `-- .github/workflows/        CI (fast gate + nightly) and release automation
 ```
@@ -168,6 +179,13 @@ npm run build:runtime
 Edit the repository root `config.json` only. `scripts/build-runtime.mjs` copies
 the canonical configuration and generated runtime into the locations consumed
 by Tauri.
+
+GIF search needs a Klipy API key, which is never committed. Export
+`SYNARA_KLIPY_API_KEY` before building and `build:runtime` writes it into the
+gitignored `devAssets/config.json`; without it, the GIF picker is turned off.
+iOS builds write it into the gitignored
+`synara-ios/Config/KlipyAPIKey.local.xcconfig` instead. Release and TestFlight
+builds read the key from the repository secret of the same name.
 
 ## iOS Development
 
@@ -244,10 +262,14 @@ editing package metadata independently:
 npm run bump:version -- X.Y.Z --ios-build X.Y.Z
 ```
 
-An exact `vX.Y.Z` tag on `main` starts the coordinated release workflow. The
-workflow reruns desktop and iOS validation, builds the signed desktop packages,
-uploads the matching iOS archive to internal TestFlight, verifies App Store
-Connect state, and publishes release assets only after all required gates pass.
+Prepare a release on a `release/vX.Y.Z` branch and merge it into `main` once
+its CI `Quality gate` passes. Pushing an exact `vX.Y.Z` tag at that merge commit
+starts the coordinated release workflow. The workflow checks that the tag
+matches the committed version, then requires the CI `Quality gate` that
+already passed for that commit instead of rerunning the suite. It builds and
+signs the macOS and Linux packages and publishes them to GitHub Releases. The
+iOS build uploads to internal TestFlight as a separate track that desktop
+publication does not wait for.
 
 Production signing, notarization, updater, TestFlight, and pacman repository
 requirements are documented in
@@ -262,6 +284,7 @@ This repository is public. Never commit:
   exports, homeserver administration credentials, or private server details.
 - Apple certificates, provisioning profiles, App Store Connect private keys,
   APNs keys, Developer ID material, or Tauri updater private keys.
+- Third-party API keys, such as the Klipy GIF key.
 - `.env` files, private URLs, personal filesystem paths, device identifiers,
   crash logs containing account data, or screenshots of non-disposable rooms.
 

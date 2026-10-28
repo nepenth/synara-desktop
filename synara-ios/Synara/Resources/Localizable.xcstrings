@@ -960,6 +960,9 @@
     "Clear room search" : {
 
     },
+    "Clear search" : {
+
+    },
     "Clear status" : {
 
     },
@@ -1549,6 +1552,27 @@
     "Full approval request" : {
 
     },
+    "GIF" : {
+
+    },
+    "GIF Search" : {
+
+    },
+    "GIF from the post" : {
+
+    },
+    "GIF search is not set up for this app." : {
+
+    },
+    "GIF search is not set up for this build." : {
+
+    },
+    "GIFs" : {
+
+    },
+    "GIFs & Link Previews" : {
+
+    },
     "Graphite" : {
 
     },
@@ -1960,6 +1984,9 @@
     "New room" : {
 
     },
+    "No GIFs found." : {
+
+    },
     "No Key Backup" : {
 
     },
@@ -2131,6 +2158,9 @@
     "Opens the original message" : {
 
     },
+    "Opens the post in your browser" : {
+
+    },
     "Opens the room timeline" : {
 
     },
@@ -2179,6 +2209,19 @@
     "Personal notes could not be synced. Try again." : {
 
     },
+    "Photo" : {
+
+    },
+    "Photo %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photo %1$lld of %2$lld"
+          }
+        }
+      }
+    },
     "Photo or Video" : {
 
     },
@@ -2197,10 +2240,22 @@
     "Pinned through Swift Package Manager." : {
 
     },
+    "Play GIF Links Inline" : {
+
+    },
+    "Play GIF from the post" : {
+
+    },
+    "Play video from the post" : {
+
+    },
     "Poll closed" : {
 
     },
     "Poll: %@" : {
+
+    },
+    "Post by %@ on X" : {
 
     },
     "Power level" : {
@@ -2644,6 +2699,9 @@
     "Search Directory" : {
 
     },
+    "Search GIFs" : {
+
+    },
     "Search Messages" : {
 
     },
@@ -2657,6 +2715,9 @@
 
     },
     "Search rooms" : {
+
+    },
+    "Searches KLIPY for a GIF to send" : {
 
     },
     "Security" : {
@@ -2684,6 +2745,12 @@
 
     },
     "Send" : {
+
+    },
+    "Send %@" : {
+
+    },
+    "Send a GIF" : {
 
     },
     "Send a message..." : {
@@ -2740,6 +2807,15 @@
     "Sheet" : {
 
     },
+    "Show GIF search in the composer and for /gif. Your searches go to KLIPY, which can see your IP address. A GIF is sent as its KLIPY link." : {
+
+    },
+    "Show Klipy and GIPHY links as GIFs. Your device loads them from the provider, which can see your IP address." : {
+
+    },
+    "Show X Posts" : {
+
+    },
     "Show approval details" : {
 
     },
@@ -2750,6 +2826,9 @@
 
     },
     "Show message content in notifications" : {
+
+    },
+    "Show the post and play its video for x.com links. Your device contacts X, which can see your IP address." : {
 
     },
     "Shows account details, settings, and logout" : {
@@ -2907,6 +2986,9 @@
 
     },
     "Synara could not reset your identity. Try again." : {
+
+    },
+    "Synara could not search GIFs. Try again." : {
 
     },
     "Synara could not set up cross-signing. Try again." : {
@@ -3143,10 +3225,16 @@
     "Token changed, re-registering" : {
 
     },
+    "Too many GIF searches. Wait a moment and try again." : {
+
+    },
     "Too many sign-in attempts. Wait a moment, then try again." : {
 
     },
     "Topic" : {
+
+    },
+    "Trending" : {
 
     },
     "Try Again" : {
@@ -3165,6 +3253,9 @@
 
     },
     "Try the verification step again." : {
+
+    },
+    "Turn on GIF Search in Settings to use /gif." : {
 
     },
     "Unavailable" : {
@@ -3300,6 +3391,12 @@
 
     },
     "Version" : {
+
+    },
+    "Video from the post" : {
+
+    },
+    "View on X" : {
 
     },
     "Visibility" : {

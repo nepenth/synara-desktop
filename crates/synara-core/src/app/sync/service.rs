@@ -88,7 +88,9 @@ impl Default for HeartbeatPolicy {
 ///
 /// The SDK sets `SyncService` state to `Running` as soon as `start()` spawns
 /// its loops, before any request succeeds, and keeps it there while a
-/// long-poll hangs. This records when a response actually arrived.
+/// long-poll hangs. This records when a response actually arrived, and
+/// whether sync has failed since then: recovery restarts a failing server
+/// every few seconds, and each restart reads `Running` again.
 #[derive(Debug, Default)]
 pub(crate) struct SyncHeartbeat {
     times: std::sync::Mutex<HeartbeatTimes>,
@@ -98,6 +100,8 @@ pub(crate) struct SyncHeartbeat {
 struct HeartbeatTimes {
     started_at: Option<Instant>,
     last_success: Option<Instant>,
+    /// First sync failure since the last response; restarts keep it.
+    failing_since: Option<Instant>,
 }
 
 impl SyncHeartbeat {
@@ -112,7 +116,24 @@ impl SyncHeartbeat {
     }
 
     pub(crate) fn record_success(&self, now: Instant) {
-        self.lock().last_success = Some(now);
+        let mut times = self.lock();
+        times.last_success = Some(now);
+        times.failing_since = None;
+    }
+
+    /// A sync error, self-termination or stale long-poll. Until a response
+    /// arrives the connection is lost, however often recovery restarts it.
+    pub(crate) fn record_failure(&self, now: Instant) {
+        self.lock().failing_since.get_or_insert(now);
+    }
+
+    /// An explicit stop: the next start begins with a fresh startup grace.
+    pub(crate) fn clear_failure(&self) {
+        self.lock().failing_since = None;
+    }
+
+    pub(crate) fn is_failing(&self) -> bool {
+        self.lock().failing_since.is_some()
     }
 
     /// `true` when no response arrived within the startup grace after the
@@ -211,12 +232,14 @@ impl SyncServiceOwner {
             snapshot.failure_diagnostic_id = None;
         }
         // `Running` only means the loops were spawned. Without a recent
-        // successful response the connection is still being (re)established.
+        // successful response the connection is still being (re)established,
+        // and after a failure only a new response proves it is back.
         if snapshot.readiness == SyncReadiness::Running
             && self.sync_requested.load(Ordering::Acquire)
-            && self
-                .heartbeat
-                .is_stale(Instant::now(), self.heartbeat_policy)
+            && (self.heartbeat.is_failing()
+                || self
+                    .heartbeat
+                    .is_stale(Instant::now(), self.heartbeat_policy))
         {
             snapshot.readiness = SyncReadiness::Offline;
         }
@@ -266,6 +289,7 @@ impl SyncServiceOwner {
         self.sync_requested.store(false, Ordering::Release);
         let _ = self.observe();
         self.service.stop().await;
+        self.heartbeat.clear_failure();
         Ok(self.observe())
     }
 
@@ -864,6 +888,7 @@ async fn network_recovery_run(
                         if context.may_restart()
                             && context.heartbeat.is_stale(Instant::now(), policy)
                         {
+                            context.heartbeat.record_failure(Instant::now());
                             context
                                 .restart_if(true, |state| matches!(state, SdkSyncState::Running))
                                 .await;
@@ -884,6 +909,10 @@ async fn network_recovery_run(
                 // MSC4186 repeats the same 404 every few seconds forever.
             }
             SdkSyncState::Error(error) if context.may_restart() => {
+                // An expired position restarts at once and is no outage.
+                if !is_expired_sync_session_error(error.as_ref()) {
+                    context.heartbeat.record_failure(Instant::now());
+                }
                 let delay = restart_delay_for_error(error.as_ref());
                 tokio::select! {
                     next = states.next() => { pending = next; if pending.is_none() { break; } }
@@ -900,6 +929,7 @@ async fn network_recovery_run(
             SdkSyncState::Terminated if context.may_restart() => {
                 // The SDK supervisor ended without our stop() while a
                 // session is installed; bring it back with growing delays.
+                context.heartbeat.record_failure(Instant::now());
                 let delay = terminated_backoff.next_delay();
                 tokio::select! {
                     next = states.next() => { pending = next; if pending.is_none() { break; } }
@@ -1396,6 +1426,12 @@ mod auth_recovery_tests {
         })
         .await
         .expect("a transient outage remains recoverable");
+        // The restarted SDK reads Running while it retries the failing
+        // server; without a response the connection is still lost.
+        for _ in 0..50 {
+            assert_eq!(owner.observe().readiness, SyncReadiness::Offline);
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
         wait_offline(&owner).await;
         owner.stop().await.unwrap();
         let stopped = server.server().received_requests().await.unwrap().len();
@@ -1540,6 +1576,35 @@ mod heartbeat_tests {
             heartbeat.is_stale(start + Duration::from_secs(36), policy()),
             "after a restart only a new response proves the connection"
         );
+    }
+
+    #[test]
+    fn a_failure_holds_until_a_response_however_often_sync_restarts() {
+        let heartbeat = SyncHeartbeat::default();
+        let start = Instant::now();
+        heartbeat.record_start(start);
+        heartbeat.record_success(start + Duration::from_secs(1));
+        assert!(!heartbeat.is_failing());
+
+        heartbeat.record_failure(start + Duration::from_secs(10));
+        // Recovery restarts a failing server every few seconds; each restart
+        // reads Running, but the connection stays lost.
+        for restart in 1..10 {
+            heartbeat.record_start(start + Duration::from_secs(10 + restart * 6));
+            heartbeat.record_failure(start + Duration::from_secs(11 + restart * 6));
+            assert!(heartbeat.is_failing());
+        }
+
+        heartbeat.record_success(start + Duration::from_secs(80));
+        assert!(!heartbeat.is_failing());
+    }
+
+    #[test]
+    fn an_explicit_stop_clears_a_failure() {
+        let heartbeat = SyncHeartbeat::default();
+        heartbeat.record_failure(Instant::now());
+        heartbeat.clear_failure();
+        assert!(!heartbeat.is_failing());
     }
 
     #[test]

@@ -156,19 +156,24 @@ export function GifPicker({
       style={{ width: toRem(420), maxWidth: '80vw', borderRadius: config.radii.R400 }}
     >
       <Header size="500" style={{ padding: `0 ${config.space.S300}` }}>
-        <Box as="form" onSubmit={handleSubmit} grow="Yes" gap="200">
-          <Input
-            autoFocus
-            variant="Background"
-            placeholder={placeholder}
-            aria-label={t('modernization.gif.search_aria_label', 'Search GIFs')}
-            value={query}
-            onChange={(evt) => setQuery(evt.currentTarget.value)}
-          />
+        <Box as="form" onSubmit={handleSubmit} grow="Yes" alignItems="Center" gap="200">
+          {/* Input sizes to its content, so this box gives it the free width. */}
+          <Box grow="Yes" direction="Column">
+            <Input
+              autoFocus
+              variant="Background"
+              size="400"
+              placeholder={placeholder}
+              aria-label={t('modernization.gif.search_aria_label', 'Search GIFs')}
+              value={query}
+              onChange={(evt) => setQuery(evt.currentTarget.value)}
+            />
+          </Box>
           <Button
             type="submit"
             size="300"
             variant="Secondary"
+            style={{ flexShrink: 0 }}
             disabled={loading || disabled}
             aria-label={t('modernization.gif.search_button_aria_label', 'Search GIFs')}
           >

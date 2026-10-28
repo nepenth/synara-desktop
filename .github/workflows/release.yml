@@ -579,6 +579,7 @@ jobs:
           SYNARA_IOS_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           SYNARA_PUSH_GATEWAY_URL: ${{ vars.SYNARA_PUSH_GATEWAY_URL }}
           SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS: ${{ vars.SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS }}
+          SYNARA_KLIPY_API_KEY: ${{ secrets.SYNARA_KLIPY_API_KEY }}
         run: |
           missing=()
           for name in \
@@ -607,6 +608,10 @@ jobs:
             echo "SYNARA_PUSH_GATEWAY_URL must use HTTPS for a TestFlight release." >&2
             exit 1
           fi
+
+          # Optional, as on desktop: without it the build has no GIF search.
+          source synara-ios/scripts/lib/klipy-api-key.sh
+          synara_validated_klipy_api_key > /dev/null
 
       - name: Import Apple Distribution identity
         shell: bash
@@ -748,6 +753,7 @@ jobs:
           SYNARA_ASC_ISSUER_ID: ${{ secrets.SYNARA_ASC_ISSUER_ID }}
           SYNARA_IOS_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           SYNARA_PUSH_GATEWAY_URL: ${{ vars.SYNARA_PUSH_GATEWAY_URL }}
+          SYNARA_KLIPY_API_KEY: ${{ secrets.SYNARA_KLIPY_API_KEY }}
           SYNARA_TESTFLIGHT_INTERNAL_ONLY: ${{ vars.SYNARA_TESTFLIGHT_INTERNAL_ONLY || 'true' }}
           SYNARA_IOS_DIAGNOSTICS_DIR: ${{ runner.temp }}/synara-ios-testflight-diagnostics
         run: synara-ios/scripts/upload-testflight-internal.sh
