@@ -1,8 +1,9 @@
 # Windows support spike
 
-Status (2.6.0): Windows is a CI-checked test target, not a released platform.
-The fixes listed under "Current state" are on main; `release.yml` still
-publishes macOS and Linux only, and there are no Windows release artifacts.
+Status (2.6.0): Windows ships as unsigned x64 MSI and NSIS installers on each
+GitHub Release, built by the `windows` job in `release.yml`. It has no
+code signing, updater, notification actions or deep links yet (see "Still
+open"). The fixes listed under "Current state" are on main.
 The numbered sections below are the original spike findings (2026-10-27) and
 describe the code before those fixes. They come from one run of `.github/workflows/windows-spike.yml` on
 `windows-latest` against the v2.4.0 code (`eade6d9f`), plus a read of the
@@ -36,7 +37,7 @@ Still open:
 - Windows toasts with actions and routes.
 - Code signing, the updater, and SmartScreen reputation.
 - Single instance and deep links.
-- A manual pass on real hardware.
+- A manual pass on real hardware (the first published installers are 2.6.0).
 - Lock in the app origin before the first Windows release. The build uses
   `http://tauri.localhost`, not `useHttpsScheme`; WebView2 keys localStorage
   and IndexedDB by origin, so it can't change after shipping.

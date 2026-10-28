@@ -1,13 +1,13 @@
 # Synara
 
-Synara is an AGPL-3.0-only Matrix client for macOS and Linux, with a SwiftUI
+Synara is an AGPL-3.0-only Matrix client for macOS, Linux and Windows, with a SwiftUI
 iOS app that shares the same Rust core. It is a derivative of
 [Cinny](https://github.com/cinnyapp/cinny). Copyright © 2026 Whyland Creative LLC.
 See [NOTICE](NOTICE).
 
 Public downloads are desktop builds. iOS is shared with internal TestFlight
-testers and is not on the App Store or attached to GitHub Releases. Windows,
-Android, a standalone web client, and voice or video calling are not supported.
+testers and is not on the App Store or attached to GitHub Releases. Android, a
+standalone web client, and voice or video calling are not supported.
 The room header and voice rooms can show MatrixRTC call status, but Synara
 does not start or join calls.
 
@@ -20,25 +20,33 @@ Current desktop release: [v2.6.0](https://github.com/nepenth/synara-desktop/rele
 Every release is listed on the [releases page](https://github.com/nepenth/synara-desktop/releases),
 and [CHANGELOG.md](CHANGELOG.md) describes each one.
 
-| Platform                    | What you get                                                   | Where                           | Updates                           |
-| --------------------------- | -------------------------------------------------------------- | ------------------------------- | --------------------------------- |
-| macOS 13 or later           | Universal (Apple silicon and Intel) signed and notarized `DMG` | The `DMG` asset on that release | Built-in updater                  |
-| Debian, Ubuntu, and related | x86_64 `.deb` and an APT repo (`Architectures: amd64`)         | [Linux install](docs/linux.md)  | `sudo apt upgrade`                |
-| Arch, CachyOS, and related  | x86_64 `synara-desktop-bin` pacman package and repo            | [Linux install](docs/linux.md)  | `sudo pacman -Syu` or `paru -Syu` |
+| Platform                    | What you get                                                   | Where                                            | Updates                                      |
+| --------------------------- | -------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------- |
+| macOS 13 or later           | Universal (Apple silicon and Intel) signed and notarized `DMG` | The `DMG` asset on that release                  | Built-in updater                             |
+| Debian, Ubuntu, and related | x86_64 `.deb` and an APT repo (`Architectures: amd64`)         | [Linux install](docs/linux.md)                   | `sudo apt upgrade`                           |
+| Arch, CachyOS, and related  | x86_64 `synara-desktop-bin` pacman package and repo            | [Linux install](docs/linux.md)                   | `sudo pacman -Syu` or `paru -Syu`            |
+| Windows 10 or 11 (x64)      | x64 `.msi` installer and NSIS `-setup.exe` installer           | The `.msi` or `-setup.exe` asset on that release | Install the next release's installer over it |
 
 Linux packages are x86_64 only. The iOS app needs iOS 16 or later and is
 available only to internal TestFlight testers.
 
+Windows is new in 2.6.0 and less proven than macOS and Linux. The installers
+are not code-signed yet, so Windows SmartScreen warns the first time you run
+one (choose "More info", then "Run anyway"). There is no built-in updater, and
+notifications have no action buttons, such as Approve, on Windows. Secrets are kept in
+Windows Credential Manager. Details are in
+[docs/windows-support-spike.md](docs/windows-support-spike.md).
+
 ## Current capabilities
 
-| In this release                                                                                                                                   | Not in this release                        |
-| ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| End-to-end encrypted messaging, rooms, spaces, threads, reactions, read receipts, and presence on the shared Rust core (`matrix-rust-sdk` 0.19.1) | Voice and video calls                      |
-| Device verification, secret storage and recovery, and identity reset through the Rust core                                                        | Windows, Android, and a standalone web app |
-| Klipy GIF search with `/gif`, inline GIF links, and X post previews with video, on desktop and iOS                                                | An ARM Linux package                       |
-| Desktop: password change                                                                                                                          |                                            |
-| Agent approval requests with Approve, Deny, and Review actions from notifications, on desktop and iOS                                             | App Store distribution                     |
-| iOS app on the same core, internal TestFlight only                                                                                                |                                            |
+| In this release                                                                                                                                   | Not in this release              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| End-to-end encrypted messaging, rooms, spaces, threads, reactions, read receipts, and presence on the shared Rust core (`matrix-rust-sdk` 0.19.1) | Voice and video calls            |
+| Device verification, secret storage and recovery, and identity reset through the Rust core                                                        | Android and a standalone web app |
+| Klipy GIF search with `/gif`, inline GIF links, and X post previews with video, on desktop and iOS                                                | An ARM Linux package             |
+| Desktop: password change                                                                                                                          |                                  |
+| Agent approval requests with Approve, Deny, and Review actions from notifications, on desktop and iOS                                             | App Store distribution           |
+| iOS app on the same core, internal TestFlight only                                                                                                |                                  |
 
 ## Interface
 
@@ -64,13 +72,14 @@ changed since.
 
 ## Product Channels
 
-| Client | User interface  | Matrix/application core                           | Distribution                                  |
-| ------ | --------------- | ------------------------------------------------- | --------------------------------------------- |
-| macOS  | Tauri 2 + React | Shared Rust core with native macOS adapters       | Signed/notarized universal DMG, Tauri updater |
-| Linux  | Tauri 2 + React | Shared Rust core with native Linux adapters       | x86_64 `.deb`/APT and Arch-family pacman repo |
-| iOS    | SwiftUI         | Shared Rust core through generated Swift bindings | Internal TestFlight only                      |
+| Client  | User interface  | Matrix/application core                           | Distribution                                  |
+| ------- | --------------- | ------------------------------------------------- | --------------------------------------------- |
+| macOS   | Tauri 2 + React | Shared Rust core with native macOS adapters       | Signed/notarized universal DMG, Tauri updater |
+| Linux   | Tauri 2 + React | Shared Rust core with native Linux adapters       | x86_64 `.deb`/APT and Arch-family pacman repo |
+| Windows | Tauri 2 + React | Shared Rust core with native Windows adapters     | Unsigned x64 MSI and NSIS installers          |
+| iOS     | SwiftUI         | Shared Rust core through generated Swift bindings | Internal TestFlight only                      |
 
-Windows, Android, and public web distribution are not currently supported.
+Android and public web distribution are not currently supported.
 
 ## Architecture
 
@@ -104,7 +113,7 @@ migration record, not a statement that the core is unfinished.
 |-- crates/synara-nse-core/   Narrow notification-extension store/preview core
 |-- crates/synara-core-bindgen/
 |                             Swift binding generator
-|-- src-tauri/                macOS/Linux native shell and adapters
+|-- src-tauri/                macOS/Linux/Windows native shell and adapters
 |-- synara/                   Desktop React/Vite application runtime
 |-- synara-ios/               Native SwiftUI application and extension
 |-- devAssets/                Generated desktop runtime consumed by Tauri
@@ -134,6 +143,9 @@ need `--recursive` or any submodule command.
 - Xcode and XcodeGen for iOS work.
 - Linux system packages documented in [docs/linux.md](docs/linux.md) for Linux
   builds.
+- On Windows, the Tauri prerequisites (Microsoft C++ Build Tools and WebView2)
+  plus Git for Windows. `npm run tauri` works from `cmd`, PowerShell or Git
+  Bash, and `npm run tauri build -- --bundles msi,nsis` builds the installers.
 
 Install JavaScript dependencies from the repository root:
 
@@ -267,7 +279,8 @@ its CI `Quality gate` passes. Pushing an exact `vX.Y.Z` tag at that merge commit
 starts the coordinated release workflow. The workflow checks that the tag
 matches the committed version, then requires the CI `Quality gate` that
 already passed for that commit instead of rerunning the suite. It builds and
-signs the macOS and Linux packages and publishes them to GitHub Releases. The
+signs the macOS and Linux packages, builds the (not yet signed) Windows
+installers, and publishes them all to GitHub Releases. The
 iOS build uploads to internal TestFlight as a separate track that desktop
 publication does not wait for.
 
