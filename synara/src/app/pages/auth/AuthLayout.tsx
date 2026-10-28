@@ -114,7 +114,7 @@ function AuthBrand() {
           <span className={css.AuthFeatureIcon}>
             <Icon size="100" src={Icons.Monitor} />
           </span>
-          Native on macOS, Linux and iOS
+          Native on macOS, Windows, Linux and iOS
         </li>
       </ul>
     </section>

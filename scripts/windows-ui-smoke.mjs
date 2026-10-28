@@ -1,27 +1,30 @@
 // Windows UI smoke test: install a built NSIS setup silently, launch Synara,
 // and prove the renderer drew the sign-in screen, not just that a process or
-// window exists. WebView2 exposes the page over the Chrome DevTools Protocol
-// when WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS asks for a debugging port, so the
-// script reads the page text there and saves a screenshot of it.
+// window exists. Tauri sets WebView2's browser arguments itself, so a
+// DevTools port cannot be added from outside; scripts/windows-ui-smoke.ps1
+// instead reads the window through UI Automation, where WebView2 publishes the
+// page's accessibility tree, and saves a desktop screenshot.
 //
 // Usage (Windows only):
 //   node scripts/windows-ui-smoke.mjs --setup <path to *-setup.exe> --out <dir>
 //
 // Exit 0 when the sign-in screen rendered. Every other outcome exits 1, with
-// whatever screenshot and page text it could capture left in <dir>.
+// the screenshot and WebView2 command lines left in <dir>.
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const DEBUG_PORT = 9333;
 export const EXPECTED_TEXT = "Welcome back";
-const LAUNCH_TIMEOUT_MS = 90_000;
-const POLL_MS = 1_000;
+const TIMEOUT_SECONDS = 90;
+const uiCheckScript = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "windows-ui-smoke.ps1",
+);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const parseArgs = (argv) => {
+export const parseArgs = (argv) => {
   const args = {};
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index];
@@ -37,21 +40,6 @@ const parseArgs = (argv) => {
   return args;
 };
 
-// The page WebView2 reports for the app: the packaged origin, never DevTools
-// or an extension page.
-export const pickAppTarget = (targets) =>
-  (targets || []).find(
-    (target) =>
-      target.type === "page" &&
-      typeof target.webSocketDebuggerUrl === "string" &&
-      /^(https?:\/\/tauri\.localhost|tauri:\/\/localhost)\//.test(
-        target.url || "",
-      ),
-  );
-
-export const renderedSignIn = (text) =>
-  typeof text === "string" && text.includes(EXPECTED_TEXT);
-
 // The NSIS installer installs per user by default; look where it puts the app.
 export const installedExeCandidates = (env) =>
   [
@@ -60,59 +48,6 @@ export const installedExeCandidates = (env) =>
       path.join(env.LOCALAPPDATA, "Programs", "Synara", "Synara.exe"),
     env.ProgramFiles && path.join(env.ProgramFiles, "Synara", "Synara.exe"),
   ].filter(Boolean);
-
-const cdp = (webSocketUrl) =>
-  new Promise((resolve, reject) => {
-    const socket = new WebSocket(webSocketUrl);
-    let nextId = 0;
-    const pending = new Map();
-    socket.addEventListener("message", (event) => {
-      const message = JSON.parse(event.data);
-      const entry = pending.get(message.id);
-      if (!entry) return;
-      pending.delete(message.id);
-      if (message.error) entry.reject(new Error(message.error.message));
-      else entry.resolve(message.result);
-    });
-    socket.addEventListener("error", () =>
-      reject(new Error("DevTools socket error")),
-    );
-    socket.addEventListener("open", () =>
-      resolve({
-        send: (method, params = {}) =>
-          new Promise((res, rej) => {
-            nextId += 1;
-            pending.set(nextId, { resolve: res, reject: rej });
-            socket.send(JSON.stringify({ id: nextId, method, params }));
-          }),
-        close: () => socket.close(),
-      }),
-    );
-  });
-
-// Desktop screenshot and WebView2 command lines, so a failed run shows what
-// was on screen and whether the debugging port reached the browser process.
-const captureDiagnostics = (out) => {
-  const desktop = path.join(out, "desktop.png").replace(/'/g, "''");
-  const processes = path.join(out, "processes.txt").replace(/'/g, "''");
-  const script = [
-    "Add-Type -AssemblyName System.Windows.Forms, System.Drawing",
-    "$b = [System.Windows.Forms.SystemInformation]::VirtualScreen",
-    "$bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height",
-    "$g = [System.Drawing.Graphics]::FromImage($bmp)",
-    "$g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size)",
-    `$bmp.Save('${desktop}', [System.Drawing.Imaging.ImageFormat]::Png)`,
-    "Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'Synara|msedgewebview2' } |" +
-      ` ForEach-Object { "$($_.ProcessId) $($_.Name) $($_.CommandLine)" } | Out-File -Encoding utf8 '${processes}'`,
-  ].join("; ");
-  try {
-    execFileSync("powershell", ["-NoProfile", "-Command", script], {
-      stdio: "inherit",
-    });
-  } catch (error) {
-    console.log(`[windows-ui-smoke] diagnostics failed: ${error.message}`);
-  }
-};
 
 const main = async () => {
   const args = parseArgs(process.argv.slice(2));
@@ -129,9 +64,8 @@ const main = async () => {
     );
   }
 
-  // The setup starts Synara when it finishes, and a second launch would only
-  // hand off to that instance and exit. Stop it so this launch, with the
-  // debugging port, is the only one.
+  // The setup starts Synara when it finishes. Stop it so the launch below is
+  // the only instance and the check sees this launch, not the installer's.
   await sleep(5_000);
   try {
     execFileSync("taskkill", ["/IM", "Synara.exe", "/F"], { stdio: "inherit" });
@@ -141,81 +75,38 @@ const main = async () => {
   }
 
   console.log(`[windows-ui-smoke] launching ${exe}`);
-  const app = spawn(exe, [], {
-    detached: false,
-    stdio: "ignore",
-    env: {
-      ...process.env,
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${DEBUG_PORT}`,
-    },
-  });
+  const app = spawn(exe, [], { detached: false, stdio: "ignore" });
   let exited = false;
   app.on("exit", (code) => {
     exited = true;
     console.log(`[windows-ui-smoke] Synara exited with ${code}`);
   });
 
-  let lastText = "";
-  let lastPoll = "not polled yet";
-  let session;
   try {
-    const deadline = Date.now() + LAUNCH_TIMEOUT_MS;
-    while (Date.now() < deadline && !exited) {
-      await sleep(POLL_MS);
-      let targets;
-      try {
-        const response = await fetch(
-          `http://127.0.0.1:${DEBUG_PORT}/json/list`,
-        );
-        targets = await response.json();
-      } catch (error) {
-        lastPoll = `DevTools port not answering: ${error.cause?.code ?? error.message}`;
-        continue; // WebView2 not listening yet.
-      }
-      lastPoll = `targets: ${JSON.stringify(targets.map(({ type, url }) => ({ type, url })))}`;
-      const target = pickAppTarget(targets);
-      if (!target) continue;
-      session ??= await cdp(target.webSocketDebuggerUrl);
-      const result = await session.send("Runtime.evaluate", {
-        expression: "document.body ? document.body.innerText : ''",
-        returnByValue: true,
-      });
-      lastText = String(result?.result?.value ?? "");
-      if (renderedSignIn(lastText)) break;
-    }
-
-    if (session) {
-      const shot = await session.send("Page.captureScreenshot", {
-        format: "png",
-      });
-      writeFileSync(
-        path.join(args.out, "synara-windows.png"),
-        Buffer.from(shot.data, "base64"),
-      );
-      console.log(
-        `[windows-ui-smoke] screenshot saved to ${path.join(args.out, "synara-windows.png")}`,
-      );
-    }
-    writeFileSync(path.join(args.out, "page-text.txt"), lastText);
-    console.log(`[windows-ui-smoke] last DevTools poll: ${lastPoll}`);
-    captureDiagnostics(args.out);
-
-    if (exited)
-      throw new Error("Synara exited before the sign-in screen rendered");
-    if (!session)
-      throw new Error(
-        `No Synara page appeared on the DevTools port within ${LAUNCH_TIMEOUT_MS / 1000}s`,
-      );
-    if (!renderedSignIn(lastText)) {
-      throw new Error(
-        `The page never showed "${EXPECTED_TEXT}"; its text is in page-text.txt`,
-      );
-    }
-    console.log(
-      `[windows-ui-smoke] the sign-in screen rendered ("${EXPECTED_TEXT}").`,
+    execFileSync(
+      "powershell",
+      [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        uiCheckScript,
+        "-Out",
+        args.out,
+        "-Expected",
+        EXPECTED_TEXT,
+        "-TimeoutSeconds",
+        String(TIMEOUT_SECONDS),
+      ],
+      { stdio: "inherit" },
+    );
+  } catch {
+    throw new Error(
+      exited
+        ? "Synara exited before the sign-in screen rendered"
+        : `The sign-in screen did not render; see the screenshot in ${args.out}`,
     );
   } finally {
-    session?.close();
     if (!exited) app.kill();
   }
 };

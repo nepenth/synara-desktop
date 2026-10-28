@@ -1,54 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
+  EXPECTED_TEXT,
   installedExeCandidates,
-  pickAppTarget,
-  renderedSignIn,
+  parseArgs,
 } from "../windows-ui-smoke.mjs";
-
-test("picks the app page, not DevTools or other targets", () => {
-  const app = {
-    type: "page",
-    url: "http://tauri.localhost/login",
-    webSocketDebuggerUrl: "ws://127.0.0.1:9333/devtools/page/A",
-  };
-  assert.equal(
-    pickAppTarget([
-      {
-        type: "page",
-        url: "devtools://devtools/bundled/inspector.html",
-        webSocketDebuggerUrl: "ws://x",
-      },
-      {
-        type: "service_worker",
-        url: "http://tauri.localhost/sw.js",
-        webSocketDebuggerUrl: "ws://y",
-      },
-      app,
-    ]),
-    app,
-  );
-  assert.equal(
-    pickAppTarget([
-      { type: "page", url: "about:blank", webSocketDebuggerUrl: "ws://z" },
-    ]),
-    undefined,
-  );
-  assert.equal(pickAppTarget(undefined), undefined);
-});
-
-test("only the sign-in heading counts as a rendered UI", () => {
-  assert.equal(
-    renderedSignIn(
-      "Synara\nWelcome back\nSign in to your account on matrix.org.",
-    ),
-    true,
-  );
-  assert.equal(renderedSignIn(""), false);
-  assert.equal(renderedSignIn(undefined), false);
-});
 
 test("looks for the per-user NSIS install first", () => {
   const candidates = installedExeCandidates({
@@ -61,4 +20,21 @@ test("looks for the per-user NSIS install first", () => {
   );
   assert.equal(candidates.length, 3);
   assert.deepEqual(installedExeCandidates({}), []);
+});
+
+test("requires both the setup and the output directory", () => {
+  assert.deepEqual(parseArgs(["--setup", "a.exe", "--out", "dir"]), {
+    setup: "a.exe",
+    out: "dir",
+  });
+  assert.throws(() => parseArgs(["--setup", "a.exe"]), /required/);
+  assert.throws(() => parseArgs(["--setup"]), /pairs/);
+});
+
+test("the expected heading is the sign-in page's", () => {
+  const login = readFileSync(
+    path.join(process.cwd(), "synara/src/app/pages/auth/login/Login.tsx"),
+    "utf8",
+  );
+  assert.match(login, new RegExp(`>\\s*${EXPECTED_TEXT}\\s*<`));
 });
