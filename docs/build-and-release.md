@@ -95,7 +95,8 @@ a fork. It skips the job only when one of them has a successful
 `iOS simulator tests` job whose proof step names the same hash. Any API error,
 missing hash or other mismatch runs the job. A reused result counts as skipped,
 so the Quality gate passes and the Release workflow's `--require` still finds
-it. Nightly, dispatch and `main` pushes always run the lane. Adding a file the
+it. The scope log names the proving run, and the Quality gate log marks the job
+as reused. Nightly, dispatch and `main` pushes always run the lane. Adding a file the
 job reads means adding it to `IOS_TEST_INPUT_PATHS`.
 `scripts/__tests__/ios-test-inputs.test.mjs` fails when a script that the job
 reaches is missing from that list.
