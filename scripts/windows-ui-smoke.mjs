@@ -44,7 +44,7 @@ export const pickAppTarget = (targets) =>
     (target) =>
       target.type === "page" &&
       typeof target.webSocketDebuggerUrl === "string" &&
-      /^https?:\/\/tauri\.localhost\//.test(target.url || "")
+      /^https?:\/\/tauri\.localhost\//.test(target.url || ""),
   );
 
 export const renderedSignIn = (text) =>
@@ -54,7 +54,8 @@ export const renderedSignIn = (text) =>
 export const installedExeCandidates = (env) =>
   [
     env.LOCALAPPDATA && path.join(env.LOCALAPPDATA, "Synara", "Synara.exe"),
-    env.LOCALAPPDATA && path.join(env.LOCALAPPDATA, "Programs", "Synara", "Synara.exe"),
+    env.LOCALAPPDATA &&
+      path.join(env.LOCALAPPDATA, "Programs", "Synara", "Synara.exe"),
     env.ProgramFiles && path.join(env.ProgramFiles, "Synara", "Synara.exe"),
   ].filter(Boolean);
 
@@ -71,7 +72,9 @@ const cdp = (webSocketUrl) =>
       if (message.error) entry.reject(new Error(message.error.message));
       else entry.resolve(message.result);
     });
-    socket.addEventListener("error", () => reject(new Error("DevTools socket error")));
+    socket.addEventListener("error", () =>
+      reject(new Error("DevTools socket error")),
+    );
     socket.addEventListener("open", () =>
       resolve({
         send: (method, params = {}) =>
@@ -81,7 +84,7 @@ const cdp = (webSocketUrl) =>
             socket.send(JSON.stringify({ id: nextId, method, params }));
           }),
         close: () => socket.close(),
-      })
+      }),
     );
   });
 
@@ -91,10 +94,12 @@ const main = async () => {
 
   console.log(`[windows-ui-smoke] installing ${args.setup}`);
   execFileSync(args.setup, ["/S"], { stdio: "inherit" });
-  const exe = installedExeCandidates(process.env).find((candidate) => existsSync(candidate));
+  const exe = installedExeCandidates(process.env).find((candidate) =>
+    existsSync(candidate),
+  );
   if (!exe) {
     throw new Error(
-      `Synara.exe not found after install; looked in ${installedExeCandidates(process.env).join(", ")}`
+      `Synara.exe not found after install; looked in ${installedExeCandidates(process.env).join(", ")}`,
     );
   }
 
@@ -121,7 +126,9 @@ const main = async () => {
       await sleep(POLL_MS);
       let targets;
       try {
-        const response = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/list`);
+        const response = await fetch(
+          `http://127.0.0.1:${DEBUG_PORT}/json/list`,
+        );
         targets = await response.json();
       } catch {
         continue; // WebView2 not listening yet.
@@ -138,30 +145,48 @@ const main = async () => {
     }
 
     if (session) {
-      const shot = await session.send("Page.captureScreenshot", { format: "png" });
-      writeFileSync(path.join(args.out, "synara-windows.png"), Buffer.from(shot.data, "base64"));
-      console.log(`[windows-ui-smoke] screenshot saved to ${path.join(args.out, "synara-windows.png")}`);
+      const shot = await session.send("Page.captureScreenshot", {
+        format: "png",
+      });
+      writeFileSync(
+        path.join(args.out, "synara-windows.png"),
+        Buffer.from(shot.data, "base64"),
+      );
+      console.log(
+        `[windows-ui-smoke] screenshot saved to ${path.join(args.out, "synara-windows.png")}`,
+      );
     }
     writeFileSync(path.join(args.out, "page-text.txt"), lastText);
 
-    if (exited) throw new Error("Synara exited before the sign-in screen rendered");
-    if (!session) throw new Error(`No Synara page appeared on the DevTools port within ${LAUNCH_TIMEOUT_MS / 1000}s`);
+    if (exited)
+      throw new Error("Synara exited before the sign-in screen rendered");
+    if (!session)
+      throw new Error(
+        `No Synara page appeared on the DevTools port within ${LAUNCH_TIMEOUT_MS / 1000}s`,
+      );
     if (!renderedSignIn(lastText)) {
-      throw new Error(`The page never showed "${EXPECTED_TEXT}"; its text is in page-text.txt`);
+      throw new Error(
+        `The page never showed "${EXPECTED_TEXT}"; its text is in page-text.txt`,
+      );
     }
-    console.log(`[windows-ui-smoke] the sign-in screen rendered ("${EXPECTED_TEXT}").`);
+    console.log(
+      `[windows-ui-smoke] the sign-in screen rendered ("${EXPECTED_TEXT}").`,
+    );
   } finally {
     session?.close();
     if (!exited) app.kill();
   }
 };
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   main().then(
     () => process.exit(0),
     (error) => {
       console.error(`[windows-ui-smoke] ${error.message}`);
       process.exit(1);
-    }
+    },
   );
 }
