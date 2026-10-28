@@ -36,6 +36,21 @@ export const floatingShadow = `inset 0 1px 0 ${quietEdgeLightStrong}, inset 0 -1
   3
 )} ${toRem(7)} ${quietShadowNear}, 0 ${toRem(12)} ${toRem(30)} ${quietShadowFar}`;
 
+export const criticalShadow = `inset 0 1px 0 ${quietEdgeLightStrong}, 0 ${toRem(3)} ${toRem(
+  8
+)} ${quietShadowNear}, 0 ${toRem(14)} ${toRem(36)} ${quietShadowFar}`;
+
+/** The highest resting plane: a decision that is waiting on the user. */
+export const criticalSurface = style({
+  boxShadow: criticalShadow,
+  '@media': {
+    '(prefers-contrast: more)': {
+      boxShadow: 'none',
+      borderColor: 'var(--synara-depth-contrast-strong-edge)',
+    },
+  },
+});
+
 export const floatingSurface = style({
   backgroundColor: color.SurfaceVariant.Container,
   backgroundImage: quietSurfaceFold,

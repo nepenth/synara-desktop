@@ -1,5 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Button, Chip, Spinner, Text, color, config, toRem } from 'folds';
+import {
+  Box,
+  Button,
+  Chip,
+  Icon,
+  IconSrc,
+  Icons,
+  Spinner,
+  Text,
+  color,
+  config,
+  toRem,
+} from 'folds';
 import {
   AGENT_APPROVAL_REACTION_APPROVE_ALWAYS,
   AGENT_APPROVAL_REACTION_APPROVE_ONCE,
@@ -35,6 +47,7 @@ type ApprovalAction = {
   actionId: string;
   key: string;
   label: string;
+  icon: IconSrc;
   variant: 'Primary' | 'Critical' | 'Secondary';
 };
 
@@ -43,18 +56,21 @@ const APPROVAL_ACTIONS: ApprovalAction[] = [
     actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
     key: AGENT_APPROVAL_REACTION_APPROVE_ONCE,
     label: 'Approve once',
+    icon: Icons.Check,
     variant: 'Primary',
   },
   {
     actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS,
     key: AGENT_APPROVAL_REACTION_APPROVE_ALWAYS,
     label: 'Approve always',
+    icon: Icons.CheckTwice,
     variant: 'Primary',
   },
   {
     actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_DENY,
     key: AGENT_APPROVAL_REACTION_DENY,
     label: 'Deny',
+    icon: Icons.Cross,
     variant: 'Critical',
   },
 ];
@@ -262,7 +278,9 @@ export function AgentApprovalCard({
                   before={
                     busyKey === action.key ? (
                       <Spinner size="100" variant={action.variant} />
-                    ) : undefined
+                    ) : (
+                      <Icon size="100" src={action.icon} />
+                    )
                   }
                   onClick={() => handleReact(action)}
                 >

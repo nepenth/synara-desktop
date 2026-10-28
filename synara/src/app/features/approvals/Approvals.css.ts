@@ -1,6 +1,6 @@
 import { style } from '@vanilla-extract/css';
 import { color, config, toRem } from 'folds';
-import { quietInteractiveSurface } from '../../styles/Depth.css';
+import { raisedShadow, quietInteractiveSurface } from '../../styles/Depth.css';
 
 export const Content = style({
   width: '100%',
@@ -62,9 +62,10 @@ export const Card = style({
   border: `1px solid ${color.Surface.ContainerLine}`,
   borderRadius: config.radii.R400,
   backgroundColor: color.Surface.Container,
+  boxShadow: raisedShadow,
   overflow: 'hidden',
   '@media': {
-    '(prefers-contrast: more)': { borderColor: color.Surface.OnContainer },
+    '(prefers-contrast: more)': { boxShadow: 'none', borderColor: color.Surface.OnContainer },
   },
 });
 export const CardHeader = style({

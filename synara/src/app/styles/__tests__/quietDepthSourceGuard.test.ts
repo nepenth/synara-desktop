@@ -16,6 +16,7 @@ test('quiet depth system preserves accessibility preferences and keeps text flat
   assert.match(depth, /export const floatingSurface/);
   assert.match(depth, /export const avatarSurface/);
   assert.match(depth, /export const avatarMedia/);
+  assert.match(depth, /export const criticalSurface/);
   assert.match(depth, /export const quietInteractiveSurface/);
   assert.doesNotMatch(depth, /translateY\(-/);
   assert.match(depth, /export const quietActionButton/);
@@ -68,8 +69,7 @@ test('identity, composer popouts, and critical approvals use their intended dept
 
   assert.match(userAvatar, /avatarMedia/);
   assert.match(roomAvatar, /avatarMedia/);
-  // Approval cards stay flat: one hairline edge, risk shown by the Critical pill.
-  assert.doesNotMatch(approval, /criticalSurface|boxShadow/);
+  assert.match(approval, /criticalSurface/);
   assert.match(roomInput, /depthCss\.floatingSurface/);
   assert.match(gifPicker, /depthCss\.floatingSurface/);
   assert.match(emojiBoard, /floatingSurface/);
