@@ -62,12 +62,54 @@
     "%@ Matches desktop Settings → Appearance → Thread Display." : {
 
     },
+    "%@ and %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ and %2$@"
+          }
+        }
+      }
+    },
     "%@ and %@ are typing..." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ and %2$@ are typing..."
+          }
+        }
+      }
+    },
+    "%@ and %lld others" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ and %#@others@"
+          },
+          "substitutions" : {
+            "others" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg other"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg others"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -185,6 +227,16 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "%@, %@: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@: %3$@"
           }
         }
       }
@@ -417,6 +469,28 @@
         }
       }
     },
+    "%lld more people" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld more person"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld more people"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld observed" : {
       "localizations" : {
         "en" : {
@@ -454,6 +528,28 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld passed"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld reactions" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld reaction"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld reactions"
                 }
               }
             }
@@ -526,6 +622,9 @@
           }
         }
       }
+    },
+    ", " : {
+
     },
     ", primary action %@" : {
 
@@ -2002,6 +2101,9 @@
     "No Messages" : {
 
     },
+    "No Reactions" : {
+
+    },
     "No Rooms" : {
 
     },
@@ -2036,6 +2138,9 @@
 
     },
     "No recent requests" : {
+
+    },
+    "Nobody has reacted to this message." : {
 
     },
     "None" : {
@@ -2364,6 +2469,9 @@
 
     },
     "React with %@" : {
+
+    },
+    "Reactions" : {
 
     },
     "Reactions: %@" : {
@@ -2829,6 +2937,9 @@
 
     },
     "Show the post and play its video for x.com links. Your device contacts X, which can see your IP address." : {
+
+    },
+    "Show who reacted" : {
 
     },
     "Shows account details, settings, and logout" : {
@@ -3396,6 +3507,9 @@
     "Video from the post" : {
 
     },
+    "View Reactions" : {
+
+    },
     "View on X" : {
 
     },
@@ -3518,6 +3632,9 @@
 
     },
     "this session" : {
+
+    },
+    "you" : {
 
     },
     "you@example.org" : {
