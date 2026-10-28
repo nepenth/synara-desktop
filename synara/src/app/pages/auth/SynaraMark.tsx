@@ -16,12 +16,13 @@ const FEATHERS = [
 ];
 const TAIL = 'm115 164 30 66-10-61Z';
 
-/** The Synara mark, drawn as vector so it stays sharp at any size. */
+/** The Synara mark: blue linework with its soft glow, drawn still. */
 export function SynaraMark({ size }: { size?: number }) {
   const id = useId().replace(/:/g, '');
   const line = `${id}-line`;
   const wing = `${id}-wing`;
   const core = `${id}-core`;
+  const glow = `${id}-glow`;
 
   return (
     <svg
@@ -47,9 +48,16 @@ export function SynaraMark({ size }: { size?: number }) {
           <stop offset="0" stopColor="#2B6DFF" />
           <stop offset="1" stopColor="#081A4F" />
         </radialGradient>
+        <filter id={glow} x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="3.5" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
       </defs>
 
-      <g>
+      <g filter={`url(#${glow})`}>
         <g fill={`url(#${wing})`} stroke={`url(#${line})`} strokeWidth="3" strokeLinejoin="round">
           {FEATHERS.map((d) => (
             <path key={d} d={d} />

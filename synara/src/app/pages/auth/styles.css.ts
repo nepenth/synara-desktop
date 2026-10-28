@@ -1,18 +1,37 @@
 import { style } from '@vanilla-extract/css';
 import { color, config, toRem } from 'folds';
+import { floatingShadow, quietSurfaceFold } from '../../styles/Depth.css';
 
 const twoColumn = `(min-width: ${toRem(920)})`;
 
 const ink = (percent: number) =>
   `color-mix(in srgb, ${color.Background.OnContainer} ${percent}%, transparent)`;
 
+/** Accent tint from the active theme, so every theme stays coherent. */
+const accent = (percent: number) =>
+  `color-mix(in srgb, ${color.Primary.Main} ${percent}%, transparent)`;
+
 export const AuthLayout = style({
   minHeight: '100%',
   backgroundColor: color.Background.Container,
   color: color.Background.OnContainer,
+  position: 'relative',
+  isolation: 'isolate',
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
+});
+
+/** One still, faint accent field behind the brand column. */
+export const AuthField = style({
+  position: 'absolute',
+  inset: 0,
+  zIndex: -1,
+  pointerEvents: 'none',
+  backgroundImage: `radial-gradient(ellipse 50% 45% at 24% 38%, ${accent(10)}, transparent 70%)`,
+  '@media': {
+    '(prefers-contrast: more)': { display: 'none' },
+  },
 });
 
 export const AuthStage = style({
@@ -20,16 +39,16 @@ export const AuthStage = style({
   width: '100%',
   maxWidth: toRem(1040),
   display: 'grid',
-  gridTemplateColumns: `minmax(0, ${toRem(440)})`,
-  justifyContent: 'center',
+  gridTemplateColumns: 'minmax(0, 1fr)',
+  justifyItems: 'center',
   alignContent: 'center',
   gap: config.space.S500,
   padding: `${toRem(40)} ${config.space.S400} ${config.space.S400}`,
   '@media': {
     [twoColumn]: {
       gridTemplateColumns: `minmax(0, 1fr) minmax(0, ${toRem(440)})`,
-      justifyContent: 'stretch',
-      alignItems: 'start',
+      alignItems: 'center',
+      justifyItems: 'stretch',
       gap: toRem(72),
       padding: `${toRem(48)} ${toRem(48)} ${config.space.S400}`,
     },
@@ -39,50 +58,97 @@ export const AuthStage = style({
 export const AuthBrand = style({
   display: 'flex',
   flexDirection: 'column',
-  gap: config.space.S200,
+  alignItems: 'center',
+  textAlign: 'center',
+  gap: config.space.S300,
   '@media': {
-    [twoColumn]: { paddingTop: toRem(32) },
+    [twoColumn]: { alignItems: 'flex-start', textAlign: 'left', gap: config.space.S400 },
   },
 });
 
-/** Mark and wordmark side by side, as on the app icon's title bar. */
+/** Mark centered over the wordmark, whatever the column alignment. */
 export const AuthLockup = style({
   display: 'flex',
+  flexDirection: 'column',
   alignItems: 'center',
   gap: config.space.S300,
 });
 
 export const AuthBrandMark = style({
-  width: toRem(40),
-  height: toRem(40),
-  flexShrink: 0,
+  position: 'relative',
+  width: toRem(72),
+  height: toRem(72),
+  // A still, soft halo in the mark's own blue; it keeps its color in every theme.
+  '::before': {
+    content: '""',
+    position: 'absolute',
+    inset: '-24%',
+    zIndex: -1,
+    borderRadius: '50%',
+    background: 'radial-gradient(circle, rgba(63, 184, 255, 0.16), transparent 68%)',
+  },
+  '@media': {
+    [twoColumn]: { width: toRem(112), height: toRem(112) },
+    '(prefers-contrast: more)': { selectors: { '&::before': { display: 'none' } } },
+  },
 });
 
 export const AuthWordmark = style({
   margin: 0,
-  fontSize: toRem(28),
+  fontSize: toRem(32),
   lineHeight: 1.2,
   fontWeight: 650,
   letterSpacing: '-0.02em',
+  '@media': { [twoColumn]: { fontSize: toRem(44) } },
 });
 
 export const AuthTagline = style({
   margin: 0,
   maxWidth: toRem(380),
-  fontSize: toRem(15),
+  fontSize: toRem(16),
   lineHeight: 1.5,
   color: ink(72),
+  '@media': { [twoColumn]: { fontSize: toRem(17) } },
+});
+
+export const AuthFeatures = style({
+  display: 'none',
+  listStyle: 'none',
+  margin: 0,
+  padding: 0,
+  flexDirection: 'column',
+  gap: config.space.S200,
+  '@media': { [twoColumn]: { display: 'flex' } },
+});
+
+export const AuthFeature = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: config.space.S300,
+  fontSize: toRem(14),
+  color: ink(78),
+});
+
+/** A plain glyph in the accent, with no tile behind it. */
+export const AuthFeatureIcon = style({
+  display: 'inline-flex',
+  flexShrink: 0,
+  color: color.Primary.Main,
 });
 
 export const AuthCard = style({
   width: '100%',
   maxWidth: toRem(440),
-  borderRadius: config.radii.R500,
+  borderRadius: toRem(16),
   color: color.SurfaceVariant.OnContainer,
   backgroundColor: color.SurfaceVariant.Container,
+  backgroundImage: quietSurfaceFold,
   border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
+  boxShadow: floatingShadow,
   '@media': {
     '(prefers-contrast: more)': {
+      backgroundImage: 'none',
+      boxShadow: 'none',
       borderColor: 'var(--synara-depth-contrast-strong-edge)',
     },
   },

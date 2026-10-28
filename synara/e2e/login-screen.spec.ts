@@ -77,13 +77,13 @@ test('the sign-in screen has no decorative motion', async ({ page }) => {
   expect(running).toBe(0);
 });
 
-test('the mark sits beside the wordmark, vertically centered', async ({ page }) => {
+test('the mark sits centered over the wordmark', async ({ page }) => {
   await open(page);
   const mark = await page.getByRole('img', { name: 'Synara' }).boundingBox();
   const word = await page.getByRole('heading', { name: 'Synara' }).boundingBox();
   expect(mark && word).toBeTruthy();
-  expect(mark!.x + mark!.width).toBeLessThanOrEqual(word!.x);
-  const markMiddle = mark!.y + mark!.height / 2;
-  const wordMiddle = word!.y + word!.height / 2;
-  expect(Math.abs(markMiddle - wordMiddle)).toBeLessThan(3);
+  expect(mark!.y + mark!.height).toBeLessThanOrEqual(word!.y);
+  const markCenter = mark!.x + mark!.width / 2;
+  const wordCenter = word!.x + word!.width / 2;
+  expect(Math.abs(markCenter - wordCenter)).toBeLessThan(2);
 });
