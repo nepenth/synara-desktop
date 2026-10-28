@@ -4,7 +4,8 @@
 # git diffs.
 #
 # Inputs: EVENT_NAME, BASE_SHA, HEAD_SHA, PR_LABELS, GITHUB_BASE_REF,
-# GITHUB_HEAD_REF, GITHUB_REF_NAME, PACKAGES_INPUT (workflow_dispatch only).
+# GITHUB_HEAD_REF, GITHUB_REF_NAME, PACKAGES_INPUT (workflow_dispatch only),
+# IOS_PROOF_LOOKUP (set by ci.yml: hash the iOS inputs and look for a proof).
 set -euo pipefail
 
 out() { echo "$1=$2" >> "$GITHUB_OUTPUT"; }
@@ -16,11 +17,29 @@ VALIDATE_FRONTEND=false
 IOS=false
 IOS_UI=false
 IOS_COMPILE=false
+IOS_INPUTS_HASH=
+IOS_REUSED=false
 SYNAPSE=false
 PACKAGES=false
 ICON_ONLY=false
 
+# The ios-tests job records a proof step named with this hash; a pull request
+# skips the job when an earlier run of it proved the same hash. It runs after
+# IOS_COMPILE is decided, so a reused proof also stands in for the compile gate.
+ios_proof() {
+  [[ "$IOS" == "true" && -n "${IOS_PROOF_LOOKUP:-}" ]] || return 0
+  IOS_INPUTS_HASH="$(node scripts/ios-test-inputs.mjs hash)"
+  echo "iOS test inputs hash: ${IOS_INPUTS_HASH}"
+  # Only pull requests reuse: nightly, dispatch and main always run the lane.
+  [[ "${EVENT_NAME}" == "pull_request" ]] || return 0
+  if node scripts/reuse-proven-ios-tests.mjs "$IOS_INPUTS_HASH"; then
+    IOS=false
+    IOS_REUSED=true
+  fi
+}
+
 emit() {
+  ios_proof
   out icon_only "$ICON_ONLY"
   out validate_rust "$VALIDATE_RUST"
   out rust_audit "$RUST_AUDIT"
@@ -28,9 +47,11 @@ emit() {
   out ios "$IOS"
   out ios_ui "$IOS_UI"
   out ios_compile "$IOS_COMPILE"
+  out ios_inputs_hash "$IOS_INPUTS_HASH"
+  out ios_reused "$IOS_REUSED"
   out synapse "$SYNAPSE"
   out packages "$PACKAGES"
-  echo "CI scope: rust=${VALIDATE_RUST} audit=${RUST_AUDIT} frontend=${VALIDATE_FRONTEND} ios=${IOS} ios_ui=${IOS_UI} ios_compile=${IOS_COMPILE} synapse=${SYNAPSE} packages=${PACKAGES}"
+  echo "CI scope: rust=${VALIDATE_RUST} audit=${RUST_AUDIT} frontend=${VALIDATE_FRONTEND} ios=${IOS} ios_ui=${IOS_UI} ios_compile=${IOS_COMPILE} ios_reused=${IOS_REUSED} synapse=${SYNAPSE} packages=${PACKAGES}"
 }
 
 full() {
@@ -129,19 +150,15 @@ if changed .github/workflows/ci.yml scripts/ci-scopes.sh scripts/synapse-integra
   SYNAPSE=true
 fi
 
+# One list with the hash in scripts/ios-test-inputs.mjs, plus the whole
+# workflow and this script. Command substitution, so a failure stops the scope.
+IOS_INPUT_LIST="$(node scripts/ios-test-inputs.mjs paths)"
+IOS_INPUT_PATHS=()
+while IFS= read -r path; do
+  [[ -n "$path" ]] && IOS_INPUT_PATHS+=("$path")
+done <<<"$IOS_INPUT_LIST"
 IOS_PATHS_CHANGED=false
-if changed rust-toolchain.toml Cargo.toml Cargo.lock .cargo \
-  crates/synara-core crates/synara-nse-core crates/synara-core-bindgen \
-  .github/workflows/ci.yml scripts/ci-scopes.sh \
-  scripts/generate-synara-core-swift.sh scripts/generate-synara-nse-core-swift.sh \
-  synara-ios/scripts/check-notification-service-archive.sh scripts/generate-xcode-project.mjs \
-  "${RUST_CACHE_PATHS[@]}" \
-  .github/actions/setup-xcode-cache .github/actions/save-xcode-cache \
-  scripts/check-synara-nse-core-isolation.mjs scripts/check-synara-nse-core-production-features.mjs \
-  scripts/check-synara-core-production-features.mjs scripts/lib/publish-generated-apple-pair.sh \
-  scripts/lib/compare-generated-apple-pair.mjs scripts/check-synara-nse-core-archive-exports.sh \
-  scripts/lib/rust-llvm-symbols.sh scripts/check-synara-core-swift-scaffold.mjs \
-  synara-ios; then
+if changed .github/workflows/ci.yml scripts/ci-scopes.sh "${IOS_INPUT_PATHS[@]}"; then
   IOS_PATHS_CHANGED=true
 fi
 

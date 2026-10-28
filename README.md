@@ -233,6 +233,15 @@ logs, or documentation.
 
 ## Validation
 
+Before pushing, run the quick pre-push check. It covers Rust formatting,
+clippy on the workspace crates you changed, the repository contract checks,
+and Prettier, ESLint and typecheck for changed renderer files. See
+[docs/build-and-release.md](docs/build-and-release.md#local-validation-gates).
+
+```sh
+npm run check:quick
+```
+
 Core repository checks:
 
 ```sh

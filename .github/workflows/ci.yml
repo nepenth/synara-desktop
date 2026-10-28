@@ -49,6 +49,10 @@ jobs:
     name: Detect CI scopes
     runs-on: ubuntu-22.04
     timeout-minutes: 5
+    # actions: read lets the scope look up an earlier run's iOS proof.
+    permissions:
+      actions: read
+      contents: read
     outputs:
       icon_only: ${{ steps.scope.outputs.icon_only }}
       validate_rust: ${{ steps.scope.outputs.validate_rust }}
@@ -57,6 +61,8 @@ jobs:
       ios: ${{ steps.scope.outputs.ios }}
       ios_ui: ${{ steps.scope.outputs.ios_ui }}
       ios_compile: ${{ steps.scope.outputs.ios_compile }}
+      ios_inputs_hash: ${{ steps.scope.outputs.ios_inputs_hash }}
+      ios_reused: ${{ steps.scope.outputs.ios_reused }}
       synapse: ${{ steps.scope.outputs.synapse }}
       packages: ${{ steps.scope.outputs.packages }}
     steps:
@@ -78,6 +84,8 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
           PACKAGES_INPUT: ${{ inputs.packages }}
+          IOS_PROOF_LOOKUP: "1"
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/ci-scopes.sh
 
   rust-lint:
@@ -445,6 +453,14 @@ jobs:
           IOS_TEST_RETRY_ON_FAILURE: "1"
           SYNARA_CORE_APPLE_SLICES: ${{ github.event_name == 'workflow_dispatch' && (inputs.apple_slices == 'all' || inputs.check_ios_device_release) && 'all' || 'simulator-arm64' }}
           CHECK_IOS_DEVICE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.check_ios_device_release && '1' || '0' }}
+
+      # The step name carries the hash of every input this job read
+      # (scripts/ios-test-inputs.mjs). A later run of the same pull request with
+      # the same hash skips this job (scripts/reuse-proven-ios-tests.mjs).
+      - name: Record proven iOS inputs ${{ needs.changes.outputs.ios_inputs_hash }}
+        env:
+          IOS_INPUTS_HASH: ${{ needs.changes.outputs.ios_inputs_hash }}
+        run: node scripts/ios-test-inputs.mjs verify "$IOS_INPUTS_HASH"
 
       - name: Publish bounded Xcode compiler cache from main
         if: github.ref == 'refs/heads/main'
@@ -886,16 +902,19 @@ jobs:
       - name: Require every scheduled job to pass or be skipped by scope
         env:
           RESULTS: ${{ toJSON(needs) }}
+          IOS_REUSED: ${{ needs.changes.outputs.ios_reused }}
         run: |
           set -euo pipefail
-          # success = ran and passed; skipped = scoped out (OK). The scope job
-          # itself must succeed.
+          # success = ran and passed; skipped = scoped out, or for ios-tests
+          # proven by an earlier run of this PR on the same inputs (OK). The
+          # scope job itself must succeed.
           node -e '
             const needs = JSON.parse(process.env.RESULTS);
             let failed = false;
             for (const [job, { result }] of Object.entries(needs)) {
               const ok = job === "changes" ? result === "success" : ["success", "skipped"].includes(result);
-              console.log(`${job}: ${result}`);
+              const reused = job === "ios-tests" && result === "skipped" && process.env.IOS_REUSED === "true";
+              console.log(`${job}: ${result}${reused ? " (reused proven result on the same inputs)" : ""}`);
               if (!ok) failed = true;
             }
             if (failed) process.exit(1);
