@@ -26,6 +26,7 @@ import {
   Tooltip,
   TooltipProvider,
   config,
+  toRem,
 } from 'folds';
 import { EmojiBoard } from '../../components/emoji-board';
 import { AgentApprovalCard } from '../../components/agent-approval/AgentApprovalCard';
@@ -163,6 +164,13 @@ import {
 } from './NativeInlineThread';
 import type { ThreadDisplayMode } from '../../utils/threadDisplay';
 import { getMyUserId } from '../../state/nativeIdentity';
+import { useRoomMembers } from '../../hooks/useRoomMembers';
+import {
+  ReactionSenderNamesContext,
+  reactionSenderNamesFromMembers,
+  reactionSendersSummary,
+  useReactionSenderNames,
+} from './reactionSenders';
 import { resolveNativeFocusRouteAction } from './nativeFocusRoute';
 import { isNativeTimelineRowVisible } from './nativeTimelineRowFilter';
 import { nativeFormattedBodyMentionsUser } from './nativeTimelineLinks';
@@ -1732,29 +1740,65 @@ const NativeTimelineReactionPills = ({
   enabled: boolean;
   onReaction: (key: string) => void;
   onViewReactions?: (key: string) => void;
-}) =>
-  reactions?.length ? (
+}) => {
+  const names = useReactionSenderNames();
+  if (!reactions?.length) return null;
+  const ownUserId = getMyUserId() ?? undefined;
+  return (
     <Box gap="100" wrap="Wrap">
-      {reactions.map((reaction) => (
-        <Button
-          key={reaction.key}
-          size="300"
-          variant={reaction.own ? 'Primary' : 'Secondary'}
-          fill="Soft"
-          disabled={!enabled}
-          onClick={() => enabled && onReaction(reaction.key)}
-          onContextMenu={(event) => {
-            if (!onViewReactions) return;
-            event.preventDefault();
-            event.stopPropagation();
-            onViewReactions(reaction.key);
-          }}
-        >
-          {reaction.key} {reaction.count}
-        </Button>
-      ))}
+      {reactions.map((reaction) => {
+        const summary = reactionSendersSummary({
+          reactionKey: reaction.key,
+          count: reaction.count,
+          senderIds: (reaction.senders ?? []).map((sender) => sender.userId),
+          names,
+          ownUserId,
+        });
+        // Right-click, Shift+F10 or the context-menu key opens the full list.
+        const viewHint = onViewReactions ? ' Open its context menu to see everyone.' : '';
+        return (
+          <TooltipProvider
+            key={reaction.key}
+            position="Top"
+            offset={4}
+            tooltip={
+              <Tooltip style={{ maxWidth: toRem(280) }}>
+                <Text size="T200">{summary}</Text>
+              </Tooltip>
+            }
+          >
+            {(triggerRef) => (
+              // A disabled button gets no pointer events, so the tooltip and
+              // the right-click list hang off this wrapper instead.
+              <span
+                ref={triggerRef}
+                data-reaction-key={reaction.key}
+                onContextMenu={(event) => {
+                  if (!onViewReactions) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onViewReactions(reaction.key);
+                }}
+              >
+                <Button
+                  size="300"
+                  variant={reaction.own ? 'Primary' : 'Secondary'}
+                  fill="Soft"
+                  disabled={!enabled}
+                  aria-label={`${summary}.${viewHint}`}
+                  onClick={() => enabled && onReaction(reaction.key)}
+                  style={enabled ? undefined : { pointerEvents: 'none' }}
+                >
+                  {reaction.key} {reaction.count}
+                </Button>
+              </span>
+            )}
+          </TooltipProvider>
+        );
+      })}
     </Box>
-  ) : null;
+  );
+};
 
 const NativeTimelinePollAnswers = ({
   answers,
@@ -2741,6 +2785,12 @@ export function NativeTimelinePresenter({
       document.hasFocus()
   );
   const ownUserId = getMyUserId() ?? undefined;
+  // Who reacted, by name, for the pill tooltips and the reactions list.
+  const memberSnapshot = useRoomMembers(roomId, true);
+  const reactionSenderNames = useMemo(
+    () => reactionSenderNamesFromMembers(memberSnapshot),
+    [memberSnapshot]
+  );
   const [reactionViewer, setReactionViewer] = useState<{
     eventId: string;
     initialKey?: string;
@@ -3971,246 +4021,252 @@ export function NativeTimelinePresenter({
 
   return (
     <NativeThreadDisplayProvider value={threadDisplayValue}>
-      <Box grow="Yes" direction="Column" style={{ minHeight: 0 }}>
-        <div role="log" aria-live="polite" className={htmlCss.VisuallyHidden}>
-          {arrivalAnnouncement}
-        </div>
-        {notice ? (
-          <NativeTimelineNotice
-            tone={notice.tone}
-            message={notice.message}
-            onDismiss={() => setNotice(undefined)}
-          />
-        ) : null}
-        {streamGap === 'failed' ? (
-          <NativeTimelineNotice
-            tone="error"
-            message={STREAM_GAP_FAILED}
-            action={{ label: 'Reload', onClick: reload }}
-          />
-        ) : null}
-        {threadRootId && showThreadBack ? (
-          <Box style={{ padding: config.space.S200 }} alignItems="Start">
-            <Button
-              size="300"
-              fill="Soft"
-              before={<Icon src={Icons.ArrowLeft} size="100" />}
-              onClick={closeThread}
-              aria-label="Back to room"
-            >
-              Back
-            </Button>
-          </Box>
-        ) : null}
-        {hasSparseLoadButton ? (
-          <Box shrink="No" style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
-            <Button onClick={() => requestPagination('backwards')}>
-              <Text>Load older messages</Text>
-            </Button>
-          </Box>
-        ) : null}
-        <Box grow="Yes" style={{ minHeight: 0, position: 'relative' }}>
-          <Scroll
-            id="native-timeline-history"
-            role="region"
-            aria-label={threadRootId ? 'Thread messages' : 'Messages'}
-            data-native-timeline-scrolling={virtualizer.isScrolling}
-            ref={scrollRef}
-            visibility="Always"
-            style={{ height: '100%', overscrollBehavior: 'contain' }}
-          >
-            {rows.length === 0 ? (
-              <Box
-                alignItems="Center"
-                justifyContent="Center"
-                style={{ minHeight: '100%', padding: config.space.S400 }}
+      <ReactionSenderNamesContext.Provider value={reactionSenderNames}>
+        <Box grow="Yes" direction="Column" style={{ minHeight: 0 }}>
+          <div role="log" aria-live="polite" className={htmlCss.VisuallyHidden}>
+            {arrivalAnnouncement}
+          </div>
+          {notice ? (
+            <NativeTimelineNotice
+              tone={notice.tone}
+              message={notice.message}
+              onDismiss={() => setNotice(undefined)}
+            />
+          ) : null}
+          {streamGap === 'failed' ? (
+            <NativeTimelineNotice
+              tone="error"
+              message={STREAM_GAP_FAILED}
+              action={{ label: 'Reload', onClick: reload }}
+            />
+          ) : null}
+          {threadRootId && showThreadBack ? (
+            <Box style={{ padding: config.space.S200 }} alignItems="Start">
+              <Button
+                size="300"
+                fill="Soft"
+                before={<Icon src={Icons.ArrowLeft} size="100" />}
+                onClick={closeThread}
+                aria-label="Back to room"
               >
-                <Text size="T300">No messages in this view yet.</Text>
-              </Box>
-            ) : null}
-            <div
-              style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}
-            >
-              {virtualizer.getVirtualItems().map((virtualItem) => {
-                const row = rows[virtualItem.index];
-                if (!row) return null;
-                const groupsNext = isGroupedWithPrevious(
-                  row,
-                  virtualItem.index + 1 < rows.length ? rows[virtualItem.index + 1] : undefined
-                );
-                const spacingToken =
-                  row.kind === 'message' && !groupsNext && messageSpacing !== '0'
-                    ? config.space[
-                        `S${messageSpacing}` as 'S100' | 'S200' | 'S300' | 'S400' | 'S500'
-                      ]
-                    : undefined;
-                return (
-                  <div
-                    key={virtualItem.key}
-                    ref={virtualizer.measureElement}
-                    data-index={virtualItem.index}
-                    data-native-timeline-row-key={rowKey(row)}
-                    data-native-timeline-row-kind={row.kind}
-                    data-native-timeline-event-id={rowEventId(row)}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      transform: `translateY(${virtualItem.start}px)`,
-                      width: '100%',
-                      overflowAnchor: 'none',
-                      // This padding is part of the measured row box. A margin
-                      // on a descendant can escape the box and make adjacent
-                      // absolutely positioned rows overlap after measurement.
-                      paddingBottom: spacingToken,
-                    }}
-                  >
-                    <NativeTimelineRow
-                      row={row}
-                      sessionGeneration={snapshot.sessionGeneration}
-                      grouped={isGroupedWithPrevious(
-                        virtualItem.index > 0 ? rows[virtualItem.index - 1] : undefined,
-                        row
-                      )}
-                      groupsNext={groupsNext}
-                      roomId={roomId}
-                      pinnedEventIds={snapshot.pinnedEventIds}
-                      sourceEncryptionStatus={sourceEncryptionStatus}
-                      onActionError={showActionError}
-                      onFocusEvent={onFocusEvent}
-                      onViewReactions={viewReactions}
-                      onOpenThread={openThread}
-                      activeThreadRoot={threadRootId}
-                      onOpenMarkdownPreview={setFilePreview}
-                      onOpenMediaViewer={setMediaViewer}
-                      editing={editingEventId !== undefined && rowEventId(row) === editingEventId}
-                      onEditingChange={setEditingEventId}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </Scroll>
-          <NativeTimelineHistoryStatus
-            edge="backward"
-            kind={backwardOverlay.kind}
-            errorMessage={backwardOverlay.message}
-            visibleDateLabel={visibleDateLabel}
-            onRetry={() => requestPagination('backwards')}
-            onLoadMore={() => requestPagination('backwards')}
-          />
-          <NativeTimelineHistoryStatus
-            edge="forward"
-            kind={forwardOverlay.kind}
-            errorMessage={forwardOverlay.message}
-            onRetry={() => requestPagination('forwards')}
-            onLoadMore={() => requestPagination('forwards')}
-          />
-          {(showJumpToLastRead || showJumpToLatest) && (
-            <Box
-              direction="Column"
-              gap="200"
-              alignItems="End"
-              style={{ position: 'absolute', right: config.space.S400, bottom: config.space.S300 }}
-            >
-              {showJumpToLastRead && (
-                <Button
-                  variant="Secondary"
-                  fill="Soft"
-                  radii="Pill"
-                  outlined
-                  size="300"
-                  className={depthCss.quietInteractiveSurface}
-                  before={<Icon src={Icons.MessageUnread} size="100" />}
-                  onClick={jumpToLastRead}
-                >
-                  <Text size="B300">Jump to Last Read</Text>
-                </Button>
-              )}
-              {showJumpToLatest && (
-                <TooltipProvider
-                  position="Top"
-                  offset={4}
-                  tooltip={
-                    <Tooltip>
-                      <Text>Jump to latest</Text>
-                    </Tooltip>
-                  }
-                >
-                  {(triggerRef) => (
-                    <IconButton
-                      ref={triggerRef}
-                      variant="SurfaceVariant"
-                      radii="Pill"
-                      outlined
-                      size="300"
-                      className={depthCss.quietInteractiveSurface}
-                      aria-label="Jump to latest"
-                      onClick={jumpToLatest}
-                    >
-                      <Icon src={Icons.ChevronBottom} size="300" />
-                    </IconButton>
-                  )}
-                </TooltipProvider>
-              )}
+                Back
+              </Button>
             </Box>
-          )}
-        </Box>
-        <Overlay
-          open={Boolean(reactionViewer)}
-          backdrop={<OverlayBackdrop />}
-          onContextMenu={(event: React.MouseEvent) => event.stopPropagation()}
-        >
-          <OverlayCenter>
-            <FocusTrap
-              focusTrapOptions={{
-                initialFocus: false,
-                // The opener (a menu item or pill) may be gone; return to the message.
-                setReturnFocus: returnFocusOrFallback(() =>
-                  reactionViewer
-                    ? scrollRef.current?.querySelector<HTMLElement>(
-                        `[data-native-timeline-event-id="${CSS.escape(
-                          reactionViewer.eventId
-                        )}"] [role="group"]`
-                      )
-                    : undefined
-                ),
-                onDeactivate: () => setReactionViewer(null),
-                clickOutsideDeactivates: true,
-                escapeDeactivates: stopPropagation,
-              }}
+          ) : null}
+          {hasSparseLoadButton ? (
+            <Box shrink="No" style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
+              <Button onClick={() => requestPagination('backwards')}>
+                <Text>Load older messages</Text>
+              </Button>
+            </Box>
+          ) : null}
+          <Box grow="Yes" style={{ minHeight: 0, position: 'relative' }}>
+            <Scroll
+              id="native-timeline-history"
+              role="region"
+              aria-label={threadRootId ? 'Thread messages' : 'Messages'}
+              data-native-timeline-scrolling={virtualizer.isScrolling}
+              ref={scrollRef}
+              visibility="Always"
+              style={{ height: '100%', overscrollBehavior: 'contain' }}
             >
-              <Modal variant="Surface" size="300" aria-label="Reactions">
-                {reactionViewer ? (
-                  <ReactionViewer
-                    roomId={roomId}
-                    targetEventId={reactionViewer.eventId}
-                    reactions={reactionViewer.reactions}
-                    initialKey={reactionViewer.initialKey}
-                    ownUserId={ownUserId}
-                    canRedactOwn={Boolean(snapshot.capabilities.canRedactOwn)}
-                    canRedactOther={Boolean(snapshot.capabilities.canRedactOther)}
-                    requestClose={() => setReactionViewer(null)}
-                  />
-                ) : null}
-              </Modal>
-            </FocusTrap>
-          </OverlayCenter>
-        </Overlay>
-        {filePreview ? (
-          <NativeTimelineMarkdownPreview
-            target={filePreview}
-            onClose={() => setFilePreview(undefined)}
-            onActionError={showActionError}
-          />
-        ) : null}
-        {mediaViewer ? (
-          <NativeTimelineMediaViewer
-            target={mediaViewer}
-            onClose={() => setMediaViewer(undefined)}
-          />
-        ) : null}
-      </Box>
+              {rows.length === 0 ? (
+                <Box
+                  alignItems="Center"
+                  justifyContent="Center"
+                  style={{ minHeight: '100%', padding: config.space.S400 }}
+                >
+                  <Text size="T300">No messages in this view yet.</Text>
+                </Box>
+              ) : null}
+              <div
+                style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}
+              >
+                {virtualizer.getVirtualItems().map((virtualItem) => {
+                  const row = rows[virtualItem.index];
+                  if (!row) return null;
+                  const groupsNext = isGroupedWithPrevious(
+                    row,
+                    virtualItem.index + 1 < rows.length ? rows[virtualItem.index + 1] : undefined
+                  );
+                  const spacingToken =
+                    row.kind === 'message' && !groupsNext && messageSpacing !== '0'
+                      ? config.space[
+                          `S${messageSpacing}` as 'S100' | 'S200' | 'S300' | 'S400' | 'S500'
+                        ]
+                      : undefined;
+                  return (
+                    <div
+                      key={virtualItem.key}
+                      ref={virtualizer.measureElement}
+                      data-index={virtualItem.index}
+                      data-native-timeline-row-key={rowKey(row)}
+                      data-native-timeline-row-kind={row.kind}
+                      data-native-timeline-event-id={rowEventId(row)}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        transform: `translateY(${virtualItem.start}px)`,
+                        width: '100%',
+                        overflowAnchor: 'none',
+                        // This padding is part of the measured row box. A margin
+                        // on a descendant can escape the box and make adjacent
+                        // absolutely positioned rows overlap after measurement.
+                        paddingBottom: spacingToken,
+                      }}
+                    >
+                      <NativeTimelineRow
+                        row={row}
+                        sessionGeneration={snapshot.sessionGeneration}
+                        grouped={isGroupedWithPrevious(
+                          virtualItem.index > 0 ? rows[virtualItem.index - 1] : undefined,
+                          row
+                        )}
+                        groupsNext={groupsNext}
+                        roomId={roomId}
+                        pinnedEventIds={snapshot.pinnedEventIds}
+                        sourceEncryptionStatus={sourceEncryptionStatus}
+                        onActionError={showActionError}
+                        onFocusEvent={onFocusEvent}
+                        onViewReactions={viewReactions}
+                        onOpenThread={openThread}
+                        activeThreadRoot={threadRootId}
+                        onOpenMarkdownPreview={setFilePreview}
+                        onOpenMediaViewer={setMediaViewer}
+                        editing={editingEventId !== undefined && rowEventId(row) === editingEventId}
+                        onEditingChange={setEditingEventId}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </Scroll>
+            <NativeTimelineHistoryStatus
+              edge="backward"
+              kind={backwardOverlay.kind}
+              errorMessage={backwardOverlay.message}
+              visibleDateLabel={visibleDateLabel}
+              onRetry={() => requestPagination('backwards')}
+              onLoadMore={() => requestPagination('backwards')}
+            />
+            <NativeTimelineHistoryStatus
+              edge="forward"
+              kind={forwardOverlay.kind}
+              errorMessage={forwardOverlay.message}
+              onRetry={() => requestPagination('forwards')}
+              onLoadMore={() => requestPagination('forwards')}
+            />
+            {(showJumpToLastRead || showJumpToLatest) && (
+              <Box
+                direction="Column"
+                gap="200"
+                alignItems="End"
+                style={{
+                  position: 'absolute',
+                  right: config.space.S400,
+                  bottom: config.space.S300,
+                }}
+              >
+                {showJumpToLastRead && (
+                  <Button
+                    variant="Secondary"
+                    fill="Soft"
+                    radii="Pill"
+                    outlined
+                    size="300"
+                    className={depthCss.quietInteractiveSurface}
+                    before={<Icon src={Icons.MessageUnread} size="100" />}
+                    onClick={jumpToLastRead}
+                  >
+                    <Text size="B300">Jump to Last Read</Text>
+                  </Button>
+                )}
+                {showJumpToLatest && (
+                  <TooltipProvider
+                    position="Top"
+                    offset={4}
+                    tooltip={
+                      <Tooltip>
+                        <Text>Jump to latest</Text>
+                      </Tooltip>
+                    }
+                  >
+                    {(triggerRef) => (
+                      <IconButton
+                        ref={triggerRef}
+                        variant="SurfaceVariant"
+                        radii="Pill"
+                        outlined
+                        size="300"
+                        className={depthCss.quietInteractiveSurface}
+                        aria-label="Jump to latest"
+                        onClick={jumpToLatest}
+                      >
+                        <Icon src={Icons.ChevronBottom} size="300" />
+                      </IconButton>
+                    )}
+                  </TooltipProvider>
+                )}
+              </Box>
+            )}
+          </Box>
+          <Overlay
+            open={Boolean(reactionViewer)}
+            backdrop={<OverlayBackdrop />}
+            onContextMenu={(event: React.MouseEvent) => event.stopPropagation()}
+          >
+            <OverlayCenter>
+              <FocusTrap
+                focusTrapOptions={{
+                  initialFocus: false,
+                  // The opener (a menu item or pill) may be gone; return to the message.
+                  setReturnFocus: returnFocusOrFallback(() =>
+                    reactionViewer
+                      ? scrollRef.current?.querySelector<HTMLElement>(
+                          `[data-native-timeline-event-id="${CSS.escape(
+                            reactionViewer.eventId
+                          )}"] [role="group"]`
+                        )
+                      : undefined
+                  ),
+                  onDeactivate: () => setReactionViewer(null),
+                  clickOutsideDeactivates: true,
+                  escapeDeactivates: stopPropagation,
+                }}
+              >
+                <Modal variant="Surface" size="300" aria-label="Reactions">
+                  {reactionViewer ? (
+                    <ReactionViewer
+                      roomId={roomId}
+                      targetEventId={reactionViewer.eventId}
+                      reactions={reactionViewer.reactions}
+                      initialKey={reactionViewer.initialKey}
+                      ownUserId={ownUserId}
+                      canRedactOwn={Boolean(snapshot.capabilities.canRedactOwn)}
+                      canRedactOther={Boolean(snapshot.capabilities.canRedactOther)}
+                      requestClose={() => setReactionViewer(null)}
+                    />
+                  ) : null}
+                </Modal>
+              </FocusTrap>
+            </OverlayCenter>
+          </Overlay>
+          {filePreview ? (
+            <NativeTimelineMarkdownPreview
+              target={filePreview}
+              onClose={() => setFilePreview(undefined)}
+              onActionError={showActionError}
+            />
+          ) : null}
+          {mediaViewer ? (
+            <NativeTimelineMediaViewer
+              target={mediaViewer}
+              onClose={() => setMediaViewer(undefined)}
+            />
+          ) : null}
+        </Box>
+      </ReactionSenderNamesContext.Provider>
     </NativeThreadDisplayProvider>
   );
 }
