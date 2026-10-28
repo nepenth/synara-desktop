@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Reactions (desktop and iOS): you can now see who reacted. On desktop, hovering a reaction shows "Alice, Bob and 3 others reacted with 👍", and right-clicking it lists everyone by display name and Matrix ID. On iOS, long-press a reaction, or choose "View Reactions" in the message menu, for a list of who reacted with each emoji. Screen readers name the people on each reaction.
+
 ## [2.6.0] - 2026-10-28
 
 - Sign-in (desktop and iOS): signing in with a plain username now works when the server address is a proxy whose name differs from the homeserver's own name, for example an IPv4 proxy `matrix-v4.example.org` in front of `matrix.example.org`. Synara used to turn `pete` into `@pete:matrix-v4.example.org`, which the server rejects. It now sends the username as typed, as Element does, and uses the Matrix ID the server returns. On desktop, a full Matrix ID whose server can't be reached (for example an IPv6-only server reached from an IPv4 network) now signs in through the server chosen on the sign-in screen instead of failing with "Failed to find your Matrix ID server."
