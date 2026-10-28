@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Windows (desktop): signing out and removing local data no longer fails on Windows when the store's database files are still closing. The wipe waits up to five seconds for Windows to release them.
+- Windows (desktop): the release workflow installs the Windows setup, launches Synara and requires the sign-in screen to render before anything is published. The Windows workflow can run the same check on any published release (`release_tag`) in a few minutes.
+- Sign-in page: lists Windows among the native platforms.
+
 ## [2.6.0] - 2026-10-28
 
 - Sign-in (desktop and iOS): signing in with a plain username now works when the server address is a proxy whose name differs from the homeserver's own name, for example an IPv4 proxy `matrix-v4.example.org` in front of `matrix.example.org`. Synara used to turn `pete` into `@pete:matrix-v4.example.org`, which the server rejects. It now sends the username as typed, as Element does, and uses the Matrix ID the server returns. On desktop, a full Matrix ID whose server can't be reached (for example an IPv6-only server reached from an IPv4 network) now signs in through the server chosen on the sign-in screen instead of failing with "Failed to find your Matrix ID server."
