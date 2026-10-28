@@ -19,7 +19,7 @@ Status: draft App Store privacy input for internal TestFlight preparation. Exter
 
 ## Privacy Manifest
 
-`Synara/Resources/PrivacyInfo.xcprivacy` declares no tracking, no tracking domains, no required-reason API use, and no Synara-collected data categories for the current app target. App Store privacy labels still need human/legal review because users exchange Matrix account and message data with their chosen homeserver.
+`Synara/Resources/PrivacyInfo.xcprivacy` (app) and `SynaraNotificationService/Resources/PrivacyInfo.xcprivacy` (notification service) declare no tracking, no tracking domains and no Synara-collected data categories. Both declare the required-reason APIs they use: UserDefaults (`CA92.1` for the target's own defaults, `1C8F.1` for settings shared through the app group), system boot time (`35F9.1`, elapsed-time measurement by `systemUptime` and the Rust core's monotonic clock) and file timestamps (`C617.1`, the Rust core and SQLite reading their own store files in the app and app group containers). App Store privacy labels still need human/legal review because users exchange Matrix account and message data with their chosen homeserver.
 
 ## Release Gates
 
