@@ -6699,6 +6699,7 @@ dependencies = [
  "tokio",
  "url",
  "webkit2gtk",
+ "wiremock",
  "zbus 5.19.0",
  "zeroize",
 ]

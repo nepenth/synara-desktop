@@ -46,6 +46,24 @@ pub async fn existing_sqlite_crypto_device_id(
     Ok(account.map(|account| account.device_id().to_string()))
 }
 
+/// Whether this account has a local store from an earlier sign-in.
+///
+/// Read-only: it derives the layout path without creating or migrating it.
+/// An account root that cannot be probed counts as existing, so the caller's
+/// store open reports why.
+pub fn has_account_store(
+    app_data_root: &Path,
+    identity: &crate::app::store::AccountIdentity,
+) -> bool {
+    use crate::app::store::{StoreKeyCreationPolicy, StorePaths};
+    StorePaths::derive(app_data_root, identity).map_or(true, |paths| {
+        !matches!(
+            paths.key_creation_policy(),
+            Ok(StoreKeyCreationPolicy::AllowForFreshStore)
+        )
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

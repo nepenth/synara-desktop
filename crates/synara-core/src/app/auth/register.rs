@@ -30,7 +30,8 @@ use super::reset_password::{
     map_password_reset_http_error, password_reset_ephemeral_user_id, PasswordEmailTokenResult,
 };
 
-/// Host-only secrets from a completed registration (never serialized to IPC).
+/// Host-only secrets from a completed registration or a detached password
+/// login (never serialized to IPC).
 #[derive(Debug)]
 pub struct RegisterCompleteSecrets {
     pub user_id: String,

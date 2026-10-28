@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Sign-in (desktop and iOS): signing in with a plain username now works when the server address is a proxy whose name differs from the homeserver's own name, for example an IPv4 proxy `matrix-v4.example.org` in front of `matrix.example.org`. Synara used to turn `pete` into `@pete:matrix-v4.example.org`, which the server rejects. It now sends the username as typed, as Element does, and uses the Matrix ID the server returns. On desktop, a full Matrix ID whose server can't be reached (for example an IPv6-only server reached from an IPv4 network) now signs in through the server chosen on the sign-in screen instead of failing with "Failed to find your Matrix ID server."
+
 ## [2.5.0] - 2026-10-27
 
 - GIFs (iOS): GIF links from Klipy and GIPHY play in the conversation, and GIF attachments animate (Reduce Motion shows their first frame). The Attach sheet has a GIF option, and typing `/gif` or `/gif high five` opens a Klipy picker with trending GIFs, search and more GIFs as you scroll. As on desktop, a GIF is sent as its link, never re-hosted. Settings → GIFs & Link Previews has "GIF Search", "Play GIF Links Inline" and "Show X Posts". TestFlight builds take the Klipy key from `SYNARA_KLIPY_API_KEY`; builds without it don't offer GIF search.
