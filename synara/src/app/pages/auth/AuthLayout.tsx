@@ -97,26 +97,6 @@ function AuthBrand() {
         <h1 className={css.AuthWordmark}>Synara</h1>
       </div>
       <p className={css.AuthTagline}>Secure Matrix messaging for you and your agents.</p>
-      <ul className={css.AuthFeatures}>
-        <li className={css.AuthFeature}>
-          <span className={css.AuthFeatureIcon}>
-            <Icon size="100" src={Icons.ShieldLock} />
-          </span>
-          End-to-end encrypted rooms and direct messages
-        </li>
-        <li className={css.AuthFeature}>
-          <span className={css.AuthFeatureIcon}>
-            <Icon size="100" src={Icons.Terminal} />
-          </span>
-          Agent approvals you can act on from anywhere
-        </li>
-        <li className={css.AuthFeature}>
-          <span className={css.AuthFeatureIcon}>
-            <Icon size="100" src={Icons.Monitor} />
-          </span>
-          Native on macOS, Windows, Linux and iOS
-        </li>
-      </ul>
     </section>
   );
 }
@@ -174,8 +154,6 @@ export function AuthLayout() {
   return (
     <Scroll variant="Background" visibility="Hover" size="300" hideTrack>
       <div className={css.AuthLayout}>
-        <div className={css.AuthAurora} aria-hidden />
-        <div className={css.AuthGrid} aria-hidden />
         <main className={css.AuthStage}>
           <AuthBrand />
           <div className={css.AuthCard}>
