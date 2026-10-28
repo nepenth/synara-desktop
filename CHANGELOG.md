@@ -6,6 +6,7 @@
 
 - Windows (desktop, not released): the desktop app now builds and passes its Rust and renderer tests on Windows, stores secrets in Windows Credential Manager, shows an unread dot on the taskbar button, and serves its packaged pages and media from Windows' `http://tauri.localhost` origin. The Windows workflow runs weekly and on demand and can build an unsigned test installer. Windows isn't a supported or published platform yet: there are no signed builds, updater or toasts (`docs/windows-support-spike.md`).
 - Privacy manifests (iOS): the app's privacy manifest now declares the required-reason APIs Synara uses (UserDefaults, system boot time and file timestamps), and the notification service has its own manifest. Nothing is tracked or collected; this only states why those APIs are read.
+- Dependencies: update pulldown-cmark to 0.13.5 for RUSTSEC-2026-0414.
 - Tests: a Rust runtime test no longer fails at random when Tokio reuses a freed worker thread for blocking work.
 - Repository: stale branches, stashes and worktrees whose work was merged, superseded or abandoned have been removed.
 
