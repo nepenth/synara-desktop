@@ -24,7 +24,7 @@ export function About({ requestClose }: AboutProps) {
         gap="400"
         style={{ textAlign: 'center', paddingBlock: config.space.S400 }}
       >
-        <SynaraMark size={88} />
+        <SynaraMark size={88} decorative />
         <Box direction="Column" alignItems="Center" gap="300">
           <Box direction="Column" alignItems="Center" gap="100">
             <Text size="H3">Synara</Text>

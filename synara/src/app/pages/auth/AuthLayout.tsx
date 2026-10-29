@@ -92,7 +92,7 @@ function AuthBrand() {
     <section className={css.AuthBrand} aria-label="Synara">
       <div className={css.AuthLockup}>
         <div className={css.AuthBrandMark}>
-          <SynaraMark />
+          <SynaraMark decorative />
         </div>
         <h1 className={css.AuthWordmark}>Synara</h1>
       </div>

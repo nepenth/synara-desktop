@@ -43,7 +43,7 @@ export function WelcomePage() {
           style={{ width: '100%', maxWidth: toRem(360), textAlign: 'center' }}
         >
           <Box direction="Column" alignItems="Center" gap="400">
-            <SynaraMark size={88} />
+            <SynaraMark size={88} decorative />
             <Box direction="Column" alignItems="Center" gap="100">
               <Text as="h1" size="H3">
                 Synara

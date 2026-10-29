@@ -26,7 +26,9 @@ const formWasRemoved = (page: Page) =>
 
 test('renders the brand panel and the sign-in form', async ({ page }) => {
   await open(page);
-  await expect(page.getByRole('img', { name: 'Synara' })).toBeVisible();
+  await expect(page.locator('[data-synara-mark]')).toBeVisible();
+  // The visible wordmark names the brand; the mark beside it stays silent.
+  await expect(page.locator('[data-synara-mark]')).toHaveAttribute('aria-hidden', 'true');
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign in' })).toBeEnabled();
 });
@@ -79,7 +81,7 @@ test('the sign-in screen has no decorative motion', async ({ page }) => {
 
 test('the mark sits centered over the wordmark', async ({ page }) => {
   await open(page);
-  const mark = await page.getByRole('img', { name: 'Synara' }).boundingBox();
+  const mark = await page.locator('[data-synara-mark]').boundingBox();
   const word = await page.getByRole('heading', { name: 'Synara' }).boundingBox();
   expect(mark && word).toBeTruthy();
   expect(mark!.y + mark!.height).toBeLessThanOrEqual(word!.y);

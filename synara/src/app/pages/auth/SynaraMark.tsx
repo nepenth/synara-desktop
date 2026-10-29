@@ -16,8 +16,12 @@ const FEATHERS = [
 ];
 const TAIL = 'm115 164 30 66-10-61Z';
 
-/** The Synara mark: blue linework with its soft glow, drawn still. */
-export function SynaraMark({ size }: { size?: number }) {
+/**
+ * The Synara mark: blue linework with its soft glow, drawn still. Pass
+ * `decorative` where a visible "Synara" name sits beside it, so screen readers
+ * hear the name once.
+ */
+export function SynaraMark({ size, decorative = false }: { size?: number; decorative?: boolean }) {
   const id = useId().replace(/:/g, '');
   const line = `${id}-line`;
   const wing = `${id}-wing`;
@@ -30,8 +34,8 @@ export function SynaraMark({ size }: { size?: number }) {
       height={size ?? '100%'}
       // Square box centered on the drawn geometry (x 5–240, y 27–232).
       viewBox="-3 4 250 250"
-      role="img"
-      aria-label="Synara"
+      data-synara-mark=""
+      {...(decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': 'Synara' })}
     >
       <defs>
         <linearGradient id={line} x1="40" y1="40" x2="150" y2="230" gradientUnits="userSpaceOnUse">
