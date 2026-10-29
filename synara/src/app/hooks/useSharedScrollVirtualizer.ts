@@ -10,7 +10,9 @@ export const useSharedScrollVirtualizer = (
   scrollRef: RefObject<HTMLDivElement | null>,
   count: number,
   getItemKey: (index: number) => string,
-  overscan = 10
+  overscan = 10,
+  /** First-paint row height before rows are measured; room rows are 32px. */
+  estimatedRowHeight = 40
 ) => {
   const [listElement, listRef] = useState<HTMLDivElement | null>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
@@ -46,7 +48,7 @@ export const useSharedScrollVirtualizer = (
     count,
     getScrollElement: () => scrollRef.current,
     getItemKey,
-    estimateSize: () => 40,
+    estimateSize: () => estimatedRowHeight,
     overscan,
     scrollMargin,
   });

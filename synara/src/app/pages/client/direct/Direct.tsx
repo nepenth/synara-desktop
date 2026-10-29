@@ -211,7 +211,10 @@ export function Direct() {
   const { virtualizer, listRef, scrollMargin } = useSharedScrollVirtualizer(
     scrollRef,
     sortedDirects.length,
-    getRoomKey
+    getRoomKey,
+    10,
+    // Room rows (`RoomSurface`) are 32px.
+    32
   );
 
   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
