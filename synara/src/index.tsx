@@ -2,7 +2,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { enableMapSet } from 'immer';
-import '@fontsource-variable/inter';
 import 'folds/dist/style.css';
 import { configClass, varsClass } from 'folds';
 
@@ -17,8 +16,10 @@ import App from './app/pages/App';
 import './app/i18n';
 import { platformSessionStore } from './app/platform';
 import { initializeSessionBootstrap } from './app/state/sessionBootstrap';
+import { applyPlatformFontFlag } from './app/utils/user-agent';
 
 document.body.classList.add(configClass, varsClass);
+applyPlatformFontFlag(document.documentElement);
 
 const mountApp = () => {
   const rootContainer = document.getElementById('root');

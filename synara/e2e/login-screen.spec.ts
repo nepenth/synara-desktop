@@ -26,7 +26,9 @@ const formWasRemoved = (page: Page) =>
 
 test('renders the brand panel and the sign-in form', async ({ page }) => {
   await open(page);
-  await expect(page.getByRole('img', { name: 'Synara' })).toBeVisible();
+  await expect(page.locator('[data-synara-mark]')).toBeVisible();
+  // The visible wordmark names the brand; the mark beside it stays silent.
+  await expect(page.locator('[data-synara-mark]')).toHaveAttribute('aria-hidden', 'true');
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign in' })).toBeEnabled();
 });
@@ -69,8 +71,7 @@ test('an unreachable homeserver shows an inline error without dropping the form'
   await expect(page.locator('input[name="usernameInput"]')).toHaveValue('alice');
 });
 
-test('reduced motion stops the logo and background animation', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' });
+test('the sign-in screen has no decorative motion', async ({ page }) => {
   await open(page);
   const running = await page.evaluate(
     () => document.getAnimations().filter((animation) => animation.playState === 'running').length
@@ -78,25 +79,12 @@ test('reduced motion stops the logo and background animation', async ({ page }) 
   expect(running).toBe(0);
 });
 
-test('the background grid stays still and the mark sits centered over the wordmark', async ({
-  page,
-}) => {
+test('the mark sits centered over the wordmark', async ({ page }) => {
   await open(page);
-  const backgroundMotion = await page.evaluate(
-    () =>
-      document
-        .getAnimations()
-        .filter((animation) =>
-          (animation.effect as KeyframeEffect | null)
-            ?.getKeyframes()
-            .some((frame) => 'backgroundPosition' in frame)
-        ).length
-  );
-  expect(backgroundMotion).toBe(0);
-
-  const mark = await page.getByRole('img', { name: 'Synara' }).boundingBox();
+  const mark = await page.locator('[data-synara-mark]').boundingBox();
   const word = await page.getByRole('heading', { name: 'Synara' }).boundingBox();
   expect(mark && word).toBeTruthy();
+  expect(mark!.y + mark!.height).toBeLessThanOrEqual(word!.y);
   const markCenter = mark!.x + mark!.width / 2;
   const wordCenter = word!.x + word!.width / 2;
   expect(Math.abs(markCenter - wordCenter)).toBeLessThan(2);

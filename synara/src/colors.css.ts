@@ -222,16 +222,16 @@ const darkThemeData = {
   },
 
   Primary: {
-    Main: '#BDB6EC',
-    MainHover: '#B2AAE9',
-    MainActive: '#ADA3E8',
-    MainLine: '#A79DE6',
-    OnMain: '#2C2843',
-    Container: '#413C65',
-    ContainerHover: '#494370',
-    ContainerActive: '#50497B',
-    ContainerLine: '#575086',
-    OnContainer: '#E3E1F7',
+    Main: '#8DB4F5',
+    MainHover: '#7FA9F2',
+    MainActive: '#77A3F1',
+    MainLine: '#6E9CEF',
+    OnMain: '#0F2547',
+    Container: '#1F3A63',
+    ContainerHover: '#23426F',
+    ContainerActive: '#284A7B',
+    ContainerLine: '#2D5287',
+    OnContainer: '#DCE7FB',
   },
 
   Secondary: {

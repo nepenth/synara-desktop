@@ -843,7 +843,7 @@ export function AppearancePage({ requestClose }: AppearancePageProps) {
   return (
     <SettingsPage
       title="Appearance"
-      description="Theme, colors, density and text size for this device."
+      description="These settings apply to this device only."
       requestClose={requestClose}
     >
       <Appearance />

@@ -16,6 +16,9 @@ matrix-rust-sdk core; see docs/matrix-rust-sdk/ for the full migration record.
 Current notable third-party components retain their copyrights and licenses:
   - matrix-rust-sdk — dual Apache-2.0 / MIT
   - folds — UI component library (Cinny authors)
+  - Inter typeface (latin and latin-ext subsets, synara/public/font/) — SIL Open
+    Font License 1.1, Copyright 2016 The Inter Project Authors; see
+    synara/public/font/Inter-OFL.txt
 
 Historical dependencies and derived portions retain their applicable notices
 and licenses, including matrix-js-sdk under Apache-2.0.

@@ -198,8 +198,13 @@ test('desktop rich-text renderers consume semantic roles instead of the chat can
     assert.match(source, /--synara-rich-text-code-block-background/);
     assert.match(source, /--synara-rich-text-spoiler-background/);
     assert.match(source, /--synara-rich-text-table-header/);
-    assert.match(source, /Liberation Mono/);
+    assert.match(source, /fontFamily: 'var\(--font-mono\)'/);
   }
+  // The shared mono stack keeps a Linux fallback.
+  assert.match(
+    readFileSync(join(srcRoot, 'index.css'), 'utf8'),
+    /--font-mono:[^;]*'Liberation Mono'/
+  );
   assert.doesNotMatch(
     nativeCss,
     /FormattedBody} :not\(pre\) > code[\s\S]{0,300}background: color\.SurfaceVariant\.Container/

@@ -367,11 +367,7 @@ type NotificationsProps = {
 };
 export function Notifications({ requestClose }: NotificationsProps) {
   return (
-    <SettingsPage
-      title="Notifications"
-      description="What notifies you, where it appears and which sounds play."
-      requestClose={requestClose}
-    >
+    <SettingsPage title="Notifications" requestClose={requestClose}>
       <SystemNotification />
       <AgentNotifications />
       <NativePushRulesEditor />

@@ -6,7 +6,6 @@ import { createStore, Provider } from 'jotai';
 import { MemoryRouter, Routes, Route, useLocation, useParams } from 'react-router-dom';
 import { configClass, varsClass } from 'folds';
 import 'folds/dist/style.css';
-import '@fontsource-variable/inter';
 import '../../src/index.css';
 import { darkTheme } from '../../src/colors.css';
 import { Approvals } from '../../src/app/features/approvals/Approvals';

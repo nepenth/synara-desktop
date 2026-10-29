@@ -54,8 +54,7 @@ const BaseCode = style({
   },
 });
 const CodeFont = style({
-  fontFamily:
-    'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", "Noto Sans Mono", monospace',
+  fontFamily: 'var(--font-mono)',
   fontSize: '0.94em',
 });
 

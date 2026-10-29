@@ -92,7 +92,7 @@ function AuthBrand() {
     <section className={css.AuthBrand} aria-label="Synara">
       <div className={css.AuthLockup}>
         <div className={css.AuthBrandMark}>
-          <SynaraMark />
+          <SynaraMark decorative />
         </div>
         <h1 className={css.AuthWordmark}>Synara</h1>
       </div>
@@ -174,8 +174,7 @@ export function AuthLayout() {
   return (
     <Scroll variant="Background" visibility="Hover" size="300" hideTrack>
       <div className={css.AuthLayout}>
-        <div className={css.AuthAurora} aria-hidden />
-        <div className={css.AuthGrid} aria-hidden />
+        <div className={css.AuthField} aria-hidden />
         <main className={css.AuthStage}>
           <AuthBrand />
           <div className={css.AuthCard}>
