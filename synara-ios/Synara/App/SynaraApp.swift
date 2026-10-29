@@ -914,6 +914,8 @@ private extension AppEnvironment {
             ]))
             : processEnvironment["SYNARA_UI_TEST_LARGE_ROOMS"] == "1"
             ? MockRoomListService(state: .loaded(RoomListFixtures.large()))
+            : processEnvironment["SYNARA_UI_TEST_REVIEW_ROOMS"] == "1"
+            ? MockRoomListService(state: .loaded(RoomListFixtures.review()))
             : MockRoomListService()
         let later = processEnvironment["SYNARA_UI_TEST_LATER_ITEMS"] == "1"
             ? MockLaterService(items: uiTestLaterItems())
