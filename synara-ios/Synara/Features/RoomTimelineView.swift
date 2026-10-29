@@ -7212,7 +7212,7 @@ private struct TimelineRow: View {
                                 .frame(width: 28, height: 28)
                                 .background(SynaraColor.elevatedSurface)
                                 .clipShape(Circle())
-                                .synaraDepth(.raised, shape: Circle())
+                                .synaraDepth(.layered, shape: Circle())
                                 .frame(width: 44, height: 44)
                                 .contentShape(Rectangle())
                         }
@@ -8640,7 +8640,7 @@ private struct ReactionPill: View {
         .foregroundStyle(isSelected ? SynaraColor.accentText : SynaraColor.primaryText)
         .background(isSelected ? SynaraColor.accent.opacity(0.14) : SynaraColor.elevatedSurface)
         .clipShape(Capsule())
-        .synaraDepth(.raised, shape: Capsule())
+        .synaraDepth(.layered, shape: Capsule(), boundaryColor: isSelected ? SynaraColor.accent : SynaraColor.separator)
         .synaraReactionPop(animationIndex: animationIndex, animationKey: reactionAnimationKey)
     }
 }
@@ -9488,7 +9488,7 @@ private struct ComposerView: View {
                 .background(SynaraColor.secondarySurface)
                 .foregroundStyle(SynaraColor.secondaryText)
                 .clipShape(Circle())
-                .synaraDepth(.raised, shape: Circle())
+                .synaraDepth(.layered, shape: Circle())
                 .frame(width: 44, height: 44)
         }
         .buttonStyle(SynaraTactileButtonStyle())
@@ -9511,7 +9511,6 @@ private struct ComposerView: View {
                 .foregroundStyle(isFormattingBarVisible ? SynaraColor.accent : SynaraColor.secondaryText)
                 .background(isFormattingBarVisible ? SynaraColor.accent.opacity(0.12) : Color.clear)
                 .clipShape(Circle())
-                .synaraDepth(isFormattingBarVisible ? .raised : .content, shape: Circle())
                 .frame(width: 44, height: 44)
         }
         .buttonStyle(SynaraTactileButtonStyle())
@@ -9531,7 +9530,6 @@ private struct ComposerView: View {
                     .background(sendButtonTint)
                     .foregroundStyle(Color.white)
                     .clipShape(Circle())
-                    .synaraDepth(.raised, shape: Circle(), boundaryColor: SynaraColor.accent)
                     .frame(width: 44, height: 44)
             }
             .buttonStyle(SynaraTactileButtonStyle())
@@ -9558,7 +9556,7 @@ private struct ComposerView: View {
             RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
                 .fill(SynaraColor.surface)
         }
-        .synaraDepth(.raised, cornerRadius: SynaraRadius.composer)
+        .synaraDepth(.layered, cornerRadius: SynaraRadius.composer)
     }
 
     private var canSubmit: Bool {
@@ -9858,13 +9856,6 @@ private struct ComposerFormattingBar: View {
                             .clipShape(
                                 RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
                             )
-                            .synaraDepth(
-                                .raised,
-                                shape: RoundedRectangle(
-                                    cornerRadius: SynaraRadius.control,
-                                    style: .continuous
-                                )
-                            )
                             .frame(width: 44, height: 44)
                     }
                     .buttonStyle(SynaraTactileButtonStyle())
@@ -10116,9 +10107,7 @@ private struct AttachmentOptionLabel: View {
         HStack(spacing: SynaraSpacing.medium) {
             icon
                 .frame(width: 30, height: 30)
-                .background(option.tint.opacity(0.14))
-                .foregroundStyle(option.tint)
-                .clipShape(Circle())
+                .foregroundStyle(SynaraColor.secondaryText)
 
             Text(option.title)
                 .font(SynaraTypography.supporting.weight(.semibold))

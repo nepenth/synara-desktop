@@ -1623,35 +1623,6 @@ struct SynaraLoadingState: View {
     }
 }
 
-struct SynaraShimmerModifier: ViewModifier {
-    @State private var phase: CGFloat = -1
-
-    func body(content: Content) -> some View {
-        content
-            .overlay {
-                GeometryReader { geometry in
-                    LinearGradient(
-                        colors: [
-                            .clear,
-                            SynaraColor.elevatedSurface.opacity(0.75),
-                            .clear
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: geometry.size.width * 1.8)
-                    .offset(x: geometry.size.width * phase)
-                }
-                .mask(content)
-            }
-            .onAppear {
-                withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
-                    phase = 1.8
-                }
-            }
-    }
-}
-
 struct SynaraSkeletonBlock: View {
     var width: CGFloat? = nil
     var height: CGFloat
@@ -1661,7 +1632,6 @@ struct SynaraSkeletonBlock: View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(SynaraColor.mutedControl.opacity(0.65))
             .frame(width: width, height: height)
-            .modifier(SynaraShimmerModifier())
             .accessibilityHidden(true)
     }
 }
