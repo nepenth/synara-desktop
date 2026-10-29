@@ -857,6 +857,8 @@ private extension AppEnvironment {
         let timeline: TimelineServicing
         if processEnvironment["SYNARA_UI_TEST_AGENT_CARD"] == "1" {
             timeline = MockTimelineService(events: uiTestAgentCardEvents())
+        } else if processEnvironment["SYNARA_UI_TEST_AGENT_APPROVAL_PROMPT"] == "decided" {
+            timeline = MockTimelineService(items: uiTestDecidedAgentApprovalPromptItems())
         } else if processEnvironment["SYNARA_UI_TEST_AGENT_APPROVAL_PROMPT"] == "1" {
             timeline = MockTimelineService(events: uiTestAgentApprovalPromptEvents())
         } else if processEnvironment["SYNARA_UI_TEST_TIMESTAMP_GESTURE"] == "1" {
@@ -1192,6 +1194,18 @@ private extension AppEnvironment {
                 isAgentApproval: true
             )
         ]
+    }
+
+    /// The same prompt after you approved it once, for visual review.
+    static func uiTestDecidedAgentApprovalPromptItems() -> [TimelineItem] {
+        uiTestAgentApprovalPromptEvents().map { event in
+            var item = TimelineMapper.map(event)
+            item.agentApprovalDecision = SynaraAgentApprovalCardDecision(
+                coreDecision: "approve_once",
+                decidedAtMilliseconds: 1_770_000_300_000
+            )
+            return item
+        }
     }
 
     static func uiTestAgentApprovalPromptBody() -> String {
