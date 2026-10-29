@@ -1497,25 +1497,6 @@ struct SynaraActionIconButton: View {
     }
 }
 
-struct SynaraIconTile: View {
-    let title: String
-    let systemImage: String
-    let tint: Color
-    var size: CGFloat = 46
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: SynaraRadius.card)
-                .fill(tint)
-            Image(systemName: systemImage)
-                .font(.system(size: size * 0.44, weight: .semibold))
-                .foregroundStyle(.white)
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
-    }
-}
-
 struct SynaraProductHeader: View {
     let title: String
     let subtitle: String
@@ -1547,7 +1528,7 @@ struct SynaraCardModifier: ViewModifier {
     var fill: Color = SynaraColor.secondarySurface
     var opaqueFill: Color = SynaraColor.secondarySurface
     var stroke: Color = SynaraColor.separator
-    var depth: SynaraDepthLevel = .raised
+    var depth: SynaraDepthLevel = .layered
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
@@ -1564,7 +1545,7 @@ extension View {
         fill: Color = SynaraColor.secondarySurface,
         opaqueFill: Color = SynaraColor.secondarySurface,
         stroke: Color = SynaraColor.separator,
-        depth: SynaraDepthLevel = .raised
+        depth: SynaraDepthLevel = .layered
     ) -> some View {
         modifier(
             SynaraCardModifier(

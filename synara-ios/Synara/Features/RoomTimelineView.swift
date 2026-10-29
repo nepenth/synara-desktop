@@ -7971,12 +7971,11 @@ private struct MediaAttachmentCard: View {
     @ViewBuilder
     private var fileAttachmentCard: some View {
         HStack(spacing: SynaraSpacing.small) {
-            SynaraIconTile(
-                title: resource.safeDescription,
-                systemImage: resource.safeDescription.localizedCaseInsensitiveContains(".pdf") ? "doc.richtext.fill" : "doc.text.fill",
-                tint: resource.safeDescription.localizedCaseInsensitiveContains(".pdf") ? SynaraColor.critical : SynaraColor.accent,
-                size: 30
-            )
+            Image(systemName: resource.safeDescription.localizedCaseInsensitiveContains(".pdf") ? "doc.richtext" : "doc.text")
+                .font(.system(size: 22, weight: .regular))
+                .foregroundStyle(SynaraColor.secondaryText)
+                .frame(width: 30, height: 30)
+                .accessibilityHidden(true)
 
             mediaMetadataRow(showDownloadIcon: true)
 
@@ -9894,7 +9893,7 @@ private struct AttachmentOptionsSheet: View {
     private static let gifOption = AttachmentOption(
         identifier: "GIF",
         title: String(localized: "GIF"),
-        systemImage: "sparkles",
+        systemImage: "play.rectangle",
         tint: SynaraColor.accent,
         kind: .gif
     )
@@ -10196,7 +10195,7 @@ private struct ComposerRelationBanner: View {
                 .accessibilityLabel(target.kind == .edit ? "Cancel editing" : "Cancel reply")
         }
         .padding(SynaraSpacing.small)
-        .synaraCard(fill: SynaraColor.accent.opacity(0.08), stroke: SynaraColor.accent)
+        .synaraCard(fill: SynaraColor.secondarySurface)
         .accessibilityIdentifier(target.kind == .edit ? "ComposerEditBanner" : "ComposerReplyBanner")
     }
 }
