@@ -845,6 +845,9 @@
     "Approvals" : {
 
     },
+    "Approve always" : {
+
+    },
     "Approve always permanently trusts this command pattern. Confirm only if you intend to allow it without future prompts." : {
 
     },

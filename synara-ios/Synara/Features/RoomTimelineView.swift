@@ -7494,7 +7494,7 @@ private struct TimelineRow: View {
         } else if let approvalPrompt {
             SynaraMessageBubble(
                 alignment: bubbleAlignment,
-                variant: .agent,
+                variant: .critical,
                 depth: .critical,
                 isGrouped: isGroupedWithPrevious,
                 showsBackground: true,
@@ -8791,21 +8791,13 @@ private struct AgentApprovalPromptTimelineCard: View {
     /// This account's own terminal reaction, projected by Core.
     let decision: SynaraAgentApprovalCardDecision?
     let onReaction: (String) -> Void
-    @State private var isCommandExpanded = true
     @State private var confirmApproveAlways = false
-
-    private var actionColumns: [GridItem] {
-        Array(
-            repeating: GridItem(.flexible(minimum: 68), spacing: SynaraSpacing.small),
-            count: SynaraAgentApprovalPromptReaction.allCases.count
-        )
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.medium) {
             HStack(alignment: .top, spacing: SynaraSpacing.small) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 19, weight: .semibold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(SynaraColor.critical)
                     .accessibilityHidden(true)
 
@@ -8823,88 +8815,27 @@ private struct AgentApprovalPromptTimelineCard: View {
             }
 
             if let command = prompt.command {
-                DisclosureGroup(isExpanded: $isCommandExpanded) {
-                    ScrollView(.vertical, showsIndicators: true) {
-                        Text(command)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(SynaraColor.primaryText)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.top, SynaraSpacing.xSmall)
-                    }
-                    .frame(maxHeight: 160)
-                } label: {
-                    Text(
-                        prompt.commandPreview.map { String(localized: "Command: \($0)") }
-                            ?? String(localized: "Review command")
-                    )
-                        .font(SynaraTypography.messageMeta.weight(.medium))
-                        .foregroundStyle(SynaraColor.primaryText)
-                        .lineLimit(2)
-                }
-                .padding(SynaraSpacing.small)
-                .synaraAccessibleSurfaceFill(
-                    SynaraColor.surface.opacity(0.72),
-                    opaqueFill: SynaraColor.surface
-                )
-                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
-                .synaraDepth(
-                    .raised,
-                    cornerRadius: SynaraRadius.control,
-                    boundaryColor: SynaraColor.critical
-                )
-            }
-
-            if prompt.command == nil, let sourceContext = prompt.sourceContext, sourceContext.isEmpty == false {
-                VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-                    Text("Full approval request")
-                        .font(SynaraTypography.messageMeta.weight(.medium))
-                        .foregroundStyle(SynaraColor.primaryText)
-                    ScrollView(.vertical, showsIndicators: true) {
-                        Text(sourceContext)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(SynaraColor.primaryText)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(maxHeight: 160)
-                }
-                .padding(SynaraSpacing.small)
-                .synaraAccessibleSurfaceFill(
-                    SynaraColor.surface.opacity(0.72),
-                    opaqueFill: SynaraColor.surface
-                )
-                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
-                .synaraDepth(.raised, cornerRadius: SynaraRadius.control)
+                sourceBlock(command)
+            } else if let sourceContext = prompt.sourceContext, sourceContext.isEmpty == false {
+                sourceBlock(sourceContext)
             }
 
             if let decision {
-                HStack(alignment: .top, spacing: SynaraSpacing.small) {
-                    Text(decision.reaction.reactionKey)
-                        .font(.system(size: 21, weight: .semibold))
+                HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
+                    Image(systemName: decision.reaction.systemImage)
+                        .font(SynaraTypography.emphasis)
+                        .foregroundStyle(decision.reaction.tint)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(decision.title)
                             .font(SynaraTypography.emphasis)
-                            .foregroundStyle(decision.reaction.tint)
+                            .foregroundStyle(SynaraColor.primaryText)
                         Text(decision.detail())
                             .font(SynaraTypography.messageMeta)
                             .foregroundStyle(SynaraColor.secondaryText)
                     }
                     Spacer(minLength: 0)
                 }
-                .padding(SynaraSpacing.small)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .synaraAccessibleSurfaceFill(
-                    decision.reaction.tint.opacity(0.10),
-                    opaqueFill: SynaraColor.secondarySurface
-                )
-                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
-                .synaraDepth(
-                    .raised,
-                    cornerRadius: SynaraRadius.control,
-                    boundaryColor: decision.reaction.tint
-                )
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("AgentApprovalPromptDecision-\(eventID)")
             } else {
@@ -8927,60 +8858,17 @@ private struct AgentApprovalPromptTimelineCard: View {
                                 confirmApproveAlways = false
                             }
                             .buttonStyle(.bordered)
+                            .tint(SynaraColor.secondaryText)
                         }
                     }
-                    .padding(SynaraSpacing.small)
-                    .synaraAccessibleSurfaceFill(
-                        SynaraColor.critical.opacity(0.08),
-                        opaqueFill: SynaraColor.secondarySurface
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
-                    .synaraDepth(
-                        .floating,
-                        cornerRadius: SynaraRadius.control,
-                        boundaryColor: SynaraColor.critical
-                    )
                 }
 
-                LazyVGrid(columns: actionColumns, spacing: SynaraSpacing.small) {
-                    ForEach(SynaraAgentApprovalPromptReaction.allCases) { action in
-                        if confirmApproveAlways, action == .approveAlways {
-                            EmptyView()
-                        } else {
-                            Button {
-                                if action == .approveAlways {
-                                    confirmApproveAlways = true
-                                } else {
-                                    confirmApproveAlways = false
-                                    onReaction(action.actionIdentifier)
-                                }
-                            } label: {
-                                VStack(spacing: SynaraSpacing.xSmall) {
-                                    Text(action.reactionKey)
-                                        .font(.system(size: 21, weight: .semibold))
-                                    Text(action.title)
-                                        .font(SynaraTypography.chipLabel.weight(.semibold))
-                                        .multilineTextAlignment(.center)
-                                        .lineLimit(2)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .frame(minHeight: 58)
-                                .foregroundStyle(action.tint)
-                                .synaraAccessibleSurfaceFill(
-                                    action.tint.opacity(action == .deny ? 0.08 : 0.10),
-                                    opaqueFill: SynaraColor.secondarySurface
-                                )
-                                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
-                                .synaraDepth(
-                                    .raised,
-                                    cornerRadius: SynaraRadius.control,
-                                    boundaryColor: action.tint
-                                )
-                            }
-                            .buttonStyle(SynaraTactileButtonStyle())
-                            .accessibilityLabel("\(action.title) \(action.reactionKey)")
-                            .accessibilityIdentifier("AgentApprovalPromptReaction-\(action.accessibilityIdentifierSuffix)-\(eventID)")
-                        }
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: SynaraSpacing.small) {
+                        actionButtons
+                    }
+                    VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+                        actionButtons
                     }
                 }
 
@@ -8989,6 +8877,67 @@ private struct AgentApprovalPromptTimelineCard: View {
                     .foregroundStyle(SynaraColor.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    /// The command (or the full request when there is no command) shown
+    /// once, as plain selectable text on a quiet inset.
+    private func sourceBlock(_ text: String) -> some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            Text(text)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(SynaraColor.primaryText)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxHeight: 160)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(SynaraSpacing.small)
+        .synaraAccessibleSurfaceFill(
+            SynaraColor.mutedControl.opacity(0.45),
+            opaqueFill: SynaraColor.surface
+        )
+        .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+        .accessibilityIdentifier("AgentApprovalPromptSource-\(eventID)")
+    }
+
+    @ViewBuilder
+    private var actionButtons: some View {
+        ForEach(SynaraAgentApprovalPromptReaction.allCases) { action in
+            if confirmApproveAlways, action == .approveAlways {
+                EmptyView()
+            } else {
+                actionButton(action)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func actionButton(_ action: SynaraAgentApprovalPromptReaction) -> some View {
+        let button = Button {
+            if action == .approveAlways {
+                confirmApproveAlways = true
+            } else {
+                confirmApproveAlways = false
+                onReaction(action.actionIdentifier)
+            }
+        } label: {
+            Label(action.title, systemImage: action.systemImage)
+                .labelStyle(.titleAndIcon)
+                .font(SynaraTypography.chipLabel)
+                .lineLimit(1)
+                .fixedSize()
+                .foregroundStyle(action == .approveOnce ? Color.white : action.buttonTint)
+        }
+        .tint(action.buttonTint)
+        .accessibilityLabel(action.accessibilityTitle)
+        .accessibilityIdentifier("AgentApprovalPromptReaction-\(action.accessibilityIdentifierSuffix)-\(eventID)")
+
+        // Approve once is the expected path; the other two stay quieter.
+        if action == .approveOnce {
+            button.buttonStyle(.borderedProminent)
+        } else {
+            button.buttonStyle(.bordered)
         }
     }
 }
@@ -9243,6 +9192,34 @@ private extension SynaraAgentCardAction {
 }
 
 private extension SynaraAgentApprovalPromptReaction {
+    /// Monochrome glyphs for the buttons and decision line. The emoji in
+    /// `reactionKey` are protocol values that are sent, never shown.
+    var systemImage: String {
+        switch self {
+        case .approveOnce:
+            return "checkmark"
+        case .approveAlways:
+            return "infinity"
+        case .deny:
+            return "xmark"
+        }
+    }
+
+    var buttonTint: Color {
+        self == .deny ? SynaraColor.critical : SynaraColor.accent
+    }
+
+    var accessibilityTitle: String {
+        switch self {
+        case .approveOnce:
+            return String(localized: "Approve once")
+        case .approveAlways:
+            return String(localized: "Approve always")
+        case .deny:
+            return String(localized: "Deny")
+        }
+    }
+
     var tint: Color {
         switch self {
         case .approveOnce, .approveAlways:
