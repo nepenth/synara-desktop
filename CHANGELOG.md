@@ -6,6 +6,7 @@
 - Windows (desktop): signing out and removing local data no longer fails on Windows when the store's database files are still closing. The wipe waits up to five seconds for Windows to release them.
 - Windows (desktop): the release workflow installs the Windows setup, launches Synara and requires the sign-in screen to render before anything is published. The Windows workflow can run the same check on any published release (`release_tag`) in a few minutes.
 - Sign-in page: lists Windows among the native platforms.
+- Timeline (desktop): a message sent right after the same person's join, leave or other room event now shows their name and avatar. The message used to appear with no header, as if it continued an earlier message, most visibly for people with no display name or avatar set. Only messages and stickers, which show who sent them, now group the next message from that sender.
 
 ## [2.6.0] - 2026-10-28
 
