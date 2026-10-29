@@ -583,13 +583,13 @@ struct RoomListView: View {
                     .padding(.horizontal, SynaraSpacing.medium)
                     .padding(.vertical, SynaraSpacing.small)
                     .background {
-                        // Rows sit on the list plane; only the open
-                        // conversation is lifted, with a quiet accent fill.
+                        // Rows sit on the list plane; the open conversation
+                        // is marked by a quiet accent fill, as on desktop.
                         if isSelectedConversation(room) {
                             RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
                                 .fill(SynaraColor.accent.opacity(0.14))
                                 .synaraDepth(
-                                    .raised,
+                                    .layered,
                                     cornerRadius: SynaraRadius.card,
                                     boundaryColor: SynaraColor.accent
                                 )
@@ -1469,12 +1469,14 @@ private struct RoomRowCompactStatusIcon: View {
     let systemImage: String
     let accessibilityLabel: String
     let tint: Color
+    @ScaledMetric(relativeTo: .caption) private var width: CGFloat = 16
+    @ScaledMetric(relativeTo: .caption) private var height: CGFloat = 20
 
     var body: some View {
         Image(systemName: systemImage)
-            .font(.system(size: 12, weight: .semibold))
+            .font(.caption.weight(.semibold))
             .foregroundStyle(tint)
-            .frame(width: 16, height: 20)
+            .frame(width: width, height: height)
             .accessibilityLabel(accessibilityLabel)
     }
 }

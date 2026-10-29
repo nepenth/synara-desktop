@@ -7974,9 +7974,9 @@ private struct MediaAttachmentCard: View {
     private var fileAttachmentCard: some View {
         HStack(spacing: SynaraSpacing.small) {
             Image(systemName: resource.safeDescription.localizedCaseInsensitiveContains(".pdf") ? "doc.richtext" : "doc.text")
-                .font(.system(size: 22, weight: .regular))
+                .font(.title3)
                 .foregroundStyle(SynaraColor.secondaryText)
-                .frame(width: 30, height: 30)
+                .frame(minWidth: 30, minHeight: 30)
                 .accessibilityHidden(true)
 
             mediaMetadataRow(showDownloadIcon: true)
@@ -8978,25 +8978,20 @@ private struct AgentApprovalButtonStyle: ViewModifier {
 private struct AgentCardLinkPreview: View {
     let urlString: String
 
-    private var isPolicySafeLink: Bool {
-        SynaraContractURLPolicy.isSafeHTTPS(urlString)
-    }
-
     var body: some View {
         HStack(spacing: SynaraSpacing.xSmall) {
-            Image(systemName: isPolicySafeLink ? "lock" : "link")
+            Image(systemName: "link")
                 .font(SynaraTypography.messageMeta)
                 .foregroundStyle(SynaraColor.secondaryText)
                 .accessibilityHidden(true)
             Text(urlString)
                 .font(SynaraTypography.messageMeta)
-                .foregroundStyle(SynaraColor.accent)
+                .foregroundStyle(SynaraColor.accentText)
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityHint(isPolicySafeLink ? String(localized: "Opens HTTPS link") : "")
     }
 }
 
