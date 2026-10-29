@@ -609,6 +609,7 @@ enum SynaraColor {
     static var warningText: Color { synaraStatusText(SynaraStatusTextPalette.warning) }
     static var criticalText: Color { synaraStatusText(SynaraStatusTextPalette.critical) }
     static var accentText: Color { synaraStatusText(SynaraStatusTextPalette.accent) }
+    static var agentText: Color { synaraStatusText(SynaraStatusTextPalette.agent) }
 }
 
 /// Text variants of the system status colors: darker in light mode, lighter
@@ -628,12 +629,14 @@ enum SynaraStatusTextPalette {
     static let warning = Pair(light: "#9a4500", dark: "#ff9f0a")
     static let critical = Pair(light: "#b3141a", dark: "#ff7f78")
     static let accent = Pair(light: "#0058b8", dark: "#5eacff")
+    static let agent = Pair(light: "#00616e", dark: "#5ad8e6")
 
     static let all: [(name: String, pair: Pair)] = [
         ("success", success),
         ("warning", warning),
         ("critical", critical),
         ("accent", accent),
+        ("agent", agent),
     ]
 }
 

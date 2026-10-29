@@ -8949,28 +8949,12 @@ private struct AgentApprovalButtonStyle: ViewModifier {
         switch action.kind {
         case .some("approve"):
             content
-                .buttonStyle(.plain)
-                .padding(.vertical, SynaraSpacing.small)
-                .padding(.horizontal, SynaraSpacing.medium)
-                .foregroundStyle(SynaraColor.successText)
-                .background(SynaraColor.success.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
-                        .stroke(SynaraColor.success, lineWidth: 1.5)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+                .buttonStyle(.borderedProminent)
+                .tint(SynaraColor.accent)
         case .some("reject"):
             content
-                .buttonStyle(.plain)
-                .padding(.vertical, SynaraSpacing.small)
-                .padding(.horizontal, SynaraSpacing.medium)
-                .foregroundStyle(SynaraColor.criticalText)
-                .background(SynaraColor.critical.opacity(0.06))
-                .overlay(
-                    RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
-                        .stroke(SynaraColor.critical, lineWidth: 1.5)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+                .buttonStyle(.bordered)
+                .tint(SynaraColor.critical)
         default:
             content
                 .buttonStyle(.borderedProminent)
@@ -8987,36 +8971,20 @@ private struct AgentCardLinkPreview: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-            Text("Preview")
+        HStack(spacing: SynaraSpacing.xSmall) {
+            Image(systemName: isPolicySafeLink ? "lock" : "link")
                 .font(SynaraTypography.messageMeta)
                 .foregroundStyle(SynaraColor.secondaryText)
-            HStack {
-                Text(urlString)
-                    .font(SynaraTypography.messageMeta)
-                    .foregroundStyle(SynaraColor.accent)
-                    .lineLimit(1)
-                Spacer()
-                Image(systemName: "arrow.up.right.square")
-                    .foregroundStyle(SynaraColor.secondaryText)
-            }
-            if isPolicySafeLink {
-                HStack(spacing: SynaraSpacing.xSmall) {
-                    Image(systemName: "link")
-                        .font(SynaraTypography.messageMeta)
-                        .foregroundStyle(SynaraColor.secondaryText)
-                    Text("Opens HTTPS link")
-                        .font(SynaraTypography.messageMeta)
-                        .foregroundStyle(SynaraColor.secondaryText)
-                }
-            }
+                .accessibilityHidden(true)
+            Text(urlString)
+                .font(SynaraTypography.messageMeta)
+                .foregroundStyle(SynaraColor.accent)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 0)
         }
-        .padding(SynaraSpacing.small)
-        .synaraCard(
-            fill: SynaraColor.surface.opacity(0.7),
-            opaqueFill: SynaraColor.surface,
-            stroke: SynaraColor.agent
-        )
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(isPolicySafeLink ? String(localized: "Opens HTTPS link") : "")
     }
 }
 
@@ -9027,25 +8995,17 @@ private struct AgentCardTimelineRow: View {
     var body: some View {
         let visibleActions = card.actions.filter { SynaraAgentCardActionResolver.shouldRender($0) }
 
-        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-            HStack(alignment: .center, spacing: SynaraSpacing.small) {
-                SynaraAvatar(title: "Agent", systemImage: "sparkles", tint: SynaraColor.agent, size: 28)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(card.title)
-                        .font(SynaraTypography.emphasis)
-                        .foregroundStyle(SynaraColor.primaryText)
-                        .lineLimit(2)
-                        .accessibilityIdentifier("AgentCardTitle")
-                    Text("Agent workflow")
-                        .font(SynaraTypography.messageMeta)
-                        .foregroundStyle(SynaraColor.secondaryText)
-                }
-
-                Spacer()
-
+        VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(card.title)
+                    .font(SynaraTypography.emphasis)
+                    .foregroundStyle(SynaraColor.primaryText)
+                    .lineLimit(2)
+                    .accessibilityIdentifier("AgentCardTitle")
                 if let status = card.status {
-                    SynaraStatusChip(title: status, tint: SynaraColor.agent, systemImage: "circle.dashed")
+                    Text(status)
+                        .font(SynaraTypography.messageMeta.weight(.medium))
+                        .foregroundStyle(SynaraColor.agentText)
                         .lineLimit(1)
                 }
             }
@@ -9054,7 +9014,7 @@ private struct AgentCardTimelineRow: View {
                 Text(summary)
                     .font(SynaraTypography.body)
                     .foregroundStyle(SynaraColor.primaryText)
-                    .lineLimit(2)
+                    .lineLimit(3)
             }
 
             AgentApprovalDetails(card: card)
@@ -9077,15 +9037,16 @@ private struct AgentCardTimelineRow: View {
                     } label: {
                         HStack {
                             Text(action.title)
-                                .font(SynaraTypography.emphasis)
+                                .font(SynaraTypography.body.weight(.medium))
                             Spacer()
-                            Image(systemName: "chevron.right")
+                            Image(systemName: "arrow.up.right")
+                                .font(SynaraTypography.messageMeta.weight(.semibold))
                                 .accessibilityHidden(true)
                         }
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
-                    .tint(action.tint)
+                    .tint(SynaraColor.accent)
                     .accessibilityHint("Performs \(action.title)")
                     .accessibilityIdentifier("AgentCardAction-\(action.id)")
                 }
@@ -9097,7 +9058,8 @@ private struct AgentCardTimelineRow: View {
                                 onAction(action)
                             } label: {
                                 Label(action.title, systemImage: action.systemImage)
-                                    .font(SynaraTypography.emphasis)
+                                    .labelStyle(.titleAndIcon)
+                                    .font(SynaraTypography.body.weight(.semibold))
                                     .frame(maxWidth: .infinity)
                             }
                             .modifier(AgentApprovalButtonStyle(action: action))
@@ -9111,57 +9073,62 @@ private struct AgentCardTimelineRow: View {
     }
 }
 
+/// Facts the card actually carries, as plain label/value rows. Rows
+/// without data are left out rather than filled with placeholder text.
 private struct AgentApprovalDetails: View {
     let card: SynaraAgentCard
 
     var body: some View {
-        VStack(spacing: SynaraSpacing.small) {
-            AgentDetailRow(
-                title: String(localized: "Target"),
-                value: card.artifacts.first?.title ?? String(localized: "Synara workflow")
-            )
-            AgentDetailRow(title: String(localized: "Changes"), value: changeSummary)
-            AgentDetailRow(title: String(localized: "Checks"), value: checkSummary, valueTint: SynaraColor.success)
-            AgentDetailRow(title: String(localized: "Summary"), value: card.summary ?? card.title)
+        let rows = detailRows
+        if rows.isEmpty == false {
+            VStack(spacing: SynaraSpacing.xSmall) {
+                ForEach(rows, id: \.title) { row in
+                    AgentDetailRow(title: row.title, value: row.value)
+                }
+            }
+            .padding(.vertical, SynaraSpacing.xSmall)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(SynaraColor.separator.opacity(0.6))
+                    .frame(height: 0.5)
+                    .accessibilityHidden(true)
+            }
         }
-        .padding(SynaraSpacing.small)
-        .synaraCard(
-            fill: SynaraColor.surface.opacity(0.65),
-            opaqueFill: SynaraColor.surface,
-            stroke: SynaraColor.agent
-        )
     }
 
-    private var changeSummary: String {
-        let count = card.artifacts.count + card.code.count + card.diffs.count
-        return String(localized: "\(max(count, 1)) items changed")
-    }
-
-    private var checkSummary: String {
-        if card.logs.isEmpty {
-            return String(localized: "Ready")
+    private var detailRows: [(title: String, value: String)] {
+        var rows: [(title: String, value: String)] = []
+        if let target = card.artifacts.first?.title {
+            rows.append((String(localized: "Target"), target))
         }
-        return String(localized: "\(card.logs.count) passed")
+        let changes = card.artifacts.count + card.code.count + card.diffs.count
+        if changes > 0 {
+            rows.append((String(localized: "Changes"), String(localized: "\(changes) items changed")))
+        }
+        if card.logs.isEmpty == false {
+            rows.append((String(localized: "Checks"), String(localized: "\(card.logs.count) passed")))
+        }
+        return rows
     }
 }
 
 private struct AgentDetailRow: View {
     let title: String
     let value: String
-    var valueTint: Color = SynaraColor.primaryText
 
     var body: some View {
-        HStack(alignment: .top, spacing: SynaraSpacing.medium) {
+        HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.medium) {
             Text(title)
                 .font(SynaraTypography.messageMeta)
                 .foregroundStyle(SynaraColor.secondaryText)
                 .frame(width: 76, alignment: .leading)
             Text(value)
                 .font(SynaraTypography.messageMeta)
-                .foregroundStyle(valueTint)
+                .foregroundStyle(SynaraColor.primaryText)
                 .lineLimit(3)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -9169,9 +9136,9 @@ private extension SynaraAgentCardAction {
     var systemImage: String {
         switch kind {
         case .some("approve"):
-            return "checkmark.circle.fill"
+            return "checkmark"
         case .some("reject"):
-            return "xmark.circle"
+            return "xmark"
         case .some("open"), .some("open_url"):
             return "safari"
         default:
