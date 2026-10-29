@@ -8864,12 +8864,20 @@ private struct AgentApprovalPromptTimelineCard: View {
                     }
                 }
 
+                // One row when it fits; else Approve once above the other
+                // two; at large Dynamic Type, one full-width button each.
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: SynaraSpacing.small) {
-                        actionButtons(stacked: false)
+                        ForEach(visibleActions) { actionButton($0, stacked: false) }
                     }
-                    VStack(alignment: .leading, spacing: SynaraSpacing.small) {
-                        actionButtons(stacked: true)
+                    VStack(spacing: SynaraSpacing.small) {
+                        actionButton(.approveOnce, stacked: true)
+                        HStack(spacing: SynaraSpacing.small) {
+                            ForEach(visibleActions.filter { $0 != .approveOnce }) { actionButton($0, stacked: true) }
+                        }
+                    }
+                    VStack(spacing: SynaraSpacing.small) {
+                        ForEach(visibleActions) { actionButton($0, stacked: true) }
                     }
                 }
 
@@ -8902,19 +8910,13 @@ private struct AgentApprovalPromptTimelineCard: View {
         .accessibilityIdentifier("AgentApprovalPromptSource-\(eventID)")
     }
 
-    @ViewBuilder
-    private func actionButtons(stacked: Bool) -> some View {
-        ForEach(SynaraAgentApprovalPromptReaction.allCases) { action in
-            if confirmApproveAlways, action == .approveAlways {
-                EmptyView()
-            } else {
-                actionButton(action, stacked: stacked)
-            }
-        }
+    /// Approve always gives way to its confirmation while that is open.
+    private var visibleActions: [SynaraAgentApprovalPromptReaction] {
+        SynaraAgentApprovalPromptReaction.allCases.filter { !(confirmApproveAlways && $0 == .approveAlways) }
     }
 
-    /// Side by side the labels keep one line so `ViewThatFits` can measure
-    /// them; stacked (large Dynamic Type) they take the full width and wrap.
+    /// In one row the labels keep one line so `ViewThatFits` can measure
+    /// them; stacked they share the available width and may wrap.
     @ViewBuilder
     private func actionButton(_ action: SynaraAgentApprovalPromptReaction, stacked: Bool) -> some View {
         let button = Button {
@@ -8931,11 +8933,7 @@ private struct AgentApprovalPromptTimelineCard: View {
                 .lineLimit(stacked ? 2 : 1)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: !stacked, vertical: false)
-                .frame(
-                    maxWidth: stacked ? .infinity : nil,
-                    minHeight: SynaraHitTarget.minimum,
-                    alignment: stacked ? .leading : .center
-                )
+                .frame(maxWidth: stacked ? .infinity : nil, minHeight: SynaraHitTarget.minimum)
                 .contentShape(Rectangle())
                 .foregroundStyle(action == .approveOnce ? Color.white : action.labelTint)
         }
