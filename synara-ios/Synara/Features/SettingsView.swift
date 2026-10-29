@@ -1199,7 +1199,7 @@ private struct NotificationSettingsView: View {
             } header: {
                 Text("Privacy")
             } footer: {
-                Text("Off by default. Synara resolves content on this device; the push gateway receives only event IDs. Your iOS Show Previews setting still controls Lock Screen visibility.")
+                Text("Off by default. Previews are decrypted on this device, and the push service only sees message IDs. iOS Show Previews still decides what the Lock Screen shows.")
                     .accessibilityIdentifier("LockScreenMessagePreviewsHelp")
             }
 
@@ -1247,7 +1247,7 @@ private struct NotificationSettingsView: View {
             } header: {
                 Text("Local Delivery Diagnostics")
             } footer: {
-                Text("Copy or share a report after reproducing a missing preview. It includes app version, notification settings, push registration and shared-store readiness, up to 256 fixed stage codes and timestamps, and how many previews failed because the server rejected your session. Reports stay on this device until you share them and exclude message content, Matrix IDs, senders, push payloads, tokens, URLs and account secrets.")
+                Text("If a notification preview goes missing, copy or share this report. It lists the app version, notification settings and recent delivery steps, never message content, Matrix IDs, tokens or account secrets, and stays on this device until you share it.")
             }
 
             if let pushRules = pushRuleSettings.snapshot {
@@ -1624,7 +1624,7 @@ private struct AppearanceSettingsView: View {
             } header: {
                 Text("Thread Display")
             } footer: {
-                Text(String(localized: "\(threadDisplay.detail) Matches desktop Settings → Appearance → Thread Display."))
+                Text(threadDisplay.detail)
             }
 
             Section {
@@ -2754,21 +2754,18 @@ private struct LicensesSettingsView: View {
             Section("App") {
                 LicenseRow(
                     name: "Synara",
-                    license: "AGPL-3.0-only",
-                    note: String(localized: "Final App Store distribution requires legal review of repository licensing.")
+                    license: "AGPL-3.0-only"
                 )
             }
 
             Section("Dependencies") {
                 LicenseRow(
                     name: "Matrix Rust SDK Swift",
-                    license: "Apache-2.0",
-                    note: String(localized: "Pinned through Swift Package Manager.")
+                    license: "Apache-2.0"
                 )
                 LicenseRow(
                     name: "Apple SwiftUI and iOS SDK",
-                    license: String(localized: "Apple platform SDK"),
-                    note: String(localized: "Provided by Xcode and iOS.")
+                    license: String(localized: "Apple platform SDK")
                 )
             }
         }
@@ -2781,7 +2778,6 @@ private struct LicensesSettingsView: View {
 private struct LicenseRow: View {
     let name: String
     let license: String
-    let note: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
@@ -2789,9 +2785,6 @@ private struct LicenseRow: View {
                 .font(SynaraTypography.body)
             Text(license)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(SynaraColor.secondaryText)
-            Text(note)
-                .font(SynaraTypography.supporting)
                 .foregroundStyle(SynaraColor.secondaryText)
         }
         .accessibilityElement(children: .combine)

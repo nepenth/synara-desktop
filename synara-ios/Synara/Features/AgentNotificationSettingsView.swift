@@ -109,7 +109,7 @@ struct AgentNotificationSettingsView: View {
             } header: {
                 Text("Agent Accounts")
             } footer: {
-                Text("Add each agent’s full Matrix user ID. These rules apply only to the listed agents and sync with your account across Synara clients. Once you add an agent, only listed agents can raise urgent approval alerts, even in muted rooms; with no agents listed, approval alerts follow each room’s notification settings.")
+                Text("Add each agent’s full Matrix ID. Once you add one, only listed agents can send urgent approval alerts, even in muted rooms. With none listed, approval alerts follow each room’s notification settings.")
             }
 
             if editor.preferences != nil {
@@ -123,7 +123,7 @@ struct AgentNotificationSettingsView: View {
                 } header: {
                     Text("Message Categories")
                 } footer: {
-                    Text("Synara recognizes messages starting with 🛠 Tool activity or 💬 Commentary, including Markdown headings. Other messages from the selected agents use the final response setting. Approval requests from listed agents remain eligible for urgent alerts. Messages remain in the conversation.")
+                    Text("Messages that start with 🛠 Tool activity or 💬 Commentary count as those categories. Other messages from these agents count as final responses. Approval requests can still send urgent alerts, and every message stays in the conversation.")
                 }
             }
 
@@ -151,7 +151,7 @@ struct AgentNotificationSettingsView: View {
                         .accessibilityIdentifier("AgentNotificationPreferencesStatus")
                 }
             } footer: {
-                Text("Changes save to your account as you make them. Encrypted background alerts may still appear as generic activity unless the installed build supports Apple’s Notification Filtering capability. Hiding message previews does not suppress those alerts.")
+                Text("Changes save to your account as you make them. Some encrypted alerts may still show as generic activity, even with previews hidden.")
             }
         }
         .scrollContentBackground(.hidden)

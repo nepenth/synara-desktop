@@ -725,6 +725,9 @@
     "Add a note or ToDo here, or pin a useful message from its menu." : {
 
     },
+    "Add each agent’s full Matrix ID. Once you add one, only listed agents can send urgent approval alerts, even in muted rooms. With none listed, approval alerts follow each room’s notification settings." : {
+
+    },
     "Add each agent’s full Matrix user ID. These rules apply only to the listed agents and sync with your account across Synara clients. Once you add an agent, only listed agents can raise urgent approval alerts, even in muted rooms; with no agents listed, approval alerts follow each room’s notification settings." : {
 
     },
@@ -1005,6 +1008,9 @@
 
     },
     "Changes save to your account as you make them. Encrypted background alerts may still appear as generic activity unless the installed build supports Apple’s Notification Filtering capability. Hiding message previews does not suppress those alerts." : {
+
+    },
+    "Changes save to your account as you make them. Some encrypted alerts may still show as generic activity, even with previews hidden." : {
 
     },
     "Channels" : {
@@ -1334,6 +1340,9 @@
 
     },
     "Decided approvals will appear here after you approve or deny a request." : {
+
+    },
+    "Decisions made from your account on any device." : {
 
     },
     "Decisions your account made, synced across devices. Inbox-only expired requests stay here until they age out of recent room activity." : {
@@ -1723,6 +1732,9 @@
     "Identity reset authentication failed. Check your password and try again." : {
 
     },
+    "If a notification preview goes missing, copy or share this report. It lists the app version, notification settings and recent delivery steps, never message content, Matrix IDs, tokens or account secrets, and stays on this device until you share it." : {
+
+    },
     "If you have lost your recovery key and all your other devices, start over with a new identity." : {
 
     },
@@ -2041,6 +2053,9 @@
     "Messages that only your old keys can read may be lost, unless another device still has them." : {
 
     },
+    "Messages that start with 🛠 Tool activity or 💬 Commentary count as those categories. Other messages from these agents count as final responses. Approval requests can still send urgent alerts, and every message stays in the conversation." : {
+
+    },
     "Messages will appear here." : {
 
     },
@@ -2225,6 +2240,9 @@
 
     },
     "Off" : {
+
+    },
+    "Off by default. Previews are decrypted on this device, and the push service only sees message IDs. iOS Show Previews still decides what the Lock Screen shows." : {
 
     },
     "Off by default. Synara resolves content on this device; the push gateway receives only event IDs. Your iOS Show Previews setting still controls Lock Screen visibility." : {
