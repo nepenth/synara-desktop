@@ -20,6 +20,9 @@ use tauri::ipc::Channel;
 /// `downloadAndInstall` (`DesktopUpdateDownloadEvent` in `desktopUpdater.ts`).
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "event", content = "data")]
+// Only the macOS install sends these; other targets keep the type for the
+// command signature.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub enum DesktopUpdateDownloadEvent {
     #[serde(rename_all = "camelCase")]
     Started {
