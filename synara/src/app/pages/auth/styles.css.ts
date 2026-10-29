@@ -77,21 +77,11 @@ export const AuthLockup = style({
 });
 
 export const AuthBrandMark = style({
-  position: 'relative',
+  // The mark's own soft glow is its only light; no halo behind it.
   width: toRem(96),
   height: toRem(96),
-  // A still, soft halo in the mark's own blue; it keeps its color in every theme.
-  '::before': {
-    content: '""',
-    position: 'absolute',
-    inset: '-24%',
-    zIndex: -1,
-    borderRadius: '50%',
-    background: 'radial-gradient(circle, rgba(63, 184, 255, 0.16), transparent 68%)',
-  },
   '@media': {
     [twoColumn]: { width: toRem(128), height: toRem(128) },
-    '(prefers-contrast: more)': { selectors: { '&::before': { display: 'none' } } },
   },
 });
 
