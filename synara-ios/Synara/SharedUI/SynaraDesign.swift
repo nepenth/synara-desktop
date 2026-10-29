@@ -958,54 +958,57 @@ enum SynaraDepthLevel: String, CaseIterable {
                 shadowOpacity: 0,
                 shadowRadius: 0,
                 shadowOffsetY: 0,
-                edgeOpacity: dark ? 0.035 : 0.025,
+                edgeOpacity: 0,
                 boundaryOpacity: (dark ? 0.20 : 0.12) * boundaryScale,
                 boundaryWidth: 0.5
             )
         case .layered:
+            // Ordinary messages sit on the reading plane: a hairline, no
+            // shadow, so elevation stays meaningful for what is selected,
+            // floating or critical.
             return SynaraDepthMetrics(
-                shadowOpacity: (dark ? 0.24 : 0.055) * transparencyScale,
-                shadowRadius: dark ? 3 : 2,
-                shadowOffsetY: 1,
-                edgeOpacity: dark ? 0.13 : 0.12,
-                boundaryOpacity: (dark ? 0.46 : 0.26) * boundaryScale,
-                boundaryWidth: 0.6
-            )
-        case .raised:
-            return SynaraDepthMetrics(
-                shadowOpacity: (dark ? 0.30 : 0.08) * transparencyScale,
-                shadowRadius: dark ? 7 : 5,
-                shadowOffsetY: dark ? 2 : 1.5,
-                edgeOpacity: dark ? 0.17 : 0.14,
-                boundaryOpacity: (dark ? 0.52 : 0.30) * boundaryScale,
-                boundaryWidth: 0.7
-            )
-        case .floating:
-            return SynaraDepthMetrics(
-                shadowOpacity: (dark ? 0.38 : 0.12) * transparencyScale,
-                shadowRadius: dark ? 14 : 11,
-                shadowOffsetY: dark ? 5 : 4,
-                edgeOpacity: dark ? 0.21 : 0.18,
-                boundaryOpacity: (dark ? 0.60 : 0.36) * boundaryScale,
-                boundaryWidth: 0.8
+                shadowOpacity: 0,
+                shadowRadius: 0,
+                shadowOffsetY: 0,
+                edgeOpacity: 0,
+                boundaryOpacity: (dark ? 0.34 : 0.20) * boundaryScale,
+                boundaryWidth: 0.5
             )
         case .avatar:
             return SynaraDepthMetrics(
-                shadowOpacity: (dark ? 0.30 : 0.08) * transparencyScale,
-                shadowRadius: dark ? 5 : 4,
-                shadowOffsetY: dark ? 2 : 1.5,
-                edgeOpacity: dark ? 0.18 : 0.12,
-                boundaryOpacity: (dark ? 0.50 : 0.28) * boundaryScale,
-                boundaryWidth: 0.8
+                shadowOpacity: 0,
+                shadowRadius: 0,
+                shadowOffsetY: 0,
+                edgeOpacity: 0,
+                boundaryOpacity: (dark ? 0.36 : 0.22) * boundaryScale,
+                boundaryWidth: 0.5
+            )
+        case .raised:
+            return SynaraDepthMetrics(
+                shadowOpacity: (dark ? 0.22 : 0.05) * transparencyScale,
+                shadowRadius: dark ? 4 : 3,
+                shadowOffsetY: 1,
+                edgeOpacity: 0,
+                boundaryOpacity: (dark ? 0.46 : 0.26) * boundaryScale,
+                boundaryWidth: 0.6
+            )
+        case .floating:
+            return SynaraDepthMetrics(
+                shadowOpacity: (dark ? 0.32 : 0.10) * transparencyScale,
+                shadowRadius: dark ? 12 : 10,
+                shadowOffsetY: dark ? 4 : 3,
+                edgeOpacity: dark ? 0.10 : 0.08,
+                boundaryOpacity: (dark ? 0.54 : 0.32) * boundaryScale,
+                boundaryWidth: 0.7
             )
         case .critical:
             return SynaraDepthMetrics(
-                shadowOpacity: (dark ? 0.44 : 0.16) * transparencyScale,
-                shadowRadius: dark ? 18 : 15,
-                shadowOffsetY: dark ? 7 : 5,
-                edgeOpacity: dark ? 0.24 : 0.22,
-                boundaryOpacity: (dark ? 0.68 : 0.44) * boundaryScale,
-                boundaryWidth: 0.9
+                shadowOpacity: (dark ? 0.36 : 0.12) * transparencyScale,
+                shadowRadius: dark ? 14 : 12,
+                shadowOffsetY: dark ? 5 : 4,
+                edgeOpacity: dark ? 0.12 : 0.10,
+                boundaryOpacity: (dark ? 0.60 : 0.38) * boundaryScale,
+                boundaryWidth: 0.8
             )
         }
     }
@@ -1055,20 +1058,20 @@ private struct SynaraDepthModifier<Outline: Shape>: ViewModifier {
                         .allowsHitTesting(false)
                 }
                 .overlay {
-                    outline
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(metrics.edgeOpacity),
-                                    Color.clear,
-                                    Color.black.opacity(metrics.edgeOpacity * 0.72),
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: max(0.75, metrics.boundaryWidth)
-                        )
-                        .allowsHitTesting(false)
+                    // A faint top edge light on floating and critical planes
+                    // only; ordinary surfaces get no bevel.
+                    if metrics.edgeOpacity > 0 {
+                        outline
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(metrics.edgeOpacity), Color.clear],
+                                    startPoint: .top,
+                                    endPoint: UnitPoint(x: 0.5, y: 0.35)
+                                ),
+                                lineWidth: metrics.boundaryWidth
+                            )
+                            .allowsHitTesting(false)
+                    }
                 }
                 .shadow(
                     color: Color.black.opacity(metrics.shadowOpacity),
