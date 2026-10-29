@@ -1,8 +1,8 @@
 import React from 'react';
-import { Box, Text, Icon, Icons, Button, config, toRem } from 'folds';
+import { Box, Text, Icon, Icons, Button, config } from 'folds';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
-import SynaraPNG from '../../../../../public/res/png/synara.png';
+import { SynaraMark } from '../../../pages/auth/SynaraMark';
 import {
   APP_VERSION,
   SYNARA_PROJECT_URL,
@@ -18,20 +18,22 @@ type AboutProps = {
 export function About({ requestClose }: AboutProps) {
   return (
     <SettingsPage title="About" requestClose={requestClose}>
-      <Box gap="400">
-        <Box shrink="No">
-          <img style={{ width: toRem(60), height: toRem(60) }} src={SynaraPNG} alt="Synara logo" />
-        </Box>
-        <Box direction="Column" gap="300">
-          <Box direction="Column" gap="100">
-            <Box gap="100" alignItems="End">
-              <Text size="H3">Synara</Text>
-              <Text size="T200">v{APP_VERSION}</Text>
-            </Box>
-            <Text>A modern Matrix client.</Text>
+      <Box
+        direction="Column"
+        alignItems="Center"
+        gap="400"
+        style={{ textAlign: 'center', paddingBlock: config.space.S400 }}
+      >
+        <SynaraMark size={88} />
+        <Box direction="Column" alignItems="Center" gap="300">
+          <Box direction="Column" alignItems="Center" gap="100">
+            <Text size="H3">Synara</Text>
+            <Text size="T300" priority="300">
+              Version {APP_VERSION}
+            </Text>
           </Box>
 
-          <Box gap="200" wrap="Wrap">
+          <Box gap="200" wrap="Wrap" justifyContent="Center">
             <Button
               as="a"
               className={SettingsQuietControl}

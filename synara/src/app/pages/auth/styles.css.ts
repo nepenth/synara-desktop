@@ -76,8 +76,8 @@ export const AuthLockup = style({
 
 export const AuthBrandMark = style({
   position: 'relative',
-  width: toRem(72),
-  height: toRem(72),
+  width: toRem(88),
+  height: toRem(88),
   // A still, soft halo in the mark's own blue; it keeps its color in every theme.
   '::before': {
     content: '""',
@@ -88,7 +88,7 @@ export const AuthBrandMark = style({
     background: 'radial-gradient(circle, rgba(63, 184, 255, 0.16), transparent 68%)',
   },
   '@media': {
-    [twoColumn]: { width: toRem(112), height: toRem(112) },
+    [twoColumn]: { width: toRem(136), height: toRem(136) },
     '(prefers-contrast: more)': { selectors: { '&::before': { display: 'none' } } },
   },
 });

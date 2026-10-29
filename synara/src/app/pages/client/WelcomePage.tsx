@@ -36,10 +36,15 @@ export function WelcomePage() {
         justifyContent="Center"
         style={{ padding: config.space.S400 }}
       >
-        <Box direction="Column" gap="400" style={{ width: '100%', maxWidth: toRem(360) }}>
-          <Box alignItems="Center" gap="300">
-            <SynaraMark size={32} />
-            <Text as="h1" size="H4">
+        <Box
+          direction="Column"
+          alignItems="Center"
+          gap="400"
+          style={{ width: '100%', maxWidth: toRem(360), textAlign: 'center' }}
+        >
+          <Box direction="Column" alignItems="Center" gap="200">
+            <SynaraMark size={88} />
+            <Text as="h1" size="H3">
               Synara
             </Text>
             <Text size="T300" priority="300">
@@ -57,9 +62,11 @@ export function WelcomePage() {
           <Box
             as="nav"
             aria-label="Synara links"
+            justifyContent="Center"
             gap="400"
             wrap="Wrap"
             style={{
+              width: '100%',
               paddingTop: config.space.S300,
               borderTop: `${config.borderWidth.B300} solid ${color.Surface.ContainerLine}`,
             }}
