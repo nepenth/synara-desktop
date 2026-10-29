@@ -650,6 +650,9 @@
     "@user:server" : {
 
     },
+    "A Matrix client for iOS, macOS, and Linux." : {
+
+    },
     "APNs device tokens and Matrix pusher registration are used only when notifications are enabled." : {
 
     },
@@ -818,6 +821,9 @@
     "Apple platform SDK" : {
 
     },
+    "Applies to times in the room list and timeline." : {
+
+    },
     "Approval" : {
 
     },
@@ -951,6 +957,9 @@
 
     },
     "Call declined." : {
+
+    },
+    "Calls" : {
 
     },
     "Camera" : {
@@ -1933,6 +1942,9 @@
     "Matrix IDs must look like @name:server." : {
 
     },
+    "Matrix chat with agent approvals." : {
+
+    },
     "Matrix room" : {
 
     },
@@ -1940,9 +1952,6 @@
 
     },
     "MatrixRTC" : {
-
-    },
-    "Matrix chat with agent approvals." : {
 
     },
     "MatrixRTC transport: LiveKit" : {
@@ -2535,6 +2544,9 @@
 
     },
     "Redact" : {
+
+    },
+    "Refresh" : {
 
     },
     "Refresh Diagnostics" : {
@@ -3171,6 +3183,9 @@
     "The authenticity of this encrypted message can't be guaranteed on this device." : {
 
     },
+    "The call service your homeserver offers. Calls start from a room." : {
+
+    },
     "The codes matched on both devices. This device is verified for encrypted conversations." : {
 
     },
@@ -3327,6 +3342,9 @@
     "Threads open on their own screen." : {
 
     },
+    "Tints the backgrounds behind your rooms and messages." : {
+
+    },
     "To approve for the whole session, reply !approve session." : {
 
     },
@@ -3432,6 +3450,9 @@
     "Use the server that hosts your Matrix account." : {
 
     },
+    "Use your Matrix account." : {
+
+    },
     "User" : {
 
     },
@@ -3448,9 +3469,6 @@
 
     },
     "User unbanned." : {
-
-    },
-    "Use your Matrix account." : {
 
     },
     "User unignored." : {

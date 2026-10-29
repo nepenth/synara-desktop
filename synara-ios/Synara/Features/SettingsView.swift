@@ -504,15 +504,15 @@ private struct AccountSettingsView: View {
                     if isRefreshingRtc {
                         ProgressView()
                     } else {
-                        Text("Refresh transport")
+                        Text("Refresh")
                     }
                 }
                 .disabled(isRefreshingRtc)
                 .accessibilityIdentifier("SettingsRtcTransportsRefresh")
             } header: {
-                Text("MatrixRTC")
+                Text("Calls")
             } footer: {
-                Text("Homeserver call transport discovery. Synara does not join calls from this screen.")
+                Text("The call service your homeserver offers. Calls start from a room.")
             }
 
             Section {
@@ -1593,7 +1593,7 @@ private struct AppearanceSettingsView: View {
             } header: {
                 Text("Theme")
             } footer: {
-                Text("Hue tint for chrome. Lightness is mapped to stacked greys (rail / room list / chat); this is not the fill color.")
+                Text("Tints the backgrounds behind your rooms and messages.")
             }
             Section {
                 Toggle("24-Hour Time", isOn: $hour24Clock)
@@ -1604,7 +1604,7 @@ private struct AppearanceSettingsView: View {
             } header: {
                 Text("Date & Time")
             } footer: {
-                Text("Matches desktop Settings → General. Room list and timeline clocks follow this toggle.")
+                Text("Applies to times in the room list and timeline.")
             }
 
             Section {
@@ -2715,7 +2715,7 @@ private struct AboutSettingsView: View {
                 VStack(alignment: .leading, spacing: SynaraSpacing.small) {
                     Text("Synara")
                         .font(SynaraTypography.screenTitle)
-                    Text("Agentic native Matrix client for iOS, macOS, and Linux.")
+                    Text("A Matrix client for iOS, macOS, and Linux.")
                         .font(SynaraTypography.supporting)
                         .foregroundStyle(SynaraColor.secondaryText)
                 }
@@ -2806,9 +2806,6 @@ private struct PrivacyPolicySettingsView: View {
             Section("Privacy Policy") {
                 Link(SettingsLink.privacy.displayTitle, destination: SettingsLink.privacy.url)
                     .accessibilityIdentifier("PrivacyPolicyExternalLink")
-                Text("External TestFlight and App Store submission remain blocked until the final privacy policy is approved.")
-                    .font(SynaraTypography.supporting)
-                    .foregroundStyle(SynaraColor.secondaryText)
             }
 
             Section("Current Data Inventory") {
