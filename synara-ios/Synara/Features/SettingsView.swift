@@ -2712,16 +2712,14 @@ private struct AboutSettingsView: View {
     var body: some View {
         List {
             Section {
-                VStack(alignment: .leading, spacing: SynaraSpacing.small) {
-                    Text("Synara")
-                        .font(SynaraTypography.screenTitle)
-                    Text("A Matrix client for iOS, macOS, and Linux.")
-                        .font(SynaraTypography.supporting)
-                        .foregroundStyle(SynaraColor.secondaryText)
-                }
-                .padding(.vertical, SynaraSpacing.small)
+                SynaraProductHeader(
+                    title: "Synara",
+                    subtitle: String(localized: "A Matrix client for iOS, macOS, and Linux."),
+                    markSize: SynaraBrandMark.secondaryHeroSize
+                )
                 .accessibilityIdentifier("AboutSummary")
             }
+            .listRowBackground(Color.clear)
 
             Section("Build") {
                 SettingsInfoRow(title: String(localized: "Version"), value: AppBuildInfo.version)

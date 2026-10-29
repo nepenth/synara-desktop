@@ -1312,15 +1312,19 @@ struct SynaraAvatar: View {
 }
 
 struct SynaraBrandMark: View {
+    /// Brand moments (sign-in, the homeserver screen) show the mark as a
+    /// centred hero above the wordmark; About and empty panes use the
+    /// secondary size. Dense chrome such as the room list header stays at 38.
+    static let heroSize: CGFloat = 96
+    static let secondaryHeroSize: CGFloat = 80
+
     var assetName = "SynaraLogo"
     var size: CGFloat = 48
     var hasBackground = true
-    /// A soft, static accent glow for the mark's brand moments (sign-in);
-    /// dense chrome such as the room list header leaves it off.
-    var glows = false
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: max(SynaraRadius.card, size * 0.22), style: .continuous)
+
         Image(assetName)
             .resizable()
             .interpolation(.high)
@@ -1329,15 +1333,10 @@ struct SynaraBrandMark: View {
             .frame(width: size, height: size)
             .background {
                 if hasBackground {
-                    RoundedRectangle(cornerRadius: SynaraRadius.card)
-                        .fill(SynaraColor.secondarySurface)
+                    shape.fill(SynaraColor.secondarySurface)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.card))
-            .shadow(
-                color: glows ? SynaraColor.accent.opacity(colorScheme == .dark ? 0.32 : 0.18) : .clear,
-                radius: size * 0.22
-            )
+            .clipShape(shape)
             .accessibilityHidden(true)
     }
 }
@@ -1521,11 +1520,12 @@ struct SynaraProductHeader: View {
     let title: String
     let subtitle: String
     var assetName: String = "SynaraLogo"
+    var markSize: CGFloat = SynaraBrandMark.heroSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SynaraSpacing.medium) {
-            SynaraBrandMark(assetName: assetName, size: 56, glows: true)
-            VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+        VStack(spacing: SynaraSpacing.large) {
+            SynaraBrandMark(assetName: assetName, size: markSize)
+            VStack(spacing: SynaraSpacing.xSmall) {
                 Text(title)
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(SynaraColor.primaryText)
@@ -1534,8 +1534,11 @@ struct SynaraProductHeader: View {
                     .foregroundStyle(SynaraColor.secondaryText)
                     .lineLimit(nil)
             }
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: 320)
         }
-        .padding(.vertical, SynaraSpacing.small)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, SynaraSpacing.large)
         .accessibilityElement(children: .combine)
     }
 }
@@ -1578,19 +1581,27 @@ struct SynaraEmptyState: View {
     let title: String
     let systemImage: String
     let message: String?
+    /// Shows the Synara mark instead of the symbol, for the few empty panes
+    /// that are a brand moment (no room selected).
+    var showsBrandMark = false
 
-    init(title: String, systemImage: String, message: String? = nil) {
+    init(title: String, systemImage: String, message: String? = nil, showsBrandMark: Bool = false) {
         self.title = title
         self.systemImage = systemImage
         self.message = message
+        self.showsBrandMark = showsBrandMark
     }
 
     var body: some View {
         VStack(spacing: SynaraSpacing.large) {
-            Image(systemName: systemImage)
-                .font(.system(size: 42, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
+            if showsBrandMark {
+                SynaraBrandMark(size: SynaraBrandMark.secondaryHeroSize)
+            } else {
+                Image(systemName: systemImage)
+                    .font(.system(size: 42, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
 
             VStack(spacing: SynaraSpacing.small) {
                 Text(title)
