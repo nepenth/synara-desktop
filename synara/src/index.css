@@ -74,14 +74,14 @@
 .butter-theme {
   --tc-link: hsl(213deg 100% 80%);
 
-  --mx-uc-1: hsl(208, 100%, 75%);
-  --mx-uc-2: hsl(301, 100%, 80%);
-  --mx-uc-3: hsl(163, 100%, 70%);
-  --mx-uc-4: hsl(343, 100%, 76%);
-  --mx-uc-5: hsl(24, 100%, 70%);
-  --mx-uc-6: hsl(181, 100%, 60%);
-  --mx-uc-7: hsl(243, 100%, 82%);
-  --mx-uc-8: hsl(94, 100%, 80%);
+  --mx-uc-1: hsl(208, 42%, 75%);
+  --mx-uc-2: hsl(301, 42%, 80%);
+  --mx-uc-3: hsl(163, 42%, 70%);
+  --mx-uc-4: hsl(343, 42%, 76%);
+  --mx-uc-5: hsl(24, 42%, 70%);
+  --mx-uc-6: hsl(181, 42%, 60%);
+  --mx-uc-7: hsl(243, 42%, 82%);
+  --mx-uc-8: hsl(94, 42%, 80%);
 
   --font-secondary: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
