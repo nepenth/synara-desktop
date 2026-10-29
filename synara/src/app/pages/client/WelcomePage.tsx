@@ -42,19 +42,21 @@ export function WelcomePage() {
           gap="400"
           style={{ width: '100%', maxWidth: toRem(360), textAlign: 'center' }}
         >
-          <Box direction="Column" alignItems="Center" gap="200">
+          <Box direction="Column" alignItems="Center" gap="400">
             <SynaraMark size={88} />
-            <Text as="h1" size="H3">
-              Synara
-            </Text>
-            <Text size="T300" priority="300">
-              <ExternalLink
-                href={SYNARA_RELEASES_URL}
-                onClick={(evt) => openExternalUrlFromClick(evt, SYNARA_RELEASES_URL)}
-              >
-                {`v${APP_VERSION}`}
-              </ExternalLink>
-            </Text>
+            <Box direction="Column" alignItems="Center" gap="100">
+              <Text as="h1" size="H3">
+                Synara
+              </Text>
+              <Text size="T300" priority="300">
+                <ExternalLink
+                  href={SYNARA_RELEASES_URL}
+                  onClick={(evt) => openExternalUrlFromClick(evt, SYNARA_RELEASES_URL)}
+                >
+                  {`v${APP_VERSION}`}
+                </ExternalLink>
+              </Text>
+            </Box>
           </Box>
           <Text size="T300" priority="400">
             Pick a room or direct message from the sidebar.

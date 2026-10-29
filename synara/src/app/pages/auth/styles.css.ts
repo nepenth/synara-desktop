@@ -71,7 +71,9 @@ export const AuthLockup = style({
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  gap: config.space.S300,
+  // About a sixth of the mark, matching iOS.
+  gap: config.space.S400,
+  '@media': { [twoColumn]: { gap: toRem(20) } },
 });
 
 export const AuthBrandMark = style({
