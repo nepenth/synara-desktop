@@ -889,7 +889,8 @@ enum SynaraAvatarPalette {
             hash ^= UInt64(byte)
             hash = hash &* 0x100000001b3
         }
-        let hue = hues[Int(hash % UInt64(hues.count))]
+        // The high half mixes better than FNV's low bits.
+        let hue = hues[Int((hash >> 32) % UInt64(hues.count))]
         return synaraHex(hue: hue, saturation: saturation, lightness: lightness)
     }
 
@@ -1821,7 +1822,7 @@ struct SynaraDesignTokenGallery: View {
                         SynaraToolbarIconButton(systemImage: "person.crop.circle", accessibilityLabel: "Account") {}
                         SynaraActionIconButton(systemImage: "paperplane.fill", accessibilityLabel: "Send") {}
                     }
-                    SynaraStatusChip(title: "Agent", tint: SynaraColor.agent, systemImage: "sparkles")
+                    SynaraStatusChip(title: "Agent", tint: SynaraColor.agent, systemImage: "terminal")
                     SynaraAvatar(title: "Project Room")
                     SynaraUnreadBadge(count: 12, highlighted: true)
                 }
