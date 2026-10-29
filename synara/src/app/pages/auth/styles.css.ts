@@ -28,7 +28,7 @@ export const AuthField = style({
   inset: 0,
   zIndex: -1,
   pointerEvents: 'none',
-  backgroundImage: `radial-gradient(ellipse 50% 45% at 24% 38%, ${accent(10)}, transparent 70%)`,
+  backgroundImage: `radial-gradient(ellipse 50% 45% at 28% 46%, ${accent(10)}, transparent 70%)`,
   '@media': {
     '(prefers-contrast: more)': { display: 'none' },
   },
@@ -61,25 +61,25 @@ export const AuthBrand = style({
   alignItems: 'center',
   textAlign: 'center',
   gap: config.space.S300,
+  // The brand block stays centered in its panel in both layouts: it is the
+  // screen's focal brand moment.
   '@media': {
-    [twoColumn]: { alignItems: 'flex-start', textAlign: 'left', gap: config.space.S400 },
+    [twoColumn]: { gap: config.space.S400 },
   },
 });
 
-/** Mark centered over the wordmark, whatever the column alignment. */
+/** Mark centered over the wordmark, 16px apart as on Welcome and iOS. */
 export const AuthLockup = style({
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  // About a sixth of the mark, matching iOS.
   gap: config.space.S400,
-  '@media': { [twoColumn]: { gap: toRem(20) } },
 });
 
 export const AuthBrandMark = style({
   position: 'relative',
-  width: toRem(88),
-  height: toRem(88),
+  width: toRem(96),
+  height: toRem(96),
   // A still, soft halo in the mark's own blue; it keeps its color in every theme.
   '::before': {
     content: '""',
@@ -90,7 +90,7 @@ export const AuthBrandMark = style({
     background: 'radial-gradient(circle, rgba(63, 184, 255, 0.16), transparent 68%)',
   },
   '@media': {
-    [twoColumn]: { width: toRem(136), height: toRem(136) },
+    [twoColumn]: { width: toRem(128), height: toRem(128) },
     '(prefers-contrast: more)': { selectors: { '&::before': { display: 'none' } } },
   },
 });
@@ -120,6 +120,8 @@ export const AuthFeatures = style({
   padding: 0,
   flexDirection: 'column',
   gap: config.space.S200,
+  // A centered block whose lines stay left-aligned, so the glyphs line up.
+  textAlign: 'left',
   '@media': { [twoColumn]: { display: 'flex' } },
 });
 
