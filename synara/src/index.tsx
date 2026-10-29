@@ -16,11 +16,10 @@ import App from './app/pages/App';
 import './app/i18n';
 import { platformSessionStore } from './app/platform';
 import { initializeSessionBootstrap } from './app/state/sessionBootstrap';
-import { isLinuxOS } from './app/utils/user-agent';
+import { applyPlatformFontFlag } from './app/utils/user-agent';
 
 document.body.classList.add(configClass, varsClass);
-// Lets index.css put the bundled Inter ahead of Linux's system-ui.
-if (isLinuxOS()) document.documentElement.dataset.synaraOs = 'linux';
+applyPlatformFontFlag(document.documentElement);
 
 const mountApp = () => {
   const rootContainer = document.getElementById('root');

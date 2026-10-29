@@ -22,12 +22,12 @@ test('DM rows show the peer in the # slot and other rooms keep #', async ({ page
   await expect(page.getByRole('link', { name: 'Alice Liddell', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'bob', exact: true })).toBeVisible();
 
-  // The person glyph fills the # slot without changing row height.
+  // The person glyph fills the # slot without changing the 32px row height.
   const glyphBox = await alice.locator('[aria-hidden="true"]').first().boundingBox();
   expect(Math.round(glyphBox!.width)).toBe(18);
   expect(Math.round(glyphBox!.height)).toBe(18);
   const heights = await rows.evaluateAll((nodes) =>
     nodes.map((node) => Math.round(node.getBoundingClientRect().height))
   );
-  expect(new Set(heights).size).toBe(1);
+  expect(heights).toEqual(heights.map(() => 32));
 });
