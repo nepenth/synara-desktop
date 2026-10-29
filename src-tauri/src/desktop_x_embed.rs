@@ -14,6 +14,9 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_BODY_BYTES: usize = 1024 * 1024;
 const MAX_POST_ID_DIGITS: usize = 20;
 const MAX_TOKEN_CHARS: usize = 32;
+/// X answers a request without a User-Agent with an empty 400, so every post
+/// failed to load and its card never appeared.
+const USER_AGENT: &str = concat!("Synara/", env!("CARGO_PKG_VERSION"), " (X post embed)");
 
 fn is_post_id(value: &str) -> bool {
     !value.is_empty()
@@ -34,18 +37,20 @@ fn syndication_url(id: &str, token: &str) -> Option<String> {
         .then(|| format!("{SYNDICATION_URL}?id={id}&lang=en&token={token}"))
 }
 
+fn post_request(client: &reqwest::Client, url: String) -> reqwest::RequestBuilder {
+    client
+        .get(url)
+        .header(reqwest::header::ACCEPT, "application/json")
+        .header(reqwest::header::USER_AGENT, USER_AGENT)
+}
+
 async fn fetch_post(url: String) -> Option<String> {
     let client = reqwest::Client::builder()
         .timeout(REQUEST_TIMEOUT)
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .ok()?;
-    let mut response = client
-        .get(url)
-        .header(reqwest::header::ACCEPT, "application/json")
-        .send()
-        .await
-        .ok()?;
+    let mut response = post_request(&client, url).send().await.ok()?;
     if !response.status().is_success() {
         return None;
     }
@@ -91,5 +96,23 @@ mod tests {
         assert!(syndication_url("20", "A").is_none());
         assert!(syndication_url("20", "a.b").is_none());
         assert!(syndication_url("20", &"a".repeat(33)).is_none());
+    }
+
+    #[test]
+    fn the_request_names_synara_as_its_user_agent() {
+        let request = post_request(
+            &reqwest::Client::new(),
+            syndication_url("20", "6dq1a2xwd93").unwrap(),
+        )
+        .build()
+        .unwrap();
+        let user_agent = request.headers()[reqwest::header::USER_AGENT]
+            .to_str()
+            .unwrap();
+        assert!(user_agent.starts_with("Synara/"), "{user_agent}");
+        assert_eq!(
+            request.headers()[reqwest::header::ACCEPT],
+            "application/json"
+        );
     }
 }

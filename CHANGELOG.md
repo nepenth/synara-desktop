@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- X posts (desktop): x.com and twitter.com links show the post card again. X's embed service started rejecting requests that carry no User-Agent, so every post failed to load and no card appeared.
+
 ## [2.7.0] - 2026-10-29
 
 - Links (desktop): web addresses in formatted messages are clickable again, including every reply and any message with bold, italics or other formatting, from Synara or other Matrix apps. Since 2.3.0 only plain-text messages linked them.
