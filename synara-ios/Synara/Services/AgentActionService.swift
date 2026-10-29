@@ -231,7 +231,7 @@ enum SynaraAgentApprovalPromptDetector {
 
         return SynaraAgentApprovalPrompt(
             title: String(localized: "Approval Required: Dangerous Command"),
-            body: reason ?? "A Hermes Agent command is waiting for approval.",
+            body: reason ?? "An agent command is waiting for approval.",
             command: command,
             commandPreview: command.flatMap { commandPreview(for: $0) },
             sourceContext: sourceContext.isEmpty ? nil : sourceContext,
