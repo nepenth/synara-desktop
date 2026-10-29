@@ -338,9 +338,15 @@ const isGroupedWithPrevious = (
 ): boolean =>
   shouldGroupNativeTimelineRows(
     previous
-      ? { senderId: rowSenderId(previous), originServerTs: rowOriginServerTs(previous) }
+      ? {
+          kind: previous.kind,
+          senderId: rowSenderId(previous),
+          originServerTs: rowOriginServerTs(previous),
+        }
       : undefined,
-    row ? { senderId: rowSenderId(row), originServerTs: rowOriginServerTs(row) } : undefined
+    row
+      ? { kind: row.kind, senderId: rowSenderId(row), originServerTs: rowOriginServerTs(row) }
+      : undefined
   );
 
 const mediaStyle = (
