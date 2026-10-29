@@ -43,6 +43,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "desktop_agent_action",
     "desktop_enable_spellcheck",
     "desktop_quit",
+    "desktop_updater_install",
     "matrix_login_flows",
     "matrix_login_password",
     "matrix_logout",
