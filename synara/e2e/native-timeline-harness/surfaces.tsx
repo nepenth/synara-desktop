@@ -8,6 +8,7 @@ import { RoomTopicViewer } from '../../src/app/components/room-topic-viewer/Room
 import { ClientConfigProvider } from '../../src/app/hooks/useClientConfig';
 import { makeHighlightRegex } from '../../src/app/utils/highlightText';
 import {
+  NativeFormattedBody,
   NativePermalinkProvider,
   type NativePermalinkHandler,
 } from '../../src/app/features/room/nativeTimelineFormattedBody';
@@ -92,6 +93,14 @@ function Surfaces() {
         </section>
         <section aria-label="Plain message body">
           <NativePlainMessageBody body="Unfurl https://example.org/article please" />
+        </section>
+        <section aria-label="Formatted message body">
+          <NativeFormattedBody
+            html={
+              '<mx-reply><blockquote>Earlier</blockquote></mx-reply><strong>Read</strong> https://example.org/guide and <a href="https://example.org/linked">this one</a>, not <code>https://example.org/code</code>'
+            }
+            fallbackBody="Read https://example.org/guide"
+          />
         </section>
         <output data-testid="opened-permalink">{opened}</output>
         <button type="button" onClick={() => setTopicOpen(true)}>
