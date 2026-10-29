@@ -493,7 +493,7 @@ private struct AccountSettingsView: View {
             Section {
                 Text(
                     rtcTransports.map(SharedCoreRtcTransports.diagnosticCopy)
-                        ?? String(localized: "Native MatrixRTC transports are unavailable.")
+                        ?? String(localized: "Calls aren’t set up on this server.")
                 )
                 .font(SynaraTypography.supporting)
                 .foregroundStyle(SynaraColor.secondaryText)

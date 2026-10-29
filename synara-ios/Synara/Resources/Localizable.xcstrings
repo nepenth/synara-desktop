@@ -968,6 +968,12 @@
     "Calls" : {
 
     },
+    "Calls are available on this server." : {
+
+    },
+    "Calls aren’t set up on this server." : {
+
+    },
     "Camera" : {
 
     },

@@ -2184,7 +2184,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
             SharedCoreRtcTransports.diagnosticCopy(
                 SharedCoreRtcTransportsSnapshot(status: .unsupported, transports: [])
             ),
-            "This homeserver does not advertise a call transport"
+            "Calls aren’t set up on this server."
         )
         XCTAssertEqual(
             SharedCoreRtcTransports.diagnosticCopy(
@@ -2195,7 +2195,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     ]
                 )
             ),
-            "MatrixRTC transport: LiveKit at https://livekit.example.org"
+            "Calls are available on this server."
         )
     }
 
