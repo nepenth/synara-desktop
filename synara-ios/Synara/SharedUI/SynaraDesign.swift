@@ -1315,6 +1315,10 @@ struct SynaraBrandMark: View {
     var assetName = "SynaraLogo"
     var size: CGFloat = 48
     var hasBackground = true
+    /// A soft, static accent glow for the mark's brand moments (sign-in);
+    /// dense chrome such as the room list header leaves it off.
+    var glows = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Image(assetName)
@@ -1330,6 +1334,10 @@ struct SynaraBrandMark: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.card))
+            .shadow(
+                color: glows ? SynaraColor.accent.opacity(colorScheme == .dark ? 0.32 : 0.18) : .clear,
+                radius: size * 0.22
+            )
             .accessibilityHidden(true)
     }
 }
@@ -1512,12 +1520,11 @@ struct SynaraIconTile: View {
 struct SynaraProductHeader: View {
     let title: String
     let subtitle: String
-    var systemImage: String = "sparkles"
     var assetName: String = "SynaraLogo"
 
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.medium) {
-            SynaraBrandMark(assetName: assetName, size: 56)
+            SynaraBrandMark(assetName: assetName, size: 56, glows: true)
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                 Text(title)
                     .font(.title2.weight(.semibold))

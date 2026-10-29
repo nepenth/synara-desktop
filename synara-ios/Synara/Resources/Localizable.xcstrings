@@ -1942,6 +1942,9 @@
     "MatrixRTC" : {
 
     },
+    "Matrix chat with agent approvals." : {
+
+    },
     "MatrixRTC transport: LiveKit" : {
 
     },
@@ -3445,6 +3448,9 @@
 
     },
     "User unbanned." : {
+
+    },
+    "Use your Matrix account." : {
 
     },
     "User unignored." : {
