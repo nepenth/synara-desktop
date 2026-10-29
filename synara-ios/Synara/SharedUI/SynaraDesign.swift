@@ -610,6 +610,9 @@ enum SynaraColor {
     static var criticalText: Color { synaraStatusText(SynaraStatusTextPalette.critical) }
     static var accentText: Color { synaraStatusText(SynaraStatusTextPalette.accent) }
     static var agentText: Color { synaraStatusText(SynaraStatusTextPalette.agent) }
+    /// Fill behind white labels on a primary button; `accent` itself is
+    /// under 4.5:1 with white.
+    static var accentFill: Color { synaraStatusText(SynaraStatusTextPalette.accentFill) }
 }
 
 /// Text variants of the system status colors: darker in light mode, lighter
@@ -630,6 +633,8 @@ enum SynaraStatusTextPalette {
     static let critical = Pair(light: "#b3141a", dark: "#ff7f78")
     static let accent = Pair(light: "#0058b8", dark: "#5eacff")
     static let agent = Pair(light: "#00616e", dark: "#5ad8e6")
+    /// A fill, not text: white on it clears 4.5:1 in both modes.
+    static let accentFill = Pair(light: "#0062cc", dark: "#1a6fd8")
 
     static let all: [(name: String, pair: Pair)] = [
         ("success", success),

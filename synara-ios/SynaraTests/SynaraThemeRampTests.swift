@@ -204,6 +204,16 @@ final class SynaraThemeRampTests: XCTestCase {
         }
     }
 
+    func testAccentFillKeepsWhiteButtonLabelsReadable() {
+        for hex in [SynaraStatusTextPalette.accentFill.light, SynaraStatusTextPalette.accentFill.dark] {
+            XCTAssertGreaterThanOrEqual(
+                SynaraThemeRamp.contrastRatio(foreground: "#ffffff", background: hex),
+                4.5,
+                hex
+            )
+        }
+    }
+
     func testTabBarScrollTailTracksActualVisibleOcclusion() {
         XCTAssertEqual(
             SynaraTabRootContentReachability.scrollTailHeight(

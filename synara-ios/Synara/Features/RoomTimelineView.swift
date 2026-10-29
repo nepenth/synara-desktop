@@ -7492,10 +7492,12 @@ private struct TimelineRow: View {
                 )
             }
         } else if let approvalPrompt {
+            // Only a request still waiting on you carries the critical plane.
+            let isPending = item.agentApprovalDecision == nil
             SynaraMessageBubble(
                 alignment: bubbleAlignment,
-                variant: .critical,
-                depth: .critical,
+                variant: isPending ? .critical : .standard,
+                depth: isPending ? .critical : .layered,
                 isGrouped: isGroupedWithPrevious,
                 showsBackground: true,
                 deliveryStatus: nil
@@ -8864,10 +8866,10 @@ private struct AgentApprovalPromptTimelineCard: View {
 
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: SynaraSpacing.small) {
-                        actionButtons
+                        actionButtons(stacked: false)
                     }
                     VStack(alignment: .leading, spacing: SynaraSpacing.small) {
-                        actionButtons
+                        actionButtons(stacked: true)
                     }
                 }
 
@@ -8901,18 +8903,20 @@ private struct AgentApprovalPromptTimelineCard: View {
     }
 
     @ViewBuilder
-    private var actionButtons: some View {
+    private func actionButtons(stacked: Bool) -> some View {
         ForEach(SynaraAgentApprovalPromptReaction.allCases) { action in
             if confirmApproveAlways, action == .approveAlways {
                 EmptyView()
             } else {
-                actionButton(action)
+                actionButton(action, stacked: stacked)
             }
         }
     }
 
+    /// Side by side the labels keep one line so `ViewThatFits` can measure
+    /// them; stacked (large Dynamic Type) they take the full width and wrap.
     @ViewBuilder
-    private func actionButton(_ action: SynaraAgentApprovalPromptReaction) -> some View {
+    private func actionButton(_ action: SynaraAgentApprovalPromptReaction, stacked: Bool) -> some View {
         let button = Button {
             if action == .approveAlways {
                 confirmApproveAlways = true
@@ -8923,12 +8927,20 @@ private struct AgentApprovalPromptTimelineCard: View {
         } label: {
             Label(action.title, systemImage: action.systemImage)
                 .labelStyle(.titleAndIcon)
-                .font(SynaraTypography.chipLabel)
-                .lineLimit(1)
-                .fixedSize()
-                .foregroundStyle(action == .approveOnce ? Color.white : action.buttonTint)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(stacked ? 2 : 1)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: !stacked, vertical: false)
+                .frame(
+                    maxWidth: stacked ? .infinity : nil,
+                    minHeight: SynaraHitTarget.minimum,
+                    alignment: stacked ? .leading : .center
+                )
+                .contentShape(Rectangle())
+                .foregroundStyle(action == .approveOnce ? Color.white : action.labelTint)
         }
-        .tint(action.buttonTint)
+        .controlSize(.large)
+        .tint(action == .approveOnce ? SynaraColor.accentFill : action.buttonTint)
         .accessibilityLabel(action.accessibilityTitle)
         .accessibilityIdentifier("AgentApprovalPromptReaction-\(action.accessibilityIdentifierSuffix)-\(eventID)")
 
@@ -8949,9 +8961,10 @@ private struct AgentApprovalButtonStyle: ViewModifier {
         case .some("approve"):
             content
                 .buttonStyle(.borderedProminent)
-                .tint(SynaraColor.accent)
+                .tint(SynaraColor.accentFill)
         case .some("reject"):
             content
+                .foregroundStyle(SynaraColor.criticalText)
                 .buttonStyle(.bordered)
                 .tint(SynaraColor.critical)
         default:
@@ -9145,15 +9158,9 @@ private extension SynaraAgentCardAction {
         }
     }
 
+    /// Approve and reject are styled by `AgentApprovalButtonStyle`.
     var tint: Color {
-        switch kind {
-        case .some("reject"):
-            return SynaraColor.critical
-        case .some("approve"):
-            return SynaraColor.success
-        default:
-            return SynaraColor.agent
-        }
+        SynaraColor.agent
     }
 }
 
@@ -9173,6 +9180,11 @@ private extension SynaraAgentApprovalPromptReaction {
 
     var buttonTint: Color {
         self == .deny ? SynaraColor.critical : SynaraColor.accent
+    }
+
+    /// Label colour on the bordered (tinted) buttons; the AA text variants.
+    var labelTint: Color {
+        self == .deny ? SynaraColor.criticalText : SynaraColor.accentText
     }
 
     var accessibilityTitle: String {
