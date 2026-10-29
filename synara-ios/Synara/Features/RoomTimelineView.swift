@@ -9901,7 +9901,6 @@ private struct AttachmentOptionsSheet: View {
         identifier: "GIF",
         title: String(localized: "GIF"),
         systemImage: "play.rectangle",
-        tint: SynaraColor.accent,
         kind: .gif
     )
 
@@ -9910,21 +9909,18 @@ private struct AttachmentOptionsSheet: View {
             identifier: "Photo or Video",
             title: String(localized: "Photo or Video"),
             systemImage: "photo",
-            tint: SynaraColor.success,
             kind: .photo
         ),
         AttachmentOption(
             identifier: "File",
             title: String(localized: "File"),
             systemImage: "doc",
-            tint: SynaraColor.accent,
             kind: .file
         ),
         AttachmentOption(
             identifier: "Camera",
             title: String(localized: "Camera"),
             systemImage: "camera",
-            tint: SynaraColor.warning,
             kind: .camera
         ),
     ]
@@ -10100,7 +10096,6 @@ private struct AttachmentOption: Identifiable {
     let identifier: String
     let title: String
     let systemImage: String
-    let tint: Color
     let kind: Kind
 
     var id: String { identifier }
