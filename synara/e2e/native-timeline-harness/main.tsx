@@ -210,6 +210,35 @@ if (scenario === 'threads') {
       : row
   );
 }
+// `scenario=sender-headers`: Ian, with no display name or avatar, joins and
+// then writes. His membership row carries his id but shows no sender header,
+// so "hola" must start a group with name and default avatar of its own.
+if (scenario === 'sender-headers') {
+  const ian = { senderId: '@ian:example.test', senderName: 'ian' };
+  const at = (index: number) => 1_700_000_000_000 + (sequence + index) * 60_000;
+  const capabilities = rows[0]?.capabilities;
+  rows = [
+    ...rows,
+    {
+      ...ian,
+      kind: 'membership' as const,
+      itemId: '$ian-join',
+      eventId: '$ian-join',
+      originServerTs: at(1),
+      targetUserId: ian.senderId,
+      summary: 'ian joined the room',
+      capabilities,
+    },
+    { ...makeRow(sequence + 2), ...ian, eventId: '$ian-hola', itemId: '$ian-hola', body: 'hola' },
+    {
+      ...makeRow(sequence + 3),
+      ...ian,
+      eventId: '$ian-again',
+      itemId: '$ian-again',
+      body: 'again',
+    },
+  ] as typeof rows;
+}
 if (scenario === 'media') {
   const media = [
     {
