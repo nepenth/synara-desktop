@@ -112,6 +112,13 @@ objc2-foundation = { version = "0.3", default-features = false, features = ["std
 objc2-user-notifications = { version = "0.3", default-features = false, features = ["std", "UNUserNotificationCenter", "UNNotificationSettings", "UNNotification", "UNNotificationAction", "UNNotificationCategory", "UNNotificationContent", "UNNotificationRequest", "UNNotificationResponse", "UNNotificationSound", "UNNotificationTrigger", "block2"] }
 block2 = "0.6"
 security-framework = "3.7"
+# In-app updates swap only the bundle's Contents (desktop_updater_macos.rs), so
+# they unpack the signed .app.tar.gz themselves, with the crates the updater
+# plugin already uses for it.
+flate2 = "1.1.9"
+libc = "0.2.186"
+tar = "0.4.46"
+tempfile = "3.27.0"
 
 [lib]
 name = "app_lib"

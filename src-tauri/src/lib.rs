@@ -24,6 +24,7 @@ mod desktop_shortcuts;
 mod desktop_spellcheck;
 mod desktop_tray;
 mod desktop_unread_badge;
+mod desktop_updater_macos;
 mod desktop_url;
 mod desktop_webview_performance;
 mod desktop_window_drag;
@@ -653,6 +654,7 @@ pub fn run() {
             desktop_logging::desktop_clear_diagnostics,
             desktop_spellcheck::desktop_enable_spellcheck,
             desktop_agent_actions::desktop_agent_action,
+            desktop_updater_macos::desktop_updater_install,
             matrix::auth::product::matrix_login_password,
             matrix::auth::product::matrix_store_recovery_prepare,
             matrix::auth::product::matrix_store_recovery_confirm,
@@ -1215,7 +1217,14 @@ mod command_manifest_tests {
         let main = granted_commands(include_str!("../capabilities/main.json"));
         let widget = granted_commands(include_str!("../capabilities/widget.json"));
         assert_eq!(widget.iter().collect::<Vec<_>>(), ["widget_bridge_post"]);
-        let granted: BTreeSet<String> = main.union(&widget).cloned().collect();
+        let updater = granted_commands(include_str!("../capabilities/desktop-updater.json"));
+        assert_eq!(
+            updater.iter().collect::<Vec<_>>(),
+            ["desktop_updater_install"]
+        );
+        assert!(!main.contains("desktop_updater_install"));
+        let granted: BTreeSet<String> =
+            main.union(&widget).chain(updater.iter()).cloned().collect();
         let ungranted: Vec<_> = registered.difference(&granted).collect();
         let unknown: Vec<_> = granted.difference(&registered).collect();
         assert!(

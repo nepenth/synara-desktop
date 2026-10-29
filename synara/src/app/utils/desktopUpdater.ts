@@ -1,6 +1,6 @@
 import { isDesktopPlatform, supportsPlatformUpdater } from '../platform';
 import { APP_VERSION, SYNARA_RELEASES_URL } from './appLinks';
-import { getDesktopPerformanceCapabilities } from './desktop';
+import { getDesktopPerformanceCapabilities, invokeDesktopWithAvailability } from './desktop';
 
 export const SYNARA_LATEST_UPDATE_METADATA_URL =
   'https://github.com/nepenth/synara-desktop/releases/latest/download/latest.json';
@@ -320,13 +320,52 @@ export const checkDesktopUpdate = async ({
   }
 };
 
-// On Windows the installer closes the app itself once it starts, so the
+export type InstallUpdateDeps = {
+  /** Downloads, verifies and installs `version` in place (macOS). */
+  installInPlace?: (
+    version: string,
+    onEvent?: (event: DesktopUpdateDownloadEvent) => void
+  ) => Promise<void>;
+  relaunch?: () => Promise<void>;
+};
+
+// The plugin's macOS install replaces the whole Synara.app directory, which
+// the Dock then treats as a different app, so a pinned tile stops matching the
+// running app. `desktop_updater_install` swaps only the bundle's Contents,
+// keeping the directory the Dock remembers.
+const defaultInstallInPlace: NonNullable<InstallUpdateDeps['installInPlace']> = async (
+  version,
+  onEvent
+) => {
+  const { Channel } = await import('@tauri-apps/api/core');
+  const channel = new Channel<DesktopUpdateDownloadEvent>((event) => onEvent?.(event));
+  const result = await invokeDesktopWithAvailability('desktop_updater_install', {
+    expectedVersion: version,
+    onEvent: channel,
+  });
+  if (!result.available) {
+    throw new Error('In-app updates are available in signed release builds only.');
+  }
+};
+
+const defaultRelaunch = async (): Promise<void> => {
+  const processPlugin = await import('@tauri-apps/plugin-process');
+  await processPlugin.relaunch();
+};
+
+// macOS installs through `desktop_updater_install`. Windows keeps the plugin's
+// NSIS/MSI install, which closes the app itself once it starts, so the
 // relaunch below only runs on macOS.
 export const installUpdateAndRelaunch = async (
   update: InAppUpdateHandle,
-  onEvent?: (event: DesktopUpdateDownloadEvent) => void
+  platform: InAppUpdaterPlatform,
+  onEvent?: (event: DesktopUpdateDownloadEvent) => void,
+  { installInPlace = defaultInstallInPlace, relaunch = defaultRelaunch }: InstallUpdateDeps = {}
 ): Promise<void> => {
-  await update.downloadAndInstall(onEvent);
-  const processPlugin = await import('@tauri-apps/plugin-process');
-  await processPlugin.relaunch();
+  if (platform === 'macos') {
+    await installInPlace(update.version, onEvent);
+  } else {
+    await update.downloadAndInstall(onEvent);
+  }
+  await relaunch();
 };

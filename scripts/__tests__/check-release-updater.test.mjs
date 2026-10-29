@@ -32,6 +32,7 @@ const readyInputs = {
     permissions: [
       "updater:allow-check",
       "updater:allow-download-and-install",
+      "allow-desktop-updater-install",
       "process:allow-restart",
     ],
   },
@@ -128,6 +129,43 @@ test("release updater gate rejects updater permissions on the shared capability"
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /must not grant updater:allow-check/);
   assert.match(result.errors.join("\n"), /must not grant process:allow-restart/);
+});
+
+test("release updater gate keeps the macOS in-place install command off the shared capability", () => {
+  const result = inspectReleaseUpdaterReadiness({
+    ...readyInputs,
+    capabilities: {
+      permissions: [
+        ...readyInputs.capabilities.permissions,
+        "allow-desktop-updater-install",
+      ],
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(
+    result.errors.join("\n"),
+    /must not grant allow-desktop-updater-install/,
+  );
+});
+
+test("release updater gate requires the macOS in-place install command on the updater capability", () => {
+  const result = inspectReleaseUpdaterReadiness({
+    ...readyInputs,
+    updaterCapability: {
+      ...readyInputs.updaterCapability,
+      permissions: readyInputs.updaterCapability.permissions.filter(
+        (permission) => permission !== "allow-desktop-updater-install",
+      ),
+    },
+    requireEnabled: true,
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(
+    result.errors.join("\n"),
+    /must grant allow-desktop-updater-install/,
+  );
 });
 
 test("release updater gate rejects an updater capability that includes Linux", () => {

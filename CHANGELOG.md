@@ -7,6 +7,7 @@
 - Windows (desktop): the release workflow installs the Windows setup, launches Synara and requires the sign-in screen to render before anything is published. The Windows workflow can run the same check on any published release (`release_tag`) in a few minutes.
 - Sign-in page: lists Windows among the native platforms.
 - Timeline (desktop): a message sent right after the same person's join, leave or other room event now shows their name and avatar. The message used to appear with no header, as if it continued an earlier message, most visibly for people with no display name or avatar set. Only messages and stickers, which show who sent them, now group the next message from that sender.
+- Updates (macOS): an in-app update now keeps the same Synara.app, so a Synara icon pinned to the Dock stays pinned and matches the running app. Since 2.3.0 each update replaced the whole app folder, which the Dock treated as a different app and showed as a second icon. Synara now swaps only the app's contents, after the same signature check, and falls back to the previous install method (including the administrator prompt) when it can't. The installed version does the install, so the fix applies from the update after the one that ships it.
 
 ## [2.6.0] - 2026-10-28
 

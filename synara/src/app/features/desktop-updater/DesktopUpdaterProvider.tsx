@@ -31,6 +31,7 @@ import {
   getDismissedUpdateVersion,
   installUpdateAndRelaunch,
   InAppUpdateHandle,
+  InAppUpdaterPlatform,
   reduceDownloadProgress,
   setDismissedUpdateVersion,
   shouldPromptForUpdate,
@@ -223,7 +224,9 @@ type DesktopUpdaterProviderProps = {
 };
 
 export function DesktopUpdaterProvider({ children }: DesktopUpdaterProviderProps) {
-  const inAppUpdateRef = useRef<InAppUpdateHandle | undefined>(undefined);
+  const inAppUpdateRef = useRef<
+    { update: InAppUpdateHandle; platform: InAppUpdaterPlatform } | undefined
+  >(undefined);
   const [state, setState] = useState<DesktopUpdaterState>({
     checking: false,
     installing: false,
@@ -259,7 +262,10 @@ export function DesktopUpdaterProvider({ children }: DesktopUpdaterProviderProps
 
     try {
       const result = await checkDesktopUpdate();
-      inAppUpdateRef.current = result.status === 'available' ? result.inAppUpdate : undefined;
+      inAppUpdateRef.current =
+        result.status === 'available' && result.inAppUpdate && result.platform !== 'linux'
+          ? { update: result.inAppUpdate, platform: result.platform }
+          : undefined;
       const checkedAt = Date.now();
       const showPrompt =
         result.status === 'available'
@@ -291,8 +297,8 @@ export function DesktopUpdaterProvider({ children }: DesktopUpdaterProviderProps
   }, []);
 
   const installAvailableUpdate = useCallback(async () => {
-    const update = inAppUpdateRef.current;
-    if (!update) return;
+    const pending = inAppUpdateRef.current;
+    if (!pending) return;
 
     setState((current) => ({
       ...current,
@@ -304,7 +310,7 @@ export function DesktopUpdaterProvider({ children }: DesktopUpdaterProviderProps
     }));
 
     try {
-      await installUpdateAndRelaunch(update, (event) => {
+      await installUpdateAndRelaunch(pending.update, pending.platform, (event) => {
         setState((current) => ({
           ...current,
           downloadProgress: reduceDownloadProgress(
