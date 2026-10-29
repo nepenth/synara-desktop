@@ -7,16 +7,18 @@ const source = (path: string) => readFileSync(path, 'utf8');
 test('quiet depth system preserves accessibility preferences and keeps text flat', () => {
   const depth = source('src/app/styles/Depth.css.ts');
 
-  assert.match(depth, /prefers-reduced-transparency: reduce/);
+  // Menus are opaque, so nothing needs a blur behind it.
+  assert.doesNotMatch(depth, /backdropFilter/);
   assert.match(depth, /prefers-contrast: more/);
   assert.match(depth, /prefers-reduced-motion: reduce/);
   assert.match(depth, /quietSurfaceFold/);
   assert.match(depth, /export const restingInnerEdge/);
   assert.match(depth, /export const floatingSurface/);
-  assert.match(depth, /export const criticalSurface/);
   assert.match(depth, /export const avatarSurface/);
   assert.match(depth, /export const avatarMedia/);
+  assert.match(depth, /export const criticalSurface/);
   assert.match(depth, /export const quietInteractiveSurface/);
+  assert.doesNotMatch(depth, /translateY\(-/);
   assert.match(depth, /export const quietActionButton/);
   assert.match(depth, /:not\(:disabled\):not\(\[aria-disabled=true\]\)/);
   assert.match(depth, /&:disabled, &\[aria-disabled=true\]/);
@@ -32,7 +34,9 @@ test('desktop hierarchy uses semantic depth while keeping text itself flat', () 
   // Selection is `data-selected` on the row; `aria-selected` is invalid on it (D58).
   assert.match(nav, /&\[data-selected=true\]/);
   assert.doesNotMatch(nav, /aria-selected/);
+  // Selected rows rise on quiet depth (tint, accent bar, raised edge) but never move.
   assert.match(nav, /raisedShadow/);
+  assert.doesNotMatch(nav, /translateY/);
   assert.match(editor, /raisedShadow/);
   assert.match(editor, /EditorFloatingOptions/);
   assert.doesNotMatch(editor, /floatingShadow|quietSurfaceFold|linear-gradient/);

@@ -37,6 +37,7 @@ import {
   CryptoStoreContinuityError,
 } from '../../../client/cryptoStoreContinuity';
 import { SplashScreen } from '../../components/splash-screen';
+import { SynaraMark } from '../auth/SynaraMark';
 import { ServerConfigsLoader } from '../../components/ServerConfigsLoader';
 import { CapabilitiesProvider } from '../../hooks/useCapabilities';
 import { MediaConfigProvider } from '../../hooks/useMediaConfig';
@@ -67,9 +68,10 @@ import { composerErrorMessage } from '../../features/room/composerSendError';
 function ClientRootLoading({ status }: { status: string }) {
   return (
     <SplashScreen>
-      <Box direction="Column" grow="Yes" alignItems="Center" justifyContent="Center" gap="400">
-        <Spinner variant="Secondary" size="600" />
-        <Box direction="Column" alignItems="Center" gap="100">
+      <Box direction="Column" grow="Yes" alignItems="Center" justifyContent="Center" gap="500">
+        <SynaraMark size={88} />
+        <Box direction="Column" alignItems="Center" gap="200">
+          <Spinner variant="Secondary" size="200" />
           <Text>Heating up</Text>
           <Text size="T300" priority="400">
             {status}

@@ -26,6 +26,14 @@ export const isMacOS = () => osName() === 'macOS';
 
 export const isLinuxOS = () => osName() === 'Linux';
 
+/**
+ * Flags Linux on the root element so index.css can put the bundled Inter ahead
+ * of Linux's system-ui, which is often DejaVu Sans.
+ */
+export const applyPlatformFontFlag = (root: Pick<HTMLElement, 'dataset'>): void => {
+  if (isLinuxOS()) root.dataset.synaraOs = 'linux';
+};
+
 export const synaraDeviceDisplayName = (): string => {
   const name = osName();
 

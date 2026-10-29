@@ -11,11 +11,7 @@ type AccountProps = {
 };
 export function Account({ requestClose }: AccountProps) {
   return (
-    <SettingsPage
-      title="Account"
-      description="Your profile, Matrix ID, password, contact details and ignored users."
-      requestClose={requestClose}
-    >
+    <SettingsPage title="Account" requestClose={requestClose}>
       <Profile />
       <MatrixId />
       <Password />

@@ -102,7 +102,7 @@ replacements and retired packages are deliberate outcomes explained below.
 | `@atlaskit/pragmatic-drag-and-drop`             | `1.1.6`   | `4.0.0`     | `4.0.0`                             | integrated             |
 | `@atlaskit/pragmatic-drag-and-drop-auto-scroll` | `1.3.0`   | `3.2.1`     | `3.2.1`                             | integrated             |
 | `@atlaskit/pragmatic-drag-and-drop-hitbox`      | `1.0.3`   | `3.0.0`     | `3.0.0`                             | integrated             |
-| `@fontsource/inter`                             | `4.5.14`  | `5.3.0`     | `@fontsource-variable/inter@5.3.0`  | compatible replacement |
+| `@fontsource/inter`                             | `4.5.14`  | `5.3.0`     | `@fontsource-variable/inter@5.3.0`  | replaced, now retired  |
 | `@tanstack/react-query`                         | `5.24.1`  | `5.104.0`   | `5.104.0`                           | integrated             |
 | `@tanstack/react-query-devtools`                | `5.24.1`  | `5.104.0`   | `5.104.0`                           | integrated             |
 | `@tanstack/react-virtual`                       | `3.14.7`  | `3.14.13`   | `3.14.13`                           | integrated             |
@@ -191,6 +191,9 @@ replacements and retired packages are deliberate outcomes explained below.
   differences were corrected so the real full lint gate passes.
 - **Fonts:** Fontsource 5 moved variable fonts to
   `@fontsource-variable/inter@5.3.0`; imports preserve variable-font rendering.
+  The package was later retired (2026-10-29, #1223): the renderer uses platform
+  UI fonts and bundles only Inter's latin and latin-ext subsets, for Linux, in
+  `synara/public/font/`.
 - **Jotai:** Jotai 3 removed `atomFamily` from its utilities. Maintained
   `jotai-family@1.1.0` serves upload and room-draft atom families.
 - **HTML parser:** structural `isTag`/`isText` checks replace instance comparisons

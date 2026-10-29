@@ -1,5 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Button, Chip, Spinner, Text, color, config, toRem } from 'folds';
+import {
+  Box,
+  Button,
+  Chip,
+  Icon,
+  IconSrc,
+  Icons,
+  Spinner,
+  Text,
+  color,
+  config,
+  toRem,
+} from 'folds';
 import {
   AGENT_APPROVAL_REACTION_APPROVE_ALWAYS,
   AGENT_APPROVAL_REACTION_APPROVE_ONCE,
@@ -35,6 +47,7 @@ type ApprovalAction = {
   actionId: string;
   key: string;
   label: string;
+  icon: IconSrc;
   variant: 'Primary' | 'Critical' | 'Secondary';
 };
 
@@ -43,18 +56,21 @@ const APPROVAL_ACTIONS: ApprovalAction[] = [
     actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
     key: AGENT_APPROVAL_REACTION_APPROVE_ONCE,
     label: 'Approve once',
+    icon: Icons.Check,
     variant: 'Primary',
   },
   {
     actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS,
     key: AGENT_APPROVAL_REACTION_APPROVE_ALWAYS,
     label: 'Approve always',
+    icon: Icons.CheckTwice,
     variant: 'Primary',
   },
   {
     actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_DENY,
     key: AGENT_APPROVAL_REACTION_DENY,
     label: 'Deny',
+    icon: Icons.Cross,
     variant: 'Critical',
   },
 ];
@@ -69,7 +85,7 @@ const monospacedBlockStyle: React.CSSProperties = {
   padding: config.space.S300,
   borderRadius: config.radii.R300,
   backgroundColor: color.SurfaceVariant.Container,
-  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+  fontFamily: 'var(--font-mono)',
   fontSize: toRem(12),
   lineHeight: 1.45,
 };
@@ -171,18 +187,9 @@ export function AgentApprovalCard({
       </Box>
 
       {prompt.command && !isResolved && (
-        <Box
-          direction="Column"
-          gap="200"
-          className={css.ApprovalDetail}
-          style={{
-            border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
-            borderRadius: config.radii.R300,
-            padding: config.space.S300,
-          }}
-        >
+        <Box direction="Column" gap="100">
           <Text size="L400" priority="300">
-            Command{prompt.commandPreview ? `: ${prompt.commandPreview}` : ''}
+            Command
           </Text>
           <pre style={monospacedBlockStyle}>
             <code>{prompt.command}</code>
@@ -236,9 +243,7 @@ export function AgentApprovalCard({
                   )
                 }
               >
-                <Text size="B300">
-                  {AGENT_APPROVAL_REACTION_APPROVE_ALWAYS} Confirm approve always
-                </Text>
+                <Text size="B300">Confirm approve always</Text>
               </Button>
               <Button
                 type="button"
@@ -268,16 +273,18 @@ export function AgentApprovalCard({
                   type="button"
                   size="300"
                   variant={action.variant}
-                  fill={action.variant === 'Critical' ? 'Solid' : 'Soft'}
+                  fill={action.key === AGENT_APPROVAL_REACTION_APPROVE_ONCE ? 'Solid' : 'Soft'}
                   disabled={disabled}
                   before={
                     busyKey === action.key ? (
                       <Spinner size="100" variant={action.variant} />
-                    ) : undefined
+                    ) : (
+                      <Icon size="100" src={action.icon} />
+                    )
                   }
                   onClick={() => handleReact(action)}
                 >
-                  <Text size="B300">{`${action.key} ${action.label}`}</Text>
+                  <Text size="B300">{action.label}</Text>
                 </Button>
               );
             })}
@@ -300,22 +307,15 @@ export function AgentApprovalCard({
           </Text>
         )}
         {isResolved && (
-          <Box
-            direction="Column"
-            gap="100"
-            style={{
-              border: `${config.borderWidth.B300} solid ${color.Success?.Main || '#22c55e'}`,
-              borderRadius: config.radii.R300,
-              padding: config.space.S200,
-              backgroundColor: color.SurfaceVariant?.Container || 'rgba(0,0,0,0.03)',
-            }}
-          >
+          <Box direction="Column" gap="100">
             <Text size="T300" priority="400">
               {coreDecision
                 ? describeAgentApprovalDecision(coreDecision)
                 : decisionStatus === 'already_decided'
                   ? 'This approval was already decided on this account.'
-                  : `Decision sent (${sentKey}).`}
+                  : `Decision sent: ${
+                      APPROVAL_ACTIONS.find((action) => action.key === sentKey)?.label ?? sentKey
+                    }.`}
             </Text>
             {prompt.commandPreview && (
               <Text size="T200" priority="300">

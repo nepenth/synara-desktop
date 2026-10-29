@@ -53,6 +53,11 @@ export const Search = style({
   color: color.Background.OnContainer,
   font: 'inherit',
 });
+export const List = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: config.space.S400,
+});
 export const Card = style({
   border: `1px solid ${color.Surface.ContainerLine}`,
   borderRadius: config.radii.R400,

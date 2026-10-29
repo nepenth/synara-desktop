@@ -7,7 +7,6 @@ import { createRoot } from 'react-dom/client';
 import { enableMapSet } from 'immer';
 import { configClass, varsClass } from 'folds';
 import 'folds/dist/style.css';
-import '@fontsource-variable/inter';
 import '../../src/index.css';
 import App from '../../src/app/pages/App';
 import '../../src/app/i18n';

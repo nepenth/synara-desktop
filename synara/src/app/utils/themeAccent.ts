@@ -2,7 +2,7 @@
 export const DEFAULT_ACCENT_COLOR = '#1245a8';
 
 /** Dark-theme Primary.Main from `colors.css.ts`. */
-export const DARK_THEME_ACCENT_COLOR = '#bdb6ec';
+export const DARK_THEME_ACCENT_COLOR = '#8db4f5';
 
 const HEX_COLOR_REGEX = /^#[0-9a-f]{6}$/i;
 

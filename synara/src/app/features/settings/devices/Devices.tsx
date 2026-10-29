@@ -62,11 +62,7 @@ export function Devices({ requestClose }: DevicesProps) {
   const canStartCurrentVerification = canStartCurrentDeviceVerification(deviceSnapshot);
 
   return (
-    <SettingsPage
-      title="Devices"
-      description="Signed-in devices, verification and encrypted message backup."
-      requestClose={requestClose}
-    >
+    <SettingsPage title="Devices" requestClose={requestClose}>
       <SettingsSection title="Security">
         <SequenceCard
           className={SequenceCardStyle}

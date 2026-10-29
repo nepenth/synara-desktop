@@ -167,8 +167,19 @@ export const SidebarAvatar = recipe({
       },
     },
     outlined: {
+      // A faint edge at rest; the full line arrives on hover or selection.
       true: {
-        border: `${config.borderWidth.B300} solid ${color.Background.ContainerLine}`,
+        border: `${config.borderWidth.B300} solid color-mix(in srgb, ${color.Background.ContainerLine} 45%, transparent)`,
+        selectors: {
+          '&:hover, &:focus-visible, &[aria-current=page]': {
+            borderColor: color.Background.ContainerLine,
+          },
+        },
+        '@media': {
+          '(prefers-contrast: more)': {
+            borderColor: color.Background.ContainerLine,
+          },
+        },
       },
     },
   },

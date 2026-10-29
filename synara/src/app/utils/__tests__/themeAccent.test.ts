@@ -17,7 +17,7 @@ test('normalizeAccentColor accepts only full hex colors', () => {
 
 test('unset accent falls back to the theme primary actually in use, not mint', () => {
   assert.equal(DEFAULT_ACCENT_COLOR, '#1245a8');
-  assert.equal(DARK_THEME_ACCENT_COLOR, '#bdb6ec');
+  assert.equal(DARK_THEME_ACCENT_COLOR, '#8db4f5');
   assert.equal(themeDefaultAccentColor('light'), DEFAULT_ACCENT_COLOR);
   assert.equal(themeDefaultAccentColor('dark'), DARK_THEME_ACCENT_COLOR);
   assert.notEqual(DEFAULT_ACCENT_COLOR, '#6bdbb8');

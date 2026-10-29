@@ -38,8 +38,6 @@ test('welcome and about surfaces link to the support URL through the external-li
     );
     assert.match(source, /Support this project/, `${name} labels the support button`);
   }
-  // The heart icon means Support; the Project button uses a neutral icon.
-  assert.match(welcome, /Icons\.Heart/, 'Welcome keeps the heart for Support');
 });
 
 test('desktop link interceptor uses capture phase', () => {

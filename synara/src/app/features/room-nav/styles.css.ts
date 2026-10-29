@@ -39,8 +39,12 @@ export const RoomNameRead = style({
   color: 'var(--synara-content-secondary)',
 });
 
-/** Resting rows remain on the reading plane; interaction supplies elevation. */
+/**
+ * Resting rows remain on the reading plane; interaction supplies elevation.
+ * Rows are 32px so a long room list scans like a list, not a stack of tiles.
+ */
 export const RoomSurface = style({
+  minHeight: toRem(32),
   backgroundColor: 'transparent',
   borderColor: 'transparent',
   boxShadow: 'none',

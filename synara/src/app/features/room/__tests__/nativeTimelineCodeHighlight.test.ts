@@ -121,7 +121,7 @@ test('native presenter routes formatted HTML through the sanitized Prism code-bl
   assert.match(htmlCss, /CodeLineNumbers/);
   assert.match(htmlCss, /CodeRow/);
   assert.match(htmlCss, /whiteSpace: 'pre'/);
-  assert.match(htmlCss, /ui-monospace/);
+  assert.match(htmlCss, /fontFamily: 'var\(--font-mono\)'/);
   assert.match(htmlCss, /fontSize: '0\.92em'/);
   assert.match(htmlCss, /lineHeight: 1\.5/);
   assert.match(htmlCss, /--synara-rich-text-code-block-background/);

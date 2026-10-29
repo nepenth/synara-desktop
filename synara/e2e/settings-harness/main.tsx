@@ -6,7 +6,6 @@ import { createRoot } from 'react-dom/client';
 import { enableMapSet } from 'immer';
 import { configClass, varsClass } from 'folds';
 import 'folds/dist/style.css';
-import '@fontsource-variable/inter';
 import '../../src/index.css';
 import { darkTheme, synaraLightTheme } from '../../src/colors.css';
 import App from '../../src/app/pages/App';
@@ -51,6 +50,97 @@ const space: RoomSummary = {
   isEncrypted: false,
   encryptionStatus: 'not_encrypted',
 };
+// `?rooms=60` fills the list the way a daily account looks: channels, DMs,
+// favourites, unread and mentioned rooms, agent approvals, muted rooms, a
+// live call, long names and invites, so density and scanning can be judged.
+const CHANNELS = [
+  'General',
+  'Announcements',
+  'Design review',
+  'Release planning',
+  'Infra on-call',
+  'Desktop',
+  'iOS',
+  'Matrix SDK',
+  'Hermes agents',
+  'Agent approvals',
+  'Support',
+  'Random',
+  'Bug triage',
+  'Incident 2026-10-27 sync stall postmortem and follow-ups',
+  'Docs',
+  'Localization',
+  'Accessibility',
+  'Security',
+  'Crypto & E2EE',
+  'Build Mac',
+  'CI',
+  'Windows',
+  'Linux packaging',
+  'Community',
+  'Off-topic',
+  'Book club',
+  'Children’s books project',
+  'Home assistants',
+  'Research assistant runs',
+  'Publishing pipeline',
+  'Customer feedback',
+  'Roadmap Q1',
+  'Hiring',
+  'Lunch',
+  'Weekend hiking crew with a deliberately long channel name for truncation',
+];
+const PEOPLE = [
+  'Ada Lovelace',
+  'Grace Hopper',
+  'Alan Kay',
+  'Barbara Liskov',
+  'Ken Thompson',
+  'Margaret Hamilton',
+  'Linus Torvalds',
+  'Radia Perlman',
+  'Dennis Ritchie',
+  'Frances Allen',
+  'Research assistant',
+  'Publishing assistant',
+  'Home assistant',
+  'Leslie Lamport',
+  'Hedy Lamarr',
+];
+const manyRooms = (count: number): RoomSummary[] =>
+  Array.from({ length: count }, (_, index) => {
+    const direct = index % 4 === 3;
+    const name = direct
+      ? PEOPLE[Math.floor(index / 4) % PEOPLE.length]
+      : CHANNELS[index % CHANNELS.length] + (index >= CHANNELS.length * 1.3 ? ` ${index}` : '');
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const unread = index % 5 === 0 ? (index % 3) + 1 : index % 11 === 2 ? 42 : 0;
+    return {
+      ...room,
+      roomId: `!many-${index}:example.test`,
+      name,
+      canonicalAlias: direct ? undefined : `#${slug}:example.test`,
+      membership: index === 9 || index === 31 ? 'invite' : 'join',
+      isDirect: direct,
+      directUserId: direct ? `@${slug}:example.test` : undefined,
+      isFavorite: index < 5 || index === 12,
+      isCall: false,
+      hasActiveCall: index === 6,
+      activeCallParticipantCount: index === 6 ? 3 : 0,
+      unreadCount: unread,
+      highlightCount: index % 7 === 0 ? 1 : 0,
+      markedUnread: index === 17,
+      notificationMode: index % 13 === 4 ? 'mute' : undefined,
+      lastMessageIsAgentApproval: index % 9 === 8,
+      lastActivityTs: Date.now() - index * 7 * 60000,
+    } as RoomSummary;
+  });
+const roomCount = Number(query.get('rooms') ?? 0);
+const listedRooms: RoomSummary[] = [
+  room,
+  ...(query.has('space') ? [space] : []),
+  ...(roomCount > 0 ? manyRooms(roomCount) : []),
+];
 type Fixture = unknown | ((args?: Record<string, unknown>) => unknown);
 // Room-scoped fixtures answer for whichever room (or space) is asked about.
 const requestedRoom = (args?: Record<string, unknown>): string => {
@@ -102,9 +192,9 @@ const fixtures: Record<string, Fixture> = {
   },
   matrix_room_list_snapshot: {
     sessionGeneration: 1,
-    orderedRoomIds: query.has('space') ? [ROOM_ID, SPACE_ID] : [ROOM_ID],
-    rooms: query.has('space') ? [room, space] : [room],
-    presentation: presentationFor(query.has('space') ? [room, space] : [room]),
+    orderedRoomIds: listedRooms.map((listed) => listed.roomId),
+    rooms: listedRooms,
+    presentation: presentationFor(listedRooms),
   },
   desktop_append_log: true,
   desktop_set_badge_count: true,

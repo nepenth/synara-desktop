@@ -536,7 +536,8 @@ export const ReplySurface = style({
   borderLeft: `3px solid var(--synara-content-separator)`,
   borderRadius: `0 ${config.radii.R300} ${config.radii.R300} 0`,
   background: 'var(--synara-table-even)',
-  boxShadow: `inset 0 1px 0 ${quietEdgeLight}, 0 1px 2px color-mix(in srgb, ${color.Other.Shadow} 18%, transparent)`,
+  // Quiet edge light only: a quote sits on the reading plane, not above it.
+  boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
   color: 'var(--synara-message-foreground)',
   textAlign: 'left',
   cursor: 'pointer',
@@ -550,9 +551,6 @@ export const ReplySurface = style({
     },
   },
   '@media': {
-    '(prefers-reduced-transparency: reduce)': {
-      boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
-    },
     '(prefers-contrast: more)': {
       boxShadow: 'none',
     },
@@ -610,8 +608,7 @@ export const CodePanel = style({
 });
 
 const codeMono = {
-  fontFamily:
-    'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", "Noto Sans Mono", monospace',
+  fontFamily: 'var(--font-mono)',
   fontSize: '0.92em',
   lineHeight: 1.5,
 } as const;
@@ -620,8 +617,7 @@ export const CodeLanguage = style({
   flex: 'none',
   padding: `${config.space.S100} ${config.space.S300}`,
   color: syntaxMeta,
-  fontFamily:
-    'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", "Noto Sans Mono", monospace',
+  fontFamily: 'var(--font-mono)',
   fontSize: '0.78em',
   letterSpacing: '0.02em',
   textTransform: 'lowercase',
@@ -761,8 +757,7 @@ globalStyle(`${FormattedBody} pre:last-child`, {
   marginBottom: 0,
 });
 globalStyle(`${FormattedBody} code`, {
-  fontFamily:
-    'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", "Noto Sans Mono", monospace',
+  fontFamily: 'var(--font-mono)',
   fontSize: '0.92em',
 });
 globalStyle(`${FormattedBody} :not(pre) > code`, {

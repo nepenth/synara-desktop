@@ -1,7 +1,5 @@
 import { Box, Text } from 'folds';
 import React, { ReactNode } from 'react';
-import classNames from 'classnames';
-import * as patternsCSS from '../../styles/Patterns.css';
 import * as css from './SplashScreen.css';
 
 type SplashScreenProps = {
@@ -9,10 +7,7 @@ type SplashScreenProps = {
 };
 export function SplashScreen({ children }: SplashScreenProps) {
   return (
-    <Box
-      className={classNames(css.SplashScreen, patternsCSS.BackgroundDotPattern)}
-      direction="Column"
-    >
+    <Box className={css.SplashScreen} direction="Column">
       {children}
       <Box
         className={css.SplashScreenFooter}
