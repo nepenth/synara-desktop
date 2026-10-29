@@ -15,7 +15,7 @@ enum SynaraApprovalNotificationSettingsCopy {
     static let approveOnceWithoutUnlockTitle = String(localized: "Approve once without unlocking")
 
     static func footer(approveOnceWithoutUnlock: Bool) -> String {
-        let delivery = String(localized: "Fresh, locally verified approval prompts use Critical Alerts when this build supports them and you allow them in iOS; otherwise they use Time Sensitive alerts. Use Request Notification Permission to allow Critical Alerts in a supported build. Show approval details puts the reason and requested command on the notification, including the Lock Screen and Apple Watch, independent of message previews.")
+        let delivery = String(localized: "Approval requests arrive as Critical Alerts if you allow them in iOS, and as Time Sensitive alerts otherwise. Show approval details puts the reason and command on the notification, on the Lock Screen and Apple Watch too, even when message previews are off.")
         let actions = approveOnceWithoutUnlock
             ? String(localized: "Approve once and Deny work from the Lock Screen and Apple Watch without unlocking your iPhone.")
             : String(localized: "Approve once requires unlocking your iPhone first. Deny works without unlocking.")

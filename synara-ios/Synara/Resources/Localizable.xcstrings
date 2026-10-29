@@ -848,6 +848,9 @@
     "Approval request filter" : {
 
     },
+    "Approval requests arrive as Critical Alerts if you allow them in iOS, and as Time Sensitive alerts otherwise. Show approval details puts the reason and command on the notification, on the Lock Screen and Apple Watch too, even when message previews are off." : {
+
+    },
     "Approval required" : {
 
     },
