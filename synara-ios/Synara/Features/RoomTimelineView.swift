@@ -6499,40 +6499,18 @@ private struct TimelineAvatar: View {
     }
 
     private var displayName: String {
-        switch senderID.lowercased() {
-        case "@mina:matrix.org":
-            return "Mina"
-        case "@alex:matrix.org":
-            return "Alex"
-        case "@ravi:matrix.org":
-            return "Ravi"
-        case "@local:matrix.org", "@you:matrix.org":
-            return "You"
-        default:
-            guard senderID.hasPrefix("@") else {
-                return senderID
-            }
+        guard senderID.hasPrefix("@") else {
             return senderID
-                .dropFirst()
-                .split(separator: ":")
-                .first
-                .map(String.init) ?? senderID
         }
+        return senderID
+            .dropFirst()
+            .split(separator: ":")
+            .first
+            .map(String.init) ?? senderID
     }
 
-    private var avatarFill: LinearGradient {
-        let colors: [Color]
-        switch senderID.lowercased() {
-        case "@mina:matrix.org":
-            colors = [Color(red: 0.88, green: 0.48, blue: 0.32), Color(red: 0.34, green: 0.18, blue: 0.12)]
-        case "@alex:matrix.org":
-            colors = [Color(red: 0.16, green: 0.53, blue: 0.65), Color(red: 0.07, green: 0.16, blue: 0.24)]
-        case "@ravi:matrix.org":
-            colors = [Color(red: 0.70, green: 0.42, blue: 0.23), Color(red: 0.16, green: 0.10, blue: 0.08)]
-        default:
-            colors = [SynaraColor.accent, SynaraColor.secondaryText]
-        }
-        return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+    private var avatarFill: Color {
+        SynaraAvatarPalette.color(for: senderID)
     }
 }
 

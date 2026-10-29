@@ -1366,7 +1366,7 @@ private struct RoomListRow: View {
                     .accessibilityHidden(true)
             case let .person(initial):
                 // Same 20 pt column as "#", so names stay aligned.
-                SynaraPersonGlyph(initial: initial, avatarURL: room.avatarURL, size: 20)
+                SynaraPersonGlyph(initial: initial, avatarURL: room.avatarURL, size: 20, seed: room.directUserId ?? room.id)
             }
 
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {

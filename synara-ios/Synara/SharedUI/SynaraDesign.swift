@@ -871,6 +871,34 @@ private func synaraHex(hue: Double, saturation: Double, lightness: Double) -> St
     )
 }
 
+/// Flat, muted fallback avatar colours, picked deterministically from a
+/// Matrix ID so a person keeps the same colour on every device. Every entry
+/// keeps white initials at 4.5:1 or better.
+enum SynaraAvatarPalette {
+    static let hues: [Double] = [212, 248, 285, 330, 8, 28, 140, 195]
+    static let saturation = 0.34
+    static let lightness = 0.37
+
+    static func hex(for seed: String) -> String {
+        // FNV-1a: stable across launches, unlike `Hasher`.
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in seed.lowercased().utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x100000001b3
+        }
+        let hue = hues[Int(hash % UInt64(hues.count))]
+        return synaraHex(hue: hue, saturation: saturation, lightness: lightness)
+    }
+
+    static func color(for seed: String) -> Color {
+        #if canImport(UIKit)
+        Color(uiColor: UIColor(synaraHex: hex(for: seed)) ?? .systemGray)
+        #else
+        Color.gray
+        #endif
+    }
+}
+
 enum SynaraRadius {
     static let small: CGFloat = 6
     static let card: CGFloat = 8

@@ -187,6 +187,23 @@ final class SynaraThemeRampTests: XCTestCase {
         XCTAssertLessThan(floating.boundaryOpacity, critical.boundaryOpacity)
     }
 
+    func testFallbackAvatarPaletteIsStableAndKeepsWhiteInitialsReadable() {
+        XCTAssertEqual(
+            SynaraAvatarPalette.hex(for: "@mina:matrix.org"),
+            SynaraAvatarPalette.hex(for: "@Mina:matrix.org")
+        )
+        let seeds = (0..<64).map { "@user\($0):example.org" }
+        let hexes = Set(seeds.map(SynaraAvatarPalette.hex(for:)))
+        XCTAssertGreaterThan(hexes.count, 4)
+        for hex in hexes {
+            XCTAssertGreaterThanOrEqual(
+                SynaraThemeRamp.contrastRatio(foreground: "#ffffff", background: hex),
+                4.5,
+                hex
+            )
+        }
+    }
+
     func testTabBarScrollTailTracksActualVisibleOcclusion() {
         XCTAssertEqual(
             SynaraTabRootContentReachability.scrollTailHeight(
