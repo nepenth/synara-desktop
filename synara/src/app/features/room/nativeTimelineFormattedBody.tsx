@@ -257,9 +257,17 @@ const renderNativeAnchor = (
   );
 };
 
+const hasAncestorTag = (node: ChildNode, name: string): boolean => {
+  for (let parent = node.parent; parent !== null; parent = parent.parent) {
+    if (isTag(parent) && parent.name === name) return true;
+  }
+  return false;
+};
+
 export const createNativeFormattedHtmlParserOptions = (
   context: NativeFormattedRenderContext
 ): HTMLReactParserOptions => {
+  const linkifyOptions = createNativeLinkifyOptions(context);
   const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
     replace: (domNode) => {
       if (isText(domNode)) {
@@ -267,8 +275,16 @@ export const createNativeFormattedHtmlParserOptions = (
         // Inline code keeps its exact text (code blocks never reach here).
         const inCode =
           domNode.parent !== null && isTag(domNode.parent) && domNode.parent.name === 'code';
-        if (!highlightRegex || inCode) return undefined;
-        return <>{highlightText(highlightRegex, [domNode.data])}</>;
+        if (inCode) return undefined;
+        const content = highlightRegex
+          ? highlightText(highlightRegex, [domNode.data])
+          : domNode.data;
+        // Bare addresses in formatted text become links, as in plain bodies.
+        // Text already inside a link stays as it is.
+        if (hasAncestorTag(domNode, 'a')) {
+          return highlightRegex ? <>{content}</> : undefined;
+        }
+        return <Linkify options={linkifyOptions}>{content}</Linkify>;
       }
       if (!isTag(domNode) || !('name' in domNode)) {
         return undefined;

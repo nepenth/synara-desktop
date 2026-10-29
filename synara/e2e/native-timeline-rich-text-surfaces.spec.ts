@@ -95,6 +95,17 @@ test('plain notices link web addresses and open matrix.to links in Synara', asyn
   await expect(plain.getByRole('link', { name: 'https://example.org/article' })).toBeVisible();
 });
 
+test('bare web addresses in formatted messages and replies are links too', async ({ page }) => {
+  await openSurfaces(page);
+  const formatted = page.getByRole('region', { name: 'Formatted message body' });
+  await expect(formatted.getByRole('link', { name: 'https://example.org/guide' })).toBeVisible();
+  // An existing link keeps its own text and target, with nothing nested inside.
+  await expect(formatted.getByRole('link', { name: 'this one' })).toHaveCount(1);
+  // Inline code stays literal.
+  await expect(formatted.getByRole('link', { name: /example\.org\/code/ })).toHaveCount(0);
+  await expect(formatted.locator('code')).toHaveText('https://example.org/code');
+});
+
 test('the room topic viewer links the topic with the same renderer', async ({ page }) => {
   await openSurfaces(page);
   await page.getByRole('button', { name: 'Open topic' }).click();

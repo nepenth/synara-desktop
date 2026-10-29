@@ -6662,14 +6662,16 @@ dependencies = [
 
 [[package]]
 name = "synara"
-version = "2.6.0"
+version = "2.7.0"
 dependencies = [
  "block2",
  "dirs",
+ "flate2",
  "getrandom 0.4.3",
  "hex",
  "hmac 0.13.0",
  "keyring",
+ "libc",
  "mac-notification-sys",
  "matrix-sdk",
  "matrix-sdk-ui",
@@ -6688,6 +6690,7 @@ dependencies = [
  "serde_json",
  "sha1 0.11.0",
  "synara-core",
+ "tar",
  "tauri",
  "tauri-build",
  "tauri-plugin-clipboard-manager",
@@ -6698,6 +6701,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
+ "tempfile",
  "tokio",
  "url",
  "webkit2gtk",

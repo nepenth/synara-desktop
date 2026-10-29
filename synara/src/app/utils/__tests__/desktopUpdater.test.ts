@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   checkDesktopUpdate,
   compareVersions,
+  installUpdateAndRelaunch,
   isUpdaterUnavailableError,
   reduceDownloadProgress,
   shouldPromptForUpdate,
@@ -197,4 +198,53 @@ test('desktop updater accumulates download progress', () => {
     downloadedBytes: 250,
     finished: true,
   });
+});
+
+const recordingUpdate = (calls: string[]): InAppUpdateHandle => ({
+  currentVersion: '2.6.0',
+  version: '2.7.0',
+  downloadAndInstall: async (onEvent) => {
+    calls.push('downloadAndInstall');
+    onEvent?.({ event: 'Finished' });
+  },
+});
+
+test('desktop updater installs macOS updates in place instead of through the plugin', async () => {
+  const calls: string[] = [];
+  const events: string[] = [];
+
+  await installUpdateAndRelaunch(
+    recordingUpdate(calls),
+    'macos',
+    (event) => events.push(event.event),
+    {
+      installInPlace: async (version, onEvent) => {
+        calls.push(`installInPlace ${version}`);
+        onEvent?.({ event: 'Started', data: { contentLength: 10 } });
+        onEvent?.({ event: 'Progress', data: { chunkLength: 10 } });
+        onEvent?.({ event: 'Finished' });
+      },
+      relaunch: async () => {
+        calls.push('relaunch');
+      },
+    }
+  );
+
+  assert.deepEqual(calls, ['installInPlace 2.7.0', 'relaunch']);
+  assert.deepEqual(events, ['Started', 'Progress', 'Finished']);
+});
+
+test('desktop updater installs Windows updates with the plugin installer', async () => {
+  const calls: string[] = [];
+
+  await installUpdateAndRelaunch(recordingUpdate(calls), 'windows', undefined, {
+    installInPlace: async () => {
+      calls.push('installInPlace');
+    },
+    relaunch: async () => {
+      calls.push('relaunch');
+    },
+  });
+
+  assert.deepEqual(calls, ['downloadAndInstall', 'relaunch']);
 });

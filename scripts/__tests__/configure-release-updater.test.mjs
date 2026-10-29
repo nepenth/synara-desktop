@@ -66,6 +66,7 @@ test("release updater config satisfies strict release readiness inspection", () 
         "updater:allow-check",
         "updater:allow-download-and-install",
         "process:allow-restart",
+        "allow-desktop-updater-install",
       ],
     },
     desktopPackage: {

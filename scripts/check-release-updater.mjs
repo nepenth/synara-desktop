@@ -111,6 +111,7 @@ const MAIN_UPDATER_PERMISSIONS = [
   "updater:allow-download",
   "updater:allow-download-and-install",
   "updater:allow-install",
+  "allow-desktop-updater-install",
   "process:default",
   "process:allow-restart",
 ];
@@ -260,6 +261,12 @@ export function inspectReleaseUpdaterReadiness({
   ) {
     report(
       "src-tauri/capabilities/desktop-updater.json must grant updater:allow-download-and-install or updater:default for macOS and Windows install prompts.",
+    );
+  }
+
+  if (!updaterPermissions.includes("allow-desktop-updater-install")) {
+    report(
+      "src-tauri/capabilities/desktop-updater.json must grant allow-desktop-updater-install, which installs macOS updates in place so the Dock keeps the pinned app.",
     );
   }
 

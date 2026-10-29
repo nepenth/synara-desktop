@@ -567,6 +567,12 @@
           "markdownDescription": "Enables the desktop_update_tray_state command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_updater_install command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-updater-install",
+          "markdownDescription": "Enables the desktop_updater_install command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_window_close command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-window-close",
@@ -2119,6 +2125,12 @@
           "type": "string",
           "const": "deny-desktop-update-tray-state",
           "markdownDescription": "Denies the desktop_update_tray_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_updater_install command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-updater-install",
+          "markdownDescription": "Denies the desktop_updater_install command without any pre-configured scope."
         },
         {
           "description": "Denies the desktop_window_close command without any pre-configured scope.",

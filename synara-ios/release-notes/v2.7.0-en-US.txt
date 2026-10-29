@@ -1,0 +1,3 @@
+Synara 2.7.0 brings a calmer look that keeps Synara's style: flatter messages and rooms, a blue accent, and a larger centred Synara mark on sign-in and About. Approval requests have full-size Approve once, Approve always and Deny buttons. Long-press a reaction, or choose View Reactions in the message menu, to see who reacted.
+
+Please test: approving and denying an agent request (also with large text sizes and VoiceOver), viewing who reacted, sign-in, and the room list and timeline in light and dark mode.
