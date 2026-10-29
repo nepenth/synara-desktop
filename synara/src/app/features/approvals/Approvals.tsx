@@ -287,7 +287,7 @@ export function ApprovalsView({
                       <Text
                         size="T300"
                         dir="auto"
-                        style={{ overflowWrap: 'anywhere', fontFamily: 'monospace' }}
+                        style={{ overflowWrap: 'anywhere', fontFamily: 'var(--font-mono)' }}
                       >
                         {summaryText}
                       </Text>
@@ -296,7 +296,7 @@ export function ApprovalsView({
                           size="T200"
                           priority="300"
                           dir="auto"
-                          style={{ overflowWrap: 'anywhere', fontFamily: 'monospace' }}
+                          style={{ overflowWrap: 'anywhere', fontFamily: 'var(--font-mono)' }}
                         >
                           {prompt.commandPreview}
                         </Text>

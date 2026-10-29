@@ -85,7 +85,7 @@ const monospacedBlockStyle: React.CSSProperties = {
   padding: config.space.S300,
   borderRadius: config.radii.R300,
   backgroundColor: color.SurfaceVariant.Container,
-  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+  fontFamily: 'var(--font-mono)',
   fontSize: toRem(12),
   lineHeight: 1.45,
 };

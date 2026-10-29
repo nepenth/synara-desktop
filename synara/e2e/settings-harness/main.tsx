@@ -6,7 +6,6 @@ import { createRoot } from 'react-dom/client';
 import { enableMapSet } from 'immer';
 import { configClass, varsClass } from 'folds';
 import 'folds/dist/style.css';
-import '@fontsource-variable/inter';
 import '../../src/index.css';
 import { darkTheme, synaraLightTheme } from '../../src/colors.css';
 import App from '../../src/app/pages/App';

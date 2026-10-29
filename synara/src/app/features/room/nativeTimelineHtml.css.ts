@@ -608,8 +608,7 @@ export const CodePanel = style({
 });
 
 const codeMono = {
-  fontFamily:
-    'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", "Noto Sans Mono", monospace',
+  fontFamily: 'var(--font-mono)',
   fontSize: '0.92em',
   lineHeight: 1.5,
 } as const;
@@ -618,8 +617,7 @@ export const CodeLanguage = style({
   flex: 'none',
   padding: `${config.space.S100} ${config.space.S300}`,
   color: syntaxMeta,
-  fontFamily:
-    'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", "Noto Sans Mono", monospace',
+  fontFamily: 'var(--font-mono)',
   fontSize: '0.78em',
   letterSpacing: '0.02em',
   textTransform: 'lowercase',
@@ -759,8 +757,7 @@ globalStyle(`${FormattedBody} pre:last-child`, {
   marginBottom: 0,
 });
 globalStyle(`${FormattedBody} code`, {
-  fontFamily:
-    'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", "Noto Sans Mono", monospace',
+  fontFamily: 'var(--font-mono)',
   fontSize: '0.92em',
 });
 globalStyle(`${FormattedBody} :not(pre) > code`, {

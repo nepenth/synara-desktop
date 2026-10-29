@@ -123,7 +123,7 @@ export function PerformanceDebugOverlay() {
         borderRadius: 8,
         background: 'rgba(0, 0, 0, 0.78)',
         color: '#fff',
-        font: '12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace',
+        font: '12px/1.45 var(--font-mono)',
         pointerEvents: 'none',
         boxShadow: '0 8px 24px rgba(0, 0, 0, 0.25)',
       }}
