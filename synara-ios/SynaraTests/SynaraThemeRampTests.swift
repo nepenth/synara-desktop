@@ -50,28 +50,29 @@ final class SynaraThemeRampTests: XCTestCase {
                 reduceTransparency: false
             )
 
-            XCTAssertGreaterThan(layered.shadowOpacity, 0)
-            XCTAssertGreaterThan(layered.edgeOpacity, 0)
+            // Ordinary messages and avatars stay on the reading plane: a
+            // hairline only, no shadow and no bevel.
+            XCTAssertEqual(layered.shadowOpacity, 0)
+            XCTAssertEqual(layered.edgeOpacity, 0)
             XCTAssertGreaterThan(layered.boundaryWidth, 0)
-            XCTAssertLessThan(layered.shadowRadius, raised.shadowRadius)
-            XCTAssertLessThan(layered.shadowOpacity, raised.shadowOpacity)
-            XCTAssertLessThan(avatar.shadowRadius, raised.shadowRadius)
-            XCTAssertLessThanOrEqual(avatar.shadowOpacity, raised.shadowOpacity)
-            XCTAssertLessThanOrEqual(avatar.edgeOpacity, 0.18)
+            XCTAssertEqual(avatar.shadowOpacity, 0)
+            XCTAssertEqual(avatar.edgeOpacity, 0)
             XCTAssertLessThanOrEqual(avatar.boundaryOpacity, raised.boundaryOpacity)
+            XCTAssertGreaterThan(raised.shadowOpacity, 0)
+            XCTAssertEqual(raised.edgeOpacity, 0)
             XCTAssertLessThan(raised.shadowRadius, floating.shadowRadius)
             XCTAssertLessThan(floating.shadowRadius, critical.shadowRadius)
             XCTAssertLessThan(raised.shadowOpacity, floating.shadowOpacity)
             XCTAssertLessThan(floating.shadowOpacity, critical.shadowOpacity)
             XCTAssertLessThan(raised.shadowOffsetY, floating.shadowOffsetY)
             XCTAssertLessThan(floating.shadowOffsetY, critical.shadowOffsetY)
-            XCTAssertLessThanOrEqual(raised.edgeOpacity, 0.24)
-            XCTAssertLessThanOrEqual(floating.edgeOpacity, 0.24)
+            XCTAssertLessThanOrEqual(floating.edgeOpacity, 0.12)
+            XCTAssertLessThanOrEqual(critical.edgeOpacity, 0.12)
         }
     }
 
     func testLightDepthRemainsQuieterThanDarkDepth() {
-        for level in SynaraDepthLevel.allCases where level != .content && level != .collection {
+        for level in [SynaraDepthLevel.raised, .floating, .critical] {
             let light = level.metrics(
                 dark: false,
                 increasedContrast: false,
@@ -100,11 +101,10 @@ final class SynaraThemeRampTests: XCTestCase {
                 XCTAssertEqual(row.shadowOpacity, 0)
                 XCTAssertEqual(row.shadowRadius, 0)
                 XCTAssertGreaterThan(row.boundaryWidth, 0)
+                XCTAssertEqual(row.edgeOpacity, 0)
                 if increasedContrast {
-                    XCTAssertEqual(row.edgeOpacity, 0)
                     XCTAssertGreaterThanOrEqual(row.boundaryOpacity, 0.78)
                 } else {
-                    XCTAssertLessThanOrEqual(row.edgeOpacity, 0.035)
                     XCTAssertLessThanOrEqual(row.boundaryOpacity, 0.20)
                 }
             }
@@ -185,6 +185,33 @@ final class SynaraThemeRampTests: XCTestCase {
         XCTAssertLessThan(floating.boundaryWidth, critical.boundaryWidth)
         XCTAssertLessThan(raised.boundaryOpacity, floating.boundaryOpacity)
         XCTAssertLessThan(floating.boundaryOpacity, critical.boundaryOpacity)
+    }
+
+    func testFallbackAvatarPaletteIsStableAndKeepsWhiteInitialsReadable() {
+        XCTAssertEqual(
+            SynaraAvatarPalette.hex(for: "@mina:matrix.org"),
+            SynaraAvatarPalette.hex(for: "@Mina:matrix.org")
+        )
+        let seeds = (0..<64).map { "@user\($0):example.org" }
+        let hexes = Set(seeds.map(SynaraAvatarPalette.hex(for:)))
+        XCTAssertGreaterThan(hexes.count, 4)
+        for hex in hexes {
+            XCTAssertGreaterThanOrEqual(
+                SynaraThemeRamp.contrastRatio(foreground: "#ffffff", background: hex),
+                4.5,
+                hex
+            )
+        }
+    }
+
+    func testAccentFillKeepsWhiteButtonLabelsReadable() {
+        for hex in [SynaraStatusTextPalette.accentFill.light, SynaraStatusTextPalette.accentFill.dark] {
+            XCTAssertGreaterThanOrEqual(
+                SynaraThemeRamp.contrastRatio(foreground: "#ffffff", background: hex),
+                4.5,
+                hex
+            )
+        }
     }
 
     func testTabBarScrollTailTracksActualVisibleOcclusion() {

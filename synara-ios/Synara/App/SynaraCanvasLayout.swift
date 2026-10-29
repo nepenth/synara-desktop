@@ -173,7 +173,8 @@ struct SynaraConversationEmptyPane: View {
         SynaraEmptyState(
             title: tab.emptyConversationTitle,
             systemImage: tab.emptyConversationSystemImage,
-            message: tab.emptyConversationMessage
+            message: tab.emptyConversationMessage,
+            showsBrandMark: tab == .rooms
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(SynaraChrome.chat)

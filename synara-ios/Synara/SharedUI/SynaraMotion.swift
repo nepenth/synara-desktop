@@ -6,6 +6,7 @@ import UIKit
 struct SynaraSendSlideInModifier: ViewModifier {
     let isEnabled: Bool
     let fromTrailing: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var didAnimate = false
 
     func body(content: Content) -> some View {
@@ -13,11 +14,11 @@ struct SynaraSendSlideInModifier: ViewModifier {
             .offset(x: offsetX)
             .opacity(isEnabled && didAnimate == false ? 0 : 1)
             .onAppear {
-                guard isEnabled, didAnimate == false else {
+                guard isEnabled, didAnimate == false, reduceMotion == false else {
                     didAnimate = true
                     return
                 }
-                withAnimation(.spring(response: 0.36, dampingFraction: 0.82)) {
+                withAnimation(.easeOut(duration: 0.22)) {
                     didAnimate = true
                 }
             }
@@ -27,18 +28,19 @@ struct SynaraSendSlideInModifier: ViewModifier {
         guard isEnabled, didAnimate == false else {
             return 0
         }
-        return fromTrailing ? 28 : -28
+        return fromTrailing ? 16 : -16
     }
 }
 
 struct SynaraReactionPopModifier: ViewModifier {
     let animationIndex: Int
     let animationKey: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isVisible = false
 
     func body(content: Content) -> some View {
         content
-            .scaleEffect(isVisible ? 1 : 0.55)
+            .scaleEffect(isVisible || reduceMotion ? 1 : 0.85)
             .opacity(isVisible ? 1 : 0)
             .onAppear {
                 guard isVisible == false else {
@@ -61,8 +63,13 @@ struct SynaraReactionPopModifier: ViewModifier {
             }
     }
 
+    /// A short settle with no overshoot; under Reduce Motion the chip
+    /// fades in place.
     private func pop(delay: Double) {
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.68).delay(delay)) {
+        let animation: Animation = reduceMotion
+            ? .easeOut(duration: 0.15)
+            : .spring(response: 0.28, dampingFraction: 1).delay(delay)
+        withAnimation(animation) {
             isVisible = true
         }
     }

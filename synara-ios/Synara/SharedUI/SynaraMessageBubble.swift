@@ -8,6 +8,9 @@ enum SynaraMessageBubbleAlignment {
 enum SynaraMessageBubbleVariant {
     case standard
     case agent
+    /// An agent request that needs a decision: one neutral plane with a
+    /// softened critical edge, so the risk reads once.
+    case critical
     case encrypted
 }
 
@@ -224,6 +227,8 @@ struct SynaraMessageBubble<Content: View>: View {
             }
         case .agent:
             return SynaraColor.agent.opacity(0.08)
+        case .critical:
+            return SynaraColor.secondarySurface
         case .encrypted:
             return SynaraColor.mutedControl.opacity(0.55)
         }
@@ -239,6 +244,8 @@ struct SynaraMessageBubble<Content: View>: View {
             return alignment == .own ? SynaraColor.elevatedSurface : SynaraColor.secondarySurface
         case .agent:
             return SynaraColor.agentReviewSurface
+        case .critical:
+            return SynaraColor.secondarySurface
         case .encrypted:
             return SynaraColor.mutedControl
         }
@@ -255,6 +262,8 @@ struct SynaraMessageBubble<Content: View>: View {
             }
         case .agent:
             return SynaraColor.agent
+        case .critical:
+            return SynaraColor.critical.opacity(0.6)
         case .encrypted:
             return SynaraColor.separator
         }
@@ -424,7 +433,7 @@ enum SynaraPlainTextLinks {
 
 private func synaraMessageBubbleTextColor(for variant: SynaraMessageBubbleVariant) -> Color {
     switch variant {
-    case .standard, .agent:
+    case .standard, .agent, .critical:
         return SynaraColor.primaryText
     case .encrypted:
         return SynaraColor.secondaryText

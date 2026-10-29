@@ -96,14 +96,14 @@ struct ApprovalsView: View {
                         : String(localized: "No recent requests"),
                     systemImage: filter == .pending ? "checkmark.shield" : "clock",
                     message: filter == .pending
-                        ? String(localized: "New Hermes approval requests will appear here as they arrive.")
+                        ? String(localized: "New approval requests from agents will appear here.")
                         : String(localized: "Decided approvals will appear here after you approve or deny a request.")
                 )
             } else {
                 List {
                     if filter == .recent {
                         Section {
-                            Text("Decisions your account made, synced across devices. Inbox-only expired requests stay here until they age out of recent room activity.")
+                            Text("Decisions made from your account on any device.")
                                 .font(SynaraTypography.supporting)
                                 .foregroundStyle(SynaraColor.secondaryText)
                                 .listRowBackground(Color.clear)

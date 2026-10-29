@@ -34,19 +34,12 @@ enum SharedCoreRtcTransports {
         )
     }
 
+    /// Settings copy for the Calls section; transport names and URLs are
+    /// left to logs.
     static func diagnosticCopy(_ snapshot: SharedCoreRtcTransportsSnapshot) -> String {
         if snapshot.status == .unsupported || snapshot.status == .unavailable {
-            return String(localized: "This homeserver does not advertise a call transport")
+            return String(localized: "Calls aren’t set up on this server.")
         }
-        if let livekit = snapshot.transports.first(where: { $0.kind == "livekit" }) {
-            if let url = livekit.serviceURL, url.isEmpty == false {
-                return String(localized: "MatrixRTC transport: LiveKit at \(url)")
-            }
-            return String(localized: "MatrixRTC transport: LiveKit")
-        }
-        if snapshot.transports.contains(where: { $0.kind == "custom" }) {
-            return String(localized: "MatrixRTC transport: custom")
-        }
-        return String(localized: "MatrixRTC transport: ready")
+        return String(localized: "Calls are available on this server.")
     }
 }

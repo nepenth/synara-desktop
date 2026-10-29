@@ -37,9 +37,7 @@ enum LoginFormField: Hashable {
 /// Neutral sign-in copy: the same screen serves first-time users.
 enum LoginCopy {
     static let title = String(localized: "Sign In")
-    static let subtitle = String(
-        localized: "Sign in to your Matrix homeserver for your rooms, secure sessions, and agent workflows."
-    )
+    static let subtitle = String(localized: "Use your Matrix account.")
 }
 
 struct LoginView: View {
@@ -78,8 +76,7 @@ struct LoginView: View {
             Section {
                 SynaraProductHeader(
                     title: LoginCopy.title,
-                    subtitle: LoginCopy.subtitle,
-                    systemImage: "lock.shield"
+                    subtitle: LoginCopy.subtitle
                 )
                 .accessibilityIdentifier("LoginProductHeader")
             }

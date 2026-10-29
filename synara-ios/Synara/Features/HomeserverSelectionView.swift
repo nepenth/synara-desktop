@@ -17,7 +17,7 @@ struct HomeserverSelectionView: View {
             Section {
                 SynaraProductHeader(
                     title: "Synara",
-                    subtitle: String(localized: "Native Matrix rooms, agent approvals, and private workflows across your devices.")
+                    subtitle: String(localized: "Matrix chat with agent approvals.")
                 )
                 .accessibilityIdentifier("HomeserverProductHeader")
             }

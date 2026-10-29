@@ -198,6 +198,8 @@ struct RoomListView: View {
                                             unreadCount: spaceUnreadCounts[group.space.id] ?? 0
                                         )
                                     }
+                                    .listRowSeparator(.hidden)
+                                    .listRowBackground(SynaraChrome.roomList)
                                 }
                             }
 
@@ -581,15 +583,18 @@ struct RoomListView: View {
                     .padding(.horizontal, SynaraSpacing.medium)
                     .padding(.vertical, SynaraSpacing.small)
                     .background {
-                        RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
-                            .fill(roomRowFill(for: room))
+                        // Rows sit on the list plane; the open conversation
+                        // is marked by a quiet accent fill, as on desktop.
+                        if isSelectedConversation(room) {
+                            RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
+                                .fill(SynaraColor.accent.opacity(0.14))
+                                .synaraDepth(
+                                    .layered,
+                                    cornerRadius: SynaraRadius.card,
+                                    boundaryColor: SynaraColor.accent
+                                )
+                        }
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous))
-                    .synaraDepth(
-                        SynaraSurfaceDepthRole.roomRow,
-                        cornerRadius: SynaraRadius.card,
-                        boundaryColor: roomRowBoundary(for: room)
-                    )
                     .contentShape(Rectangle())
             }
             .buttonStyle(SynaraListRowButtonStyle())
@@ -600,7 +605,7 @@ struct RoomListView: View {
             .accessibilityAddTraits(isSelectedConversation(room) ? .isSelected : [])
             .accessibilityIdentifier("RoomRow-\(room.id)")
             .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: 4, leading: SynaraSpacing.medium, bottom: 4, trailing: SynaraSpacing.medium))
+            .listRowInsets(EdgeInsets(top: 1, leading: SynaraSpacing.small, bottom: 1, trailing: SynaraSpacing.small))
             .listRowBackground(SynaraChrome.roomList)
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                 Button {
@@ -655,20 +660,6 @@ struct RoomListView: View {
 
     private func isSelectedConversation(_ room: RoomSummary) -> Bool {
         canvasLayout == .split && selectedConversationID == room.id
-    }
-
-    private func roomRowFill(for room: RoomSummary) -> Color {
-        if isSelectedConversation(room) {
-            return SynaraColor.accent.opacity(0.16)
-        }
-        return room.hasUnreadActivity ? SynaraColor.elevatedSurface : SynaraColor.surface
-    }
-
-    private func roomRowBoundary(for room: RoomSummary) -> Color {
-        if isSelectedConversation(room) {
-            return SynaraColor.accent
-        }
-        return room.hasHighlight ? SynaraColor.accent : SynaraColor.separator
     }
 
     private func markRoomAsRead(_ room: RoomSummary) {
@@ -851,14 +842,8 @@ private struct RoomListHeader: View {
             Button(action: onSearch) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 17, weight: .semibold))
-                    .frame(width: 42, height: 42)
-                    .background(SynaraColor.secondaryText.opacity(0.10))
-                    .foregroundStyle(SynaraColor.secondaryText)
-                    .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
-                    .synaraDepth(
-                        .raised,
-                        shape: RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
-                    )
+                    .frame(width: SynaraHitTarget.minimum, height: SynaraHitTarget.minimum)
+                    .foregroundStyle(SynaraColor.accent)
             }
             .buttonStyle(SynaraTactileButtonStyle())
             .contentShape(Rectangle())
@@ -868,14 +853,8 @@ private struct RoomListHeader: View {
             Button(action: onNewRoom) {
                 Image(systemName: "square.and.pencil")
                     .font(.system(size: 17, weight: .semibold))
-                    .frame(width: 42, height: 42)
-                    .background(SynaraColor.secondaryText.opacity(0.12))
-                    .foregroundStyle(SynaraColor.secondaryText)
-                    .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
-                    .synaraDepth(
-                        .raised,
-                        shape: RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
-                    )
+                    .frame(width: SynaraHitTarget.minimum, height: SynaraHitTarget.minimum)
+                    .foregroundStyle(SynaraColor.accent)
             }
             .buttonStyle(SynaraTactileButtonStyle())
             .contentShape(Rectangle())
@@ -1319,7 +1298,10 @@ private struct RoomSearchField: View {
         }
         .padding(SynaraSpacing.medium)
         .frame(height: 44)
-        .synaraCard(fill: SynaraColor.secondarySurface)
+        .background(
+            SynaraColor.mutedControl.opacity(0.6),
+            in: RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
+        )
         .contentShape(Rectangle())
         .onTapGesture {
             isFocused.wrappedValue = true
@@ -1366,7 +1348,7 @@ private struct RoomListRow: View {
                     .accessibilityHidden(true)
             case let .person(initial):
                 // Same 20 pt column as "#", so names stay aligned.
-                SynaraPersonGlyph(initial: initial, avatarURL: room.avatarURL, size: 20)
+                SynaraPersonGlyph(initial: initial, avatarURL: room.avatarURL, size: 20, seed: room.directUserId ?? room.id)
             }
 
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
@@ -1451,7 +1433,7 @@ private struct RoomListRow: View {
                             .accessibilityIdentifier("RoomRowApprovalChip-\(room.id)")
                         } else if room.isAgentRoom {
                             RoomRowCompactStatusIcon(
-                                systemImage: "sparkles",
+                                systemImage: "terminal",
                                 accessibilityLabel: String(localized: "Agent room"),
                                 tint: SynaraColor.agent
                             )
@@ -1487,13 +1469,14 @@ private struct RoomRowCompactStatusIcon: View {
     let systemImage: String
     let accessibilityLabel: String
     let tint: Color
+    @ScaledMetric(relativeTo: .caption) private var width: CGFloat = 16
+    @ScaledMetric(relativeTo: .caption) private var height: CGFloat = 20
 
     var body: some View {
         Image(systemName: systemImage)
-            .font(.system(size: 10, weight: .semibold))
+            .font(.caption.weight(.semibold))
             .foregroundStyle(tint)
-            .frame(width: 20, height: 20)
-            .background(tint.opacity(0.12), in: Circle())
+            .frame(width: width, height: height)
             .accessibilityLabel(accessibilityLabel)
     }
 }
@@ -1538,7 +1521,7 @@ struct InviteRoomListRow: View {
             }
         }
         .padding(SynaraSpacing.medium)
-        .synaraCard(fill: SynaraColor.warning.opacity(0.08), stroke: SynaraColor.warning)
+        .synaraCard(fill: SynaraColor.warning.opacity(0.08), stroke: SynaraColor.warning, depth: .layered)
     }
 }
 

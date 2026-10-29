@@ -59,9 +59,6 @@
         }
       }
     },
-    "%@ Matches desktop Settings → Appearance → Thread Display." : {
-
-    },
     "%@ and %@" : {
       "localizations" : {
         "en" : {
@@ -650,6 +647,9 @@
     "@user:server" : {
 
     },
+    "A Matrix client for iOS, macOS, and Linux." : {
+
+    },
     "APNs device tokens and Matrix pusher registration are used only when notifications are enabled." : {
 
     },
@@ -722,7 +722,7 @@
     "Add a note or ToDo here, or pin a useful message from its menu." : {
 
     },
-    "Add each agent’s full Matrix user ID. These rules apply only to the listed agents and sync with your account across Synara clients. Once you add an agent, only listed agents can raise urgent approval alerts, even in muted rooms; with no agents listed, approval alerts follow each room’s notification settings." : {
+    "Add each agent’s full Matrix ID. Once you add one, only listed agents can send urgent approval alerts, even in muted rooms. With none listed, approval alerts follow each room’s notification settings." : {
 
     },
     "Add to Favorites" : {
@@ -779,12 +779,6 @@
     "Agent room" : {
 
     },
-    "Agent workflow" : {
-
-    },
-    "Agentic native Matrix client for iOS, macOS, and Linux." : {
-
-    },
     "Agents" : {
 
     },
@@ -818,6 +812,9 @@
     "Apple platform SDK" : {
 
     },
+    "Applies to times in the room list and timeline." : {
+
+    },
     "Approval" : {
 
     },
@@ -839,10 +836,16 @@
     "Approval request filter" : {
 
     },
+    "Approval requests arrive as Critical Alerts if you allow them in iOS, and as Time Sensitive alerts otherwise. Show approval details puts the reason and command on the notification, on the Lock Screen and Apple Watch too, even when message previews are off." : {
+
+    },
     "Approval required" : {
 
     },
     "Approvals" : {
+
+    },
+    "Approve always" : {
 
     },
     "Approve always permanently trusts this command pattern. Confirm only if you intend to allow it without future prompts." : {
@@ -950,6 +953,15 @@
     "Call declined." : {
 
     },
+    "Calls" : {
+
+    },
+    "Calls are available on this server." : {
+
+    },
+    "Calls aren’t set up on this server." : {
+
+    },
     "Camera" : {
 
     },
@@ -992,7 +1004,7 @@
     "Changes" : {
 
     },
-    "Changes save to your account as you make them. Encrypted background alerts may still appear as generic activity unless the installed build supports Apple’s Notification Filtering capability. Hiding message previews does not suppress those alerts." : {
+    "Changes save to your account as you make them. Some encrypted alerts may still show as generic activity, even with previews hidden." : {
 
     },
     "Channels" : {
@@ -1108,9 +1120,6 @@
     "Command not recorded" : {
 
     },
-    "Command: %@" : {
-
-    },
     "Compare emoji or number codes with another verified session. Synara does not mark this device verified until both sides confirm." : {
 
     },
@@ -1187,9 +1196,6 @@
 
     },
     "Copy code" : {
-
-    },
-    "Copy or share a report after reproducing a missing preview. It includes app version, notification settings, push registration and shared-store readiness, up to 256 fixed stage codes and timestamps, and how many previews failed because the server rejected your session. Reports stay on this device until you share them and exclude message content, Matrix IDs, senders, push payloads, tokens, URLs and account secrets." : {
 
     },
     "Copy user ID" : {
@@ -1324,7 +1330,7 @@
     "Decided approvals will appear here after you approve or deny a request." : {
 
     },
-    "Decisions your account made, synced across devices. Inbox-only expired requests stay here until they age out of recent room activity." : {
+    "Decisions made from your account on any device." : {
 
     },
     "Decline" : {
@@ -1600,9 +1606,6 @@
     "Expired" : {
 
     },
-    "External TestFlight and App Store submission remain blocked until the final privacy policy is approved." : {
-
-    },
     "Failed to send. Tap to retry." : {
 
     },
@@ -1616,9 +1619,6 @@
 
     },
     "Filter messages currently loaded in this room." : {
-
-    },
-    "Final App Store distribution requires legal review of repository licensing." : {
 
     },
     "First seen %@" : {
@@ -1642,13 +1642,7 @@
     "Forwarding was not completed." : {
 
     },
-    "Fresh, locally verified approval prompts use Critical Alerts when this build supports them and you allow them in iOS; otherwise they use Time Sensitive alerts. Use Request Notification Permission to allow Critical Alerts in a supported build. Show approval details puts the reason and requested command on the notification, including the Lock Screen and Apple Watch, independent of message previews." : {
-
-    },
     "Full Screen" : {
-
-    },
-    "Full approval request" : {
 
     },
     "GIF" : {
@@ -1699,16 +1693,13 @@
     "Homeserver addresses must use HTTPS." : {
 
     },
-    "Homeserver call transport discovery. Synara does not join calls from this screen." : {
-
-    },
-    "Hue tint for chrome. Lightness is mapped to stacked greys (rail / room list / chat); this is not the fill color." : {
-
-    },
     "Identity key %@" : {
 
     },
     "Identity reset authentication failed. Check your password and try again." : {
+
+    },
+    "If a notification preview goes missing, copy or share this report. It lists the app version, notification settings and recent delivery steps, never message content, Matrix IDs, tokens or account secrets, and stays on this device until you share it." : {
 
     },
     "If you have lost your recovery key and all your other devices, start over with a new identity." : {
@@ -1921,13 +1912,13 @@
     "Mark ToDo active" : {
 
     },
-    "Matches desktop Settings → General. Room list and timeline clocks follow this toggle." : {
-
-    },
     "Matrix Account" : {
 
     },
     "Matrix IDs must look like @name:server." : {
+
+    },
+    "Matrix chat with agent approvals." : {
 
     },
     "Matrix room" : {
@@ -1937,18 +1928,6 @@
 
     },
     "MatrixRTC" : {
-
-    },
-    "MatrixRTC transport: LiveKit" : {
-
-    },
-    "MatrixRTC transport: LiveKit at %@" : {
-
-    },
-    "MatrixRTC transport: custom" : {
-
-    },
-    "MatrixRTC transport: ready" : {
 
     },
     "Media could not be loaded." : {
@@ -2026,6 +2005,9 @@
     "Messages that only your old keys can read may be lost, unless another device still has them." : {
 
     },
+    "Messages that start with 🛠 Tool activity or 💬 Commentary count as those categories. Other messages from these agents count as final responses. Approval requests can still send urgent alerts, and every message stays in the conversation." : {
+
+    },
     "Messages will appear here." : {
 
     },
@@ -2053,12 +2035,6 @@
     "Name" : {
 
     },
-    "Native Matrix rooms, agent approvals, and private workflows across your devices." : {
-
-    },
-    "Native MatrixRTC transports are unavailable." : {
-
-    },
     "Native encryption backup could not be activated." : {
 
     },
@@ -2071,10 +2047,10 @@
     "New" : {
 
     },
-    "New Hermes approval requests will appear here as they arrive." : {
+    "New ToDo" : {
 
     },
-    "New ToDo" : {
+    "New approval requests from agents will appear here." : {
 
     },
     "New private note" : {
@@ -2212,7 +2188,7 @@
     "Off" : {
 
     },
-    "Off by default. Synara resolves content on this device; the push gateway receives only event IDs. Your iOS Show Previews setting still controls Lock Screen visibility." : {
+    "Off by default. Previews are decrypted on this device, and the push service only sees message IDs. iOS Show Previews still decides what the Lock Screen shows." : {
 
     },
     "Offline" : {
@@ -2255,9 +2231,6 @@
 
     },
     "Open thread" : {
-
-    },
-    "Opens HTTPS link" : {
 
     },
     "Opens the original message" : {
@@ -2342,9 +2315,6 @@
     "Pinned Messages" : {
 
     },
-    "Pinned through Swift Package Manager." : {
-
-    },
     "Play GIF Links Inline" : {
 
     },
@@ -2403,9 +2373,6 @@
 
     },
     "Protection" : {
-
-    },
-    "Provided by Xcode and iOS." : {
 
     },
     "Provisional" : {
@@ -2531,6 +2498,9 @@
     "Redact" : {
 
     },
+    "Refresh" : {
+
+    },
     "Refresh Diagnostics" : {
 
     },
@@ -2538,9 +2508,6 @@
 
     },
     "Refresh Settings" : {
-
-    },
-    "Refresh transport" : {
 
     },
     "Register Push" : {
@@ -2698,9 +2665,6 @@
 
     },
     "Review available approval reactions" : {
-
-    },
-    "Review command" : {
 
     },
     "Review pending and recent agent approvals" : {
@@ -2984,9 +2948,6 @@
     "Sign in to submit this agent action." : {
 
     },
-    "Sign in to your Matrix homeserver for your rooms, secure sessions, and agent workflows." : {
-
-    },
     "Sign-in failed. Try again." : {
 
     },
@@ -3114,13 +3075,7 @@
     "Synara has not seen your approval yet. Approve the reset in your browser, then select Continue." : {
 
     },
-    "Synara recognizes messages starting with 🛠 Tool activity or 💬 Commentary, including Markdown headings. Other messages from the selected agents use the final response setting. Approval requests from listed agents remain eligible for urgent alerts. Messages remain in the conversation." : {
-
-    },
     "Synara will create and securely store your cross-signing identity on this device. Enter your account password to continue." : {
-
-    },
-    "Synara workflow" : {
 
     },
     "Syncing" : {
@@ -3163,6 +3118,9 @@
 
     },
     "The authenticity of this encrypted message can't be guaranteed on this device." : {
+
+    },
+    "The call service your homeserver offers. Calls start from a room." : {
 
     },
     "The codes matched on both devices. This device is verified for encrypted conversations." : {
@@ -3270,9 +3228,6 @@
     "This homeserver asks for a sign-in step Synara cannot complete for device verification setup." : {
 
     },
-    "This homeserver does not advertise a call transport" : {
-
-    },
     "This homeserver does not support user status." : {
 
     },
@@ -3319,6 +3274,9 @@
 
     },
     "Threads open on their own screen." : {
+
+    },
+    "Tints the backgrounds behind your rooms and messages." : {
 
     },
     "To approve for the whole session, reply !approve session." : {
@@ -3424,6 +3382,9 @@
 
     },
     "Use the server that hosts your Matrix account." : {
+
+    },
+    "Use your Matrix account." : {
 
     },
     "User" : {

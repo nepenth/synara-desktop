@@ -493,7 +493,7 @@ private struct AccountSettingsView: View {
             Section {
                 Text(
                     rtcTransports.map(SharedCoreRtcTransports.diagnosticCopy)
-                        ?? String(localized: "Native MatrixRTC transports are unavailable.")
+                        ?? String(localized: "Calls aren’t set up on this server.")
                 )
                 .font(SynaraTypography.supporting)
                 .foregroundStyle(SynaraColor.secondaryText)
@@ -504,15 +504,15 @@ private struct AccountSettingsView: View {
                     if isRefreshingRtc {
                         ProgressView()
                     } else {
-                        Text("Refresh transport")
+                        Text("Refresh")
                     }
                 }
                 .disabled(isRefreshingRtc)
                 .accessibilityIdentifier("SettingsRtcTransportsRefresh")
             } header: {
-                Text("MatrixRTC")
+                Text("Calls")
             } footer: {
-                Text("Homeserver call transport discovery. Synara does not join calls from this screen.")
+                Text("The call service your homeserver offers. Calls start from a room.")
             }
 
             Section {
@@ -1199,7 +1199,7 @@ private struct NotificationSettingsView: View {
             } header: {
                 Text("Privacy")
             } footer: {
-                Text("Off by default. Synara resolves content on this device; the push gateway receives only event IDs. Your iOS Show Previews setting still controls Lock Screen visibility.")
+                Text("Off by default. Previews are decrypted on this device, and the push service only sees message IDs. iOS Show Previews still decides what the Lock Screen shows.")
                     .accessibilityIdentifier("LockScreenMessagePreviewsHelp")
             }
 
@@ -1247,7 +1247,7 @@ private struct NotificationSettingsView: View {
             } header: {
                 Text("Local Delivery Diagnostics")
             } footer: {
-                Text("Copy or share a report after reproducing a missing preview. It includes app version, notification settings, push registration and shared-store readiness, up to 256 fixed stage codes and timestamps, and how many previews failed because the server rejected your session. Reports stay on this device until you share them and exclude message content, Matrix IDs, senders, push payloads, tokens, URLs and account secrets.")
+                Text("If a notification preview goes missing, copy or share this report. It lists the app version, notification settings and recent delivery steps, never message content, Matrix IDs, tokens or account secrets, and stays on this device until you share it.")
             }
 
             if let pushRules = pushRuleSettings.snapshot {
@@ -1593,7 +1593,7 @@ private struct AppearanceSettingsView: View {
             } header: {
                 Text("Theme")
             } footer: {
-                Text("Hue tint for chrome. Lightness is mapped to stacked greys (rail / room list / chat); this is not the fill color.")
+                Text("Tints the backgrounds behind your rooms and messages.")
             }
             Section {
                 Toggle("24-Hour Time", isOn: $hour24Clock)
@@ -1604,7 +1604,7 @@ private struct AppearanceSettingsView: View {
             } header: {
                 Text("Date & Time")
             } footer: {
-                Text("Matches desktop Settings → General. Room list and timeline clocks follow this toggle.")
+                Text("Applies to times in the room list and timeline.")
             }
 
             Section {
@@ -1624,7 +1624,7 @@ private struct AppearanceSettingsView: View {
             } header: {
                 Text("Thread Display")
             } footer: {
-                Text(String(localized: "\(threadDisplay.detail) Matches desktop Settings → Appearance → Thread Display."))
+                Text(threadDisplay.detail)
             }
 
             Section {
@@ -2712,16 +2712,14 @@ private struct AboutSettingsView: View {
     var body: some View {
         List {
             Section {
-                VStack(alignment: .leading, spacing: SynaraSpacing.small) {
-                    Text("Synara")
-                        .font(SynaraTypography.screenTitle)
-                    Text("Agentic native Matrix client for iOS, macOS, and Linux.")
-                        .font(SynaraTypography.supporting)
-                        .foregroundStyle(SynaraColor.secondaryText)
-                }
-                .padding(.vertical, SynaraSpacing.small)
+                SynaraProductHeader(
+                    title: "Synara",
+                    subtitle: String(localized: "A Matrix client for iOS, macOS, and Linux."),
+                    markSize: SynaraBrandMark.secondaryHeroSize
+                )
                 .accessibilityIdentifier("AboutSummary")
             }
+            .listRowBackground(Color.clear)
 
             Section("Build") {
                 SettingsInfoRow(title: String(localized: "Version"), value: AppBuildInfo.version)
@@ -2756,21 +2754,18 @@ private struct LicensesSettingsView: View {
             Section("App") {
                 LicenseRow(
                     name: "Synara",
-                    license: "AGPL-3.0-only",
-                    note: String(localized: "Final App Store distribution requires legal review of repository licensing.")
+                    license: "AGPL-3.0-only"
                 )
             }
 
             Section("Dependencies") {
                 LicenseRow(
                     name: "Matrix Rust SDK Swift",
-                    license: "Apache-2.0",
-                    note: String(localized: "Pinned through Swift Package Manager.")
+                    license: "Apache-2.0"
                 )
                 LicenseRow(
                     name: "Apple SwiftUI and iOS SDK",
-                    license: String(localized: "Apple platform SDK"),
-                    note: String(localized: "Provided by Xcode and iOS.")
+                    license: String(localized: "Apple platform SDK")
                 )
             }
         }
@@ -2783,7 +2778,6 @@ private struct LicensesSettingsView: View {
 private struct LicenseRow: View {
     let name: String
     let license: String
-    let note: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
@@ -2791,9 +2785,6 @@ private struct LicenseRow: View {
                 .font(SynaraTypography.body)
             Text(license)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(SynaraColor.secondaryText)
-            Text(note)
-                .font(SynaraTypography.supporting)
                 .foregroundStyle(SynaraColor.secondaryText)
         }
         .accessibilityElement(children: .combine)
@@ -2806,9 +2797,6 @@ private struct PrivacyPolicySettingsView: View {
             Section("Privacy Policy") {
                 Link(SettingsLink.privacy.displayTitle, destination: SettingsLink.privacy.url)
                     .accessibilityIdentifier("PrivacyPolicyExternalLink")
-                Text("External TestFlight and App Store submission remain blocked until the final privacy policy is approved.")
-                    .font(SynaraTypography.supporting)
-                    .foregroundStyle(SynaraColor.secondaryText)
             }
 
             Section("Current Data Inventory") {

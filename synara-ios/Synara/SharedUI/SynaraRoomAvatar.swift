@@ -107,6 +107,8 @@ struct SynaraPersonGlyph: View {
     let initial: String
     let avatarURL: URL?
     let size: CGFloat
+    /// Picks the fallback colour; the peer's Matrix ID when known.
+    var seed: String? = nil
     @Environment(\.appEnvironment) private var environment
     @State private var avatarImage: UIImage?
 
@@ -118,13 +120,7 @@ struct SynaraPersonGlyph: View {
                     .scaledToFill()
             } else {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [SynaraColor.accent, SynaraColor.secondaryText],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(SynaraAvatarPalette.color(for: seed ?? initial))
                     .overlay {
                         Text(initial)
                             .font(.system(size: size * 0.5, weight: .semibold))

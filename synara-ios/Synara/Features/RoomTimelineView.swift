@@ -6499,40 +6499,18 @@ private struct TimelineAvatar: View {
     }
 
     private var displayName: String {
-        switch senderID.lowercased() {
-        case "@mina:matrix.org":
-            return "Mina"
-        case "@alex:matrix.org":
-            return "Alex"
-        case "@ravi:matrix.org":
-            return "Ravi"
-        case "@local:matrix.org", "@you:matrix.org":
-            return "You"
-        default:
-            guard senderID.hasPrefix("@") else {
-                return senderID
-            }
+        guard senderID.hasPrefix("@") else {
             return senderID
-                .dropFirst()
-                .split(separator: ":")
-                .first
-                .map(String.init) ?? senderID
         }
+        return senderID
+            .dropFirst()
+            .split(separator: ":")
+            .first
+            .map(String.init) ?? senderID
     }
 
-    private var avatarFill: LinearGradient {
-        let colors: [Color]
-        switch senderID.lowercased() {
-        case "@mina:matrix.org":
-            colors = [Color(red: 0.88, green: 0.48, blue: 0.32), Color(red: 0.34, green: 0.18, blue: 0.12)]
-        case "@alex:matrix.org":
-            colors = [Color(red: 0.16, green: 0.53, blue: 0.65), Color(red: 0.07, green: 0.16, blue: 0.24)]
-        case "@ravi:matrix.org":
-            colors = [Color(red: 0.70, green: 0.42, blue: 0.23), Color(red: 0.16, green: 0.10, blue: 0.08)]
-        default:
-            colors = [SynaraColor.accent, SynaraColor.secondaryText]
-        }
-        return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+    private var avatarFill: Color {
+        SynaraAvatarPalette.color(for: senderID)
     }
 }
 
@@ -7234,7 +7212,7 @@ private struct TimelineRow: View {
                                 .frame(width: 28, height: 28)
                                 .background(SynaraColor.elevatedSurface)
                                 .clipShape(Circle())
-                                .synaraDepth(.raised, shape: Circle())
+                                .synaraDepth(.layered, shape: Circle())
                                 .frame(width: 44, height: 44)
                                 .contentShape(Rectangle())
                         }
@@ -7514,10 +7492,12 @@ private struct TimelineRow: View {
                 )
             }
         } else if let approvalPrompt {
+            // Only a request still waiting on you carries the critical plane.
+            let isPending = item.agentApprovalDecision == nil
             SynaraMessageBubble(
                 alignment: bubbleAlignment,
-                variant: .agent,
-                depth: .critical,
+                variant: isPending ? .critical : .standard,
+                depth: isPending ? .critical : .layered,
                 isGrouped: isGroupedWithPrevious,
                 showsBackground: true,
                 deliveryStatus: nil
@@ -7993,12 +7973,11 @@ private struct MediaAttachmentCard: View {
     @ViewBuilder
     private var fileAttachmentCard: some View {
         HStack(spacing: SynaraSpacing.small) {
-            SynaraIconTile(
-                title: resource.safeDescription,
-                systemImage: resource.safeDescription.localizedCaseInsensitiveContains(".pdf") ? "doc.richtext.fill" : "doc.text.fill",
-                tint: resource.safeDescription.localizedCaseInsensitiveContains(".pdf") ? SynaraColor.critical : SynaraColor.accent,
-                size: 30
-            )
+            Image(systemName: resource.safeDescription.localizedCaseInsensitiveContains(".pdf") ? "doc.richtext" : "doc.text")
+                .font(.title3)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .frame(minWidth: 30, minHeight: 30)
+                .accessibilityHidden(true)
 
             mediaMetadataRow(showDownloadIcon: true)
 
@@ -8662,7 +8641,7 @@ private struct ReactionPill: View {
         .foregroundStyle(isSelected ? SynaraColor.accentText : SynaraColor.primaryText)
         .background(isSelected ? SynaraColor.accent.opacity(0.14) : SynaraColor.elevatedSurface)
         .clipShape(Capsule())
-        .synaraDepth(.raised, shape: Capsule())
+        .synaraDepth(.layered, shape: Capsule(), boundaryColor: isSelected ? SynaraColor.accent : SynaraColor.separator)
         .synaraReactionPop(animationIndex: animationIndex, animationKey: reactionAnimationKey)
     }
 }
@@ -8813,21 +8792,13 @@ private struct AgentApprovalPromptTimelineCard: View {
     /// This account's own terminal reaction, projected by Core.
     let decision: SynaraAgentApprovalCardDecision?
     let onReaction: (String) -> Void
-    @State private var isCommandExpanded = true
     @State private var confirmApproveAlways = false
-
-    private var actionColumns: [GridItem] {
-        Array(
-            repeating: GridItem(.flexible(minimum: 68), spacing: SynaraSpacing.small),
-            count: SynaraAgentApprovalPromptReaction.allCases.count
-        )
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.medium) {
             HStack(alignment: .top, spacing: SynaraSpacing.small) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 19, weight: .semibold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(SynaraColor.critical)
                     .accessibilityHidden(true)
 
@@ -8845,88 +8816,27 @@ private struct AgentApprovalPromptTimelineCard: View {
             }
 
             if let command = prompt.command {
-                DisclosureGroup(isExpanded: $isCommandExpanded) {
-                    ScrollView(.vertical, showsIndicators: true) {
-                        Text(command)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(SynaraColor.primaryText)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.top, SynaraSpacing.xSmall)
-                    }
-                    .frame(maxHeight: 160)
-                } label: {
-                    Text(
-                        prompt.commandPreview.map { String(localized: "Command: \($0)") }
-                            ?? String(localized: "Review command")
-                    )
-                        .font(SynaraTypography.messageMeta.weight(.medium))
-                        .foregroundStyle(SynaraColor.primaryText)
-                        .lineLimit(2)
-                }
-                .padding(SynaraSpacing.small)
-                .synaraAccessibleSurfaceFill(
-                    SynaraColor.surface.opacity(0.72),
-                    opaqueFill: SynaraColor.surface
-                )
-                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
-                .synaraDepth(
-                    .raised,
-                    cornerRadius: SynaraRadius.control,
-                    boundaryColor: SynaraColor.critical
-                )
-            }
-
-            if prompt.command == nil, let sourceContext = prompt.sourceContext, sourceContext.isEmpty == false {
-                VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-                    Text("Full approval request")
-                        .font(SynaraTypography.messageMeta.weight(.medium))
-                        .foregroundStyle(SynaraColor.primaryText)
-                    ScrollView(.vertical, showsIndicators: true) {
-                        Text(sourceContext)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(SynaraColor.primaryText)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(maxHeight: 160)
-                }
-                .padding(SynaraSpacing.small)
-                .synaraAccessibleSurfaceFill(
-                    SynaraColor.surface.opacity(0.72),
-                    opaqueFill: SynaraColor.surface
-                )
-                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
-                .synaraDepth(.raised, cornerRadius: SynaraRadius.control)
+                sourceBlock(command)
+            } else if let sourceContext = prompt.sourceContext, sourceContext.isEmpty == false {
+                sourceBlock(sourceContext)
             }
 
             if let decision {
-                HStack(alignment: .top, spacing: SynaraSpacing.small) {
-                    Text(decision.reaction.reactionKey)
-                        .font(.system(size: 21, weight: .semibold))
+                HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
+                    Image(systemName: decision.reaction.systemImage)
+                        .font(SynaraTypography.emphasis)
+                        .foregroundStyle(decision.reaction.tint)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(decision.title)
                             .font(SynaraTypography.emphasis)
-                            .foregroundStyle(decision.reaction.tint)
+                            .foregroundStyle(SynaraColor.primaryText)
                         Text(decision.detail())
                             .font(SynaraTypography.messageMeta)
                             .foregroundStyle(SynaraColor.secondaryText)
                     }
                     Spacer(minLength: 0)
                 }
-                .padding(SynaraSpacing.small)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .synaraAccessibleSurfaceFill(
-                    decision.reaction.tint.opacity(0.10),
-                    opaqueFill: SynaraColor.secondarySurface
-                )
-                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
-                .synaraDepth(
-                    .raised,
-                    cornerRadius: SynaraRadius.control,
-                    boundaryColor: decision.reaction.tint
-                )
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("AgentApprovalPromptDecision-\(eventID)")
             } else {
@@ -8949,60 +8859,25 @@ private struct AgentApprovalPromptTimelineCard: View {
                                 confirmApproveAlways = false
                             }
                             .buttonStyle(.bordered)
+                            .tint(SynaraColor.secondaryText)
                         }
                     }
-                    .padding(SynaraSpacing.small)
-                    .synaraAccessibleSurfaceFill(
-                        SynaraColor.critical.opacity(0.08),
-                        opaqueFill: SynaraColor.secondarySurface
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
-                    .synaraDepth(
-                        .floating,
-                        cornerRadius: SynaraRadius.control,
-                        boundaryColor: SynaraColor.critical
-                    )
                 }
 
-                LazyVGrid(columns: actionColumns, spacing: SynaraSpacing.small) {
-                    ForEach(SynaraAgentApprovalPromptReaction.allCases) { action in
-                        if confirmApproveAlways, action == .approveAlways {
-                            EmptyView()
-                        } else {
-                            Button {
-                                if action == .approveAlways {
-                                    confirmApproveAlways = true
-                                } else {
-                                    confirmApproveAlways = false
-                                    onReaction(action.actionIdentifier)
-                                }
-                            } label: {
-                                VStack(spacing: SynaraSpacing.xSmall) {
-                                    Text(action.reactionKey)
-                                        .font(.system(size: 21, weight: .semibold))
-                                    Text(action.title)
-                                        .font(SynaraTypography.chipLabel.weight(.semibold))
-                                        .multilineTextAlignment(.center)
-                                        .lineLimit(2)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .frame(minHeight: 58)
-                                .foregroundStyle(action.tint)
-                                .synaraAccessibleSurfaceFill(
-                                    action.tint.opacity(action == .deny ? 0.08 : 0.10),
-                                    opaqueFill: SynaraColor.secondarySurface
-                                )
-                                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
-                                .synaraDepth(
-                                    .raised,
-                                    cornerRadius: SynaraRadius.control,
-                                    boundaryColor: action.tint
-                                )
-                            }
-                            .buttonStyle(SynaraTactileButtonStyle())
-                            .accessibilityLabel("\(action.title) \(action.reactionKey)")
-                            .accessibilityIdentifier("AgentApprovalPromptReaction-\(action.accessibilityIdentifierSuffix)-\(eventID)")
+                // One row when it fits; else Approve once above the other
+                // two; at large Dynamic Type, one full-width button each.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: SynaraSpacing.small) {
+                        ForEach(visibleActions) { actionButton($0, stacked: false) }
+                    }
+                    VStack(spacing: SynaraSpacing.small) {
+                        actionButton(.approveOnce, stacked: true)
+                        HStack(spacing: SynaraSpacing.small) {
+                            ForEach(visibleActions.filter { $0 != .approveOnce }) { actionButton($0, stacked: true) }
                         }
+                    }
+                    VStack(spacing: SynaraSpacing.small) {
+                        ForEach(visibleActions) { actionButton($0, stacked: true) }
                     }
                 }
 
@@ -9011,6 +8886,67 @@ private struct AgentApprovalPromptTimelineCard: View {
                     .foregroundStyle(SynaraColor.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    /// The command (or the full request when there is no command) shown
+    /// once, as plain selectable text on a quiet inset.
+    private func sourceBlock(_ text: String) -> some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            Text(text)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(SynaraColor.primaryText)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxHeight: 160)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(SynaraSpacing.small)
+        .synaraAccessibleSurfaceFill(
+            SynaraColor.mutedControl.opacity(0.45),
+            opaqueFill: SynaraColor.surface
+        )
+        .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+        .accessibilityIdentifier("AgentApprovalPromptSource-\(eventID)")
+    }
+
+    /// Approve always gives way to its confirmation while that is open.
+    private var visibleActions: [SynaraAgentApprovalPromptReaction] {
+        SynaraAgentApprovalPromptReaction.allCases.filter { !(confirmApproveAlways && $0 == .approveAlways) }
+    }
+
+    /// In one row the labels keep one line so `ViewThatFits` can measure
+    /// them; stacked they share the available width and may wrap.
+    @ViewBuilder
+    private func actionButton(_ action: SynaraAgentApprovalPromptReaction, stacked: Bool) -> some View {
+        let button = Button {
+            if action == .approveAlways {
+                confirmApproveAlways = true
+            } else {
+                confirmApproveAlways = false
+                onReaction(action.actionIdentifier)
+            }
+        } label: {
+            Label(action.title, systemImage: action.systemImage)
+                .labelStyle(.titleAndIcon)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(stacked ? 2 : 1)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: !stacked, vertical: false)
+                .frame(maxWidth: stacked ? .infinity : nil, minHeight: SynaraHitTarget.minimum)
+                .contentShape(Rectangle())
+                .foregroundStyle(action == .approveOnce ? Color.white : action.labelTint)
+        }
+        .controlSize(.large)
+        .tint(action == .approveOnce ? SynaraColor.accentFill : action.buttonTint)
+        .accessibilityLabel(action.accessibilityTitle)
+        .accessibilityIdentifier("AgentApprovalPromptReaction-\(action.accessibilityIdentifierSuffix)-\(eventID)")
+
+        // Approve once is the expected path; the other two stay quieter.
+        if action == .approveOnce {
+            button.buttonStyle(.borderedProminent)
+        } else {
+            button.buttonStyle(.bordered)
         }
     }
 }
@@ -9022,28 +8958,13 @@ private struct AgentApprovalButtonStyle: ViewModifier {
         switch action.kind {
         case .some("approve"):
             content
-                .buttonStyle(.plain)
-                .padding(.vertical, SynaraSpacing.small)
-                .padding(.horizontal, SynaraSpacing.medium)
-                .foregroundStyle(SynaraColor.successText)
-                .background(SynaraColor.success.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
-                        .stroke(SynaraColor.success, lineWidth: 1.5)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+                .buttonStyle(.borderedProminent)
+                .tint(SynaraColor.accentFill)
         case .some("reject"):
             content
-                .buttonStyle(.plain)
-                .padding(.vertical, SynaraSpacing.small)
-                .padding(.horizontal, SynaraSpacing.medium)
                 .foregroundStyle(SynaraColor.criticalText)
-                .background(SynaraColor.critical.opacity(0.06))
-                .overlay(
-                    RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
-                        .stroke(SynaraColor.critical, lineWidth: 1.5)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+                .buttonStyle(.bordered)
+                .tint(SynaraColor.critical)
         default:
             content
                 .buttonStyle(.borderedProminent)
@@ -9055,41 +8976,20 @@ private struct AgentApprovalButtonStyle: ViewModifier {
 private struct AgentCardLinkPreview: View {
     let urlString: String
 
-    private var isPolicySafeLink: Bool {
-        SynaraContractURLPolicy.isSafeHTTPS(urlString)
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-            Text("Preview")
+        HStack(spacing: SynaraSpacing.xSmall) {
+            Image(systemName: "link")
                 .font(SynaraTypography.messageMeta)
                 .foregroundStyle(SynaraColor.secondaryText)
-            HStack {
-                Text(urlString)
-                    .font(SynaraTypography.messageMeta)
-                    .foregroundStyle(SynaraColor.accent)
-                    .lineLimit(1)
-                Spacer()
-                Image(systemName: "arrow.up.right.square")
-                    .foregroundStyle(SynaraColor.secondaryText)
-            }
-            if isPolicySafeLink {
-                HStack(spacing: SynaraSpacing.xSmall) {
-                    Image(systemName: "link")
-                        .font(SynaraTypography.messageMeta)
-                        .foregroundStyle(SynaraColor.secondaryText)
-                    Text("Opens HTTPS link")
-                        .font(SynaraTypography.messageMeta)
-                        .foregroundStyle(SynaraColor.secondaryText)
-                }
-            }
+                .accessibilityHidden(true)
+            Text(urlString)
+                .font(SynaraTypography.messageMeta)
+                .foregroundStyle(SynaraColor.accentText)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 0)
         }
-        .padding(SynaraSpacing.small)
-        .synaraCard(
-            fill: SynaraColor.surface.opacity(0.7),
-            opaqueFill: SynaraColor.surface,
-            stroke: SynaraColor.agent
-        )
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -9100,25 +9000,17 @@ private struct AgentCardTimelineRow: View {
     var body: some View {
         let visibleActions = card.actions.filter { SynaraAgentCardActionResolver.shouldRender($0) }
 
-        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-            HStack(alignment: .center, spacing: SynaraSpacing.small) {
-                SynaraAvatar(title: "Agent", systemImage: "sparkles", tint: SynaraColor.agent, size: 28)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(card.title)
-                        .font(SynaraTypography.emphasis)
-                        .foregroundStyle(SynaraColor.primaryText)
-                        .lineLimit(2)
-                        .accessibilityIdentifier("AgentCardTitle")
-                    Text("Agent workflow")
-                        .font(SynaraTypography.messageMeta)
-                        .foregroundStyle(SynaraColor.secondaryText)
-                }
-
-                Spacer()
-
+        VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(card.title)
+                    .font(SynaraTypography.emphasis)
+                    .foregroundStyle(SynaraColor.primaryText)
+                    .lineLimit(2)
+                    .accessibilityIdentifier("AgentCardTitle")
                 if let status = card.status {
-                    SynaraStatusChip(title: status, tint: SynaraColor.agent, systemImage: "circle.dashed")
+                    Text(status)
+                        .font(SynaraTypography.messageMeta.weight(.medium))
+                        .foregroundStyle(SynaraColor.agentText)
                         .lineLimit(1)
                 }
             }
@@ -9127,7 +9019,7 @@ private struct AgentCardTimelineRow: View {
                 Text(summary)
                     .font(SynaraTypography.body)
                     .foregroundStyle(SynaraColor.primaryText)
-                    .lineLimit(2)
+                    .lineLimit(3)
             }
 
             AgentApprovalDetails(card: card)
@@ -9150,15 +9042,16 @@ private struct AgentCardTimelineRow: View {
                     } label: {
                         HStack {
                             Text(action.title)
-                                .font(SynaraTypography.emphasis)
+                                .font(SynaraTypography.body.weight(.medium))
                             Spacer()
-                            Image(systemName: "chevron.right")
+                            Image(systemName: "arrow.up.right")
+                                .font(SynaraTypography.messageMeta.weight(.semibold))
                                 .accessibilityHidden(true)
                         }
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
-                    .tint(action.tint)
+                    .tint(SynaraColor.accent)
                     .accessibilityHint("Performs \(action.title)")
                     .accessibilityIdentifier("AgentCardAction-\(action.id)")
                 }
@@ -9170,7 +9063,8 @@ private struct AgentCardTimelineRow: View {
                                 onAction(action)
                             } label: {
                                 Label(action.title, systemImage: action.systemImage)
-                                    .font(SynaraTypography.emphasis)
+                                    .labelStyle(.titleAndIcon)
+                                    .font(SynaraTypography.body.weight(.semibold))
                                     .frame(maxWidth: .infinity)
                             }
                             .modifier(AgentApprovalButtonStyle(action: action))
@@ -9184,57 +9078,62 @@ private struct AgentCardTimelineRow: View {
     }
 }
 
+/// Facts the card actually carries, as plain label/value rows. Rows
+/// without data are left out rather than filled with placeholder text.
 private struct AgentApprovalDetails: View {
     let card: SynaraAgentCard
 
     var body: some View {
-        VStack(spacing: SynaraSpacing.small) {
-            AgentDetailRow(
-                title: String(localized: "Target"),
-                value: card.artifacts.first?.title ?? String(localized: "Synara workflow")
-            )
-            AgentDetailRow(title: String(localized: "Changes"), value: changeSummary)
-            AgentDetailRow(title: String(localized: "Checks"), value: checkSummary, valueTint: SynaraColor.success)
-            AgentDetailRow(title: String(localized: "Summary"), value: card.summary ?? card.title)
+        let rows = detailRows
+        if rows.isEmpty == false {
+            VStack(spacing: SynaraSpacing.xSmall) {
+                ForEach(rows, id: \.title) { row in
+                    AgentDetailRow(title: row.title, value: row.value)
+                }
+            }
+            .padding(.vertical, SynaraSpacing.xSmall)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(SynaraColor.separator.opacity(0.6))
+                    .frame(height: 0.5)
+                    .accessibilityHidden(true)
+            }
         }
-        .padding(SynaraSpacing.small)
-        .synaraCard(
-            fill: SynaraColor.surface.opacity(0.65),
-            opaqueFill: SynaraColor.surface,
-            stroke: SynaraColor.agent
-        )
     }
 
-    private var changeSummary: String {
-        let count = card.artifacts.count + card.code.count + card.diffs.count
-        return String(localized: "\(max(count, 1)) items changed")
-    }
-
-    private var checkSummary: String {
-        if card.logs.isEmpty {
-            return String(localized: "Ready")
+    private var detailRows: [(title: String, value: String)] {
+        var rows: [(title: String, value: String)] = []
+        if let target = card.artifacts.first?.title {
+            rows.append((String(localized: "Target"), target))
         }
-        return String(localized: "\(card.logs.count) passed")
+        let changes = card.artifacts.count + card.code.count + card.diffs.count
+        if changes > 0 {
+            rows.append((String(localized: "Changes"), String(localized: "\(changes) items changed")))
+        }
+        if card.logs.isEmpty == false {
+            rows.append((String(localized: "Checks"), String(localized: "\(card.logs.count) passed")))
+        }
+        return rows
     }
 }
 
 private struct AgentDetailRow: View {
     let title: String
     let value: String
-    var valueTint: Color = SynaraColor.primaryText
 
     var body: some View {
-        HStack(alignment: .top, spacing: SynaraSpacing.medium) {
+        HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.medium) {
             Text(title)
                 .font(SynaraTypography.messageMeta)
                 .foregroundStyle(SynaraColor.secondaryText)
                 .frame(width: 76, alignment: .leading)
             Text(value)
                 .font(SynaraTypography.messageMeta)
-                .foregroundStyle(valueTint)
+                .foregroundStyle(SynaraColor.primaryText)
                 .lineLimit(3)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -9242,9 +9141,9 @@ private extension SynaraAgentCardAction {
     var systemImage: String {
         switch kind {
         case .some("approve"):
-            return "checkmark.circle.fill"
+            return "checkmark"
         case .some("reject"):
-            return "xmark.circle"
+            return "xmark"
         case .some("open"), .some("open_url"):
             return "safari"
         default:
@@ -9252,19 +9151,46 @@ private extension SynaraAgentCardAction {
         }
     }
 
+    /// Approve and reject are styled by `AgentApprovalButtonStyle`.
     var tint: Color {
-        switch kind {
-        case .some("reject"):
-            return SynaraColor.critical
-        case .some("approve"):
-            return SynaraColor.success
-        default:
-            return SynaraColor.agent
-        }
+        SynaraColor.agent
     }
 }
 
 private extension SynaraAgentApprovalPromptReaction {
+    /// Monochrome glyphs for the buttons and decision line. The emoji in
+    /// `reactionKey` are protocol values that are sent, never shown.
+    var systemImage: String {
+        switch self {
+        case .approveOnce:
+            return "checkmark"
+        case .approveAlways:
+            return "infinity"
+        case .deny:
+            return "xmark"
+        }
+    }
+
+    var buttonTint: Color {
+        self == .deny ? SynaraColor.critical : SynaraColor.accent
+    }
+
+    /// Label colour on the bordered (tinted) buttons; the AA text variants.
+    var labelTint: Color {
+        self == .deny ? SynaraColor.criticalText : SynaraColor.accentText
+    }
+
+    var accessibilityTitle: String {
+        switch self {
+        case .approveOnce:
+            return String(localized: "Approve once")
+        case .approveAlways:
+            return String(localized: "Approve always")
+        case .deny:
+            return String(localized: "Deny")
+        }
+    }
+
     var tint: Color {
         switch self {
         case .approveOnce, .approveAlways:
@@ -9566,7 +9492,7 @@ private struct ComposerView: View {
                 .background(SynaraColor.secondarySurface)
                 .foregroundStyle(SynaraColor.secondaryText)
                 .clipShape(Circle())
-                .synaraDepth(.raised, shape: Circle())
+                .synaraDepth(.layered, shape: Circle())
                 .frame(width: 44, height: 44)
         }
         .buttonStyle(SynaraTactileButtonStyle())
@@ -9589,7 +9515,6 @@ private struct ComposerView: View {
                 .foregroundStyle(isFormattingBarVisible ? SynaraColor.accent : SynaraColor.secondaryText)
                 .background(isFormattingBarVisible ? SynaraColor.accent.opacity(0.12) : Color.clear)
                 .clipShape(Circle())
-                .synaraDepth(isFormattingBarVisible ? .raised : .content, shape: Circle())
                 .frame(width: 44, height: 44)
         }
         .buttonStyle(SynaraTactileButtonStyle())
@@ -9609,7 +9534,6 @@ private struct ComposerView: View {
                     .background(sendButtonTint)
                     .foregroundStyle(Color.white)
                     .clipShape(Circle())
-                    .synaraDepth(.raised, shape: Circle(), boundaryColor: SynaraColor.accent)
                     .frame(width: 44, height: 44)
             }
             .buttonStyle(SynaraTactileButtonStyle())
@@ -9636,7 +9560,7 @@ private struct ComposerView: View {
             RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
                 .fill(SynaraColor.surface)
         }
-        .synaraDepth(.raised, cornerRadius: SynaraRadius.composer)
+        .synaraDepth(.layered, cornerRadius: SynaraRadius.composer)
     }
 
     private var canSubmit: Bool {
@@ -9936,13 +9860,6 @@ private struct ComposerFormattingBar: View {
                             .clipShape(
                                 RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
                             )
-                            .synaraDepth(
-                                .raised,
-                                shape: RoundedRectangle(
-                                    cornerRadius: SynaraRadius.control,
-                                    style: .continuous
-                                )
-                            )
                             .frame(width: 44, height: 44)
                     }
                     .buttonStyle(SynaraTactileButtonStyle())
@@ -9981,8 +9898,7 @@ private struct AttachmentOptionsSheet: View {
     private static let gifOption = AttachmentOption(
         identifier: "GIF",
         title: String(localized: "GIF"),
-        systemImage: "sparkles",
-        tint: SynaraColor.accent,
+        systemImage: "play.rectangle",
         kind: .gif
     )
 
@@ -9991,21 +9907,18 @@ private struct AttachmentOptionsSheet: View {
             identifier: "Photo or Video",
             title: String(localized: "Photo or Video"),
             systemImage: "photo",
-            tint: SynaraColor.success,
             kind: .photo
         ),
         AttachmentOption(
             identifier: "File",
             title: String(localized: "File"),
             systemImage: "doc",
-            tint: SynaraColor.accent,
             kind: .file
         ),
         AttachmentOption(
             identifier: "Camera",
             title: String(localized: "Camera"),
             systemImage: "camera",
-            tint: SynaraColor.warning,
             kind: .camera
         ),
     ]
@@ -10181,7 +10094,6 @@ private struct AttachmentOption: Identifiable {
     let identifier: String
     let title: String
     let systemImage: String
-    let tint: Color
     let kind: Kind
 
     var id: String { identifier }
@@ -10194,9 +10106,7 @@ private struct AttachmentOptionLabel: View {
         HStack(spacing: SynaraSpacing.medium) {
             icon
                 .frame(width: 30, height: 30)
-                .background(option.tint.opacity(0.14))
-                .foregroundStyle(option.tint)
-                .clipShape(Circle())
+                .foregroundStyle(SynaraColor.secondaryText)
 
             Text(option.title)
                 .font(SynaraTypography.supporting.weight(.semibold))
@@ -10285,7 +10195,7 @@ private struct ComposerRelationBanner: View {
                 .accessibilityLabel(target.kind == .edit ? "Cancel editing" : "Cancel reply")
         }
         .padding(SynaraSpacing.small)
-        .synaraCard(fill: SynaraColor.accent.opacity(0.08), stroke: SynaraColor.accent)
+        .synaraCard(fill: SynaraColor.secondarySurface)
         .accessibilityIdentifier(target.kind == .edit ? "ComposerEditBanner" : "ComposerReplyBanner")
     }
 }

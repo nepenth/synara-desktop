@@ -364,7 +364,7 @@ private struct AgentPendingApprovalRow: View {
                     .lineLimit(2)
 
                 HStack(spacing: SynaraSpacing.small) {
-                    Label("Agent", systemImage: "sparkles")
+                    Label("Agent", systemImage: "terminal")
                     Text("# \(item.roomName)")
                         .lineLimit(1)
                     if let status = item.status, status.isEmpty == false {

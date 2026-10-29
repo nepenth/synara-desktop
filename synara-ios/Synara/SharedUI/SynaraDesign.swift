@@ -609,6 +609,10 @@ enum SynaraColor {
     static var warningText: Color { synaraStatusText(SynaraStatusTextPalette.warning) }
     static var criticalText: Color { synaraStatusText(SynaraStatusTextPalette.critical) }
     static var accentText: Color { synaraStatusText(SynaraStatusTextPalette.accent) }
+    static var agentText: Color { synaraStatusText(SynaraStatusTextPalette.agent) }
+    /// Fill behind white labels on a primary button; `accent` itself is
+    /// under 4.5:1 with white.
+    static var accentFill: Color { synaraStatusText(SynaraStatusTextPalette.accentFill) }
 }
 
 /// Text variants of the system status colors: darker in light mode, lighter
@@ -628,12 +632,16 @@ enum SynaraStatusTextPalette {
     static let warning = Pair(light: "#9a4500", dark: "#ff9f0a")
     static let critical = Pair(light: "#b3141a", dark: "#ff7f78")
     static let accent = Pair(light: "#0058b8", dark: "#5eacff")
+    static let agent = Pair(light: "#00616e", dark: "#5ad8e6")
+    /// A fill, not text: white on it clears 4.5:1 in both modes.
+    static let accentFill = Pair(light: "#0062cc", dark: "#1a6fd8")
 
     static let all: [(name: String, pair: Pair)] = [
         ("success", success),
         ("warning", warning),
         ("critical", critical),
         ("accent", accent),
+        ("agent", agent),
     ]
 }
 
@@ -871,6 +879,35 @@ private func synaraHex(hue: Double, saturation: Double, lightness: Double) -> St
     )
 }
 
+/// Flat, muted fallback avatar colours, picked deterministically from a
+/// Matrix ID so a person keeps the same colour on every device. Every entry
+/// keeps white initials at 4.5:1 or better.
+enum SynaraAvatarPalette {
+    static let hues: [Double] = [212, 248, 285, 330, 8, 28, 140, 195]
+    static let saturation = 0.34
+    static let lightness = 0.37
+
+    static func hex(for seed: String) -> String {
+        // FNV-1a: stable across launches, unlike `Hasher`.
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in seed.lowercased().utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x100000001b3
+        }
+        // The high half mixes better than FNV's low bits.
+        let hue = hues[Int((hash >> 32) % UInt64(hues.count))]
+        return synaraHex(hue: hue, saturation: saturation, lightness: lightness)
+    }
+
+    static func color(for seed: String) -> Color {
+        #if canImport(UIKit)
+        Color(uiColor: UIColor(synaraHex: hex(for: seed)) ?? .systemGray)
+        #else
+        Color.gray
+        #endif
+    }
+}
+
 enum SynaraRadius {
     static let small: CGFloat = 6
     static let card: CGFloat = 8
@@ -958,54 +995,57 @@ enum SynaraDepthLevel: String, CaseIterable {
                 shadowOpacity: 0,
                 shadowRadius: 0,
                 shadowOffsetY: 0,
-                edgeOpacity: dark ? 0.035 : 0.025,
+                edgeOpacity: 0,
                 boundaryOpacity: (dark ? 0.20 : 0.12) * boundaryScale,
                 boundaryWidth: 0.5
             )
         case .layered:
+            // Ordinary messages sit on the reading plane: a hairline, no
+            // shadow, so elevation stays meaningful for what is selected,
+            // floating or critical.
             return SynaraDepthMetrics(
-                shadowOpacity: (dark ? 0.24 : 0.055) * transparencyScale,
-                shadowRadius: dark ? 3 : 2,
-                shadowOffsetY: 1,
-                edgeOpacity: dark ? 0.13 : 0.12,
-                boundaryOpacity: (dark ? 0.46 : 0.26) * boundaryScale,
-                boundaryWidth: 0.6
-            )
-        case .raised:
-            return SynaraDepthMetrics(
-                shadowOpacity: (dark ? 0.30 : 0.08) * transparencyScale,
-                shadowRadius: dark ? 7 : 5,
-                shadowOffsetY: dark ? 2 : 1.5,
-                edgeOpacity: dark ? 0.17 : 0.14,
-                boundaryOpacity: (dark ? 0.52 : 0.30) * boundaryScale,
-                boundaryWidth: 0.7
-            )
-        case .floating:
-            return SynaraDepthMetrics(
-                shadowOpacity: (dark ? 0.38 : 0.12) * transparencyScale,
-                shadowRadius: dark ? 14 : 11,
-                shadowOffsetY: dark ? 5 : 4,
-                edgeOpacity: dark ? 0.21 : 0.18,
-                boundaryOpacity: (dark ? 0.60 : 0.36) * boundaryScale,
-                boundaryWidth: 0.8
+                shadowOpacity: 0,
+                shadowRadius: 0,
+                shadowOffsetY: 0,
+                edgeOpacity: 0,
+                boundaryOpacity: (dark ? 0.34 : 0.20) * boundaryScale,
+                boundaryWidth: 0.5
             )
         case .avatar:
             return SynaraDepthMetrics(
-                shadowOpacity: (dark ? 0.30 : 0.08) * transparencyScale,
-                shadowRadius: dark ? 5 : 4,
-                shadowOffsetY: dark ? 2 : 1.5,
-                edgeOpacity: dark ? 0.18 : 0.12,
-                boundaryOpacity: (dark ? 0.50 : 0.28) * boundaryScale,
-                boundaryWidth: 0.8
+                shadowOpacity: 0,
+                shadowRadius: 0,
+                shadowOffsetY: 0,
+                edgeOpacity: 0,
+                boundaryOpacity: (dark ? 0.36 : 0.22) * boundaryScale,
+                boundaryWidth: 0.5
+            )
+        case .raised:
+            return SynaraDepthMetrics(
+                shadowOpacity: (dark ? 0.22 : 0.05) * transparencyScale,
+                shadowRadius: dark ? 4 : 3,
+                shadowOffsetY: 1,
+                edgeOpacity: 0,
+                boundaryOpacity: (dark ? 0.46 : 0.26) * boundaryScale,
+                boundaryWidth: 0.6
+            )
+        case .floating:
+            return SynaraDepthMetrics(
+                shadowOpacity: (dark ? 0.32 : 0.10) * transparencyScale,
+                shadowRadius: dark ? 12 : 10,
+                shadowOffsetY: dark ? 4 : 3,
+                edgeOpacity: dark ? 0.10 : 0.08,
+                boundaryOpacity: (dark ? 0.54 : 0.32) * boundaryScale,
+                boundaryWidth: 0.7
             )
         case .critical:
             return SynaraDepthMetrics(
-                shadowOpacity: (dark ? 0.44 : 0.16) * transparencyScale,
-                shadowRadius: dark ? 18 : 15,
-                shadowOffsetY: dark ? 7 : 5,
-                edgeOpacity: dark ? 0.24 : 0.22,
-                boundaryOpacity: (dark ? 0.68 : 0.44) * boundaryScale,
-                boundaryWidth: 0.9
+                shadowOpacity: (dark ? 0.36 : 0.12) * transparencyScale,
+                shadowRadius: dark ? 14 : 12,
+                shadowOffsetY: dark ? 5 : 4,
+                edgeOpacity: dark ? 0.12 : 0.10,
+                boundaryOpacity: (dark ? 0.60 : 0.38) * boundaryScale,
+                boundaryWidth: 0.8
             )
         }
     }
@@ -1055,20 +1095,20 @@ private struct SynaraDepthModifier<Outline: Shape>: ViewModifier {
                         .allowsHitTesting(false)
                 }
                 .overlay {
-                    outline
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(metrics.edgeOpacity),
-                                    Color.clear,
-                                    Color.black.opacity(metrics.edgeOpacity * 0.72),
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: max(0.75, metrics.boundaryWidth)
-                        )
-                        .allowsHitTesting(false)
+                    // A faint top edge light on floating and critical planes
+                    // only; ordinary surfaces get no bevel.
+                    if metrics.edgeOpacity > 0 {
+                        outline
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(metrics.edgeOpacity), Color.clear],
+                                    startPoint: .top,
+                                    endPoint: UnitPoint(x: 0.5, y: 0.35)
+                                ),
+                                lineWidth: metrics.boundaryWidth
+                            )
+                            .allowsHitTesting(false)
+                    }
                 }
                 .shadow(
                     color: Color.black.opacity(metrics.shadowOpacity),
@@ -1277,11 +1317,19 @@ struct SynaraAvatar: View {
 }
 
 struct SynaraBrandMark: View {
+    /// Brand moments (sign-in, the homeserver screen) show the mark as a
+    /// centred hero above the wordmark; About and empty panes use the
+    /// secondary size. Dense chrome such as the room list header stays at 38.
+    static let heroSize: CGFloat = 96
+    static let secondaryHeroSize: CGFloat = 80
+
     var assetName = "SynaraLogo"
     var size: CGFloat = 48
     var hasBackground = true
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: max(SynaraRadius.card, size * 0.22), style: .continuous)
+
         Image(assetName)
             .resizable()
             .interpolation(.high)
@@ -1290,11 +1338,10 @@ struct SynaraBrandMark: View {
             .frame(width: size, height: size)
             .background {
                 if hasBackground {
-                    RoundedRectangle(cornerRadius: SynaraRadius.card)
-                        .fill(SynaraColor.secondarySurface)
+                    shape.fill(SynaraColor.secondarySurface)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.card))
+            .clipShape(shape)
             .accessibilityHidden(true)
     }
 }
@@ -1455,35 +1502,16 @@ struct SynaraActionIconButton: View {
     }
 }
 
-struct SynaraIconTile: View {
-    let title: String
-    let systemImage: String
-    let tint: Color
-    var size: CGFloat = 46
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: SynaraRadius.card)
-                .fill(tint)
-            Image(systemName: systemImage)
-                .font(.system(size: size * 0.44, weight: .semibold))
-                .foregroundStyle(.white)
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
-    }
-}
-
 struct SynaraProductHeader: View {
     let title: String
     let subtitle: String
-    var systemImage: String = "sparkles"
     var assetName: String = "SynaraLogo"
+    var markSize: CGFloat = SynaraBrandMark.heroSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SynaraSpacing.medium) {
-            SynaraBrandMark(assetName: assetName, size: 56)
-            VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+        VStack(spacing: SynaraSpacing.large) {
+            SynaraBrandMark(assetName: assetName, size: markSize)
+            VStack(spacing: SynaraSpacing.xSmall) {
                 Text(title)
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(SynaraColor.primaryText)
@@ -1492,8 +1520,11 @@ struct SynaraProductHeader: View {
                     .foregroundStyle(SynaraColor.secondaryText)
                     .lineLimit(nil)
             }
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: 320)
         }
-        .padding(.vertical, SynaraSpacing.small)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, SynaraSpacing.large)
         .accessibilityElement(children: .combine)
     }
 }
@@ -1502,7 +1533,7 @@ struct SynaraCardModifier: ViewModifier {
     var fill: Color = SynaraColor.secondarySurface
     var opaqueFill: Color = SynaraColor.secondarySurface
     var stroke: Color = SynaraColor.separator
-    var depth: SynaraDepthLevel = .raised
+    var depth: SynaraDepthLevel = .layered
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
@@ -1519,7 +1550,7 @@ extension View {
         fill: Color = SynaraColor.secondarySurface,
         opaqueFill: Color = SynaraColor.secondarySurface,
         stroke: Color = SynaraColor.separator,
-        depth: SynaraDepthLevel = .raised
+        depth: SynaraDepthLevel = .layered
     ) -> some View {
         modifier(
             SynaraCardModifier(
@@ -1536,19 +1567,27 @@ struct SynaraEmptyState: View {
     let title: String
     let systemImage: String
     let message: String?
+    /// Shows the Synara mark instead of the symbol, for the few empty panes
+    /// that are a brand moment (no room selected).
+    var showsBrandMark = false
 
-    init(title: String, systemImage: String, message: String? = nil) {
+    init(title: String, systemImage: String, message: String? = nil, showsBrandMark: Bool = false) {
         self.title = title
         self.systemImage = systemImage
         self.message = message
+        self.showsBrandMark = showsBrandMark
     }
 
     var body: some View {
         VStack(spacing: SynaraSpacing.large) {
-            Image(systemName: systemImage)
-                .font(.system(size: 42, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
+            if showsBrandMark {
+                SynaraBrandMark(size: SynaraBrandMark.secondaryHeroSize)
+            } else {
+                Image(systemName: systemImage)
+                    .font(.system(size: 42, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
 
             VStack(spacing: SynaraSpacing.small) {
                 Text(title)
@@ -1588,35 +1627,6 @@ struct SynaraLoadingState: View {
     }
 }
 
-struct SynaraShimmerModifier: ViewModifier {
-    @State private var phase: CGFloat = -1
-
-    func body(content: Content) -> some View {
-        content
-            .overlay {
-                GeometryReader { geometry in
-                    LinearGradient(
-                        colors: [
-                            .clear,
-                            SynaraColor.elevatedSurface.opacity(0.75),
-                            .clear
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: geometry.size.width * 1.8)
-                    .offset(x: geometry.size.width * phase)
-                }
-                .mask(content)
-            }
-            .onAppear {
-                withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
-                    phase = 1.8
-                }
-            }
-    }
-}
-
 struct SynaraSkeletonBlock: View {
     var width: CGFloat? = nil
     var height: CGFloat
@@ -1626,7 +1636,6 @@ struct SynaraSkeletonBlock: View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(SynaraColor.mutedControl.opacity(0.65))
             .frame(width: width, height: height)
-            .modifier(SynaraShimmerModifier())
             .accessibilityHidden(true)
     }
 }
@@ -1787,7 +1796,7 @@ struct SynaraDesignTokenGallery: View {
                         SynaraToolbarIconButton(systemImage: "person.crop.circle", accessibilityLabel: "Account") {}
                         SynaraActionIconButton(systemImage: "paperplane.fill", accessibilityLabel: "Send") {}
                     }
-                    SynaraStatusChip(title: "Agent", tint: SynaraColor.agent, systemImage: "sparkles")
+                    SynaraStatusChip(title: "Agent", tint: SynaraColor.agent, systemImage: "terminal")
                     SynaraAvatar(title: "Project Room")
                     SynaraUnreadBadge(count: 12, highlighted: true)
                 }

@@ -514,6 +514,100 @@ enum RoomListFixtures {
         ]
     }
 
+    /// A varied, realistically named list of 60+ rooms for visual review:
+    /// mixed DMs, spaces, unread counts, mentions, favorites, agent rooms and
+    /// a pending approval, so density and state cues read as they do in use.
+    static func review() -> [RoomSummary] {
+        let workspace = SpaceSummary(id: "!workspace:matrix.org", name: "Workspace")
+        let ops = SpaceSummary(id: "!ops:matrix.org", name: "Ops")
+        let community = SpaceSummary(id: "!community:matrix.org", name: "Community")
+        let rooms: [(String, String, RoomSummary.RoomKind, [SpaceSummary])] = [
+            ("Release Train", "Noor: RC2 is tagged, smoke tests running", .room, [workspace]),
+            ("Priya Raman", "Can you look at the migration PR today?", .directMessage, []),
+            ("Infra On-call", "PagerDuty: disk usage above 85% on db-2", .room, [ops]),
+            ("Design Critique", "Lena: Updated the empty states, see thread", .room, [workspace]),
+            ("Tomás", "You: Thanks, merged", .directMessage, []),
+            ("Matrix Spec", "Discussion of MSC4186 sliding sync timeouts", .room, [community]),
+            ("Mobile", "Kai: TestFlight build 412 is up", .room, [workspace]),
+            ("Hiro Tanaka", "Photo", .directMessage, []),
+            ("Billing", "Stripe webhook retries look normal again", .room, [ops]),
+            ("Rust SDK", "Ivan: bumped matrix-sdk to 0.19.1", .room, [community]),
+            ("Ada Okafor", "Sounds good, talk tomorrow", .directMessage, []),
+            ("Security Reviews", "Ravi: Please review the key backup audit", .room, [ops]),
+            ("Docs", "You: Fixed the broken links in the guide", .room, [workspace]),
+            ("Frontend", "Mei: The virtual list fix landed", .room, [workspace]),
+            ("Coffee Chat", "Anyone in the office Friday?", .room, []),
+            ("Sam Whitfield", "Voice message", .directMessage, []),
+            ("Incident 2026-10-27", "Postmortem draft is in the notes", .room, [ops]),
+            ("Self-hosting", "Synapse 1.140 upgrade went fine", .room, [community]),
+            ("Growth", "Weekly numbers attached", .room, [workspace]),
+            ("Lena Fischer", "You: I'll send the file tonight", .directMessage, []),
+            ("Accessibility", "VoiceOver order on the composer is fixed", .room, [workspace]),
+            ("Bridges", "Signal bridge reconnected", .room, [community]),
+            ("Hiring", "Two new candidates for the backend role", .room, [workspace]),
+            ("Marco Bellini", "Ok!", .directMessage, []),
+            ("Observability", "Grafana dashboard for push latency is live", .room, [ops]),
+            ("Book Club", "Next pick: The Dispossessed", .room, []),
+            ("Localization", "French strings updated", .room, [community]),
+            ("Noor Haddad", "Running 5 min late", .directMessage, []),
+            ("QA", "Regression pass done on 2.4.0-rc1", .room, [workspace]),
+            ("Element Interop", "Threads render the same on both clients now", .room, [community]),
+            ("Push Notifications", "APNs token rotation tested", .room, [ops]),
+            ("Ivan Petrov", "You: See you at the meetup", .directMessage, []),
+            ("Random", "lol", .room, []),
+            ("Data Platform", "Nightly export finished in 14 min", .room, [ops]),
+            ("Product Planning", "Q1 roadmap draft shared", .room, [workspace]),
+            ("Mei Lin", "Sticker", .directMessage, []),
+            ("Encryption", "Cross-signing reset flow reviewed", .room, [community]),
+            ("Support", "3 tickets waiting for triage", .room, [ops]),
+            ("Photography", "Shot this at the coast this weekend", .room, []),
+            ("Kai Andersen", "Did the build pass?", .directMessage, []),
+            ("Legal", "AGPL notice wording approved", .room, [workspace]),
+            ("Networking", "IPv6 on the edge nodes is enabled", .room, [ops]),
+            ("Plants", "My monstera has a new leaf", .room, []),
+            ("Ravi Kumar", "You: Thanks for the review", .directMessage, []),
+            ("Website", "Landing page copy feedback", .room, [workspace]),
+            ("Gaming", "Anyone up for a match tonight?", .room, []),
+            ("Archive 2025", "This room is read-only", .room, [workspace]),
+            ("Elena Ruiz", "Happy birthday!", .directMessage, []),
+            ("Hackathon", "Teams are posted", .room, [community]),
+            ("Running Club", "Saturday 8am, usual spot", .room, []),
+        ]
+
+        var summaries = small()
+        summaries[0] = RoomSummary(
+            id: summaries[0].id,
+            name: summaries[0].name,
+            lastMessagePreview: summaries[0].lastMessagePreview,
+            unreadCount: summaries[0].unreadCount,
+            hasHighlight: summaries[0].hasHighlight,
+            kind: summaries[0].kind,
+            membership: summaries[0].membership,
+            lastActivityAt: summaries[0].lastActivityAt,
+            parentSpaces: summaries[0].parentSpaces,
+            isFavorite: true
+        )
+        for (index, room) in rooms.enumerated() {
+            summaries.append(
+                RoomSummary(
+                    id: "!review-\(index):matrix.org",
+                    name: room.0,
+                    lastMessagePreview: room.1,
+                    unreadCount: index < 14 ? [3, 1, 12, 0, 2, 0, 5][index % 7] : 0,
+                    hasHighlight: index == 1 || index == 9,
+                    kind: room.2,
+                    membership: .joined,
+                    lastActivityAt: now.addingTimeInterval(TimeInterval(-1_500 - index * 2_700)),
+                    parentSpaces: room.3,
+                    hasAgentActivity: index == 2 || index == 17,
+                    isFavorite: index == 3 || index == 7,
+                    isEncrypted: room.2 == .directMessage || index % 3 == 0
+                )
+            )
+        }
+        return summaries
+    }
+
     static func large(count: Int = 1_000) -> [RoomSummary] {
         var rooms: [RoomSummary] = []
         rooms.reserveCapacity(count)
