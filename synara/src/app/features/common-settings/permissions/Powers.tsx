@@ -5,6 +5,8 @@ import {
   Box,
   Button,
   Chip,
+  Icon,
+  Icons,
   Text,
   RectCords,
   PopOut,
@@ -75,15 +77,26 @@ function PeekPermissions({ powerLevels, power, permissionGroups, children }: Pee
                           const hasPower = requiredPower <= power;
 
                           return (
-                            <Text
+                            <Box
                               key={itemIndex}
-                              size="T200"
+                              as="span"
+                              alignItems="Center"
+                              gap="100"
                               style={{
                                 color: hasPower ? undefined : color.Critical.Main,
                               }}
                             >
-                              {hasPower ? '✅' : '❌'} {item.name}
-                            </Text>
+                              <span
+                                role="img"
+                                aria-label={hasPower ? 'Allowed' : 'Not allowed'}
+                                style={{ display: 'inline-flex' }}
+                              >
+                                <Icon size="50" src={hasPower ? Icons.Check : Icons.Cross} />
+                              </span>
+                              <Text as="span" size="T200">
+                                {item.name}
+                              </Text>
+                            </Box>
                           );
                         })}
                       </div>
