@@ -13,7 +13,8 @@ const pushRight = keyframes({
 export const UnverifiedTab = style({
   animationName: pushRight,
   animationDuration: '400ms',
-  animationIterationCount: 30,
+  // Two nudges when it appears, then still: the badge colour carries the state.
+  animationIterationCount: 4,
   animationDirection: 'alternate',
   '@media': {
     // The badge colour still says the session is unverified.

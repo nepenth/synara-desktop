@@ -536,7 +536,8 @@ export const ReplySurface = style({
   borderLeft: `3px solid var(--synara-content-separator)`,
   borderRadius: `0 ${config.radii.R300} ${config.radii.R300} 0`,
   background: 'var(--synara-table-even)',
-  boxShadow: `inset 0 1px 0 ${quietEdgeLight}, 0 1px 2px color-mix(in srgb, ${color.Other.Shadow} 18%, transparent)`,
+  // Quiet edge light only: a quote sits on the reading plane, not above it.
+  boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
   color: 'var(--synara-message-foreground)',
   textAlign: 'left',
   cursor: 'pointer',
@@ -550,9 +551,6 @@ export const ReplySurface = style({
     },
   },
   '@media': {
-    '(prefers-reduced-transparency: reduce)': {
-      boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
-    },
     '(prefers-contrast: more)': {
       boxShadow: 'none',
     },
