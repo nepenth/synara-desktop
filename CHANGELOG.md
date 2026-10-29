@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Links (desktop): web addresses in formatted messages are clickable again, including every reply and any message with bold, italics or other formatting, from Synara or other Matrix apps. Since 2.3.0 only plain-text messages linked them.
+
 - Reactions (desktop and iOS): you can now see who reacted. On desktop, hovering a reaction shows "Alice, Bob and 3 others reacted with 👍", and right-clicking it lists everyone by display name and Matrix ID. On iOS, long-press a reaction, or choose "View Reactions" in the message menu, for a list of who reacted with each emoji. Screen readers name the people on each reaction.
 - Windows (desktop): signing out and removing local data no longer fails on Windows when the store's database files are still closing. The wipe waits up to five seconds for Windows to release them.
 - Windows (desktop): the release workflow installs the Windows setup, launches Synara and requires the sign-in screen to render before anything is published. The Windows workflow can run the same check on any published release (`release_tag`) in a few minutes.
