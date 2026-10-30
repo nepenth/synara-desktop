@@ -7,49 +7,26 @@ export const COMPOSER_UNFURL_DEBOUNCE_MS = 400;
 
 const ATTACHMENT_MESSAGE_TYPES = new Set(['image', 'file', 'audio', 'video']);
 const HANDLE_PATTERN = /^[0-9a-f]{64}$/i;
-const ROOM_ID_PATTERN = /^![^:\s]+:[^\s]+$/;
+const MAX_PREVIEW_TEXT = 2048;
 
 export type NativeInvoke = (
   command: string,
   args?: Record<string, unknown>
 ) => Promise<DesktopInvokeResult<unknown>>;
 
-export type NativeMediaPreview = {
-  status: 'ok';
-  roomId: string;
-  sessionGeneration: number;
+/**
+ * A link preview this device fetched (`desktop_link_preview`). The image is
+ * served by the desktop shell on `synara-media:` at `link-preview/<id>`.
+ */
+export type NativeLinkPreview = {
   url: string;
-  title?: string;
+  title: string;
   description?: string;
   siteName?: string;
-  thumbnailHandleId?: string;
+  imageHandleId?: string;
 };
 
-type NativeSessionSnapshot = {
-  status: 'logged_out' | 'logged_in';
-  sessionGeneration?: number;
-};
-
-const unavailableMessage = 'A link preview is not available.';
-
-const inFlight = new Map<string, Promise<NativeMediaPreview | null>>();
-
-const isSafeGeneration = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
-
-const isRoomId = (value: unknown): value is string =>
-  typeof value === 'string' && value.length <= 512 && ROOM_ID_PATTERN.test(value);
-
-const hasExactKeys = (
-  value: Record<string, unknown>,
-  keys: readonly string[],
-  requiredKeys: readonly string[] = keys
-): boolean => {
-  const allowed = new Set(keys);
-  return (
-    Object.keys(value).every((key) => allowed.has(key)) && requiredKeys.every((key) => key in value)
-  );
-};
+const inFlight = new Map<string, Promise<NativeLinkPreview | null>>();
 
 const invokeSafely = async (
   command: string,
@@ -121,107 +98,72 @@ export const shouldSkipMessageUnfurl = (input: {
     (input.messageType && ATTACHMENT_MESSAGE_TYPES.has(input.messageType))
   );
 
-const requirePreviewSession = async (invoke: NativeInvoke): Promise<number | undefined> => {
-  const result = await invokeSafely('matrix_session_snapshot', undefined, invoke);
-  if (!result.available || !isObject(result.value) || hasForbiddenWireFields(result.value)) {
-    return undefined;
-  }
-  const snapshot = result.value as NativeSessionSnapshot & Record<string, unknown>;
-  if (snapshot.status !== 'logged_in') return undefined;
-  if (
-    !hasExactKeys(snapshot, [
-      'status',
-      'user_id',
-      'device_id',
-      'homeserver_url',
-      'sessionGeneration',
-    ]) ||
-    !isSafeGeneration(snapshot.sessionGeneration)
-  ) {
-    return undefined;
-  }
-  return snapshot.sessionGeneration;
+/** The URL a message row previews: its first link, unless a skip rule applies. */
+export const timelinePreviewUrl = (input: {
+  enabled: boolean;
+  body: string;
+  formattedBody?: string;
+  messageType?: string;
+  hasMedia?: boolean;
+  skip?: boolean;
+}): string | undefined => {
+  if (!input.enabled || shouldSkipMessageUnfurl(input)) return undefined;
+  return firstTimelinePreviewUrl(input.body, input.formattedBody);
 };
 
-export const parseMediaPreviewSnapshot = (
-  value: unknown,
-  roomId: string,
-  sessionGeneration: number,
-  url: string
-): NativeMediaPreview | null => {
+/** The desktop shell's answer for `url`, or `null` when it is not a valid preview of it. */
+export const parseLinkPreview = (value: unknown, url: string): NativeLinkPreview | null => {
   if (!isObject(value) || hasForbiddenWireFields(value)) return null;
-  if ('imageMxc' in value || 'og:image' in value || 'image_mxc' in value) {
-    throw new Error(unavailableMessage);
-  }
-  if (typeof value.status !== 'string') throw new Error(unavailableMessage);
-  if (value.status === 'skipped' || value.status === 'unavailable') return null;
-  const required = ['status', 'roomId', 'sessionGeneration', 'url'] as const;
-  const optional = ['title', 'description', 'siteName', 'thumbnailHandleId'] as const;
+  const optional = ['description', 'siteName', 'imageHandleId'] as const;
+  const allowed = new Set<string>(['url', 'title', ...optional]);
+  if (!Object.keys(value).every((key) => allowed.has(key)) || value.url !== url) return null;
   if (
-    !hasExactKeys(value, [...required, ...optional], required) ||
-    value.status !== 'ok' ||
-    value.roomId !== roomId ||
-    value.sessionGeneration !== sessionGeneration ||
-    value.url !== url ||
-    !isSafeGeneration(value.sessionGeneration)
-  ) {
-    throw new Error(unavailableMessage);
-  }
-  for (const key of optional) {
-    if (key in value && (typeof value[key] !== 'string' || value[key].length === 0)) {
-      throw new Error(unavailableMessage);
-    }
-  }
-  if ('thumbnailHandleId' in value && !HANDLE_PATTERN.test(String(value.thumbnailHandleId))) {
-    throw new Error(unavailableMessage);
-  }
-  const dumped = JSON.stringify(value);
-  if (dumped.includes('mxc://') || dumped.includes('access_token')) {
-    throw new Error(unavailableMessage);
-  }
-  return value as NativeMediaPreview;
-};
-
-export async function fetchMediaPreviewWithNativeOwner(input: {
-  roomId: string;
-  url: string;
-  ts?: number;
-  encryptionStatus?: string;
-  desktopAvailable: boolean;
-  invoke: NativeInvoke;
-}): Promise<NativeMediaPreview | null> {
-  if (
-    !input.desktopAvailable ||
-    !isRoomId(input.roomId) ||
-    !isPreviewCandidateUrl(input.url) ||
-    input.encryptionStatus !== 'not_encrypted'
+    typeof value.title !== 'string' ||
+    value.title.length === 0 ||
+    value.title.length > MAX_PREVIEW_TEXT
   ) {
     return null;
   }
-  const sessionGeneration = await requirePreviewSession(input.invoke);
-  if (sessionGeneration === undefined) return null;
-  const cacheKey = `${sessionGeneration}\0${input.roomId}\0${input.url}\0${input.ts ?? ''}`;
-  const pending = inFlight.get(cacheKey);
-  if (pending) return pending;
-  const task = (async () => {
-    const args: Record<string, unknown> = {
-      roomId: input.roomId,
-      sessionGeneration,
-      url: input.url,
-    };
-    if (input.ts !== undefined) args.ts = input.ts;
-    const result = await invokeSafely('matrix_media_preview', args, input.invoke);
-    if (!result.available) return null;
-    try {
-      return parseMediaPreviewSnapshot(result.value, input.roomId, sessionGeneration, input.url);
-    } catch {
+  for (const key of optional) {
+    if (!(key in value)) continue;
+    const field = value[key];
+    if (typeof field !== 'string' || field.length === 0 || field.length > MAX_PREVIEW_TEXT) {
       return null;
     }
+  }
+  if ('imageHandleId' in value && !HANDLE_PATTERN.test(String(value.imageHandleId))) return null;
+  return value as NativeLinkPreview;
+};
+
+/** Where the desktop shell serves a preview's image on `synara-media:`. */
+export const linkPreviewImagePath = (handleId: string): string => `link-preview/${handleId}`;
+
+/**
+ * A preview of `url` fetched from this device: the desktop shell requests the
+ * page itself and nothing goes through the homeserver, so encrypted rooms
+ * preview too. `null` when the Link previews setting is off, outside the
+ * desktop app, or when the page has no preview.
+ */
+export async function fetchDeviceLinkPreview(input: {
+  url: string;
+  enabled: boolean;
+  desktopAvailable: boolean;
+  invoke: NativeInvoke;
+}): Promise<NativeLinkPreview | null> {
+  if (!input.enabled || !input.desktopAvailable || !isPreviewCandidateUrl(input.url)) {
+    return null;
+  }
+  const pending = inFlight.get(input.url);
+  if (pending) return pending;
+  const task = (async () => {
+    const result = await invokeSafely('desktop_link_preview', { url: input.url }, input.invoke);
+    if (!result.available) return null;
+    return parseLinkPreview(result.value, input.url);
   })();
-  inFlight.set(cacheKey, task);
+  inFlight.set(input.url, task);
   try {
     return await task;
   } finally {
-    inFlight.delete(cacheKey);
+    inFlight.delete(input.url);
   }
 }

@@ -411,6 +411,12 @@
           "markdownDescription": "Enables the desktop_hide command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_link_preview command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-link-preview",
+          "markdownDescription": "Enables the desktop_link_preview command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_log_path command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-log-path",
@@ -1969,6 +1975,12 @@
           "type": "string",
           "const": "deny-desktop-hide",
           "markdownDescription": "Denies the desktop_hide command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_link_preview command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-link-preview",
+          "markdownDescription": "Denies the desktop_link_preview command without any pre-configured scope."
         },
         {
           "description": "Denies the desktop_log_path command without any pre-configured scope.",

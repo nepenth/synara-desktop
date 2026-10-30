@@ -1103,6 +1103,7 @@ function Messages() {
   const [gifSearchEnabled, setGifSearchEnabled] = useSetting(settingsAtom, 'gifSearchEnabled');
   const [inlineGifLinks, setInlineGifLinks] = useSetting(settingsAtom, 'inlineGifLinks');
   const [xEmbeds, setXEmbeds] = useSetting(settingsAtom, 'xEmbeds');
+  const [linkPreviews, setLinkPreviews] = useSetting(settingsAtom, 'linkPreviews');
   const [indexedMessageSearch, setIndexedMessageSearch] = useSetting(
     settingsAtom,
     'indexedMessageSearch'
@@ -1187,6 +1188,16 @@ function Messages() {
             'Show the post and play its video for x.com links. Your device contacts X, which can see your IP address.'
           )}
           after={<Switch variant="Primary" value={xEmbeds} onChange={setXEmbeds} />}
+        />
+      </SequenceCard>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title={t('modernization.settings.link_previews.title', 'Link previews')}
+          description={t(
+            'modernization.settings.link_previews.description',
+            'Synara fetches the page from this device to show its title and image; the site can see your IP address.'
+          )}
+          after={<Switch variant="Primary" value={linkPreviews} onChange={setLinkPreviews} />}
         />
       </SequenceCard>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">

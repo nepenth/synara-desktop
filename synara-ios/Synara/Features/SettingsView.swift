@@ -1468,6 +1468,7 @@ private struct RichLinkSettingsView: View {
     @State private var inlineGifLinks = true
     @State private var gifSearch = true
     @State private var xEmbeds = true
+    @State private var linkPreviews = true
     @State private var didLoad = false
     /// Builds without a Klipy key (local, dev and CI test builds) cannot search.
     private let gifSearchConfigured = KlipyGifProvider.configured() != nil
@@ -1514,6 +1515,17 @@ private struct RichLinkSettingsView: View {
             } footer: {
                 Text("Show the post and play its video for x.com links. Your device contacts X, which can see your IP address.")
             }
+
+            Section {
+                Toggle("Link previews", isOn: $linkPreviews)
+                    .accessibilityIdentifier("RichLinkLinkPreviewsToggle")
+                    .onChange(of: linkPreviews) { value in
+                        guard didLoad else { return }
+                        environment.settings.set(value, for: RichLinkSettings.linkPreviewsKey)
+                    }
+            } footer: {
+                Text("Synara fetches the page from this device to show its title and image; the site can see your IP address.")
+            }
         }
         .scrollContentBackground(.hidden)
         .background(SynaraChrome.settings)
@@ -1524,6 +1536,7 @@ private struct RichLinkSettingsView: View {
             inlineGifLinks = environment.settings.bool(for: RichLinkSettings.inlineGifLinksKey)
             gifSearch = environment.settings.bool(for: RichLinkSettings.gifSearchKey)
             xEmbeds = environment.settings.bool(for: RichLinkSettings.xEmbedsKey)
+            linkPreviews = environment.settings.bool(for: RichLinkSettings.linkPreviewsKey)
             DispatchQueue.main.async {
                 didLoad = true
             }

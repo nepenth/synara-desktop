@@ -1834,6 +1834,12 @@
     "Licenses" : {
 
     },
+    "Link preview: %@, %@" : {
+
+    },
+    "Link previews" : {
+
+    },
     "Links" : {
 
     },
@@ -2231,6 +2237,9 @@
 
     },
     "Open thread" : {
+
+    },
+    "Opens the link in your browser" : {
 
     },
     "Opens the original message" : {
@@ -3070,6 +3079,9 @@
 
     },
     "Synara deletes this account's saved data on this iPhone, then signs in again. Rooms come back from your homeserver; use your recovery key afterwards to read older encrypted messages." : {
+
+    },
+    "Synara fetches the page from this device to show its title and image; the site can see your IP address." : {
 
     },
     "Synara has not seen your approval yet. Approve the reset in your browser, then select Continue." : {

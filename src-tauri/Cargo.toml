@@ -16,8 +16,9 @@ rust-version.workspace = true
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-# X post embeds fetch public post JSON natively (desktop_x_embed.rs); the
-# crate is already in the graph through synara-core.
+# X post embeds fetch public post JSON natively (desktop_x_embed.rs), and link
+# previews fetch the linked page from this device (desktop_link_preview.rs);
+# the crate is already in the graph through synara-core.
 reqwest = { workspace = true, features = ["rustls", "http2"] }
 serde_json = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -77,7 +78,7 @@ matrix-sdk = { workspace = true, features = [
 ] }
 # Runtime for Matrix client open/drop (also used by matrix-sdk). Kept direct so
 # SdkClientHandle can shut down SQLite pools outside an ambient async context.
-tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time"] }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net"] }
 
 [features]
 # by default Tauri runs in production mode
@@ -142,6 +143,7 @@ hmac = "0.13"
 sha1 = "0.11"
 hex = "0.4"
 wiremock = "0.6"
+tokio = { workspace = true, features = ["io-util", "net"] }
 matrix-sdk = { workspace = true, features = [
   "testing",
   "sqlite",
