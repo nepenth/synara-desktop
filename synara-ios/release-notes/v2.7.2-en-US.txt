@@ -1,0 +1,3 @@
+Synara 2.7.2 adds link previews on iOS: the first link in a message shows a card with the site, title, description and image, in encrypted rooms too. The phone fetches the page itself and never reaches your local network. Turn previews off in Settings > GIFs & Link Previews.
+
+Please test: links from news sites, GitHub and others in encrypted and unencrypted rooms, tapping a preview card, turning previews off, and scrolling a room with many links.
