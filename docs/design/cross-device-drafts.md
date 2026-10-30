@@ -189,6 +189,9 @@ Recommendation: **B + A** in Phase 1.
     text, which then becomes newest.
   - Remote is a tombstone and the composer is dirty: keep the local text with
     no prompt (another device sent, and this one is typing something new).
+  - The local text's age is unknown (iOS keeps no stamp for a draft restored
+    from disk until it is first saved or applied): prompt rather than replace,
+    and never clear it on a tombstone.
 - **Opening a room** reads the cached account data. If the room has been
   outside the sliding-sync window, the Core also does one fresh GET, the same
   way room notes do (`fetch_fresh_room_notes_content`).
