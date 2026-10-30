@@ -1195,7 +1195,7 @@ function Messages() {
           title={t('modernization.settings.link_previews.title', 'Link previews')}
           description={t(
             'modernization.settings.link_previews.description',
-            'Synara fetches the page from this device to show its title and image; the site can see your IP address.'
+            'When a message has a link, Synara fetches the page from this device to show a preview. The site can see your IP address.'
           )}
           after={<Switch variant="Primary" value={linkPreviews} onChange={setLinkPreviews} />}
         />

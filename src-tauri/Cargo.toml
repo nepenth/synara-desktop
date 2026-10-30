@@ -78,7 +78,7 @@ matrix-sdk = { workspace = true, features = [
 ] }
 # Runtime for Matrix client open/drop (also used by matrix-sdk). Kept direct so
 # SdkClientHandle can shut down SQLite pools outside an ambient async context.
-tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net"] }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "sync"] }
 
 [features]
 # by default Tauri runs in production mode

@@ -1,8 +1,9 @@
-//! On-device link previews: fetches the linked page from this device and
-//! reads its title, description, site name and image from the `<head>`, the
-//! way Signal or Telegram do. Nothing goes through the homeserver, so previews
-//! work in encrypted rooms too; the site sees this device's IP address, which
-//! the Link previews setting says.
+//! Link previews fetched by each reader's device: when a message shows a link,
+//! the desktop app of everyone who reads it requests the linked page itself
+//! and reads its title, description, site name and image from the `<head>`.
+//! Nothing goes through the homeserver, so previews work in encrypted rooms
+//! too, but the site sees every reader's IP address; the Link previews
+//! setting says so and turns the fetch off.
 //!
 //! The renderer hands over any URL from a message, so every request is
 //! treated as hostile (SSRF):
@@ -17,9 +18,12 @@
 //! - no proxy (a proxy would resolve the name itself);
 //! - redirects are followed by hand, at most [`MAX_REDIRECTS`], each target
 //!   checked like the first URL;
-//! - an 8 s timeout, a 1 MiB HTML cap read in chunks that stops at `</head>`,
-//!   `text/html` only; the image is capped at 5 MB, must say `image/*` and
-//!   must sniff as PNG, JPEG, GIF, WebP or AVIF (never SVG).
+//! - an 8 s timeout per request and [`TOTAL_TIMEOUT`] for the whole preview
+//!   (every page and image hop), a 1 MiB HTML cap read in chunks that stops
+//!   at `</head>`, `text/html` only; the image is capped at 5 MB, must say
+//!   `image/*` and must sniff as PNG, JPEG, GIF, WebP or AVIF (never SVG);
+//! - at most [`MAX_CONCURRENT_FETCHES`] previews fetch at once, and
+//!   concurrent calls for one URL share a single fetch.
 //!
 //! The image is kept in memory and served to the webview through the
 //! `synara-media:` protocol at `link-preview/<handle>`, like other downloaded
@@ -36,6 +40,11 @@ use serde::Serialize;
 use url::{Host, Url};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(8);
+const TOTAL_TIMEOUT: Duration = Duration::from_secs(10);
+const MAX_CONCURRENT_FETCHES: usize = 4;
+/// Bytes of the previous chunk scanned again for a `</head` or `<body` that
+/// straddles two chunks.
+const HEAD_SCAN_OVERLAP: usize = 8;
 const MAX_REDIRECTS: usize = 3;
 const MAX_HTML_BYTES: usize = 1024 * 1024;
 const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
@@ -207,22 +216,38 @@ fn is_image(content_type: &str) -> bool {
 
 /// Where the HTML head ends, if it has: `</head>` or the start of `<body`.
 fn head_end(body: &[u8]) -> Option<usize> {
-    let lower = body.to_ascii_lowercase();
+    head_end_from(body, 0)
+}
+
+/// [`head_end`] that only looks at `body[from..]`, for a body read in chunks
+/// whose earlier bytes were already scanned (`from` includes the overlap).
+fn head_end_from(body: &[u8], from: usize) -> Option<usize> {
+    let from = from.min(body.len());
+    let lower = body[from..].to_ascii_lowercase();
     let find = |needle: &[u8]| lower.windows(needle.len()).position(|w| w == needle);
     match (find(b"</head"), find(b"<body")) {
-        (Some(a), Some(b)) => Some(a.min(b)),
-        (a, b) => a.or(b),
+        (Some(a), Some(b)) => Some(from + a.min(b)),
+        (a, b) => a.or(b).map(|at| from + at),
     }
 }
+
+type InFlight = Arc<tokio::sync::OnceCell<Option<LinkPreview>>>;
 
 pub struct LinkPreviewer {
     client: reqwest::Client,
     allow: AddressPolicy,
+    total_timeout: Duration,
+    fetches: tokio::sync::Semaphore,
     cache: Mutex<HashMap<String, (Instant, Option<LinkPreview>)>>,
+    in_flight: Mutex<HashMap<String, InFlight>>,
 }
 
 impl LinkPreviewer {
     fn new(allow: AddressPolicy) -> Option<Self> {
+        Self::with_limits(allow, TOTAL_TIMEOUT, MAX_CONCURRENT_FETCHES)
+    }
+
+    fn with_limits(allow: AddressPolicy, total_timeout: Duration, permits: usize) -> Option<Self> {
         let client = reqwest::Client::builder()
             .timeout(REQUEST_TIMEOUT)
             .connect_timeout(REQUEST_TIMEOUT)
@@ -235,7 +260,10 @@ impl LinkPreviewer {
         Some(Self {
             client,
             allow,
+            total_timeout,
+            fetches: tokio::sync::Semaphore::new(permits),
             cache: Mutex::new(HashMap::new()),
+            in_flight: Mutex::new(HashMap::new()),
         })
     }
 
@@ -303,9 +331,10 @@ impl LinkPreviewer {
                 if body.len() + chunk.len() > max_bytes {
                     return Err(FetchError::TooLarge);
                 }
+                let scan_from = body.len().saturating_sub(HEAD_SCAN_OVERLAP);
                 body.extend_from_slice(&chunk);
                 if stop_at_head {
-                    if let Some(end) = head_end(&body) {
+                    if let Some(end) = head_end_from(&body, scan_from) {
                         body.truncate(end);
                         break;
                     }
@@ -383,9 +412,39 @@ impl LinkPreviewer {
         if let Some(cached) = self.cached(url) {
             return cached;
         }
-        let preview = self.fetch_preview(url).await;
-        self.remember(url, preview.clone());
+        // Concurrent calls for one URL share the first caller's fetch; if
+        // that caller is dropped mid-fetch, a waiting one takes over.
+        let cell = {
+            let Ok(mut in_flight) = self.in_flight.lock() else {
+                return None;
+            };
+            // A fetch may have finished since the check above.
+            if let Some(cached) = self.cached(url) {
+                return cached;
+            }
+            in_flight.entry(url.to_owned()).or_default().clone()
+        };
+        let preview = cell.get_or_init(|| self.fetch_bounded(url)).await.clone();
+        if let Ok(mut in_flight) = self.in_flight.lock() {
+            if in_flight
+                .get(url)
+                .is_some_and(|current| Arc::ptr_eq(current, &cell))
+            {
+                in_flight.remove(url);
+                self.remember(url, preview.clone());
+            }
+        }
         preview
+    }
+
+    /// One preview fetch under the concurrency limit, all of its page and
+    /// image hops within the total timeout.
+    async fn fetch_bounded(&self, url: &str) -> Option<LinkPreview> {
+        let _permit = self.fetches.acquire().await.ok()?;
+        tokio::time::timeout(self.total_timeout, self.fetch_preview(url))
+            .await
+            .ok()
+            .flatten()
     }
 }
 

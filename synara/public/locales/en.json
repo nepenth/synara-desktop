@@ -42,7 +42,7 @@
       },
       "link_previews": {
         "title": "Link previews",
-        "description": "Synara fetches the page from this device to show its title and image; the site can see your IP address."
+        "description": "When a message has a link, Synara fetches the page from this device to show a preview. The site can see your IP address."
       }
     },
     "gif": {

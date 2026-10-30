@@ -109,6 +109,23 @@ test('settings saved by 2.5 to 2.7 turn link previews on once and keep GIF and X
   assert.equal(store.getSharedSettings().linkPreviews, false);
 });
 
+test('settings written by a newer version are left alone after a downgrade', () => {
+  const storage = createMemoryStorage({
+    settings: JSON.stringify({
+      gifSearchEnabled: false,
+      inlineGifLinks: false,
+      xEmbeds: false,
+      linkPreviews: false,
+      previewDefaultsVersion: 4,
+    }),
+  });
+  const settings = createLocalStorageSettingsStore(storage).getSharedSettings();
+  assert.equal(settings.linkPreviews, false);
+  assert.equal(settings.gifSearchEnabled, false);
+  assert.equal(settings.xEmbeds, false);
+  assert.equal(settings.previewDefaultsVersion, 4);
+});
+
 test('shared settings defaults exclude desktop shortcut settings', () => {
   assert.equal('desktopShortcutShow' in defaultSharedSettings, false);
   assert.equal(

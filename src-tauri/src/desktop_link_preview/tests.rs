@@ -498,3 +498,147 @@ fn the_preview_serializes_in_camel_case_without_empty_fields() {
         serde_json::json!({"url": "https://example.org/", "title": "T", "siteName": "S"})
     );
 }
+
+/// Answers every connection with a small page after `delay`, and reports the
+/// most connections it ever had open at once.
+async fn slow_page_server(delay: Duration) -> (String, Arc<std::sync::atomic::AtomicUsize>) {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let open = Arc::new(AtomicUsize::new(0));
+    let peak = Arc::new(AtomicUsize::new(0));
+    let reported = peak.clone();
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut socket, _)) = listener.accept().await else {
+                return;
+            };
+            let (open, peak) = (open.clone(), peak.clone());
+            tokio::spawn(async move {
+                let now = open.fetch_add(1, Ordering::SeqCst) + 1;
+                peak.fetch_max(now, Ordering::SeqCst);
+                let mut request = [0u8; 4096];
+                let _ = socket.read(&mut request).await;
+                tokio::time::sleep(delay).await;
+                let body = "<head><title>Slow</title></head>";
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\ncontent-type: text/html\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = socket.write_all(response.as_bytes()).await;
+                let _ = socket.shutdown().await;
+                open.fetch_sub(1, Ordering::SeqCst);
+            });
+        }
+    });
+    (format!("http://{addr}"), reported)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn at_most_four_previews_fetch_at_once() {
+    use std::sync::atomic::Ordering;
+    let (base, peak) = slow_page_server(Duration::from_millis(300)).await;
+    let previewer = Arc::new(test_previewer());
+    let started = Instant::now();
+    let tasks: Vec<_> = (0..8)
+        .map(|index| {
+            let previewer = previewer.clone();
+            let url = format!("{base}/page{index}");
+            tokio::spawn(async move { previewer.preview(&url).await })
+        })
+        .collect();
+    for task in tasks {
+        assert_eq!(task.await.unwrap().unwrap().title, "Slow");
+    }
+    assert_eq!(peak.load(Ordering::SeqCst), MAX_CONCURRENT_FETCHES);
+    assert!(
+        started.elapsed() >= Duration::from_millis(600),
+        "two waves of four"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_calls_for_one_url_share_one_fetch() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(
+            html("<head><title>Shared</title></head>").set_delay(Duration::from_millis(300)),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let previewer = Arc::new(test_previewer());
+    let url = format!("{}/shared", server.uri());
+    let tasks: Vec<_> = (0..6)
+        .map(|_| {
+            let (previewer, url) = (previewer.clone(), url.clone());
+            tokio::spawn(async move { previewer.preview(&url).await })
+        })
+        .collect();
+    for task in tasks {
+        assert_eq!(task.await.unwrap().unwrap().title, "Shared");
+    }
+    assert!(previewer.in_flight.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn one_timeout_covers_every_redirect_hop() {
+    let server = MockServer::start().await;
+    let base = server.uri();
+    for (from, to) in [("/h1", "/h2"), ("/h2", "/h3"), ("/h3", "/end")] {
+        Mock::given(method("GET"))
+            .and(path(from))
+            .respond_with(redirect(&format!("{base}{to}")).set_delay(Duration::from_millis(400)))
+            .mount(&server)
+            .await;
+    }
+    Mock::given(method("GET"))
+        .and(path("/end"))
+        .respond_with(
+            html("<head><title>Late</title></head>").set_delay(Duration::from_millis(400)),
+        )
+        .mount(&server)
+        .await;
+    // Every hop is well inside the 8 s request timeout; together they are not.
+    let previewer =
+        LinkPreviewer::with_limits(allow_test_loopback, Duration::from_secs(1), 4).unwrap();
+    let started = Instant::now();
+    assert_eq!(previewer.preview(&format!("{base}/h1")).await, None);
+    assert!(started.elapsed() < Duration::from_millis(1500));
+    let patient =
+        LinkPreviewer::with_limits(allow_test_loopback, Duration::from_secs(5), 4).unwrap();
+    assert_eq!(
+        patient.preview(&format!("{base}/h1")).await.unwrap().title,
+        "Late"
+    );
+}
+
+#[test]
+fn the_head_scan_finds_a_marker_split_across_chunks() {
+    let page = b"<html><head><title>T</title></HEAD><body>rest";
+    let expected = head_end(page).unwrap();
+    assert_eq!(&page[expected..expected + 6], b"</HEAD");
+    let scan = |chunks: Vec<&[u8]>| {
+        let mut body = Vec::new();
+        for chunk in chunks {
+            let from = body.len().saturating_sub(HEAD_SCAN_OVERLAP);
+            body.extend_from_slice(chunk);
+            if let Some(end) = head_end_from(&body, from) {
+                return Some(end);
+            }
+        }
+        None
+    };
+    // Every two-chunk split, scanning only each new tail.
+    for split in 1..page.len() {
+        assert_eq!(
+            scan(vec![&page[..split], &page[split..]]),
+            Some(expected),
+            "split at {split}"
+        );
+    }
+    // One byte at a time.
+    assert_eq!(scan(page.chunks(1).collect()), Some(expected));
+    assert_eq!(head_end_from(b"<head><title>x", 3), None);
+    assert_eq!(head_end_from(b"ab", 10), None);
+}

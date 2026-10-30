@@ -79,22 +79,18 @@ enum GifCommand {
     }
 }
 
-/// The rich-link settings desktop has under Settings → General. All four
+/// The rich-link settings desktop has under Settings → General. All three
 /// default on; each one controls whether this device contacts a third party.
 enum RichLinkSettings {
     static let inlineGifLinksKey = "synara.settings.inlineGifLinks"
     static let gifSearchKey = "synara.settings.gifSearch"
     static let xEmbedsKey = "synara.settings.xEmbeds"
-    /// Desktop `linkPreviews`: a title and image card for a message's first
-    /// link, fetched from this device.
-    static let linkPreviewsKey = "synara.settings.linkPreviews"
 
     static var registeredDefaults: [String: Bool] {
         [
             inlineGifLinksKey: true,
             gifSearchKey: true,
             xEmbedsKey: true,
-            linkPreviewsKey: true,
         ]
     }
 }

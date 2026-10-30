@@ -244,9 +244,11 @@ const migratePreviewDefaults = (
   settings: SharedSettings,
   stored: Record<string, unknown> | undefined
 ): SharedSettings => {
-  if (!stored || stored.previewDefaultsVersion === PREVIEW_DEFAULTS_VERSION) return settings;
+  if (!stored) return settings;
   const storedVersion =
     typeof stored.previewDefaultsVersion === 'number' ? stored.previewDefaultsVersion : 0;
+  // Written by this version or a newer one (after a downgrade): its choices stand.
+  if (storedVersion >= PREVIEW_DEFAULTS_VERSION) return settings;
   return {
     ...settings,
     ...(storedVersion < 2 ? { gifSearchEnabled: true, inlineGifLinks: true, xEmbeds: true } : {}),
