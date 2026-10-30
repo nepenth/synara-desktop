@@ -67,6 +67,8 @@ struct AppEnvironment {
     let readMarkers: RoomReadMarkerServicing
     let mediaLoader: MediaLoading
     let mediaUploader: MediaUploading
+    /// Link previews fetched by Core on this device (Settings → Link previews).
+    let linkPreviews: LinkPreviewFetching
     let crypto: CryptoStatusServicing
     /// Shared, read-coalescing session crypto status over `crypto`.
     let sessionCrypto: SessionCryptoStore
@@ -177,6 +179,7 @@ struct AppEnvironment {
             readMarkers: SharedCoreRoomReadMarkerService(host: host),
             mediaLoader: SharedCoreMediaLoader(host: host),
             mediaUploader: SharedCoreMediaUploadService(host: host),
+            linkPreviews: SharedCoreLinkPreviewService(core: core),
             crypto: crypto,
             sessionCrypto: SessionCryptoStore(crypto: crypto),
             roomManagement: roomManagement,
@@ -213,6 +216,7 @@ struct AppEnvironment {
         readMarkers: RoomReadMarkerServicing = MockRoomReadMarkerService(),
         mediaLoader: MediaLoading = MockMediaLoader(),
         mediaUploader: MediaUploading = MockMediaUploadService(),
+        linkPreviews: LinkPreviewFetching = MockLinkPreviewService(),
         crypto: CryptoStatusServicing = MockCryptoStatusService(),
         roomManagement: RoomManagementServicing = MockRoomManagementService(),
         sessionReadiness: SignedInSessionReadinessServicing = ImmediateSignedInSessionReadiness(),
@@ -259,6 +263,7 @@ struct AppEnvironment {
             readMarkers: readMarkers,
             mediaLoader: mediaLoader,
             mediaUploader: mediaUploader,
+            linkPreviews: linkPreviews,
             crypto: crypto,
             sessionCrypto: SessionCryptoStore(crypto: crypto),
             roomManagement: roomManagement,

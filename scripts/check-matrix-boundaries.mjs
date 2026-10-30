@@ -145,8 +145,8 @@ const RUST_ALLOWED_RAW_HTTP_PATHS = new Map([
     "RUST-RAW-HTTP-003: opt-in X post cards fetch public post JSON from X's syndication endpoint, which refuses browser origins; not Matrix traffic, fixed host, redirect-free, time- and size-bounded.",
   ],
   [
-    "src-tauri/src/desktop_link_preview.rs",
-    "RUST-RAW-HTTP-004: on-device link previews (Settings > General > Link previews) fetch the linked page's head and og:image from the public web; not Matrix traffic. Every hop is checked: http(s) only, a resolver that refuses non-public addresses (and the connection uses the addresses it checked), at most 3 re-checked redirects, no proxy, time-, size- and content-type-bounded.",
+    "crates/synara-core/src/app/link_preview/mod.rs",
+    "RUST-RAW-HTTP-004: on-device link previews (desktop Settings > General and iOS Settings > GIFs & Link Previews > Link previews) fetch the linked page's head and og:image from the public web; not Matrix traffic. Every hop is checked: http(s) only, a resolver that refuses non-public addresses (and the connection uses the addresses it checked), at most 3 re-checked redirects, no proxy, time-, size- and content-type-bounded.",
   ],
 ]);
 

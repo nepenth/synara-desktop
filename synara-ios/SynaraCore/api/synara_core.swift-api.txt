@@ -73,6 +73,7 @@ extension LeftoverAckDto: Sendable
 extension LeftoverAckStatusDto: Sendable
 extension LeftoverBytesDto: Sendable
 extension LeftoverCommandError: Sendable
+extension LinkPreviewDto: Sendable
 extension LoginFlowDto: Sendable
 extension LoginFlowsError: Sendable
 extension MDirectCommandError: Sendable
@@ -350,6 +351,7 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func laterSnapshot() async throws -> LaterSnapshotDto
   open func laterSnooze(itemId: String, dueTs: Double) async throws -> LaterSnapshotDto
   open func laterUpsert(item: LaterItemDto) async throws -> LaterSnapshotDto
+  open func linkPreview(url: String) async -> LinkPreviewDto?
   open func localEchoDiscard(roomId: String, transactionId: String) async throws -> Bool
   open func localEchoRetry(roomId: String, transactionId: String) async throws
   open func loginAccountUserId(user: String, homeserverUrl: String, storeRoot: String, serverName: String?) -> String?
@@ -1044,6 +1046,7 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func laterSnapshot() async throws -> LaterSnapshotDto
   func laterSnooze(itemId: String, dueTs: Double) async throws -> LaterSnapshotDto
   func laterUpsert(item: LaterItemDto) async throws -> LaterSnapshotDto
+  func linkPreview(url: String) async -> LinkPreviewDto?
   func localEchoDiscard(roomId: String, transactionId: String) async throws -> Bool
   func localEchoRetry(roomId: String, transactionId: String) async throws
   func loginAccountUserId(user: String, homeserverUrl: String, storeRoot: String, serverName: String?) -> String?
@@ -1409,6 +1412,13 @@ public struct LeftoverAckDto: Equatable, Hashable
 public struct LeftoverBytesDto: Equatable, Hashable
   public var payload: Data
   public init(payload: Data)
+public struct LinkPreviewDto: Equatable, Hashable
+  public var url: String
+  public var title: String
+  public var description: String?
+  public var siteName: String?
+  public var image: Data?
+  public init(url: String, title: String, description: String?, siteName: String?, image: Data?)
 public struct LoginFlowDto: Equatable, Hashable
   public var kind: String
   public var matrixType: String

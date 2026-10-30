@@ -861,6 +861,8 @@ private extension AppEnvironment {
             timeline = MockTimelineService(items: uiTestDecidedAgentApprovalPromptItems())
         } else if processEnvironment["SYNARA_UI_TEST_AGENT_APPROVAL_PROMPT"] == "1" {
             timeline = MockTimelineService(events: uiTestAgentApprovalPromptEvents())
+        } else if processEnvironment["SYNARA_UI_TEST_LINK_PREVIEW"] == "1" {
+            timeline = MockTimelineService(events: uiTestLinkPreviewEvents())
         } else if processEnvironment["SYNARA_UI_TEST_TIMESTAMP_GESTURE"] == "1" {
             timeline = MockTimelineService(events: uiTestTimestampGestureEvents())
         } else if processEnvironment["SYNARA_UI_TEST_ENCRYPTED_TIMELINE"] == "1" {
@@ -1016,6 +1018,9 @@ private extension AppEnvironment {
             agentApprovalDecisions: agentApprovalDecisions,
             readMarkers: readMarkers,
             mediaUploader: MockMediaUploadService(shouldFail: processEnvironment["SYNARA_UI_TEST_UPLOAD_FAIL"] == "1"),
+            linkPreviews: processEnvironment["SYNARA_UI_TEST_LINK_PREVIEW"] == "1"
+                ? MockLinkPreviewService(previews: uiTestLinkPreviews())
+                : MockLinkPreviewService(),
             crypto: crypto,
             settings: uiTestSettings(processEnvironment)
         )
@@ -1076,6 +1081,52 @@ private extension AppEnvironment {
                 isEdited: false,
                 mediaURL: nil
             )
+        ]
+    }
+
+    /// One message whose link has a preview, and one whose second link has
+    /// one too but gets no card, because only a message's first link does.
+    static func uiTestLinkPreviewEvents() -> [RawTimelineEvent] {
+        TimelineFixtures.commonEvents() + [
+            RawTimelineEvent(
+                eventID: "$link-preview:!project:matrix.org",
+                senderID: "@alex:matrix.org",
+                timestamp: TimelineFixtures.baseDate.addingTimeInterval(370),
+                type: "m.room.message",
+                body: "Release notes are up: https://example.org/releases/2-7",
+                replyToEventID: nil,
+                isEdited: false,
+                mediaURL: nil
+            ),
+            RawTimelineEvent(
+                eventID: "$link-preview-second:!project:matrix.org",
+                senderID: "@sam:matrix.org",
+                timestamp: TimelineFixtures.baseDate.addingTimeInterval(400),
+                type: "m.room.message",
+                body: "Compare https://example.org/notes with https://example.org/releases/2-7",
+                replyToEventID: nil,
+                isEdited: false,
+                mediaURL: nil
+            ),
+        ]
+    }
+
+    static func uiTestLinkPreviews() -> [URL: LinkPreviewContent] {
+        guard let url = URL(string: "https://example.org/releases/2-7") else {
+            return [:]
+        }
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 240, height: 240)).pngData { context in
+            UIColor.systemTeal.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 240, height: 240))
+        }
+        return [
+            url: LinkPreviewContent(
+                url: url,
+                title: "Synara 2.7: calmer look, reaction senders and Windows fixes",
+                description: "What changed in this release for desktop and iOS, and how to update.",
+                siteName: "Example",
+                imageData: image
+            ),
         ]
     }
 

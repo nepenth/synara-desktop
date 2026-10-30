@@ -12,6 +12,7 @@ import * as htmlCss from './nativeTimelineHtml.css';
 import {
   fetchDeviceLinkPreview,
   linkPreviewImagePath,
+  linkPreviewSource,
   timelinePreviewUrl,
   type NativeLinkPreview,
 } from './nativeLinkUnfurl';
@@ -62,13 +63,7 @@ export function NativeLinkUnfurlCard({
     preview.imageHandleId && !imageFailed
       ? convertDesktopFileSrc(linkPreviewImagePath(preview.imageHandleId), 'synara-media')
       : undefined;
-  const hostname = (() => {
-    try {
-      return new URL(preview.url).hostname;
-    } catch {
-      return preview.siteName ?? preview.url;
-    }
-  })();
+  const source = linkPreviewSource(preview.url, preview.siteName);
 
   return (
     <div className={htmlCss.UnfurlCard}>
@@ -89,7 +84,7 @@ export function NativeLinkUnfurlCard({
         ) : null}
         <Box direction="Column" gap="100" grow="Yes" style={{ minWidth: 0, padding: '8px 10px' }}>
           <Text size="T200" truncate>
-            {preview.siteName ?? hostname}
+            {source}
           </Text>
           {preview.title ? (
             <Text size="T300" style={{ fontWeight: 600 }}>

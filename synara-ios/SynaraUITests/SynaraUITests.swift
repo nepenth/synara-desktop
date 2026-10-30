@@ -1291,11 +1291,13 @@ final class SynaraUITests: XCTestCase {
         let inlineGifs = app.switches["RichLinkInlineGifToggle"]
         let gifSearch = app.switches["RichLinkGifSearchToggle"]
         let xPosts = app.switches["RichLinkXPostsToggle"]
-        for toggle in [inlineGifs, gifSearch, xPosts] {
+        let linkPreviews = app.switches["RichLinkLinkPreviewsToggle"]
+        for toggle in [inlineGifs, gifSearch, xPosts, linkPreviews] {
             XCTAssertTrue(revealForDirectHit(toggle, in: screen, app: app))
         }
         XCTAssertEqual(inlineGifs.value as? String, "1")
         XCTAssertEqual(xPosts.value as? String, "1")
+        XCTAssertEqual(linkPreviews.value as? String, "1")
         // Test builds carry no Klipy key, so GIF search is off and cannot be turned on.
         XCTAssertEqual(gifSearch.value as? String, "0")
         XCTAssertFalse(gifSearch.isEnabled)
@@ -1423,6 +1425,22 @@ final class SynaraUITests: XCTestCase {
         assertAboveFloatingTabBar(row, app: app)
         row.tap()
         XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 8))
+    }
+
+    func testLinkPreviewCardShowsForTheFirstLinkOnly() {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!project:matrix.org"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Product"
+        app.launchEnvironment["SYNARA_UI_TEST_LINK_PREVIEW"] = "1"
+        launch(app)
+
+        let card = app.buttons["LinkPreviewCard"]
+        XCTAssertTrue(card.waitForExistence(timeout: 10))
+        XCTAssertTrue(card.label.contains("Synara 2.7: calmer look"), card.label)
+        XCTAssertTrue(card.label.contains("Example"), card.label)
+        // The second message's preview is for its second link, so it gets none.
+        XCTAssertEqual(app.buttons.matching(identifier: "LinkPreviewCard").count, 1)
     }
 
     func testAgentCardApproveActionShowsSubmittedState() {

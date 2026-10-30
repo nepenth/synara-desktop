@@ -989,13 +989,18 @@ impl SharedCore {
         self.lifecycle.next_generation()
     }
 
-    fn with_platform(platform: IosFailClosedPlatform, user_agent: String) -> Self {
+    fn with_platform(
+        platform: IosFailClosedPlatform,
+        user_agent: String,
+        app_version: &str,
+    ) -> Self {
         crate::ffi_runtime::install_app_ffi_runtime();
         let secret_store = Platform::secret_store(&platform);
         Self {
             core: Core::new(Arc::new(platform)),
             secret_store,
             user_agent,
+            link_previews: LinkPreviews::new(app_version),
             lifecycle: Arc::new(session_policy::SessionLifecycleOwner::new()),
             sync_lifecycle: tokio::sync::Mutex::new(()),
             suspension: SessionSuspension::new(),
@@ -1633,6 +1638,7 @@ impl SharedCore {
         Self::with_platform(
             IosFailClosedPlatform::new(),
             crate::app::client_builder::default_user_agent(),
+            "",
         )
     }
 
@@ -1644,6 +1650,7 @@ impl SharedCore {
                 inner: store,
             })),
             crate::app::client_builder::default_user_agent(),
+            "",
         )
     }
 
@@ -1659,6 +1666,7 @@ impl SharedCore {
             }))
             .with_user_agent(user_agent.clone()),
             user_agent,
+            &app_version,
         )
     }
 

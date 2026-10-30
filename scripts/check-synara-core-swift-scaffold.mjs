@@ -169,6 +169,10 @@ const sharedCoreLater = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreLater.swift"),
   "utf8"
 );
+const linkPreviews = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/LinkPreviews.swift"),
+  "utf8"
+);
 const sharedCoreMDirect = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreMDirect.swift"),
   "utf8"
@@ -597,6 +601,11 @@ const assertions = [
   [sharedCoreLater, "laterMarkReminded", "P4-S9-5 product later mark-reminded helper"],
   [sharedCoreLater, "core: SharedCore", "P4-S9-5 helper takes an already-constructed SharedCore"],
   [sharedCoreLater, "core.laterSnapshot", "P4-S9-5 helper reads on the caller-owned instance"],
+  [sharedCoreFfi, "pub async fn link_preview(", "on-device link preview FFI"],
+  [sharedCoreFfi, "crate::app::link_preview::{self, LinkPreviewer}", "link preview FFI uses the shared vetted fetcher"],
+  [swiftApi, "func linkPreview(url: String) async -> LinkPreviewDto?", "SharedCore link preview"],
+  [swiftApi, "public struct LinkPreviewDto", "link preview DTO"],
+  [linkPreviews, "core.linkPreview(url:", "iOS link previews fetch through SharedCore"],
   [sharedCoreFfi, "mdirect_snapshot", "P4-S9-6 typed m.direct snapshot FFI"],
   [sharedCoreFfi, ".mdirect_snapshot(", "P4-S9-6 calls the registered m.direct snapshot"],
   [sharedCoreFfi, ".mdirect_add(", "P4-S9-6 calls the registered m.direct add"],
@@ -1049,6 +1058,25 @@ for (const [source, forbidden, label] of [
 }
 for (const [text, needle, label] of assertions) {
   if (!text.includes(needle)) throw new Error(`missing ${label}: ${needle}`);
+}
+
+// iOS link previews go through Core's SSRF-checked fetcher. LinkPresentation
+// resolves names, follows redirects and loads subresources itself, so a
+// message link could reach the reader's local network.
+function swiftSources(dir) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) return swiftSources(path);
+    return entry.name.endsWith(".swift") ? [path] : [];
+  });
+}
+for (const target of ["Synara", "SynaraNotificationService", "SynaraShared"]) {
+  for (const file of swiftSources(resolve(root, "synara-ios", target))) {
+    const source = readFileSync(file, "utf8");
+    if (/^\s*import\s+LinkPresentation\b/m.test(source) || /\bLPMetadataProvider\s*\(/.test(source)) {
+      throw new Error(`${file} must not fetch link metadata with LinkPresentation; use SharedCore.linkPreview`);
+    }
+  }
 }
 
 // The app's MatrixRustSDK service constructs this actor from another file in

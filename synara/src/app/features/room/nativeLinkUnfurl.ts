@@ -135,6 +135,22 @@ export const parseLinkPreview = (value: unknown, url: string): NativeLinkPreview
   return value as NativeLinkPreview;
 };
 
+/**
+ * The card's source line: the link's host always comes first, because a page
+ * names itself in `og:site_name` and could claim to be any site; the page's
+ * own name follows when it says something the host does not.
+ */
+export const linkPreviewSource = (url: string, siteName?: string): string => {
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return siteName?.trim() || url;
+  }
+  const name = siteName?.trim();
+  return name && name.toLowerCase() !== host ? `${host} · ${name}` : host;
+};
+
 /** Where the desktop shell serves a preview's image on `synara-media:`. */
 export const linkPreviewImagePath = (handleId: string): string => `link-preview/${handleId}`;
 
