@@ -71,10 +71,12 @@ struct XPostEmbedView: View {
     }
 }
 
-/// The preview card for a message's first link (Settings → Link previews);
-/// nothing while it loads or when the page has no title.
+/// The preview card for a message's first link (Settings → Link previews),
+/// fetched by Core on this device; nothing while it loads or when the page
+/// has no title.
 struct LinkPreviewEmbedView: View {
     let url: URL
+    @Environment(\.appEnvironment) private var environment
     @State private var preview: LinkPreview?
 
     var body: some View {
@@ -88,7 +90,7 @@ struct LinkPreviewEmbedView: View {
         .accessibilityHidden(preview == nil)
         .task(id: url) {
             preview = nil
-            let loaded = await LinkPreviewStore.shared.preview(for: url)
+            let loaded = await LinkPreviewStore.shared.preview(for: url, using: environment.linkPreviews)
             if Task.isCancelled == false {
                 preview = loaded
             }
@@ -96,6 +98,8 @@ struct LinkPreviewEmbedView: View {
     }
 }
 
+/// A flat card on a quiet inset, like the restyled agent cards: site, title
+/// and description beside the page's image.
 struct LinkPreviewCard: View {
     let preview: LinkPreview
     @Environment(\.openURL) private var openURL
@@ -105,14 +109,6 @@ struct LinkPreviewCard: View {
             openURL(preview.url)
         } label: {
             HStack(alignment: .top, spacing: SynaraSpacing.small) {
-                if let image = preview.image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 64, height: 64)
-                        .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous))
-                        .accessibilityHidden(true)
-                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(verbatim: preview.siteName)
                         .font(SynaraTypography.messageMeta)
@@ -122,16 +118,35 @@ struct LinkPreviewCard: View {
                         .font(SynaraTypography.emphasis)
                         .foregroundStyle(SynaraColor.primaryText)
                         .multilineTextAlignment(.leading)
-                        .lineLimit(3)
+                        .lineLimit(2)
+                    if let description = preview.description {
+                        Text(verbatim: description)
+                            .font(SynaraTypography.messageMeta)
+                            .foregroundStyle(SynaraColor.secondaryText)
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(2)
+                    }
                 }
                 Spacer(minLength: 0)
+                if let image = preview.image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 64, height: 64)
+                        .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+                        .accessibilityHidden(true)
+                }
             }
             .padding(SynaraSpacing.small)
             .frame(maxWidth: 460, minHeight: SynaraHitTarget.minimum, alignment: .leading)
+            .synaraAccessibleSurfaceFill(
+                SynaraColor.mutedControl.opacity(0.45),
+                opaqueFill: SynaraColor.surface
+            )
+            .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .synaraCard(fill: SynaraColor.surface)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text("Link preview: \(preview.title), \(preview.siteName)"))
         .accessibilityHint(Text("Opens the link in your browser"))

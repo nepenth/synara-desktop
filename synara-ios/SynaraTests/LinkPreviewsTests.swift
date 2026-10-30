@@ -1,4 +1,5 @@
 import Network
+import UIKit
 import XCTest
 @testable import Synara
 
@@ -83,7 +84,84 @@ final class LinkPreviewsTests: XCTestCase {
         }
     }
 
-    func testSiteNameDropsWww() throws {
-        XCTAssertEqual(LinkPreviewStore.siteName(for: try XCTUnwrap(URL(string: "https://www.Example.org/a"))), "example.org")
+    func testTheCardNamesTheSiteOrItsHost() throws {
+        let url = try XCTUnwrap(URL(string: "https://www.Example.org/a"))
+        XCTAssertEqual(LinkPreviewStore.hostName(for: url), "example.org")
+        let named = LinkPreviewStore.makePreview(LinkPreviewContent(url: url, title: "T", siteName: "Example"))
+        XCTAssertEqual(named.siteName, "Example")
+        let unnamed = LinkPreviewStore.makePreview(
+            LinkPreviewContent(url: url, title: "T", description: "", siteName: "")
+        )
+        XCTAssertEqual(unnamed.siteName, "example.org")
+        XCTAssertNil(unnamed.description)
+        XCTAssertNil(unnamed.image)
+    }
+
+    func testImagesAreThumbnailedAndNonImagesDropped() throws {
+        let png = UIGraphicsImageRenderer(size: CGSize(width: 800, height: 400)).pngData { context in
+            UIColor.red.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 800, height: 400))
+        }
+        let thumbnail = try XCTUnwrap(LinkPreviewStore.thumbnail(from: png))
+        let longest = max(thumbnail.size.width * thumbnail.scale, thumbnail.size.height * thumbnail.scale)
+        XCTAssertLessThanOrEqual(longest, CGFloat(LinkPreviewStore.maxImagePixels))
+        XCTAssertNil(LinkPreviewStore.thumbnail(from: Data("<svg onload=alert(1)/>".utf8)))
+        XCTAssertNil(LinkPreviewStore.thumbnail(from: Data()))
+    }
+
+    func testTheStoreAsksCoreOnlyForPreviewableLinks() async throws {
+        let url = try XCTUnwrap(URL(string: "https://example.org/a"))
+        let local = try XCTUnwrap(URL(string: "http://192.168.1.1/"))
+        let fetcher = CountingLinkPreviewFetcher(previews: [
+            url: LinkPreviewContent(url: url, title: "Example page", description: "About it", siteName: "Example"),
+            local: LinkPreviewContent(url: local, title: "Router"),
+        ])
+        let store = LinkPreviewStore()
+        let loaded = await store.preview(for: url, using: fetcher)
+        XCTAssertEqual(loaded?.title, "Example page")
+        XCTAssertEqual(loaded?.description, "About it")
+        XCTAssertEqual(loaded?.siteName, "Example")
+        // Kept for the session: scrolling back does not ask Core again.
+        _ = await store.preview(for: url, using: fetcher)
+        let refused = await store.preview(for: local, using: fetcher)
+        XCTAssertNil(refused)
+        XCTAssertEqual(fetcher.requested, [url])
+    }
+
+    func testFailedPreviewsAreLeftToCore() async throws {
+        let url = try XCTUnwrap(URL(string: "https://example.org/missing"))
+        let fetcher = CountingLinkPreviewFetcher(previews: [:])
+        let store = LinkPreviewStore()
+        let first = await store.preview(for: url, using: fetcher)
+        let second = await store.preview(for: url, using: fetcher)
+        XCTAssertNil(first)
+        XCTAssertNil(second)
+        XCTAssertEqual(fetcher.requested, [url, url], "Core remembers failures, so the app does not")
+    }
+
+    func testFormattedMessagesPreviewTheirFirstPlainTextLink() {
+        let body = "See https://example.org/first, and https://example.org/second."
+        XCTAssertEqual(LinkPreviewPolicy.previewURL(for: row(body))?.absoluteString, "https://example.org/first")
+        XCTAssertNil(LinkPreviewPolicy.previewURL(for: row("go to http://192.168.1.1/admin then https://example.org/")))
+    }
+}
+
+/// Hands out fixed previews and records which links Core was asked for.
+private final class CountingLinkPreviewFetcher: LinkPreviewFetching {
+    private let previews: [URL: LinkPreviewContent]
+    private let lock = NSLock()
+    private var asked: [URL] = []
+
+    init(previews: [URL: LinkPreviewContent]) {
+        self.previews = previews
+    }
+
+    var requested: [URL] {
+        lock.withLock { asked }
+    }
+
+    func preview(for url: URL) async -> LinkPreviewContent? {
+        lock.withLock { asked.append(url) }
+        return previews[url]
     }
 }

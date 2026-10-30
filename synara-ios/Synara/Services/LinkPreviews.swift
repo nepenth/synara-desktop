@@ -1,6 +1,7 @@
 import Foundation
-import LinkPresentation
+import ImageIO
 import Network
+import SynaraCore
 import UIKit
 
 /// Which link of a message gets a preview card (Settings → GIFs & Link
@@ -34,7 +35,9 @@ enum LinkPreviewPolicy {
     }
 
     /// An http(s) link without credentials whose host is not this device, the
-    /// local network or a private address written as a literal IP.
+    /// local network or a private address written as a literal IP. This only
+    /// spares Core a call: Core's fetcher checks every address it connects
+    /// to, including where names resolve and redirects lead.
     static func isPreviewable(_ url: URL) -> Bool {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let scheme = components.scheme?.lowercased(),
@@ -103,92 +106,142 @@ enum LinkPreviewPolicy {
     }
 }
 
+/// A page's preview as Core fetched it.
+struct LinkPreviewContent: Equatable {
+    let url: URL
+    let title: String
+    var description: String?
+    var siteName: String?
+    /// The page's image as fetched: PNG, JPEG, GIF, WebP or AVIF, at most 5 MB.
+    var imageData: Data?
+}
+
+/// Fetches a link's preview from this device.
+protocol LinkPreviewFetching {
+    func preview(for url: URL) async -> LinkPreviewContent?
+}
+
+/// Core's fetcher, the one desktop uses: it connects only to public
+/// addresses it resolved itself, re-checks every redirect and bounds size and
+/// time. Never `LPMetadataProvider`, which resolves, redirects and loads
+/// subresources on its own, so a message link could reach the local network.
+final class SharedCoreLinkPreviewService: LinkPreviewFetching {
+    private let core: SharedCore
+
+    init(core: SharedCore) {
+        self.core = core
+    }
+
+    func preview(for url: URL) async -> LinkPreviewContent? {
+        guard let dto = await core.linkPreview(url: url.absoluteString) else {
+            return nil
+        }
+        return LinkPreviewContent(
+            url: url,
+            title: dto.title,
+            description: dto.description,
+            siteName: dto.siteName,
+            imageData: dto.image
+        )
+    }
+}
+
+/// No previews, or the ones a test hands it.
+struct MockLinkPreviewService: LinkPreviewFetching {
+    var previews: [URL: LinkPreviewContent] = [:]
+
+    func preview(for url: URL) async -> LinkPreviewContent? {
+        previews[url]
+    }
+}
+
 /// What a preview card shows.
 struct LinkPreview {
     let url: URL
     let title: String
+    let description: String?
     let siteName: String
     let image: UIImage?
 }
 
-/// Previews by URL for this session, fetched on this device with Apple's
-/// LinkPresentation (nothing goes through the homeserver, so encrypted rooms
-/// preview too). Failures are remembered for a few minutes.
-@MainActor
-final class LinkPreviewStore {
+/// Previews by URL for this session, with their images decoded once, so
+/// scrolling past a link never refetches or redecodes it. Core remembers
+/// failures for a few minutes, so only previews stay here.
+actor LinkPreviewStore {
     static let shared = LinkPreviewStore()
 
-    private static let timeout: TimeInterval = 8
-    private static let failureTTL: TimeInterval = 5 * 60
-    private static let maxImageSide: CGFloat = 600
-    private static let maxTitleCharacters = 300
+    /// Thumbnails are drawn at 64 pt; this covers 3x screens.
+    static let maxImagePixels = 192
+    /// Larger images are not decoded at all (a small file can declare a huge
+    /// canvas).
+    static let maxSourcePixels = 40_000_000
 
     private var previews = BoundedLRUCache<URL, LinkPreview>(capacity: 200)
-    private var failures = BoundedLRUCache<URL, Date>(capacity: 200)
     private var inFlight: [URL: Task<LinkPreview?, Never>] = [:]
 
-    func preview(for url: URL) async -> LinkPreview? {
+    func preview(for url: URL, using fetcher: LinkPreviewFetching) async -> LinkPreview? {
         guard LinkPreviewPolicy.isPreviewable(url) else {
             return nil
         }
         if let cached = previews.value(forKey: url) {
             return cached
         }
-        if let failed = failures.value(forKey: url), Date().timeIntervalSince(failed) < Self.failureTTL {
-            return nil
-        }
         if let task = inFlight[url] {
             return await task.value
         }
-        let task = Task { await Self.fetch(url) }
+        let task = Task { () -> LinkPreview? in
+            guard let content = await fetcher.preview(for: url) else {
+                return nil
+            }
+            return Self.makePreview(content)
+        }
         inFlight[url] = task
         let preview = await task.value
         inFlight[url] = nil
         if let preview {
             previews.insert(preview, forKey: url)
-        } else {
-            failures.insert(Date(), forKey: url)
         }
         return preview
     }
 
-    private static func fetch(_ url: URL) async -> LinkPreview? {
-        let provider = LPMetadataProvider()
-        provider.timeout = timeout
-        guard let metadata = try? await provider.startFetchingMetadata(for: url),
-              let rawTitle = metadata.title?.trimmingCharacters(in: .whitespacesAndNewlines),
-              rawTitle.isEmpty == false
-        else {
-            return nil
-        }
-        let title = rawTitle.count > maxTitleCharacters
-            ? String(rawTitle.prefix(maxTitleCharacters - 1)) + "…"
-            : rawTitle
-        let image = await loadImage(metadata.imageProvider)
-        return LinkPreview(url: url, title: title, siteName: siteName(for: url), image: image)
+    static func makePreview(_ content: LinkPreviewContent) -> LinkPreview {
+        let siteName = content.siteName.flatMap { $0.isEmpty ? nil : $0 } ?? hostName(for: content.url)
+        return LinkPreview(
+            url: content.url,
+            title: content.title,
+            description: content.description.flatMap { $0.isEmpty ? nil : $0 },
+            siteName: siteName,
+            image: content.imageData.flatMap(thumbnail(from:))
+        )
     }
 
-    nonisolated static func siteName(for url: URL) -> String {
+    static func hostName(for url: URL) -> String {
         let host = url.host?.lowercased() ?? url.absoluteString
         return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
-    private static func loadImage(_ provider: NSItemProvider?) async -> UIImage? {
-        guard let provider, provider.canLoadObject(ofClass: UIImage.self) else {
+    /// A small thumbnail of `data`, or `nil` when it is not an image ImageIO
+    /// reads or its canvas is too large to decode.
+    static func thumbnail(from data: Data) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              width > 0, height > 0,
+              width.multipliedReportingOverflow(by: height).overflow == false,
+              width * height <= maxSourcePixels
+        else {
             return nil
         }
-        let image: UIImage? = await withCheckedContinuation { continuation in
-            provider.loadObject(ofClass: UIImage.self) { object, _ in
-                continuation.resume(returning: object as? UIImage)
-            }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxImagePixels,
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
         }
-        guard let image else { return nil }
-        let side = max(image.size.width, image.size.height)
-        guard side > maxImageSide else { return image }
-        let scale = maxImageSide / side
-        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-        return UIGraphicsImageRenderer(size: size).image { _ in
-            image.draw(in: CGRect(origin: .zero, size: size))
-        }
+        return UIImage(cgImage: image)
     }
 }
