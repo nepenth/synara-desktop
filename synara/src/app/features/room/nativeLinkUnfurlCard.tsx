@@ -6,13 +6,14 @@ import {
   invokeDesktopWithAvailability,
   isSynaraDesktop,
 } from '../../utils/desktop';
-import type { RoomEncryptionStatus } from '../matrix-dto/room';
+import { useSetting } from '../../state/hooks/settings';
+import { settingsAtom } from '../../state/settings';
 import * as htmlCss from './nativeTimelineHtml.css';
 import {
-  fetchMediaPreviewWithNativeOwner,
-  firstTimelinePreviewUrl,
-  shouldSkipMessageUnfurl,
-  type NativeMediaPreview,
+  fetchDeviceLinkPreview,
+  linkPreviewImagePath,
+  timelinePreviewUrl,
+  type NativeLinkPreview,
 } from './nativeLinkUnfurl';
 import { NativeLinkifiedText } from './nativeTimelineFormattedBody';
 
@@ -53,12 +54,14 @@ export function NativeLinkUnfurlCard({
   preview,
   onDismiss,
 }: {
-  preview: NativeMediaPreview;
+  preview: NativeLinkPreview;
   onDismiss?: () => void;
 }) {
-  const thumbnailSrc = preview.thumbnailHandleId
-    ? convertDesktopFileSrc(preview.thumbnailHandleId, 'synara-media')
-    : undefined;
+  const [imageFailed, setImageFailed] = useState(false);
+  const thumbnailSrc =
+    preview.imageHandleId && !imageFailed
+      ? convertDesktopFileSrc(linkPreviewImagePath(preview.imageHandleId), 'synara-media')
+      : undefined;
   const hostname = (() => {
     try {
       return new URL(preview.url).hostname;
@@ -76,7 +79,14 @@ export function NativeLinkUnfurlCard({
         rel="noreferrer noopener"
         onClick={handleDesktopExternalLinkClick}
       >
-        {thumbnailSrc ? <img className={htmlCss.UnfurlThumb} src={thumbnailSrc} alt="" /> : null}
+        {thumbnailSrc ? (
+          <img
+            className={htmlCss.UnfurlThumb}
+            src={thumbnailSrc}
+            alt=""
+            onError={() => setImageFailed(true)}
+          />
+        ) : null}
         <Box direction="Column" gap="100" grow="Yes" style={{ minWidth: 0, padding: '8px 10px' }}>
           <Text size="T200" truncate>
             {preview.siteName ?? hostname}
@@ -112,44 +122,49 @@ export function NativeLinkUnfurlCard({
   );
 }
 
+/**
+ * The preview card for a message's first link, fetched from this device when
+ * Settings > General > Link previews is on, in encrypted rooms too. Nothing
+ * is fetched for media messages or when `skip` says another card (an X post,
+ * an inline GIF, an approval or agent card) already shows the link.
+ */
 export function NativeTimelineLinkUnfurl({
-  roomId,
-  sessionGeneration,
-  encryptionStatus,
   body,
   formattedBody,
   messageType,
   hasMedia,
   skip,
-  originServerTs,
 }: {
-  roomId: string;
-  sessionGeneration: number;
-  encryptionStatus?: RoomEncryptionStatus;
   body: string;
   formattedBody?: string;
   messageType?: string;
   hasMedia?: boolean;
   skip?: boolean;
-  originServerTs?: number;
 }) {
-  const url = useMemo(() => {
-    if (shouldSkipMessageUnfurl({ messageType, hasMedia, skip })) return undefined;
-    return firstTimelinePreviewUrl(body, formattedBody);
-  }, [body, formattedBody, hasMedia, messageType, skip]);
-  const [preview, setPreview] = useState<NativeMediaPreview | null>(null);
+  const [linkPreviews] = useSetting(settingsAtom, 'linkPreviews');
+  const url = useMemo(
+    () =>
+      timelinePreviewUrl({
+        enabled: linkPreviews,
+        body,
+        formattedBody,
+        messageType,
+        hasMedia,
+        skip,
+      }),
+    [body, formattedBody, hasMedia, linkPreviews, messageType, skip]
+  );
+  const [preview, setPreview] = useState<NativeLinkPreview | null>(null);
 
   useEffect(() => {
-    if (!url || encryptionStatus !== 'not_encrypted') {
+    if (!url) {
       setPreview(null);
       return undefined;
     }
     let cancelled = false;
-    void fetchMediaPreviewWithNativeOwner({
-      roomId,
+    void fetchDeviceLinkPreview({
       url,
-      ts: originServerTs,
-      encryptionStatus,
+      enabled: linkPreviews,
       desktopAvailable: isSynaraDesktop(),
       invoke: invokeDesktopWithAvailability,
     }).then((next) => {
@@ -158,8 +173,8 @@ export function NativeTimelineLinkUnfurl({
     return () => {
       cancelled = true;
     };
-  }, [encryptionStatus, originServerTs, roomId, sessionGeneration, url]);
+  }, [linkPreviews, url]);
 
-  if (!preview || preview.url !== url) return null;
+  if (!url || !preview || preview.url !== url) return null;
   return <NativeLinkUnfurlCard preview={preview} />;
 }

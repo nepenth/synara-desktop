@@ -193,6 +193,18 @@ if (scenario === 'embeds') {
     return row;
   });
 }
+// `scenario=link-preview`: the last message holds two links, and
+// `desktop_link_preview` below answers for the first. The room's encryption is
+// never reported, as for an encrypted room: device previews must not depend
+// on it.
+const LINK_PREVIEW_URL = 'https://example.org/article';
+if (scenario === 'link-preview') {
+  rows = rows.map((row, index) =>
+    index === rows.length - 1
+      ? { ...row, body: `Read ${LINK_PREVIEW_URL} and https://example.org/second` }
+      : row
+  );
+}
 // `scenario=threads`: the second-to-last message owns a 7-reply thread.
 const THREAD_ROOT = `$${Math.max(1, sequence - 1)}`;
 const THREAD_REPLY_COUNT = 7;
@@ -437,6 +449,18 @@ window.__SYNARA_DESKTOP__ = {
       } as T;
     }
     if (command === 'desktop_x_post') return JSON.stringify(EMBED_X_POST) as T;
+    if (command === 'desktop_link_preview') {
+      return (
+        args?.url === LINK_PREVIEW_URL
+          ? {
+              url: LINK_PREVIEW_URL,
+              title: 'An article worth reading',
+              description: 'What the page says about itself.',
+              siteName: 'Example Press',
+            }
+          : null
+      ) as T;
+    }
     if (command === 'matrix_edit_message') {
       return {
         roomId: room,

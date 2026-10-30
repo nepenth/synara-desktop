@@ -152,13 +152,12 @@ import {
 } from './nativeComposerDraft';
 import {
   COMPOSER_UNFURL_DEBOUNCE_MS,
-  fetchMediaPreviewWithNativeOwner,
+  fetchDeviceLinkPreview,
   trailingComposerPreviewUrl,
-  type NativeMediaPreview,
+  type NativeLinkPreview,
 } from './nativeLinkUnfurl';
 import { NativeLinkUnfurlCard } from './nativeLinkUnfurlCard';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
-import { useNativeRoomSummary } from '../../state/room-list/roomList';
 import { useNativeThreadRoot } from './nativeThreadViewContext';
 import type { AttachmentSendPlan } from './attachmentSendPlan';
 import {
@@ -377,10 +376,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const [gifPickerQuery, setGifPickerQuery] = useState({ query: '', key: 0 });
     const [sendError, setSendError] = useState<string>();
     const [composerPreviewUrl, setComposerPreviewUrl] = useState<string>();
-    const [composerPreview, setComposerPreview] = useState<NativeMediaPreview | null>(null);
+    const [composerPreview, setComposerPreview] = useState<NativeLinkPreview | null>(null);
     const [composerPreviewDismissed, setComposerPreviewDismissed] = useState<string>();
-    // This room only, so other rooms' activity does not re-render the editor.
-    const composerEncryptionStatus = useNativeRoomSummary(roomId)?.encryptionStatus;
+    const [linkPreviews] = useSetting(settingsAtom, 'linkPreviews');
     const [pollAnchor, setPollAnchor] = useState<RectCords>();
     const [pollQuestion, setPollQuestion] = useState('');
     const [pollAnswers, setPollAnswers] = useState(['', '']);
@@ -615,10 +613,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         setComposerPreview(null);
         return undefined;
       }
-      if (
-        composerPreviewUrl === composerPreviewDismissed ||
-        composerEncryptionStatus !== 'not_encrypted'
-      ) {
+      if (composerPreviewUrl === composerPreviewDismissed || !linkPreviews) {
         if (composerPreviewUrl !== composerPreviewDismissed) {
           setComposerPreview(null);
         }
@@ -626,10 +621,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       }
       let cancelled = false;
       const timer = window.setTimeout(() => {
-        void fetchMediaPreviewWithNativeOwner({
-          roomId,
+        void fetchDeviceLinkPreview({
           url: composerPreviewUrl,
-          encryptionStatus: composerEncryptionStatus,
+          enabled: linkPreviews,
           desktopAvailable: isSynaraDesktop(),
           invoke: invokeDesktopWithAvailability,
         }).then((preview) => {
@@ -640,7 +634,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         cancelled = true;
         window.clearTimeout(timer);
       };
-    }, [composerEncryptionStatus, composerPreviewDismissed, composerPreviewUrl, roomId]);
+    }, [composerPreviewDismissed, composerPreviewUrl, linkPreviews]);
 
     const handleFileMetadata = useCallback(
       (fileItem: TUploadItem, metadata: TUploadMetadata) => {
