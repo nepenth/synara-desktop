@@ -114,3 +114,17 @@ test('the room topic viewer links the topic with the same renderer', async ({ pa
   await topic.getByRole('link', { name: 'https://matrix.to/#/#lobby:example.test' }).click();
   expect(await opened(page)).toMatchObject({ kind: 'room', roomIdOrAlias: '#lobby:example.test' });
 });
+
+test('a long bare link shows as its site and path but opens the whole address', async ({
+  page,
+}) => {
+  await openSurfaces(page);
+  const body = page.getByRole('region', { name: 'Long link body' });
+  const links = body.getByRole('link');
+  await expect(links).toHaveCount(2);
+  for (const link of await links.all()) {
+    await expect(link).toHaveText('example.com/…/a-very-long-story-slug-about-…');
+    await expect(link).toHaveAttribute('href', /\?guccounter=1&guce_referrer=/);
+    await expect(link).toHaveAttribute('title', /^https:\/\/www\.example\.com\/entertainment\//);
+  }
+});

@@ -76,6 +76,12 @@ export interface SharedSettings {
    */
   linkPreviews: boolean;
   /**
+   * Show a long bare web address in a message as a short label (its site and
+   * path, without the query); the link it opens and its tooltip keep the
+   * whole address.
+   */
+  shortenLinks: boolean;
+  /**
    * The GIF, X post and link preview defaults this snapshot has taken. Every save writes the
    * whole snapshot, so a stored `false` from before 2.5 was the old default,
    * not a choice; reading such a snapshot turns them on once.
@@ -167,6 +173,7 @@ export const defaultSharedSettings: SharedSettings = {
   inlineGifLinks: true,
   xEmbeds: true,
   linkPreviews: true,
+  shortenLinks: true,
   previewDefaultsVersion: PREVIEW_DEFAULTS_VERSION,
   showHiddenEvents: false,
   legacyUsernameColor: false,

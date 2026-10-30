@@ -5742,6 +5742,14 @@ private struct MessageTextSelectionSheet: View {
 struct MatrixRichTextPresentationContext {
     let readingSurface: KeyPath<SynaraThemeTokens, String>
     let appliesStandardOwnMessageTint: Bool
+    /// Show a link whose text is its own long address as a short label.
+    var shortensLinks = false
+
+    func shortensLinks(_ enabled: Bool) -> Self {
+        var copy = self
+        copy.shortensLinks = enabled
+        return copy
+    }
 
     static let canvas = MatrixRichTextPresentationContext(
         readingSurface: \SynaraThemeTokens.surface,
@@ -6255,7 +6263,10 @@ func attributedRichText(
 ) -> AttributedString {
     var output = AttributedString()
     for run in richText.runs {
-        var value = AttributedString(run.text)
+        let shortLabel = includeLinks && presentationContext.shortensLinks
+            ? run.link.flatMap { SynaraShortLinks.label(text: run.text, url: $0) }
+            : nil
+        var value = AttributedString(shortLabel ?? run.text)
         var intent: InlinePresentationIntent = []
         if run.style.contains(.bold) {
             intent.insert(.stronglyEmphasized)
@@ -7551,9 +7562,10 @@ private struct TimelineRow: View {
                         fallbackBody: body,
                         html: html,
                         font: SynaraTypography.messageBody,
-                        presentationContext: bubbleAlignment == .own
-                            ? .ownMessage
-                            : .otherMessage
+                        presentationContext: (bubbleAlignment == .own
+                            ? MatrixRichTextPresentationContext.ownMessage
+                            : .otherMessage)
+                            .shortensLinks(environment.settings.bool(for: SynaraShortLinks.settingKey))
                     )
                 }
             case .encryptedPlaceholder:
@@ -7598,7 +7610,8 @@ private struct TimelineRow: View {
             statusEventID: item.eventID,
             onRetryFailedSend: bubbleRetryAction,
             onDiscardFailedSend: bubbleDiscardAction,
-            encryptionShield: item.encryptionShield
+            encryptionShield: item.encryptionShield,
+            shortensLinks: environment.settings.bool(for: SynaraShortLinks.settingKey)
         )
     }
 

@@ -410,24 +410,107 @@ enum SynaraPlainTextLinks {
         }
     }
 
-    /// `text` with a `.link` on each detected link; cached by body.
-    static func attributedText(_ text: String) -> AttributedString {
-        let key = text as NSString
+    /// `text` with a `.link` on each detected link, and with a long bare
+    /// address shown as its short label when `shortensLinks`; cached by body.
+    static func attributedText(_ text: String, shortensLinks: Bool = false) -> AttributedString {
+        let key = "\(shortensLinks ? "s" : "f")\(text)" as NSString
         if let cached = cache.object(forKey: key) {
             return cached.value
         }
         var attributed = AttributedString(text)
-        for link in links(in: text) {
+        // Last link first, so a shortened label leaves earlier ranges valid.
+        for link in links(in: text).reversed() {
             guard let stringRange = Range(link.range, in: text),
                   let lower = AttributedString.Index(stringRange.lowerBound, within: attributed),
                   let upper = AttributedString.Index(stringRange.upperBound, within: attributed)
             else {
                 continue
             }
-            attributed[lower ..< upper].link = link.url
+            if shortensLinks, let label = SynaraShortLinks.label(text: String(text[stringRange]), url: link.url) {
+                var replacement = AttributedString(label)
+                replacement.link = link.url
+                attributed.replaceSubrange(lower ..< upper, with: replacement)
+            } else {
+                attributed[lower ..< upper].link = link.url
+            }
         }
         cache.setObject(CachedText(attributed), forKey: key)
         return attributed
+    }
+}
+
+/// A long web address written out as a link's own text, shown short: the site
+/// (never cut, so the reader always sees where it goes), then as much of the
+/// path as fits. The query and fragment, mostly tracking, are left out and
+/// marked with an ellipsis. The link still opens the whole address. Matches
+/// desktop's `shortLinkLabel`.
+enum SynaraShortLinks {
+    static let maxLength = 50
+    static let settingKey = "synara.settings.shortenLinks"
+
+    /// The short label, or nil when the link keeps its text: written words, a
+    /// short address, or anything but a plain http(s) address.
+    static func label(text: String, url: URL) -> String? {
+        let shown = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard shown.count > maxLength,
+              withoutScheme(shown).lowercased() == withoutScheme(url.absoluteString).lowercased(),
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              components.user == nil, components.password == nil,
+              var host = components.host, host.isEmpty == false
+        else {
+            return nil
+        }
+        if host.lowercased().hasPrefix("www.") {
+            host.removeFirst(4)
+        }
+        if let port = components.port {
+            host += ":\(port)"
+        }
+        let segments = components.percentEncodedPath.split(separator: "/").map(String.init)
+        let dropped = (components.percentEncodedQuery?.isEmpty == false)
+            || (components.percentEncodedFragment?.isEmpty == false)
+        let full = segments.isEmpty ? host : "\(host)/\(segments.joined(separator: "/"))"
+        var label = full
+        if full.count > maxLength, let last = segments.last {
+            let prefix = segments.count > 1 ? "\(host)/…/" : "\(host)/"
+            // A site too long to leave room for the path shows alone.
+            label = maxLength - 1 - prefix.count < 8
+                ? "\(host)/…"
+                : cut("\(prefix)\(last)", keep: prefix.count + 1)
+        }
+        if dropped, label.hasSuffix("…") == false {
+            label += "…"
+        }
+        return label
+    }
+
+    private static func withoutScheme(_ value: String) -> String {
+        guard let range = value.range(of: "^https?://", options: [.regularExpression, .caseInsensitive]) else {
+            return value
+        }
+        return String(value[range.upperBound...])
+    }
+
+    /// `value` cut to `maxLength` with an ellipsis, at a word break in the last
+    /// few characters when there is one, never before `keep` characters.
+    private static func cut(_ value: String, keep: Int) -> String {
+        let chars = Array(value)
+        guard chars.count > maxLength else {
+            return value
+        }
+        let breaks: Set<Character> = ["-", "_", ".", "~", "/"]
+        var end = maxLength - 1
+        var index = end - 1
+        while index >= max(keep, end - 12) {
+            if breaks.contains(chars[index]) {
+                end = index + 1
+                break
+            }
+            index -= 1
+        }
+        return String(chars[..<end]) + "…"
     }
 }
 
@@ -451,7 +534,8 @@ extension SynaraMessageBubble where Content == AnyView {
         statusEventID: String? = nil,
         onRetryFailedSend: (() -> Void)? = nil,
         onDiscardFailedSend: (() -> Void)? = nil,
-        encryptionShield: TimelineEncryptionShield? = nil
+        encryptionShield: TimelineEncryptionShield? = nil,
+        shortensLinks: Bool = false
     ) {
         self.alignment = alignment
         self.variant = variant
@@ -464,7 +548,7 @@ extension SynaraMessageBubble where Content == AnyView {
         self.encryptionShield = encryptionShield
         self.content = {
             AnyView(
-                Text(SynaraPlainTextLinks.attributedText(text))
+                Text(SynaraPlainTextLinks.attributedText(text, shortensLinks: shortensLinks))
                     .font(SynaraTypography.messageBody)
                     .foregroundStyle(synaraMessageBubbleTextColor(for: variant))
                     .lineSpacing(2.5)

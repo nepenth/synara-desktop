@@ -14,6 +14,9 @@ import {
 } from '../../src/app/features/room/nativeTimelineFormattedBody';
 import { NativePlainMessageBody } from '../../src/app/features/room/nativeLinkUnfurlCard';
 
+const LONG_LINK =
+  'https://www.example.com/entertainment/celebrity/article/a-very-long-story-slug-about-something-sad-195431969.html?guccounter=1&guce_referrer=aHR0cHM6Ly93d3cuZ29vZ2xlLmNvbS8';
+
 const INBOX_HTML = [
   '<p>Hi <a href="https://matrix.to/#/@reader0:example.test">Reader Zero</a>, ',
   'see <a href="https://matrix.to/#/!room:example.test/$event?via=example.test">this message</a> ',
@@ -93,6 +96,13 @@ function Surfaces() {
         </section>
         <section aria-label="Plain message body">
           <NativePlainMessageBody body="Unfurl https://example.org/article please" />
+        </section>
+        <section aria-label="Long link body">
+          <NativePlainMessageBody body={`Terrible news ${LONG_LINK} so sad`} />
+          <NativeFormattedBody
+            html={`<p>Formatted <a href="${LONG_LINK}">${LONG_LINK}</a></p>`}
+            fallbackBody={`Formatted ${LONG_LINK}`}
+          />
         </section>
         <section aria-label="Formatted message body">
           <NativeFormattedBody

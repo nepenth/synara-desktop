@@ -2888,6 +2888,9 @@
     "Sheet" : {
 
     },
+    "Shorten Long Links" : {
+
+    },
     "Show GIF search in the composer and for /gif. Your searches go to KLIPY, which can see your IP address. A GIF is sent as its KLIPY link." : {
 
     },
@@ -2895,6 +2898,9 @@
 
     },
     "Show X Posts" : {
+
+    },
+    "Show a long web address as its site and path. Tapping it still opens the full address." : {
 
     },
     "Show approval details" : {
