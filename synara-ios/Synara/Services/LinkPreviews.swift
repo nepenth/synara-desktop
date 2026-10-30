@@ -13,6 +13,8 @@ enum LinkPreviewPolicy {
     struct Row: Equatable {
         /// The message text, or `nil` for media, agent cards and placeholders.
         var body: String?
+        /// The formatted body (`org.matrix.custom.html`), when the message has one.
+        var html: String? = nil
         var isEnabled: Bool
         var isAgentApproval = false
         var hasInlineGif = false
@@ -22,16 +24,44 @@ enum LinkPreviewPolicy {
     static func previewURL(for row: Row) -> URL? {
         guard row.isEnabled,
               let body = row.body,
-              body.contains("."),
               row.isAgentApproval == false,
               row.hasInlineGif == false,
               row.hasXPost == false,
-              let first = SynaraPlainTextLinks.links(in: body).first?.url,
+              let first = firstLink(body: body, html: row.html),
               isPreviewable(first)
         else {
             return nil
         }
         return first
+    }
+
+    /// Desktop's `firstTimelinePreviewUrl`: the formatted body's first web
+    /// link (its `href`, which the plain body may not spell out), else the
+    /// plain body's first link.
+    static func firstLink(body: String, html: String?) -> URL? {
+        if let html, html.isEmpty == false,
+           let formatted = MatrixHTMLRenderer.richText(body: body, html: html).runs
+               .lazy.compactMap(\.link).first(where: isCandidate)
+        {
+            return formatted
+        }
+        guard body.contains(".") else {
+            return nil
+        }
+        return SynaraPlainTextLinks.links(in: body).first?.url
+    }
+
+    /// An http(s) link without credentials, as desktop's `isPreviewCandidateUrl`.
+    static func isCandidate(_ url: URL) -> Bool {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let scheme = components.scheme?.lowercased()
+        else {
+            return false
+        }
+        return (scheme == "https" || scheme == "http")
+            && (components.user ?? "").isEmpty
+            && (components.password ?? "").isEmpty
+            && url.absoluteString.count <= 2048
     }
 
     /// An http(s) link without credentials whose host is not this device, the
@@ -155,13 +185,21 @@ struct MockLinkPreviewService: LinkPreviewFetching {
     }
 }
 
-/// What a preview card shows.
+/// What a preview card shows. `host` always shows, because a page names
+/// itself in `siteName` and could claim to be any site.
 struct LinkPreview {
     let url: URL
     let title: String
     let description: String?
-    let siteName: String
+    let host: String
+    /// The page's own name, when it says something the host does not.
+    let siteName: String?
     let image: UIImage?
+
+    /// "example.org · Example", or the host alone.
+    var source: String {
+        siteName.map { "\(host) · \($0)" } ?? host
+    }
 }
 
 /// Previews by URL for this session, with their images decoded once, so
@@ -174,7 +212,7 @@ actor LinkPreviewStore {
     static let maxImagePixels = 192
     /// Larger images are not decoded at all (a small file can declare a huge
     /// canvas).
-    static let maxSourcePixels = 40_000_000
+    static let maxSourcePixels = 16_000_000
 
     private var previews = BoundedLRUCache<URL, LinkPreview>(capacity: 200)
     private var inFlight: [URL: Task<LinkPreview?, Never>] = [:]
@@ -193,7 +231,10 @@ actor LinkPreviewStore {
             guard let content = await fetcher.preview(for: url) else {
                 return nil
             }
-            return Self.makePreview(content)
+            // Decoding can be slow; off this actor, other previews keep going.
+            return await Task.detached(priority: .utility) {
+                Self.makePreview(content)
+            }.value
         }
         inFlight[url] = task
         let preview = await task.value
@@ -205,12 +246,16 @@ actor LinkPreviewStore {
     }
 
     static func makePreview(_ content: LinkPreviewContent) -> LinkPreview {
-        let siteName = content.siteName.flatMap { $0.isEmpty ? nil : $0 } ?? hostName(for: content.url)
+        let host = hostName(for: content.url)
+        let siteName = content.siteName?.trimmingCharacters(in: .whitespacesAndNewlines)
         return LinkPreview(
             url: content.url,
             title: content.title,
             description: content.description.flatMap { $0.isEmpty ? nil : $0 },
-            siteName: siteName,
+            host: host,
+            siteName: siteName.flatMap { name in
+                name.isEmpty || name.caseInsensitiveCompare(host) == .orderedSame ? nil : name
+            },
             image: content.imageData.flatMap(thumbnail(from:))
         )
     }

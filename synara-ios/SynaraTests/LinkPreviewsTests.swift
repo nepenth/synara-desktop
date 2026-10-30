@@ -84,17 +84,23 @@ final class LinkPreviewsTests: XCTestCase {
         }
     }
 
-    func testTheCardNamesTheSiteOrItsHost() throws {
+    func testTheCardAlwaysNamesTheHost() throws {
         let url = try XCTUnwrap(URL(string: "https://www.Example.org/a"))
         XCTAssertEqual(LinkPreviewStore.hostName(for: url), "example.org")
         let named = LinkPreviewStore.makePreview(LinkPreviewContent(url: url, title: "T", siteName: "Example"))
-        XCTAssertEqual(named.siteName, "Example")
+        XCTAssertEqual(named.source, "example.org · Example")
+        // A page cannot pass itself off as another site: the host comes first.
+        let spoof = try XCTUnwrap(URL(string: "https://evil.example/login"))
+        let claimed = LinkPreviewStore.makePreview(LinkPreviewContent(url: spoof, title: "Sign in", siteName: "Apple"))
+        XCTAssertEqual(claimed.source, "evil.example · Apple")
         let unnamed = LinkPreviewStore.makePreview(
-            LinkPreviewContent(url: url, title: "T", description: "", siteName: "")
+            LinkPreviewContent(url: url, title: "T", description: "", siteName: " ")
         )
-        XCTAssertEqual(unnamed.siteName, "example.org")
+        XCTAssertEqual(unnamed.source, "example.org")
         XCTAssertNil(unnamed.description)
         XCTAssertNil(unnamed.image)
+        let same = LinkPreviewStore.makePreview(LinkPreviewContent(url: url, title: "T", siteName: "Example.org"))
+        XCTAssertEqual(same.source, "example.org")
     }
 
     func testImagesAreThumbnailedAndNonImagesDropped() throws {
@@ -106,6 +112,7 @@ final class LinkPreviewsTests: XCTestCase {
         let longest = max(thumbnail.size.width * thumbnail.scale, thumbnail.size.height * thumbnail.scale)
         XCTAssertLessThanOrEqual(longest, CGFloat(LinkPreviewStore.maxImagePixels))
         XCTAssertNil(LinkPreviewStore.thumbnail(from: Data("<svg onload=alert(1)/>".utf8)))
+        XCTAssertEqual(LinkPreviewStore.maxSourcePixels, 16_000_000)
         XCTAssertNil(LinkPreviewStore.thumbnail(from: Data()))
     }
 
@@ -137,6 +144,22 @@ final class LinkPreviewsTests: XCTestCase {
         XCTAssertNil(first)
         XCTAssertNil(second)
         XCTAssertEqual(fetcher.requested, [url, url], "Core remembers failures, so the app does not")
+    }
+
+    func testFormattedMessagesPreviewTheirFirstLinkTarget() {
+        let html = #"Read <a href="https://example.org/post">the post</a> and https://example.org/other"#
+        var formatted = row("Read the post and https://example.org/other")
+        formatted.html = html
+        XCTAssertEqual(LinkPreviewPolicy.previewURL(for: formatted)?.absoluteString, "https://example.org/post")
+        // Non-web hrefs are passed over, as desktop does.
+        formatted.html = #"<a href="mailto:a@example.org">mail</a> <a href="https://example.org/b">b</a>"#
+        XCTAssertEqual(LinkPreviewPolicy.previewURL(for: formatted)?.absoluteString, "https://example.org/b")
+        // No web link in the HTML: the plain body's first link.
+        formatted.html = "<b>Read</b> the post and https://example.org/other"
+        XCTAssertEqual(LinkPreviewPolicy.previewURL(for: formatted)?.absoluteString, "https://example.org/other")
+        // The formatted body's first link decides, even when it is local.
+        formatted.html = #"<a href="http://192.168.1.1/">router</a> <a href="https://example.org/b">b</a>"#
+        XCTAssertNil(LinkPreviewPolicy.previewURL(for: formatted))
     }
 
     func testFormattedMessagesPreviewTheirFirstPlainTextLink() {

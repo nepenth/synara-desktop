@@ -7637,19 +7637,23 @@ private struct TimelineRow: View {
     }
 
     /// The message's first link for a preview card (Settings → Link
-    /// previews), unless it already shows as an inline GIF or an X post.
+    /// previews), from its formatted body first, unless it already shows as
+    /// an inline GIF or an X post.
     private var linkPreviewURL: URL? {
         let body: String?
+        var html: String?
         switch item.kind {
         case let .text(text):
             body = text
-        case let .formattedText(text, _):
+        case let .formattedText(text, formatted):
             body = text
+            html = formatted
         default:
             body = nil
         }
         return LinkPreviewPolicy.previewURL(for: LinkPreviewPolicy.Row(
             body: body,
+            html: html,
             isEnabled: environment.settings.bool(for: RichLinkSettings.linkPreviewsKey),
             isAgentApproval: item.isAgentApproval,
             hasInlineGif: inlineGif != nil,

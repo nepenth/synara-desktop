@@ -17,7 +17,7 @@ test('the first link previews from this device without a known room encryption',
   await page.goto('/e2e/native-timeline-harness/index.html?scenario=link-preview');
   const card = page.getByRole('link', { name: /An article worth reading/ });
   await expect(card).toBeVisible();
-  await expect(card).toContainText('Example Press');
+  await expect(card).toContainText('example.org · Example Press');
   await expect(card).toHaveAttribute('href', 'https://example.org/article');
   await expect(card).toHaveCount(1);
   // Only the message's first link is fetched; nothing asks the homeserver.

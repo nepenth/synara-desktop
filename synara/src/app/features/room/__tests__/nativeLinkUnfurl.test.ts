@@ -8,6 +8,7 @@ import {
   firstTimelinePreviewUrl,
   isPreviewCandidateUrl,
   linkPreviewImagePath,
+  linkPreviewSource,
   parseLinkPreview,
   shouldSkipMessageUnfurl,
   timelinePreviewUrl,
@@ -183,4 +184,15 @@ test('composer and timeline wire device previews', () => {
   assert.match(input, /COMPOSER_UNFURL_DEBOUNCE_MS/);
   assert.match(input, /trailingComposerPreviewUrl/);
   assert.match(input, /fetchDeviceLinkPreview/);
+});
+
+test('the card names the host first, so a page cannot pose as another site', () => {
+  assert.equal(
+    linkPreviewSource('https://www.Example.org/x', 'Example Site'),
+    'example.org · Example Site'
+  );
+  assert.equal(linkPreviewSource('https://evil.example/login', 'Apple'), 'evil.example · Apple');
+  assert.equal(linkPreviewSource('https://example.org/x', 'Example.org'), 'example.org');
+  assert.equal(linkPreviewSource('https://example.org/x', '  '), 'example.org');
+  assert.equal(linkPreviewSource('https://example.org/x'), 'example.org');
 });

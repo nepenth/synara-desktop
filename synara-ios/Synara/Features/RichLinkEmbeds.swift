@@ -98,8 +98,9 @@ struct LinkPreviewEmbedView: View {
     }
 }
 
-/// A flat card on a quiet inset, like the restyled agent cards: site, title
-/// and description beside the page's image.
+/// A flat card on a quiet inset, like the restyled agent cards: the host (and
+/// the page's own site name after it), title and description beside the
+/// page's image.
 struct LinkPreviewCard: View {
     let preview: LinkPreview
     @Environment(\.openURL) private var openURL
@@ -110,7 +111,7 @@ struct LinkPreviewCard: View {
         } label: {
             HStack(alignment: .top, spacing: SynaraSpacing.small) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: preview.siteName)
+                    Text(verbatim: preview.source)
                         .font(SynaraTypography.messageMeta)
                         .foregroundStyle(SynaraColor.secondaryText)
                         .lineLimit(1)
@@ -148,7 +149,7 @@ struct LinkPreviewCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("Link preview: \(preview.title), \(preview.siteName)"))
+        .accessibilityLabel(Text("Link preview: \(preview.title), \(preview.source)"))
         .accessibilityHint(Text("Opens the link in your browser"))
         .accessibilityIdentifier("LinkPreviewCard")
     }
