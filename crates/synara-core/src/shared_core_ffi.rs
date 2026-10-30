@@ -650,6 +650,8 @@ pub struct SharedCore {
     secret_store: Arc<dyn SecretVault + Send + Sync>,
     /// User-Agent of every SDK client this Core builds.
     user_agent: String,
+    /// On-device link previews, built on first use.
+    link_previews: LinkPreviews,
     /// The session slot, transition gate, recover gate, generation counter
     /// and save-retry backoff, shared with desktop's `MatrixAuthState`.
     lifecycle: Arc<crate::app::lifecycle::session::SessionLifecycleOwner<IosSession>>,
@@ -686,6 +688,8 @@ const START_OBSERVE_POLL: std::time::Duration = std::time::Duration::from_millis
 // projection, and closed error conversion beside its owner boundary.
 mod account_data;
 pub use account_data::*;
+mod link_preview;
+pub use link_preview::*;
 mod media;
 pub use media::*;
 mod messaging;

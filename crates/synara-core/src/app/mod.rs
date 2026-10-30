@@ -24,6 +24,8 @@ pub mod devices;
 pub mod diagnostics;
 pub mod lifecycle;
 #[cfg(feature = "full-app")]
+pub mod link_preview;
+#[cfg(feature = "full-app")]
 pub mod media;
 #[cfg(feature = "full-app")]
 pub mod media_cache;

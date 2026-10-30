@@ -33,6 +33,7 @@ full-app = [
   "dep:futures-util",
   "dep:mime",
   "dep:hmac",
+  "dep:regex",
 ]
 # Apple adds its binding surface explicitly; desktop opts out of the default
 # so it never compiles UniFFI runtime/scaffolding or exports Apple symbols.
@@ -68,7 +69,8 @@ url = { workspace = true }
 reqwest = { workspace = true, features = ["rustls", "http2", "stream"], optional = true }
 # SNC-P1-4: task registry (moved from src-tauri/matrix/tasks) supervises async
 # work — tokio spawn/JoinHandle at runtime and the test macro for its unit tests.
-tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "io-util"] }
+# Link previews bound their fetches with a semaphore and share in-flight ones (sync).
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "io-util", "sync"] }
 # SNC-P1-5a + live client open: sync and Client::builder live in this crate.
 # Workspace pins disable SDK default features. sqlite + bundled-sqlite
 # are required here because build_unauthenticated_client opens the product store.
@@ -120,6 +122,8 @@ sha2 = { workspace = true }
 hmac = { workspace = true, optional = true }
 # Host-only register token buffers (moved with live register orchestration).
 zeroize = { workspace = true }
+# Link previews read title, description and image from the page's <head>.
+regex = { version = "1", optional = true }
 # Avatar MIME parsing for upload_avatar (bytes stay off Core JSON).
 mime = { workspace = true, optional = true }
 # Optional: desktop `x509-identity` installs aws-lc as the rustls process

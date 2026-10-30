@@ -71,6 +71,74 @@ struct XPostEmbedView: View {
     }
 }
 
+/// The preview card for a message's first link (Settings → Link previews);
+/// nothing while it loads or when the page has no title.
+struct LinkPreviewEmbedView: View {
+    let url: URL
+    @State private var preview: LinkPreview?
+
+    var body: some View {
+        ZStack {
+            if let preview {
+                LinkPreviewCard(preview: preview)
+            } else {
+                Color.clear.frame(width: 0, height: 0)
+            }
+        }
+        .accessibilityHidden(preview == nil)
+        .task(id: url) {
+            preview = nil
+            let loaded = await LinkPreviewStore.shared.preview(for: url)
+            if Task.isCancelled == false {
+                preview = loaded
+            }
+        }
+    }
+}
+
+struct LinkPreviewCard: View {
+    let preview: LinkPreview
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        Button {
+            openURL(preview.url)
+        } label: {
+            HStack(alignment: .top, spacing: SynaraSpacing.small) {
+                if let image = preview.image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 64, height: 64)
+                        .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous))
+                        .accessibilityHidden(true)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: preview.siteName)
+                        .font(SynaraTypography.messageMeta)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .lineLimit(1)
+                    Text(verbatim: preview.title)
+                        .font(SynaraTypography.emphasis)
+                        .foregroundStyle(SynaraColor.primaryText)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(3)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(SynaraSpacing.small)
+            .frame(maxWidth: 460, minHeight: SynaraHitTarget.minimum, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .synaraCard(fill: SynaraColor.surface)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text("Link preview: \(preview.title), \(preview.siteName)"))
+        .accessibilityHint(Text("Opens the link in your browser"))
+        .accessibilityIdentifier("LinkPreviewCard")
+    }
+}
+
 struct XPostCard: View {
     let post: XPost
     @Environment(\.openURL) private var openURL
