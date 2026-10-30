@@ -119,9 +119,21 @@ fn only_http_urls_without_credentials_or_private_literals_pass() {
         "http://[::ffff:127.0.0.1]/",
         "http://[fd00::1]/",
         "http://[fe80::1]/",
+        "http://localhost/",
+        "http://LocalHost./",
+        "http://printer.localhost/",
+        "http://printer.local/",
+        "http://printer.local./",
+        "http://router.lan/",
+        "http://nas.home.arpa/",
+        "http://metadata.google.internal/",
+        "http://intranet/",
+        "http://intranet./",
     ] {
         assert!(!ok(refused), "{refused} should be refused");
     }
+    assert!(ok("https://local.example.org/"));
+    assert!(ok("https://example.lanes/"));
     assert!(!ok(&format!(
         "https://example.org/{}",
         "a".repeat(MAX_URL_CHARS)
@@ -244,6 +256,8 @@ async fn redirects_are_followed_up_to_three_times_and_rechecked() {
         ("/to-mapped", "http://[::ffff:127.0.0.2]/"),
         ("/to-ula", "http://[fd00::1]/"),
         ("/to-file", "file:///etc/passwd"),
+        ("/to-mdns", "http://printer.local/"),
+        ("/to-single-label", "http://intranet/"),
     ] {
         Mock::given(method("GET"))
             .and(path(target))
@@ -261,6 +275,8 @@ async fn redirects_are_followed_up_to_three_times_and_rechecked() {
         "/to-mapped",
         "/to-ula",
         "/to-file",
+        "/to-mdns",
+        "/to-single-label",
     ] {
         let refused = previewer
             .get(
@@ -407,8 +423,19 @@ async fn images_must_be_small_raster_images() {
         .respond_with(page("http://192.168.1.1/a.png"))
         .mount(&server)
         .await;
+    Mock::given(method("GET"))
+        .and(path("/mdns-image"))
+        .respond_with(page("http://camera.local/a.png"))
+        .mount(&server)
+        .await;
     let previewer = test_previewer();
-    for page in ["/big", "/svg", "/html-image", "/private-image"] {
+    for page in [
+        "/big",
+        "/svg",
+        "/html-image",
+        "/private-image",
+        "/mdns-image",
+    ] {
         let preview = previewer.preview(&format!("{base}{page}")).await.unwrap();
         assert_eq!(preview.title, "T", "{page}");
         assert_eq!(preview.image_handle_id, None, "{page}");
@@ -722,4 +749,19 @@ fn the_image_store_is_bounded_by_count_and_bytes() {
         .sum();
     assert!(held <= MAX_STORED_IMAGE_BYTES);
     assert!(previewer.image(kept.last().unwrap()).is_some());
+}
+
+#[test]
+fn a_taken_image_leaves_the_store() {
+    let previewer = test_previewer();
+    let kept = previewer.store_image(PNG.to_vec(), "image/png");
+    let taken = previewer.store_image(PNG.to_vec(), "image/png");
+    let (bytes, content_type) = previewer.take_image(&taken).expect("taken once");
+    assert_eq!(bytes, PNG);
+    assert_eq!(content_type, "image/png");
+    assert!(previewer.take_image(&taken).is_none());
+    assert!(previewer.image(&taken).is_none());
+    assert!(previewer.image(&kept).is_some(), "other images stay");
+    assert!(previewer.take_image("../etc").is_none());
+    assert_eq!(previewer.images.lock().unwrap().len(), 1);
 }

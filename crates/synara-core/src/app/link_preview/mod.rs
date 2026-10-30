@@ -8,7 +8,9 @@
 //!
 //! Shells hand over any URL from a message, so every request is treated as
 //! hostile (SSRF):
-//! - only `http` and `https`, without credentials;
+//! - only `http` and `https`, without credentials, and never a local
+//!   network name (`localhost`, `.local`, `.lan`, a single label, …), which
+//!   would go to mDNS or the LAN's DNS;
 //! - a literal IP in the URL, and every address a host name resolves to, must
 //!   be public (no loopback, private, link-local, unique-local, CGNAT,
 //!   multicast, unspecified, documentation or metadata addresses, including
@@ -174,9 +176,23 @@ fn checked_url(url: &Url, allow: AddressPolicy) -> bool {
     match url.host() {
         Some(Host::Ipv4(ip)) => allow(IpAddr::V4(ip)),
         Some(Host::Ipv6(ip)) => allow(IpAddr::V6(ip)),
-        Some(Host::Domain(domain)) => !domain.is_empty(),
+        Some(Host::Domain(domain)) => !is_local_name(domain),
         None => false,
     }
+}
+
+/// Names that only mean something on this device or its network: they
+/// never reach the resolver, which would ask mDNS for `.local` (on iOS that
+/// is the Local Network permission prompt) or the LAN's DNS for the rest.
+fn is_local_name(domain: &str) -> bool {
+    let name = domain.trim_end_matches('.').to_ascii_lowercase();
+    if name.is_empty() || !name.contains('.') {
+        return true;
+    }
+    name == "localhost"
+        || [".localhost", ".local", ".home.arpa", ".internal", ".lan"]
+            .iter()
+            .any(|suffix| name.ends_with(suffix))
 }
 
 // ---------------------------------------------------------------------------
@@ -518,9 +534,10 @@ impl LinkPreviewer {
     }
 
     /// A preview's image bytes and sniffed content type by
-    /// `image_handle_id`, while it is still held.
+    /// `image_handle_id`, while it is still held. Desktop serves the same
+    /// image again on every render.
     pub fn image(&self, handle: &str) -> Option<(Arc<Vec<u8>>, &'static str)> {
-        if handle.len() != 64 || !handle.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        if !is_image_handle(handle) {
             return None;
         }
         let store = self.images.lock().ok()?;
@@ -529,6 +546,25 @@ impl LinkPreviewer {
             .find(|(id, _, _)| id == handle)
             .map(|(_, bytes, content_type)| (bytes.clone(), *content_type))
     }
+
+    /// [`Self::image`] for a shell that keeps its own copy (iOS keeps a
+    /// small decoded thumbnail): the image leaves the store, so this process
+    /// holds nothing for it afterwards, and later calls get `None`.
+    pub fn take_image(&self, handle: &str) -> Option<(Vec<u8>, &'static str)> {
+        if !is_image_handle(handle) {
+            return None;
+        }
+        let mut store = self.images.lock().ok()?;
+        let index = store.iter().position(|(id, _, _)| id == handle)?;
+        let (_, bytes, content_type) = store.remove(index)?;
+        drop(store);
+        let bytes = Arc::try_unwrap(bytes).unwrap_or_else(|shared| shared.as_ref().clone());
+        Some((bytes, content_type))
+    }
+}
+
+fn is_image_handle(handle: &str) -> bool {
+    handle.len() == 64 && handle.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 // ---------------------------------------------------------------------------

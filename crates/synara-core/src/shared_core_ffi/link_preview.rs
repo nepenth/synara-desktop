@@ -12,8 +12,8 @@ use super::*;
 use crate::app::link_preview::{self, LinkPreviewer};
 
 /// A link's preview for the card under a message. `image` holds the page's
-/// image as fetched (PNG, JPEG, GIF, WebP or AVIF, at most 5 MB); the shell
-/// decodes and downsizes it. Callers must not log the payload.
+/// image as fetched (PNG, JPEG, GIF, WebP or AVIF, at most 5 MB), handed over
+/// once; the shell decodes and downsizes it. Callers must not log the payload.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct LinkPreviewDto {
     pub url: String,
@@ -54,11 +54,14 @@ impl SharedCore {
     pub async fn link_preview(&self, url: String) -> Option<LinkPreviewDto> {
         let previewer = self.link_previews.previewer()?;
         let preview = previewer.preview(&url).await?;
+        // The app keeps a decoded thumbnail, so the bytes leave Core's store
+        // instead of staying in memory here. A later call for the same URL
+        // (from Core's cache) has no image.
         let image = preview
             .image_handle_id
             .as_deref()
-            .and_then(|handle| previewer.image(handle))
-            .map(|(bytes, _)| bytes.as_ref().clone());
+            .and_then(|handle| previewer.take_image(handle))
+            .map(|(bytes, _)| bytes);
         Some(LinkPreviewDto {
             url: preview.url,
             title: preview.title,
