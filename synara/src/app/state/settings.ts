@@ -16,8 +16,11 @@ import {
 
 const SHARED_SETTINGS_STORAGE_KEY = 'settings';
 const PLATFORM_SETTINGS_STORAGE_KEY = 'platformSettings';
-/** 2: GIF search and X posts on by default (2.5). */
-const PREVIEW_DEFAULTS_VERSION = 2;
+/**
+ * 2: GIF search and X posts on by default (2.5).
+ * 3: on-device link previews on by default (2.8).
+ */
+const PREVIEW_DEFAULTS_VERSION = 3;
 export type DateFormat =
   'D MMM YYYY' | 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY/MM/DD' | 'YYYY-MM-DD' | '';
 export type MessageSpacing = '0' | '100' | '200' | '300' | '400' | '500';
@@ -68,7 +71,12 @@ export interface SharedSettings {
   /** Show X posts, with their video, for x.com links; the reader's device contacts X. */
   xEmbeds: boolean;
   /**
-   * The GIF and X post defaults this snapshot has taken. Every save writes the
+   * Show a title and image card for a message's first link; this device
+   * fetches the page itself, so the site sees its IP address.
+   */
+  linkPreviews: boolean;
+  /**
+   * The GIF, X post and link preview defaults this snapshot has taken. Every save writes the
    * whole snapshot, so a stored `false` from before 2.5 was the old default,
    * not a choice; reading such a snapshot turns them on once.
    */
@@ -158,6 +166,7 @@ export const defaultSharedSettings: SharedSettings = {
   gifOnboardingDismissed: false,
   inlineGifLinks: true,
   xEmbeds: true,
+  linkPreviews: true,
   previewDefaultsVersion: PREVIEW_DEFAULTS_VERSION,
   showHiddenEvents: false,
   legacyUsernameColor: false,
@@ -227,21 +236,26 @@ const RETIRED_DESKTOP_SHORTCUTS = {
 
 /**
  * Snapshots saved before 2.5 hold GIF search and X posts off, the old
- * defaults, so they move to the 2.5 defaults once.
+ * defaults, and snapshots saved before 2.8 have no link previews, so each
+ * moves to the newer defaults once. A snapshot already at 2 keeps its GIF and
+ * X post choices and only gains link previews.
  */
 const migratePreviewDefaults = (
   settings: SharedSettings,
   stored: Record<string, unknown> | undefined
-): SharedSettings =>
-  stored && stored.previewDefaultsVersion !== PREVIEW_DEFAULTS_VERSION
-    ? {
-        ...settings,
-        gifSearchEnabled: true,
-        inlineGifLinks: true,
-        xEmbeds: true,
-        previewDefaultsVersion: PREVIEW_DEFAULTS_VERSION,
-      }
-    : settings;
+): SharedSettings => {
+  if (!stored) return settings;
+  const storedVersion =
+    typeof stored.previewDefaultsVersion === 'number' ? stored.previewDefaultsVersion : 0;
+  // Written by this version or a newer one (after a downgrade): its choices stand.
+  if (storedVersion >= PREVIEW_DEFAULTS_VERSION) return settings;
+  return {
+    ...settings,
+    ...(storedVersion < 2 ? { gifSearchEnabled: true, inlineGifLinks: true, xEmbeds: true } : {}),
+    linkPreviews: true,
+    previewDefaultsVersion: PREVIEW_DEFAULTS_VERSION,
+  };
+};
 
 /**
  * A stored set equal to the retired defaults was never customised (it is

@@ -63,6 +63,8 @@ test('GIF search, inline GIF links and X posts default on', () => {
   assert.equal(defaultSettings.gifSearchEnabled, true);
   assert.equal(defaultSettings.inlineGifLinks, true);
   assert.equal(defaultSettings.xEmbeds, true);
+  assert.equal(defaultSettings.linkPreviews, true);
+  assert.equal(store.getSettings().linkPreviews, true);
   assert.equal(store.getSettings().gifSearchEnabled, true);
   assert.equal(store.getSettings().xEmbeds, true);
 });
@@ -76,12 +78,52 @@ test('settings saved before 2.5 turn GIFs and X posts on once; later choices sta
   assert.equal(migrated.gifSearchEnabled, true);
   assert.equal(migrated.inlineGifLinks, true);
   assert.equal(migrated.xEmbeds, true);
+  assert.equal(migrated.linkPreviews, true);
 
   // Turning one off afterwards is a choice and survives the next read.
   store.setSharedSettings({ ...migrated, xEmbeds: false });
-  assert.equal(storage.getObject('settings')?.previewDefaultsVersion, 2);
+  assert.equal(storage.getObject('settings')?.previewDefaultsVersion, 3);
   assert.equal(store.getSharedSettings().xEmbeds, false);
   assert.equal(store.getSharedSettings().gifSearchEnabled, true);
+});
+
+test('settings saved by 2.5 to 2.7 turn link previews on once and keep GIF and X choices', () => {
+  const storage = createMemoryStorage({
+    settings: JSON.stringify({
+      gifSearchEnabled: false,
+      inlineGifLinks: false,
+      xEmbeds: false,
+      linkPreviews: false,
+      previewDefaultsVersion: 2,
+    }),
+  });
+  const store = createLocalStorageSettingsStore(storage);
+  const migrated = store.getSharedSettings();
+  assert.equal(migrated.linkPreviews, true);
+  assert.equal(migrated.gifSearchEnabled, false);
+  assert.equal(migrated.inlineGifLinks, false);
+  assert.equal(migrated.xEmbeds, false);
+
+  store.setSharedSettings({ ...migrated, linkPreviews: false });
+  assert.equal(storage.getObject('settings')?.previewDefaultsVersion, 3);
+  assert.equal(store.getSharedSettings().linkPreviews, false);
+});
+
+test('settings written by a newer version are left alone after a downgrade', () => {
+  const storage = createMemoryStorage({
+    settings: JSON.stringify({
+      gifSearchEnabled: false,
+      inlineGifLinks: false,
+      xEmbeds: false,
+      linkPreviews: false,
+      previewDefaultsVersion: 4,
+    }),
+  });
+  const settings = createLocalStorageSettingsStore(storage).getSharedSettings();
+  assert.equal(settings.linkPreviews, false);
+  assert.equal(settings.gifSearchEnabled, false);
+  assert.equal(settings.xEmbeds, false);
+  assert.equal(settings.previewDefaultsVersion, 4);
 });
 
 test('shared settings defaults exclude desktop shortcut settings', () => {

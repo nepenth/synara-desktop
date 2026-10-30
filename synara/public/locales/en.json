@@ -39,6 +39,10 @@
       "x_embeds": {
         "title": "Show X Posts",
         "description": "Show the post and play its video for x.com links. Your device contacts X, which can see your IP address."
+      },
+      "link_previews": {
+        "title": "Link previews",
+        "description": "When a message has a link, Synara fetches the page from this device to show a preview. The site can see your IP address."
       }
     },
     "gif": {

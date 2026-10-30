@@ -13,6 +13,7 @@ mod desktop;
 mod desktop_agent_actions;
 mod desktop_file_transfer;
 mod desktop_integration;
+mod desktop_link_preview;
 mod desktop_logging;
 mod desktop_navigation;
 mod desktop_notification_sound;
@@ -425,6 +426,16 @@ async fn synara_media_for_path<R: tauri::Runtime>(
     path: &str,
     range: Option<&str>,
 ) -> tauri::http::Response<Vec<u8>> {
+    if let Some(id) = path.strip_prefix(desktop_link_preview::IMAGE_PATH_PREFIX) {
+        return match desktop_link_preview::stored_image(id) {
+            Some((bytes, content_type)) => synara_media_response(
+                tauri::http::StatusCode::OK,
+                bytes.to_vec(),
+                Some(content_type),
+            ),
+            None => synara_media_status(tauri::http::StatusCode::NOT_FOUND),
+        };
+    }
     let Some((hint, handle)) = split_thumbnail_hint(path) else {
         return synara_media_status(tauri::http::StatusCode::NOT_FOUND);
     };
@@ -637,6 +648,7 @@ pub fn run() {
             desktop_notifications::desktop_take_notification_responses,
             desktop::desktop_open_external_url,
             desktop_x_embed::desktop_x_post,
+            desktop_link_preview::desktop_link_preview,
             desktop_file_transfer::desktop_save_file,
             desktop_file_transfer::desktop_save_file_begin,
             desktop_file_transfer::desktop_save_file_chunk,

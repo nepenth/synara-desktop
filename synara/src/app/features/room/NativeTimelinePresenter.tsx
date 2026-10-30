@@ -2326,15 +2326,11 @@ const NativeTimelineRowImpl = ({
                   )}
                   {xPostUrl ? <NativeXPostEmbed url={xPostUrl} /> : null}
                   <NativeTimelineLinkUnfurl
-                    roomId={roomId}
-                    sessionGeneration={sessionGeneration}
-                    encryptionStatus={sourceEncryptionStatus}
                     body={row.body}
                     formattedBody={row.formattedBody}
                     messageType={row.messageType}
                     hasMedia={Boolean(row.media)}
                     skip={Boolean(approvalPrompt || agentPayload || inlineGif || xPostUrl)}
-                    originServerTs={originServerTs}
                   />
                   <NativeTimelineThreadSurface
                     threadRoot={row.threadRoot}

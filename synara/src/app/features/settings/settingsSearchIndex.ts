@@ -94,6 +94,12 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
   },
   {
     page: SettingsPages.GeneralPage,
+    title: 'Link previews',
+    description: 'Show the title and image of a linked page, fetched from this device.',
+    synonyms: ['link', 'url', 'preview', 'unfurl', 'embed', 'open graph'],
+  },
+  {
+    page: SettingsPages.GeneralPage,
     title: 'Indexed message search',
     description: 'Search encrypted messages with a local index.',
     synonyms: ['search', 'index', 'find', 'encrypted'],

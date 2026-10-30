@@ -1,0 +1,3 @@
+Synara 2.7.1 is a maintenance release for iOS with no visible changes; the desktop app gains link previews and working X post cards.
+
+Please test: signing in, the room list and timeline, and approving an agent request, to confirm nothing regressed.
