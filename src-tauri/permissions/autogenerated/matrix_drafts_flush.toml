@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-drafts-flush"
+description = "Enables the matrix_drafts_flush command without any pre-configured scope."
+commands.allow = ["matrix_drafts_flush"]
+
+[[permission]]
+identifier = "deny-matrix-drafts-flush"
+description = "Denies the matrix_drafts_flush command without any pre-configured scope."
+commands.deny = ["matrix_drafts_flush"]

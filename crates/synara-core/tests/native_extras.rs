@@ -35,7 +35,8 @@ fn room_event(event_type: &str, content: serde_json::Value) -> Raw<AnyRoomAccoun
 async fn raw_account_data_lists_reads_and_writes_without_secret_types() {
     let server = MatrixMockServer::new().await;
     let client = server.client_builder().build().await;
-    let owner = NativeImagePackOwner::start(&client, Arc::new(|_| {}), 3).expect("owner");
+    let owner =
+        NativeImagePackOwner::start(&client, Arc::new(|_| {}), Arc::new(|_| {}), 3).expect("owner");
     let room_id = room_id!("!layout:example.org");
 
     server

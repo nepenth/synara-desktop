@@ -43,6 +43,10 @@
       "link_previews": {
         "title": "Link previews",
         "description": "When a message has a link, Synara fetches the page from this device to show a preview. The site can see your IP address."
+      },
+      "sync_drafts": {
+        "title": "Sync drafts across devices",
+        "description": "Unsent messages follow you to your other Synara devices, end-to-end encrypted. Devices need your recovery key or another verified device to read them."
       }
     },
     "gif": {

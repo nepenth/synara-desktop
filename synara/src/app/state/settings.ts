@@ -76,6 +76,11 @@ export interface SharedSettings {
    */
   linkPreviews: boolean;
   /**
+   * Sync unsent composer drafts with this account's other Synara devices, end-to-end
+   * encrypted in room account data. Per device.
+   */
+  syncDrafts: boolean;
+  /**
    * The GIF, X post and link preview defaults this snapshot has taken. Every save writes the
    * whole snapshot, so a stored `false` from before 2.5 was the old default,
    * not a choice; reading such a snapshot turns them on once.
@@ -167,6 +172,7 @@ export const defaultSharedSettings: SharedSettings = {
   inlineGifLinks: true,
   xEmbeds: true,
   linkPreviews: true,
+  syncDrafts: true,
   previewDefaultsVersion: PREVIEW_DEFAULTS_VERSION,
   showHiddenEvents: false,
   legacyUsernameColor: false,

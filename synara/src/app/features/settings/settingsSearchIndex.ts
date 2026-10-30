@@ -100,6 +100,12 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
   },
   {
     page: SettingsPages.GeneralPage,
+    title: 'Sync drafts across devices',
+    description: 'Keep unsent messages on your other Synara devices, end-to-end encrypted.',
+    synonyms: ['draft', 'unsent', 'composer', 'sync', 'devices', 'continue'],
+  },
+  {
+    page: SettingsPages.GeneralPage,
     title: 'Indexed message search',
     description: 'Search encrypted messages with a local index.',
     synonyms: ['search', 'index', 'find', 'encrypted'],

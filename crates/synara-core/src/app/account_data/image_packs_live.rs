@@ -438,6 +438,8 @@ pub struct NativeImagePackOwner {
     room_notes_projection: Arc<Mutex<RoomNotesProjectionState>>,
     /// Account-data types seen in sync or written here (Matrix cannot list them).
     account_data_types: Arc<Mutex<AccountDataTypeRegistry>>,
+    /// Encrypted `in.synara.draft` sync rides the account-data owner's life.
+    drafts: crate::app::drafts::DraftSyncOwner,
     _account_data: EventHandlerDropGuard,
     _room_account_data: EventHandlerDropGuard,
     _state: EventHandlerDropGuard,
@@ -447,11 +449,14 @@ impl NativeImagePackOwner {
     pub fn start(
         client: &Client,
         emit: ImagePackUpdateEmit,
+        drafts_emit: crate::app::drafts::DraftSyncEmit,
         session_generation: u64,
     ) -> Result<Self, &'static str> {
         let _ = client
             .user_id()
             .ok_or("v-send.r-pack-read-subscribe-no-user")?;
+        let drafts =
+            crate::app::drafts::DraftSyncOwner::start(client, drafts_emit, session_generation)?;
 
         let room_notes_projection = Arc::new(Mutex::new(RoomNotesProjectionState::default()));
         let account_projection = Arc::clone(&room_notes_projection);
@@ -513,10 +518,15 @@ impl NativeImagePackOwner {
             room_notes_mutation: AsyncMutex::new(()),
             room_notes_projection,
             account_data_types,
+            drafts,
             _account_data: client.event_handler_drop_guard(account_handle),
             _room_account_data: client.event_handler_drop_guard(room_account_handle),
             _state: client.event_handler_drop_guard(state_handle),
         })
+    }
+
+    pub fn drafts(&self) -> &crate::app::drafts::DraftSyncOwner {
+        &self.drafts
     }
 
     pub async fn snapshot_global(&self) -> Result<NativeGlobalImagePacksSnapshot, &'static str> {

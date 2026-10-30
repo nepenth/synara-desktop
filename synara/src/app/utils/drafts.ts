@@ -42,6 +42,21 @@ export const loadRoomDraft = (
   }
 };
 
+/** When the stored draft last changed, for cross-device sync. */
+export const loadRoomDraftUpdatedAt = (
+  storage: Pick<Storage, 'getItem'>,
+  userId: string,
+  roomId: string
+): number | undefined => {
+  const raw = storage.getItem(getRoomDraftStorageKey(userId, roomId));
+  if (!raw || raw.length > MAX_DRAFT_BYTES) return undefined;
+  try {
+    return normalizeStoredRoomDraft(JSON.parse(raw))?.updatedAt;
+  } catch {
+    return undefined;
+  }
+};
+
 export const saveRoomDraft = (
   storage: Pick<Storage, 'setItem' | 'removeItem'>,
   userId: string,

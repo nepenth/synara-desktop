@@ -209,6 +209,7 @@ pub(crate) async fn enable_recovery(
             .await?,
     );
     let _ = crate::app::dehydrated_devices::start_with_secret(client, &recovery_key).await;
+    crate::app::drafts::on_secret_store_open(client, &recovery_key).await;
     Ok(recovery_key)
 }
 
@@ -230,6 +231,7 @@ pub async fn unlock(
                 .map_err(|_| "v-crypto.4-unlock-rejected")?;
             let _ =
                 crate::app::dehydrated_devices::start_with_secret(client, recovery_secret).await;
+            crate::app::drafts::on_secret_store_open(client, recovery_secret).await;
             Ok(())
         },
         authoritative_status(client, session_generation),
@@ -262,6 +264,8 @@ pub async fn reset(
                     .map_err(|_| "v-crypto.4-reset-failed")?,
             );
             let _ = crate::app::dehydrated_devices::start_with_secret(client, &recovery_key).await;
+            // The SDK re-keys only its own secrets; carry the drafts key over.
+            crate::app::drafts::on_secret_store_open(client, &recovery_key).await;
 
             Ok(recovery_key)
         },

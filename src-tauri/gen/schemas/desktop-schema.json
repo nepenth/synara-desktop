@@ -771,6 +771,48 @@
           "markdownDescription": "Enables the matrix_device_verification_prompt_dismiss command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_drafts_clear command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-drafts-clear",
+          "markdownDescription": "Enables the matrix_drafts_clear command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_drafts_delete_all command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-drafts-delete-all",
+          "markdownDescription": "Enables the matrix_drafts_delete_all command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_drafts_flush command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-drafts-flush",
+          "markdownDescription": "Enables the matrix_drafts_flush command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_drafts_resolve command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-drafts-resolve",
+          "markdownDescription": "Enables the matrix_drafts_resolve command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_drafts_save command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-drafts-save",
+          "markdownDescription": "Enables the matrix_drafts_save command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_drafts_set_enabled command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-drafts-set-enabled",
+          "markdownDescription": "Enables the matrix_drafts_set_enabled command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_drafts_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-drafts-status",
+          "markdownDescription": "Enables the matrix_drafts_status command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_edit_message command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-edit-message",
@@ -2335,6 +2377,48 @@
           "type": "string",
           "const": "deny-matrix-device-verification-prompt-dismiss",
           "markdownDescription": "Denies the matrix_device_verification_prompt_dismiss command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_drafts_clear command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-drafts-clear",
+          "markdownDescription": "Denies the matrix_drafts_clear command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_drafts_delete_all command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-drafts-delete-all",
+          "markdownDescription": "Denies the matrix_drafts_delete_all command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_drafts_flush command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-drafts-flush",
+          "markdownDescription": "Denies the matrix_drafts_flush command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_drafts_resolve command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-drafts-resolve",
+          "markdownDescription": "Denies the matrix_drafts_resolve command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_drafts_save command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-drafts-save",
+          "markdownDescription": "Denies the matrix_drafts_save command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_drafts_set_enabled command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-drafts-set-enabled",
+          "markdownDescription": "Denies the matrix_drafts_set_enabled command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_drafts_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-drafts-status",
+          "markdownDescription": "Denies the matrix_drafts_status command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_edit_message command without any pre-configured scope.",

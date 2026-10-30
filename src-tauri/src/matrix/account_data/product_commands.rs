@@ -358,3 +358,86 @@ pub async fn matrix_inbox_notifications(
     )
     .await
 }
+
+#[tauri::command]
+pub async fn matrix_drafts_status(
+    core: State<'_, Arc<synara_core::Core>>,
+) -> Result<synara_core::app::drafts::NativeDraftSyncStatus, MatrixAuthCommandError> {
+    crate::bridge::drafts::drafts_status(core.inner().as_ref()).await
+}
+
+#[tauri::command]
+pub async fn matrix_drafts_set_enabled(
+    core: State<'_, Arc<synara_core::Core>>,
+    enabled: bool,
+) -> Result<synara_core::app::drafts::NativeDraftSyncStatus, MatrixAuthCommandError> {
+    crate::bridge::drafts::drafts_set_enabled(core.inner().as_ref(), enabled).await
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn matrix_drafts_save(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    slot: String,
+    markdown: Option<String>,
+    desktop_slate: Option<serde_json::Value>,
+    reply_to: Option<String>,
+    edit_of: Option<String>,
+    flush: Option<bool>,
+) -> Result<synara_core::core_api::NativeDraftWriteResult, MatrixAuthCommandError> {
+    crate::bridge::drafts::drafts_save(
+        core.inner().as_ref(),
+        synara_core::core_api::MatrixDraftSaveRequest {
+            room_id,
+            slot,
+            markdown,
+            desktop_slate,
+            reply_to,
+            edit_of,
+            flush: flush.unwrap_or(false),
+        },
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn matrix_drafts_clear(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    slot: String,
+) -> Result<synara_core::core_api::NativeDraftWriteResult, MatrixAuthCommandError> {
+    crate::bridge::drafts::drafts_clear(core.inner().as_ref(), room_id, slot).await
+}
+
+#[tauri::command]
+pub async fn matrix_drafts_resolve(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    slot: String,
+    local: Option<synara_core::app::drafts::NativeLocalDraftState>,
+    fetch_fresh: Option<bool>,
+) -> Result<synara_core::app::drafts::NativeDraftResolution, MatrixAuthCommandError> {
+    crate::bridge::drafts::drafts_resolve(
+        core.inner().as_ref(),
+        room_id,
+        slot,
+        local.unwrap_or_default(),
+        fetch_fresh.unwrap_or(false),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn matrix_drafts_delete_all(
+    core: State<'_, Arc<synara_core::Core>>,
+) -> Result<synara_core::core_api::NativeDraftDeleteAllResult, MatrixAuthCommandError> {
+    crate::bridge::drafts::drafts_delete_all(core.inner().as_ref()).await
+}
+
+#[tauri::command]
+pub async fn matrix_drafts_flush(
+    core: State<'_, Arc<synara_core::Core>>,
+) -> Result<(), MatrixAuthCommandError> {
+    crate::bridge::drafts::drafts_flush(core.inner().as_ref()).await
+}

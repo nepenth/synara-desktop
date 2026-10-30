@@ -31,6 +31,10 @@
         "description": "Buttons, links, and selected items. The window background is Base Color above. Theme default until you pick a custom color.",
         "aria_label": "Custom accent color",
         "reset": "Reset"
+      },
+      "sync_drafts": {
+        "title": "Entwürfe geräteübergreifend synchronisieren",
+        "description": "Nicht gesendete Nachrichten folgen dir auf deine anderen Synara-Geräte, Ende-zu-Ende-verschlüsselt. Geräte brauchen deinen Wiederherstellungsschlüssel oder ein anderes verifiziertes Gerät, um sie zu lesen."
       }
     },
     "gif": {

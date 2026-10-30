@@ -22,6 +22,8 @@ pub mod dehydrated_devices;
 #[cfg(feature = "full-app")]
 pub mod devices;
 pub mod diagnostics;
+#[cfg(feature = "full-app")]
+pub mod drafts;
 pub mod lifecycle;
 #[cfg(feature = "full-app")]
 pub mod link_preview;
