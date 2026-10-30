@@ -1104,6 +1104,7 @@ function Messages() {
   const [inlineGifLinks, setInlineGifLinks] = useSetting(settingsAtom, 'inlineGifLinks');
   const [xEmbeds, setXEmbeds] = useSetting(settingsAtom, 'xEmbeds');
   const [linkPreviews, setLinkPreviews] = useSetting(settingsAtom, 'linkPreviews');
+  const [syncDrafts, setSyncDrafts] = useSetting(settingsAtom, 'syncDrafts');
   const [indexedMessageSearch, setIndexedMessageSearch] = useSetting(
     settingsAtom,
     'indexedMessageSearch'
@@ -1198,6 +1199,16 @@ function Messages() {
             'When a message has a link, Synara fetches the page from this device to show a preview. The site can see your IP address.'
           )}
           after={<Switch variant="Primary" value={linkPreviews} onChange={setLinkPreviews} />}
+        />
+      </SequenceCard>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title={t('modernization.settings.sync_drafts.title', 'Sync drafts across devices')}
+          description={t(
+            'modernization.settings.sync_drafts.description',
+            'Unsent messages follow you to your other Synara devices, end-to-end encrypted. Devices need your recovery key or another verified device to read them.'
+          )}
+          after={<Switch variant="Primary" value={syncDrafts} onChange={setSyncDrafts} />}
         />
       </SequenceCard>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
