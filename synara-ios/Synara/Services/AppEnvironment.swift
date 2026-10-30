@@ -76,6 +76,8 @@ struct AppEnvironment {
     let sessionReadiness: SignedInSessionReadinessServicing
     let connectionStatus: ConnectionStatusStore
     let outgoingSends: OutgoingSendCoordinator
+    /// Encrypted cross-device composer drafts (Settings → Sync drafts).
+    var draftSync: DraftSyncServicing = NoDraftSync()
 
     @MainActor
     static func live() -> AppEnvironment {
@@ -185,7 +187,8 @@ struct AppEnvironment {
             roomManagement: roomManagement,
             sessionReadiness: sessionReadiness,
             connectionStatus: connectionStatus,
-            outgoingSends: outgoingSends
+            outgoingSends: outgoingSends,
+            draftSync: SharedCoreDraftSyncService(host: host)
         )
     }
 

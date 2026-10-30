@@ -1914,6 +1914,8 @@ private struct SecuritySettingsView: View {
     @State private var cryptoActionMessage: String?
     @State private var isRunningCryptoAction = false
     @State private var showsIdentityReset = false
+    @State private var syncDrafts = true
+    @State private var didLoadSyncDrafts = false
 
     /// Shown while the account has no recovery, and kept while a setup is in
     /// progress or its key is on screen, even after status refreshes.
@@ -2028,6 +2030,24 @@ private struct SecuritySettingsView: View {
                 } footer: {
                     Text(IdentityResetCopy.settingsDescription)
                 }
+            }
+
+            Section {
+                Toggle("Sync drafts across devices", isOn: $syncDrafts)
+                    .accessibilityIdentifier("SyncDraftsToggle")
+                    .onChange(of: syncDrafts) { value in
+                        guard didLoadSyncDrafts else { return }
+                        environment.settings.set(value, for: DraftSyncSettings.syncDraftsKey)
+                        Task { await environment.draftSync.setEnabled(value) }
+                    }
+            } footer: {
+                Text("Unsent messages follow you to your other Synara devices, end-to-end encrypted. Devices need your recovery key or another verified device to read them.")
+            }
+        }
+        .onAppear {
+            syncDrafts = environment.settings.bool(for: DraftSyncSettings.syncDraftsKey)
+            DispatchQueue.main.async {
+                didLoadSyncDrafts = true
             }
         }
         .sheet(isPresented: $showsIdentityReset, onDismiss: {

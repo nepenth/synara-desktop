@@ -58,6 +58,7 @@
 		3321B54F4A9FFE147A737368 /* SignedInSessionReadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF389D46848BA1444F7035D0 /* SignedInSessionReadiness.swift */; };
 		3397141E30A00168F395FC72 /* NotificationPreviewSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB7C256708A8C6C4189DA5AB /* NotificationPreviewSupportTests.swift */; };
 		35321EEB56E2DB145A96303E /* ApprovalsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C7CADB8BA8642C2961DC08F /* ApprovalsView.swift */; };
+		35CDD4D0622C92CD29DDAA4D /* DraftSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5491ACFA6238AA381EE6CE19 /* DraftSyncTests.swift */; };
 		37B02657CA5E5B7386BEA95B /* SharedCorePresenceLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CC5B538D759B0BA4E412935 /* SharedCorePresenceLive.swift */; };
 		37E0DABCD7B044B59F2C5545 /* BoundedLRUCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43B4D9CA1CA01FA1D72EA05F /* BoundedLRUCache.swift */; };
 		38BD1E5575DC80C5A020A26B /* TimelinePolishTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60874DF9B51EDE6D7164CB21 /* TimelinePolishTests.swift */; };
@@ -153,6 +154,7 @@
 		969D33C61DAE6C1B12C9BCDB /* AgentActionResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DA6E8858D607B040754AF0E /* AgentActionResolverTests.swift */; };
 		97901F6C1B589C2271A4975D /* AuthServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 017B2EBED1FF4FF0EC25CB24 /* AuthServiceTests.swift */; };
 		98DDD34A1A8A4A63C23D8401 /* SynaraNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 4B42BC8DD2D2505F14EE1B6D /* SynaraNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		98EA8A075A4A46A0A84F03C2 /* DraftSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30B2E2C50029208F1DC34ECE /* DraftSync.swift */; };
 		9B792F2B4073B7792ED943D8 /* MediaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3ECC92EE34CCE4DB57A5D3E /* MediaService.swift */; };
 		9D70F473C1C1E8971224F0B0 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 184EF5364268AFF19F35E66B /* PrivacyInfo.xcprivacy */; };
 		9DA561CC126EB87B8410D7C7 /* RootShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57076E7E82206F1492033846 /* RootShellView.swift */; };
@@ -191,6 +193,7 @@
 		CAE7630DBBA1747729F7F85E /* SharedCoreRoomProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8A673CF71EFDD2DCB998C8C /* SharedCoreRoomProfile.swift */; };
 		CC89EE97042280F04BD29498 /* SynaraApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2E4F1A7ADF247942C6D0059 /* SynaraApp.swift */; };
 		CDCDCDD2EFC9D72CA218D821 /* MatrixClientPolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05E9804A6FB5F292C398A0FC /* MatrixClientPolicies.swift */; };
+		CF64E31E749653F27EE1CBBB /* SyncedDraftBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D8CA14D13D8DBAA1108D43 /* SyncedDraftBanner.swift */; };
 		D08F97130C56008BF1101E20 /* SharedCoreRoomPowerLevels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE9ED2F14657EAEB22A05533 /* SharedCoreRoomPowerLevels.swift */; };
 		D0F9ECDAFC0C1996B350149B /* MatrixSessionProjectionMirror.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80766F42BBCF758CD7C7F4F /* MatrixSessionProjectionMirror.swift */; };
 		D21F2D94FEAEE8E93F3E2A6A /* RoomReadMarkerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B44B25CB0277A9BAD73943 /* RoomReadMarkerService.swift */; };
@@ -312,6 +315,7 @@
 		2CBE437294BD93B48D7CDF75 /* MatrixLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixLifecycleTests.swift; sourceTree = "<group>"; };
 		2DC75E32CF38C6774B2FAFC7 /* SynaraTimeFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraTimeFormatting.swift; sourceTree = "<group>"; };
 		2EE498A23839D0BB8FD5AA3B /* SharedCoreReadMarkers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreReadMarkers.swift; sourceTree = "<group>"; };
+		30B2E2C50029208F1DC34ECE /* DraftSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftSync.swift; sourceTree = "<group>"; };
 		311E5731825808ADC48C05B4 /* StableTimelineViewportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StableTimelineViewportTests.swift; sourceTree = "<group>"; };
 		3176190587515D1A32A6DE56 /* SynaraNseCoreBindingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraNseCoreBindingsTests.swift; sourceTree = "<group>"; };
 		334A39CBA034191D868AAD73 /* ConnectionStatusBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatusBanner.swift; sourceTree = "<group>"; };
@@ -343,6 +347,7 @@
 		4F818AC6C01E58C4E7BACF38 /* IosSecretVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosSecretVault.swift; sourceTree = "<group>"; };
 		4F84F97D77A9A566CA405225 /* SharedCoreTimelinePin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelinePin.swift; sourceTree = "<group>"; };
 		5160F29A03489EC72ED66FE4 /* SynaraHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraHaptics.swift; sourceTree = "<group>"; };
+		5491ACFA6238AA381EE6CE19 /* DraftSyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftSyncTests.swift; sourceTree = "<group>"; };
 		54B5B55419769DE9EA2EE1F9 /* SynaraCoreBindingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraCoreBindingsTests.swift; sourceTree = "<group>"; };
 		57076E7E82206F1492033846 /* RootShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootShellView.swift; sourceTree = "<group>"; };
 		5A01BE29532BD71E7B4B5D1F /* SynaraNotificationServiceFiltering.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SynaraNotificationServiceFiltering.entitlements; sourceTree = "<group>"; };
@@ -407,6 +412,7 @@
 		A0B665F3BD49873F6C4732FF /* SharedCoreSpaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSpaces.swift; sourceTree = "<group>"; };
 		A144E94571B336790791A07D /* SharedCoreRoomDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomDetails.swift; sourceTree = "<group>"; };
 		A1BA2F3A13CFE7CF46E4AFB9 /* OutgoingSendServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutgoingSendServiceTests.swift; sourceTree = "<group>"; };
+		A1D8CA14D13D8DBAA1108D43 /* SyncedDraftBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncedDraftBanner.swift; sourceTree = "<group>"; };
 		A250FE1A7BB064F16F28C795 /* SynaraMessageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraMessageBubble.swift; sourceTree = "<group>"; };
 		A2B32ACB6B0CEC48C00B0D21 /* CameraImagePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraImagePicker.swift; sourceTree = "<group>"; };
 		A346A6C213E92D2E71A5D4B4 /* SharedCoreSessionStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionStatus.swift; sourceTree = "<group>"; };
@@ -572,6 +578,7 @@
 				9A3E2D83D3C17850385E7490 /* SelectableMessageTextView.swift */,
 				C0FBB16EA6FF93511B2EE8F0 /* SettingsView.swift */,
 				6D1561F09029D684B9548B0F /* StableTimelineViewport.swift */,
+				A1D8CA14D13D8DBAA1108D43 /* SyncedDraftBanner.swift */,
 				6986249FA7AA7E42D24E6A82 /* ThreadDisplay.swift */,
 				6D321FEADA71C48BAB6ABFD6 /* TimelineAccessibility.swift */,
 				E382ED63AB12001F7FF74057 /* TimelineReactionSenders.swift */,
@@ -679,6 +686,7 @@
 				A7A9908B77A7CB8F4A4CC55A /* ComposerService.swift */,
 				4EEE98F80D158F92EB7D2722 /* ConnectionStatus.swift */,
 				8499E60EE280EF350D65EF0C /* CryptoVerificationPresentation.swift */,
+				30B2E2C50029208F1DC34ECE /* DraftSync.swift */,
 				A856EC4E030E1E38C04CBE4B /* EventActionService.swift */,
 				7D2EDDECAE38AE812E274377 /* GifLinks.swift */,
 				B41D9817A0F821E67BCD9C00 /* HomeserverDiscovery.swift */,
@@ -827,6 +835,7 @@
 				28004193A008B4EDFF0E6E18 /* ComposerServiceTests.swift */,
 				0BF3C056F084434309E1D3F3 /* ConnectionStatusCopyTests.swift */,
 				0D151178FEAF6AA24CF435C4 /* CryptoVerificationPresentationTests.swift */,
+				5491ACFA6238AA381EE6CE19 /* DraftSyncTests.swift */,
 				E8CE546B97B6AE15795C6E76 /* EventActionServiceTests.swift */,
 				E978AA508FD616546B8390DE /* ForegroundNotificationPolicyTests.swift */,
 				ED1DBDC75FB89E8A941D7D3E /* GifLinksTests.swift */,
@@ -1065,6 +1074,7 @@
 				480BE3E7090674BEB4144D36 /* ComposerServiceTests.swift in Sources */,
 				1A5417BC15B5AC21819DCBD1 /* ConnectionStatusCopyTests.swift in Sources */,
 				439E6C602CC55DF08520952C /* CryptoVerificationPresentationTests.swift in Sources */,
+				35CDD4D0622C92CD29DDAA4D /* DraftSyncTests.swift in Sources */,
 				6022C473D59F944208C3E79D /* EventActionServiceTests.swift in Sources */,
 				FD41BA797B5F59D7C2094C57 /* ForegroundNotificationPolicyTests.swift in Sources */,
 				DDBA2842622CAD2DECF79199 /* GifLinksTests.swift in Sources */,
@@ -1140,6 +1150,7 @@
 				0DFCC15849478640A3BF3903 /* ConnectionStatus.swift in Sources */,
 				052A93DF2C5AD7E2C75EC162 /* ConnectionStatusBanner.swift in Sources */,
 				40F30B8E665A65F3FFDA8D9C /* CryptoVerificationPresentation.swift in Sources */,
+				98EA8A075A4A46A0A84F03C2 /* DraftSync.swift in Sources */,
 				E9028170C931CDFE77B89713 /* EventActionService.swift in Sources */,
 				AB8257270E67599EC892B001 /* GifLinks.swift in Sources */,
 				AC16E5E6B23C7D01275A9EA1 /* GifPickerSheet.swift in Sources */,
@@ -1258,6 +1269,7 @@
 				6565433C651603C659B39B26 /* SynaraNotificationPreviewSupport.swift in Sources */,
 				919BCCE1F8A9D3525404023E /* SynaraRoomAvatar.swift in Sources */,
 				94411E2A4EAB1890DBDCF4E5 /* SynaraTimeFormatting.swift in Sources */,
+				CF64E31E749653F27EE1CBBB /* SyncedDraftBanner.swift in Sources */,
 				186137E419A250964CD5F7D5 /* ThreadDisplay.swift in Sources */,
 				32F6D221C229D808F0C21DAD /* TimelineAccessibility.swift in Sources */,
 				EA9F46EFA0F4E2B44CF98B53 /* TimelineReactionSenders.swift in Sources */,
