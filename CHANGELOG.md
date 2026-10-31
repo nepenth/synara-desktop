@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [2.7.4] - 2026-10-31
+
 - Room timeline (iOS): messages are flat rows instead of outlined pills. The text sits directly under the sender's name, on the same edge, and messages from one sender stack closely while a new sender starts a clear gap. The "…" button on every message is gone: long-press a message for its actions (it is still there with VoiceOver or Switch Control on). Your own messages no longer carry a blue fill and outline. A reply shows its quote on one quiet line instead of a block larger than the reply. Messages that mention you get a soft accent highlight with a bar on the leading edge, as on desktop. Deleted and unsupported messages are flat too.
 
 ## [2.7.3] - 2026-10-30
