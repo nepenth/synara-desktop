@@ -2238,7 +2238,7 @@ final class SharedCoreMessageSendService: MessageSending {
                     body: body,
                     msgType: nil,
                     formattedBody: request.formattedBody,
-                    mentionUserIds: nil,
+                    mentionUserIds: request.mentionUserIDs,
                     mentionRoom: nil,
                     txnId: nil
                 )
@@ -2249,7 +2249,7 @@ final class SharedCoreMessageSendService: MessageSending {
                     body: body,
                     msgType: nil,
                     formattedBody: request.formattedBody,
-                    mentionUserIds: nil,
+                    mentionUserIds: request.mentionUserIDs,
                     mentionRoom: nil,
                     replyTo: request.replyToEventID,
                     threadRoot: request.threadRootEventID,
@@ -2284,7 +2284,7 @@ final class SharedCoreMessageSendService: MessageSending {
                 body: body,
                 msgType: nil,
                 formattedBody: request.formattedBody,
-                mentionUserIds: nil,
+                mentionUserIds: request.mentionUserIDs,
                 mentionRoom: nil,
                 replyTo: request.replyToEventID,
                 threadRoot: request.threadRootEventID,

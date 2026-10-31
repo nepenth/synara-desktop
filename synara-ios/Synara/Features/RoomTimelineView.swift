@@ -560,6 +560,8 @@ struct RoomTimelineView: View {
     @State private var resolvedRoomTitle: String?
     @State private var state: TimelineViewState = .idle
     @State private var draft: String = ""
+    /// People picked from the composer's @ suggestions for this draft.
+    @State private var composerMentions: [ComposerMention] = []
     @State private var sentDraft: ComposerSentDraft?
     @State private var sentDraftSerial: UInt64 = 0
     @StateObject private var quickReactions = TimelineQuickReactionStore()
@@ -731,7 +733,9 @@ struct RoomTimelineView: View {
                 onPasteImages: draftPastedImages,
                 isFocusedExternally: $isComposerFocused,
                 sentDraft: sentDraft,
-                onSendGif: sendGif
+                onSendGif: sendGif,
+                mentions: $composerMentions,
+                currentUserID: currentUserID
             )
             .padding(.bottom, canvasLayout == .stacked && !isComposerFocused ? SynaraSpacing.large : 0)
         }
@@ -2735,8 +2739,11 @@ struct RoomTimelineView: View {
             sendError = MessageSendError.emptyMessage.localizedDescription
             return
         }
-        let formattedBody = ComposerMatrixFormatting.formattedBody(for: draftBody)
+        let mentioned = ComposerMentions.resolve(draftBody, mentions: composerMentions, currentUserID: currentUserID)
+        let formattedBody = ComposerMatrixFormatting.formattedBody(for: mentioned.markdown)
         let body = ComposerMatrixFormatting.plainBody(for: draftBody, formattedBody: formattedBody)
+        let mentionUserIDs = mentioned.userIDs.isEmpty ? nil : mentioned.userIDs
+        composerMentions = []
 
         let request = MessageSendRequest(
             roomID: roomID,
@@ -2744,7 +2751,8 @@ struct RoomTimelineView: View {
             formattedBody: formattedBody,
             replyToEventID: replyToEventID,
             editEventID: editEventID,
-            threadRootEventID: threadRootEventID
+            threadRootEventID: threadRootEventID,
+            mentionUserIDs: mentionUserIDs
         )
         let isEditing = request.editEventID != nil
 
@@ -2780,7 +2788,8 @@ struct RoomTimelineView: View {
             senderID: currentUserID,
             senderAvatarURL: ownAvatarURL,
             timestamp: failedItem?.timestamp ?? Date(),
-            clearingDraft: true
+            clearingDraft: true,
+            mentionUserIDs: mentionUserIDs
         )
         registerSendAnimation(for: queued.id, isRetry: failedItem != nil)
         applyOutgoingQueueToTimeline()
@@ -3785,6 +3794,9 @@ struct RoomTimelineView: View {
         )
         replyTarget = nil
         editSession = session
+        if case let .formattedText(_, html) = item.kind {
+            composerMentions = ComposerMentions.mentions(inHTML: html)
+        }
         if TimelinePendingReconciler.messageBody(for: item) != nil {
             draft = session.draft
             environment.drafts.setDraft(session.draft, roomID: roomID)
@@ -4561,6 +4573,7 @@ struct ThreadTimelineView: View {
     @Environment(\.synaraCanvasLayout) private var canvasLayout
     @State private var state: TimelineViewState = .idle
     @State private var draft = ""
+    @State private var composerMentions: [ComposerMention] = []
     @State private var sentDraft: ComposerSentDraft?
     @State private var sentDraftSerial: UInt64 = 0
     @StateObject private var quickReactions = TimelineQuickReactionStore()
@@ -4628,7 +4641,9 @@ struct ThreadTimelineView: View {
                 onPasteImages: draftThreadPastedImages,
                 isFocusedExternally: $isComposerFocused,
                 sentDraft: sentDraft,
-                onSendGif: sendThreadGif
+                onSendGif: sendThreadGif,
+                mentions: $composerMentions,
+                currentUserID: currentUserID
             )
             .padding(.bottom, canvasLayout == .stacked ? SynaraSpacing.large : 0)
         }
@@ -5268,8 +5283,11 @@ struct ThreadTimelineView: View {
             sendError = MessageSendError.emptyMessage.localizedDescription
             return
         }
-        let formattedBody = ComposerMatrixFormatting.formattedBody(for: draftBody)
+        let mentioned = ComposerMentions.resolve(draftBody, mentions: composerMentions, currentUserID: currentUserID)
+        let formattedBody = ComposerMatrixFormatting.formattedBody(for: mentioned.markdown)
         let body = ComposerMatrixFormatting.plainBody(for: draftBody, formattedBody: formattedBody)
+        let mentionUserIDs = mentioned.userIDs.isEmpty ? nil : mentioned.userIDs
+        composerMentions = []
 
         if let editEventID = intent.editEventID {
             do {
@@ -5284,7 +5302,8 @@ struct ThreadTimelineView: View {
                         formattedBody: formattedBody,
                         replyToEventID: nil,
                         editEventID: editEventID,
-                        threadRootEventID: rootEventID
+                        threadRootEventID: rootEventID,
+                        mentionUserIDs: mentionUserIDs
                     )
                 )
                 finishComposerSend(sentText: sentText)
@@ -5307,7 +5326,8 @@ struct ThreadTimelineView: View {
             replyToEventID: intent.replyToEventID,
             threadRootEventID: rootEventID,
             senderID: currentUserID,
-            timestamp: intent.retrying?.timestamp ?? Date()
+            timestamp: intent.retrying?.timestamp ?? Date(),
+            mentionUserIDs: mentionUserIDs
         )
         finishComposerSend(sentText: sentText)
         completeComposerRelation()
@@ -5437,6 +5457,9 @@ struct ThreadTimelineView: View {
         )
         replyTarget = nil
         editSession = session
+        if case let .formattedText(_, html) = item.kind {
+            composerMentions = ComposerMentions.mentions(inHTML: html)
+        }
         if TimelinePendingReconciler.messageBody(for: item) != nil {
             draft = session.draft
         }
@@ -9355,8 +9378,13 @@ private struct ComposerView: View {
     /// Sends a picked GIF as its provider link, with the composer's reply
     /// or thread relation; the typed draft is kept.
     var onSendGif: ((GifResult) -> Void)?
+    /// People picked from the @ suggestions; the send turns them into pills.
+    @Binding var mentions: [ComposerMention]
+    var currentUserID = ""
     @Environment(\.appEnvironment) private var environment
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The room's members, loaded the first time "@" is typed.
+    @State private var mentionMembers: [RoomMemberSummary]?
     @State private var typingNotifier: ComposerTypingNotifier?
     @State private var isAttachmentSheetPresented = false
     @State private var gifPickerRequest: GifPickerRequest?
@@ -9424,6 +9452,11 @@ private struct ComposerView: View {
                 composerAttachmentDrafts
             }
 
+            if mentionSuggestions.isEmpty == false {
+                ComposerMentionSuggestions(members: mentionSuggestions, onPick: pickMention)
+                    .transition(.opacity)
+            }
+
             if isFormattingBarVisible {
                 ComposerFormattingBar { format in
                     applyFormatting(format)
@@ -9453,6 +9486,11 @@ private struct ComposerView: View {
         .padding(.bottom, SynaraSpacing.xSmall)
         .animation(.easeInOut(duration: 0.18), value: isFormattingBarVisible)
         .animation(.easeInOut(duration: 0.18), value: shouldShowPromptMetrics)
+        .animation(.easeOut(duration: 0.12), value: mentionSuggestions.map(\.userID))
+        .task(id: mentionQuery == nil ? "" : roomID) {
+            guard mentionQuery != nil, mentionMembers == nil else { return }
+            mentionMembers = await environment.roomManagement.roomDetails(roomID: roomID)?.members ?? []
+        }
         .onChange(of: isComposerFocused) { focused in
             isFocusedExternally = focused
             updateOutgoingTyping()
@@ -9863,6 +9901,38 @@ private struct ComposerView: View {
         isComposerFocused = true
     }
 
+    private var mentionQuery: ComposerMentions.Query? {
+        guard composerSelection.length == 0 else { return nil }
+        return ComposerMentions.query(in: currentText, cursor: composerSelection.location)
+    }
+
+    private var mentionSuggestions: [RoomMemberSummary] {
+        guard let mentionQuery, let mentionMembers else { return [] }
+        return ComposerMentions.suggestions(
+            for: mentionQuery.text,
+            members: mentionMembers,
+            excluding: currentUserID
+        )
+    }
+
+    private func pickMention(_ member: RoomMemberSummary) {
+        guard let mentionQuery else { return }
+        let mention = ComposerMention(userID: member.userID, displayName: member.title)
+        let result = ComposerMentions.insert(
+            mention,
+            replacing: mentionQuery,
+            cursor: composerSelection.location,
+            in: currentText
+        )
+        setLiveText(result.text)
+        composerSelection = ComposerTextSelection(location: result.cursor, length: 0)
+        formattingRevision += 1
+        isComposerFocused = true
+        if mentions.contains(mention) == false {
+            mentions.append(mention)
+        }
+    }
+
     private func submitMessage() {
         guard isSending == false else {
             return
@@ -9951,6 +10021,50 @@ private struct ComposerView: View {
         if text != value {
             text = value
         }
+    }
+}
+
+/// Who "@" can mention: room members matching what follows it.
+private struct ComposerMentionSuggestions: View {
+    let members: [RoomMemberSummary]
+    let onPick: (RoomMemberSummary) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(members) { member in
+                Button {
+                    onPick(member)
+                } label: {
+                    HStack(spacing: SynaraSpacing.medium) {
+                        TimelineAvatar(senderID: member.userID, avatarURL: nil, size: 30)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(member.title)
+                                .font(SynaraTypography.emphasis)
+                                .foregroundStyle(SynaraColor.primaryText)
+                                .lineLimit(1)
+                            if member.title != member.userID {
+                                Text(member.userID)
+                                    .font(SynaraTypography.messageTime)
+                                    .foregroundStyle(SynaraColor.secondaryText)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, SynaraSpacing.medium)
+                    .frame(minHeight: 48)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(member.title)
+                .accessibilityHint(Text("Mentions \(member.userID)"))
+                .accessibilityIdentifier("MentionSuggestion-\(member.userID)")
+            }
+        }
+        .padding(.vertical, SynaraSpacing.xSmall)
+        .synaraChromeGlass(in: RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("MentionSuggestions")
     }
 }
 
