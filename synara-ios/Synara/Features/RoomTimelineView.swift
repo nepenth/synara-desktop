@@ -7469,6 +7469,9 @@ private struct TimelineRow: View {
             }
 
             bubbleWrappedBodyContent
+                // Flat rows have no fill to hit: the whole message width
+                // answers a long-press, not only its glyphs.
+                .contentShape(.interaction, Rectangle())
                 .contextMenu {
                     messageActions
                 } preview: {

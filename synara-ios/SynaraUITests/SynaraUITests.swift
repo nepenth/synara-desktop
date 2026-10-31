@@ -400,7 +400,7 @@ final class SynaraUITests: XCTestCase {
         timelineScreenshot.lifetime = .keepAlways
         add(timelineScreenshot)
 
-        message.press(forDuration: 0.8)
+        app.staticTexts["Can I take a pass on the reviewer roles?"].press(forDuration: 0.8)
         XCTAssertTrue(app.buttons["Reply"].waitForExistence(timeout: 5))
         if #available(iOS 17.0, *) {
             // The quick-reaction palette: six emoji, each its own button
