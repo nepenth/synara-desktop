@@ -5,7 +5,6 @@ import {
   isNativeCustomEmojiSource,
   isNativeOpenableHref,
   nativeCustomEmojiContentUri,
-  nativeFormattedBodyMentionsUser,
   nativeLinkHostMismatch,
   parseNativePermalink,
   shortLinkLabel,
@@ -78,20 +77,6 @@ test('ftp and magnet links show their address; web and mail links open', () => {
   assert.equal(isNativeOpenableHref('magnet:?xt=urn:btih:abc'), false);
 });
 
-test('mentions of the signed-in user are recognised for the row highlight', () => {
-  const html = '<a href="https://matrix.to/#/@me:example.org">Me</a> look';
-  assert.equal(nativeFormattedBodyMentionsUser(html, '@me:example.org'), true);
-  assert.equal(
-    nativeFormattedBodyMentionsUser(
-      '<a href="https://matrix.to/#/%40me%3Aexample.org">Me</a>',
-      '@me:example.org'
-    ),
-    true
-  );
-  assert.equal(nativeFormattedBodyMentionsUser(html, '@you:example.org'), false);
-  assert.equal(nativeFormattedBodyMentionsUser(undefined, '@me:example.org'), false);
-});
-
 test('formatted bodies navigate permalinks in app and show link destinations', () => {
   const body = readFileSync('src/app/features/room/nativeTimelineFormattedBody.tsx', 'utf8');
   assert.match(body, /\[IN_APP_LINK_ATTRIBUTE\]: ''/);
@@ -104,8 +89,13 @@ test('formatted bodies navigate permalinks in app and show link destinations', (
   assert.match(appLinks, /anchor\.hasAttribute\(IN_APP_LINK_ATTRIBUTE\)/);
   const room = readFileSync('src/app/features/room/Room.tsx', 'utf8');
   assert.match(room, /<NativePermalinkProvider value=\{permalinkHandler\}>/);
+  // A mention of you is marked on its pill, not across the whole message.
+  assert.match(
+    body,
+    /highlight: permalink\.kind === 'user' && permalink\.userId === context\.ownUserId/
+  );
   const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');
-  assert.match(presenter, /htmlCss\.MentionsMeRow/);
+  assert.doesNotMatch(presenter, /MentionsMeRow/);
 });
 
 test('a long bare web address shows as its site and path, without the query', () => {

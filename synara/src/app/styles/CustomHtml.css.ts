@@ -252,29 +252,34 @@ export const InlineChromiumBugfix = style({
   lineHeight: 0,
 });
 
+/**
+ * A mention or permalink pill: accent text on a light accent tint, and gold
+ * when it names you, as on iOS.
+ */
 export const Mention = recipe({
   base: [
     DefaultReset,
     {
-      backgroundColor: color.SurfaceVariant.Container,
-      color: color.SurfaceVariant.OnContainer,
-      boxShadow: `0 0 0 ${config.borderWidth.B300} ${color.SurfaceVariant.ContainerLine}`,
+      backgroundColor: `color-mix(in srgb, ${color.Primary.Main} 16%, transparent)`,
+      color: color.Primary.Main,
       padding: `0 ${toRem(2)}`,
       borderRadius: config.radii.R300,
-      fontWeight: config.fontWeight.W500,
+      fontWeight: config.fontWeight.W600,
+      textDecoration: 'none',
     },
   ],
   variants: {
     highlight: {
       true: {
-        backgroundColor: color.Success.Container,
-        color: color.Success.OnContainer,
-        boxShadow: `0 0 0 ${config.borderWidth.B300} ${color.Success.ContainerLine}`,
+        backgroundColor: 'color-mix(in srgb, #F5B400 22%, transparent)',
+        // The warning tone pulled toward gold: brown on light themes (4.5:1),
+        // warm gold on dark ones.
+        color: `color-mix(in srgb, ${color.Warning.Main} 75%, #F5B400)`,
       },
     },
     focus: {
       true: {
-        boxShadow: `0 0 0 ${config.borderWidth.B300} ${color.SurfaceVariant.OnContainer}`,
+        boxShadow: `0 0 0 ${config.borderWidth.B300} ${color.Primary.Main}`,
       },
     },
   },

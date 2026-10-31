@@ -144,7 +144,11 @@ import {
   NativeTimelineMediaViewer,
   type NativeTimelineMediaViewerTarget,
 } from './NativeTimelineMediaViewer';
-import { formatTimelineDayLabel, rowTimestampMs } from '../../utils/timelineDateMarks';
+import {
+  formatTimelineDayHeading,
+  formatTimelineDayLabel,
+  rowTimestampMs,
+} from '../../utils/timelineDateMarks';
 import {
   canPaginateTimelineForward,
   clearTimelinePaginationError,
@@ -173,7 +177,6 @@ import {
 } from './reactionSenders';
 import { resolveNativeFocusRouteAction } from './nativeFocusRoute';
 import { isNativeTimelineRowVisible } from './nativeTimelineRowFilter';
-import { nativeFormattedBodyMentionsUser } from './nativeTimelineLinks';
 import { preferredScrollBehavior } from '../../utils/motion';
 import { nativeTimelineArrivals } from './nativeTimelineAnnouncements';
 import { NativeTimelineMessageEditor } from './NativeTimelineMessageEditor';
@@ -1737,21 +1740,29 @@ const NativeTimelineThreadSurface = ({
 };
 
 const NativeTimelineReactionPills = ({
+  roomId,
   reactions,
   enabled,
   onReaction,
   onViewReactions,
 }: {
+  roomId: string;
   reactions?: NativeTimelineReaction[];
   enabled: boolean;
   onReaction: (key: string) => void;
   onViewReactions?: (key: string) => void;
 }) => {
   const names = useReactionSenderNames();
+  const [emojiBoardAnchor, setEmojiBoardAnchor] = useState<RectCords>();
+  const imagePackRooms = useMemo(() => [roomId], [roomId]);
   if (!reactions?.length) return null;
   const ownUserId = getMyUserId() ?? undefined;
+  const pick = (key: string) => {
+    onReaction(key);
+    setEmojiBoardAnchor(undefined);
+  };
   return (
-    <Box gap="100" wrap="Wrap">
+    <Box gap="100" wrap="Wrap" alignItems="Center">
       {reactions.map((reaction) => {
         const summary = reactionSendersSummary({
           reactionKey: reaction.key,
@@ -1786,22 +1797,52 @@ const NativeTimelineReactionPills = ({
                   onViewReactions(reaction.key);
                 }}
               >
-                <Button
-                  size="300"
-                  variant={reaction.own ? 'Primary' : 'Secondary'}
-                  fill="Soft"
+                <button
+                  type="button"
+                  className={`${htmlCss.ReactionPill}${reaction.own ? ` ${htmlCss.ReactionPillOwn}` : ''}`}
+                  aria-pressed={reaction.own}
                   disabled={!enabled}
                   aria-label={`${summary}.${viewHint}`}
                   onClick={() => enabled && onReaction(reaction.key)}
                   style={enabled ? undefined : { pointerEvents: 'none' }}
                 >
-                  {reaction.key} {reaction.count}
-                </Button>
+                  <span className={htmlCss.ReactionEmoji}>{reaction.key}</span>
+                  {reaction.count}
+                </button>
               </span>
             )}
           </TooltipProvider>
         );
       })}
+      {enabled && (
+        <PopOut
+          anchor={emojiBoardAnchor}
+          position="Top"
+          align="Start"
+          content={
+            <EmojiBoard
+              imagePackRooms={imagePackRooms}
+              addToRecentEmoji={false}
+              onEmojiSelect={pick}
+              onCustomEmojiSelect={pick}
+              requestClose={() => setEmojiBoardAnchor(undefined)}
+            />
+          }
+        >
+          <button
+            type="button"
+            className={`${htmlCss.ReactionPill} ${htmlCss.AddReactionPill}`}
+            title="Add reaction"
+            aria-label="Add reaction"
+            aria-haspopup="dialog"
+            aria-expanded={Boolean(emojiBoardAnchor)}
+            data-native-timeline-add-reaction="true"
+            onClick={(event) => setEmojiBoardAnchor(event.currentTarget.getBoundingClientRect())}
+          >
+            <Icon src={Icons.SmilePlus} size="100" />
+          </button>
+        </PopOut>
+      )}
     </Box>
   );
 };
@@ -2170,7 +2211,6 @@ const NativeTimelineRowImpl = ({
       const approvalPrompt = row.isAgentApproval
         ? formatCoreAgentApprovalPrompt(row.body)
         : undefined;
-      const mentionsMe = nativeFormattedBodyMentionsUser(row.formattedBody, getMyUserId());
       const embedsAllowed =
         !approvalPrompt &&
         !agentPayload &&
@@ -2236,10 +2276,7 @@ const NativeTimelineRowImpl = ({
             <Box
               direction="Column"
               gap="100"
-              className={`${rowClassName} ${htmlCss.MessageSwipeContent}${
-                mentionsMe ? ` ${htmlCss.MentionsMeRow}` : ''
-              }`}
-              data-native-timeline-mentions-me={mentionsMe || undefined}
+              className={`${rowClassName} ${htmlCss.MessageSwipeContent}`}
             >
               <Box gap="300" alignItems="Start">
                 <Box direction="Column" alignItems="Center" style={{ width: 36, flexShrink: 0 }}>
@@ -2312,7 +2349,7 @@ const NativeTimelineRowImpl = ({
                           style={{
                             whiteSpace: 'pre-wrap',
                             fontWeight: 400,
-                            lineHeight: 1.55,
+                            lineHeight: 1.47,
                             fontStyle: isEmote ? 'italic' : undefined,
                           }}
                         />
@@ -2349,6 +2386,7 @@ const NativeTimelineRowImpl = ({
                     onOpenMediaViewer={onOpenMediaViewer}
                   />
                   <NativeTimelineReactionPills
+                    roomId={roomId}
                     reactions={row.reactions}
                     enabled={Boolean(genericReactionCapabilities?.react)}
                     onReaction={runReaction}
@@ -2438,6 +2476,7 @@ const NativeTimelineRowImpl = ({
               onOpenThread={onOpenThread}
             />
             <NativeTimelineReactionPills
+              roomId={roomId}
               reactions={row.reactions}
               enabled={Boolean(genericReactionCapabilities?.react)}
               onReaction={runReaction}
@@ -2487,11 +2526,12 @@ const NativeTimelineRowImpl = ({
       );
     case 'date_separator':
       return row.timestampMs && Number.isFinite(row.timestampMs) ? (
-        <Box className={`${rowClassName} ${htmlCss.SystemRow}`}>
-          <span className={htmlCss.SystemRule} aria-hidden="true" />
-          <Text size="T300">{new Date(row.timestampMs).toLocaleDateString()}</Text>
-          <span className={htmlCss.SystemRule} aria-hidden="true" />
-        </Box>
+        <div className={`${rowClassName} ${htmlCss.DayHeader}`}>
+          <Text as="h2" className={htmlCss.DayHeaderLabel}>
+            {formatTimelineDayHeading(row.timestampMs)}
+          </Text>
+          <span className={htmlCss.DayHeaderRule} aria-hidden="true" />
+        </div>
       ) : null;
     case 'read_marker':
       return (
@@ -2651,6 +2691,7 @@ const NativeTimelineRowImpl = ({
               onOpenThread={onOpenThread}
             />
             <NativeTimelineReactionPills
+              roomId={roomId}
               reactions={row.reactions}
               enabled={Boolean(genericReactionCapabilities?.react)}
               onReaction={runReaction}

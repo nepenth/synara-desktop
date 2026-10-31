@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Room timeline (desktop): the conversation view follows the iOS restyle, sized for a desktop window. Each day starts with a bold heading ("Today", "Yesterday", or the weekday and date) over a full-width rule, instead of a small centered date. Sender names are bold and message text is a touch smaller and tighter (15 px on 22 px lines). Reactions are roomier pills, yours outlined in the accent colour, followed by an add-reaction pill that opens the emoji picker (the hover toolbar keeps its button too). A mention is a pill in the text, gold when it is you and blue for anyone else, with no underline; the tinted band across a whole message that mentions you is gone. The room title is bold, and the composer reads "Message #room" in a channel or "Message Name" in a DM.
+- Room header (iPad): the title capsule fits the room name instead of stretching across the pane.
+
 ## [2.7.5] - 2026-10-31
 
 - Room timeline (iOS): the conversation view takes after Slack's. Avatars are larger rounded squares, sender names are bold with a smaller time beside them, and each day starts with a bold left-aligned heading over a rule. Your own messages carry your name instead of "You". Reactions are roomier pills, followed by an add-reaction pill that offers your recent emoji. A mention is a pill in the text, gold when it is you and blue for anyone else, instead of a highlight across the whole message. The room header is a back button, a title capsule and a search and details capsule (Liquid Glass on iOS 26 and later), and the composer is one rounded field with the attach button inside, reading "Message #room" or "Message Name".

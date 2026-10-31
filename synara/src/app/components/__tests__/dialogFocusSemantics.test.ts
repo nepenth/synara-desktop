@@ -174,7 +174,15 @@ test('timestamps, composer and links do not rely on opacity or colour alone', ()
   );
 
   const html = source('src/app/features/room/nativeTimelineHtml.css.ts');
-  assert.match(html, /globalStyle\(`\$\{MessageBody\} a:not\(\.\$\{UnfurlLink\}\)`/);
+  assert.match(
+    html,
+    /globalStyle\(`\$\{MessageBody\} a:not\(\.\$\{UnfurlLink\}\):not\(\[data-mention-pill\]\)`/
+  );
+  // Mention pills skip the underline because a tinted fill marks them.
+  assert.match(
+    source('src/app/styles/CustomHtml.css.ts'),
+    /export const Mention = recipe\(\{[\s\S]*?backgroundColor: `color-mix/
+  );
   assert.match(html, /SpoilerButton = style\(\{[\s\S]*?color: 'var\(--synara-content-primary\)'/);
 });
 
