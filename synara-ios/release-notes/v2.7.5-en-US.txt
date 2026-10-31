@@ -1,0 +1,3 @@
+Synara 2.7.5 restyles the room timeline: rounded-square avatars, bold names, day headings, roomier reactions with an add-reaction pill, mention pills, and a glass header and composer. You can now mention people: type "@" in the composer and pick someone from the list.
+
+Please test: mentioning people with "@" (including in threads and when editing), whether the person you mention is notified, mentions of you showing gold, the add-reaction pill, and the header and composer on your iOS version.

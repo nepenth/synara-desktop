@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [2.7.5] - 2026-10-31
+
 - Room timeline (iOS): the conversation view takes after Slack's. Avatars are larger rounded squares, sender names are bold with a smaller time beside them, and each day starts with a bold left-aligned heading over a rule. Your own messages carry your name instead of "You". Reactions are roomier pills, followed by an add-reaction pill that offers your recent emoji. A mention is a pill in the text, gold when it is you and blue for anyone else, instead of a highlight across the whole message. The room header is a back button, a title capsule and a search and details capsule (Liquid Glass on iOS 26 and later), and the composer is one rounded field with the attach button inside, reading "Message #room" or "Message Name".
 - Mentions (iOS): typing "@" in the composer lists the room's members who match what follows it; picking one inserts "@Name". The message goes out with the same matrix.to pill desktop sends, and the people it mentions are listed in `m.mentions`, so they are notified. Editing a message keeps its mentions. iOS could not mention anyone before.
 
