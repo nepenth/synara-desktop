@@ -4375,6 +4375,13 @@ private struct TimelineHeader: View {
     let onDetails: () -> Void
     let onBack: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    /// On a wide screen the title capsule fits its text instead of
+    /// stretching across the pane.
+    private var titleFitsText: Bool {
+        horizontalSizeClass == .regular
+    }
 
     var body: some View {
         HStack(spacing: SynaraSpacing.small) {
@@ -4434,9 +4441,13 @@ private struct TimelineHeader: View {
             }
             .padding(.horizontal, SynaraSpacing.large)
             .padding(.vertical, 5)
-            .frame(maxWidth: .infinity, minHeight: SynaraHitTarget.minimum, alignment: .leading)
+            .frame(maxWidth: titleFitsText ? nil : .infinity, minHeight: SynaraHitTarget.minimum, alignment: .leading)
             .synaraChromeGlass(in: Capsule())
             .layoutPriority(1)
+
+            if titleFitsText {
+                Spacer(minLength: 0)
+            }
 
             HStack(spacing: 0) {
                 Button(action: onSearch) {
