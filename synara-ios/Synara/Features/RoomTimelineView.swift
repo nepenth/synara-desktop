@@ -708,7 +708,6 @@ struct RoomTimelineView: View {
                 RoomTypingIndicator(text: typingText)
             }
             RoomIdentityWarningBanner(roomID: roomID, crypto: environment.crypto)
-            Divider()
             ComposerView(
                 roomID: roomID,
                 text: $draft,
@@ -735,11 +734,6 @@ struct RoomTimelineView: View {
                 onSendGif: sendGif
             )
             .padding(.bottom, canvasLayout == .stacked && !isComposerFocused ? SynaraSpacing.large : 0)
-            .background { SynaraChrome.composer.ignoresSafeArea(edges: .bottom) }
-            .synaraDockedDepth(
-                .floating,
-                boundaryColor: isAgentRoom ? SynaraColor.agent : SynaraColor.separator
-            )
         }
         .background {
             (isAgentRoom ? SynaraChrome.agentReview : SynaraChrome.chat).ignoresSafeArea()
@@ -1897,7 +1891,7 @@ struct RoomTimelineView: View {
     }
 
     private var timelineHorizontalPadding: CGFloat {
-        horizontalSizeClass == .compact ? SynaraSpacing.small : SynaraSpacing.medium
+        SynaraSpacing.large
     }
 
     private var composerPlaceholder: String {
@@ -1906,9 +1900,15 @@ struct RoomTimelineView: View {
                 ? String(localized: "Edit unsent message...")
                 : String(localized: "Edit message...")
         }
-        return isAgentRoom
-            ? String(localized: "Reply to the agent workflow...")
-            : String(localized: "Send a message...")
+        if isAgentRoom {
+            return String(localized: "Reply to the agent workflow...")
+        }
+        switch SynaraRoomGlyph.glyph(for: roomSummary) {
+        case .channel:
+            return String(localized: "Message #\(displayRoomTitle)")
+        case .person:
+            return String(localized: "Message \(displayRoomTitle)")
+        }
     }
 
     private func isGroupedWithPrevious(index: Int, items: [TimelineItem]) -> Bool {
@@ -4365,20 +4365,21 @@ private struct TimelineHeader: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HStack(spacing: SynaraSpacing.medium) {
+        HStack(spacing: SynaraSpacing.small) {
             if showsBackButton {
                 Button(action: onBack) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 19, weight: .semibold))
                         .frame(width: SynaraHitTarget.minimum, height: SynaraHitTarget.minimum)
-                        .contentShape(Rectangle())
+                        .synaraChromeGlass(in: Circle(), interactive: true)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .padding(.leading, -5)
+                .foregroundStyle(SynaraColor.primaryText)
                 .accessibilityLabel("Back")
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
                 HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.xSmall) {
                     // At accessibility sizes the glyph would take the
                     // title's width.
@@ -4397,7 +4398,7 @@ private struct TimelineHeader: View {
                     }
                     Text(title)
                         .accessibilityIdentifier("TimelineRoomTitle")
-                        .font(SynaraTypography.sectionTitle.weight(.semibold))
+                        .font(SynaraTypography.sectionTitle.weight(.bold))
                         .foregroundStyle(SynaraColor.headingText)
                         .lineLimit(SynaraDynamicTypeLayout.titleLineLimit(dynamicTypeSize))
                         .fixedSize(horizontal: false, vertical: true)
@@ -4415,13 +4416,15 @@ private struct TimelineHeader: View {
                             .accessibilityIdentifier("RoomEncryptionStatus")
                     }
                 }
-                .font(SynaraTypography.messageMeta)
+                .font(SynaraTypography.messageTime)
                 .foregroundStyle(SynaraColor.secondaryText)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
             }
+            .padding(.horizontal, SynaraSpacing.large)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, minHeight: SynaraHitTarget.minimum, alignment: .leading)
+            .synaraChromeGlass(in: Capsule())
             .layoutPriority(1)
-
-            Spacer(minLength: 0)
 
             HStack(spacing: 0) {
                 Button(action: onSearch) {
@@ -4443,15 +4446,13 @@ private struct TimelineHeader: View {
                 .accessibilityLabel("Room details")
                 .accessibilityIdentifier("RoomDetailsButton")
             }
-            .padding(.trailing, -SynaraSpacing.small)
+            .padding(.horizontal, SynaraSpacing.xSmall)
+            .synaraChromeGlass(in: Capsule(), interactive: true)
             .foregroundStyle(SynaraColor.primaryText)
         }
         .padding(.horizontal, SynaraSpacing.large)
-        .padding(.vertical, SynaraSpacing.small)
-        .background(SynaraColor.surface)
-        .overlay(alignment: .bottom) {
-            Divider()
-        }
+        .padding(.top, SynaraSpacing.xSmall)
+        .padding(.bottom, SynaraSpacing.small)
     }
 }
 
@@ -4602,8 +4603,6 @@ struct ThreadTimelineView: View {
             )
 
             threadContent
-
-            Divider()
 
             ComposerView(
                 roomID: roomID,
@@ -5685,7 +5684,7 @@ private struct MessageTextSelectionSheet: View {
                         Text(attributedRichText(projection.richText, includeLinks: false))
                             .font(SynaraTypography.messageBody)
                             .foregroundStyle(SynaraColor.primaryText)
-                            .lineSpacing(2.5)
+                            .lineSpacing(SynaraTypography.messageLineSpacing)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .fixedSize(horizontal: false, vertical: true)
@@ -5744,10 +5743,18 @@ struct MatrixRichTextPresentationContext {
     let appliesStandardOwnMessageTint: Bool
     /// Show a link whose text is its own long address as a short label.
     var shortensLinks = false
+    /// Mentions of this user are painted as your own (gold) pills.
+    var currentUserID: String?
 
     func shortensLinks(_ enabled: Bool) -> Self {
         var copy = self
         copy.shortensLinks = enabled
+        return copy
+    }
+
+    func mentions(currentUserID: String) -> Self {
+        var copy = self
+        copy.currentUserID = currentUserID
         return copy
     }
 
@@ -5861,7 +5868,7 @@ private struct MatrixHeadingBlockView: View {
         )
             .font(headingFont)
             .foregroundStyle(SynaraColor.primaryText)
-            .lineSpacing(2.5)
+            .lineSpacing(SynaraTypography.messageLineSpacing)
             .lineLimit(nil)
             .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
@@ -5938,7 +5945,7 @@ private struct MatrixRichTextView: View {
         Text(attributedRichText(displayText, presentationContext: presentationContext))
             .font(font)
             .foregroundStyle(SynaraColor.primaryText)
-            .lineSpacing(2.5)
+            .lineSpacing(SynaraTypography.messageLineSpacing)
             .lineLimit(nil)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -6015,7 +6022,7 @@ private struct MatrixInlineGroupView: View {
         )
             .font(font)
             .foregroundStyle(SynaraColor.primaryText)
-            .lineSpacing(2.5)
+            .lineSpacing(SynaraTypography.messageLineSpacing)
             .lineLimit(nil)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -6043,7 +6050,7 @@ private struct MatrixSpoilerBlockView: View {
             )
             .font(font)
             .foregroundStyle(SynaraColor.primaryText)
-            .lineSpacing(2.5)
+            .lineSpacing(SynaraTypography.messageLineSpacing)
             .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, SynaraSpacing.small)
@@ -6266,7 +6273,10 @@ func attributedRichText(
         let shortLabel = includeLinks && presentationContext.shortensLinks
             ? run.link.flatMap { SynaraShortLinks.label(text: run.text, url: $0) }
             : nil
-        var value = AttributedString(shortLabel ?? run.text)
+        let mentionedUserID = includeLinks ? run.link.flatMap(TimelineMentionPolicy.userID(inPermalink:)) : nil
+        var value = AttributedString(
+            mentionedUserID.map { _ in TimelineMentionPolicy.pillLabel(run.text) } ?? shortLabel ?? run.text
+        )
         var intent: InlinePresentationIntent = []
         if run.style.contains(.bold) {
             intent.insert(.stronglyEmphasized)
@@ -6333,6 +6343,12 @@ func attributedRichText(
         }
         if includeLinks {
             value.link = run.link
+        }
+        if let mentionedUserID {
+            let isSelf = mentionedUserID == presentationContext.currentUserID
+            value.foregroundColor = isSelf ? SynaraColor.selfMentionText : SynaraColor.accentText
+            value.backgroundColor = isSelf ? SynaraColor.selfMentionFill : SynaraColor.accent.opacity(0.16)
+            value.inlinePresentationIntent = (value.inlinePresentationIntent ?? []).union(.stronglyEmphasized)
         }
         output.append(value)
     }
@@ -6444,11 +6460,15 @@ private struct TimelineAvatar: View {
     @Environment(\.appEnvironment) private var environment
     @State private var avatarImage: UIImage?
 
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: SynaraRadius.avatar(size), style: .continuous)
+    }
+
     var body: some View {
         avatarContent
             .frame(width: size, height: size)
-            .clipShape(Circle())
-            .synaraDepth(.avatar, shape: Circle(), boundaryColor: SynaraColor.elevatedSurface)
+            .clipShape(shape)
+            .synaraDepth(.avatar, shape: shape, boundaryColor: SynaraColor.elevatedSurface)
             .task(id: avatarTaskID) {
                 await loadAvatar()
             }
@@ -6462,13 +6482,13 @@ private struct TimelineAvatar: View {
                 .resizable()
                 .scaledToFill()
                 .frame(width: size, height: size)
-                .clipShape(Circle())
+                .clipShape(shape)
         } else {
-            Circle()
+            shape
                 .fill(avatarFill)
                 .overlay {
                     Text(initials)
-                        .font(.system(size: size * 0.34, weight: .semibold))
+                        .font(.system(size: size * 0.42, weight: .semibold))
                         .foregroundStyle(Color.white)
                 }
         }
@@ -7129,33 +7149,27 @@ private struct CryptoRecoveryBanner: View {
     }
 }
 
-/// A message that mentions you: a soft accent wash with an accent rule on its
-/// leading edge, as desktop marks its mention rows.
-private struct TimelineMentionHighlight: View {
-    var body: some View {
-        RoundedRectangle(cornerRadius: SynaraRadius.small, style: .continuous)
-            .fill(SynaraColor.accent.opacity(0.10))
-            .overlay(alignment: .leading) {
-                Capsule()
-                    .fill(SynaraColor.accent)
-                    .frame(width: 3)
-            }
-            .accessibilityHidden(true)
-    }
-}
-
-/// Whether a message mentions a user: its formatted body links them with a
-/// matrix.to pill, the same rule desktop uses.
+/// Mentions are matrix.to user links, painted as pills in the message text.
 enum TimelineMentionPolicy {
-    static func mentions(userID: String, in kind: TimelineItem.Kind) -> Bool {
-        guard userID.isEmpty == false, case let .formattedText(_, html) = kind else {
-            return false
+    /// The user a matrix.to link points at ("@ada:example.org"), or nil for
+    /// rooms, events and other links.
+    static func userID(inPermalink url: URL) -> String? {
+        guard url.host?.lowercased() == "matrix.to", let fragment = url.fragment else {
+            return nil
         }
-        // As JavaScript's encodeURIComponent writes it (desktop's pills).
-        var unreserved = CharacterSet.alphanumerics
-        unreserved.insert(charactersIn: "-_.!~*'()")
-        let encoded = userID.addingPercentEncoding(withAllowedCharacters: unreserved) ?? userID
-        return html.contains("matrix.to/#/\(userID)") || html.contains("matrix.to/#/\(encoded)")
+        let path = fragment.hasPrefix("/") ? String(fragment.dropFirst()) : fragment
+        let first = path.split(separator: "?", maxSplits: 1).first.map(String.init) ?? path
+        let decoded = first.removingPercentEncoding ?? first
+        guard decoded.hasPrefix("@"), decoded.contains(":"), decoded.contains("/") == false else {
+            return nil
+        }
+        return decoded
+    }
+
+    /// A mention's pill text: "@Name", with hair spaces so its fill has room.
+    static func pillLabel(_ text: String) -> String {
+        let name = text.trimmingCharacters(in: .whitespaces)
+        return "\u{200A}" + (name.hasPrefix("@") ? name : "@" + name) + "\u{200A}"
     }
 }
 
@@ -7231,15 +7245,15 @@ private struct TimelineRow: View {
                     HStack(alignment: .center, spacing: SynaraSpacing.small) {
                         HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
                             Text(senderDisplayName)
-                                .font(SynaraTypography.emphasis)
+                                .font(SynaraTypography.messageSender)
                                 .foregroundStyle(SynaraColor.headingText)
                                 .lineLimit(1)
                             Text(timeText)
-                                .font(SynaraTypography.messageMeta)
+                                .font(SynaraTypography.messageTime)
                                 .foregroundStyle(SynaraColor.secondaryText)
                             if item.isEdited {
                                 Text("edited")
-                                    .font(SynaraTypography.messageMeta)
+                                    .font(SynaraTypography.messageTime)
                                     .foregroundStyle(SynaraColor.tertiaryText)
                             }
                         }
@@ -7277,15 +7291,8 @@ private struct TimelineRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, mentionsCurrentUser ? SynaraSpacing.xSmall : 0)
-        .padding(.leading, mentionsCurrentUser ? SynaraSpacing.small : 0)
-        .background {
-            if mentionsCurrentUser {
-                TimelineMentionHighlight()
-            }
-        }
         // Messages from one sender sit close; a new sender starts a clear gap.
-        .padding(.top, isGroupedWithPrevious ? 2 : 14)
+        .padding(.top, isGroupedWithPrevious ? 2 : SynaraSpacing.medium)
         .accessibilityElement(children: accessibilityChildBehavior)
         .accessibilityLabel(accessibilitySummary)
         .accessibilityHint(accessibilityHint)
@@ -7489,7 +7496,7 @@ private struct TimelineRow: View {
                     availability: availability,
                     ownership: item.reactionOwnership
                 )
-                HStack(spacing: SynaraSpacing.xSmall) {
+                HStack(spacing: SynaraSpacing.small) {
                     ForEach(Array(item.reactions.keys.sorted().enumerated()), id: \.element) { index, reaction in
                         ReactionPill(
                             title: reaction,
@@ -7500,6 +7507,9 @@ private struct TimelineRow: View {
                             onToggle: canToggleReactions ? { onToggleReaction(reaction) } : nil,
                             onShowSenders: onShowReactions.map { show in { show(reaction) } }
                         )
+                    }
+                    if canToggleReactions {
+                        addReactionPill
                     }
                 }
             }
@@ -7614,6 +7624,7 @@ private struct TimelineRow: View {
                             ? MatrixRichTextPresentationContext.ownMessage
                             : .otherMessage)
                             .shortensLinks(environment.settings.bool(for: SynaraShortLinks.settingKey))
+                            .mentions(currentUserID: currentUserID)
                     )
                 }
             case .encryptedPlaceholder:
@@ -7784,13 +7795,10 @@ private struct TimelineRow: View {
         voiceOverEnabled || switchControlEnabled
     }
 
-    private var mentionsCurrentUser: Bool {
-        isOutgoing == false && TimelineMentionPolicy.mentions(userID: currentUserID, in: item.kind)
-    }
-
     private var accessibilitySummary: String {
         TimelineRowAccessibility.summary(
-            sender: senderDisplayName,
+            // VoiceOver still says "You" for your own messages.
+            sender: item.resolvedSenderDisplayName(currentUserID: currentUserID),
             time: timeText,
             // A played GIF link reads as "GIF", not as its URL.
             kind: inlineGif == nil ? item.kind : .text(String(localized: "GIF")),
@@ -7848,6 +7856,23 @@ private struct TimelineRow: View {
                 Label("React", systemImage: "face.smiling")
             }
         }
+    }
+
+    private var addReactionPill: some View {
+        Menu {
+            quickReactionButtons
+        } label: {
+            Image(systemName: "face.smiling")
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(SynaraColor.secondaryText)
+                .padding(.horizontal, ReactionPill.horizontalPadding)
+                .frame(minHeight: ReactionPill.height)
+                .background(ReactionPill.fill, in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Add Reaction")
+        .accessibilityIdentifier("TimelineItemAddReaction-\(item.eventID)")
     }
 
     private var quickReactionButtons: some View {
@@ -7969,7 +7994,7 @@ private struct TimelineRow: View {
     }
 
     private var avatarSize: CGFloat {
-        isCompactWidth ? 28 : 30
+        isCompactWidth ? 38 : 40
     }
 
     private var groupedLeadingGutter: CGFloat {
@@ -7977,7 +8002,7 @@ private struct TimelineRow: View {
     }
 
     private var rowHorizontalSpacing: CGFloat {
-        SynaraSpacing.small
+        SynaraSpacing.medium
     }
 
     @ViewBuilder
@@ -8009,7 +8034,8 @@ private struct TimelineRow: View {
             return item.senderID
         }
 
-        return item.resolvedSenderDisplayName(currentUserID: currentUserID)
+        // Your own messages carry your name, as everyone else sees them.
+        return item.senderDisplayName
     }
 
     /// "👍, 3 reactions: Alice, Bob and you".
@@ -8219,22 +8245,18 @@ private struct TimelineDayHeader: View {
 
     var body: some View {
         let label = TimelineDayHeaderPolicy.label(for: day)
-        HStack(spacing: SynaraSpacing.medium) {
-            Rectangle()
-                .fill(SynaraColor.separator.opacity(0.55))
-                .frame(height: 0.5)
+        VStack(alignment: .leading, spacing: SynaraSpacing.small) {
             Text(label)
-                .font(SynaraTypography.chipLabel)
-                .foregroundStyle(SynaraColor.secondaryText)
-                .multilineTextAlignment(.center)
+                .font(SynaraTypography.dayHeader)
+                .foregroundStyle(SynaraColor.headingText)
                 .lineLimit(SynaraDynamicTypeLayout.ruleLabelLineLimit(dynamicTypeSize))
-                .fixedSize(horizontal: dynamicTypeSize.isAccessibilitySize == false, vertical: true)
-                .layoutPriority(1)
+                .fixedSize(horizontal: false, vertical: true)
             Rectangle()
-                .fill(SynaraColor.separator.opacity(0.55))
+                .fill(SynaraColor.separator.opacity(0.7))
                 .frame(height: 0.5)
         }
-        .frame(maxWidth: .infinity)
+        .padding(.top, SynaraSpacing.small)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
         .accessibilityAddTraits(.isHeader)
@@ -8722,20 +8744,28 @@ private struct ReactionPill: View {
         }
     }
 
+    static let height: CGFloat = 32
+    static let fill = SynaraColor.primaryText.opacity(0.09)
+    static let horizontalPadding: CGFloat = 10
+
     private var pill: some View {
-        HStack(spacing: SynaraSpacing.xSmall) {
+        HStack(spacing: 6) {
             Text(title)
-                .font(SynaraTypography.messageMeta)
+                .font(.system(size: 17))
             Text("\(count)")
-                .font(SynaraTypography.chipLabel)
+                .font(.subheadline.weight(.semibold))
                 .monospacedDigit()
         }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
+        .padding(.horizontal, Self.horizontalPadding)
+        .frame(minHeight: Self.height)
         .foregroundStyle(isSelected ? SynaraColor.accentText : SynaraColor.primaryText)
-        .background(isSelected ? SynaraColor.accent.opacity(0.14) : SynaraColor.elevatedSurface)
+        .background(isSelected ? SynaraColor.accent.opacity(0.18) : Self.fill)
         .clipShape(Capsule())
-        .synaraDepth(.layered, shape: Capsule(), boundaryColor: isSelected ? SynaraColor.accent : SynaraColor.separator)
+        .overlay {
+            if isSelected {
+                Capsule().strokeBorder(SynaraColor.accent.opacity(0.8), lineWidth: 1)
+            }
+        }
         .synaraReactionPop(animationIndex: animationIndex, animationKey: reactionAnimationKey)
     }
 }
@@ -9418,13 +9448,9 @@ private struct ComposerView: View {
                     .accessibilityIdentifier("MediaUploadErrorText")
             }
         }
-        .padding(.horizontal, SynaraSpacing.small)
+        .padding(.horizontal, SynaraSpacing.medium)
         .padding(.top, SynaraSpacing.xSmall)
         .padding(.bottom, SynaraSpacing.xSmall)
-        .background {
-            SynaraChrome.composer
-                .ignoresSafeArea(.container, edges: .bottom)
-        }
         .animation(.easeInOut(duration: 0.18), value: isFormattingBarVisible)
         .animation(.easeInOut(duration: 0.18), value: shouldShowPromptMetrics)
         .onChange(of: isComposerFocused) { focused in
@@ -9568,9 +9594,8 @@ private struct ComposerView: View {
                 }
             }
         } else {
-            HStack(alignment: .center, spacing: SynaraSpacing.xSmall) {
-                attachmentButton
-                composerInputSurface(showsFormattingToggle: true)
+            HStack(alignment: .bottom, spacing: SynaraSpacing.xSmall) {
+                composerInputSurface(showsFormattingToggle: true, showsAttachment: true)
                 sendButton
             }
         }
@@ -9581,12 +9606,11 @@ private struct ComposerView: View {
             isAttachmentSheetPresented = true
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 20, weight: .regular))
                 .frame(width: 34, height: 34)
-                .background(SynaraColor.secondarySurface)
-                .foregroundStyle(SynaraColor.secondaryText)
+                .background(SynaraColor.secondarySurface.opacity(0.7))
+                .foregroundStyle(SynaraColor.primaryText)
                 .clipShape(Circle())
-                .synaraDepth(.layered, shape: Circle())
                 .frame(width: 44, height: 44)
         }
         .buttonStyle(SynaraTactileButtonStyle())
@@ -9639,22 +9663,25 @@ private struct ComposerView: View {
         }
     }
 
-    private func composerInputSurface(showsFormattingToggle: Bool) -> some View {
-        HStack(alignment: .center, spacing: SynaraSpacing.xSmall) {
+    private func composerInputSurface(showsFormattingToggle: Bool, showsAttachment: Bool = false) -> some View {
+        HStack(alignment: .bottom, spacing: SynaraSpacing.xSmall) {
+            if showsAttachment {
+                attachmentButton
+            }
+
             composerField
+                .frame(minHeight: SynaraHitTarget.minimum)
 
             if showsFormattingToggle {
                 formattingButton
             }
         }
-        .padding(.leading, SynaraSpacing.small)
+        .padding(.leading, showsAttachment ? 0 : SynaraSpacing.small)
         .padding(.trailing, SynaraSpacing.xSmall)
-        .padding(.vertical, 5)
-        .background {
-            RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
-                .fill(SynaraColor.surface)
-        }
-        .synaraDepth(.layered, cornerRadius: SynaraRadius.composer)
+        .padding(.vertical, 2)
+        .synaraChromeGlass(
+            in: RoundedRectangle(cornerRadius: SynaraRadius.composer + 2, style: .continuous)
+        )
     }
 
     private var canSubmit: Bool {

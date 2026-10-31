@@ -551,7 +551,7 @@ extension SynaraMessageBubble where Content == AnyView {
                 Text(SynaraPlainTextLinks.attributedText(text, shortensLinks: shortensLinks))
                     .font(SynaraTypography.messageBody)
                     .foregroundStyle(synaraMessageBubbleTextColor(for: variant))
-                    .lineSpacing(2.5)
+                    .lineSpacing(SynaraTypography.messageLineSpacing)
                     .lineLimit(nil)
                     .textSelection(.enabled)
                     .frame(

@@ -200,21 +200,18 @@ final class TimelinePolishTests: XCTestCase {
         XCTAssertNil(label("mailto:someone.with.a.very.long.address@example-company-domain.test"))
     }
 
-    func testMentionHighlightNeedsAPillForTheCurrentUser() {
-        let me = "@ada:example.org"
-        let pill = TimelineItem.Kind.formattedText(
-            body: "Ada look",
-            html: "<a href=\"https://matrix.to/#/@ada:example.org\">Ada</a> look"
-        )
-        let encodedPill = TimelineItem.Kind.formattedText(
-            body: "Ada look",
-            html: "<a href=\"https://matrix.to/#/%40ada%3Aexample.org\">Ada</a> look"
-        )
-        XCTAssertTrue(TimelineMentionPolicy.mentions(userID: me, in: pill))
-        XCTAssertTrue(TimelineMentionPolicy.mentions(userID: me, in: encodedPill))
-        XCTAssertFalse(TimelineMentionPolicy.mentions(userID: "@bob:example.org", in: pill))
-        XCTAssertFalse(TimelineMentionPolicy.mentions(userID: me, in: .text("@ada:example.org hi")))
-        XCTAssertFalse(TimelineMentionPolicy.mentions(userID: "", in: pill))
+    func testMentionPillsComeFromMatrixToUserLinks() {
+        func user(_ link: String) -> String? {
+            URL(string: link).flatMap(TimelineMentionPolicy.userID(inPermalink:))
+        }
+        XCTAssertEqual(user("https://matrix.to/#/@ada:example.org"), "@ada:example.org")
+        XCTAssertEqual(user("https://matrix.to/#/%40ada%3Aexample.org"), "@ada:example.org")
+        XCTAssertEqual(user("https://matrix.to/#/@ada:example.org?via=example.org"), "@ada:example.org")
+        XCTAssertNil(user("https://matrix.to/#/!room:example.org"))
+        XCTAssertNil(user("https://matrix.to/#/!room:example.org/$event"))
+        XCTAssertNil(user("https://example.org/#/@ada:example.org"))
+        XCTAssertEqual(TimelineMentionPolicy.pillLabel("Ada"), "\u{200A}@Ada\u{200A}")
+        XCTAssertEqual(TimelineMentionPolicy.pillLabel("@Ada"), "\u{200A}@Ada\u{200A}")
     }
 
     // MARK: Reactions (I21)
