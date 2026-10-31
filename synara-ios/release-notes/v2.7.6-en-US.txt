@@ -1,0 +1,3 @@
+Synara 2.7.6 tidies the iPad room header: the room title capsule now fits the room name instead of stretching across the screen. The desktop apps get the same timeline restyle iOS got in 2.7.5.
+
+Please test: the room header on iPad in portrait and landscape and with the sidebar hidden, and that mentions, reactions and the composer still work as in 2.7.5.

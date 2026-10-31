@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [2.7.6] - 2026-10-31
+
 - Room timeline (desktop): the conversation view follows the iOS restyle, sized for a desktop window. Each day starts with a bold heading ("Today", "Yesterday", or the weekday and date) over a full-width rule, instead of a small centered date. Sender names are bold and message text is a touch smaller and tighter (15 px on 22 px lines). Reactions are roomier pills, yours outlined in the accent colour, followed by an add-reaction pill that opens the emoji picker (the hover toolbar keeps its button too). A mention is a pill in the text, gold when it is you and blue for anyone else, with no underline; the tinted band across a whole message that mentions you is gone. The room title is bold, and the composer reads "Message #room" in a channel or "Message Name" in a DM.
 - Room header (iPad): the title capsule fits the room name instead of stretching across the pane.
 
