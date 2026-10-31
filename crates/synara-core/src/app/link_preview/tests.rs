@@ -559,9 +559,12 @@ async fn slow_page_server(delay: Duration) -> (String, Arc<std::sync::atomic::At
                     "HTTP/1.1 200 OK\r\ncontent-type: text/html\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
                     body.len()
                 );
+                // Close the count before answering: once the client has the
+                // response it may start the next fetch, which must not see
+                // this one still open.
+                open.fetch_sub(1, Ordering::SeqCst);
                 let _ = socket.write_all(response.as_bytes()).await;
                 let _ = socket.shutdown().await;
-                open.fetch_sub(1, Ordering::SeqCst);
             });
         }
     });
