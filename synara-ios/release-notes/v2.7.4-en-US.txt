@@ -1,0 +1,3 @@
+Synara 2.7.4 makes the room timeline easier to read: messages are flat rows under the sender's name, with no outlines or per-message buttons. Long-press a message for its actions. Replies quote on one line, and messages that mention you are highlighted.
+
+Please test: reading busy rooms, long-pressing messages (including beside short ones) for actions and reactions, replies, mentions of you, and VoiceOver on a message.

@@ -16,7 +16,7 @@ Synara does not ship a standalone browser client. The React/Vite package under
 
 ## Install
 
-Current desktop release: [v2.7.3](https://github.com/nepenth/synara-desktop/releases/tag/v2.7.3).
+Current desktop release: [v2.7.4](https://github.com/nepenth/synara-desktop/releases/tag/v2.7.4).
 Every release is listed on the [releases page](https://github.com/nepenth/synara-desktop/releases),
 and [CHANGELOG.md](CHANGELOG.md) describes each one.
 
