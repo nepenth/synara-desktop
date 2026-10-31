@@ -200,21 +200,72 @@ final class TimelinePolishTests: XCTestCase {
         XCTAssertNil(label("mailto:someone.with.a.very.long.address@example-company-domain.test"))
     }
 
-    func testMentionHighlightNeedsAPillForTheCurrentUser() {
-        let me = "@ada:example.org"
-        let pill = TimelineItem.Kind.formattedText(
-            body: "Ada look",
-            html: "<a href=\"https://matrix.to/#/@ada:example.org\">Ada</a> look"
+    func testMentionPillsComeFromMatrixToUserLinks() {
+        func user(_ link: String) -> String? {
+            URL(string: link).flatMap(TimelineMentionPolicy.userID(inPermalink:))
+        }
+        XCTAssertEqual(user("https://matrix.to/#/@ada:example.org"), "@ada:example.org")
+        XCTAssertEqual(user("https://matrix.to/#/%40ada%3Aexample.org"), "@ada:example.org")
+        XCTAssertEqual(user("https://matrix.to/#/@ada:example.org?via=example.org"), "@ada:example.org")
+        XCTAssertNil(user("https://matrix.to/#/!room:example.org"))
+        XCTAssertNil(user("https://matrix.to/#/!room:example.org/$event"))
+        XCTAssertNil(user("https://example.org/#/@ada:example.org"))
+        XCTAssertEqual(TimelineMentionPolicy.pillLabel("Ada"), "\u{200A}@Ada\u{200A}")
+        XCTAssertEqual(TimelineMentionPolicy.pillLabel("@Ada"), "\u{200A}@Ada\u{200A}")
+    }
+
+    func testComposerMentionQueryNeedsTheAtToStartAWord() {
+        XCTAssertEqual(ComposerMentions.query(in: "hi @al", cursor: 6), .init(location: 3, text: "al"))
+        XCTAssertEqual(ComposerMentions.query(in: "@", cursor: 1), .init(location: 0, text: ""))
+        XCTAssertNil(ComposerMentions.query(in: "mail@al", cursor: 7))
+        XCTAssertNil(ComposerMentions.query(in: "@al ex", cursor: 6))
+        XCTAssertNil(ComposerMentions.query(in: "hi", cursor: 2))
+    }
+
+    func testComposerMentionSuggestionsRankNamesAndSkipYouAndLeavers() {
+        let members = [
+            RoomMemberSummary(userID: "@me:example.org", displayName: "Alma", membership: .join, powerLevel: 0),
+            RoomMemberSummary(userID: "@alex:example.org", displayName: "Alex Kim", membership: .join, powerLevel: 0),
+            RoomMemberSummary(userID: "@sam:example.org", displayName: "Sam Alvarez", membership: .invite, powerLevel: 0),
+            RoomMemberSummary(userID: "@al:example.org", displayName: "Gone Al", membership: .leave, powerLevel: 0),
+        ]
+        let picked = ComposerMentions.suggestions(for: "al", members: members, excluding: "@me:example.org")
+        XCTAssertEqual(picked.map(\.userID), ["@alex:example.org", "@sam:example.org"])
+    }
+
+    func testComposerMentionInsertAndResolveMakeDesktopPills() {
+        let alex = ComposerMention(userID: "@alex:example.org", displayName: "Alex Kim")
+        let inserted = ComposerMentions.insert(
+            alex,
+            replacing: .init(location: 3, text: "al"),
+            cursor: 6,
+            in: "hi @al"
         )
-        let encodedPill = TimelineItem.Kind.formattedText(
-            body: "Ada look",
-            html: "<a href=\"https://matrix.to/#/%40ada%3Aexample.org\">Ada</a> look"
+        XCTAssertEqual(inserted.text, "hi @Alex Kim ")
+        XCTAssertEqual(inserted.cursor, 13)
+
+        let me = ComposerMention(userID: "@me:example.org", displayName: "Me")
+        let resolved = ComposerMentions.resolve(
+            "@Alex Kim and @Me, not @Alex Kimberly",
+            mentions: [alex, me],
+            currentUserID: "@me:example.org"
         )
-        XCTAssertTrue(TimelineMentionPolicy.mentions(userID: me, in: pill))
-        XCTAssertTrue(TimelineMentionPolicy.mentions(userID: me, in: encodedPill))
-        XCTAssertFalse(TimelineMentionPolicy.mentions(userID: "@bob:example.org", in: pill))
-        XCTAssertFalse(TimelineMentionPolicy.mentions(userID: me, in: .text("@ada:example.org hi")))
-        XCTAssertFalse(TimelineMentionPolicy.mentions(userID: "", in: pill))
+        XCTAssertEqual(
+            resolved.markdown,
+            "[@Alex Kim](https://matrix.to/#/@alex:example.org) and [@Me](https://matrix.to/#/@me:example.org), not @Alex Kimberly"
+        )
+        XCTAssertEqual(resolved.userIDs, ["@alex:example.org"])
+
+        let html = ComposerMatrixFormatting.formattedBody(for: resolved.markdown) ?? ""
+        XCTAssertTrue(html.contains("<a href=\"https://matrix.to/#/@alex:example.org\">@Alex Kim</a>"), html)
+    }
+
+    func testComposerMentionsComeBackWhenEditingAPilledMessage() {
+        let found = ComposerMentions.mentions(
+            inHTML: "<a href=\"https://matrix.to/#/@alex:example.org\">@Alex</a> hi"
+        )
+        XCTAssertEqual(found.map(\.label), ["@Alex", "@alex:example.org"])
+        XCTAssertEqual(Set(found.map(\.userID)), ["@alex:example.org"])
     }
 
     // MARK: Reactions (I21)

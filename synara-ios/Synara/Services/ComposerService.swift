@@ -13,6 +13,8 @@ struct MessageSendRequest: Equatable {
     /// Caller transaction id of a text send. Core answers a repeat with the
     /// same id with the request it already enqueued, never a second event.
     let transactionID: String?
+    /// People the message mentions (`m.mentions`), so they are notified.
+    let mentionUserIDs: [String]?
 
     init(
         roomID: String,
@@ -21,7 +23,8 @@ struct MessageSendRequest: Equatable {
         replyToEventID: String?,
         editEventID: String?,
         threadRootEventID: String? = nil,
-        transactionID: String? = nil
+        transactionID: String? = nil,
+        mentionUserIDs: [String]? = nil
     ) {
         self.roomID = roomID
         self.body = body
@@ -30,6 +33,7 @@ struct MessageSendRequest: Equatable {
         self.editEventID = editEventID
         self.threadRootEventID = threadRootEventID
         self.transactionID = transactionID
+        self.mentionUserIDs = mentionUserIDs
     }
 }
 
@@ -109,6 +113,7 @@ final class ComposerLocalStore: @unchecked Sendable {
         let senderID: String
         let timestamp: Date
         var failed: Bool
+        var mentionUserIDs: [String]? = nil
     }
 
     struct Snapshot: Codable, Equatable {

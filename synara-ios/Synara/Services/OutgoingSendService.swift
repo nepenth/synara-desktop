@@ -148,6 +148,8 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
     var transactionID: String?
     /// Server event id when Core already knew it.
     var serverEventID: String?
+    /// People the message mentions (`m.mentions`).
+    var mentionUserIDs: [String]?
 
     init(
         id: String,
@@ -162,7 +164,8 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
         timestamp: Date,
         deliveryStatus: TimelineDeliveryStatus,
         transactionID: String? = nil,
-        serverEventID: String? = nil
+        serverEventID: String? = nil,
+        mentionUserIDs: [String]? = nil
     ) {
         self.id = id
         self.clientTransactionID = clientTransactionID ?? Self.newClientTransactionID()
@@ -177,6 +180,7 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
         self.deliveryStatus = deliveryStatus
         self.transactionID = transactionID
         self.serverEventID = serverEventID
+        self.mentionUserIDs = mentionUserIDs
     }
 
     static func newClientTransactionID() -> String {
@@ -210,7 +214,8 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
             replyToEventID: replyToEventID,
             editEventID: nil,
             threadRootEventID: threadRootEventID,
-            transactionID: clientTransactionID
+            transactionID: clientTransactionID,
+            mentionUserIDs: mentionUserIDs
         )
     }
 
@@ -225,7 +230,8 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
             threadRootEventID: threadRootEventID,
             senderID: senderID,
             timestamp: timestamp,
-            failed: deliveryStatus == .failed
+            failed: deliveryStatus == .failed,
+            mentionUserIDs: mentionUserIDs
         )
     }
 
@@ -242,7 +248,8 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
             threadRootEventID: message.threadRootEventID,
             senderID: message.senderID,
             timestamp: message.timestamp,
-            deliveryStatus: message.failed ? .failed : .queued
+            deliveryStatus: message.failed ? .failed : .queued,
+            mentionUserIDs: message.mentionUserIDs
         )
     }
 }
@@ -456,7 +463,8 @@ final class OutgoingSendCoordinator {
         senderID: String,
         senderAvatarURL: URL? = nil,
         timestamp: Date,
-        clearingDraft: Bool = false
+        clearingDraft: Bool = false,
+        mentionUserIDs: [String]? = nil
     ) -> OutgoingQueuedMessage {
         let message = OutgoingQueuedMessage(
             id: localID,
@@ -469,7 +477,8 @@ final class OutgoingSendCoordinator {
             senderID: senderID,
             senderAvatarURL: senderAvatarURL,
             timestamp: timestamp,
-            deliveryStatus: .sending
+            deliveryStatus: .sending,
+            mentionUserIDs: mentionUserIDs
         )
         queue.upsert(message, clearingDraftOf: clearingDraft ? roomID : nil)
         return message

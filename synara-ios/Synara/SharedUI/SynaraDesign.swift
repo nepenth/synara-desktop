@@ -580,6 +580,13 @@ enum SynaraColor {
     static var secondaryText: Color { synaraAdaptive(\.secondaryText) }
     static var tertiaryText: Color { synaraAdaptive(\.tertiaryText) }
     static let accent = Color.accentColor
+    /// A mention of you: gold, as distinct from other people's blue pills.
+    static let selfMentionText = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.98, green: 0.80, blue: 0.36, alpha: 1)
+            : UIColor(red: 0.52, green: 0.36, blue: 0.0, alpha: 1)
+    })
+    static let selfMentionFill = Color(uiColor: .systemYellow).opacity(0.22)
     static let agent = Color(.systemTeal)
     static let success = Color(.systemGreen)
     static let warning = Color(.systemOrange)
@@ -913,6 +920,11 @@ enum SynaraRadius {
     static let card: CGFloat = 8
     static let control: CGFloat = 8
     static let composer: CGFloat = 22
+
+    /// People are rounded squares (rooms keep their own tiles).
+    static func avatar(_ size: CGFloat) -> CGFloat {
+        (size * 0.22).rounded()
+    }
 }
 
 enum SynaraDepthLevel: String, CaseIterable {
@@ -1248,14 +1260,32 @@ extension View {
     }
 }
 
+extension View {
+    /// Room chrome (header pieces, composer field): Liquid Glass where the
+    /// system has it, a quiet filled shape before that.
+    @ViewBuilder
+    func synaraChromeGlass<S: Shape>(in shape: S, interactive: Bool = false) -> some View {
+        if #available(iOS 26.0, *) {
+            glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
+        } else {
+            background(SynaraColor.secondarySurface, in: shape)
+        }
+    }
+}
+
 enum SynaraTypography {
     static let screenTitle = Font.title2.weight(.semibold)
     static let sectionTitle = Font.headline
     static let body = Font.body
     static let supporting = Font.callout
     static let emphasis = Font.body.weight(.semibold)
-    static let messageBody = Font.body
+    static let messageBody = Font.body.leading(.tight)
     static let messageMeta = Font.caption
+    static let messageSender = Font.body.weight(.bold)
+    static let messageTime = Font.footnote
+    static let dayHeader = Font.headline.weight(.bold)
+    /// Extra leading between wrapped message lines; SF's own is enough.
+    static let messageLineSpacing: CGFloat = 0.5
     static let roomPreview = Font.subheadline
     static let chipLabel = Font.caption.weight(.semibold)
     static let fineMeta = Font.caption2

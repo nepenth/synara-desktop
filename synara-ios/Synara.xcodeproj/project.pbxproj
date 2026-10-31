@@ -83,6 +83,7 @@
 		49A35E5B574613614328D6E4 /* ComposerMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 275642FB89913A7B3E8AD14A /* ComposerMarkdown.swift */; };
 		4A014306BFF1ADF7E1444027 /* NotificationPermissionCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C10DC4BB2D6146CF070DDC8 /* NotificationPermissionCoordinatorTests.swift */; };
 		4A665A8695E281B0E96F0A54 /* TimelineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFDD334C6EF890B453477E1 /* TimelineService.swift */; };
+		4BA6CD129332B829FFB2DA9F /* ComposerMentions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B876F6800A8024CC6191A5B /* ComposerMentions.swift */; };
 		4C0DF38E441C5250941FE911 /* HomeserverDiscoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12329DB928DC3AB27731C926 /* HomeserverDiscoveryTests.swift */; };
 		4FC4F37BA082A43570C836AF /* SharedCoreReadMarkers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EE498A23839D0BB8FD5AA3B /* SharedCoreReadMarkers.swift */; };
 		502195675B8E4299D9D998AE /* SharedCoreInviteActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E062711DFC1EC46B1A8411D1 /* SharedCoreInviteActions.swift */; };
@@ -295,6 +296,7 @@
 		184EF5364268AFF19F35E66B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		1B446B03C1BB4057C12E560B /* SharedCoreTimelineViewUpdates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineViewUpdates.swift; sourceTree = "<group>"; };
 		1B67C2384B24499A9C8CBE33 /* SharedCoreMediaSend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreMediaSend.swift; sourceTree = "<group>"; };
+		1B876F6800A8024CC6191A5B /* ComposerMentions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerMentions.swift; sourceTree = "<group>"; };
 		1C0070A890F80B56DD756D02 /* SecureSessionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureSessionStoreTests.swift; sourceTree = "<group>"; };
 		1C10DC4BB2D6146CF070DDC8 /* NotificationPermissionCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPermissionCoordinatorTests.swift; sourceTree = "<group>"; };
 		1F904C4D40AD4D8203B71167 /* LinkPreviewsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkPreviewsTests.swift; sourceTree = "<group>"; };
@@ -658,6 +660,7 @@
 				B562FF42D366E4E1B20D1393 /* ComposerAttributedMarkdown.swift */,
 				275642FB89913A7B3E8AD14A /* ComposerMarkdown.swift */,
 				3A2EA7250A5E48B4331075A1 /* ComposerMatrixFormatting.swift */,
+				1B876F6800A8024CC6191A5B /* ComposerMentions.swift */,
 				69B679E7F5741D45B587B578 /* ComposerTextView.swift */,
 				708862C3264172D71D1FDAC2 /* ComposerTypingNotifier.swift */,
 				BAAB3E6D8205E3F0DC8A368F /* GifPickerSheet.swift */,
@@ -1134,6 +1137,7 @@
 				946E9FB93FE2BAE4E5AE6604 /* ComposerAttributedMarkdown.swift in Sources */,
 				49A35E5B574613614328D6E4 /* ComposerMarkdown.swift in Sources */,
 				D47B51D8E747B028B21D8DD0 /* ComposerMatrixFormatting.swift in Sources */,
+				4BA6CD129332B829FFB2DA9F /* ComposerMentions.swift in Sources */,
 				3AB84959BA0C8A2EB98CF309 /* ComposerService.swift in Sources */,
 				0B6FED64AA988069902712C4 /* ComposerTextView.swift in Sources */,
 				24E6C71DC330BA909F0A649D /* ComposerTypingNotifier.swift in Sources */,
