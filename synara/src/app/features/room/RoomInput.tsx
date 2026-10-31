@@ -259,6 +259,21 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     }, [mentionInsert, roomId, editor, setMentionInsert]);
     const roomThreadRootEventId = useNativeThreadRoot(roomId);
     const threadRootEventId = threadRootOverride ?? roomThreadRootEventId;
+    // "Message #room" in a channel and "Message Name" in a DM, as on iOS.
+    const composerRoomName = room?.name?.trim();
+    const composerPlaceholder = threadRootEventId
+      ? t('composer.thread_placeholder', 'Reply in thread')
+      : !composerRoomName
+        ? t('composer.placeholder', 'Send a message...')
+        : direct
+          ? t('composer.direct_placeholder', {
+              name: composerRoomName,
+              defaultValue: 'Message {{name}}',
+            })
+          : t('composer.room_placeholder', {
+              room: composerRoomName,
+              defaultValue: 'Message #{{room}}',
+            });
     const coreReplyDraft = useNativeComposerReplyDraft(roomId, threadRootEventId);
     // A queued send owns the reply it was written as. The preview hides until
     // the send clears it (or fails and gives it back), so the next message is
@@ -1339,7 +1354,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         <RoomComposer
           editableName="RoomInput"
           editor={editor}
-          placeholder="Send a message..."
+          placeholder={composerPlaceholder}
           ariaLabel={
             threadRootEventId
               ? t('composer.thread_aria_label', 'Reply in thread')

@@ -310,12 +310,6 @@ export const MessageRow = recipe({
   },
 });
 
-/** A message that mentions the signed-in user: an accent edge and a light tint. */
-export const MentionsMeRow = style({
-  boxShadow: `inset ${toRem(3)} 0 0 ${color.Primary.Main}`,
-  backgroundColor: `color-mix(in srgb, ${color.Primary.Container} 45%, transparent)`,
-});
-
 export const UnsentDelivery = style({
   display: 'flex',
   flexWrap: 'wrap',
@@ -356,18 +350,18 @@ export const MessageBody = style({
   width: '100%',
   maxWidth: '100%',
   minWidth: 0,
-  fontSize: toRem(16),
+  fontSize: toRem(15),
   fontWeight: 400,
-  lineHeight: 1.55,
+  lineHeight: 1.47,
   color: 'var(--synara-message-foreground)',
 });
 
 export const FormattedBody = style({
   overflowWrap: 'break-word',
   wordBreak: 'normal',
-  fontSize: toRem(16),
+  fontSize: toRem(15),
   fontWeight: 400,
-  lineHeight: 1.55,
+  lineHeight: 1.47,
   color: 'var(--synara-message-foreground)',
   vars: syntaxPaletteVars(NATIVE_SYNTAX_PALETTES.light),
 });
@@ -452,7 +446,8 @@ export const InlineImageFallback = style({
 
 export const SenderName = style({
   color: 'var(--synara-content-heading)',
-  fontWeight: 600,
+  fontSize: toRem(15),
+  fontWeight: 700,
 });
 
 export const Metadata = style({
@@ -571,8 +566,77 @@ export const SystemRow = style({
 export const SystemRule = style({
   flex: 1,
   height: 1,
-  maxWidth: toRem(160),
   background: 'var(--synara-content-separator)',
+});
+
+/** A day's heading: the day in bold over a full-width rule, as on iOS. */
+export const DayHeader = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: config.space.S200,
+  paddingTop: config.space.S500,
+});
+
+export const DayHeaderLabel = style({
+  color: 'var(--synara-content-heading)',
+  fontSize: toRem(15),
+  fontWeight: 700,
+  lineHeight: 1.3,
+});
+
+export const DayHeaderRule = style({
+  height: 1,
+  background: 'var(--synara-content-separator)',
+});
+
+/** Reactions: roomy pills with a quiet fill; yours carry the accent. */
+export const ReactionPill = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: toRem(5),
+  height: toRem(28),
+  padding: `0 ${toRem(9)}`,
+  border: `${config.borderWidth.B300} solid transparent`,
+  borderRadius: toRem(14),
+  backgroundColor: 'color-mix(in srgb, var(--synara-content-heading) 8%, transparent)',
+  color: 'var(--synara-content-heading)',
+  fontSize: toRem(13),
+  fontWeight: 600,
+  lineHeight: 1,
+  cursor: 'pointer',
+  selectors: {
+    '&:hover': {
+      backgroundColor: 'color-mix(in srgb, var(--synara-content-heading) 13%, transparent)',
+    },
+    '&:focus-visible': {
+      outline: `2px solid ${color.Primary.Main}`,
+      outlineOffset: 1,
+    },
+    '&:disabled': {
+      cursor: 'default',
+    },
+  },
+});
+
+export const ReactionPillOwn = style({
+  backgroundColor: `color-mix(in srgb, ${color.Primary.Main} 18%, transparent)`,
+  borderColor: color.Primary.Main,
+  color: color.Primary.Main,
+  selectors: {
+    '&:hover': {
+      backgroundColor: `color-mix(in srgb, ${color.Primary.Main} 24%, transparent)`,
+    },
+  },
+});
+
+export const ReactionEmoji = style({
+  fontSize: toRem(16),
+  lineHeight: 1,
+});
+
+export const AddReactionPill = style({
+  color: 'var(--synara-content-secondary)',
+  padding: `0 ${toRem(7)}`,
 });
 
 export const UnreadSystemRow = style({
@@ -789,7 +853,8 @@ globalStyle(`${FormattedBody} pre code`, {
   lineHeight: 1.5,
   tabSize: 4,
 });
-globalStyle(`${FormattedBody} a`, {
+// Mention pills carry their own colour and no underline.
+globalStyle(`${FormattedBody} a:not([data-mention-pill])`, {
   color: 'var(--tc-link)',
   textDecoration: 'underline',
   textUnderlineOffset: toRem(2),
@@ -950,7 +1015,7 @@ export const UnfurlLink = style({
 
 // Links in plain bodies are underlined like formatted ones: colour alone is
 // 1.75:1 against dark body text. Unfurl cards are whole-card links.
-globalStyle(`${MessageBody} a:not(.${UnfurlLink})`, {
+globalStyle(`${MessageBody} a:not(.${UnfurlLink}):not([data-mention-pill])`, {
   textDecoration: 'underline',
   textUnderlineOffset: toRem(2),
 });

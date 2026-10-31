@@ -1,3 +1,4 @@
+import dayjs from 'dayjs';
 import { timeDayMonthYear, today, yesterday } from './time';
 
 export type TimelineDateMarkSource = {
@@ -26,4 +27,11 @@ export const formatTimelineDayLabel = (timestampMs: number): string => {
   if (today(timestampMs)) return 'Today';
   if (yesterday(timestampMs)) return 'Yesterday';
   return timeDayMonthYear(timestampMs);
+};
+
+/** A day heading in the timeline: "Today", "Yesterday" or the weekday and date. */
+export const formatTimelineDayHeading = (timestampMs: number): string => {
+  if (today(timestampMs)) return 'Today';
+  if (yesterday(timestampMs)) return 'Yesterday';
+  return dayjs(timestampMs).format('dddd, D MMMM YYYY');
 };

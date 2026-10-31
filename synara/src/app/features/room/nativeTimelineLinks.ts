@@ -41,18 +41,6 @@ export const parseNativePermalink = (href: string): NativePermalinkTarget | unde
   return undefined;
 };
 
-/** True when formatted HTML links a mention of `userId` (a matrix.to pill). */
-export const nativeFormattedBodyMentionsUser = (
-  html: string | undefined,
-  userId: string | undefined
-): boolean => {
-  if (!html || !userId) return false;
-  return (
-    html.includes(`matrix.to/#/${userId}`) ||
-    html.includes(`matrix.to/#/${encodeURIComponent(userId)}`)
-  );
-};
-
 const hostOf = (value: string): string | undefined => {
   try {
     const url = new URL(value);

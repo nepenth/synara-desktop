@@ -217,6 +217,7 @@ const renderNativeAnchor = (
     return (
       <a
         href={href}
+        data-mention-pill=""
         className={customHtmlCss.Mention({
           highlight: permalink.kind === 'user' && permalink.userId === context.ownUserId,
         })}

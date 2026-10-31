@@ -17,6 +17,7 @@ export const RoomPersonGlyph = style({
 
 export const RoomTitle = style({
   color: 'var(--synara-content-heading)',
+  fontWeight: 700,
   letterSpacing: '-0.01em',
 });
 
