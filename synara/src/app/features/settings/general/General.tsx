@@ -1104,6 +1104,7 @@ function Messages() {
   const [inlineGifLinks, setInlineGifLinks] = useSetting(settingsAtom, 'inlineGifLinks');
   const [xEmbeds, setXEmbeds] = useSetting(settingsAtom, 'xEmbeds');
   const [linkPreviews, setLinkPreviews] = useSetting(settingsAtom, 'linkPreviews');
+  const [shortenLinks, setShortenLinks] = useSetting(settingsAtom, 'shortenLinks');
   const [indexedMessageSearch, setIndexedMessageSearch] = useSetting(
     settingsAtom,
     'indexedMessageSearch'
@@ -1198,6 +1199,16 @@ function Messages() {
             'When a message has a link, Synara fetches the page from this device to show a preview. The site can see your IP address.'
           )}
           after={<Switch variant="Primary" value={linkPreviews} onChange={setLinkPreviews} />}
+        />
+      </SequenceCard>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title={t('modernization.settings.shorten_links.title', 'Shorten long links')}
+          description={t(
+            'modernization.settings.shorten_links.description',
+            'Show a long web address as its site and path. The link still opens the full address, shown when you point at it.'
+          )}
+          after={<Switch variant="Primary" value={shortenLinks} onChange={setShortenLinks} />}
         />
       </SequenceCard>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">

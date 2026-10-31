@@ -95,6 +95,7 @@ enum RichLinkSettings {
             gifSearchKey: true,
             xEmbedsKey: true,
             linkPreviewsKey: true,
+            SynaraShortLinks.settingKey: true,
         ]
     }
 }

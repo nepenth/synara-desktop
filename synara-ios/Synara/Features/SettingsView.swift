@@ -1469,6 +1469,7 @@ private struct RichLinkSettingsView: View {
     @State private var gifSearch = true
     @State private var xEmbeds = true
     @State private var linkPreviews = true
+    @State private var shortenLinks = true
     @State private var didLoad = false
     /// Builds without a Klipy key (local, dev and CI test builds) cannot search.
     private let gifSearchConfigured = KlipyGifProvider.configured() != nil
@@ -1526,6 +1527,17 @@ private struct RichLinkSettingsView: View {
             } footer: {
                 Text("Synara fetches the page from this device to show its title and image; the site can see your IP address.")
             }
+
+            Section {
+                Toggle("Shorten Long Links", isOn: $shortenLinks)
+                    .accessibilityIdentifier("RichLinkShortenLinksToggle")
+                    .onChange(of: shortenLinks) { value in
+                        guard didLoad else { return }
+                        environment.settings.set(value, for: SynaraShortLinks.settingKey)
+                    }
+            } footer: {
+                Text("Show a long web address as its site and path. Tapping it still opens the full address.")
+            }
         }
         .scrollContentBackground(.hidden)
         .background(SynaraChrome.settings)
@@ -1537,6 +1549,7 @@ private struct RichLinkSettingsView: View {
             gifSearch = environment.settings.bool(for: RichLinkSettings.gifSearchKey)
             xEmbeds = environment.settings.bool(for: RichLinkSettings.xEmbedsKey)
             linkPreviews = environment.settings.bool(for: RichLinkSettings.linkPreviewsKey)
+            shortenLinks = environment.settings.bool(for: SynaraShortLinks.settingKey)
             DispatchQueue.main.async {
                 didLoad = true
             }

@@ -84,6 +84,72 @@ export const nativeLinkHostMismatch = (text: string, href: string): string | und
   return destination;
 };
 
+/** Longest label a bare web address keeps before it is shortened. */
+export const SHORT_LINK_MAX_LENGTH = 50;
+
+const withoutScheme = (value: string): string => value.replace(/^https?:\/\//i, '');
+
+const WORD_BREAK = /[-_.~/]/;
+
+/**
+ * `value` cut to `max` characters with an ellipsis, at a word break in the
+ * last few characters when there is one, never before `keep` characters.
+ */
+const cutTo = (value: string, max: number, keep: number): string => {
+  const chars = Array.from(value);
+  if (chars.length <= max) return value;
+  let end = max - 1;
+  for (let i = end - 1; i >= Math.max(keep, end - 12); i -= 1) {
+    if (WORD_BREAK.test(chars[i])) {
+      end = i + 1;
+      break;
+    }
+  }
+  return `${chars.slice(0, end).join('')}…`;
+};
+
+/**
+ * A short label for a link whose text is its own long web address: the site
+ * (never cut, so the reader always sees where it goes), then as much of the
+ * path as fits. The query and fragment, mostly tracking, are left out and
+ * marked with an ellipsis. Undefined when the link keeps its text: written
+ * words, a short address, or anything but a plain http(s) address.
+ */
+export const shortLinkLabel = (text: string, href: string): string | undefined => {
+  const shown = text.trim();
+  if (Array.from(shown).length <= SHORT_LINK_MAX_LENGTH) return undefined;
+  if (withoutScheme(shown).toLowerCase() !== withoutScheme(href).toLowerCase()) return undefined;
+  let url: URL;
+  try {
+    url = new URL(href);
+  } catch {
+    return undefined;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
+  if (url.username || url.password) return undefined;
+
+  const host = `${url.hostname.replace(/^www\./i, '')}${url.port ? `:${url.port}` : ''}`;
+  const segments = url.pathname.split('/').filter((segment) => segment.length > 0);
+  const dropped = url.search.length > 1 || url.hash.length > 1;
+  const full = segments.length > 0 ? `${host}/${segments.join('/')}` : host;
+  let label = full;
+  if (Array.from(full).length > SHORT_LINK_MAX_LENGTH) {
+    const prefix = segments.length > 1 ? `${host}/…/` : `${host}/`;
+    const room = SHORT_LINK_MAX_LENGTH - 1 - Array.from(prefix).length;
+    // A site too long to leave room for the path shows alone.
+    label =
+      room < 8
+        ? `${host}/…`
+        : cutTo(
+            `${prefix}${segments[segments.length - 1]}`,
+            SHORT_LINK_MAX_LENGTH,
+            Array.from(prefix).length + 1
+          );
+  }
+  if (dropped && !label.endsWith('…')) label = `${label}…`;
+  return label;
+};
+
 /** A custom emoji source: an `mxc://` URI and nothing else. */
 const MXC_URI = /^mxc:\/\/[A-Za-z0-9.:[\]-]+\/[A-Za-z0-9_-]+$/;
 

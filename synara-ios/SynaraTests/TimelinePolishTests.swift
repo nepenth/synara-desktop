@@ -155,6 +155,51 @@ final class TimelinePolishTests: XCTestCase {
         })
     }
 
+    func testLongBareLinksShowAsSiteAndPathButOpenTheWholeAddress() throws {
+        let yahoo = "https://www.yahoo.com/entertainment/celebrity/article/patrick-stewart-star-of-x-men-and-star-trek-dies-at-86-195431969.html?guccounter=1&guce_referrer=aHR0cHM6Ly93d3cuZ29vZ2xlLmNvbS8"
+        let body = "I got some terrible news guys...\(yahoo) so sad"
+        let attributed = SynaraPlainTextLinks.attributedText(body, shortensLinks: true)
+        XCTAssertEqual(
+            String(attributed.characters),
+            "I got some terrible news guys...yahoo.com/…/patrick-stewart-star-of-x-men-and-… so sad"
+        )
+        let linked = try XCTUnwrap(attributed.runs.first { $0.link != nil })
+        XCTAssertEqual(linked.link?.absoluteString, yahoo)
+        XCTAssertEqual(
+            String(SynaraPlainTextLinks.attributedText(body).characters),
+            body,
+            "with the setting off the address stays whole"
+        )
+
+        func label(_ text: String, _ href: String? = nil) -> String? {
+            SynaraShortLinks.label(text: text, url: URL(string: href ?? text)!)
+        }
+        XCTAssertEqual(label("https://example.com/news/story?utm_source=feed&utm_medium=rss&utm_campaign=x"), "example.com/news/story…")
+        XCTAssertEqual(label("https://docs.example.org/guide/install/linux/arch/packages/troubleshooting"), "docs.example.org/…/troubleshooting")
+        XCTAssertEqual(
+            label("www.example.com/a/b?session=0123456789abcdef0123456789abcdef", "http://www.example.com/a/b?session=0123456789abcdef0123456789abcdef"),
+            "example.com/a/b…"
+        )
+    }
+
+    func testShortLinksNeverCutTheSiteOrRelabelOtherLinks() {
+        func label(_ text: String, _ href: String? = nil) -> String? {
+            SynaraShortLinks.label(text: text, url: URL(string: href ?? text)!)
+        }
+        XCTAssertEqual(
+            label("https://paypal.com.account-verify.secure-login.example-phishing-host.test/x?token=1"),
+            "paypal.com.account-verify.secure-login.example-phishing-host.test/…"
+        )
+        let host = String(repeating: "a", count: 60) + ".test"
+        XCTAssertEqual(label("https://\(host)/one/two/three"), "\(host)/…")
+        XCTAssertNil(label("https://example.com/a?b=c"))
+        let long = "https://example.com/a/very/long/path/that/goes/on/and/on/for/a/while"
+        XCTAssertNil(label("Read the full article here please, it is long", long))
+        XCTAssertNil(label(long, "https://example.com/other"))
+        XCTAssertNil(label("https://user:secret@example.com/a/very/long/path/that/goes/on/and/on"))
+        XCTAssertNil(label("mailto:someone.with.a.very.long.address@example-company-domain.test"))
+    }
+
     // MARK: Reactions (I21)
 
     func testReactionPillsToggleOnlyWhenReactingIsAllowedAndOwnershipIsKnown() {

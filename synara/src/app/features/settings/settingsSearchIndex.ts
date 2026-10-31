@@ -100,6 +100,12 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
   },
   {
     page: SettingsPages.GeneralPage,
+    title: 'Shorten long links',
+    description: 'Show a long web address as its site and path.',
+    synonyms: ['link', 'url', 'shorten', 'truncate', 'tracking', 'long'],
+  },
+  {
+    page: SettingsPages.GeneralPage,
     title: 'Indexed message search',
     description: 'Search encrypted messages with a local index.',
     synonyms: ['search', 'index', 'find', 'encrypted'],
