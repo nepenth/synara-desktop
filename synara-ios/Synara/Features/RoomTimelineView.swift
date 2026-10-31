@@ -7129,6 +7129,36 @@ private struct CryptoRecoveryBanner: View {
     }
 }
 
+/// A message that mentions you: a soft accent wash with an accent rule on its
+/// leading edge, as desktop marks its mention rows.
+private struct TimelineMentionHighlight: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: SynaraRadius.small, style: .continuous)
+            .fill(SynaraColor.accent.opacity(0.10))
+            .overlay(alignment: .leading) {
+                Capsule()
+                    .fill(SynaraColor.accent)
+                    .frame(width: 3)
+            }
+            .accessibilityHidden(true)
+    }
+}
+
+/// Whether a message mentions a user: its formatted body links them with a
+/// matrix.to pill, the same rule desktop uses.
+enum TimelineMentionPolicy {
+    static func mentions(userID: String, in kind: TimelineItem.Kind) -> Bool {
+        guard userID.isEmpty == false, case let .formattedText(_, html) = kind else {
+            return false
+        }
+        // As JavaScript's encodeURIComponent writes it (desktop's pills).
+        var unreserved = CharacterSet.alphanumerics
+        unreserved.insert(charactersIn: "-_.!~*'()")
+        let encoded = userID.addingPercentEncoding(withAllowedCharacters: unreserved) ?? userID
+        return html.contains("matrix.to/#/\(userID)") || html.contains("matrix.to/#/\(encoded)")
+    }
+}
+
 private struct TimelineRow: View {
     let item: TimelineItem
     let currentUserID: String
@@ -7169,6 +7199,8 @@ private struct TimelineRow: View {
     var onShowReactions: ((String?) -> Void)?
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.appEnvironment) private var environment
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.accessibilitySwitchControlEnabled) private var switchControlEnabled
     @State private var isSelectingText = false
     /// A GIF link that failed to load shows as its link instead.
     @State private var failedInlineGifURL: String?
@@ -7194,7 +7226,7 @@ private struct TimelineRow: View {
                 TimelineAvatar(senderID: item.senderID, avatarURL: item.senderAvatarURL, size: avatarSize)
             }
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 2) {
                 if isGroupedWithPrevious == false {
                     HStack(alignment: .center, spacing: SynaraSpacing.small) {
                         HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
@@ -7214,24 +7246,29 @@ private struct TimelineRow: View {
 
                         Spacer(minLength: SynaraSpacing.xSmall)
 
-                        Menu {
-                            messageActions
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(SynaraColor.secondaryText)
-                                .frame(width: 28, height: 28)
-                                .background(SynaraColor.elevatedSurface)
-                                .clipShape(Circle())
-                                .synaraDepth(.layered, shape: Circle())
-                                .frame(width: 44, height: 44)
-                                .contentShape(Rectangle())
+                        // Long-press (and swipe to reply) carry the actions; a
+                        // visible button on every message only adds noise.
+                        // VoiceOver and Switch Control keep it as their way in.
+                        if showsActionsButton {
+                            Menu {
+                                messageActions
+                            } label: {
+                                Image(systemName: "ellipsis")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(SynaraColor.secondaryText)
+                                    .frame(width: 28, height: 28)
+                                    .background(SynaraColor.elevatedSurface)
+                                    .clipShape(Circle())
+                                    .synaraDepth(.layered, shape: Circle())
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Message actions")
+                            // A one-element row offers these as custom actions.
+                            .accessibilityHidden(combinesAccessibilityChildren)
+                            .accessibilityIdentifier("TimelineItemActions-\(item.eventID)")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Message actions")
-                        // A one-element row offers these as custom actions.
-                        .accessibilityHidden(combinesAccessibilityChildren)
-                        .accessibilityIdentifier("TimelineItemActions-\(item.eventID)")
                     }
                 }
 
@@ -7240,7 +7277,15 @@ private struct TimelineRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, isGroupedWithPrevious ? 0 : 7)
+        .padding(.vertical, mentionsCurrentUser ? SynaraSpacing.xSmall : 0)
+        .padding(.leading, mentionsCurrentUser ? SynaraSpacing.small : 0)
+        .background {
+            if mentionsCurrentUser {
+                TimelineMentionHighlight()
+            }
+        }
+        // Messages from one sender sit close; a new sender starts a clear gap.
+        .padding(.top, isGroupedWithPrevious ? 2 : 14)
         .accessibilityElement(children: accessibilityChildBehavior)
         .accessibilityLabel(accessibilitySummary)
         .accessibilityHint(accessibilityHint)
@@ -7698,7 +7743,7 @@ private struct TimelineRow: View {
                 variant: .standard,
                 depth: SynaraSurfaceDepthRole.emphasizedMessage,
                 isGrouped: isGroupedWithPrevious,
-                showsBackground: true,
+                showsBackground: false,
                 deliveryStatus: nil
             ) {
                 Text("Message deleted")
@@ -7711,7 +7756,7 @@ private struct TimelineRow: View {
                 variant: .standard,
                 depth: SynaraSurfaceDepthRole.emphasizedMessage,
                 isGrouped: isGroupedWithPrevious,
-                showsBackground: true,
+                showsBackground: false,
                 deliveryStatus: nil
             ) {
                 Text(TimelineUnavailableMessageCopy.text)
@@ -7729,6 +7774,15 @@ private struct TimelineRow: View {
 
     private var bubbleAlignment: SynaraMessageBubbleAlignment {
         isOutgoing ? .own : .other
+    }
+
+    /// The visible actions button, for VoiceOver and Switch Control only.
+    private var showsActionsButton: Bool {
+        voiceOverEnabled || switchControlEnabled
+    }
+
+    private var mentionsCurrentUser: Bool {
+        isOutgoing == false && TimelineMentionPolicy.mentions(userID: currentUserID, in: item.kind)
     }
 
     private var accessibilitySummary: String {
@@ -7926,16 +7980,13 @@ private struct TimelineRow: View {
     @ViewBuilder
     private func replyQuoteLabel(for _: String) -> some View {
         if let preview = replyPreview {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Replying to \(preview.senderName)")
-                    .font(SynaraTypography.supporting.weight(.semibold))
-                    .foregroundStyle(SynaraColor.secondaryText)
-                    .lineLimit(1)
-                Text(preview.snippet)
-                    .font(SynaraTypography.supporting)
-                    .foregroundStyle(SynaraColor.secondaryText)
-                    .lineLimit(3)
-            }
+            // One quiet line: the reply, not the quote, is the message.
+            (Text(preview.senderName).fontWeight(.semibold) + Text("  ") + Text(preview.snippet))
+                .font(SynaraTypography.messageMeta)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .accessibilityLabel("Replying to \(preview.senderName): \(preview.snippet)")
             .padding(.leading, SynaraSpacing.small)
             .overlay(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 2, style: .continuous)

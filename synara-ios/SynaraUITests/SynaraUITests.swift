@@ -389,16 +389,18 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 5))
         XCTAssertTrue(composerField(in: app).waitForExistence(timeout: 5))
 
-        let actions = app.buttons["TimelineItemActions-$alex-thread:!project:matrix.org"]
-        XCTAssertTrue(actions.waitForExistence(timeout: 5))
-        XCTAssertTrue(actions.isHittable)
+        // Rows are flat with no visible actions button; a long-press on the
+        // message opens its actions.
+        let message = app.descendants(matching: .any)["TimelineItem-$alex-thread:!project:matrix.org"]
+        XCTAssertTrue(message.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["TimelineItemActions-$alex-thread:!project:matrix.org"].exists)
 
         let timelineScreenshot = XCTAttachment(screenshot: app.screenshot())
         timelineScreenshot.name = "quiet-depth-timeline"
         timelineScreenshot.lifetime = .keepAlways
         add(timelineScreenshot)
 
-        actions.tap()
+        message.press(forDuration: 0.8)
         XCTAssertTrue(app.buttons["Reply"].waitForExistence(timeout: 5))
         if #available(iOS 17.0, *) {
             // The quick-reaction palette: six emoji, each its own button

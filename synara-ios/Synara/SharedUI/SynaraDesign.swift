@@ -1056,7 +1056,8 @@ enum SynaraSurfaceDepthRole {
     static let roomRow: SynaraDepthLevel = .collection
     static let standardMessage: SynaraDepthLevel = .layered
     static let emphasizedMessage: SynaraDepthLevel = .raised
-    static let standardMessageShowsBackground = true
+    /// Message text sits on the canvas as flat rows, without a bubble.
+    static let standardMessageShowsBackground = false
 }
 
 struct SynaraDepthMetrics: Equatable {
