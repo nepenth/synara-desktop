@@ -1070,7 +1070,23 @@ private extension AppEnvironment {
     }
 
     static func uiTestTimestampGestureEvents() -> [RawTimelineEvent] {
-        TimelineFixtures.commonEvents() + [
+        // Older history, so the room is taller than the screen and a drag
+        // has something to scroll even with compact flat rows.
+        let earlier: [RawTimelineEvent] = (0 ..< 12).map { (index: Int) -> RawTimelineEvent in
+            let sender: String = index % 2 == 0 ? "@ravi:matrix.org" : "@mina:matrix.org"
+            let offset = TimeInterval(index * 120 - 3600)
+            return RawTimelineEvent(
+                eventID: "$gesture-earlier-\(index):!project:matrix.org",
+                senderID: sender,
+                timestamp: TimelineFixtures.baseDate.addingTimeInterval(offset),
+                type: "m.room.message",
+                body: "Earlier planning note \(index + 1) about the permissions rollout.",
+                replyToEventID: nil,
+                isEdited: false,
+                mediaURL: nil
+            )
+        }
+        return earlier + TimelineFixtures.commonEvents() + [
             RawTimelineEvent(
                 eventID: "$gesture-b:!project:matrix.org",
                 senderID: "@alex:matrix.org",

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Room timeline (iOS): messages are flat rows instead of outlined pills. The text sits directly under the sender's name, on the same edge, and messages from one sender stack closely while a new sender starts a clear gap. The "…" button on every message is gone: long-press a message for its actions (it is still there with VoiceOver or Switch Control on). Your own messages no longer carry a blue fill and outline. A reply shows its quote on one quiet line instead of a block larger than the reply. Messages that mention you get a soft accent highlight with a bar on the leading edge, as on desktop. Deleted and unsupported messages are flat too.
+
 ## [2.7.3] - 2026-10-30
 
 - Short links (desktop and iOS): a long web address written out in a message shows as its site and path, such as `yahoo.com/…/patrick-stewart-star-of-x-men-and-…`, instead of filling the chat. The query and fragment (mostly tracking) are left out and marked with `…`, and the path is cut at a word break. The site is never cut, so you always see where a link goes. The link still opens the whole address, hovering it on desktop shows the whole address, and the message itself is sent unchanged, so other clients see what was written. Links with their own text, short addresses, search results and anything but plain web addresses keep their text. Turn it off in Settings → General → Shorten long links on desktop, or Settings → GIFs & Link Previews → Shorten Long Links on iOS (on by default).
