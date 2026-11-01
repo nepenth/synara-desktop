@@ -94,7 +94,7 @@ tauri-plugin-global-shortcut = "2"
 # The default "zip" feature only adds Windows zip and Linux AppImage extraction.
 # macOS updates unpack with tar and flate2, and Windows updates run the signed
 # NSIS or MSI installer directly, so neither needs it.
-tauri-plugin-updater = { version = "~2.13.1", default-features = false, features = ["rustls-tls", "system-proxy"] }
+tauri-plugin-updater = { version = "~2.14.1", default-features = false, features = ["rustls-tls", "system-proxy"] }
 tauri-plugin-process = "2"
 tauri-plugin-single-instance = "2.4.5"
 
