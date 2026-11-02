@@ -78,6 +78,23 @@ import { SettingsModal } from '../components/settings-layout';
 import { RouteError } from './RouteError';
 import { ApprovalInboxProvider } from '../features/approvals/ApprovalInboxProvider';
 import { Approvals } from '../features/approvals/Approvals';
+import { lastActiveRoomPath, readStoredActivePaths } from './client/lastActiveRoomPath';
+
+/**
+ * Home and Direct index routes reopen the scope's last room (NAV-1). Only a
+ * brand-new account, or a scope without a remembered room, sees Welcome.
+ */
+const lastRoomLoader = (navId: 'home' | 'direct', basePath: string, utility: string[]) => () => {
+  const session = getActiveSession();
+  if (!session) return null;
+  const target = lastActiveRoomPath(
+    readStoredActivePaths(session.userId),
+    navId,
+    basePath,
+    utility
+  );
+  return target ? redirect(target) : null;
+};
 
 function SettingsRoute() {
   const navigate = useNavigate();
@@ -187,7 +204,13 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
             </PageRoot>
           }
         >
-          {mobile ? null : <Route index element={<WelcomePage />} />}
+          {mobile ? null : (
+            <Route
+              index
+              loader={lastRoomLoader('home', HOME_PATH, [_CREATE_PATH, _JOIN_PATH, _SEARCH_PATH])}
+              element={<WelcomePage />}
+            />
+          )}
           <Route path={_CREATE_PATH} element={<HomeCreateRoom />} />
           <Route path={_JOIN_PATH} element={<HomeJoin />} />
           <Route path={_SEARCH_PATH} element={<HomeSearch />} />
@@ -222,7 +245,13 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
             </PageRoot>
           }
         >
-          {mobile ? null : <Route index element={<WelcomePage />} />}
+          {mobile ? null : (
+            <Route
+              index
+              loader={lastRoomLoader('direct', DIRECT_PATH, [_CREATE_PATH])}
+              element={<WelcomePage />}
+            />
+          )}
           <Route path={_CREATE_PATH} element={<DirectCreate />} />
           <Route
             path={_ROOM_THREAD_PATH}

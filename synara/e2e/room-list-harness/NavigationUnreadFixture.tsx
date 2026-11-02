@@ -150,6 +150,9 @@ function BoundRail() {
       <button type="button" onClick={() => update(home, { unreadCount: 4 })}>
         Receive Home
       </button>
+      <button type="button" onClick={() => update(home, { unreadCount: 4, highlightCount: 1 })}>
+        Mention Home
+      </button>
       <button type="button" onClick={() => update(dm, { unreadCount: 0, highlightCount: 1 })}>
         Mention only DM
       </button>

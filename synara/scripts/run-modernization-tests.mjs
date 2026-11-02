@@ -80,6 +80,7 @@ const tests = [
   'src/app/utils/__tests__/nativeDirectRooms.test.ts',
   'src/app/state/room-list/__tests__/roomListPerRoom.test.ts',
   'src/app/pages/client/__tests__/clientRootDiscovery.test.ts',
+  'src/app/pages/client/__tests__/lastActiveRoomPath.test.ts',
   'src/app/utils/__tests__/syncSplashRecovery.test.ts',
   'src/app/utils/__tests__/timelinePagination.test.ts',
   'src/app/utils/__tests__/timelineDateMarks.test.ts',

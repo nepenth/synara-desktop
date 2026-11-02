@@ -85,11 +85,11 @@ export function DirectTab() {
   };
   return (
     <SidebarItem active={directSelected}>
-      <SidebarItemTooltip tooltip="Direct Messages">
+      <SidebarItemTooltip tooltip="Direct messages">
         {(triggerRef) => (
           <SidebarAvatar
             as="button"
-            aria-label="Direct Messages"
+            aria-label="Direct messages"
             ref={triggerRef}
             outlined
             onClick={handleDirectClick}
@@ -100,8 +100,9 @@ export function DirectTab() {
         )}
       </SidebarItemTooltip>
       {directUnread && (
+        // Every unread DM is attention (Slack): always the red count.
         <SidebarItemBadge hasCount={directUnread.total > 0}>
-          <UnreadBadge highlight={directUnread.highlight > 0} count={directUnread.total} />
+          <UnreadBadge highlight count={directUnread.total} />
         </SidebarItemBadge>
       )}
       {menuAnchor && (

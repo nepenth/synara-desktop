@@ -8,7 +8,6 @@ import React, {
 } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import {
-  Avatar,
   Box,
   Button,
   Icon,
@@ -22,26 +21,26 @@ import {
   config,
   toRem,
 } from 'folds';
+import { useTranslation } from 'react-i18next';
 import { useSharedScrollVirtualizer } from '../../../hooks/useSharedScrollVirtualizer';
 import FocusTrap from '../../../components/FocusTrap';
 import { useNavigate } from 'react-router-dom';
-import { factoryRoomIdByActivity } from '../../../utils/sort';
 import {
-  NavButton,
   NavCategory,
-  NavCategoryHeader,
   NavEmptyCenter,
   NavEmptyLayout,
-  NavItem,
-  NavItemContent,
   NavLoading,
+  NavSectionHeader,
 } from '../../../components/nav';
-import { useNativeRoomListLoaded } from '../../../state/room-list/roomList';
+import {
+  useNativeRoomListLoaded,
+  useNativeRoomListSnapshot,
+} from '../../../state/room-list/roomList';
 import { getDirectCreatePath, getDirectRoomPath } from '../../pathUtils';
 import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
 import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
 import { VirtualTile } from '../../../components/virtualizer';
-import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
+import { RoomListSortMenu, RoomNavItem } from '../../../features/room-nav';
 import { makeNavCategoryId } from '../../../state/closedNavCategories';
 import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
@@ -57,12 +56,21 @@ import {
   useRoomsNotificationPreferencesContext,
 } from '../../../hooks/useRoomsNotificationPreferences';
 import { useDirectCreateSelected } from '../../../hooks/router/useDirectSelected';
+import {
+  readRoomListSort,
+  sortHomeRoomIds,
+  writeRoomListSort,
+  type RoomListSort,
+} from '../home/homeRoomList';
+import { useRoomListSortOptions } from '../home/Home';
+import * as depthCss from '../../../styles/Depth.css';
 
 import { getNativeRoom } from '../../../native/nativeSession';
 type DirectMenuProps = {
   requestClose: () => void;
 };
 const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }, ref) => {
+  const { t } = useTranslation();
   const { roomIds: orphanRooms, unread } = useNativeNavigationScope('direct');
 
   const { markRead, markingRead, markReadError } = useMarkRoomsAsRead();
@@ -73,7 +81,7 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
   };
 
   return (
-    <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
+    <Menu ref={ref} style={{ maxWidth: toRem(200), width: '100vw' }}>
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
         <MenuItem
           variant="Surface"
@@ -85,7 +93,7 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
           aria-disabled={!unread}
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            Mark as Read
+            {t('modernization.nav.mark_as_read', 'Mark as read')}
           </Text>
         </MenuItem>
         {markReadError && (
@@ -99,6 +107,9 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
 });
 
 function DirectHeader() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const createDirectSelected = useDirectCreateSelected();
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
 
   const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
@@ -111,16 +122,25 @@ function DirectHeader() {
 
   return (
     <>
-      <PageNavHeader>
+      <PageNavHeader data-tauri-drag-region>
         <Box alignItems="Center" grow="Yes" gap="300">
           <Box grow="Yes">
             <Text size="H4" truncate>
-              Direct Messages
+              {t('modernization.nav.direct_messages', 'Direct messages')}
             </Text>
           </Box>
-          <Box>
+          <Box shrink="No" gap="100">
             <IconButton
-              aria-label="Direct messages options"
+              className={depthCss.quietInteractiveSurface}
+              aria-label={t('modernization.nav.new_message', 'New message')}
+              aria-pressed={createDirectSelected}
+              variant="Surface"
+              onClick={() => navigate(getDirectCreatePath())}
+            >
+              <Icon src={Icons.Plus} size="200" />
+            </IconButton>
+            <IconButton
+              aria-label={t('modernization.nav.direct_messages_options', 'Direct messages options')}
               aria-pressed={!!menuAnchor}
               variant="Surface"
               onClick={handleOpenMenu}
@@ -155,6 +175,7 @@ function DirectHeader() {
 }
 
 function DirectEmpty() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   return (
@@ -163,18 +184,21 @@ function DirectEmpty() {
         icon={<Icon size="600" src={Icons.Mention} />}
         title={
           <Text size="H5" align="Center">
-            No Direct Messages
+            {t('modernization.nav.no_direct_messages_title', 'No direct messages')}
           </Text>
         }
         content={
           <Text size="T300" align="Center">
-            You do not have any direct messages yet.
+            {t(
+              'modernization.nav.no_direct_messages_description',
+              'You do not have any direct messages yet.'
+            )}
           </Text>
         }
         options={
           <Button variant="Secondary" size="300" onClick={() => navigate(getDirectCreatePath())}>
             <Text size="B300" truncate>
-              Direct Message
+              {t('modernization.nav.new_message', 'New message')}
             </Text>
           </Button>
         }
@@ -186,26 +210,37 @@ function DirectEmpty() {
 const DEFAULT_CATEGORY_ID = makeNavCategoryId('direct', 'direct');
 export function Direct() {
   useNavToActivePathMapper('direct');
+  const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const directs = useDirectRooms();
   const notificationPreferences = useRoomsNotificationPreferencesContext();
   const roomToUnread = useAtomValue(roomToUnreadAtom);
-  const navigate = useNavigate();
-
-  const createDirectSelected = useDirectCreateSelected();
+  const nativeRoomList = useNativeRoomListSnapshot();
+  const sortOptions = useRoomListSortOptions();
 
   const selectedRoomId = useSelectedRoom();
   const roomListLoaded = useNativeRoomListLoaded();
   const noRoomToDisplay = directs.length === 0;
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 
+  // Direct messages share Core's presentation order with Home (NAV-11).
+  const sortStorage = typeof localStorage === 'undefined' ? undefined : localStorage;
+  const [directSort, setDirectSort] = useState<RoomListSort>(() =>
+    readRoomListSort(sortStorage, 'directs')
+  );
+  const handleDirectSort = (sort: RoomListSort) => {
+    setDirectSort(sort);
+    writeRoomListSort(sortStorage, sort, 'directs');
+  };
+
+  const closed = closedCategories.has(DEFAULT_CATEGORY_ID);
   const sortedDirects = useMemo(() => {
-    const items = Array.from(directs).sort(factoryRoomIdByActivity());
-    if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
+    const items = sortHomeRoomIds(directs, nativeRoomList.presentation, directSort);
+    if (closed) {
       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
     }
     return items;
-  }, [directs, closedCategories, roomToUnread, selectedRoomId]);
+  }, [directs, nativeRoomList.presentation, directSort, closed, roomToUnread, selectedRoomId]);
 
   const getRoomKey = useCallback((index: number) => sortedDirects[index], [sortedDirects]);
   const { virtualizer, listRef, scrollMargin } = useSharedScrollVirtualizer(
@@ -221,49 +256,37 @@ export function Direct() {
     closedCategories.has(categoryId)
   );
 
+  const label = t('modernization.nav.direct_messages', 'Direct messages');
+
   return (
-    <PageNav label="Direct messages">
+    <PageNav label={label}>
       <DirectHeader />
       {noRoomToDisplay ? (
         roomListLoaded ? (
           <DirectEmpty />
         ) : (
-          <NavLoading label="Loading direct messages…" />
+          <NavLoading
+            label={t('modernization.nav.loading_direct_messages', 'Loading direct messages…')}
+          />
         )
       ) : (
         <PageNavContent scrollRef={scrollRef}>
           <Box direction="Column" gap="300">
             <NavCategory>
-              <NavItem variant="Surface" radii="400" selected={createDirectSelected}>
-                <NavButton
-                  aria-current={createDirectSelected ? 'page' : undefined}
-                  onClick={() => navigate(getDirectCreatePath())}
-                >
-                  <NavItemContent>
-                    <Box as="span" grow="Yes" alignItems="Center" gap="200">
-                      <Avatar size="200" radii="400">
-                        <Icon src={Icons.Plus} size="100" />
-                      </Avatar>
-                      <Box as="span" grow="Yes">
-                        <Text as="span" size="Inherit" truncate>
-                          Create Chat
-                        </Text>
-                      </Box>
-                    </Box>
-                  </NavItemContent>
-                </NavButton>
-              </NavItem>
-            </NavCategory>
-            <NavCategory>
-              <NavCategoryHeader>
-                <RoomNavCategoryButton
-                  closed={closedCategories.has(DEFAULT_CATEGORY_ID)}
-                  data-category-id={DEFAULT_CATEGORY_ID}
-                  onClick={handleCategoryClick}
-                >
-                  Chats
-                </RoomNavCategoryButton>
-              </NavCategoryHeader>
+              <NavSectionHeader
+                label={label}
+                closed={closed}
+                categoryId={DEFAULT_CATEGORY_ID}
+                onToggle={handleCategoryClick}
+                actions={
+                  <RoomListSortMenu
+                    sectionLabel={label}
+                    value={directSort}
+                    options={sortOptions}
+                    onChange={handleDirectSort}
+                  />
+                }
+              />
               <div
                 ref={listRef}
                 style={{

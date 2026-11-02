@@ -100,8 +100,9 @@ export function HomeTab() {
         )}
       </SidebarItemTooltip>
       {homeUnread && (
-        <SidebarItemBadge hasCount={homeUnread.total > 0}>
-          <UnreadBadge highlight={homeUnread.highlight > 0} count={homeUnread.total} />
+        // Slack rule: a red count for mentions, a dot for plain unread.
+        <SidebarItemBadge hasCount={homeUnread.highlight > 0}>
+          <UnreadBadge highlight={homeUnread.highlight > 0} count={homeUnread.highlight} />
         </SidebarItemBadge>
       )}
       {menuAnchor && (

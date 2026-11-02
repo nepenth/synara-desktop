@@ -8,12 +8,12 @@ import React, {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Avatar,
   Box,
   Button,
   Icon,
   IconButton,
   Icons,
+  Line,
   Menu,
   MenuItem,
   PopOut,
@@ -22,19 +22,17 @@ import {
   config,
   toRem,
 } from 'folds';
+import { useTranslation } from 'react-i18next';
 import { useSharedScrollVirtualizer } from '../../../hooks/useSharedScrollVirtualizer';
 import { useAtom, useAtomValue } from 'jotai';
 import FocusTrap from '../../../components/FocusTrap';
 import {
-  NavButton,
   NavCategory,
-  NavCategoryHeader,
   NavEmptyCenter,
   NavLoading,
   NavEmptyLayout,
-  NavItem,
-  NavItemContent,
-  NavLink,
+  NavSearchField,
+  NavSectionHeader,
 } from '../../../components/nav';
 import {
   getExplorePath,
@@ -64,7 +62,7 @@ import {
   useNativeRoomListSnapshot,
 } from '../../../state/room-list/roomList';
 import { VirtualTile } from '../../../components/virtualizer';
-import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
+import { RoomListSortMenu, RoomNavItem } from '../../../features/room-nav';
 import { makeNavCategoryId } from '../../../state/closedNavCategories';
 import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
@@ -79,16 +77,29 @@ import {
   getRoomNotificationMode,
   useRoomsNotificationPreferencesContext,
 } from '../../../hooks/useRoomsNotificationPreferences';
-import * as css from './Home.css';
 import * as depthCss from '../../../styles/Depth.css';
 import { getActiveSession } from '../../../state/sessionBootstrap';
 import { homeserverDisplayName } from './homeIdentity';
 
 import { getNativeRoom } from '../../../native/nativeSession';
+
+/** Sort options shared by every room-list section (Home, Direct, spaces). */
+export const useRoomListSortOptions = () => {
+  const { t } = useTranslation();
+  return useMemo(
+    () => [
+      { value: 'recent' as const, label: t('modernization.nav.sort_recent', 'Recent activity') },
+      { value: 'name' as const, label: t('modernization.nav.sort_name', 'Name') },
+    ],
+    [t]
+  );
+};
+
 type HomeMenuProps = {
   requestClose: () => void;
 };
 const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, ref) => {
+  const { t } = useTranslation();
   const { roomIds: orphanRooms, unread } = useNativeNavigationScope('home');
 
   const { markRead, markingRead, markReadError } = useMarkRoomsAsRead();
@@ -99,7 +110,7 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
   };
 
   return (
-    <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
+    <Menu ref={ref} style={{ maxWidth: toRem(200), width: '100vw' }}>
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
         <MenuItem
           variant="Surface"
@@ -111,7 +122,7 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
           aria-disabled={!unread}
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            Mark as Read
+            {t('modernization.nav.mark_as_read', 'Mark as read')}
           </Text>
         </MenuItem>
         {markReadError && (
@@ -124,101 +135,90 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
   );
 });
 
-function RoomListSortIcons({
-  sectionLabel,
-  roomSort,
-  onRoomSort,
-}: {
-  sectionLabel: string;
-  roomSort: RoomListSort;
-  onRoomSort: (sort: RoomListSort) => void;
-}) {
-  const [menuAnchor, setMenuAnchor] = useState<RectCords>();
-  const activeLabel = roomSort === 'recent' ? 'Recent activity' : 'Name';
-  const closeMenu = () => setMenuAnchor(undefined);
+type HomeAddMenuProps = {
+  requestClose: () => void;
+};
+/** The "+" menu: the former Create Room / Join with Address utility rows. */
+const HomeAddMenu = forwardRef<HTMLDivElement, HomeAddMenuProps>(({ requestClose }, ref) => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const go = (path: string) => {
+    navigate(path);
+    requestClose();
+  };
   return (
-    <PopOut
-      anchor={menuAnchor}
-      position="Bottom"
-      align="End"
-      content={
-        <FocusTrap
-          focusTrapOptions={{
-            initialFocus: false,
-            onDeactivate: closeMenu,
-            clickOutsideDeactivates: true,
-            escapeDeactivates: stopPropagation,
-          }}
+    <Menu ref={ref} style={{ maxWidth: toRem(200), width: '100vw' }}>
+      <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+        <MenuItem
+          variant="Surface"
+          fill="None"
+          size="300"
+          radii="300"
+          after={<Icon size="100" src={Icons.Plus} />}
+          onClick={() => go(getHomeCreatePath())}
         >
-          <Menu style={{ width: toRem(190) }}>
-            <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
-              <MenuItem
-                variant="Surface"
-                fill="None"
-                size="300"
-                radii="300"
-                onClick={() => {
-                  onRoomSort('recent');
-                  closeMenu();
-                }}
-                after={roomSort === 'recent' ? <Icon size="100" src={Icons.Check} /> : undefined}
-              >
-                <Text size="T300">Recent activity</Text>
-              </MenuItem>
-              <MenuItem
-                variant="Surface"
-                fill="None"
-                size="300"
-                radii="300"
-                onClick={() => {
-                  onRoomSort('name');
-                  closeMenu();
-                }}
-                after={roomSort === 'name' ? <Icon size="100" src={Icons.Check} /> : undefined}
-              >
-                <Text size="T300">Name</Text>
-              </MenuItem>
-            </Box>
-          </Menu>
-        </FocusTrap>
-      }
-    >
-      <IconButton
-        className={css.SortIconButton}
-        size="300"
-        variant="Surface"
-        radii="300"
-        fill={menuAnchor ? 'Soft' : 'None'}
-        aria-expanded={!!menuAnchor}
-        aria-label={`Sort ${sectionLabel}. Current: ${activeLabel}`}
-        title={`Sort ${sectionLabel}. Current: ${activeLabel}`}
-        onClick={(event) =>
-          setMenuAnchor(menuAnchor ? undefined : event.currentTarget.getBoundingClientRect())
-        }
-      >
-        <Icon
-          className={css.SortIcon}
-          size="50"
-          src={roomSort === 'recent' ? Icons.RecentClock : Icons.Alphabet}
-          filled
-        />
-      </IconButton>
-    </PopOut>
+          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+            {t('modernization.nav.create_room', 'Create room')}
+          </Text>
+        </MenuItem>
+        <MenuItem
+          variant="Surface"
+          fill="None"
+          size="300"
+          radii="300"
+          after={<Icon size="100" src={Icons.Link} />}
+          onClick={() => go(getHomeJoinPath())}
+        >
+          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+            {t('modernization.nav.join_with_address', 'Join with address')}
+          </Text>
+        </MenuItem>
+      </Box>
+      <Line variant="Surface" size="300" />
+      <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+        <MenuItem
+          variant="Surface"
+          fill="None"
+          size="300"
+          radii="300"
+          after={<Icon size="100" src={Icons.Explore} />}
+          onClick={() => go(getExplorePath())}
+        >
+          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+            {t('modernization.nav.explore_rooms', 'Explore rooms')}
+          </Text>
+        </MenuItem>
+      </Box>
+    </Menu>
   );
-}
+});
 
 function HomeHeader() {
+  const { t } = useTranslation();
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
+  const [addAnchor, setAddAnchor] = useState<RectCords>();
   const session = getActiveSession();
   const serverName = homeserverDisplayName(session?.baseUrl, session?.userId);
+  const createRoomSelected = useHomeCreateSelected();
+  const joinSelected = useHomeJoinSelected();
 
-  const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
-    const cords = evt.currentTarget.getBoundingClientRect();
-    setMenuAnchor((currentState) => {
-      if (currentState) return undefined;
-      return cords;
-    });
-  };
+  const toggle =
+    (
+      set: React.Dispatch<React.SetStateAction<RectCords | undefined>>
+    ): MouseEventHandler<HTMLButtonElement> =>
+    (evt) => {
+      const cords = evt.currentTarget.getBoundingClientRect();
+      set((currentState) => (currentState ? undefined : cords));
+    };
+
+  const trapOptions = (close: () => void) => ({
+    initialFocus: false as const,
+    onDeactivate: close,
+    clickOutsideDeactivates: true,
+    isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
+    isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
+    escapeDeactivates: stopPropagation,
+  });
 
   return (
     <>
@@ -236,12 +236,23 @@ function HomeHeader() {
               {serverName}
             </Text>
           </Box>
-          <Box>
+          <Box shrink="No" gap="100">
             <IconButton
-              aria-label="Home options"
+              className={depthCss.quietInteractiveSurface}
+              aria-label={t('modernization.nav.add_room', 'Add room')}
+              aria-haspopup="menu"
+              aria-expanded={!!addAnchor}
+              aria-pressed={!!addAnchor || createRoomSelected || joinSelected}
+              variant="Surface"
+              onClick={toggle(setAddAnchor)}
+            >
+              <Icon src={Icons.Plus} size="200" />
+            </IconButton>
+            <IconButton
+              aria-label={t('modernization.nav.home_options', 'Home options')}
               aria-pressed={!!menuAnchor}
               variant="Surface"
-              onClick={handleOpenMenu}
+              onClick={toggle(setMenuAnchor)}
             >
               <Icon src={Icons.VerticalDots} size="200" />
             </IconButton>
@@ -249,21 +260,23 @@ function HomeHeader() {
         </Box>
       </PageNavHeader>
       <PopOut
+        anchor={addAnchor}
+        position="Bottom"
+        align="End"
+        offset={6}
+        content={
+          <FocusTrap focusTrapOptions={trapOptions(() => setAddAnchor(undefined))}>
+            <HomeAddMenu requestClose={() => setAddAnchor(undefined)} />
+          </FocusTrap>
+        }
+      />
+      <PopOut
         anchor={menuAnchor}
         position="Bottom"
         align="End"
         offset={6}
         content={
-          <FocusTrap
-            focusTrapOptions={{
-              initialFocus: false,
-              onDeactivate: () => setMenuAnchor(undefined),
-              clickOutsideDeactivates: true,
-              isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
-              isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
-              escapeDeactivates: stopPropagation,
-            }}
-          >
+          <FocusTrap focusTrapOptions={trapOptions(() => setMenuAnchor(undefined))}>
             <HomeMenu requestClose={() => setMenuAnchor(undefined)} />
           </FocusTrap>
         }
@@ -273,6 +286,7 @@ function HomeHeader() {
 }
 
 function HomeEmpty() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   return (
@@ -281,19 +295,19 @@ function HomeEmpty() {
         icon={<Icon size="600" src={Icons.Hash} />}
         title={
           <Text size="H5" align="Center">
-            No Rooms
+            {t('modernization.nav.no_rooms_title', 'No rooms')}
           </Text>
         }
         content={
           <Text size="T300" align="Center">
-            You do not have any rooms yet.
+            {t('modernization.nav.no_rooms_description', 'You do not have any rooms yet.')}
           </Text>
         }
         options={
           <>
             <Button onClick={() => navigate(getHomeCreatePath())} variant="Secondary" size="300">
               <Text size="B300" truncate>
-                Create Room
+                {t('modernization.nav.create_room', 'Create room')}
               </Text>
             </Button>
             <Button
@@ -303,7 +317,7 @@ function HomeEmpty() {
               size="300"
             >
               <Text size="B300" truncate>
-                Explore Community Rooms
+                {t('modernization.nav.explore_rooms', 'Explore rooms')}
               </Text>
             </Button>
           </>
@@ -314,18 +328,19 @@ function HomeEmpty() {
 }
 
 const DEFAULT_CATEGORY_ID = makeNavCategoryId('home', 'room');
+const FAVORITES_CATEGORY_ID = makeNavCategoryId('home', 'favorites');
 
 export function Home() {
   useNavToActivePathMapper('home');
+  const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const rooms = useHomeRooms();
   const notificationPreferences = useRoomsNotificationPreferencesContext();
   const roomToUnread = useAtomValue(roomToUnreadAtom);
   const navigate = useNavigate();
+  const sortOptions = useRoomListSortOptions();
 
   const selectedRoomId = useSelectedRoom();
-  const createRoomSelected = useHomeCreateSelected();
-  const joinSelected = useHomeJoinSelected();
   const searchSelected = useHomeSearchSelected();
   const roomListLoaded = useNativeRoomListLoaded();
   const noRoomToDisplay = rooms.length === 0;
@@ -348,14 +363,28 @@ export function Home() {
     [rooms, favoriteIds]
   );
 
-  const sortedFavoriteRoomIds = useMemo(
-    () => sortHomeRoomIds(favoriteRoomIds, nativeRoomList.presentation, favoriteSort),
-    [favoriteRoomIds, nativeRoomList.presentation, favoriteSort]
-  );
+  const favoritesClosed = closedCategories.has(FAVORITES_CATEGORY_ID);
+  const roomsClosed = closedCategories.has(DEFAULT_CATEGORY_ID);
+
+  // A collapsed section keeps its unread and selected rows visible (Slack).
+  const sortedFavoriteRoomIds = useMemo(() => {
+    const items = sortHomeRoomIds(favoriteRoomIds, nativeRoomList.presentation, favoriteSort);
+    if (favoritesClosed) {
+      return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
+    }
+    return items;
+  }, [
+    favoriteRoomIds,
+    nativeRoomList.presentation,
+    favoriteSort,
+    favoritesClosed,
+    roomToUnread,
+    selectedRoomId,
+  ]);
 
   const mainRoomIds = useMemo(() => {
     const items = sortHomeRoomIds(remainingRoomIds, nativeRoomList.presentation, roomsSort);
-    if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
+    if (roomsClosed) {
       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
     }
     return items;
@@ -363,7 +392,7 @@ export function Home() {
     remainingRoomIds,
     nativeRoomList.presentation,
     roomsSort,
-    closedCategories,
+    roomsClosed,
     roomToUnread,
     selectedRoomId,
   ]);
@@ -392,106 +421,38 @@ export function Home() {
     closedCategories.has(categoryId)
   );
 
+  const favoritesLabel = t('modernization.nav.favorites', 'Favorites');
+  const roomsLabel = t('modernization.nav.rooms', 'Rooms');
+
   return (
-    <PageNav label="Rooms">
+    <PageNav label={roomsLabel}>
       <HomeHeader />
+      <NavSearchField onOpen={() => navigate(getHomeSearchPath())} selected={searchSelected} />
       {noRoomToDisplay ? (
         roomListLoaded ? (
           <HomeEmpty />
         ) : (
-          <NavLoading label="Loading rooms…" />
+          <NavLoading label={t('modernization.nav.loading_rooms', 'Loading rooms…')} />
         )
       ) : (
         <PageNavContent scrollRef={scrollRef}>
           <Box direction="Column" gap="300">
-            <NavCategory>
-              <NavItem
-                className={depthCss.quietInteractiveSurface}
-                variant="Surface"
-                radii="400"
-                selected={createRoomSelected}
-              >
-                <NavButton
-                  aria-current={createRoomSelected ? 'page' : undefined}
-                  onClick={() => navigate(getHomeCreatePath())}
-                >
-                  <NavItemContent>
-                    <Box as="span" grow="Yes" alignItems="Center" gap="200">
-                      <Avatar size="200" radii="400">
-                        <Icon src={Icons.Plus} size="100" />
-                      </Avatar>
-                      <Box as="span" grow="Yes">
-                        <Text as="span" size="Inherit" truncate>
-                          Create Room
-                        </Text>
-                      </Box>
-                    </Box>
-                  </NavItemContent>
-                </NavButton>
-              </NavItem>
-              <NavItem
-                className={depthCss.quietInteractiveSurface}
-                variant="Surface"
-                radii="400"
-                selected={joinSelected}
-              >
-                <NavButton
-                  aria-current={joinSelected ? 'page' : undefined}
-                  onClick={() => navigate(getHomeJoinPath())}
-                >
-                  <NavItemContent>
-                    <Box as="span" grow="Yes" alignItems="Center" gap="200">
-                      <Avatar size="200" radii="400">
-                        <Icon src={Icons.Link} size="100" />
-                      </Avatar>
-                      <Box as="span" grow="Yes">
-                        <Text as="span" size="Inherit" truncate>
-                          Join with Address
-                        </Text>
-                      </Box>
-                    </Box>
-                  </NavItemContent>
-                </NavButton>
-              </NavItem>
-              <NavItem
-                className={depthCss.quietInteractiveSurface}
-                variant="Surface"
-                radii="400"
-                selected={searchSelected}
-              >
-                <NavLink
-                  aria-current={searchSelected ? 'page' : undefined}
-                  to={getHomeSearchPath()}
-                >
-                  <NavItemContent>
-                    <Box as="span" grow="Yes" alignItems="Center" gap="200">
-                      <Avatar size="200" radii="400">
-                        <Icon src={Icons.Search} size="100" filled={searchSelected} />
-                      </Avatar>
-                      <Box as="span" grow="Yes">
-                        <Text as="span" size="Inherit" truncate>
-                          Message Search
-                        </Text>
-                      </Box>
-                    </Box>
-                  </NavItemContent>
-                </NavLink>
-              </NavItem>
-            </NavCategory>
-
-            {sortedFavoriteRoomIds.length > 0 && (
+            {favoriteRoomIds.length > 0 && (
               <NavCategory>
-                <NavCategoryHeader>
-                  <Box grow="Yes" alignItems="Center" gap="200">
-                    <Text size="B300">Favorites</Text>
-                    <Box grow="Yes" />
-                    <RoomListSortIcons
-                      sectionLabel="Favorites"
-                      roomSort={favoriteSort}
-                      onRoomSort={handleFavoriteSort}
+                <NavSectionHeader
+                  label={favoritesLabel}
+                  closed={favoritesClosed}
+                  categoryId={FAVORITES_CATEGORY_ID}
+                  onToggle={handleCategoryClick}
+                  actions={
+                    <RoomListSortMenu
+                      sectionLabel={favoritesLabel}
+                      value={favoriteSort}
+                      options={sortOptions}
+                      onChange={handleFavoriteSort}
                     />
-                  </Box>
-                </NavCategoryHeader>
+                  }
+                />
                 {sortedFavoriteRoomIds.map((roomId) => {
                   const room = getNativeRoom(roomId);
                   if (!room) return null;
@@ -513,23 +474,20 @@ export function Home() {
             )}
 
             <NavCategory>
-              <NavCategoryHeader>
-                <Box grow="Yes" alignItems="Center" gap="200">
-                  <RoomNavCategoryButton
-                    closed={closedCategories.has(DEFAULT_CATEGORY_ID)}
-                    data-category-id={DEFAULT_CATEGORY_ID}
-                    onClick={handleCategoryClick}
-                  >
-                    Rooms
-                  </RoomNavCategoryButton>
-                  <Box grow="Yes" />
-                  <RoomListSortIcons
-                    sectionLabel="Rooms"
-                    roomSort={roomsSort}
-                    onRoomSort={handleRoomsSort}
+              <NavSectionHeader
+                label={roomsLabel}
+                closed={roomsClosed}
+                categoryId={DEFAULT_CATEGORY_ID}
+                onToggle={handleCategoryClick}
+                actions={
+                  <RoomListSortMenu
+                    sectionLabel={roomsLabel}
+                    value={roomsSort}
+                    options={sortOptions}
+                    onChange={handleRoomsSort}
                   />
-                </Box>
-              </NavCategoryHeader>
+                }
+              />
               <div
                 ref={listRef}
                 style={{

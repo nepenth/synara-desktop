@@ -1,4 +1,9 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
+
+// Rail rule (Slack): Home shows a red count only for mentions and a dot for
+// plain unread; every unread DM is attention, so the DM tab always counts.
+const badge = (rail: Locator) => rail.locator('[data-badge-role]');
+const dot = (rail: Locator) => rail.locator('[data-badge-role="neutral"]');
 
 test('DM aggregate updates while Home is selected even if m.direct readback lags', async ({
   page,
@@ -13,7 +18,7 @@ test('DM aggregate updates while Home is selected even if m.direct readback lags
   await expect(home).not.toContainText('2');
   await page.getByRole('button', { name: 'Receive second DM' }).click();
   await expect(dm).toContainText('5');
-  await page.getByRole('button', { name: 'Direct Messages', exact: true }).click();
+  await page.getByRole('button', { name: 'Direct messages', exact: true }).click();
   const destination = page.getByTestId('destination-rooms');
   await expect(destination).toContainText('!dm:example.test');
   await expect(destination).toContainText('!other-dm:example.test');
@@ -23,9 +28,10 @@ test('DM aggregate updates while Home is selected even if m.direct readback lags
   await expect(dm).toContainText('3');
   await page.getByRole('button', { name: 'Mark second DM read' }).click();
   await expect(dm).not.toContainText(/\d/);
+  await expect(badge(dm)).toHaveCount(0);
 });
 
-test('Home aggregate continues updating and clearing while Direct Messages is selected', async ({
+test('Home aggregate shows a dot for plain unread and a red count for mentions', async ({
   page,
 }) => {
   await page.goto('/e2e/room-list-harness/index.html?navigationUnread&directSelected');
@@ -33,10 +39,21 @@ test('Home aggregate continues updating and clearing while Direct Messages is se
   const dm = page.getByTestId('dm-rail');
   await expect(dm.locator('button')).toHaveAttribute('aria-current', 'page');
   await page.getByRole('button', { name: 'Receive Home' }).click();
-  await expect(home).toContainText('4');
-  await expect(dm).not.toContainText(/\d/);
-  await page.getByRole('button', { name: 'Mark Home read' }).click();
+  await expect(dot(home)).toHaveCount(1);
   await expect(home).not.toContainText(/\d/);
+  await expect(dm).not.toContainText(/\d/);
+  await page.getByRole('button', { name: 'Mention Home' }).click();
+  const mention = home.locator('[data-badge-role="mention"]');
+  await expect(mention).toHaveText('1');
+  // Dark theme Critical.Main.
+  await expect(mention).toHaveCSS('background-color', 'rgb(230, 157, 157)');
+  // Bottom-right of the tile.
+  const tile = await home.locator('button').boundingBox();
+  const pill = await mention.boundingBox();
+  expect(pill!.x + pill!.width / 2).toBeGreaterThan(tile!.x + tile!.width / 2);
+  expect(pill!.y + pill!.height / 2).toBeGreaterThan(tile!.y + tile!.height / 2);
+  await page.getByRole('button', { name: 'Mark Home read' }).click();
+  await expect(badge(home)).toHaveCount(0);
 });
 
 test('DM aggregate preserves mention-only, marked-unread, and mute behavior', async ({ page }) => {
@@ -47,23 +64,15 @@ test('DM aggregate preserves mention-only, marked-unread, and mute behavior', as
   await page.getByRole('button', { name: 'Mark DM read', exact: true }).click();
   await expect(dm).not.toContainText(/\d/);
   await page.getByRole('button', { name: 'Mention only DM' }).click();
-  await expect(dm).toContainText('1');
-  const mentionBadge = dm.locator('span').filter({ hasText: /^1$/ }).last();
-  const mentionColor = await mentionBadge.evaluate(
-    (el) => getComputedStyle(el.parentElement!).backgroundColor
-  );
+  await expect(dm.locator('[data-badge-role="mention"]')).toHaveText('1');
   await page.getByRole('button', { name: 'Mark DM read', exact: true }).click();
   await expect(dm).not.toContainText(/\d/);
   await page.getByRole('button', { name: 'Receive DM', exact: true }).click();
-  await expect(dm).toContainText('2');
-  const ordinaryColor = await dm
-    .locator('span')
-    .filter({ hasText: /^2$/ })
-    .last()
-    .evaluate((el) => getComputedStyle(el.parentElement!).backgroundColor);
-  expect(mentionColor).not.toEqual(ordinaryColor);
+  // An ordinary unread DM is attention too: same red role as a mention.
+  await expect(dm.locator('[data-badge-role="mention"]')).toHaveText('2');
   await page.getByRole('button', { name: 'Mute DM' }).click();
   await expect(dm).not.toContainText(/\d/);
+  await expect(badge(dm)).toHaveCount(0);
 });
 
 test('rail Mark as Read clears exactly its badge and destination scope', async ({ page }) => {
@@ -73,20 +82,20 @@ test('rail Mark as Read clears exactly its badge and destination scope', async (
   await page.getByRole('button', { name: 'Receive DM', exact: true }).click();
   await page.getByRole('button', { name: 'Receive Home', exact: true }).click();
   await expect(dm).toContainText('2');
-  await expect(home).toContainText('4');
+  await expect(dot(home)).toHaveCount(1);
   await page
-    .getByRole('button', { name: 'Direct Messages', exact: true })
+    .getByRole('button', { name: 'Direct messages', exact: true })
     .click({ button: 'right' });
   await page.getByRole('button', { name: 'Mark as Read', exact: true }).click();
   await expect(dm).not.toContainText(/\d/);
-  await expect(home).toContainText('4');
+  await expect(dot(home)).toHaveCount(1);
   await expect(page.locator('body')).toHaveAttribute(
     'data-read-rooms',
     JSON.stringify(['!dm:example.test', '!other-dm:example.test'])
   );
   await page.getByRole('button', { name: 'Home', exact: true }).click({ button: 'right' });
   await page.getByRole('button', { name: 'Mark as Read', exact: true }).click();
-  await expect(home).not.toContainText(/\d/);
+  await expect(badge(home)).toHaveCount(0);
   await expect(page.locator('body')).toHaveAttribute(
     'data-read-rooms',
     JSON.stringify(['!dm:example.test', '!other-dm:example.test', '!home:example.test'])
