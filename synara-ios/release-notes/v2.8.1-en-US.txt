@@ -1,0 +1,3 @@
+Synara 2.8.1 makes the Rooms list easier to scan: read rooms recede, unread rooms are bold with a short bar at the left edge, section headers are small captions with a chevron, long names keep their ending, and direct messages show a green or grey presence dot. On iPad the selected room fills with the accent colour.
+
+Please test: scanning the Rooms list for unread rooms, collapsing sections, long room names, presence dots on direct messages, and the selected room on iPad.
