@@ -9,6 +9,7 @@
     "updater:allow-check",
     "updater:allow-download-and-install",
     "allow-desktop-updater-install",
+    "allow-desktop-updater-relaunch",
     "process:allow-restart"
   ]
 }

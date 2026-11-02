@@ -187,6 +187,45 @@ export const createLinkElement = (
   children: typeof children === 'string' ? [{ text: children }] : children,
 });
 
+const isLinkElement = (node: unknown): node is LinkElement =>
+  Element.isElement(node) && node.type === BlockType.Link;
+
+/**
+ * Moves a collapsed selection that sits on a link's edge to just outside the
+ * link. Slate otherwise keeps typing inside an inline it reached the end of,
+ * so everything written after a pasted link became part of that link.
+ */
+export const escapeLinkEdge = (editor: Editor): void => {
+  const { selection } = editor;
+  if (!selection || !Range.isCollapsed(selection)) return;
+  const link = Editor.above(editor, { at: selection, match: isLinkElement });
+  if (!link) return;
+  const [, path] = link;
+  if (Editor.isEnd(editor, selection.anchor, path)) {
+    Transforms.move(editor, { unit: 'offset' });
+  } else if (Editor.isStart(editor, selection.anchor, path)) {
+    Transforms.move(editor, { unit: 'offset', reverse: true });
+  }
+};
+
+/** Text and breaks entered at a link's edge land outside the link. */
+export const withLinkEdgeEscape = (editor: Editor): Editor => {
+  const { insertText, insertBreak, insertSoftBreak } = editor;
+  editor.insertText = (text, options) => {
+    escapeLinkEdge(editor);
+    insertText(text, options);
+  };
+  editor.insertBreak = () => {
+    escapeLinkEdge(editor);
+    insertBreak();
+  };
+  editor.insertSoftBreak = () => {
+    escapeLinkEdge(editor);
+    insertSoftBreak();
+  };
+  return editor;
+};
+
 export const createCommandElement = (command: string): CommandElement => ({
   type: BlockType.Command,
   command,

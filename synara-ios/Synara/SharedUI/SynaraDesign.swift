@@ -671,8 +671,23 @@ enum SynaraMetrics {
     /// Slack-density room rows: ~56 pt with the preview line.
     static let roomRowMinHeight: CGFloat = 44
     static let roomRowVerticalPadding: CGFloat = 4
-    /// Gap between collapsible sections (iOS 17 `listSectionSpacing`).
-    static let roomListSectionSpacing: CGFloat = 8
+    /// Extra gap between collapsible sections (iOS 17 `listSectionSpacing`).
+    /// Zero since wave 3: each header after the first carries
+    /// `roomListSectionHeaderTopSpacing` itself.
+    static let roomListSectionSpacing: CGFloat = 0
+    /// Space above every room-list section header but the first (wave 3,
+    /// desktop's 16 px section gap).
+    static let roomListSectionHeaderTopSpacing: CGFloat = 16
+    /// Section header tracking: 0.02 em of the 12 pt caption (wave 3).
+    static let roomListSectionHeaderTracking: CGFloat = 0.24
+    /// The unread gutter marker: a 3 x 16 capsule in the row's leading inset.
+    static let unreadMarkerWidth: CGFloat = 3
+    static let unreadMarkerHeight: CGFloat = 16
+    /// Presence dot on a direct message's letter circle.
+    static let presenceDot: CGFloat = 8
+    /// Opacity of the accent fill behind the open conversation's row; the
+    /// press highlight (`SynaraListRowButtonStyle`, 10 % grey) stays weaker.
+    static let selectedRowFillOpacity: CGFloat = 0.16
     /// Settings on a regular-width canvas never stretch past this.
     static let readableSettingsWidth: CGFloat = 720
 }
@@ -1321,6 +1336,8 @@ enum SynaraTypography {
     static let messageLineSpacing: CGFloat = 0.5
     static let roomPreview = Font.subheadline
     static let chipLabel = Font.caption.weight(.semibold)
+    /// Room-list and Activity section headers (wave 3): 12 pt scaled, semibold.
+    static let sectionCaption = Font.caption.weight(.semibold)
     static let fineMeta = Font.caption2
     static let fineMetaBold = Font.caption2.weight(.bold)
     static let monoBody = Font.system(.callout, design: .monospaced)

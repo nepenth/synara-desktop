@@ -1,7 +1,11 @@
 // Production room rows and section headers with a 56-room list: unread,
 // mentions, muted, private, favourites, DMs and long names. Only native IPC
-// data is synthetic. Visual proof for NAV-2/3/4/7/8/9, and for NAV-12: the
-// one list's sections in order Favorites, Rooms, Direct messages.
+// data is synthetic. Visual proof for NAV-2/3/4/7/8/9, for NAV-12 (the one
+// list's sections in order Favorites, Rooms, Direct messages) and for wave 3:
+// the reading hierarchy, the selected fill, the unread gutter marker, middle
+// truncation of names and the pane title, and DM presence dots fed through
+// the real presence subscription (Alice online, Bob and Dave offline, Carol
+// unknown).
 import React, { useCallback, useState } from 'react';
 import { Provider } from 'jotai';
 import { MemoryRouter } from 'react-router-dom';
@@ -19,7 +23,13 @@ import {
 } from '../../src/app/state/room-list/roomList';
 import { useBindRoomToUnreadAtom } from '../../src/app/state/room/roomToUnread';
 import { RoomNavItem } from '../../src/app/features/room-nav';
-import { NavCategory, NavSearchField, NavSectionHeader } from '../../src/app/components/nav';
+import {
+  NavCategory,
+  NavPaneTitle,
+  NavSearchField,
+  NavSectionHeader,
+} from '../../src/app/components/nav';
+import { setSessionBootstrapResult } from '../../src/app/state/sessionBootstrap';
 import { RoomNotificationMode } from '../../src/app/hooks/useRoomsNotificationPreferences';
 import type { RoomSummary } from '../../src/app/features/matrix-dto/room';
 
@@ -52,6 +62,8 @@ const special: RoomSummary[] = [
   room('!private-unread:example.test', 'incident-bridge', { joinRule: 'invite', unreadCount: 1 }),
   room('!fav:example.test', 'ops', { isFavorite: true }),
   room('!long:example.test', LONG, { unreadCount: 3, highlightCount: 1 }),
+  room('!home-mgmt:example.test', 'Project - Home Management', {}),
+  room('!hosting:example.test', 'Project - Hosting Migration', { unreadCount: 2 }),
   room('!dm:example.test', 'Alice Liddell', {
     isDirect: true,
     directUserId: '@alice:example.test',
@@ -72,7 +84,7 @@ const special: RoomSummary[] = [
     notificationMode: 'mute',
   }),
 ];
-const filler: RoomSummary[] = Array.from({ length: 46 }, (_, index) =>
+const filler: RoomSummary[] = Array.from({ length: 44 }, (_, index) =>
   room(`!room-${index}:example.test`, `project-${String(index + 1).padStart(2, '0')}`, {
     lastActivityTs: 1_700_000_000_000 - index * 60_000,
   })
@@ -85,8 +97,31 @@ const session = {
   device_id: 'TEST',
   homeserver_url: 'https://example.test',
 };
-const invoke = async (command: string) => {
+// Core presence snapshots for the DM peers; anyone else is unknown.
+const presence: Record<string, 'online' | 'offline'> = {
+  '@alice:example.test': 'online',
+  '@bob:example.test': 'offline',
+  '@dave:example.test': 'offline',
+};
+const invoke = async (command: string, args?: Record<string, unknown>) => {
   if (command === 'matrix_session_snapshot') return session;
+  const userId = typeof args?.userId === 'string' ? args.userId : '';
+  if (command === 'matrix_presence_snapshot') {
+    const state = presence[userId];
+    return state
+      ? {
+          status: 'ready',
+          sessionGeneration: 1,
+          userId,
+          snapshot: { userId, state, currentlyActive: state === 'online' },
+        }
+      : { status: 'unknown', sessionGeneration: 1, userId };
+  }
+  if (command === 'matrix_presence_subscribe') {
+    return { subscriptionId: `presence-${userId}`, userId, sessionGeneration: 1 };
+  }
+  if (command === 'matrix_presence_unsubscribe') return { status: 'ok' };
+  if (command === 'matrix_user_status_snapshot') return { sessionGeneration: 1, userId };
   if (command === 'matrix_room_list_snapshot') {
     return {
       sessionGeneration: 1,
@@ -101,8 +136,35 @@ const invoke = async (command: string) => {
 const installFixtureSession = () => {
   window.__SYNARA_DESKTOP__ = {
     platform: 'tauri',
-    invoke: async <T,>(cmd: string) => invoke(cmd) as Promise<T>,
+    invoke: async <T,>(cmd: string, args?: Record<string, unknown>) =>
+      invoke(cmd, args) as Promise<T>,
   };
+  // `@tauri-apps/api/event` listens through the internals; presence updates
+  // never arrive here, the snapshot is the whole story.
+  let callbacks = 0;
+  Object.assign(window, {
+    __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => undefined },
+    __TAURI_INTERNALS__: {
+      transformCallback: () => {
+        callbacks += 1;
+        return callbacks;
+      },
+      invoke: async (cmd: string, args?: Record<string, unknown>) => {
+        if (cmd === 'plugin:event|listen') return callbacks;
+        if (cmd === 'plugin:event|unlisten') return null;
+        return invoke(cmd, args);
+      },
+    },
+  });
+  setSessionBootstrapResult({
+    source: 'native',
+    session: {
+      userId: session.user_id,
+      deviceId: session.device_id,
+      baseUrl: session.homeserver_url,
+      sessionGeneration: '1',
+    },
+  });
   const fixtureSession = createNativeSession(async (command) => ({
     available: true,
     value: await invoke(command),
@@ -180,14 +242,30 @@ function BoundRows({
           width: 256,
           display: 'flex',
           flexDirection: 'column',
-          // The light theme reads on its own container colour, not the dark fallback.
-          background: light
-            ? color.Background.Container
-            : 'var(--synara-room-list-background, #1e1f22)',
+          // The room list's own chrome role (`THEME_CHROME_ROLES.roomList`).
+          background: color.Surface.Container,
         }}
       >
-        <NavSearchField onOpen={() => undefined} />
-        <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* The Home pane header's geometry: logo, title, "+" and options. */}
+        <header
+          style={{ display: 'flex', alignItems: 'center', gap: 12, height: 48, padding: '0 12px' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexGrow: 1, minWidth: 0 }}>
+            <span
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 6,
+                flex: 'none',
+                background: color.Primary.Main,
+              }}
+            />
+            <NavPaneTitle text="matrix.whyland.net" />
+          </div>
+          <span style={{ width: 68, height: 32, flex: 'none' }} />
+        </header>
+        <NavSearchField />
+        <div style={{ padding: 8, display: 'flex', flexDirection: 'column' }}>
           <NavCategory>
             <NavSectionHeader label="Favorites" closed={false} onToggle={() => undefined} />
             {favorites.map((roomId) => row(roomId))}
@@ -195,6 +273,7 @@ function BoundRows({
           <NavCategory>
             <NavSectionHeader
               label="Rooms"
+              spaced
               closed={closed}
               categoryId="rooms"
               onToggle={() => setClosed((value) => !value)}
@@ -209,6 +288,7 @@ function BoundRows({
           <NavCategory>
             <NavSectionHeader
               label="Direct messages"
+              spaced
               closed={directsClosed}
               categoryId="direct|direct"
               onToggle={() => setDirectsClosed((value) => !value)}

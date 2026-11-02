@@ -64,7 +64,6 @@ test('sidebar layout writes revert at once and show the failure', () => {
 test('mark read and unread report failures in the menu that started them', () => {
   for (const path of [
     'pages/client/sidebar/HomeTab.tsx',
-    'pages/client/sidebar/DirectTab.tsx',
     'pages/client/sidebar/SpaceTabs.tsx',
     'pages/client/home/Home.tsx',
     'pages/client/space/Space.tsx',

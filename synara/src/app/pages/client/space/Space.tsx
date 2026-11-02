@@ -45,10 +45,11 @@ import {
   NavItemContent,
   NavLink,
   NavLoading,
+  NavPaneTitle,
   NavSearchField,
   NavSectionHeader,
 } from '../../../components/nav';
-import { getSpaceLobbyPath, getSpaceRoomPath, getSpaceSearchPath } from '../../pathUtils';
+import { getSpaceLobbyPath, getSpaceRoomPath } from '../../pathUtils';
 import {
   readSpaceRoomListSort,
   writeSpaceRoomListSort,
@@ -59,10 +60,7 @@ import { useRoomListSortOptions } from '../home/Home';
 import * as roomNavCss from '../../../features/room-nav/styles.css';
 import { getCanonicalAliasOrRoomId, isRoomAlias } from '../../../utils/matrix';
 import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
-import {
-  useSpaceLobbySelected,
-  useSpaceSearchSelected,
-} from '../../../hooks/router/useSelectedSpace';
+import { useSpaceLobbySelected } from '../../../hooks/router/useSelectedSpace';
 import { useSpace } from '../../../hooks/useSpace';
 import { VirtualTile } from '../../../components/virtualizer';
 import { RoomListSortMenu, RoomNavItem } from '../../../features/room-nav';
@@ -306,9 +304,7 @@ function SpaceHeader() {
       <PageNavHeader>
         <Box alignItems="Center" grow="Yes" gap="300">
           <Box grow="Yes" alignItems="Center" gap="100">
-            <Text size="H4" truncate>
-              {spaceName}
-            </Text>
+            <NavPaneTitle text={spaceName} />
             {joinRules?.join_rule !== 'public' && <Icon src={Icons.Lock} size="50" />}
           </Box>
           <Box shrink="No">
@@ -462,7 +458,6 @@ export function Space() {
   useNavToActivePathMapper(space.roomId);
   const spaceIdOrAlias = getCanonicalAliasOrRoomId(space.roomId);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
   const roomToUnread = useAtomValue(roomToUnreadAtom);
   const allRooms = useAtomValue(allRoomsAtom);
   const allJoinedRooms = useMemo(() => new Set(allRooms), [allRooms]);
@@ -474,7 +469,6 @@ export function Space() {
   const tombstoneEvent = useStateEvent(space, StateEvent.RoomTombstone);
   const selectedRoomId = useSelectedRoom();
   const lobbySelected = useSpaceLobbySelected(spaceIdOrAlias);
-  const searchSelected = useSpaceSearchSelected(spaceIdOrAlias);
 
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 
@@ -617,10 +611,7 @@ export function Space() {
   return (
     <PageNav label={roomsLabel}>
       <SpaceHeader />
-      <NavSearchField
-        onOpen={() => navigate(getSpaceSearchPath(getCanonicalAliasOrRoomId(space.roomId)))}
-        selected={searchSelected}
-      />
+      <NavSearchField />
       {noRoomToDisplay ? (
         <>
           <div style={{ padding: `${config.space.S200} ${config.space.S200} 0` }}>
@@ -697,7 +688,7 @@ export function Space() {
                       ref={virtualizer.measureElement}
                     >
                       <div
-                        style={{ paddingTop: vItem.index === 0 ? undefined : config.space.S300 }}
+                        style={{ paddingTop: vItem.index === 0 ? undefined : config.space.S500 }}
                       >
                         <NavSectionHeader
                           label={roomId === space.roomId ? roomsLabel : room?.name}

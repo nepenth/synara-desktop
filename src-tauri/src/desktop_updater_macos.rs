@@ -12,6 +12,13 @@
 //! Contents swap cannot run (another file system, no write access, a bundle
 //! with more than `Contents`), the plugin's own `Update::install` runs instead,
 //! which keeps its administrator prompt.
+//!
+//! The relaunch matters as much as the install. `tauri::process::restart`
+//! spawns the new instance while the old one is still running, so for a moment
+//! two instances of the bundle exist; the Dock gives the second one a tile of
+//! its own, which then outlives the pinned one. `desktop_updater_relaunch`
+//! instead exits the app and lets a detached helper open the bundle through
+//! LaunchServices once this process is gone.
 
 use serde::Serialize;
 use tauri::ipc::Channel;
@@ -54,18 +61,90 @@ pub async fn desktop_updater_install(
     }
 }
 
+/// Exits the app and reopens the installed bundle through LaunchServices once
+/// this process has gone, so the Dock never sees two instances at once.
+#[tauri::command]
+pub async fn desktop_updater_relaunch(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        macos::relaunch_after_exit(app)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+        Err("desktop_updater_relaunch is only available on macOS.".to_owned())
+    }
+}
+
 #[cfg(target_os = "macos")]
 mod macos {
     use super::DesktopUpdateDownloadEvent;
-    use std::ffi::{c_void, CString};
+    use std::ffi::{c_void, CString, OsString};
     use std::io;
     use std::os::unix::ffi::OsStrExt;
     use std::os::unix::fs::MetadataExt;
     use std::path::{Component, Path, PathBuf};
+    use std::process::Stdio;
     use tauri::ipc::Channel;
     use tauri_plugin_updater::UpdaterExt;
 
     const CONTENTS: &str = "Contents";
+
+    /// The `.app` bundle this process runs from.
+    fn installed_bundle_path() -> Result<PathBuf, String> {
+        std::env::current_exe()
+            .map_err(|error| error.to_string())
+            .and_then(|exe| {
+                tauri_plugin_updater::extract_path_from_executable(&exe)
+                    .map_err(|error| error.to_string())
+            })
+    }
+
+    pub(super) fn relaunch_after_exit(app: tauri::AppHandle) -> Result<(), String> {
+        let app_path = installed_bundle_path()?;
+        spawn_relaunch_helper(std::process::id(), &app_path, Path::new("/usr/bin/open"))
+            .map_err(|error| format!("cannot start the relaunch helper: {error}"))?;
+        // Requests the exit the shell already handles: sync stops, then the
+        // process ends and the helper opens the bundle.
+        app.exit(0);
+        Ok(())
+    }
+
+    /// Waits up to 30 s for `pid` to exit, then runs `opener` (LaunchServices'
+    /// `open`) with the bundle path. `open` launches the bundle at that exact
+    /// path; should the old instance still be alive it only activates it, so
+    /// no second instance is ever started.
+    const RELAUNCH_SCRIPT: &str = r#"i=0
+while kill -0 "$1" 2>/dev/null && [ "$i" -lt 300 ]; do sleep 0.1; i=$((i+1)); done
+exec "$3" "$2""#;
+
+    pub(super) fn relaunch_helper_args(pid: u32, app: &Path, opener: &Path) -> Vec<OsString> {
+        vec![
+            OsString::from("-c"),
+            OsString::from(RELAUNCH_SCRIPT),
+            OsString::from("synara-relaunch"),
+            OsString::from(pid.to_string()),
+            app.as_os_str().to_owned(),
+            opener.as_os_str().to_owned(),
+        ]
+    }
+
+    /// Starts the helper in its own process group with no inherited stdio, so
+    /// it survives this process exiting.
+    pub(super) fn spawn_relaunch_helper(
+        pid: u32,
+        app: &Path,
+        opener: &Path,
+    ) -> io::Result<std::process::Child> {
+        use std::os::unix::process::CommandExt;
+        std::process::Command::new("/bin/sh")
+            .args(relaunch_helper_args(pid, app, opener))
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .process_group(0)
+            .spawn()
+    }
 
     pub(super) async fn download_and_install(
         app: tauri::AppHandle,
@@ -106,12 +185,7 @@ mod macos {
             .await
             .map_err(|error| error.to_string())?;
 
-        let app_path = std::env::current_exe()
-            .map_err(|error| error.to_string())
-            .and_then(|exe| {
-                tauri_plugin_updater::extract_path_from_executable(&exe)
-                    .map_err(|error| error.to_string())
-            })?;
+        let app_path = installed_bundle_path()?;
 
         tauri::async_runtime::spawn_blocking(move || {
             install_preserving_identity(&app_path, &bytes, swap_paths, |bytes| {
@@ -479,6 +553,55 @@ mod macos {
                             .is_ok_and(|plist| plist == new_plist)
                 })
                 .collect()
+        }
+
+        #[test]
+        fn the_relaunch_helper_waits_for_the_old_process_and_then_opens_the_bundle() {
+            let root = tempfile::tempdir().unwrap();
+            let opened = root.path().join("opened");
+            let opener = root.path().join("fake-open");
+            std::fs::write(
+                &opener,
+                format!("#!/bin/sh\nprintf '%s' \"$1\" > '{}'\n", opened.display()),
+            )
+            .unwrap();
+            std::fs::set_permissions(&opener, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+                .unwrap();
+            let app = root.path().join("Synara.app");
+
+            // Stands in for the exiting app.
+            let mut old_instance = std::process::Command::new("/bin/sleep")
+                .arg("0.4")
+                .spawn()
+                .unwrap();
+            let started = std::time::Instant::now();
+            let mut helper = spawn_relaunch_helper(old_instance.id(), &app, &opener).unwrap();
+
+            assert!(helper.wait().unwrap().success());
+            old_instance.wait().unwrap();
+            assert!(
+                started.elapsed() >= std::time::Duration::from_millis(350),
+                "the helper opened the bundle before the old process had exited"
+            );
+            assert_eq!(
+                std::fs::read_to_string(&opened).unwrap(),
+                app.to_string_lossy()
+            );
+        }
+
+        #[test]
+        fn the_relaunch_helper_is_given_the_pid_the_bundle_and_the_opener() {
+            let args = relaunch_helper_args(
+                4242,
+                Path::new("/Applications/Synara.app"),
+                Path::new("/usr/bin/open"),
+            );
+            assert_eq!(args[0], "-c");
+            assert!(args[1].to_str().unwrap().contains("kill -0 \"$1\""));
+            assert!(args[1].to_str().unwrap().ends_with("exec \"$3\" \"$2\""));
+            assert_eq!(args[3], "4242");
+            assert_eq!(args[4], "/Applications/Synara.app");
+            assert_eq!(args[5], "/usr/bin/open");
         }
 
         #[test]

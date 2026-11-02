@@ -1866,6 +1866,14 @@ final class MockMatrixClientService: MatrixClientServicing {
         syncStatus = .stopped
     }
 
+    /// Presence the mock reports, by user ID (review fixtures only); other
+    /// users are unknown, like a server that withholds presence.
+    var presenceByUserID: [String: SharedCorePresence] = [:]
+
+    func presence(userID: String) async -> SharedCorePresence? {
+        presenceByUserID[userID]
+    }
+
     func revokeServerSession(_ session: AuthenticatedSession) async -> Bool {
         onOperation?("server-revoke")
         revokedSessions.append(session)

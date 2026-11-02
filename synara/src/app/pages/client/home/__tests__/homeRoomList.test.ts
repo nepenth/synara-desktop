@@ -153,7 +153,7 @@ test('desktop and iOS room lists no longer implement a Recent 24h partition', ()
   assert.equal(iosService.includes('synara.roomListSort'), true);
 });
 
-test('section headers are full-width 28px rows with 14px semibold title-case labels', () => {
+test('section headers are full-width 28px rows with 12px semibold caption labels', () => {
   const cwd = process.cwd();
   const home = readFileSync(join(cwd, 'src/app/pages/client/home/Home.tsx'), 'utf8');
   const header = readFileSync(join(cwd, 'src/app/components/nav/NavSectionHeader.tsx'), 'utf8');
@@ -164,10 +164,12 @@ test('section headers are full-width 28px rows with 14px semibold title-case lab
   assert.match(home, /FAVORITES_CATEGORY_ID = makeNavCategoryId\('home', 'favorites'\)/);
   assert.match(header, /aria-expanded=\{!closed\}/);
   assert.match(navCss, /NavSectionHeader = style\(\{[\s\S]*?minHeight: toRem\(28\)/);
+  // Wave 3 caption: 12px semibold, secondary, 0.02em tracking, chevron always shown.
   assert.match(
     navCss,
-    /NavSectionLabel = style\(\{\s*fontSize: toRem\(14\),\s*lineHeight: toRem\(20\),\s*fontWeight: config\.fontWeight\.W600/
+    /NavSectionLabel = style\(\{\s*fontSize: toRem\(12\),\s*lineHeight: toRem\(16\),\s*fontWeight: config\.fontWeight\.W600,\s*letterSpacing: '0\.02em'/
   );
+  assert.doesNotMatch(navCss, /NavSectionChevron = style\(\{[^}]*opacity: 0/);
   assert.equal(navCss.includes('O400'), false);
   assert.equal(existsSync(join(cwd, 'src/app/features/room-nav/RoomNavCategoryButton.tsx')), false);
 });

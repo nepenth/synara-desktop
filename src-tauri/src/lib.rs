@@ -667,6 +667,7 @@ pub fn run() {
             desktop_spellcheck::desktop_enable_spellcheck,
             desktop_agent_actions::desktop_agent_action,
             desktop_updater_macos::desktop_updater_install,
+            desktop_updater_macos::desktop_updater_relaunch,
             matrix::auth::product::matrix_login_password,
             matrix::auth::product::matrix_store_recovery_prepare,
             matrix::auth::product::matrix_store_recovery_confirm,
@@ -1232,9 +1233,10 @@ mod command_manifest_tests {
         let updater = granted_commands(include_str!("../capabilities/desktop-updater.json"));
         assert_eq!(
             updater.iter().collect::<Vec<_>>(),
-            ["desktop_updater_install"]
+            ["desktop_updater_install", "desktop_updater_relaunch"]
         );
         assert!(!main.contains("desktop_updater_install"));
+        assert!(!main.contains("desktop_updater_relaunch"));
         let granted: BTreeSet<String> =
             main.union(&widget).chain(updater.iter()).cloned().collect();
         let ungranted: Vec<_> = registered.difference(&granted).collect();

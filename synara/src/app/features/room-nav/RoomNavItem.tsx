@@ -51,6 +51,8 @@ import { setRoomFavoriteWithNativeOwner } from '../../components/nativeRoomFavor
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { LiveCallChip } from './LiveCallChip';
 import { useNativeUserStatus } from '../matrix-presence/nativeUserStatus';
+import { Presence, useNativeUserPresence } from '../matrix-presence/nativePresence';
+import { MiddleTruncatedText } from '../../components/text';
 import * as css from './styles.css';
 import * as depthCss from '../../styles/Depth.css';
 import { PersonGlyph, roomGlyphFor } from '../../components/room-glyph';
@@ -341,6 +343,18 @@ function RoomNavItemImpl({
       : undefined;
   const dmPeerStatus = useNativeUserStatus(dmPeerId);
   const showDmInCall = Boolean(dmPeerId && dmPeerStatus?.inCall);
+  // Core's live presence for the DM peer (`matrix_presence_subscribe`); the
+  // dot stays hidden while presence is unknown or unavailable.
+  const dmPresence = useNativeUserPresence(
+    nativeRoom?.isDirect === true && typeof nativeRoom.directUserId === 'string'
+      ? nativeRoom.directUserId
+      : undefined
+  );
+  const presenceDot: 'online' | 'offline' | undefined = dmPresence
+    ? dmPresence.presence === Presence.Online
+      ? 'online'
+      : 'offline'
+    : undefined;
 
   const roomName = useRoomName(room);
   const glyph = roomGlyphFor(nativeRoom, roomName);
@@ -414,7 +428,16 @@ function RoomNavItemImpl({
         <NavItemContent>
           <Box as="span" grow="Yes" alignItems="Center" gap="200">
             {glyph.kind === 'person' ? (
-              <PersonGlyph className={css.RoomPersonGlyph} glyph={glyph} />
+              <span className={css.RoomPersonGlyphSlot}>
+                <PersonGlyph className={css.RoomPersonGlyph} glyph={glyph} />
+                {presenceDot && (
+                  <span
+                    className={css.RoomPresenceDot}
+                    data-presence={presenceDot}
+                    aria-hidden="true"
+                  />
+                )}
+              </span>
             ) : glyph.locked ? (
               <Text as="span" className={glyphClassName} aria-hidden="true" data-room-glyph="lock">
                 <Icon className={css.RoomGlyphIcon} size="100" src={Icons.Lock} />
@@ -424,10 +447,16 @@ function RoomNavItemImpl({
                 #
               </Text>
             )}
-            <Box as="span" grow="Yes" direction="Column">
-              <Text as="span" size="Inherit" className={nameClassName} truncate>
-                {roomName}
+            <Box as="span" grow="Yes" direction="Column" style={{ minWidth: 0 }}>
+              <Text as="span" size="Inherit" className={nameClassName} data-room-name="">
+                <MiddleTruncatedText text={roomName} />
               </Text>
+              {presenceDot && (
+                // The dot is aria-hidden; its meaning joins the link's name.
+                <span className={css.RoomPresenceLabel} data-presence-label="">
+                  {presenceDot === 'online' ? ', Online' : ', Offline'}
+                </span>
+              )}
             </Box>
             {showFavoriteStar && (
               <Icon

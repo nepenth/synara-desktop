@@ -417,6 +417,59 @@ final class TimelinePolishTests: XCTestCase {
         XCTAssertFalse(RoomListPeerCallStatus.isInCall(rooms[4], peersInCall: ["@nobody:example.org"]))
     }
 
+    // MARK: Room-list wave 3 (presence dot, unread marker)
+
+    func testRoomListPresenceAsksEveryDirectPeerIncludingLiveCalls() {
+        let rooms = [
+            room(kind: .directMessage, name: "Bob", peer: "@bob:example.org"),
+            room(kind: .directMessage, name: "Live", peer: "@live:example.org", hasActiveCall: true),
+            room(kind: .directMessage, name: "Nobody", peer: ""),
+            room(kind: .room, name: "Channel", peer: "@chan:example.org"),
+        ]
+        XCTAssertEqual(RoomListPeerPresence.peerIDs(in: rooms), ["@bob:example.org", "@live:example.org"])
+    }
+
+    func testRoomListPresenceMapsCoreStatesAndNeverGuessesUnknown() {
+        func snapshot(_ state: String, active: Bool = false) -> SharedCorePresence {
+            SharedCorePresenceLive.presence(userId: "@a:example.org", state: state, currentlyActive: active, statusMsg: nil)
+        }
+        XCTAssertNil(RoomListPeerPresence.presence(from: nil))
+        XCTAssertEqual(RoomListPeerPresence.presence(from: snapshot("online")), .online)
+        XCTAssertEqual(RoomListPeerPresence.presence(from: snapshot("offline")), .offline)
+        XCTAssertEqual(RoomListPeerPresence.presence(from: snapshot("unavailable")), .offline)
+        XCTAssertNil(RoomListPeerPresence.presence(from: snapshot("")))
+        XCTAssertNil(RoomListPeerPresence.presence(from: snapshot("unknown")))
+        XCTAssertEqual(RoomListPeerPresence.presence(from: snapshot("unknown", active: true)), .online)
+    }
+
+    func testUnreadGutterMarkerShowsForUnreadAudibleRowsOnly() {
+        func summary(unread: Int, highlight: Bool = false, mode: SynaraRoomNotificationMode = .default) -> RoomSummary {
+            RoomSummary(
+                id: "!r:example.org",
+                name: "R",
+                lastMessagePreview: "",
+                unreadCount: unread,
+                hasHighlight: highlight,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: Date(timeIntervalSince1970: 0),
+                notificationMode: mode
+            )
+        }
+        XCTAssertTrue(RoomListUnreadMarker.isShown(for: summary(unread: 2)))
+        XCTAssertTrue(RoomListUnreadMarker.isShown(for: summary(unread: 1, highlight: true)))
+        XCTAssertFalse(RoomListUnreadMarker.isShown(for: summary(unread: 0)))
+        XCTAssertFalse(RoomListUnreadMarker.isShown(for: summary(unread: 4, mode: .mute)))
+        XCTAssertFalse(RoomListUnreadMarker.isShown(for: summary(unread: 1, highlight: true, mode: .mute)))
+        XCTAssertEqual(SynaraMetrics.unreadMarkerWidth, 3)
+        XCTAssertEqual(SynaraMetrics.unreadMarkerHeight, 16)
+        XCTAssertLessThanOrEqual(
+            RoomListUnreadMarker.gutterOffset + SynaraMetrics.unreadMarkerWidth / 2,
+            SynaraSpacing.small,
+            "The marker stays inside the row's leading list inset"
+        )
+    }
+
     // MARK: Formatter cache (I15)
 
     func testClockFormatterIsReusedUntilTheTwentyFourHourSettingChanges() throws {

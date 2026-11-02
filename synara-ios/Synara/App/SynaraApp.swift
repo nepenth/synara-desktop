@@ -997,6 +997,9 @@ private extension AppEnvironment {
         }
 
         let matrix = MockMatrixClientService()
+        if processEnvironment["SYNARA_UI_TEST_REVIEW_ROOMS"] == "1" {
+            matrix.presenceByUserID = RoomListFixtures.reviewPresence()
+        }
         switch processEnvironment["SYNARA_UI_TEST_CONNECTION_STATUS"] {
         case "restoreFailed":
             matrix.statusAfterStart = .restoreFailed

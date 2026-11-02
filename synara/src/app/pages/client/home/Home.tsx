@@ -2,7 +2,6 @@ import React, {
   MouseEventHandler,
   forwardRef,
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -32,32 +31,25 @@ import {
   NavEmptyCenter,
   NavLoading,
   NavEmptyLayout,
+  NavPaneTitle,
   NavSearchField,
   NavSectionHeader,
 } from '../../../components/nav';
 import {
+  getCreatePath,
   getDirectCreatePath,
   getDirectRoomPath,
   getExplorePath,
   getHomeCreatePath,
   getHomeJoinPath,
   getHomeRoomPath,
-  getHomeSearchPath,
 } from '../../pathUtils';
 import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
 import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
-import {
-  useHomeCreateSelected,
-  useHomeJoinSelected,
-  useHomeSearchSelected,
-} from '../../../hooks/router/useHomeSelected';
+import { useHomeCreateSelected, useHomeJoinSelected } from '../../../hooks/router/useHomeSelected';
 import { useHomeRooms } from './useHomeRooms';
 import { useDirectRooms } from '../direct/useDirectRooms';
-import {
-  useDirectCreateSelected,
-  useDirectSelected,
-} from '../../../hooks/router/useDirectSelected';
-import { directSectionRevealAtom } from '../../../state/directSectionReveal';
+import { useDirectCreateSelected } from '../../../hooks/router/useDirectSelected';
 import {
   favoriteRoomIdSet,
   partitionHomeRooms,
@@ -148,7 +140,11 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
 type HomeAddMenuProps = {
   requestClose: () => void;
 };
-/** The "+" menu: create, join, new direct message, explore. */
+/**
+ * The "+" menu: every way into a new conversation (wave 3 folded the rail's
+ * Explore and Add space items in here): create, join, new message, then
+ * explore and create space.
+ */
 const HomeAddMenu = forwardRef<HTMLDivElement, HomeAddMenuProps>(({ requestClose }, ref) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -180,7 +176,7 @@ const HomeAddMenu = forwardRef<HTMLDivElement, HomeAddMenuProps>(({ requestClose
           onClick={() => go(getHomeJoinPath())}
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            {t('modernization.nav.join_with_address', 'Join with address')}
+            {t('modernization.nav.join_room', 'Join room')}
           </Text>
         </MenuItem>
         <MenuItem
@@ -208,6 +204,18 @@ const HomeAddMenu = forwardRef<HTMLDivElement, HomeAddMenuProps>(({ requestClose
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
             {t('modernization.nav.explore_rooms', 'Explore rooms')}
+          </Text>
+        </MenuItem>
+        <MenuItem
+          variant="Surface"
+          fill="None"
+          size="300"
+          radii="300"
+          after={<Icon size="100" src={Icons.Space} />}
+          onClick={() => go(getCreatePath())}
+        >
+          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+            {t('modernization.nav.create_space', 'Create space')}
           </Text>
         </MenuItem>
       </Box>
@@ -255,9 +263,7 @@ function HomeHeader() {
               height={22}
               style={{ borderRadius: 6, display: 'block' }}
             />
-            <Text size="H4" truncate>
-              {serverName}
-            </Text>
+            <NavPaneTitle text={serverName} />
           </Box>
           <Box shrink="No" gap="100">
             <IconButton
@@ -373,26 +379,20 @@ const visibleWhenClosed = (
  * scroll position and the rail's Home tab stay put.
  */
 export function Home() {
-  const directSelected = useDirectSelected();
-  // `home` remembers the last place in this pane, room or DM; `direct` the
-  // last DM, which the Direct rail tab reopens.
+  // `home` remembers the last place in this pane, room or DM.
   useNavToActivePathMapper('home');
-  useNavToActivePathMapper('direct', directSelected);
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const rooms = useHomeRooms();
   const directs = useDirectRooms();
   const notificationPreferences = useRoomsNotificationPreferencesContext();
   const roomToUnread = useAtomValue(roomToUnreadAtom);
-  const navigate = useNavigate();
   const sortOptions = useRoomListSortOptions();
 
   const selectedRoomId = useSelectedRoom();
-  const searchSelected = useHomeSearchSelected();
   const roomListLoaded = useNativeRoomListLoaded();
   const noRoomToDisplay = rooms.length === 0 && directs.length === 0;
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
-  const [revealDirects, setRevealDirects] = useAtom(directSectionRevealAtom);
 
   const nativeRoomList = useNativeRoomListSnapshot();
   const sortStorage = typeof localStorage === 'undefined' ? undefined : localStorage;
@@ -515,39 +515,6 @@ export function Home() {
     closedCategories.has(categoryId)
   );
 
-  // Direct rail tab: expand the section, then bring its header to the top.
-  useEffect(() => {
-    if (!revealDirects) return undefined;
-    // Wait for the first room-list snapshot so the section exists.
-    if (noRoomToDisplay && !roomListLoaded) return undefined;
-    if (closedCategories.has(DIRECT_CATEGORY_ID)) {
-      setClosedCategories({ type: 'DELETE', categoryId: DIRECT_CATEGORY_ID });
-      return undefined;
-    }
-    const frame = requestAnimationFrame(() => {
-      const scroller = scrollRef.current;
-      const header = scroller?.querySelector<HTMLElement>(
-        `[data-category-id="${CSS.escape(DIRECT_CATEGORY_ID)}"]`
-      );
-      if (scroller && header) {
-        const top =
-          header.getBoundingClientRect().top -
-          scroller.getBoundingClientRect().top +
-          scroller.scrollTop;
-        scroller.scrollTo({ top: Math.max(0, top - 4) });
-      }
-      setRevealDirects(false);
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [
-    revealDirects,
-    closedCategories,
-    setClosedCategories,
-    setRevealDirects,
-    noRoomToDisplay,
-    roomListLoaded,
-  ]);
-
   const favoritesLabel = t('modernization.nav.favorites', 'Favorites');
   const roomsLabel = t('modernization.nav.rooms', 'Rooms');
   const directsLabel = t('modernization.nav.direct_messages', 'Direct messages');
@@ -560,7 +527,7 @@ export function Home() {
   return (
     <PageNav label={roomsLabel}>
       <HomeHeader />
-      <NavSearchField onOpen={() => navigate(getHomeSearchPath())} selected={searchSelected} />
+      <NavSearchField />
       {noRoomToDisplay ? (
         roomListLoaded ? (
           <HomeEmpty />
@@ -569,7 +536,8 @@ export function Home() {
         )
       ) : (
         <PageNavContent scrollRef={scrollRef}>
-          <Box direction="Column" gap="300">
+          {/* Sections are spaced by their headers (`spaced`), not a gap. */}
+          <Box direction="Column">
             {favoriteRoomIds.length > 0 && (
               <NavCategory>
                 <NavSectionHeader
@@ -610,6 +578,7 @@ export function Home() {
               <NavCategory>
                 <NavSectionHeader
                   label={roomsLabel}
+                  spaced={favoriteRoomIds.length > 0}
                   closed={roomsClosed}
                   categoryId={DEFAULT_CATEGORY_ID}
                   onToggle={handleCategoryClick}
@@ -662,6 +631,7 @@ export function Home() {
               <NavCategory>
                 <NavSectionHeader
                   label={directsLabel}
+                  spaced={favoriteRoomIds.length > 0 || remainingRoomIds.length > 0}
                   closed={directsClosed}
                   categoryId={DIRECT_CATEGORY_ID}
                   onToggle={handleCategoryClick}

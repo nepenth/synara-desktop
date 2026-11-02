@@ -306,6 +306,7 @@ private struct LaterListRow: View {
                         Label(roomName, systemImage: "number")
                             .labelStyle(.titleAndIcon)
                             .lineLimit(1)
+                            .truncationMode(.middle)
                     }
                     if !item.canNavigate {
                         Text("Destination unavailable")

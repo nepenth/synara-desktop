@@ -582,7 +582,7 @@ enum RoomListFixtures {
             ("Ivan Petrov", "You: See you at the meetup", .directMessage, []),
             ("Random", "lol", .room, []),
             ("Data Platform", "Nightly export finished in 14 min", .room, [ops]),
-            ("Product Planning", "Q1 roadmap draft shared", .room, [workspace]),
+            ("Household Operations Project - Home Management", "Q1 roadmap draft shared", .room, [workspace]),
             ("Mei Lin", "Sticker", .directMessage, []),
             ("Encryption", "Cross-signing reset flow reviewed", .room, [community]),
             ("Support", "3 tickets waiting for triage", .room, [ops]),
@@ -627,11 +627,38 @@ enum RoomListFixtures {
                     parentSpaces: room.3,
                     hasAgentActivity: index == 2 || index == 17,
                     isFavorite: index == 3 || index == 7,
-                    isEncrypted: room.2 == .directMessage || index % 3 == 0
+                    directUserId: room.2 == .directMessage ? reviewPeerID(room.0) : nil,
+                    isEncrypted: room.2 == .directMessage || index % 3 == 0,
+                    // One muted room with unread messages, one read.
+                    notificationMode: index == 8 || index == 20 ? .mute : .default
                 )
             )
         }
         return summaries
+    }
+
+    static func reviewPeerID(_ name: String) -> String {
+        let localpart = name.split(separator: " ").first.map(String.init)?.lowercased() ?? "peer"
+        return "@\(localpart.folding(options: .diacriticInsensitive, locale: nil)):example.org"
+    }
+
+    /// Presence for some review-fixture peers; the rest stay unknown.
+    static func reviewPresence() -> [String: SharedCorePresence] {
+        let states: [(String, String)] = [
+            ("Priya Raman", "online"), ("Tomás", "offline"), ("Hiro Tanaka", "online"),
+            ("Sam Whitfield", "unavailable"), ("Lena Fischer", "online"), ("Marco Bellini", "offline"),
+        ]
+        var presence: [String: SharedCorePresence] = [:]
+        for (name, state) in states {
+            let userID = reviewPeerID(name)
+            presence[userID] = SharedCorePresenceLive.presence(
+                userId: userID,
+                state: state,
+                currentlyActive: state == "online",
+                statusMsg: nil
+            )
+        }
+        return presence
     }
 
     static func large(count: Int = 1_000) -> [RoomSummary] {
@@ -956,6 +983,51 @@ enum RoomListPeerCallStatus {
             return nil
         }
         return peerID
+    }
+}
+
+/// A direct-message peer's presence for the room list's dot, read from Core's
+/// `matrix_presence_snapshot` (wave 3). Unknown presence has no case: the
+/// row draws no dot rather than guessing.
+enum RoomListPeerPresence: Equatable {
+    case online
+    case offline
+
+    struct Key: Equatable {
+        let peerIDs: [String]
+        let generation: UInt64
+    }
+
+    /// Sorted, unique peers of joined direct rooms.
+    static func peerIDs(in rooms: [RoomSummary]) -> [String] {
+        Set(rooms.compactMap(peerID(for:))).sorted()
+    }
+
+    static func peerID(for room: RoomSummary) -> String? {
+        guard room.kind == .directMessage,
+              room.membership == .joined,
+              let peerID = room.directUserId,
+              peerID.isEmpty == false
+        else {
+            return nil
+        }
+        return peerID
+    }
+
+    /// `online` (or currently active) is online; `offline` and `unavailable`
+    /// (away) read as offline; anything else, or no snapshot, is unknown.
+    static func presence(from snapshot: SharedCorePresence?) -> RoomListPeerPresence? {
+        guard let snapshot else {
+            return nil
+        }
+        switch snapshot.state.lowercased() {
+        case "online":
+            return .online
+        case "offline", "unavailable":
+            return .offline
+        default:
+            return snapshot.currentlyActive ? .online : nil
+        }
     }
 }
 

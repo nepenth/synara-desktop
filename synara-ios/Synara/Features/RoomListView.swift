@@ -30,6 +30,8 @@ struct RoomListView: View {
     /// Direct-message peers whose MSC4426 status says they are in a call.
     @State private var peersInCall: Set<String> = []
     @State private var peerCallStatusGeneration: UInt64 = 0
+    /// Direct-message peers' presence from Core; a missing entry is unknown.
+    @State private var peerPresence: [String: RoomListPeerPresence] = [:]
     @FocusState private var isSearchFocused: Bool
 
     var body: some View {
@@ -101,6 +103,16 @@ struct RoomListView: View {
                 )
                 let spaceChannelGroups = RoomListSpaceGrouping.spaceChannelGroups(from: channelRooms)
                 let ungroupedChannelRooms = RoomListSpaceGrouping.ungroupedChannelRooms(from: channelRooms)
+                // The first visible section's header gets no top spacing.
+                let firstSectionKey = Self.firstSectionKey(
+                    favorites: favoriteRooms,
+                    middle: selectedSpaceTitle != nil && selectedSpaceID != nil
+                        ? [(RoomListSectionKey.space(selectedSpaceID ?? ""), channelRooms)]
+                        : spaceChannelGroups.map { (RoomListSectionKey.space($0.space.id), $0.rooms) }
+                            + [(RoomListSectionKey.channels, ungroupedChannelRooms)],
+                    directs: directRooms,
+                    lowPriority: lowPriorityRooms
+                )
                 VStack(spacing: 0) {
                     roomListChrome(
                         spaces: spaces,
@@ -121,20 +133,20 @@ struct RoomListView: View {
                             .listRowBackground(SynaraChrome.roomList)
                         }
 
-                        roomSection(RoomListSectionKey.favorites, title: String(localized: "Favorites"), rooms: favoriteRooms)
+                        roomSection(RoomListSectionKey.favorites, title: String(localized: "Favorites"), rooms: favoriteRooms, firstKey: firstSectionKey)
 
                         if let selectedSpaceTitle, let selectedSpaceID {
-                            roomSection(RoomListSectionKey.space(selectedSpaceID), title: selectedSpaceTitle, rooms: channelRooms)
+                            roomSection(RoomListSectionKey.space(selectedSpaceID), title: selectedSpaceTitle, rooms: channelRooms, firstKey: firstSectionKey)
                         } else {
                             ForEach(spaceChannelGroups) { group in
-                                roomSection(RoomListSectionKey.space(group.space.id), title: group.space.name, rooms: group.rooms)
+                                roomSection(RoomListSectionKey.space(group.space.id), title: group.space.name, rooms: group.rooms, firstKey: firstSectionKey)
                             }
 
-                            roomSection(RoomListSectionKey.channels, title: String(localized: "Rooms"), rooms: ungroupedChannelRooms)
+                            roomSection(RoomListSectionKey.channels, title: String(localized: "Rooms"), rooms: ungroupedChannelRooms, firstKey: firstSectionKey)
                         }
 
-                        roomSection(RoomListSectionKey.directs, title: String(localized: "Direct messages"), rooms: directRooms)
-                        roomSection(RoomListSectionKey.lowPriority, title: String(localized: "Low priority"), rooms: lowPriorityRooms)
+                        roomSection(RoomListSectionKey.directs, title: String(localized: "Direct messages"), rooms: directRooms, firstKey: firstSectionKey)
+                        roomSection(RoomListSectionKey.lowPriority, title: String(localized: "Low priority"), rooms: lowPriorityRooms, firstKey: firstSectionKey)
                     }
                     .listStyle(.plain)
                     .modifier(RoomListTopMargin())
@@ -216,6 +228,9 @@ struct RoomListView: View {
         .task(id: peerCallStatusKey) {
             await refreshPeerCallStatus(peerIDs: peerCallStatusKey.peerIDs)
         }
+        .task(id: peerPresenceKey) {
+            await refreshPeerPresence(peerIDs: peerPresenceKey.peerIDs)
+        }
         // `.task` runs on every appearance and is cancelled on disappearance.
         // Opening a room (for example from a notification) can hide the list
         // before its first snapshot arrives, so each appearance starts the
@@ -284,10 +299,25 @@ struct RoomListView: View {
         .background(SynaraChrome.roomList)
     }
 
+    /// The key of the first section that will draw (empty sections are
+    /// skipped), so only later headers carry the top spacing.
+    private static func firstSectionKey(
+        favorites: [RoomSummary],
+        middle: [(String, [RoomSummary])],
+        directs: [RoomSummary],
+        lowPriority: [RoomSummary]
+    ) -> String? {
+        var sections: [(String, [RoomSummary])] = [(RoomListSectionKey.favorites, favorites)]
+        sections.append(contentsOf: middle)
+        sections.append((RoomListSectionKey.directs, directs))
+        sections.append((RoomListSectionKey.lowPriority, lowPriority))
+        return sections.first { $0.1.isEmpty == false }?.0
+    }
+
     /// A collapsible section. Collapsing hides the read rows only; unread
     /// rooms stay listed, as in Slack's sidebar.
     @ViewBuilder
-    private func roomSection(_ key: String, title: String, rooms: [RoomSummary]) -> some View {
+    private func roomSection(_ key: String, title: String, rooms: [RoomSummary], firstKey: String?) -> some View {
         if rooms.isEmpty == false {
             let isCollapsed = collapsedSections.contains(key)
             let visibleRooms = isCollapsed ? rooms.filter(\.hasUnreadActivity) : rooms
@@ -300,10 +330,19 @@ struct RoomListView: View {
                     title: title,
                     count: rooms.count,
                     isCollapsed: isCollapsed,
-                    identifier: key
+                    identifier: key,
+                    isFirst: key == firstKey
                 ) {
                     toggleSection(key)
                 }
+                // The header carries its own top spacing; its chevron sits
+                // in the rows' glyph column (row inset + row padding).
+                .listRowInsets(EdgeInsets(
+                    top: 0,
+                    leading: SynaraSpacing.small + SynaraSpacing.medium,
+                    bottom: 0,
+                    trailing: SynaraSpacing.small + SynaraSpacing.medium
+                ))
             }
         }
     }
@@ -345,6 +384,31 @@ struct RoomListView: View {
             } else {
                 peersInCall.remove(peerID)
             }
+        }
+    }
+
+    private var peerPresenceKey: RoomListPeerPresence.Key {
+        guard case .loaded(let rooms) = state else {
+            return RoomListPeerPresence.Key(peerIDs: [], generation: peerCallStatusGeneration)
+        }
+        return RoomListPeerPresence.Key(
+            peerIDs: RoomListPeerPresence.peerIDs(in: rooms),
+            generation: peerCallStatusGeneration
+        )
+    }
+
+    /// One pass over the direct-message peers' presence when that set
+    /// changes, the list reappears or is pulled to refresh. Core caches the
+    /// reads (`PRESENCE_FETCH_TTL`), so this is not a request per row.
+    private func refreshPeerPresence(peerIDs: [String]) async {
+        let peers = Set(peerIDs)
+        peerPresence = peerPresence.filter { peers.contains($0.key) }
+        for peerID in peerIDs {
+            let snapshot = await environment.matrix.presence(userID: peerID)
+            guard Task.isCancelled == false else {
+                return
+            }
+            peerPresence[peerID] = RoomListPeerPresence.presence(from: snapshot)
         }
     }
 
@@ -523,16 +587,21 @@ struct RoomListView: View {
                 dismissSearch(clearQuery: false)
                 environment.router.route(to: .room(id: room.id, title: room.name))
             } label: {
-                RoomListRow(room: room, peerInCall: RoomListPeerCallStatus.isInCall(room, peersInCall: peersInCall))
+                RoomListRow(
+                    room: room,
+                    peerInCall: RoomListPeerCallStatus.isInCall(room, peersInCall: peersInCall),
+                    isSelected: isSelectedConversation(room),
+                    presence: RoomListPeerPresence.peerID(for: room).flatMap { peerPresence[$0] }
+                )
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, SynaraSpacing.medium)
                     .padding(.vertical, SynaraMetrics.roomRowVerticalPadding)
                     .background {
                         // Rows sit on the list plane; the open conversation
-                        // is marked by a quiet accent fill, as on desktop.
+                        // is marked by the accent fill, as on desktop.
                         if isSelectedConversation(room) {
                             RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
-                                .fill(SynaraColor.accent.opacity(0.14))
+                                .fill(SynaraColor.accent.opacity(SynaraMetrics.selectedRowFillOpacity))
                                 .synaraDepth(
                                     .layered,
                                     cornerRadius: SynaraRadius.card,
@@ -545,7 +614,15 @@ struct RoomListView: View {
             .buttonStyle(SynaraListRowButtonStyle())
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
-            .accessibilityLabel(room.accessibilitySummary)
+            .overlay(alignment: .leading) {
+                // Drawn in the row's leading list inset, so the text does not
+                // move; it slides with the row when a swipe action opens.
+                if RoomListUnreadMarker.isShown(for: room) {
+                    RoomListUnreadMarker()
+                        .offset(x: -RoomListUnreadMarker.gutterOffset)
+                }
+            }
+            .accessibilityLabel(rowAccessibilityLabel(room))
             .accessibilityHint("Opens the room timeline")
             .accessibilityAddTraits(isSelectedConversation(room) ? .isSelected : [])
             .accessibilityIdentifier("RoomRow-\(room.id)")
@@ -619,6 +696,14 @@ struct RoomListView: View {
                 }
             }
         }
+    }
+
+    private func rowAccessibilityLabel(_ room: RoomSummary) -> String {
+        guard let presence = RoomListPeerPresence.peerID(for: room).flatMap({ peerPresence[$0] }) else {
+            return room.accessibilitySummary
+        }
+        let presenceLabel = presence == .online ? String(localized: "Online") : String(localized: "Offline")
+        return [room.accessibilitySummary, presenceLabel].joined(separator: ", ")
     }
 
     private func isSelectedConversation(_ room: RoomSummary) -> Bool {
@@ -1277,6 +1362,9 @@ struct RoomListSectionHeader: View {
     var isCollapsed = false
     /// Stable, non-localized suffix of the accessibility identifier.
     var identifier: String? = nil
+    /// The list's first header sits flush; later ones get
+    /// `SynaraMetrics.roomListSectionHeaderTopSpacing` above them.
+    var isFirst = false
     var onToggle: (() -> Void)? = nil
 
     var body: some View {
@@ -1296,27 +1384,37 @@ struct RoomListSectionHeader: View {
         }
     }
 
+    /// Wave 3: a quiet caption (12 pt scaled, semibold, secondary, 0.02 em
+    /// tracking) with an always-visible leading chevron that turns when the
+    /// section is collapsed, so headers frame the rows instead of competing.
     private var label: some View {
-        HStack(spacing: SynaraSpacing.small) {
-            Text(title)
-                .font(SynaraTypography.emphasis)
-                .textCase(nil)
-                .foregroundStyle(SynaraColor.headingText)
-                .lineLimit(1)
-            Spacer(minLength: SynaraSpacing.small)
-            Text("\(count)")
-                .font(SynaraTypography.chipLabel)
-                .monospacedDigit()
-                .foregroundStyle(SynaraColor.secondaryText)
+        // The chevron takes the rows' glyph column, so the title lines up
+        // with the room names below it.
+        HStack(spacing: SynaraSpacing.medium) {
             if onToggle != nil {
                 Image(systemName: "chevron.down")
-                    .font(.caption.weight(.semibold))
+                    .font(SynaraTypography.sectionCaption)
+                    .imageScale(.small)
                     .foregroundStyle(SynaraColor.secondaryText)
                     .rotationEffect(.degrees(isCollapsed ? -90 : 0))
+                    .frame(width: SynaraMetrics.roomGlyph)
                     .accessibilityHidden(true)
             }
+            Text(title)
+                .font(SynaraTypography.sectionCaption)
+                .tracking(SynaraMetrics.roomListSectionHeaderTracking)
+                .textCase(nil)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: SynaraSpacing.small)
+            Text("\(count)")
+                .font(SynaraTypography.messageMeta)
+                .monospacedDigit()
+                .foregroundStyle(SynaraColor.tertiaryText)
         }
-        .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+        .padding(.top, isFirst ? 0 : SynaraMetrics.roomListSectionHeaderTopSpacing)
         .contentShape(Rectangle())
     }
 }
@@ -1367,6 +1465,10 @@ private struct RoomListRow: View {
     let room: RoomSummary
     /// The direct-message peer is in a call (batched by `RoomListView`).
     var peerInCall = false
+    /// The open conversation on a split canvas (iPad regular width).
+    var isSelected = false
+    /// The direct-message peer's presence; nil draws no dot.
+    var presence: RoomListPeerPresence? = nil
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var accessibilityChildren: AccessibilityChildBehavior {
@@ -1380,20 +1482,36 @@ private struct RoomListRow: View {
         room.hasUnreadActivity
     }
 
-    /// Muted rooms read as tertiary throughout; unread rows carry the
-    /// heading colour and a bold name, read rows stay regular.
+    /// Wave 3 reading hierarchy, mirrored from desktop: read rows recede
+    /// (secondary name, tertiary glyph, regular), unread rows step forward
+    /// (strongest text colour, semibold, secondary glyph), muted rows stay
+    /// tertiary, and the open conversation takes the accent.
     private var nameColor: Color {
+        if isSelected {
+            return SynaraColor.accentText
+        }
         if room.isMuted {
             return SynaraColor.tertiaryText
         }
-        return hasUnreadActivity ? SynaraColor.headingText : SynaraColor.primaryText
+        return isUnreadAndAudible ? SynaraColor.headingText : SynaraColor.secondaryText
     }
 
     private var glyphColor: Color {
+        if isSelected {
+            return SynaraColor.accent
+        }
         if room.isMuted {
             return SynaraColor.tertiaryText
         }
-        return hasUnreadActivity ? SynaraColor.headingText : SynaraColor.secondaryText
+        return isUnreadAndAudible ? SynaraColor.secondaryText : SynaraColor.tertiaryText
+    }
+
+    private var nameWeight: Font.Weight {
+        isSelected || isUnreadAndAudible ? .semibold : .regular
+    }
+
+    private var isUnreadAndAudible: Bool {
+        hasUnreadActivity && room.isMuted == false
     }
 
     private var previewColor: Color {
@@ -1411,21 +1529,24 @@ private struct RoomListRow: View {
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
-            SynaraRoomGlyphView(room: room, tint: glyphColor)
+            SynaraRoomGlyphView(room: room, tint: glyphColor, presence: presence)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
+                    // One line at standard sizes, truncated in the middle so
+                    // "Project - Home Management" keeps its distinguishing tail.
                     Text(room.name)
-                        .font(SynaraTypography.body.weight(hasUnreadActivity && room.isMuted == false ? .bold : .regular))
+                        .font(SynaraTypography.body.weight(nameWeight))
                         .foregroundStyle(nameColor)
                         .lineLimit(SynaraDynamicTypeLayout.titleLineLimit(dynamicTypeSize))
+                        .truncationMode(.middle)
                         .layoutPriority(1)
                         .accessibilityIdentifier("RoomRowTitle-\(room.id)")
 
                     if room.isEncrypted {
                         Image(systemName: "lock.fill")
                             .font(SynaraTypography.chipLabel)
-                            .foregroundStyle(SynaraColor.secondaryText)
+                            .foregroundStyle(SynaraColor.tertiaryText)
                             .accessibilityLabel("Encrypted room")
                     }
 
@@ -1534,6 +1655,26 @@ private struct RoomListRow: View {
             return String(localized: "\(room.accessibilitySummary), In a call")
         }
         return room.accessibilitySummary
+    }
+}
+
+/// Wave 3 unread gutter marker: a 3 x 16 capsule in the strongest text
+/// colour, centred in the row's leading list inset of unread rows (mentions
+/// included). Read and muted rows have none.
+struct RoomListUnreadMarker: View {
+    /// From the row's leading edge back into the middle of its
+    /// `SynaraSpacing.small` list inset.
+    static let gutterOffset = (SynaraSpacing.small + SynaraMetrics.unreadMarkerWidth) / 2
+
+    static func isShown(for room: RoomSummary) -> Bool {
+        room.membership != .invited && room.hasUnreadActivity && room.isMuted == false
+    }
+
+    var body: some View {
+        Capsule()
+            .fill(SynaraColor.headingText)
+            .frame(width: SynaraMetrics.unreadMarkerWidth, height: SynaraMetrics.unreadMarkerHeight)
+            .accessibilityHidden(true)
     }
 }
 
