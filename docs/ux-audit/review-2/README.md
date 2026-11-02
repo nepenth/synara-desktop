@@ -43,14 +43,32 @@ room intro block; the redaction confirmation copy ("Remove this message?") is st
 should move to "Delete" on both platforms; the iOS timeline header should adopt
 `SynaraMetrics.columnHeaderHeight`; the iOS Threads glyph is still four symbols (DS-7).
 
-## Needs the user's decision (not done)
+## Wave 2 (this branch, done): the six decisions
 
-1. NAV-12 / IOSS-… — show Rooms and Direct messages in one list (Slack) instead of a separate rail tab / tab.
-2. IOSS-14 / DS-8 — rename the iOS "Notifications" tab and desktop "Inbox" to one name ("Activity").
-3. DS-8 — iOS says "Channels"; desktop says "Rooms". Pick one word.
-4. DS-10/11 — avatar fallback colours: share one hash and palette (Core-provided) so a user looks the same on every device.
-5. IOSS-1 — keep space chips in the Rooms header, or fold space switching into the title menu.
-6. Later on iOS (DS-9): iOS cannot save a message to Later today; add it to the context menu.
+Decided on 2026-11-02, all six as recommended:
+
+1. NAV-12 — desktop shows Favourites, Rooms and a collapsible, activity-sorted Direct messages section in one
+   Home list. The Direct rail tab stays as a filter (reopens the last DM, expands and scrolls to the section);
+   the Home badge counts room mentions plus unread DM messages; `/direct/...` paths are unchanged.
+2. IOSS-14 / DS-8 — "Activity" on both: the desktop rail/pane formerly "Inbox" (route segment `inbox` kept,
+   quick switcher accepts both words) and the iOS tab formerly "Notifications" (deep links accept `activity`,
+   `notifications`, `notification` and `/inbox/...`). Settings > Notifications keeps its name.
+3. DS-8 — "Rooms" everywhere; the iOS "Channels" header and its unused catalog keys are gone.
+4. DS-10/11 — desktop `colorMXID` mirrors iOS `SynaraAvatarPalette` (FNV-1a, lower-cased ID, high 32 bits
+   mod 8, hues 212/248/285/330/8/28/140/195). Avatar ladder 20/24/28/36(–40)/44/64 with a 22 % corner on
+   both platforms. A Core-provided colour stays deferred.
+5. IOSS-1/2 — the title menu is the space switcher: per-space unread counts, "All spaces" when a space is
+   selected, collapse state persisted. The chip strip stays off.
+6. DS-9 — iOS "Save to Later" (bookmark) after Forward in the message menu and VoiceOver actions, writing
+   the same `LaterItem` desktop writes through Core's upsert, with a two-second "Saved to Later" notice.
+   No trailing swipe: a leftward drag already reveals timestamps.
+
+Verified: desktop tsc/eslint/prettier clean, 1414 unit tests, six Playwright suites (Chromium);
+iOS build-for-testing and 1107 unit tests; iOS UI tests not run. Released as 2.8.0.
+
+Known gaps after wave 2: the selected space in the iOS title menu carries the checkmark but no unread
+subtitle; locale keys used only by the deleted desktop Direct pane are unused; a Rust push-rules fixture
+string still says "New inbox notification"; the 22 % corner applies to the resized avatars only.
 
 ## Deferred (P2 or needs Core work)
 
