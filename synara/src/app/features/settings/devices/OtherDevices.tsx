@@ -264,7 +264,9 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
                   Log out {deleted.size} {deleted.size === 1 ? 'session' : 'sessions'}
                 </b>
               </Text>
-              {deleteFailed && <Text size="T200">Couldn't log out those sessions. Try again.</Text>}
+              {deleteFailed && (
+                <Text size="T200">Couldn&apos;t log out those sessions. Try again.</Text>
+              )}
               {challenge?.authenticationFailed && (
                 <Text size="T200">
                   Authentication was not completed. Check your password and try again.

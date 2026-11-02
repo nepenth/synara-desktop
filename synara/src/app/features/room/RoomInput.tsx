@@ -1395,7 +1395,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                   <Box direction="Row" gap="200" alignItems="Center" style={{ minWidth: 0 }}>
                     {replyDraft.threadRootEventId && <ThreadIndicator />}
                     <ReplyQuote
-                      style={replyUsernameColor ? { borderLeftColor: replyUsernameColor } : undefined}
+                      style={
+                        replyUsernameColor ? { borderLeftColor: replyUsernameColor } : undefined
+                      }
                       senderName={
                         getMemberDisplayName(room, replyDraft.senderId) ??
                         getMxIdLocalPart(replyDraft.senderId) ??
