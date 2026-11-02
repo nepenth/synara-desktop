@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [2.8.1] - 2026-11-02
+
+- Room list (desktop, iOS, iPad): read rooms recede to a quieter grey, unread rooms are bold with a short bar at the left edge, muted rooms are dimmer still, and the selected room sits on a filled row (the accent colour on iPad). Section headers are small captions with a visible chevron and more air above each group. Long room names keep their ending ("Project - Hom…agement"). Direct messages show a presence dot, green when the person is online and grey when offline.
+- Rail (desktop): Home, spaces, Activity, Approvals and your account. The Direct messages, Explore, "+" and Search buttons are gone; create, join, new message, explore and create space live in the "+" menu at the top of the list, and the search field opens the global switcher (⌘K).
+- Composer (desktop): typing after a pasted link, with or without a space first, writes plain text instead of extending the link.
+- Updates (macOS): after an in-app update the app quits and reopens through the system once the old process has gone, so the Dock keeps your pinned icon instead of adding a second one.
+
 ## [2.8.0] - 2026-11-02
 
 - Room list (desktop): rooms and direct messages are one list. "Direct messages" is a collapsible, activity-sorted section under Rooms, and the Direct messages rail button jumps to it instead of swapping the whole list. Rows are 15 px like the timeline; an unread room is bold, a mention or an unread direct message gets a red count badge, and a plain unread shows a dot. Muted rooms are dimmed with a slashed bell; private, invite-only or restricted rooms show a lock. A search field replaces the three utility rows, with create and join behind a "+" menu. Space lists gain sort, favourites and empty states. The app opens on the room you were last in.
