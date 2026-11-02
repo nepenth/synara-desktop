@@ -121,6 +121,19 @@ export const RoomPresenceDot = style({
   },
 });
 
+/** Screen-reader text for the presence dot ("Online" / "Offline"). */
+export const RoomPresenceLabel = style({
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  margin: -1,
+  padding: 0,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+  border: 0,
+});
+
 export const RoomName = style({
   minWidth: 0,
   overflow: 'hidden',

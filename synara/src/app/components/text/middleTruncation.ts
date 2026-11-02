@@ -12,6 +12,22 @@ export type MiddleTruncationParts = { start: string; end: string };
  * points, so an emoji or astral character is never cut in half. Returns
  * `undefined` when the text is short enough to render as one span.
  */
+export const MIDDLE_TRUNCATION_ELLIPSIS = '…';
+
+/**
+ * What the two visual spans show. While the start overflows it is clipped
+ * under a short fade and the ellipsis leads the end span, so it sits flush
+ * against the tail ("Project - Ho…agement") with no gap; otherwise the parts
+ * read as the plain name.
+ */
+export const middleTruncationDisplay = (
+  parts: MiddleTruncationParts,
+  overflowing: boolean
+): MiddleTruncationParts => ({
+  start: parts.start,
+  end: overflowing ? `${MIDDLE_TRUNCATION_ELLIPSIS}${parts.end}` : parts.end,
+});
+
 export const splitForMiddleTruncation = (
   text: string,
   tail: number = MIDDLE_TRUNCATION_TAIL,

@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   MIDDLE_TRUNCATION_MIN_LENGTH,
   MIDDLE_TRUNCATION_TAIL,
+  middleTruncationDisplay,
   splitForMiddleTruncation,
 } from '../text/middleTruncation';
 
@@ -35,7 +36,23 @@ test('the split counts code points, so an emoji is never cut in half', () => {
   assert.equal(parts.start + parts.end, name);
 });
 
-test('the tail and threshold are adjustable (the pane title uses a shorter threshold)', () => {
+test('the ellipsis leads the tail only while the start overflows', () => {
+  const parts = splitForMiddleTruncation('Project - Home Management');
+  assert.ok(parts);
+  // Overflowing: the start clips under a fade, "…" sits flush before the tail.
+  assert.deepEqual(middleTruncationDisplay(parts, true), {
+    start: 'Project - Home Man',
+    end: '…agement',
+  });
+  // Fits: no ellipsis anywhere, the two spans read as the plain name.
+  const fits = middleTruncationDisplay(parts, false);
+  assert.equal(fits.start + fits.end, 'Project - Home Management');
+  const css = readFileSync('src/app/components/text/MiddleTruncatedText.css.ts', 'utf8');
+  assert.match(css, /MiddleTruncatedStart = style\(\{[\s\S]*?textOverflow: 'clip'/);
+  assert.match(css, /black calc\(100% - 12px\), transparent/);
+});
+
+test('the tail and threshold are adjustable', () => {
   assert.deepEqual(splitForMiddleTruncation('matrix.whyland.net', 7, 12), {
     start: 'matrix.whyl',
     end: 'and.net',

@@ -227,28 +227,36 @@ test('the selected row is anchored: Primary container fill, on-container name, s
   await expect(item).toHaveCount(0);
 });
 
-test('long names and the pane title truncate in the middle, keeping their end', async ({
+test('long room names truncate in the middle; the pane title ends in an ellipsis', async ({
   page,
 }) => {
   await open(page);
+  // [hidden full name, visual start, visual end]
+  const spans = (r: Locator) => r.locator('[data-middle-truncated="true"] > span');
   const project = row(page, '!home-mgmt:example.test');
-  const split = project.locator('[data-middle-truncated="true"]');
-  await expect(split).toHaveCount(1);
-  await expect(split.locator('span').last()).toHaveText('agement');
-  await expect(nameText(project)).toHaveText('Project - Home Management');
+  await expect(spans(project)).toHaveCount(3);
+  // Assistive tech gets the full name once; the visual spans are hidden from it.
+  await expect(spans(project).nth(0)).toHaveText('Project - Home Management');
+  await expect(spans(project).nth(1)).toHaveAttribute('aria-hidden', 'true');
+  await expect(spans(project).nth(2)).toHaveAttribute('aria-hidden', 'true');
+  await expect(nameOf(project)).toHaveAccessibleName(/^Project - Home Management/);
 
-  // The end of a name that overflows stays visible after the ellipsis.
+  // An overflowing start clips under a fade; the ellipsis leads the tail,
+  // flush against the start, so there is no gap before it.
   const long = row(page, '!long:example.test');
-  const [start, end] = [
-    long.locator('[data-middle-truncated] > span').first(),
-    long.locator('[data-middle-truncated] > span').last(),
-  ];
-  await expect(end).toHaveText('on pane');
+  const [start, end] = [spans(long).nth(1), spans(long).nth(2)];
+  await expect(end).toHaveText('…on pane');
   await expect(end).toBeVisible();
+  await expect(start).toHaveAttribute('data-overflowing', 'true');
   expect(await start.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
-  await expect(start).toHaveCSS('text-overflow', 'ellipsis');
+  await expect(start).toHaveCSS('text-overflow', 'clip');
+  expect(await start.evaluate((el) => getComputedStyle(el).webkitMaskImage)).toContain(
+    'linear-gradient'
+  );
+  const startBox = (await start.boundingBox())!;
   const endBox = (await end.boundingBox())!;
   const rowBox = (await long.boundingBox())!;
+  expect(Math.abs(endBox.x - (startBox.x + startBox.width))).toBeLessThanOrEqual(1);
   expect(endBox.x + endBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width);
 
   // Short names are one span.
@@ -256,13 +264,13 @@ test('long names and the pane title truncate in the middle, keeping their end', 
     row(page, '!unread:example.test').locator('[data-middle-truncated="false"]')
   ).toHaveCount(1);
 
-  // The pane title: 15px semibold, "matrix.whyl…and.net" rather than "matrix.whyl…".
+  // The pane title: 15px semibold, whole text with an ordinary end ellipsis.
   const title = page.getByTestId('nav-pane-title');
   await expect(title).toHaveCSS('font-size', '15px');
   await expect(title).toHaveCSS('font-weight', '600');
   await expect(title).toHaveText('matrix.whyland.net');
-  await expect(title.locator('[data-middle-truncated="true"] > span').last()).toHaveText('and.net');
-  await expect(title.locator('[data-middle-truncated="true"] > span').last()).toBeVisible();
+  await expect(title).toHaveCSS('text-overflow', 'ellipsis');
+  await expect(title.locator('[data-middle-truncated]')).toHaveCount(0);
 });
 
 test('DM rows show the peer presence from Core: online, offline, or nothing when unknown', async ({
@@ -282,6 +290,15 @@ test('DM rows show the peer presence from Core: online, offline, or nothing when
     toRgb(await cssVar(page, '--synara-content-tertiary'))
   );
   await expect(dot('!dm-muted')).toHaveAttribute('data-presence', 'offline');
+  // The dot is aria-hidden; its meaning is in the row's accessible name.
+  await expect(dot('!dm')).toHaveAttribute('aria-hidden', 'true');
+  await expect(nameOf(row(page, '!dm:example.test'))).toHaveAccessibleName(
+    /Alice Liddell\s*, Online/
+  );
+  await expect(nameOf(row(page, '!dm-read:example.test'))).toHaveAccessibleName(/Bob\s*, Offline/);
+  await expect(row(page, '!dm-mention:example.test').locator('[data-presence-label]')).toHaveCount(
+    0
+  );
   // Carol's presence is unknown: no dot.
   await expect(dot('!dm-mention')).toHaveCount(0);
   // Rooms never get one.

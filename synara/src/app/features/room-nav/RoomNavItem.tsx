@@ -451,6 +451,12 @@ function RoomNavItemImpl({
               <Text as="span" size="Inherit" className={nameClassName} data-room-name="">
                 <MiddleTruncatedText text={roomName} />
               </Text>
+              {presenceDot && (
+                // The dot is aria-hidden; its meaning joins the link's name.
+                <span className={css.RoomPresenceLabel} data-presence-label="">
+                  {presenceDot === 'online' ? ', Online' : ', Offline'}
+                </span>
+              )}
             </Box>
             {showFavoriteStar && (
               <Icon
