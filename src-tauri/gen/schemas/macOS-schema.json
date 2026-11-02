@@ -579,6 +579,12 @@
           "markdownDescription": "Enables the desktop_updater_install command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_updater_relaunch command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-updater-relaunch",
+          "markdownDescription": "Enables the desktop_updater_relaunch command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_window_close command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-window-close",
@@ -2143,6 +2149,12 @@
           "type": "string",
           "const": "deny-desktop-updater-install",
           "markdownDescription": "Denies the desktop_updater_install command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_updater_relaunch command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-updater-relaunch",
+          "markdownDescription": "Denies the desktop_updater_relaunch command without any pre-configured scope."
         },
         {
           "description": "Denies the desktop_window_close command without any pre-configured scope.",
