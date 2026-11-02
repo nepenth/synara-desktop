@@ -143,7 +143,8 @@ function BoundRows({
   };
   return (
     <main
-      className={`${configClass} ${varsClass} ${light ? lightTheme : darkTheme}`}
+      // index.css scopes the reading-role variables under `.dark-theme`, as the app's body has.
+      className={`${configClass} ${varsClass} ${light ? lightTheme : `${darkTheme} dark-theme`}`}
       style={{ padding: 16 }}
     >
       <nav
