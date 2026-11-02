@@ -338,6 +338,7 @@ private struct NotificationsInboxRow: View {
                     .font(SynaraTypography.body.weight(room.hasUnreadActivity ? .bold : .regular))
                     .foregroundStyle(SynaraColor.headingText)
                     .lineLimit(1)
+                    .truncationMode(.middle)
 
                 Text(room.lastMessagePreview)
                     .font(SynaraTypography.roomPreview)
@@ -389,8 +390,12 @@ private struct AgentPendingApprovalRow: View {
 
                 HStack(spacing: SynaraSpacing.small) {
                     Label("Agent", systemImage: "terminal")
+                        .labelStyle(.titleAndIcon)
+                        .lineLimit(1)
+                        .fixedSize()
                     Text(item.roomName)
                         .lineLimit(1)
+                        .truncationMode(.middle)
                     if let status = item.status, status.isEmpty == false {
                         Text(status)
                             .fontWeight(.semibold)

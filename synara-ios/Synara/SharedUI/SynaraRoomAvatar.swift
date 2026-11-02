@@ -34,6 +34,8 @@ enum SynaraRoomGlyph: Equatable {
 struct SynaraRoomGlyphView: View {
     let room: RoomSummary?
     var tint: Color = SynaraColor.secondaryText
+    /// The direct-message peer's presence; nil (unknown) draws no dot.
+    var presence: RoomListPeerPresence? = nil
 
     var body: some View {
         switch SynaraRoomGlyph.glyph(for: room) {
@@ -50,7 +52,29 @@ struct SynaraRoomGlyphView: View {
                 size: SynaraMetrics.roomGlyph,
                 seed: room?.directUserId ?? room?.id
             )
+            .overlay(alignment: .bottomTrailing) {
+                if let presence {
+                    SynaraPresenceDot(presence: presence)
+                        .offset(x: 2, y: 2)
+                }
+            }
         }
+    }
+}
+
+/// An 8 pt presence dot at the bottom-right of a direct message's letter
+/// circle: success green online, tertiary offline. A thin ring in the list
+/// plane's colour keeps it apart from the circle.
+struct SynaraPresenceDot: View {
+    let presence: RoomListPeerPresence
+
+    var body: some View {
+        Circle()
+            .fill(presence == .online ? SynaraColor.success : SynaraColor.tertiaryText)
+            .frame(width: SynaraMetrics.presenceDot, height: SynaraMetrics.presenceDot)
+            .padding(1.5)
+            .background(Circle().fill(SynaraColor.secondarySurface))
+            .accessibilityHidden(true)
     }
 }
 
