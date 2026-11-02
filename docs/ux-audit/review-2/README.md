@@ -27,11 +27,21 @@ Six parallel reviews (Fable 5.1, high effort), code reading only, every finding 
 - Icons: Later = bookmark, Notes = note/document, Threads = one glyph, Edit = pencil only.
 - Copy: sentence case; "Rooms", "Direct messages", "Later", "Threads", "Approvals", "Notes".
 
-## Wave 1 (this branch)
+## Wave 1 (this branch, done)
 
-Desktop room view: ROOM-1, 2, 4, 5, 6, 7, 9, 10, 11, 12. Desktop nav: NAV-1 to 11, 13, DS-7.
-Desktop settings: SET-1 to 11. iOS timeline: IOST-1 to 8, 10, 11, 15, 16, 17, DS-5.
-iOS shell: IOSS-1 to 13, 15, 16, 17, 19, DS-1, DS-2, DS-7.
+Desktop room view: ROOM-1, 2, 4, 5, 6, 7, 9, 10, 11, 12, 23. Desktop nav: NAV-1 to 11, 13.
+Desktop settings: SET-1 to 11. iOS timeline: IOST-1 to 8, 10, 11, 13, 15, 16, 17, DS-5.
+iOS shell: IOSS-1 to 13, 15, 16, 17, 18, 19, DS-1, DS-2, DS-7. Identity-reset copy is sentence case on both.
+
+Verified: desktop tsc/eslint/prettier clean, 1409 unit tests, six Playwright suites (Chromium);
+iOS build-for-testing and 1100 unit tests. Not yet judged in a running app with real rooms.
+
+Gaps found while implementing: iOS has no "Save to Later" API, so the context menu lacks it (DS-9);
+Core `TimelineThreadSummary` only carries a count, so thread chips use the loaded window for
+participants and recency (ROOM-3/IOST-8); `RoomSummary` carries no topic or creation date for the
+room intro block; the redaction confirmation copy ("Remove this message?") is still shared and
+should move to "Delete" on both platforms; the iOS timeline header should adopt
+`SynaraMetrics.columnHeaderHeight`; the iOS Threads glyph is still four symbols (DS-7).
 
 ## Needs the user's decision (not done)
 

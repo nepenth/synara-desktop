@@ -680,7 +680,7 @@ enum RecoverySetupCopy {
     static let unavailable = String(localized: "Recovery setup is unavailable.")
 }
 
-/// One Reset Identity step (Security, or the "Verify This Device" prompt).
+/// One Reset Identity step (Security, or the "Verify this device" prompt).
 enum IdentityResetResult: Equatable {
     /// The new identity is published; recovery setup comes next.
     case complete
@@ -698,7 +698,7 @@ enum IdentityResetResult: Equatable {
 /// Desktop's wording, word for word
 /// (`synara/src/app/features/cross-signing/nativeIdentityReset.ts`).
 enum IdentityResetCopy {
-    static let title = String(localized: "Reset Identity")
+    static let title = String(localized: "Reset identity")
     static let settingsDescription =
         String(localized: "If you have lost your recovery key and all your other devices, start over with a new identity.")
     static let warningIntro =
@@ -712,7 +712,7 @@ enum IdentityResetCopy {
     static let password = String(localized: "Enter your account password to confirm the reset.")
     static let approval =
         String(localized: "Your homeserver asks you to approve the reset on your account page. Approve it in your browser, then select Continue.")
-    static let openAccountPage = String(localized: "Open Account Page")
+    static let openAccountPage = String(localized: "Open account page")
     static let recovery = String(localized: "Your identity was reset. Set up recovery now to get a new recovery key.")
     static let configured = String(localized: "Device verification and account recovery are configured for this session.")
     static let cancelled =
@@ -728,13 +728,13 @@ enum IdentityResetCopy {
         String(localized: "This homeserver asks for a sign-in step Synara cannot complete for an identity reset.")
 }
 
-/// Desktop's "Verify This Device" prompt wording.
+/// Desktop's "Verify this device" prompt wording.
 enum VerifyDevicePromptCopy {
-    static let title = String(localized: "Verify This Device")
+    static let title = String(localized: "Verify this device")
     static let description =
         String(localized: "Your account already has a cross-signing identity. Verify this device to read your encrypted messages and so others can trust it.")
-    static let verifyWithDevice = String(localized: "Verify from Another Device")
-    static let recoveryKey = String(localized: "Use Recovery Key")
+    static let verifyWithDevice = String(localized: "Verify from another device")
+    static let recoveryKey = String(localized: "Use recovery key")
     static let cantVerify = String(localized: "Lost your recovery key and all your other devices?")
     static let later = String(localized: "Later")
 }
@@ -760,7 +760,7 @@ protocol CryptoStatusServicing {
     func authenticateCrossSigningSetup(password: String) async -> CrossSigningSetupResult
     /// Enrol secret storage and key backup with a recovery passphrase.
     func enableRecovery(passphrase: String) async -> RecoveryEnrollmentResult
-    /// Whether to show "Verify This Device" now; Core arms it once per sign-in.
+    /// Whether to show "Verify this device" now; Core arms it once per sign-in.
     func deviceVerificationPromptVisible() async -> Bool
     /// "Later" (or any choice): hide the prompt for this session.
     func dismissDeviceVerificationPrompt() async
@@ -1333,7 +1333,7 @@ final class PlaceholderPushService: PushServicing {
 struct MockCryptoStatusService: CryptoStatusServicing {
     var roomCryptoStatus: RoomCryptoStatus
     var sessionCryptoStatus: SessionCryptoStatus
-    /// UI tests: show "Verify This Device" as after a new sign-in.
+    /// UI tests: show "Verify this device" as after a new sign-in.
     var verifyDevicePrompt: Bool
 
     init(

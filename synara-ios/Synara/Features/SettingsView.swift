@@ -632,7 +632,7 @@ private struct AccountSettingsView: View {
                         if isRequestingVerification {
                             ProgressView()
                         } else {
-                            Text("Verify This Device")
+                            Text("Verify this device")
                         }
                     }
                     .disabled(isRequestingVerification || sessionCrypto.enablesVerifyThisDevice == false)
@@ -2080,7 +2080,7 @@ private struct SecuritySettingsView: View {
                             await environment.crypto.requestDeviceVerification()
                         }
                     } label: {
-                        cryptoActionLabel(String(localized: "Verify This Device"))
+                        cryptoActionLabel(String(localized: "Verify this device"))
                     }
                     .disabled(isRunningCryptoAction || sessionCrypto.enablesVerifyThisDevice == false)
                     .accessibilityIdentifier("RequestDeviceVerificationButton")
@@ -2416,7 +2416,7 @@ final class IdentityResetFlow: ObservableObject {
 }
 
 /// The Reset Identity steps as Form sections, shared by the Security sheet
-/// and the "Verify This Device" prompt.
+/// and the "Verify this device" prompt.
 struct IdentityResetSections: View {
     @Environment(\.appEnvironment) private var environment
     @Environment(\.openURL) private var openURL
@@ -2572,7 +2572,7 @@ struct IdentityResetSheet: View {
     }
 }
 
-/// When the "Verify This Device" prompt shows, and what follows it. "Verify
+/// When the "Verify this device" prompt shows, and what follows it. "Verify
 /// from Another Device" only records the choice and closes the sheet; the
 /// request starts from the sheet's `onDismiss`, once it is gone, so the
 /// verification sheet can present.
@@ -2602,7 +2602,7 @@ final class VerifyDevicePromptPresentation: ObservableObject {
     }
 }
 
-/// "Verify This Device", once after signing in on a new device of an account
+/// "Verify this device", once after signing in on a new device of an account
 /// that already has an identity. Core decides when; closing it in any way
 /// dismisses it for the session, and Security keeps every entry.
 struct VerifyThisDevicePromptSheet: View {
